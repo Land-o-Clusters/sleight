@@ -14,6 +14,9 @@ belong in [STATE.md](STATE.md).
   engine updates, someone else has installed it from the marketplace, the desktop pane's picture is
   verified, and the benchmark compares it with another tool.
 
+- The owner's rule for every open-source project of theirs, sleight included (2026-10-03), in order:
+  do what competitors do, but better. Improve on them where they haven't. Then build what nobody has.
+
 ## Approvals and safety
 
 - An accepted app approval lasts for one Claude Code session, kept in the relay's memory. The relay never

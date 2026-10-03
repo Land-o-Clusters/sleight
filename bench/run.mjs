@@ -35,8 +35,14 @@ function option(name, fallback) {
 const isDryRun = process.argv.includes('--dry-run');
 const armOption = option('arm', 'sleight');
 const ARMS = {
+  // Each arm runs from its own empty folder, so neither gets this repo's
+  // CLAUDE.md or project memory (until 2026-10-03 the sleight arm ran here).
   sleight: {
-    cwd: ROOT,
+    cwd: (() => {
+      const dir = process.env.SLEIGHT_ARM_DIR || join(ROOT, '.dev', 'sleight-arm');
+      mkdirSync(dir, { recursive: true });
+      return dir;
+    })(),
     args: ['--plugin-dir', join(ROOT, 'plugins', 'sleight'), '--allowedTools', 'mcp__plugin_sleight_computer__js'],
     env: {},
   },

@@ -49,6 +49,12 @@ after the mouse is held down. Move text with the keyboard instead: select it, `a
 click where it goes, `app.pressKey("super+v")`. Drags that pick something up at once, like Chess
 pieces, work fine.
 
+## Saving to a path
+
+In a save dialog, `app.pressKey("super+shift+g")` opens Go to Folder. Set the folder there and press
+Return, then set the file name. A full path set into the name field with `app.setValue` doesn't move
+the dialog anywhere. The slashes end up in the file name.
+
 ## What it can't do
 
 - Real pointer hover, beyond the workarounds above.

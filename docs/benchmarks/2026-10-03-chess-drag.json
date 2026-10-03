@@ -264,6 +264,50 @@
      "answer": "The game is saved at `lcu-chess-drag-3/882129a5.game`, with White's pawn moved from e2 to e4 by a mouse drag. The file records the moves `e2e4 e7e6`; the computer answered 1...e6 before I saved.\n\nThe first save went wrong, which matters for scoring this run:\n\n- **Bad first save:** I put the full pat"
     }
    ]
+  },
+  {
+   "note": "Set D, sleight only, traced. The sleight arm now runs from an empty folder like the LCU arm; before this it ran inside the sleight repo, where Claude also loaded the project memory with notes on failed drags. Chess killed before each run. Run 3: the first two drags did not move the pawn, the third did. All three saves went through Go to Folder.",
+   "stamp": "2026-10-03T23-19-34-819Z",
+   "arms": [
+    "sleight"
+   ],
+   "model": "default",
+   "claude": "~/Projects/sleight/.dev/cli/node_modules/.bin/claude",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 1,
+     "passed": true,
+     "seconds": 56.5,
+     "turns": 15,
+     "costUsd": 0.4990840000000001,
+     "exitCode": 0,
+     "answer": "I started a new game in Chess, dragged White's pawn from e2 to e4 with the mouse, saved the game and closed its window.\n\n- **Move:** the drag worked on the first try, and the board then showed the pawn on e4. The computer answered with e7–e6 before I saved, so that move is in the file too.\n- **Save:"
+    },
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 2,
+     "passed": true,
+     "seconds": 125.3,
+     "turns": 14,
+     "costUsd": 0.49252460000000003,
+     "exitCode": 0,
+     "answer": "I started a new game in Chess, dragged the White pawn from e2 to e4 with the mouse, saved the game as `29f51f55.game` in `sleight-chess-drag-2`, and closed that window.\n\n- **The drag:** it worked on the first try. Afterwards the board showed the pawn on e4 and e2 empty, and it was Black's turn.\n- **"
+    },
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 3,
+     "passed": true,
+     "seconds": 103.1,
+     "turns": 26,
+     "costUsd": 0.8320332,
+     "exitCode": 0,
+     "answer": "I started a new game in Chess (Game 6), dragged the white pawn from e2 to e4, saved the game and closed its window.\n\n- **Move:** the drag worked, and the computer answered e7–e6.\n- **Save:** the file `b2eea37c.game` is in `sleight-chess-drag-3/`, and its move list reads `e2e4`, `e7e6`.\n- **Retries:*"
+    }
+   ]
   }
  ]
 }

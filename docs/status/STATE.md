@@ -20,13 +20,17 @@ engine sends any mouse-drag events between press and release; finding out needs 
 allowlist (owner's call). Cut and paste stays the documented workaround.
 
 Chess is on the benchmark allowlist (owner, 2026-10-03), with a `chess-drag` task that kills Chess
-before each run. Results are in `docs/benchmarks/2026-10-03-chess-drag.json`. Sleight passed 2/3 in the clean set
-and 4/10 over all runs. LCU passed 3/3 and 8/9. Sleight moved the pawn in 8 of the 9
-runs that reached the drag. Most failures were in the save dialog. One sleight failure said "sleight
-stopped responding" and had no trace, so we don't know what happened there. Next: rerun with
-`SLEIGHT_TRACE=1` and read why sleight's save step fails more often than LCU's.
+before each run. All runs are in `docs/benchmarks/2026-10-03-chess-drag.json`. With Chess restarted,
+LCU passed 3/3 and sleight 2/3, then 3/3 once the sleight arm ran from an empty folder (set D,
+traced). Until set D the sleight arm ran inside this repo and read the project memory, which LCU's
+arm never did. The published 12/15 table has the same confound.
 
-The benchmarks this session cost $13.37 in all.
+Next: rerun the full benchmark on both arms from their empty folders (about $15 at today's costs, the
+owner's call) and replace the table. Then follow the owner's rule in LAWS, with LCU as the
+competitor. LCU's adapter passes the engine's instructions through untouched and doesn't add guidance
+of its own. The desktop approval prompt and the pane are already things LCU lacks.
+
+The benchmarks this session cost $15.19 in all.
 
 ## Machine state outside the repo
 
