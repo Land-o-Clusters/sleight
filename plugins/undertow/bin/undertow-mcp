@@ -1,0 +1,13 @@
+#!/bin/sh
+# Runs lib/launch.mjs with the Node that ships inside the ChatGPT app, so
+# undertow needs nothing installed beyond ChatGPT itself.
+APP_NODE="${UNDERTOW_CHATGPT_APP:-/Applications/ChatGPT.app}/Contents/Resources/cua_node/bin/node"
+if [ -x "$APP_NODE" ]; then
+  NODE="$APP_NODE"
+elif command -v node >/dev/null 2>&1; then
+  NODE="$(command -v node)"
+else
+  echo "undertow: ChatGPT.app not found at ${UNDERTOW_CHATGPT_APP:-/Applications/ChatGPT.app}, and no node on PATH" >&2
+  exit 1
+fi
+exec "$NODE" "$(dirname "$0")/../lib/launch.mjs" "$@"

@@ -1,0 +1,15 @@
+{
+  "name": "undertow",
+  "owner": { "name": "Land o' Clusters", "url": "https://github.com/Land-o-Clusters" },
+  "metadata": {
+    "description": "Background macOS computer use for Claude Code, built on the engine bundled with the ChatGPT desktop app. Unofficial."
+  },
+  "plugins": [
+    {
+      "name": "undertow",
+      "source": "./plugins/undertow",
+      "description": "Drive macOS apps in the background without taking over your cursor.",
+      "category": "productivity"
+    }
+  ]
+}

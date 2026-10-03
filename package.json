@@ -1,0 +1,9 @@
+{
+  "name": "undertow",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "doctor": "plugins/undertow/bin/undertow-mcp --doctor"
+  }
+}

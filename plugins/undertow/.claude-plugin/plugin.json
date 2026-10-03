@@ -1,0 +1,15 @@
+{
+  "name": "undertow",
+  "version": "0.1.0",
+  "description": "Unofficial: lets Claude drive macOS apps in the background through the computer-use engine bundled with the ChatGPT desktop app, without taking over your cursor.",
+  "author": { "name": "Land o' Clusters", "url": "https://github.com/Land-o-Clusters" },
+  "homepage": "https://github.com/Land-o-Clusters/undertow",
+  "repository": "https://github.com/Land-o-Clusters/undertow",
+  "license": "MIT",
+  "keywords": ["computer-use", "macos", "automation", "mcp", "mod"],
+  "mcpServers": {
+    "computer": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/undertow-mcp"
+    }
+  }
+}
