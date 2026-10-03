@@ -17,6 +17,8 @@ it has one, then a dedicated MCP tool or connector. Web pages belong to browser 
 
 1. Make the first `js` call exactly one API call, such as `let app = await cua.getApp("Calculator")`.
    Its result contains the full API documentation and the app's current UI state. Read both before acting.
+   When two copies of an app share a bundle ID (an installed app and a dev build), `getApp` with the ID
+   fails as ambiguous. Pass the full path to the `.app` instead.
 2. Act by element index from the UI state (`app.click(12)`) when you can, and by coordinates only when an
    element has no index. Batch several actions in one call when you're sure of them.
 3. The first time you touch an app, the user gets an approval prompt. If the result says the app was not

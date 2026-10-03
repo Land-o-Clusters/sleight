@@ -1,11 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 (2026-10-03)
 
 - App approvals work in the desktop app's Code tab. It declines MCP prompts without showing them, so
   there sleight asks with its own panel (Liquid Glass where macOS has it). `SLEIGHT_APPROVAL_PROMPT`
   picks `dialog` or `client`.
-- Benchmark runs keep approvals on the benchmark's hook when started from a desktop app session.
+- Benchmark runs keep approvals on the benchmark's hook when started from a desktop app session, and
+  the sleight arm runs from an empty folder like LCU's. A Chess drag task joins the benchmark.
+- The skill covers saving to a path through Go to Folder, and apps whose bundle ID is ambiguous.
 
 ## 0.1.0 (2026-10-03)
 
