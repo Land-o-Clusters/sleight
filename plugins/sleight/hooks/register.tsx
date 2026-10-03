@@ -96,8 +96,8 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'sleight',
-      description: 'Show what sleight is doing in a pane, or `stop` to halt its computer use',
-      argumentHint: '[stop]',
+      description: 'Open the sleight pane, and send any text after it to Claude; `stop` halts its computer use',
+      argumentHint: '[stop | prompt]',
       immediate: true,
     })
     return next(e)
@@ -172,7 +172,18 @@ export const register: Register = on => {
       return { text: 'sleight stopped: Claude can’t use it again until your next message. Press Esc to stop the rest of the turn.' }
     }
     await $.ui.open({ id: PANE, title: 'sleight' })
-    return { text: 'sleight pane opened.' }
+    // `/sleight do this` opens the pane and sends "do this" to Claude, as if
+    // typed on its own line. The engine refuses a submit from inside this hook
+    // (the prompt would wait on the command submitting it), so it goes out
+    // just after; it waits for any running turn to finish.
+    const prompt = e.args.trim()
+    if (!prompt) return { text: 'sleight pane opened.' }
+    $.clock.after(0, () => {
+      $.prompt.submit({ text: prompt, asUser: true }).catch(err => {
+        $.ui.toast(`sleight: couldn't send your prompt (${(err as Error).message}). Send it on its own line.`)
+      })
+    })
+    return { text: 'sleight pane opened. Sending your prompt to Claude.' }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {

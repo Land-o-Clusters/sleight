@@ -101,7 +101,9 @@ Or turn on auto-update for the `sleight` marketplace under `/plugin` → Marketp
 The apps sleight drives stay in the background, which also means you can't see them. On Claude Code
 v2.1.287 or later you get three ways to keep an eye on things.
 
-`/sleight` opens a pane with the app's latest picture and a log of every action Claude took. The picture
+`/sleight` opens a pane with the app's latest picture and a log of every action Claude took. Anything
+after it goes to Claude as a prompt, so `/sleight play chess in the background` opens the pane and starts
+the task. The picture
 refreshes after each turn that used sleight, or when you press Refresh (`r`) while Claude is idle. A
 terminal draws it in colored half-blocks. The desktop app's Code tab shows the screenshot itself.
 

@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, mock, test } from 'claude-code/testing'
 
 const JS_TOOL = 'mcp__plugin_sleight_computer__js'
 const TURN_END_TOOL = 'mcp__plugin_sleight_computer__turn_ended'
@@ -45,6 +45,35 @@ describe('sleight mod', () => {
     const refused = await $.tool.call({ tool: JS_TOOL, code: '1' } as never)
     expect(String(refused.deny)).toMatch(/stopped sleight/)
     expect(await ui.find({ text: /Stopped until your next message/ })).toBeDefined()
+  })
+
+  test('/sleight with text opens the pane and sends the text as a prompt', async ($, on) => {
+    const sent: string[] = []
+    // Stand-ins for the engine: the test kit draws no real pane.
+    on('ui.open', async () => ({ value: { isPlaced: true } }) as never)
+    on('prompt.submit', async (_$, e) => {
+      sent.push(e.text)
+      return { text: e.text }
+    })
+    const clock = mock.clock(on)
+    const result = await $.command.run({ command: 'sleight', args: 'play chess in the background' } as never)
+    // The prompt goes out just after the command returns.
+    expect(sent).toEqual([])
+    await clock.advance(1)
+    expect(sent).toEqual(['play chess in the background'])
+    expect(String((result as { text?: string }).text)).toMatch(/Sending your prompt/)
+  })
+
+  test('/sleight alone only opens the pane', async ($, on) => {
+    const sent: string[] = []
+    // Stand-ins for the engine: the test kit draws no real pane.
+    on('ui.open', async () => ({ value: { isPlaced: true } }) as never)
+    on('prompt.submit', async (_$, e) => {
+      sent.push(e.text)
+      return { text: e.text }
+    })
+    await $.command.run({ command: 'sleight', args: '' } as never)
+    expect(sent).toEqual([])
   })
 
   test('Claude may not call turn_ended', async $ => {
