@@ -245,6 +245,15 @@ otherwise. The 30 runs cost $12.90 in all. Every run is in
 [`docs/benchmarks/2026-10-03-sleight-vs-lcu.json`](docs/benchmarks/2026-10-03-sleight-vs-lcu.json).
 LCU warned that this engine version is one it hasn't tested, and so is ours.
 
+A Chess task followed the same day. Claude starts a game, drags the e2 pawn to e4 and saves the game
+as a file we name. In the last set, with Chess restarted before each run, sleight passed 2/3 and LCU 3/3 (medians
+98 s and 120 s). Across all runs, sleight passed 4 of 10 and LCU 8 of 9. The earlier sets didn't
+restart Chess, which piled up windows and once hung it. One sleight run hit a bug in a change being
+made at the time, and one failed only because the first version of the check was wrong. In sleight's
+runs that reached the drag, it moved the pawn 8 times out of 9.
+Most failures came after a good drag, in the save dialog. Every run, with notes on each set, is in
+[`docs/benchmarks/2026-10-03-chess-drag.json`](docs/benchmarks/2026-10-03-chess-drag.json).
+
 ```bash
 npm run bench -- --runs 3             # sleight only
 npm run bench -- --arm all --runs 3   # sleight and LCU

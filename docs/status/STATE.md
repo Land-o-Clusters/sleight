@@ -19,11 +19,14 @@ can't write TextEdit's sandboxed prefs) still failed the drag task, 0/2. We don'
 engine sends any mouse-drag events between press and release; finding out needs a probe app on the
 allowlist (owner's call). Cut and paste stays the documented workaround.
 
-Chess is on the benchmark allowlist (owner, 2026-10-03), with a `chess-drag` task (uncommitted until
-its results are published). Nothing reset Chess between runs in the first two sets, and they came to sleight 2/6, LCU 5/6.
-One sleight run was declined by the new prompt mid-edit, Chess hung in the last pair, and the save
-dialog failed one sleight run after a good drag. A clean set, killing Chess before each run, is
-running. Publish all three sets in `docs/benchmarks/` with these caveats.
+Chess is on the benchmark allowlist (owner, 2026-10-03), with a `chess-drag` task that kills Chess
+before each run. Results are in `docs/benchmarks/2026-10-03-chess-drag.json`. Sleight passed 2/3 in the clean set
+and 4/10 over all runs. LCU passed 3/3 and 8/9. Sleight moved the pawn in 8 of the 9
+runs that reached the drag. Most failures were in the save dialog. One sleight failure said "sleight
+stopped responding" and had no trace, so we don't know what happened there. Next: rerun with
+`SLEIGHT_TRACE=1` and read why sleight's save step fails more often than LCU's.
+
+The benchmarks this session cost $13.37 in all.
 
 ## Machine state outside the repo
 

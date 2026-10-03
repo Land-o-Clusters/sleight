@@ -1,0 +1,52 @@
+{
+ "task": "textedit-drag",
+ "note": "TextEdit launched with -NSDragAndDropTextDelay 0 (open -a TextEdit --args), 2026-10-03, sleight arm only, Claude Code 2.1.288.",
+ "sets": [
+  {
+   "note": "Run 1. TextEdit was launched without a document, so its Open panel was up and the agent spent its later turns in it. Its first drag, before that, changed nothing.",
+   "stamp": "2026-10-03T22-34-21-609Z",
+   "arms": [
+    "sleight"
+   ],
+   "model": "default",
+   "claude": "~/Projects/sleight/.dev/cli/node_modules/.bin/claude",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "textedit-drag",
+     "run": 1,
+     "passed": false,
+     "reason": "file holds \"alpha beta gamma\"",
+     "seconds": 49.8,
+     "turns": 14,
+     "costUsd": 0.46609500000000004,
+     "exitCode": 0,
+     "answer": "I couldn't do the drag-and-drop, so the file is unchanged. It still reads `alpha beta gamma`, and I didn't save anything.\n\n- **What I tried:** I opened the file in TextEdit and selected \"alpha\". Then I dragged it to the end of the line, twice. The first drag changed nothing. The second just cleared "
+    }
+   ]
+  },
+  {
+   "note": "Run 2. TextEdit launched with a scratch document, so no Open panel. Both drags changed nothing.",
+   "stamp": "2026-10-03T22-35-57-166Z",
+   "arms": [
+    "sleight"
+   ],
+   "model": "default",
+   "claude": "~/Projects/sleight/.dev/cli/node_modules/.bin/claude",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "textedit-drag",
+     "run": 1,
+     "passed": false,
+     "reason": "file holds \"alpha beta gamma\"",
+     "seconds": 40.6,
+     "turns": 11,
+     "costUsd": 0.40508500000000003,
+     "exitCode": 0,
+     "answer": "I couldn't move the word. The drag didn't work, and the file still reads `alpha beta gamma`.\n\n- **What I did:** I opened the file in TextEdit in the background and selected \"alpha\". Then I dragged it to the end of the line twice. Both times the text stayed the same and the selection was cleared.\n- *"
+    }
+   ]
+  }
+ ]
+}

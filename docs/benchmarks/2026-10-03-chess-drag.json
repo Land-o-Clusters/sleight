@@ -1,0 +1,269 @@
+{
+ "task": "chess-drag",
+ "note": "Every chess-drag run on 2026-10-03, in order, failures included. Claude Code 2.1.288, default model, ChatGPT engine 26.930.31730, LCU 0.8.8. The same Mac was also running other Claude sessions, some using sleight, and the owner was using it.",
+ "sets": [
+  {
+   "note": "Exploratory single run. Failed only because the first version of the check looked for PGN; the saved file held e2e4 as the first move. The check was fixed before set A.",
+   "stamp": "2026-10-03T22-37-17-623Z",
+   "arms": [
+    "sleight"
+   ],
+   "model": "default",
+   "claude": "~/Projects/sleight/.dev/cli/node_modules/.bin/claude",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 1,
+     "passed": false,
+     "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-03T22-37-17-623Z/sleight-chess-drag-1/d8b71193.game holds \"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?>\\n<!DOCTYPE plist PUBLIC \\\"-//Apple//DTD PLIST 1.0//EN\\\" \\\"http://www.apple.com/DTDs/PropertyList-1.0.dtd\\\">\\n<plist version=\\\"1.0\\\">\\n<dict>\\n\\t<key>Black</key>\\n\\t<string>Co\"",
+     "seconds": 84.4,
+     "turns": 24,
+     "costUsd": 0.7494766000000003,
+     "exitCode": 0,
+     "answer": "I started a new game in Chess, dragged White's pawn from e2 to e4, saved the game to `/var/folders/.../sleight-chess-drag-1/d8b71193.game` and closed the window. The saved file's move list begins with `e2e4`, and the computer answered with e6.\n\n- **The drag:** it worked on the first try, dragging be"
+    }
+   ]
+  },
+  {
+   "note": "Set A. Chess not reset between runs. Sleight run 3 was declined by the new desktop approval prompt while it was mid-edit (the run inherited CLAUDE_CODE_ENTRYPOINT=claude-desktop); the bench now pins SLEIGHT_APPROVAL_PROMPT=client.",
+   "stamp": "2026-10-03T22-39-03-910Z",
+   "arms": [
+    "sleight",
+    "lcu"
+   ],
+   "model": "default",
+   "claude": "~/Projects/sleight/.dev/cli/node_modules/.bin/claude",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 1,
+     "passed": true,
+     "seconds": 247.2,
+     "turns": 31,
+     "costUsd": 0.9446808000000001,
+     "exitCode": 0,
+     "answer": "I started a new game, dragged White's pawn from e2 to e4, and saved it to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-03T22-39-03-910Z/sleight-chess-drag-1/11186c07.game`. Then I closed the game windows.\n\n- **The move:** I did it as a mouse drag. The board updated to show"
+    },
+    {
+     "arm": "lcu",
+     "task": "chess-drag",
+     "run": 1,
+     "passed": true,
+     "seconds": 98.6,
+     "turns": 27,
+     "costUsd": 0.8399279999999998,
+     "exitCode": 0,
+     "answer": "I started a new game, dragged the e2 pawn to e4, saved the game to the path you gave and closed its window. The save hit a snag along the way and left a stray file in another run's folder.\n\n- **Drag:** the first drag didn't register; the board stayed the same. The second one did, from (678,690) to ("
+    },
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 2,
+     "passed": true,
+     "seconds": 99.2,
+     "turns": 26,
+     "costUsd": 0.8113872000000003,
+     "exitCode": 0,
+     "answer": "The game is saved at the path you gave and its window is closed. The save needed a second try.\n\n- **New game:** I opened Chess and started a new game (\"Game 2\", Human vs. Computer).\n- **Move:** I dragged the White pawn from e2 to e4 with the mouse. The board then showed a white pawn on e4 and an emp"
+    },
+    {
+     "arm": "lcu",
+     "task": "chess-drag",
+     "run": 2,
+     "passed": true,
+     "seconds": 72.1,
+     "turns": 13,
+     "costUsd": 0.4964226000000001,
+     "exitCode": 0,
+     "answer": "I started a new game in Chess, moved White's pawn from e2 to e4 by dragging it with the mouse, saved the game and closed its window. Everything ran in the background through the `lcu` computer-use server.\n\n- **New game:** I opened Game 2 as Human vs. Computer with the default settings.\n- **The drag:"
+    },
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 3,
+     "passed": false,
+     "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-03T22-39-03-910Z/sleight-chess-drag-3/736fa717.game was not saved",
+     "seconds": 21.5,
+     "turns": 5,
+     "costUsd": 0.2593188,
+     "exitCode": 0,
+     "answer": "I didn't do any of it. Computer use isn't approved to control Chess, so the first call failed with \"Computer Use was not approved to use Chess\" before anything opened.\n\nSo nothing happened in the app: no new game, no e2–e4 drag, and the `.game` file wasn't saved to `/var/folders/.../sleight-chess-dr"
+    },
+    {
+     "arm": "lcu",
+     "task": "chess-drag",
+     "run": 3,
+     "passed": true,
+     "seconds": 52.7,
+     "turns": 13,
+     "costUsd": 0.5120408000000001,
+     "exitCode": 0,
+     "answer": "I started a new game (Game 2) in Chess and dragged White's pawn from e2 to e4 with the mouse. The board then showed the pawn on e4, and the computer answered with e5. I saved the game to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-03T22-39-03-910Z/lcu-chess-drag-3/f4e9336"
+    }
+   ]
+  },
+  {
+   "note": "Set B. Chess not reset between runs; windows and games piled up. Sleight 1: five drags failed in a second Chess window. Sleight 2: the drag worked, the save dialog took the full path as a file name. Run 3 on both arms: the engine could not attach to Chess, which had hung and was killed afterwards.",
+   "stamp": "2026-10-03T22-53-30-685Z",
+   "arms": [
+    "sleight",
+    "lcu"
+   ],
+   "model": "default",
+   "claude": "~/Projects/sleight/.dev/cli/node_modules/.bin/claude",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 1,
+     "passed": false,
+     "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-03T22-53-30-685Z/sleight-chess-drag-1/d5677484.game was not saved",
+     "seconds": 96.8,
+     "turns": 21,
+     "costUsd": 0.7978592000000002,
+     "exitCode": 0,
+     "answer": "I couldn't make the e2→e4 move by dragging, so I stopped there. I didn't save the game and both Chess windows are still open.\n\n- **New game:** Cmd+N opened a second window, \"Game 2\", next to the existing \"Game 1\" instead of resetting it. Game 2 started fine with White to move.\n- **Dragging failed 5 "
+    },
+    {
+     "arm": "lcu",
+     "task": "chess-drag",
+     "run": 1,
+     "passed": true,
+     "seconds": 142.2,
+     "turns": 23,
+     "costUsd": 0.7708274,
+     "exitCode": 0,
+     "answer": "Done. I started a new game, dragged the white pawn from e2 to e4, and saved it to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-03T22-53-30-685Z/lcu-chess-drag-1/5e276928.game`. The file exists (1,364 bytes) and its move list starts with `e2e4`. The computer had already ans"
+    },
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 2,
+     "passed": false,
+     "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-03T22-53-30-685Z/sleight-chess-drag-2/647fb985.game was not saved",
+     "seconds": 106.1,
+     "turns": 27,
+     "costUsd": 0.7889632000000001,
+     "exitCode": 0,
+     "answer": "I stopped partway, and the game is not saved at the path you gave.\n\n- **Done:** I started a new game and dragged the e2 pawn to e4. Chess accepted the move and the computer replied e5.\n- **Save failed:** I typed the full path into the Save As field. The dialog read the slashes as part of the file na"
+    },
+    {
+     "arm": "lcu",
+     "task": "chess-drag",
+     "run": 2,
+     "passed": true,
+     "seconds": 63.3,
+     "turns": 15,
+     "costUsd": 0.5554510000000001,
+     "exitCode": 0,
+     "answer": "I started a new game in Chess, dragged White's pawn from e2 to e4 with the mouse, saved the game and closed the window.\n\n- **Move:** after the drag, the board showed the white pawn on e4 and e2 empty. Black then answered e6.\n- **Save:** `9cb4fbbc.game` (1,364 bytes) is in `.../lcu-chess-drag-2/`.\n- "
+    },
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 3,
+     "passed": false,
+     "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-03T22-53-30-685Z/sleight-chess-drag-3/cf604d28.game was not saved",
+     "seconds": 74,
+     "turns": 11,
+     "costUsd": 0.3867338,
+     "exitCode": 0,
+     "answer": "I couldn't do any of it. Chess never opened under computer use, so no new game was started, no pawn was moved and nothing was saved.\n\n- **What failed:** I asked the engine for Chess three times (by name twice, then by its bundle ID `com.apple.Chess`, with up to 90s to wait). Each call ended with `Co"
+    },
+    {
+     "arm": "lcu",
+     "task": "chess-drag",
+     "run": 3,
+     "passed": false,
+     "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-03T22-53-30-685Z/lcu-chess-drag-3/f4d6dbe0.game was not saved",
+     "seconds": 65.6,
+     "turns": 11,
+     "costUsd": 0.36494519999999997,
+     "exitCode": 0,
+     "answer": "I didn't finish the task. The computer-use engine (the `lcu` server) never managed to attach to Chess, so I couldn't start a game, drag e2 to e4, save the file or close the window.\n\n- **What failed:** `cua.getApp(\"Chess\")` hit `timeoutReached` (error -10005) all four times I tried, by name and by bu"
+    }
+   ]
+  },
+  {
+   "note": "Set C. Chess killed before each run (Chess restores its earlier games on relaunch, so the reset is partial). Sleight 3: the drag worked, the save went under the wrong name.",
+   "stamp": "2026-10-03T23-03-33-472Z",
+   "arms": [
+    "sleight",
+    "lcu"
+   ],
+   "model": "default",
+   "claude": "~/Projects/sleight/.dev/cli/node_modules/.bin/claude",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 1,
+     "passed": true,
+     "seconds": 63.6,
+     "turns": 16,
+     "costUsd": 0.5326042,
+     "exitCode": 0,
+     "answer": "I opened Chess, started a new game (Human vs. Computer) and dragged the white pawn from e2 to e4 with the mouse. The board then showed the pawn on e4 with Black to move, and the computer answered with e5.\n\nI saved the game to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-03"
+    },
+    {
+     "arm": "lcu",
+     "task": "chess-drag",
+     "run": 1,
+     "passed": true,
+     "seconds": 222.5,
+     "turns": 29,
+     "costUsd": 0.9171105999999999,
+     "exitCode": 0,
+     "answer": "I started a new game in Chess, dragged the e2 pawn to e4, saved the game to `lcu-chess-drag-1/51b21a50.game` and closed its window. Reading the file back shows the moves `e2e4 e7e6`; the computer answered with e6 before I saved.\n\nThe save took two tries:\n\n- **First save went to the wrong folder.** I"
+    },
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 2,
+     "passed": true,
+     "seconds": 97.7,
+     "turns": 22,
+     "costUsd": 0.7051356,
+     "exitCode": 0,
+     "answer": "I started a new game in Chess, dragged the white pawn from e2 to e4, saved the game to `.../sleight-chess-drag-2/ef229348.game` and closed the window.\n\n- **The move:** a single drag did it on the first try. The computer answered with e7e5.\n- **The save:** I checked the saved file. It records the mov"
+    },
+    {
+     "arm": "lcu",
+     "task": "chess-drag",
+     "run": 2,
+     "passed": true,
+     "seconds": 73.7,
+     "turns": 16,
+     "costUsd": 0.5335366000000001,
+     "exitCode": 0,
+     "answer": "I started a new game in Chess (Game 4), moved White's pawn from e2 to e4 by dragging it, saved the game and closed its window. I did all of it through the `lcu` computer-use server, in the background.\n\n- **The move:** one drag worked on the first try. After it, the board showed a white pawn on e4 an"
+    },
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 3,
+     "passed": false,
+     "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-03T23-03-33-472Z/sleight-chess-drag-3/52342c32.game was not saved",
+     "seconds": 193.5,
+     "turns": 25,
+     "costUsd": 0.7270764,
+     "exitCode": 0,
+     "answer": "I only got partway through this. The move worked, but the save ended up under the wrong name, the window is still open, and sleight stopped responding.\n\n- **New game and move:** I started a new game (Game 4, Human vs. Computer). I dragged the e2 pawn to e4 with `app.drag`, and the board showed the p"
+    },
+    {
+     "arm": "lcu",
+     "task": "chess-drag",
+     "run": 3,
+     "passed": true,
+     "seconds": 120.2,
+     "turns": 26,
+     "costUsd": 0.8034324,
+     "exitCode": 0,
+     "answer": "The game is saved at `lcu-chess-drag-3/882129a5.game`, with White's pawn moved from e2 to e4 by a mouse drag. The file records the moves `e2e4 e7e6`; the computer answered 1...e6 before I saved.\n\nThe first save went wrong, which matters for scoring this run:\n\n- **Bad first save:** I put the full pat"
+    }
+   ]
+  }
+ ]
+}

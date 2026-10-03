@@ -3,6 +3,7 @@
 // answer), never by asking Claude whether it succeeded. Prompts name no tool,
 // so every arm gets the same words.
 
+import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -10,7 +11,7 @@ import { join } from 'node:path';
 const hasNumber = (answer, n) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(answer.replace(/(?<=\d)[,\u202f\u00a0 ](?=\d{3})/g, ''));
 
 // The only apps a benchmark run may approve (see approve.mjs).
-export const BENCH_APPS = ['Calculator', 'TextEdit'];
+export const BENCH_APPS = ['Calculator', 'TextEdit', 'Chess'];
 
 export const tasks = [
   {
@@ -59,6 +60,28 @@ export const tasks = [
     check: ({ dir, nonce }) => {
       const words = readFileSync(join(dir, `${nonce}-drag.txt`), 'utf8').trim().split(/\s+/);
       return words.join(' ') === 'beta gamma alpha' || `file holds ${JSON.stringify(words.join(' '))}`;
+    },
+  },
+  {
+    id: 'chess-drag',
+    app: 'Chess',
+    // Each run starts from a fresh Chess. Left running, games and windows pile
+    // up between runs, an unsaved game blocks a normal quit, and Chess hung
+    // once (2026-10-03). Its games here are throwaway, so terminate it.
+    setup: () => {
+      try { execFileSync('pkill', ['-x', 'Chess']); } catch {} // exits 1 when Chess isn't running
+      execFileSync('sleep', ['2']);
+    },
+    prompt: ({ dir, nonce }) =>
+      'Using computer use in the background, open Chess and start a new game. As White, move the pawn from ' +
+      `e2 to e4 by dragging it with the mouse. Then save the game as ${join(dir, `${nonce}.game`)} and close the window.`,
+    check: ({ dir, nonce }) => {
+      const path = join(dir, `${nonce}.game`);
+      let text;
+      try { text = readFileSync(path, 'utf8'); } catch { return `${path} was not saved`; }
+      // A .game file is a plist whose Moves string lists moves as e2e4, one per line.
+      const moves = /<key>Moves<\/key>\s*<string>([^<]*)/.exec(text)?.[1].trim().split(/\s+/) ?? [];
+      return moves[0] === 'e2e4' || `${path} has moves ${JSON.stringify(moves.slice(0, 4))}`;
     },
   },
 ];
