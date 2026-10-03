@@ -25,22 +25,23 @@ later, and the desktop app bundles 2.1.286.
 - Chess demo: recorded 2026-10-03 and in the README (`docs/assets/demo.gif`, 32 s at 6x, plus
   `demo.mp4` for posts). Claude played 15 moves by dragging and the game didn't finish. The recording
   showed the pane's action log cutting off its newest entries, fixed the same day (newest first).
-- Launch prep: `v0.1.0` tag and changelog, repo topics, a line on the Land-o-Clusters profile README.
+- Launch prep done on 2026-10-03, except the parts that make the project public. `v0.1.0` is tagged
+  (commit `04e97de`), `CHANGELOG.md` is in, and the repo has topics. The repo is still private.
 
 ## Waiting on the owner
 
 - The icon's original PNG from ChatGPT, saved as `docs/assets/sleight-icon-source.png` (the repo has a
   compressed WebP), and optionally a simplified small-size version.
-- Going public.
+- Going public. When the owner does it, add sleight to the org profile README
+  (`Land-o-Clusters/.github`, `profile/README.md`, under "What lives here", matching the Floati and
+  Puddle entries). The owner pushes that change.
 - Optional: remove `com.apple.TextEdit` from the engine's global approvals file
   (`~/Library/Group Containers/2DC432GLL2.com.openai.sky.CUAService/Library/Application Support/Software/ComputerUseAppApprovals.json`).
 
 ## Next
 
-1. Chess demo.
-2. Launch prep above.
-3. Benchmark arm for LCU plus a drag task, for a measured comparison.
-4. A weekly scheduled `--doctor` and one-task smoke run to catch ChatGPT updates breaking the engine.
+1. Benchmark arm for LCU plus a drag task, for a measured comparison.
+2. A weekly scheduled `--doctor` and one-task smoke run to catch ChatGPT updates breaking the engine.
 
 ## Reading list
 
