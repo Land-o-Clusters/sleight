@@ -33,5 +33,8 @@ belong in [STATE.md](STATE.md).
 
 - Run every check bare, capture its exit code, commit only on 0. Commit with the pathspec on the commit.
 - Live behavior is proven by a live run, judged from the relay trace and the transcript, not the screen.
+- Benchmark results are published in full: every run, failures included, with the raw results file
+  in `docs/benchmarks/` and the caveats stated (owner, 2026-10-03). We never pick runs after seeing
+  them.
 - Docs pass `npm run lint:prose` with zero flags. Limitations go in the README's "Known problems" when we
   find them.

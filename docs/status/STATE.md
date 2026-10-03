@@ -3,53 +3,70 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-03)
+## Banner (2026-10-03, end of session)
 
 Private repo `Land-o-Clusters/sleight`, `main` green in CI (relay tests, plugin validation, mod tests,
-Vale prose lint). We haven't published or released anything yet.
+Vale prose lint). `v0.1.0` is tagged. Nothing is public.
 
-Verified live on Claude Code 2.1.288 with ChatGPT engine 26.930.31730:
+Verified live on Claude Code 2.1.288 with ChatGPT engine 26.930.31730: background control, one approval
+per app per session, per-turn cleanup, the pane and status line, `/sleight stop` mid-turn, and
+`/sleight <text>`. The Chess demo is in the README.
 
-- Background control in Calculator and TextEdit. The benchmark passed 12/12 (four tasks, three runs each).
-- One approval prompt per app per session. The relay answered the repeats (8 of 9 in one run).
-- Per-turn cleanup: the mod's `turn_ended` reaches the engine and succeeds.
-- Pane: action log, status line and a 902-cell half-block picture in a terminal.
-- `/sleight stop` mid-turn. The engine got `Interrupt` and saw no later call, and Claude's next call was
-  refused.
+Benchmark against LCU 0.8.8 (2026-10-03, published in full in `docs/benchmarks/`): both arms passed
+12/15. Both failed the TextEdit drag task 0/3 the same way.
 
-Not verified: the pane's picture in the desktop app's Code tab. That needs desktop Claude Code 2.1.287 or
-later, and the desktop app bundles 2.1.286.
+## Next session's first job: the drag rabbit hole (owner's call, 2026-10-03)
 
-## In flight
+Dragging selected text fails because the engine's macOS `drag` presses, moves and releases at once,
+and text views only start a text drag after a hold. The macOS engine's `drag` takes only a start and an end
+point, while its Linux build offers a press-hold-release drag handle. Calling the native helper directly
+is ruled out because it skips the engine's per-app approval.
 
-- Chess demo: recorded 2026-10-03 and in the README (`docs/assets/demo.gif`, 32 s at 6x, plus
-  `demo.mp4` for posts). Claude played 15 moves by dragging and the game didn't finish. The recording
-  showed the pane's action log cutting off its newest entries, fixed the same day (newest first).
-- Launch prep done on 2026-10-03, except the parts that make the project public. `v0.1.0` is tagged
-  (commit `04e97de`), `CHANGELOG.md` is in, and the repo has topics. The repo is still private.
+The fix to test is the `NSDragAndDropTextDelay` preference (milliseconds before selected text becomes
+draggable). It's undocumented, so prove it before relying on it.
+
+1. Ask the owner first: it changes an app setting on their Mac.
+2. `defaults write com.apple.TextEdit NSDragAndDropTextDelay -int 0`, then quit and reopen TextEdit.
+3. `CLAUDE_BIN=$PWD/.dev/cli/node_modules/.bin/claude node bench/run.mjs --arm sleight --tasks textedit-drag --runs 1`
+4. Undo either way unless the owner keeps it: `defaults delete com.apple.TextEdit NSDragAndDropTextDelay`.
+
+If it works, build an opt-in `/sleight fix-drag <app>` command and a README note, and rerun the drag
+task on both arms. A failure means checking whether the engine's drag sends intermediate mouse-move
+events at all, because without them no delay setting can help. Posting our own mouse events outside the
+engine is the last resort, and I recommend against it: the engine's per-app approval wouldn't cover them.
+
+Also open: adding Chess to the benchmark allowlist, for a drag task that passes (owner's call under
+LAWS). The skill and README already give the cut-and-paste workaround.
+
+## Machine state outside the repo
+
+- Weekly launchd job `com.landoclusters.sleight-watch` (Mondays 9:00, `scripts/watch.sh`), installed
+  2026-10-03. Remove with `npm run watch:remove`. Log: `~/Library/Logs/sleight/watch.log`.
+- LCU 0.8.8 installed runtime-only at `~/.local/share/lcu`, registered for Claude Code only in
+  `.dev/lcu-arm` (untracked). `.dev/py/python3` links Homebrew Python 3.14 for it. The user-level Claude
+  Code config doesn't have LCU.
+- Installed by Homebrew this session: `vale`, `ffmpeg`.
+- `.dev/` (untracked) holds the 2.1.288 test CLI, pseudo-terminal test harnesses (`stop_test2.py`) and
+  `make-demo.sh`.
+- No background jobs are running.
 
 ## Waiting on the owner
 
-- The icon's original PNG from ChatGPT, saved as `docs/assets/sleight-icon-source.png` (the repo has a
-  compressed WebP), and optionally a simplified small-size version.
-- Before going public: the owner reads ChatGPT's terms on the bundled computer-use engine, since
-  publishing something that depends on it is a licensing call.
-- Going public. When the owner does it, add sleight to the org profile README
-  (`Land-o-Clusters/.github`, `profile/README.md`, under "What lives here", matching the Floati and
-  Puddle entries). The owner pushes that change.
+- The NSDragAndDropTextDelay test above.
+- Chess on the benchmark allowlist (yes or no).
+- The icon's original PNG from ChatGPT as `docs/assets/sleight-icon-source.png`, and optionally a
+  small-size version.
+- Before going public: read ChatGPT's terms on the bundled computer-use engine, give LCU's author a
+  heads-up about the comparison, then flip the repo and add sleight to the org profile README
+  (`Land-o-Clusters/.github`, `profile/README.md`, matching the Floati and Puddle entries).
 - Optional: remove `com.apple.TextEdit` from the engine's global approvals file
   (`~/Library/Group Containers/2DC432GLL2.com.openai.sky.CUAService/Library/Application Support/Software/ComputerUseAppApprovals.json`).
 
-## Next
-
-1. Benchmark arm for LCU plus a drag task, for a measured comparison.
-2. A weekly scheduled `--doctor` and one-task smoke run to catch ChatGPT updates breaking the engine.
-
 ## Reading list
 
-- `README.md`: how it works, known problems, benchmark.
+- `README.md`: how it works, known problems, benchmark, update watch.
 - `CLAUDE.md`: checks and writing rules.
 - `plugins/sleight/lib/relay.mjs`: the relay, with the reasons for each thing it adds.
-- `bench/`: tasks, runner, and the approval hook that only benchmark runs load.
-- `.dev/stop_test2.py` (untracked): how to drive an interactive session in a pseudo-terminal. Judge results
+- `bench/`: tasks, the arm setup in `run.mjs`, and the approval hook only benchmark runs load.
+- `.dev/stop_test2.py` (untracked): driving an interactive session in a pseudo-terminal. Judge results
   from the relay trace and the session transcript, because the screen redraws too much to match on.

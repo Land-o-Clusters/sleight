@@ -2,8 +2,13 @@
   "hooks": {
     "Elicitation": [
       {
-        "matcher": "plugin:sleight:computer",
-        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/bench/approve.mjs\"" }]
+        "matcher": "plugin:sleight:computer|lcu",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${BENCH_ROOT:-$CLAUDE_PROJECT_DIR}/bench/approve.mjs\""
+          }
+        ]
       }
     ]
   }

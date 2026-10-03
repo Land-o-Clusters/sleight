@@ -153,6 +153,10 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   foreground counts too. Background sessions can share the engine's helper fine (two sleight sessions, or
   sleight next to Codex). In one test where Codex was also driving in the foreground, keystrokes typed
   during the run showed up twice, and we still don't know why.
+- Dragging selected text doesn't move it. The engine's drag on macOS presses, moves and releases at
+  once, and text views like TextEdit's only start a text drag after the mouse is held down for a
+  moment, so they read it as a new selection. LCU fails the same way. Drags that pick something up
+  right away, like Chess pieces, work. To move text, use cut and paste.
 - There's no real hover, since events go to the app and the real pointer never moves. The skill covers
   most cases: tooltips are readable as `Help:` text in the UI state, and hover menus usually open through
   an element's secondary actions, a right-click or a key. UI that only reacts to a real pointer needs a
@@ -208,31 +212,55 @@ The `env` block of `~/.claude/settings.json` works.
 
 ## Benchmark
 
-`bench/` has four tasks. The Calculator pair clicks buttons in one and switches modes through a menu in
-the other. The TextEdit pair saves a new file in one and edits an existing file in the other. Each runs through headless `claude -p` and gets
-checked outside the agent, against the file on disk or the exact answer.
+`bench/` runs each task through headless `claude -p` and checks it outside the agent, against the file
+on disk or the exact answer. sleight and LCU get the same prompt for each task, and the prompts
+don't mention a tool by name.
 
-First run, three runs per task, Claude Code 2.1.288 with its default model:
+Comparison with [LCU](https://github.com/0xpolarzero/lcu) 0.8.8, which drives the same engine, on
+2026-10-03, with each task run 3 times per arm, the arms alternating, on Claude Code 2.1.288 and its
+default model:
 
-| Task | Passed | Median time | Median turns | Cost for 3 runs |
+| Task | sleight | LCU | sleight median | LCU median |
 |---|---|---|---|---|
-| Calculator, clicking | 3/3 | 23 s | 6 | $1.17 |
-| Calculator, Scientific mode via menu | 3/3 | 21 s | 7 | $1.16 |
-| TextEdit, save a new file | 3/3 | 91 s | 20 | $3.34 |
-| TextEdit, edit an existing file | 3/3 | 51 s | 11 | $1.81 |
+| Calculator, clicking | 3/3 | 3/3 | 14 s | 15 s |
+| Calculator, Scientific mode via menu | 3/3 | 3/3 | 19 s | 23 s |
+| TextEdit, save a new file | 3/3 | 3/3 | 75 s | 70 s |
+| TextEdit, edit a file | 3/3 | 3/3 | 21 s | 31 s |
+| TextEdit, move a word by drag and drop | 0/3 | 0/3 | 53 s | 45 s |
+
+Both passed 12 of 15 and failed every drag run the same way (see [Known problems](#known-problems)).
+The speed differences come from three runs on one Mac, so treat them as noise until more runs say
+otherwise. The 30 runs cost $12.90 in all. Every run is in
+[`docs/benchmarks/2026-10-03-sleight-vs-lcu.json`](docs/benchmarks/2026-10-03-sleight-vs-lcu.json).
+LCU warned that this engine version is one it hasn't tested, and so is ours.
 
 ```bash
-npm run bench -- --runs 3
+npm run bench -- --runs 3             # sleight only
+npm run bench -- --arm all --runs 3   # sleight and LCU
 ```
+
+The LCU arm needs LCU registered for Claude Code in a separate folder. `bench/run.mjs` has the steps.
 
 > [!WARNING]
 > Headless runs can't show approval prompts, so a benchmark run auto-approves Calculator and TextEdit
-> for sleight (`bench/approve.mjs`, loaded only through `bench/settings.json`). Only run it when you're
-> fine with Claude driving those two apps unattended. `--dry-run` checks the setup without launching
-> Claude.
+> for either arm (`bench/approve.mjs`, loaded only through `bench/settings.json`). Only run it when
+> you're fine with Claude driving those two apps unattended. `--dry-run` checks the setup without
+> launching Claude.
 
-Results go to `bench/results/`. Comparing other computer-use tools means adding each one's MCP
-configuration as another arm, which doesn't exist yet.
+## Update watch
+
+A ChatGPT update can change the engine under sleight at any time. `scripts/watch.sh` checks for that:
+it runs `--doctor`, and when the engine version differs from the last run, it runs one benchmark task.
+It logs to `~/Library/Logs/sleight/watch.log` and posts a macOS notification when something fails or
+the engine changed.
+
+```bash
+npm run watch            # check now
+npm run watch:install    # run it every Monday at 9:00 (a launchd job)
+npm run watch:remove     # remove the job
+```
+
+The benchmark task auto-approves Calculator, like any benchmark run.
 
 ## Development
 
@@ -257,7 +285,7 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 - [x] Status line entry and `/sleight stop`
 - [x] Hover workarounds in the skill
 - [x] A reproducible task benchmark
-- [ ] Benchmark arms for other computer-use tools
+- [x] Weekly update watch
 - [ ] Check the pane's picture in the desktop app's Code tab
 
 ## Credits

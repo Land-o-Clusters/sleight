@@ -42,6 +42,13 @@ background equivalent. Try these in order:
    use a pointer-moving computer-use tool if one is available, for that step only, and tell the user
    first that it will take over their screen.
 
+## Moving text
+
+Dragging selected text doesn't work: the engine's drag is instant, and text views only move a selection
+after the mouse is held down. Move text with the keyboard instead: select it, `app.pressKey("super+x")`,
+click where it goes, `app.pressKey("super+v")`. Drags that pick something up at once, like Chess
+pieces, work fine.
+
 ## What it can't do
 
 - Real pointer hover, beyond the workarounds above.
