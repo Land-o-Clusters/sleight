@@ -208,3 +208,11 @@ test('a new relay (a new session) asks again', async () => {
   await tick();
   assert.equal(second.toClient.length, 1);
 });
+
+test('answers a server/discover probe itself instead of forwarding it', async () => {
+  const h = harness();
+  h.fromClient({ jsonrpc: '2.0', id: 'server-discover-probe-1', method: 'server/discover', params: {} });
+  await tick();
+  assert.equal(h.toServer.length, 0);
+  assert.deepEqual(h.toClient[0], { jsonrpc: '2.0', id: 'server-discover-probe-1', error: { code: -32601, message: 'Method not found' } });
+});

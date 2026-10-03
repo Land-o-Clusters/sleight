@@ -1,5 +1,5 @@
 ---
-name: undertow
+name: drive-mac-apps
 description: Use when a task needs a native macOS app operated through its UI (clicking, typing, dragging, reading what is on screen) and no CLI, API or dedicated tool covers it. undertow drives the app in the background through the computer-use engine bundled with the ChatGPT desktop app, without moving the user's pointer.
 ---
 

@@ -10,6 +10,11 @@
 //   undertow mod at the end of each Claude turn) gets the current ids filled
 //   in, then the next call starts a new turn.
 //
+// Claude Code 2.1.288 opens with a `server/discover` probe from a newer MCP
+// protocol; the server exits on any request before `initialize`, and Claude
+// Code then restarts it on the older protocol. The relay answers the probe
+// with "method not found" itself, so the server isn't killed.
+//
 // It also keeps the server's js_add_node_module_dir tool out of the model's
 // tool list, marks turn_ended as internal (it stays listed because Claude Code
 // only lets the mod call listed tools; the mod refuses model calls to it), and
@@ -120,6 +125,10 @@ export function createRelay({
       msg = JSON.parse(line);
     } catch {
       serverIn.write(line + '\n');
+      return;
+    }
+    if (msg.method === 'server/discover' && msg.id !== undefined) {
+      toClient({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'Method not found' } });
       return;
     }
     if (msg.method === 'tools/list' && msg.id !== undefined) listRequests.add(msg.id);
