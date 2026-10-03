@@ -5,7 +5,7 @@ What is true now. One banner, replaced in place as work happens. Always-true rul
 
 ## Banner (2026-10-03, late evening)
 
-Private repo `Land-o-Clusters/sleight`, `main` green in CI at `a5f8f37`. `v0.1.0` is tagged. Nothing
+Private repo `Land-o-Clusters/sleight`, `main` green in CI. `v0.1.0` is tagged. Nothing
 is public.
 
 App approvals now work in the desktop app's Code tab (`a5f8f37`). The Code tab (Claude 2.19675.0)
