@@ -12,6 +12,12 @@
 //
 // It also keeps the server's host-only tools out of the model's tool list,
 // and ends the open turn when Claude Code closes the connection.
+//
+// App approvals: the server remembers an approval for the session only when
+// the answer carries `_meta.persist: "session"`, which Codex sends for "Allow
+// for this session". Claude Code's prompt can only accept or decline, so the
+// relay adds that field to an accepted computer-use approval that offers it.
+// It never adds "always". `approvalScope: 'once'` turns this off.
 
 import { randomUUID } from 'node:crypto';
 
@@ -35,12 +41,26 @@ function lines(stream, onLine) {
   });
 }
 
-export function createRelay({ clientIn, clientOut, serverIn, serverOut, sessionId = randomUUID() }) {
+// A server request asking the user to approve an app, with "session" among
+// the scopes it accepts.
+function isSessionScopableApproval(msg) {
+  const meta = msg.params?._meta;
+  return msg.method === 'elicitation/create'
+    && meta?.connector_id === 'computer-use'
+    && Array.isArray(meta.persist) && meta.persist.includes('session');
+}
+
+export function createRelay({
+  clientIn, clientOut, serverIn, serverOut,
+  sessionId = randomUUID(),
+  approvalScope = 'session',
+}) {
   let turnId = randomUUID();
   let turnUsed = false;
   let nextInternalId = 0;
   const listRequests = new Set();
   const internalRequests = new Map();
+  const approvalRequests = new Set();
 
   const toServer = msg => serverIn.write(JSON.stringify(msg) + '\n');
   const toClient = msg => clientOut.write(JSON.stringify(msg) + '\n');
@@ -71,6 +91,10 @@ export function createRelay({ clientIn, clientOut, serverIn, serverOut, sessionI
       return;
     }
     if (msg.method === 'tools/list' && msg.id !== undefined) listRequests.add(msg.id);
+    if (msg.method === undefined && approvalRequests.delete(msg.id)
+        && msg.result?.action === 'accept' && msg.result._meta?.persist === undefined) {
+      msg.result._meta = { ...msg.result._meta, persist: 'session' };
+    }
     if (msg.method === 'tools/call' && msg.params) {
       const { name } = msg.params;
       if (name === TURN_END_TOOL) {
@@ -98,6 +122,7 @@ export function createRelay({ clientIn, clientOut, serverIn, serverOut, sessionI
       internalRequests.delete(msg.id);
       return;
     }
+    if (approvalScope === 'session' && isSessionScopableApproval(msg)) approvalRequests.add(msg.id);
     if (msg.id !== undefined && listRequests.has(msg.id)) {
       listRequests.delete(msg.id);
       if (Array.isArray(msg.result?.tools)) {

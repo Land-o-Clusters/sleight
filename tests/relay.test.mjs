@@ -4,7 +4,7 @@ import { PassThrough } from 'node:stream';
 import { createRelay } from '../plugins/undertow/lib/relay.mjs';
 
 // Wires a relay to in-memory streams and records what each side receives.
-function harness() {
+function harness(options = {}) {
   const clientIn = new PassThrough();
   const clientOut = new PassThrough();
   const serverIn = new PassThrough();
@@ -13,7 +13,7 @@ function harness() {
   const toClient = [];
   serverIn.setEncoding('utf8').on('data', d => d.split('\n').filter(Boolean).forEach(l => toServer.push(JSON.parse(l))));
   clientOut.setEncoding('utf8').on('data', d => d.split('\n').filter(Boolean).forEach(l => toClient.push(JSON.parse(l))));
-  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, sessionId: 'session-1' });
+  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, sessionId: 'session-1', ...options });
   return {
     relay,
     toServer,
@@ -87,4 +87,52 @@ test('endOpenTurn does nothing when no call used the turn', async () => {
   await h.relay.endOpenTurn();
   await tick();
   assert.equal(h.toServer.length, 0);
+});
+
+const appApproval = (id, persist = ['session', 'always']) => ({
+  jsonrpc: '2.0', id, method: 'elicitation/create',
+  params: { message: 'Allow Computer Use to use "Calculator"?', mode: 'form', requestedSchema: { type: 'object', properties: {} },
+    _meta: { connector_id: 'computer-use', persist } },
+});
+
+test('scopes an accepted app approval to the session', async () => {
+  const h = harness();
+  h.fromServer(appApproval(5));
+  await tick();
+  h.fromClient({ jsonrpc: '2.0', id: 5, result: { action: 'accept', content: {} } });
+  await tick();
+  assert.deepEqual(h.toServer[0].result, { action: 'accept', content: {}, _meta: { persist: 'session' } });
+});
+
+test('never changes a decline, a cancel, or a scope the client chose', async () => {
+  const h = harness();
+  for (const id of [1, 2, 3]) h.fromServer(appApproval(id));
+  await tick();
+  h.fromClient({ jsonrpc: '2.0', id: 1, result: { action: 'decline' } });
+  h.fromClient({ jsonrpc: '2.0', id: 2, result: { action: 'cancel' } });
+  h.fromClient({ jsonrpc: '2.0', id: 3, result: { action: 'accept', _meta: { persist: 'always' } } });
+  await tick();
+  assert.deepEqual(h.toServer.map(m => m.result), [
+    { action: 'decline' }, { action: 'cancel' }, { action: 'accept', _meta: { persist: 'always' } },
+  ]);
+});
+
+test('leaves approvals alone that do not offer a session scope or are not computer use', async () => {
+  const h = harness();
+  h.fromServer(appApproval(1, []));
+  h.fromServer({ jsonrpc: '2.0', id: 2, method: 'elicitation/create', params: { message: 'Other?', _meta: { connector_id: 'other', persist: ['session'] } } });
+  await tick();
+  h.fromClient({ jsonrpc: '2.0', id: 1, result: { action: 'accept' } });
+  h.fromClient({ jsonrpc: '2.0', id: 2, result: { action: 'accept' } });
+  await tick();
+  assert.deepEqual(h.toServer.map(m => m.result), [{ action: 'accept' }, { action: 'accept' }]);
+});
+
+test('approvalScope once passes accepts through unchanged', async () => {
+  const h = harness({ approvalScope: 'once' });
+  h.fromServer(appApproval(5));
+  await tick();
+  h.fromClient({ jsonrpc: '2.0', id: 5, result: { action: 'accept', content: {} } });
+  await tick();
+  assert.deepEqual(h.toServer[0].result, { action: 'accept', content: {} });
 });

@@ -100,6 +100,8 @@ function run() {
     clientOut: process.stdout,
     serverIn: child.stdin,
     serverOut: child.stdout,
+    // UNDERTOW_APPROVAL_SCOPE=once asks again on every action instead.
+    approvalScope: process.env.UNDERTOW_APPROVAL_SCOPE === 'once' ? 'once' : 'session',
   });
 
   // Claude Code closing the connection is the end of the session: end the

@@ -72,7 +72,8 @@ Use undertow to open Calculator in the background and work out 12 × 12 by click
 ```
 
 The first time Claude touches an app, you'll get a prompt like **Allow Computer Use to use "Calculator"?**
-That prompt comes from the engine itself, once per app per session.
+That prompt comes from the engine itself. Accepting it allows that app for the rest of the session; see
+[Approval scope](#approval-scope).
 
 ### Updating
 
@@ -103,6 +104,12 @@ Claude Code ──MCP──▶ bin/undertow-mcp ──▶ ChatGPT.app's cua-repl
 3. The server exposes a persistent JavaScript tool, `js`. Its first call returns the full API
    documentation for the installed version, so Claude always learns the current API.
 4. Per-app approvals go through MCP form elicitation, which Claude Code shows as a normal prompt.
+5. Between the two, `lib/relay.mjs` adds what Codex would send and Claude Code doesn't: a session and
+   turn id on each call, the session scope on accepted app approvals, and a `turn_ended` call when the
+   session closes. It also keeps the engine's internal tools (`turn_ended`, `js_add_node_module_dir`)
+   out of Claude's tool list.
+6. On Claude Code v2.1.287 or later, the plugin's mod (`hooks/register.ts`) also ends the engine's turn
+   after each Claude turn that used it, as Codex does.
 
 By default undertow turns on native apps only (`CUA_REPL_ENABLED_SURFACES=computer`). The engine's
 in-app browser only exists inside ChatGPT. Set `UNDERTOW_SURFACES=browser,computer` in the plugin's
@@ -118,36 +125,40 @@ environment to try the Chrome surface, which needs the Codex Chrome extension.
   arrived twice. We haven't pinned down why.
 - **No hover.** The engine sends events to the app, not through the real pointer, so hover-only UI
   (tooltips, hover menus) never sees a pointer. Use a pointer-moving computer-use tool for those.
-- **No end-of-turn cleanup yet.** In Codex, the end of each turn tells the engine to release the apps
-  it was using. undertow doesn't send that signal yet, so the engine can hold an app between turns.
-  This is the next thing on the roadmap.
+- **Per-turn cleanup is unverified.** The mod that ends the engine's turn after each Claude turn passes
+  validation, but hasn't yet been seen working in a live session. Before Claude Code v2.1.287 there is no
+  mod, so turns end only when the session closes.
 - **ChatGPT updates can break it.** The runtime is undocumented. The version lookup handles the
   folder changing; it can't handle the API changing. Run `--doctor` first when something stops working.
 - **Some apps are off limits.** The engine refuses terminal apps such as Terminal.app ("not allowed …
   for safety reasons"), and honors any app blocks your organization sets.
-- **Approvals repeat on every action.** Claude Code's prompt can only accept or decline, so the engine
-  treats each accept as one-time and asks again on the next click. Codex avoids this by sending a
-  "for this session" choice. See [the open question](#open-question-approval-scope).
 - **`claude -p` can't answer approval prompts**, so headless runs can only use apps already approved
   for that session.
 - **macOS on Apple Silicon only.** The engine has Linux and Windows builds, but undertow has only been
   tested on macOS.
 
-### Open question: approval scope
+### Approval scope
 
-The engine remembers an approval for the rest of a session only when the answer says so
-(`_meta.persist: "session"`), which Claude Code's prompt can't express. The relay could add that field
-whenever you click Accept on a computer-use approval, so each app is approved once per Claude session,
-as in Codex. The cost is that Accept then silently means "for this session". This is undecided; it would
-ship as an opt-in setting, not a default, if at all.
+**Accepting an app approval allows that app for the rest of the Claude Code session.** The prompt
+doesn't say so, so here it is plainly.
+
+The engine remembers an approval only when the answer says how long for (`_meta.persist`). Codex sends
+"session" when you pick "Allow for this session"; Claude Code's prompt can only accept or decline, and
+without a scope the engine asks again on every click. So the relay adds `persist: "session"` when you
+accept a computer-use app approval. It never adds "always", and it doesn't touch a decline or a cancel.
+A new Claude Code session asks again.
+
+To be asked on every action instead, set `UNDERTOW_APPROVAL_SCOPE=once` in Claude Code's environment,
+for example in the `env` block of `~/.claude/settings.json`.
 
 ## Safety
 
 - **`js` runs JavaScript as you.** Treat it like Bash: Claude Code asks before each call unless you allow
   `mcp__plugin_undertow_computer__js`. Allowing it means no more prompts for any code Claude sends.
-- **Per-app approvals still apply.** The engine asks before touching each app, however the `js` tool is allowed.
-- **Read before you install.** This repository is small on purpose: one shell script, one Node file,
-  two manifests.
+- **Per-app approvals still apply.** The engine asks before touching each app, however the `js` tool is
+  allowed. An accepted approval lasts for the session ([Approval scope](#approval-scope)).
+- **Read before you install.** This repository is small on purpose: one shell script, two Node files,
+  a mod, a skill and two manifests.
 
 ## Troubleshooting
 
@@ -161,11 +172,13 @@ ship as an opt-in setting, not a default, if at all.
 ## Roadmap
 
 - [x] MCP server that survives ChatGPT updates
-- [ ] End-of-turn cleanup through a mod `turn.complete` hook (Claude Code v2.1.287+)
-- [ ] Hide the engine's internal tools (`turn_ended`, `js_add_node_module_dir`) from Claude
+- [x] Session and turn ids, so the engine can scope approvals and cleanup
+- [x] Approvals that last for the session, as in Codex
+- [x] Hide the engine's internal tools (`turn_ended`, `js_add_node_module_dir`) from Claude
+- [x] A skill that tells Claude when to use undertow and when to fall back to a pointer-moving tool
+- [ ] Per-turn cleanup through the mod's `turn.complete` hook: written, not yet verified live
 - [ ] Live pane showing the engine's latest screenshot and actions, since you can't see apps it drives in the background
 - [ ] Status line entry and `/undertow stop`
-- [ ] A skill that tells Claude when to use undertow and when to fall back to a pointer-moving tool
 - [ ] A reproducible task benchmark against other computer-use tools
 
 ## Credits
