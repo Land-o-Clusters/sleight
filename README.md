@@ -125,9 +125,8 @@ environment to try the Chrome surface, which needs the Codex Chrome extension.
   arrived twice. We haven't pinned down why.
 - **No hover.** The engine sends events to the app, not through the real pointer, so hover-only UI
   (tooltips, hover menus) never sees a pointer. Use a pointer-moving computer-use tool for those.
-- **Per-turn cleanup is unverified.** The mod that ends the engine's turn after each Claude turn passes
-  validation, but hasn't yet been seen working in a live session. Before Claude Code v2.1.287 there is no
-  mod, so turns end only when the session closes.
+- **Per-turn cleanup needs Claude Code v2.1.287 or later.** The mod ends the engine's turn after each
+  Claude turn. On older versions there is no mod, so turns end only when the session closes.
 - **ChatGPT updates can break it.** The runtime is undocumented. The version lookup handles the
   folder changing; it can't handle the API changing. Run `--doctor` first when something stops working.
 - **Some apps are off limits.** The engine refuses terminal apps such as Terminal.app ("not allowed …
@@ -181,7 +180,7 @@ for example in the `env` block of `~/.claude/settings.json`.
 - [x] Approvals that last for the session, as in Codex
 - [x] Hide the engine's internal tools (`turn_ended`, `js_add_node_module_dir`) from Claude
 - [x] A skill that tells Claude when to use undertow and when to fall back to a pointer-moving tool
-- [ ] Per-turn cleanup through the mod's `turn.complete` hook: written, not yet verified live
+- [x] Per-turn cleanup through the mod's `turn.complete` hook
 - [ ] Live pane showing the engine's latest screenshot and actions, since you can't see apps it drives in the background
 - [ ] Status line entry and `/undertow stop`
 - [ ] A reproducible task benchmark against other computer-use tools
