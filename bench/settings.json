@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "Elicitation": [
+      {
+        "matcher": "plugin:undertow:computer",
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/bench/approve.mjs\"" }]
+      }
+    ]
+  }
+}

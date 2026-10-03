@@ -10,10 +10,12 @@
 
 <p align="center">
   <a href="#install">Install</a> ·
+  <a href="#watch-and-stop-it">Watch and stop it</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#what-is-still-wrong">What is still wrong</a> ·
   <a href="#safety">Safety</a> ·
   <a href="#troubleshooting">Troubleshooting</a> ·
+  <a href="#benchmark">Benchmark</a> ·
   <a href="#roadmap">Roadmap</a>
 </p>
 
@@ -37,7 +39,9 @@ undertow lets Claude Code use that engine. Claude writes short JavaScript agains
 - [ChatGPT desktop app](https://chatgpt.com/download/), with **Computer Use** turned on in Codex at least once.
   That first run installs the engine's helper and asks macOS for Accessibility and Screen Recording access.
   You don't need to stay signed in to Codex afterwards.
-- Claude Code v2.1.275 or later. Later releases add a live view of what the engine is doing (see [Roadmap](#roadmap)); those need v2.1.287 or later.
+- Claude Code v2.1.275 or later. The pane, status line, `/undertow stop` and per-turn cleanup are a
+  [mod](https://code.claude.com/docs/en/plugins/mods/overview) and need v2.1.287 or later; on older
+  versions undertow still works without them.
 
 ### Add the plugin
 
@@ -89,6 +93,24 @@ claude plugin update undertow@undertow
 
 Or turn on auto-update for the `undertow` marketplace in `/plugin` → **Marketplaces**.
 
+## Watch and stop it
+
+Apps undertow drives stay in the background, so you can't watch them directly. On Claude Code v2.1.287
+or later:
+
+- **`/undertow`** opens a pane with the app's latest picture and a log of each action Claude took.
+  The picture refreshes after each turn that used undertow, or when you press **Refresh** (`r`) while
+  Claude is idle. In a terminal it's drawn in colored half-blocks; in the desktop app's Code tab it's
+  the screenshot itself.
+- **The status line** shows the app and how many actions Claude has taken.
+- **`/undertow stop`**, or **Stop** (`s`) in the pane, ends the engine's turn and refuses any further
+  undertow call until your next message. It works mid-turn. Press Esc as well to stop the rest of
+  Claude's turn.
+
+The pane never snapshots while Claude is working, because the engine reports UI changes as a diff
+against the latest read of an app, whoever made it. After the pane reads an app, your next message
+tells Claude to take a full read before trusting a diff.
+
 ## How it works
 
 ```
@@ -123,8 +145,12 @@ environment to try the Chrome surface, which needs the Codex Chrome extension.
   background sessions (two undertow sessions, or undertow and Codex) can share the engine's helper at
   once. In one test with Codex driving the foreground at the same time, keystrokes typed during the run
   arrived twice. We haven't pinned down why.
-- **No hover.** The engine sends events to the app, not through the real pointer, so hover-only UI
-  (tooltips, hover menus) never sees a pointer. Use a pointer-moving computer-use tool for those.
+- **No real hover.** The engine sends events to the app, not through the real pointer. The skill teaches
+  Claude the workarounds: tooltips are readable as `Help:` text in the UI state, hover menus usually open
+  through an element's secondary actions, a right-click or a key. Only truly pointer-driven UI needs a
+  pointer-moving tool.
+- **The desktop app's pane picture is unverified.** It embeds the screenshot in an SVG, which the
+  terminal pane doesn't need; it hasn't been checked in the desktop app's Code tab yet.
 - **Per-turn cleanup needs Claude Code v2.1.287 or later.** The mod ends the engine's turn after each
   Claude turn. On older versions there is no mod, so turns end only when the session closes.
 - **ChatGPT updates can break it.** The runtime is undocumented. The version lookup handles the
@@ -161,8 +187,8 @@ for example in the `env` block of `~/.claude/settings.json`.
   `mcp__plugin_undertow_computer__js`. Allowing it means no more prompts for any code Claude sends.
 - **Per-app approvals still apply.** The engine asks before touching each app, however the `js` tool is
   allowed. An accepted approval lasts for the session ([Approval scope](#approval-scope)).
-- **Read before you install.** This repository is small on purpose: one shell script, two Node files,
-  a mod, a skill and two manifests.
+- **Read before you install.** This repository is small on purpose: a launcher, a relay, a mod, a skill
+  and two manifests.
 
 ## Troubleshooting
 
@@ -173,6 +199,35 @@ for example in the `env` block of `~/.claude/settings.json`.
 | Approval prompt never appears | Claude Code too old for form elicitation | Update Claude Code |
 | Tool calls fail after a ChatGPT update | Runtime API changed | Open an issue with the `--doctor` output |
 
+## Benchmark
+
+`bench/` holds a small task suite: two Calculator tasks (clicking, a menu) and two TextEdit tasks (save a
+new file, edit an existing one). Each runs through headless `claude -p` and is checked outside the
+agent, by the file on disk or the exact answer.
+
+```bash
+npm run bench -- --runs 3
+```
+
+> [!WARNING]
+> Headless runs can't show approval prompts, so a benchmark run **auto-approves Calculator and
+> TextEdit** for undertow (`bench/approve.mjs`, used only through `bench/settings.json`). Run it only
+> when you're fine with Claude driving those two apps unattended. `--dry-run` checks the setup without
+> launching Claude.
+
+Results go to `bench/results/`. Comparing other computer-use tools on the same tasks means adding
+their MCP configuration as another arm; that isn't built yet.
+
+## Development
+
+```bash
+npm test               # relay unit tests
+npm run validate       # claude plugin validate, marketplace and plugin
+npm run test:mod       # the mod's tests, against the engine (claude plugin test)
+npm run typecheck      # needs the types Claude Code writes when it loads the mod
+UNDERTOW_TRACE=1 claude --plugin-dir plugins/undertow   # logs every relayed message to ~/Library/Logs/undertow/
+```
+
 ## Roadmap
 
 - [x] MCP server that survives ChatGPT updates
@@ -181,9 +236,12 @@ for example in the `env` block of `~/.claude/settings.json`.
 - [x] Hide the engine's internal tools (`turn_ended`, `js_add_node_module_dir`) from Claude
 - [x] A skill that tells Claude when to use undertow and when to fall back to a pointer-moving tool
 - [x] Per-turn cleanup through the mod's `turn.complete` hook
-- [ ] Live pane showing the engine's latest screenshot and actions, since you can't see apps it drives in the background
-- [ ] Status line entry and `/undertow stop`
-- [ ] A reproducible task benchmark against other computer-use tools
+- [x] Live pane with the app's latest picture and an action log
+- [x] Status line entry and `/undertow stop`
+- [x] Hover workarounds in the skill
+- [x] A reproducible task benchmark
+- [ ] Benchmark arms for other computer-use tools
+- [ ] Check the pane's picture in the desktop app's Code tab
 
 ## Credits
 

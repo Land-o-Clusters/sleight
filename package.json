@@ -8,6 +8,7 @@
     "validate": "claude plugin validate . && claude plugin validate plugins/undertow",
     "typecheck": "tsc -p plugins/undertow/tsconfig.json",
     "check": "npm test && npm run validate && npm run test:mod",
-    "doctor": "plugins/undertow/bin/undertow-mcp --doctor"
+    "doctor": "plugins/undertow/bin/undertow-mcp --doctor",
+    "bench": "node bench/run.mjs"
   }
 }
