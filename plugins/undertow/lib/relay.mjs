@@ -15,12 +15,15 @@
 // only lets the mod call listed tools; the mod refuses model calls to it), and
 // ends the open turn when Claude Code closes the connection.
 //
-// App approvals: the server remembers an approval for the session only when
-// the answer carries `_meta.persist: "session"`, which Codex sends for "Allow
-// for this session". Claude Code's prompt can only accept or decline, so the
-// relay adds that field to an accepted computer-use approval that offers it,
-// in both `_meta` and `content`, the two places the server reads a scope.
-// It never adds "always". `approvalScope: 'once'` turns this off.
+// App approvals: the server asks before each action on an app and never
+// remembers an answer for a session itself. In Codex, the host remembers "Allow
+// for this session" and answers the repeats. Claude Code's prompt can only
+// accept or decline, so the relay plays that part: once the user accepts an app,
+// later approval requests for the same app and risk level are answered with the
+// same accept, for the life of this process (one Claude Code session). A
+// different app, a riskier request or a new session reaches the user. Declines
+// and cancels are never remembered, and nothing is stored on disk.
+// `approvalScope: 'once'` turns this off.
 //
 // `trace`, when given, receives every message as it passes, for debugging.
 
@@ -47,13 +50,28 @@ function lines(stream, onLine) {
   });
 }
 
-// A server request asking the user to approve an app, with "session" among
-// the scopes it accepts.
-function isSessionScopableApproval(msg) {
+// The key an app approval is remembered under, or undefined for a request
+// that isn't a session-scopable computer-use app approval.
+function approvalKey(msg) {
   const meta = msg.params?._meta;
-  return msg.method === 'elicitation/create'
-    && meta?.connector_id === 'computer-use'
-    && Array.isArray(meta.persist) && meta.persist.includes('session');
+  const app = meta?.tool_params?.app;
+  if (msg.method !== 'elicitation/create' || meta?.connector_id !== 'computer-use') return undefined;
+  if (!Array.isArray(meta.persist) || !meta.persist.includes('session')) return undefined;
+  if (typeof app !== 'string' || !app) return undefined;
+  return JSON.stringify([app, meta.riskLevel ?? null]);
+}
+
+// The server marks turn_ended with `_meta.ui.visibility: []`, which Claude Code
+// reads as "callable by no one", the mod included. Drop that, and describe it
+// as internal; the mod refuses model calls to it.
+function internalTurnEnd(tool) {
+  const { _meta, ...rest } = tool;
+  const { ui, ...otherMeta } = _meta ?? {};
+  return {
+    ...rest,
+    description: TURN_END_DESCRIPTION,
+    ...(Object.keys(otherMeta).length ? { _meta: otherMeta } : {}),
+  };
 }
 
 export function createRelay({
@@ -67,7 +85,8 @@ export function createRelay({
   let nextInternalId = 0;
   const listRequests = new Set();
   const internalRequests = new Map();
-  const approvalRequests = new Set();
+  const approvalRequests = new Map(); // server request id -> approval key
+  const approved = new Set(); // approval keys the user accepted this session
 
   const toServer = msg => {
     trace('to-server', msg);
@@ -104,10 +123,15 @@ export function createRelay({
       return;
     }
     if (msg.method === 'tools/list' && msg.id !== undefined) listRequests.add(msg.id);
-    if (msg.method === undefined && approvalRequests.delete(msg.id)
-        && msg.result?.action === 'accept' && msg.result._meta?.persist === undefined) {
-      msg.result._meta = { ...msg.result._meta, persist: 'session' };
-      msg.result.content = { ...msg.result.content, persist: 'session' };
+    if (msg.method === undefined && approvalRequests.has(msg.id)) {
+      const key = approvalRequests.get(msg.id);
+      approvalRequests.delete(msg.id);
+      if (msg.result?.action === 'accept') {
+        approved.add(key);
+        if (msg.result._meta?.persist === undefined) {
+          msg.result._meta = { ...msg.result._meta, persist: 'session' };
+        }
+      }
     }
     if (msg.method === 'tools/call' && msg.params) {
       const { name } = msg.params;
@@ -136,11 +160,19 @@ export function createRelay({
       internalRequests.delete(msg.id);
       return;
     }
-    if (approvalScope === 'session' && isSessionScopableApproval(msg)) approvalRequests.add(msg.id);
+    const key = approvalScope === 'session' ? approvalKey(msg) : undefined;
+    if (key !== undefined) {
+      if (approved.has(key)) {
+        trace('answered-for-session', msg);
+        toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'accept', content: {}, _meta: { persist: 'session' } } });
+        return;
+      }
+      approvalRequests.set(msg.id, key);
+    }
     if (msg.method === undefined && listRequests.delete(msg.id) && Array.isArray(msg.result?.tools)) {
       msg.result.tools = msg.result.tools
         .filter(t => !HIDDEN_TOOLS.has(t.name))
-        .map(t => (t.name === TURN_END_TOOL ? { ...t, description: TURN_END_DESCRIPTION } : t));
+        .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t));
     }
     toClient(msg);
   });

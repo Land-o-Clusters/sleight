@@ -142,11 +142,16 @@ environment to try the Chrome surface, which needs the Codex Chrome extension.
 **Accepting an app approval allows that app for the rest of the Claude Code session.** The prompt
 doesn't say so, so here it is plainly.
 
-The engine remembers an approval only when the answer says how long for (`_meta.persist`). Codex sends
-"session" when you pick "Allow for this session"; Claude Code's prompt can only accept or decline, and
-without a scope the engine asks again on every click. So the relay adds `persist: "session"` when you
-accept a computer-use app approval. It never adds "always", and it doesn't touch a decline or a cancel.
-A new Claude Code session asks again.
+The engine asks before every action on an app and doesn't remember answers for a session itself. In
+Codex, the host app remembers "Allow for this session" and answers the repeats. Claude Code's prompt can
+only accept or decline, so without help you'd be asked on every click. undertow's relay plays the
+host's part:
+
+- Once you accept an app, the relay answers later requests for **the same app at the same risk level**
+  for the rest of the session.
+- A different app, a riskier request for the same app, or a new Claude Code session asks you again.
+- Declines and cancels are never remembered.
+- Nothing is written to disk. The memory ends with the session.
 
 To be asked on every action instead, set `UNDERTOW_APPROVAL_SCOPE=once` in Claude Code's environment,
 for example in the `env` block of `~/.claude/settings.json`.

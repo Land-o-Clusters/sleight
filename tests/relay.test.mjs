@@ -52,11 +52,12 @@ test('hides js_add_node_module_dir and marks turn_ended internal in tools/list',
   const h = harness();
   h.fromClient({ jsonrpc: '2.0', id: 'list', method: 'tools/list' });
   await tick();
-  h.fromServer({ jsonrpc: '2.0', id: 'list', result: { tools: [{ name: 'js' }, { name: 'js_reset' }, { name: 'turn_ended' }, { name: 'js_add_node_module_dir' }] } });
+  h.fromServer({ jsonrpc: '2.0', id: 'list', result: { tools: [{ name: 'js' }, { name: 'js_reset' }, { name: 'turn_ended', _meta: { ui: { visibility: [] } } }, { name: 'js_add_node_module_dir' }] } });
   await tick();
   const tools = h.toClient[0].result.tools;
   assert.deepEqual(tools.map(t => t.name), ['js', 'js_reset', 'turn_ended']);
   assert.match(tools[2].description, /Internal to undertow/);
+  assert.equal(tools[2]._meta, undefined);
 });
 
 test('passes other messages through unchanged', async () => {
@@ -91,10 +92,10 @@ test('endOpenTurn does nothing when no call used the turn', async () => {
   assert.equal(h.toServer.length, 0);
 });
 
-const appApproval = (id, persist = ['session', 'always']) => ({
+const appApproval = (id, persist = ['session', 'always'], app = 'com.apple.calculator', riskLevel = 'low') => ({
   jsonrpc: '2.0', id, method: 'elicitation/create',
-  params: { message: 'Allow Computer Use to use "Calculator"?', mode: 'form', requestedSchema: { type: 'object', properties: {} },
-    _meta: { connector_id: 'computer-use', persist } },
+  params: { message: `Allow Computer Use to use "${app}"?`, mode: 'form', requestedSchema: { type: 'object', properties: {} },
+    _meta: { connector_id: 'computer-use', persist, riskLevel, tool_params: { app } } },
 });
 
 test('scopes an accepted app approval to the session', async () => {
@@ -103,7 +104,7 @@ test('scopes an accepted app approval to the session', async () => {
   await tick();
   h.fromClient({ jsonrpc: '2.0', id: 5, result: { action: 'accept', content: {} } });
   await tick();
-  assert.deepEqual(h.toServer[0].result, { action: 'accept', content: { persist: 'session' }, _meta: { persist: 'session' } });
+  assert.deepEqual(h.toServer[0].result, { action: 'accept', content: {}, _meta: { persist: 'session' } });
 });
 
 test('never changes a decline, a cancel, or a scope the client chose', async () => {
@@ -146,4 +147,64 @@ test('approvalScope once passes accepts through unchanged', async () => {
   h.fromClient({ jsonrpc: '2.0', id: 5, result: { action: 'accept', content: {} } });
   await tick();
   assert.deepEqual(h.toServer[0].result, { action: 'accept', content: {} });
+});
+
+test('answers repeat approvals for an app the user accepted this session', async () => {
+  const h = harness();
+  h.fromServer(appApproval(1));
+  await tick();
+  h.fromClient({ jsonrpc: '2.0', id: 1, result: { action: 'accept', content: {} } });
+  await tick();
+  h.fromServer(appApproval(2));
+  h.fromServer(appApproval(3));
+  await tick();
+  // Only the first prompt reached the user; the relay answered the others.
+  assert.equal(h.toClient.length, 1);
+  assert.deepEqual(h.toServer.slice(1).map(m => [m.id, m.result.action]), [[2, 'accept'], [3, 'accept']]);
+});
+
+test('still asks for a different app or a riskier request', async () => {
+  const h = harness();
+  h.fromServer(appApproval(1));
+  await tick();
+  h.fromClient({ jsonrpc: '2.0', id: 1, result: { action: 'accept' } });
+  await tick();
+  h.fromServer(appApproval(2, undefined, 'com.apple.TextEdit'));
+  h.fromServer(appApproval(3, undefined, 'com.apple.calculator', 'high'));
+  await tick();
+  assert.deepEqual(h.toClient.map(m => m.id), [1, 2, 3]);
+});
+
+test('never remembers a decline', async () => {
+  const h = harness();
+  h.fromServer(appApproval(1));
+  await tick();
+  h.fromClient({ jsonrpc: '2.0', id: 1, result: { action: 'decline' } });
+  await tick();
+  h.fromServer(appApproval(2));
+  await tick();
+  assert.deepEqual(h.toClient.map(m => m.id), [1, 2]);
+});
+
+test('approvalScope once asks every time', async () => {
+  const h = harness({ approvalScope: 'once' });
+  h.fromServer(appApproval(1));
+  await tick();
+  h.fromClient({ jsonrpc: '2.0', id: 1, result: { action: 'accept' } });
+  await tick();
+  h.fromServer(appApproval(2));
+  await tick();
+  assert.deepEqual(h.toClient.map(m => m.id), [1, 2]);
+});
+
+test('a new relay (a new session) asks again', async () => {
+  const first = harness();
+  first.fromServer(appApproval(1));
+  await tick();
+  first.fromClient({ jsonrpc: '2.0', id: 1, result: { action: 'accept' } });
+  await tick();
+  const second = harness();
+  second.fromServer(appApproval(1));
+  await tick();
+  assert.equal(second.toClient.length, 1);
 });
