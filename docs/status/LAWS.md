@@ -18,7 +18,7 @@ belong in [STATE.md](STATE.md).
 
 - An accepted app approval lasts for one Claude Code session, kept in the relay's memory. The relay never
   sends `persist: "always"` and never remembers a decline. `SLEIGHT_APPROVAL_SCOPE=once` turns it off.
-- Apps get approved without a person only through the benchmark's allowlist (Calculator, TextEdit), and
+- Apps get approved without a person only through the benchmark's allowlist (Calculator, TextEdit, and Chess since 2026-10-03), and
   only in benchmark runs. When a safety check blocks an action, the owner does it or it doesn't happen.
 - sleight's branding uses only its own marks, never another company's logo or mascot.
 

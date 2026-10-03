@@ -3,40 +3,27 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-03, end of session)
+## Banner (2026-10-03, late evening)
 
-Private repo `Land-o-Clusters/sleight`, `main` green in CI (relay tests, plugin validation, mod tests,
-Vale prose lint). `v0.1.0` is tagged. Nothing is public.
+Private repo `Land-o-Clusters/sleight`, `main` green in CI at `a5f8f37`. `v0.1.0` is tagged. Nothing
+is public.
 
-Verified live on Claude Code 2.1.288 with ChatGPT engine 26.930.31730: background control, one approval
-per app per session, per-turn cleanup, the pane and status line, `/sleight stop` mid-turn, and
-`/sleight <text>`. The Chess demo is in the README.
+App approvals now work in the desktop app's Code tab (`a5f8f37`). The Code tab (Claude 2.19675.0)
+declines MCP prompts unseen, so under `CLAUDE_CODE_ENTRYPOINT=claude-desktop` the relay asks with
+`lib/ask.js`, a Liquid Glass panel. Proven live with a real click (accept),
+and the engine's repeat request came from session memory. The engine waited 60 s and 120 s for an answer. The owner approved
+the panel's look. The Code tab's own Claude Code is 2.1.286, too old for the mod, so no pane there.
 
-Benchmark against LCU 0.8.8 (2026-10-03, published in full in `docs/benchmarks/`): both arms passed
-12/15. Both failed the TextEdit drag task 0/3 the same way.
+The drag rabbit hole is closed for now. Launching TextEdit with `-NSDragAndDropTextDelay 0` (the shell
+can't write TextEdit's sandboxed prefs) still failed the drag task, 0/2. We don't know whether the
+engine sends any mouse-drag events between press and release; finding out needs a probe app on the
+allowlist (owner's call). Cut and paste stays the documented workaround.
 
-## Next session's first job: the drag rabbit hole (owner's call, 2026-10-03)
-
-Dragging selected text fails because the engine's macOS `drag` presses, moves and releases at once,
-and text views only start a text drag after a hold. The macOS engine's `drag` takes only a start and an end
-point, while its Linux build offers a press-hold-release drag handle. Calling the native helper directly
-is ruled out because it skips the engine's per-app approval.
-
-The fix to test is the `NSDragAndDropTextDelay` preference (milliseconds before selected text becomes
-draggable). It's undocumented, so prove it before relying on it.
-
-1. Ask the owner first: it changes an app setting on their Mac.
-2. `defaults write com.apple.TextEdit NSDragAndDropTextDelay -int 0`, then quit and reopen TextEdit.
-3. `CLAUDE_BIN=$PWD/.dev/cli/node_modules/.bin/claude node bench/run.mjs --arm sleight --tasks textedit-drag --runs 1`
-4. Undo either way unless the owner keeps it: `defaults delete com.apple.TextEdit NSDragAndDropTextDelay`.
-
-If it works, build an opt-in `/sleight fix-drag <app>` command and a README note, and rerun the drag
-task on both arms. A failure means checking whether the engine's drag sends intermediate mouse-move
-events at all, because without them no delay setting can help. Posting our own mouse events outside the
-engine is the last resort, and I recommend against it: the engine's per-app approval wouldn't cover them.
-
-Also open: adding Chess to the benchmark allowlist, for a drag task that passes (owner's call under
-LAWS). The skill and README already give the cut-and-paste workaround.
+Chess is on the benchmark allowlist (owner, 2026-10-03), with a `chess-drag` task (uncommitted until
+its results are published). Nothing reset Chess between runs in the first two sets, and they came to sleight 2/6, LCU 5/6.
+One sleight run was declined by the new prompt mid-edit, Chess hung in the last pair, and the save
+dialog failed one sleight run after a good drag. A clean set, killing Chess before each run, is
+running. Publish all three sets in `docs/benchmarks/` with these caveats.
 
 ## Machine state outside the repo
 
@@ -48,12 +35,17 @@ LAWS). The skill and README already give the cut-and-paste workaround.
 - Installed by Homebrew this session: `vale`, `ffmpeg`.
 - `.dev/` (untracked) holds the 2.1.288 test CLI, pseudo-terminal test harnesses (`stop_test2.py`) and
   `make-demo.sh`.
-- No background jobs are running.
+- sleight is installed at user scope from the working copy (another session did it, 2026-10-03), so
+  every Claude session on this Mac starts a sleight server from `~/Projects/sleight/plugins/sleight`.
+- No background jobs are running besides benchmark runs this session starts.
 
 ## Waiting on the owner
 
-- The NSDragAndDropTextDelay test above.
-- Chess on the benchmark allowlist (yes or no).
+- Whether to add a probe app to the benchmark allowlist, to learn if the engine's drag sends
+  intermediate mouse events. Without it we can't tell why text drags fail.
+- Whether to report the desktop app declining MCP prompts to Anthropic (outward-facing).
+- `~/.local/bin/claude` is 2.1.278 and fails `claude plugin validate` on the mod. Checks pass with
+  `PATH=$PWD/.dev/cli/node_modules/.bin:$PATH` (2.1.288, what CI pins). Updating it is the owner's call.
 - The icon's original PNG from ChatGPT as `docs/assets/sleight-icon-source.png`, and optionally a
   small-size version.
 - Before going public: read ChatGPT's terms on the bundled computer-use engine, give LCU's author a
