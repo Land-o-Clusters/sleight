@@ -34,6 +34,9 @@ and you keep working.
 sleight gives that engine to Claude Code. Claude writes a few lines of JavaScript against the engine's
 API (`cua.getApp("Calculator")`, `app.click(...)`, `app.getScreenshot()`) and the engine handles the rest.
 
+<p align="center"><img src="docs/assets/demo.gif" width="900" alt="Claude playing macOS Chess against the computer through sleight, with the sleight pane logging each move"></p>
+<p align="center"><sub>Claude plays macOS Chess against the computer through sleight, at 6× speed. Every move is a drag. The sleight pane on the right logs each one.</sub></p>
+
 ## Install
 
 ### Requirements

@@ -217,7 +217,10 @@ export const register: Register = on => {
       : status.kind === 'error' ? `Couldn't refresh: ${status.message}`
       : shot ? `${shot.app} at ${shot.at}`
       : ''
-    const room = Math.max(3, (e.viewport?.rows ?? 30) - (shot?.rows ?? 2) - 8)
+    // Size the log to the rows the pane shows, not the whole terminal: picture,
+    // status line, buttons and the "Actions" heading take the rest.
+    const bodyRows = e.props.scroll?.bodyRows ?? e.viewport?.rows ?? 30
+    const room = Math.max(3, bodyRows - (shot?.rows ?? 1) - 4)
     const mark = { running: '…', done: '✓', error: '✗', refused: '⊘' } as const
 
     return (
@@ -248,7 +251,8 @@ export const register: Register = on => {
         </Box>
         <Text bold>Actions</Text>
         {entries.length === 0 && <Text dimColor>None yet.</Text>}
-        {entries.slice(-room).map(entry => (
+        {/* Newest first, so the latest action stays visible however short the pane is. */}
+        {entries.slice(-room).reverse().map(entry => (
           <Text dimColor={entry.status === 'done'} wrap="truncate-end">
             {`${mark[entry.status]} ${entry.at} ${entry.app ? `${entry.app}: ` : ''}${entry.title}`}
           </Text>

@@ -28,6 +28,16 @@ describe('sleight mod', () => {
 
   // Lifting the stop on the next message (prompt.submit) is checked in a live
   // session: the test kit raises no prompt.submit.
+  test('the action log lists the newest action first', async ($, on) => {
+    on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [{ type: 'text', text: 'App: Chess.' }] } }) as never)
+    for (const move of ['Play e4', 'Play Nf3', 'Play Bc4']) {
+      await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("Chess")', title: move } as never)
+    }
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { bodyColumns: 60 } as never })
+    const lines = (await ui.findAll({ type: 'Text', text: /Chess: Play/ })).map(found => found.text)
+    expect(lines.map(line => line?.replace(/^.*Chess: /, ''))).toEqual(['Play Bc4', 'Play Nf3', 'Play e4'])
+  })
+
   test('/sleight stop refuses js calls', async ($, on) => {
     on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [] } }) as never)
     const before = await $.tool.call({ tool: JS_TOOL, code: '1' } as never)

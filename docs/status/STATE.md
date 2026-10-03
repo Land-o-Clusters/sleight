@@ -22,12 +22,9 @@ later, and the desktop app bundles 2.1.286.
 
 ## In flight
 
-- Chess demo for the README and launch post (owner chose it 2026-10-03). Claude plays macOS Chess behind
-  the owner's editor while the pane shows the board. A feasibility run on 2026-10-03 worked. Claude
-  started a game and dragged e2-e4, d2-d4 and Nb1-c3, the computer answered each, and the owner saw one
-  approval prompt (the relay answered 18 repeats). Before recording, the Chess window title shows the
-  owner's real name ("Chris Menendez - Computer"), so change the player name in Chess or crop it.
-  Recording hasn't started.
+- Chess demo: recorded 2026-10-03 and in the README (`docs/assets/demo.gif`, 32 s at 6x, plus
+  `demo.mp4` for posts). Claude played 15 moves by dragging and the game didn't finish. The recording
+  showed the pane's action log cutting off its newest entries, fixed the same day (newest first).
 - Launch prep: `v0.1.0` tag and changelog, repo topics, a line on the Land-o-Clusters profile README.
 
 ## Waiting on the owner
