@@ -1,8 +1,8 @@
 <p align="center"><img src="docs/assets/sleight-icon-256.png" width="128" height="128" alt="sleight icon: two hands passing a mouse pointer, trailing warm and cool pixels"></p>
 
 <h1 align="center">sleight</h1>
-<p align="center"><strong>Let Claude Code drive your Mac apps in the background, without taking your cursor.</strong></p>
-<p align="center">A Claude Code plugin that connects Claude to the computer-use engine bundled with the ChatGPT desktop app.</p>
+<p align="center"><strong>Claude drives your Mac apps in the background. Your cursor stays yours.</strong></p>
+<p align="center">A Claude Code plugin that hands Claude the computer-use engine bundled with the ChatGPT desktop app.</p>
 
 <p align="center">
   <img alt="license MIT" src="https://img.shields.io/badge/license-MIT-E8622C">
@@ -14,7 +14,7 @@
   <a href="#install">Install</a> ·
   <a href="#watch-and-stop-it">Watch and stop it</a> ·
   <a href="#how-it-works">How it works</a> ·
-  <a href="#what-is-still-wrong">What is still wrong</a> ·
+  <a href="#known-problems">Known problems</a> ·
   <a href="#safety">Safety</a> ·
   <a href="#troubleshooting">Troubleshooting</a> ·
   <a href="#benchmark">Benchmark</a> ·
@@ -22,28 +22,29 @@
 </p>
 
 > [!IMPORTANT]
-> **Unofficial.** sleight is not affiliated with, endorsed by, or supported by OpenAI or Anthropic.
-> It drives an undocumented runtime that ships inside the ChatGPT app, and any ChatGPT update can break it.
-> It contains no OpenAI code: it starts the copy already installed on your Mac.
+> sleight is unofficial. OpenAI and Anthropic don't endorse or support it.
+> It drives an undocumented runtime that comes with the ChatGPT app, so a ChatGPT update can break it at any time.
+> It contains no OpenAI code. It starts the copy already installed on your Mac.
 
-Most computer-use tools take over your screen: the pointer moves, windows jump to the front, and you
-wait. The engine inside the ChatGPT desktop app works differently. It sends clicks, drags and keystrokes
-straight to the target app, so the app can sit behind your other windows while you keep working.
+Most computer-use tools borrow your screen. The pointer jumps around, windows pop to the front, and you
+sit on your hands until it's done. The engine inside the ChatGPT desktop app sends clicks, drags and
+keystrokes straight to the target app instead. The app can be behind your other windows the whole time,
+and you keep working.
 
-sleight lets Claude Code use that engine. Claude writes short JavaScript against the engine's API
-(`cua.getApp("Calculator")`, `app.click(...)`, `app.getScreenshot()`), and the engine does the rest.
+sleight gives that engine to Claude Code. Claude writes a few lines of JavaScript against the engine's
+API (`cua.getApp("Calculator")`, `app.click(...)`, `app.getScreenshot()`) and the engine handles the rest.
 
 ## Install
 
 ### Requirements
 
-- macOS on Apple Silicon
-- [ChatGPT desktop app](https://chatgpt.com/download/), with **Computer Use** turned on in Codex at least once.
-  That first run installs the engine's helper and asks macOS for Accessibility and Screen Recording access.
-  You don't need to stay signed in to Codex afterwards.
-- Claude Code v2.1.275 or later. The pane, status line, `/sleight stop` and per-turn cleanup are a
-  [mod](https://code.claude.com/docs/en/plugins/mods/overview) and need v2.1.287 or later; on older
-  versions sleight still works without them.
+- macOS on Apple Silicon.
+- The [ChatGPT desktop app](https://chatgpt.com/download/), with Computer Use turned on in Codex at least
+  once. That first run installs the engine's helper and gets macOS to grant it Accessibility and Screen
+  Recording. You can sign out of Codex afterwards.
+- Claude Code v2.1.275 or later. The pane, status line, `/sleight stop` and per-turn cleanup come from a
+  [mod](https://code.claude.com/docs/en/plugins/mods/overview), which needs v2.1.287 or later. Older
+  versions still get everything else.
 
 ### Add the plugin
 
@@ -63,7 +64,7 @@ claude plugin marketplace add Land-o-Clusters/sleight
 claude plugin install sleight@sleight
 ```
 
-Run `/reload-plugins` in any open session, or start a new one.
+Then run `/reload-plugins` in any open session, or start a new one.
 
 ### Check it
 
@@ -71,19 +72,19 @@ Run `/reload-plugins` in any open session, or start a new one.
 ~/.claude/plugins/marketplaces/sleight/plugins/sleight/bin/sleight-mcp --doctor
 ```
 
-`--doctor` prints the engine version it found and checks each file it needs. Then ask Claude:
+`--doctor` prints the engine version it found and checks every file it needs. Then try:
 
 ```text
 Use sleight to open Calculator in the background and work out 12 × 12 by clicking its buttons.
 ```
 
-The first time Claude touches an app, you'll get a prompt like **Allow Computer Use to use "Calculator"?**
-That prompt comes from the engine itself. Accepting it allows that app for the rest of the session; see
-[Approval scope](#approval-scope).
+The first time Claude touches an app, the engine asks you something like *Allow Computer Use to use
+"Calculator"?* Saying yes covers that app for the rest of the session. [Approval scope](#approval-scope)
+has the details.
 
 ### Updating
 
-Third-party marketplaces don't auto-update by default. To update:
+Third-party marketplaces don't update on their own unless you ask them to. To update by hand:
 
 ```bash
 claude plugin marketplace update sleight
@@ -93,25 +94,26 @@ claude plugin marketplace update sleight
 claude plugin update sleight@sleight
 ```
 
-Or turn on auto-update for the `sleight` marketplace in `/plugin` → **Marketplaces**.
+Or turn on auto-update for the `sleight` marketplace under `/plugin` → Marketplaces.
 
 ## Watch and stop it
 
-Apps sleight drives stay in the background, so you can't watch them directly. On Claude Code v2.1.287
-or later:
+The apps sleight drives stay in the background, which also means you can't see them. On Claude Code
+v2.1.287 or later you get three ways to keep an eye on things.
 
-- **`/sleight`** opens a pane with the app's latest picture and a log of each action Claude took.
-  The picture refreshes after each turn that used sleight, or when you press **Refresh** (`r`) while
-  Claude is idle. In a terminal it's drawn in colored half-blocks; in the desktop app's Code tab it's
-  the screenshot itself.
-- **The status line** shows the app and how many actions Claude has taken.
-- **`/sleight stop`**, or **Stop** (`s`) in the pane, ends the engine's turn and refuses any further
-  sleight call until your next message. It works mid-turn. Press Esc as well to stop the rest of
-  Claude's turn.
+`/sleight` opens a pane with the app's latest picture and a log of every action Claude took. The picture
+refreshes after each turn that used sleight, or when you press Refresh (`r`) while Claude is idle. A
+terminal draws it in colored half-blocks. The desktop app's Code tab shows the screenshot itself.
 
-The pane never snapshots while Claude is working, because the engine reports UI changes as a diff
-against the latest read of an app, whoever made it. After the pane reads an app, your next message
-tells Claude to take a full read before trusting a diff.
+The status line shows which app Claude is working in and how many actions it has taken.
+
+`/sleight stop`, or Stop (`s`) in the pane, works mid-turn. It ends the engine's turn and refuses every
+further sleight call until your next message. Press Esc too if you want the rest of Claude's turn gone.
+
+The pane waits for Claude to finish before it takes a picture. The engine reports UI changes as a diff
+against the latest read of an app, no matter who made that read, so a snapshot mid-turn could hide a
+change from Claude. When the pane does read an app, your next message tells Claude to take a full read
+before relying on a diff.
 
 ## How it works
 
@@ -120,77 +122,75 @@ Claude Code ──MCP──▶ bin/sleight-mcp ──▶ ChatGPT.app's cua-repl 
 ```
 
 1. The ChatGPT app writes its computer-use server config to
-   `~/.codex/plugins/cache/openai-bundled/unified-computer-use/<version>/.mcp.json`,
-   and replaces that folder on almost every update.
-2. `bin/sleight-mcp` runs with the Node that ships inside ChatGPT.app, finds the newest version folder,
-   and starts the server it describes. A hard-coded path would break within days; this one follows
-   the updates.
-3. The server exposes a persistent JavaScript tool, `js`. Its first call returns the full API
-   documentation for the installed version, so Claude always learns the current API.
-4. Per-app approvals go through MCP form elicitation, which Claude Code shows as a normal prompt.
-5. Between the two, `lib/relay.mjs` adds what Codex would send and Claude Code doesn't: a session and
-   turn id on each call, the session scope on accepted app approvals, and a `turn_ended` call when the
-   session closes. It also keeps the engine's internal tools (`turn_ended`, `js_add_node_module_dir`)
-   out of Claude's tool list.
-6. On Claude Code v2.1.287 or later, the plugin's mod (`hooks/register.ts`) also ends the engine's turn
-   after each Claude turn that used it, as Codex does.
+   `~/.codex/plugins/cache/openai-bundled/unified-computer-use/<version>/.mcp.json`, and replaces that
+   folder on almost every update.
+2. `bin/sleight-mcp` runs on the Node runtime bundled in ChatGPT.app, finds the newest version folder and
+   starts the server described there. A hard-coded path would break within days.
+3. The server has one main tool, `js`, a persistent JavaScript session. Its first call returns the API
+   docs for whichever engine version is installed, so Claude always gets the current API.
+4. Per-app approvals arrive as MCP form elicitations, which Claude Code shows as an ordinary prompt.
+5. `lib/relay.mjs` sits between Claude Code and the server and fills in what Codex would have sent: a
+   session and turn id on each call, session memory for approvals you accepted, and a `turn_ended` call
+   when the session closes. It hides `js_add_node_module_dir` from Claude and marks `turn_ended` as
+   internal. It also answers a protocol probe from newer Claude Code versions that would otherwise
+   crash the server.
+6. On Claude Code v2.1.287 or later, the mod (`hooks/register.tsx`) ends the engine's turn after each
+   Claude turn that used it, the way Codex does, and refuses Claude's own calls to `turn_ended`.
 
-By default sleight turns on native apps only (`CUA_REPL_ENABLED_SURFACES=computer`). The engine's
-in-app browser only exists inside ChatGPT. Set `SLEIGHT_SURFACES=browser,computer` in the plugin's
-environment to try the Chrome surface, which needs the Codex Chrome extension.
+sleight only turns on native apps by default (`CUA_REPL_ENABLED_SURFACES=computer`), because the engine's
+in-app browser only exists inside ChatGPT. To try Chrome control, which needs the Codex Chrome
+extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
 
-## What is still wrong
+## Known problems
 
-- **Foreground pointer activity interrupts it.** The engine watches real mouse and keyboard input to
-  notice a person taking over an app, and asks Claude to re-read the app when it does. Anything moving
-  the real pointer in that app counts, including another agent driving in the foreground. Several
-  background sessions (two sleight sessions, or sleight and Codex) can share the engine's helper at
-  once. In one test with Codex driving the foreground at the same time, keystrokes typed during the run
-  arrived twice. We haven't pinned down why.
-- **No real hover.** The engine sends events to the app, not through the real pointer. The skill teaches
-  Claude the workarounds: tooltips are readable as `Help:` text in the UI state, hover menus usually open
-  through an element's secondary actions, a right-click or a key. Only truly pointer-driven UI needs a
+- Anything moving your real pointer in the app interrupts it. The engine watches real mouse and keyboard
+  input to notice a person taking over, then makes Claude re-read the app. Another agent driving in the
+  foreground counts too. Background sessions can share the engine's helper fine (two sleight sessions, or
+  sleight next to Codex). In one test where Codex was also driving in the foreground, keystrokes typed
+  during the run showed up twice, and we still don't know why.
+- There's no real hover, since events go to the app and the real pointer never moves. The skill covers
+  most cases: tooltips are readable as `Help:` text in the UI state, and hover menus usually open through
+  an element's secondary actions, a right-click or a key. UI that only reacts to a real pointer needs a
   pointer-moving tool.
-- **The desktop app's pane picture is unverified.** It embeds the screenshot in an SVG, which the
-  terminal pane doesn't need; it hasn't been checked in the desktop app's Code tab yet.
-- **Per-turn cleanup needs Claude Code v2.1.287 or later.** The mod ends the engine's turn after each
-  Claude turn. On older versions there is no mod, so turns end only when the session closes.
-- **ChatGPT updates can break it.** The runtime is undocumented. The version lookup handles the
-  folder changing; it can't handle the API changing. Run `--doctor` first when something stops working.
-- **Some apps are off limits.** The engine refuses terminal apps such as Terminal.app ("not allowed …
-  for safety reasons"), and honors any app blocks your organization sets.
-- **`claude -p` can't answer approval prompts**, so headless runs can only use apps already approved
-  for that session.
-- **macOS on Apple Silicon only.** The engine has Linux and Windows builds, but sleight has only been
-  tested on macOS.
+- Nobody has checked the pane's picture in the desktop app's Code tab yet. It embeds the screenshot in an
+  SVG there, which the terminal doesn't need.
+- Per-turn cleanup needs Claude Code v2.1.287 or later. Without the mod, the engine's turn only ends when
+  the session closes.
+- ChatGPT updates can break it. The version lookup handles the folder moving around, but not the API
+  changing. Run `--doctor` first when something stops working.
+- The engine refuses terminal apps such as Terminal.app ("not allowed … for safety reasons") and respects
+  any app blocks your organization sets.
+- `claude -p` can't answer approval prompts, so headless runs only get apps already approved in that
+  session.
+- It's macOS on Apple Silicon only. The engine has Linux and Windows builds, but sleight hasn't been
+  tested on either.
 
 ### Approval scope
 
-**Accepting an app approval allows that app for the rest of the Claude Code session.** The prompt
-doesn't say so, so here it is plainly.
+Saying yes to an app approval allows that app for the rest of the Claude Code session. The prompt itself
+doesn't mention that.
 
-The engine asks before every action on an app and doesn't remember answers for a session itself. In
-Codex, the host app remembers "Allow for this session" and answers the repeats. Claude Code's prompt can
-only accept or decline, so without help you'd be asked on every click. sleight's relay plays the
-host's part:
+The engine asks before every action on an app and doesn't remember your answers. In Codex, the app
+around the engine remembers "Allow for this session" and answers the repeats. Claude Code's prompt only
+has accept and decline, so without help you'd get asked on every click. The relay does the remembering:
 
-- Once you accept an app, the relay answers later requests for **the same app at the same risk level**
-  for the rest of the session.
+- After you accept an app, the relay answers later requests for the same app at the same risk level for
+  the rest of the session.
 - A different app, a riskier request for the same app, or a new Claude Code session asks you again.
-- Declines and cancels are never remembered.
-- Nothing is written to disk. The memory ends with the session.
+- It never remembers a decline or a cancel.
+- The relay doesn't write anything to disk. The memory ends with the session.
 
-To be asked on every action instead, set `SLEIGHT_APPROVAL_SCOPE=once` in Claude Code's environment,
-for example in the `env` block of `~/.claude/settings.json`.
+To get asked on every action instead, set `SLEIGHT_APPROVAL_SCOPE=once` in Claude Code's environment.
+The `env` block of `~/.claude/settings.json` works.
 
 ## Safety
 
-- **`js` runs JavaScript as you.** Treat it like Bash: Claude Code asks before each call unless you allow
-  `mcp__plugin_sleight_computer__js`. Allowing it means no more prompts for any code Claude sends.
-- **Per-app approvals still apply.** The engine asks before touching each app, however the `js` tool is
-  allowed. An accepted approval lasts for the session ([Approval scope](#approval-scope)).
-- **Read before you install.** This repository is small on purpose: a launcher, a relay, a mod, a skill
-  and two manifests.
+- `js` runs JavaScript as you, so treat it like Bash. Claude Code asks before each call unless you allow
+  `mcp__plugin_sleight_computer__js`, and allowing it means Claude can send any code without asking.
+- Per-app approvals apply however you've set up the `js` tool. An accepted approval lasts for the
+  session ([Approval scope](#approval-scope)).
+- The repo is small enough to read before you install it. It's a launcher and a relay, plus a mod, a
+  skill and two manifests.
 
 ## Troubleshooting
 
@@ -203,22 +203,31 @@ for example in the `env` block of `~/.claude/settings.json`.
 
 ## Benchmark
 
-`bench/` holds a small task suite: two Calculator tasks (clicking, a menu) and two TextEdit tasks (save a
-new file, edit an existing one). Each runs through headless `claude -p` and is checked outside the
-agent, by the file on disk or the exact answer.
+`bench/` has four tasks. The Calculator pair clicks buttons in one and switches modes through a menu in
+the other. The TextEdit pair saves a new file in one and edits an existing file in the other. Each runs through headless `claude -p` and gets
+checked outside the agent, against the file on disk or the exact answer.
+
+First run, three runs per task, Claude Code 2.1.288 with its default model:
+
+| Task | Passed | Median time | Median turns | Cost for 3 runs |
+|---|---|---|---|---|
+| Calculator, clicking | 3/3 | 23 s | 6 | $1.17 |
+| Calculator, Scientific mode via menu | 3/3 | 21 s | 7 | $1.16 |
+| TextEdit, save a new file | 3/3 | 91 s | 20 | $3.34 |
+| TextEdit, edit an existing file | 3/3 | 51 s | 11 | $1.81 |
 
 ```bash
 npm run bench -- --runs 3
 ```
 
 > [!WARNING]
-> Headless runs can't show approval prompts, so a benchmark run **auto-approves Calculator and
-> TextEdit** for sleight (`bench/approve.mjs`, used only through `bench/settings.json`). Run it only
-> when you're fine with Claude driving those two apps unattended. `--dry-run` checks the setup without
-> launching Claude.
+> Headless runs can't show approval prompts, so a benchmark run auto-approves Calculator and TextEdit
+> for sleight (`bench/approve.mjs`, loaded only through `bench/settings.json`). Only run it when you're
+> fine with Claude driving those two apps unattended. `--dry-run` checks the setup without launching
+> Claude.
 
-Results go to `bench/results/`. Comparing other computer-use tools on the same tasks means adding
-their MCP configuration as another arm; that isn't built yet.
+Results go to `bench/results/`. Comparing other computer-use tools means adding each one's MCP
+configuration as another arm, which doesn't exist yet.
 
 ## Development
 
@@ -227,6 +236,7 @@ npm test               # relay unit tests
 npm run validate       # claude plugin validate, marketplace and plugin
 npm run test:mod       # the mod's tests, against the engine (claude plugin test)
 npm run typecheck      # needs the types Claude Code writes when it loads the mod
+npm run lint:prose     # Vale with the ai-tells style pack, over the docs
 SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed message to ~/Library/Logs/sleight/
 ```
 
@@ -235,7 +245,7 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 - [x] MCP server that survives ChatGPT updates
 - [x] Session and turn ids, so the engine can scope approvals and cleanup
 - [x] Approvals that last for the session, as in Codex
-- [x] Hide the engine's internal tools (`turn_ended`, `js_add_node_module_dir`) from Claude
+- [x] Hide or block the engine's internal tools for Claude
 - [x] A skill that tells Claude when to use sleight and when to fall back to a pointer-moving tool
 - [x] Per-turn cleanup through the mod's `turn.complete` hook
 - [x] Live pane with the app's latest picture and an action log
@@ -247,10 +257,11 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 
 ## Credits
 
-- [@argofowl](https://x.com/argofowl) for showing that the ChatGPT app's computer-use server works outside Codex.
-- [LCU](https://github.com/0xpolarzero/lcu) by 0xpolarzero, a multi-harness take on the same idea, for mapping how the runtime's lifecycle works.
+- [@argofowl](https://x.com/argofowl) showed that the ChatGPT app's computer-use server works outside Codex.
+- [LCU](https://github.com/0xpolarzero/lcu) by 0xpolarzero takes the same idea across several harnesses, and its notes mapped out how the runtime's lifecycle works.
+- The icon started as an image from ChatGPT's image generation.
 
 ## License
 
-[MIT](LICENSE). The ChatGPT app and its computer-use runtime are OpenAI's and keep their own terms;
-sleight doesn't include or redistribute them.
+[MIT](LICENSE). The ChatGPT app and its computer-use runtime belong to OpenAI, under OpenAI's terms.
+sleight doesn't include or redistribute either.

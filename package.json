@@ -9,6 +9,7 @@
     "typecheck": "tsc -p plugins/sleight/tsconfig.json",
     "check": "npm test && npm run validate && npm run test:mod",
     "doctor": "plugins/sleight/bin/sleight-mcp --doctor",
-    "bench": "node bench/run.mjs"
+    "bench": "node bench/run.mjs",
+    "lint:prose": "vale README.md CLAUDE.md plugins/sleight/skills/drive-mac-apps/SKILL.md"
   }
 }

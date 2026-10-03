@@ -3,3 +3,4 @@ node_modules/
 .DS_Store
 plugins/sleight/.claude-plugin/types/
 bench/results/
+.vale/styles/
