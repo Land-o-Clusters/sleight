@@ -155,12 +155,17 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   during the run showed up twice, and we still don't know why.
 - Dragging selected text doesn't move it. The engine's drag on macOS presses, moves and releases at
   once, and text views like TextEdit's only start a text drag after the mouse is held down for a
-  moment, so they read it as a new selection. LCU fails the same way. Drags that pick something up
-  right away, like Chess pieces, work. To move text, use cut and paste.
+  moment, so they read it as a new selection. LCU fails the same way. Launching TextEdit with
+  `-NSDragAndDropTextDelay 0` didn't help (0/2), and we don't know whether the engine's drag sends
+  any mouse-drag events between press and release. Drags that pick something up right away, like
+  Chess pieces, work. To move text, use cut and paste.
 - There's no real hover, since events go to the app and the real pointer never moves. The skill covers
   most cases: tooltips are readable as `Help:` text in the UI state, and hover menus usually open through
   an element's secondary actions, a right-click or a key. UI that only reacts to a real pointer needs a
   pointer-moving tool.
+- The desktop app's Code tab runs its own Claude Code, 2.1.286 as of 2026-10-03, which is too old
+  for the mod. There you get approvals and the `js` tool, but no pane, status line, `/sleight stop`
+  or per-turn cleanup.
 - Nobody has checked the pane's picture in the desktop app's Code tab yet. It embeds the screenshot in an
   SVG there, which the terminal doesn't need.
 - Per-turn cleanup needs Claude Code v2.1.287 or later. Without the mod, the engine's turn only ends when
@@ -191,6 +196,12 @@ has accept and decline, so without help you'd get asked on every click. The rela
 
 To get asked on every action instead, set `SLEIGHT_APPROVAL_SCOPE=once` in Claude Code's environment.
 The `env` block of `~/.claude/settings.json` works.
+
+In the desktop app's Code tab, sleight asks with its own prompt instead: a small panel with
+sleight's icon, Allow and Don't Allow. The Code tab (Claude 2.19675.0) declines MCP prompts without
+showing them, so a forwarded prompt would always come back as no. Return does nothing in sleight's
+panel, Escape means no, and it gives up after five minutes. Session memory works the same way.
+`SLEIGHT_APPROVAL_PROMPT=dialog` or `client` overrides the choice.
 
 ## Safety
 

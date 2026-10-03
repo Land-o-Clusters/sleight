@@ -73,7 +73,10 @@ function runClaude(prompt, arm) {
     ...(model ? ['--model', model] : []),
   ];
   return new Promise(resolve => {
-    const child = spawn(claudeBin, args, { cwd: arm.cwd, env: { ...process.env, BENCH_ROOT: ROOT, ...arm.env }, stdio: ['ignore', 'pipe', 'pipe'] });
+    // SLEIGHT_APPROVAL_PROMPT=client keeps approvals going to approve.mjs, even
+    // when the benchmark runs from a desktop app session.
+    const env = { ...process.env, BENCH_ROOT: ROOT, SLEIGHT_APPROVAL_PROMPT: 'client', ...arm.env };
+    const child = spawn(claudeBin, args, { cwd: arm.cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', d => (stdout += d));

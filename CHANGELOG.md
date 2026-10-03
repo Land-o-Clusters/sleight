@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- App approvals work in the desktop app's Code tab. It declines MCP prompts without showing them, so
+  there sleight asks with its own panel (Liquid Glass where macOS has it). `SLEIGHT_APPROVAL_PROMPT`
+  picks `dialog` or `client`.
+- Benchmark runs keep approvals on the benchmark's hook when started from a desktop app session.
+
 ## 0.1.0 (2026-10-03)
 
 First release. Tested on Claude Code 2.1.288 with ChatGPT engine 26.930.31730, on macOS (Apple Silicon).

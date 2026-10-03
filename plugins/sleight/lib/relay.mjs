@@ -30,6 +30,11 @@
 // and cancels are never remembered, and nothing is stored on disk.
 // `approvalScope: 'once'` turns this off.
 //
+// `ask`, when given, asks the user about app approvals instead of forwarding
+// them to Claude Code: `ask(message, sessionScoped)` resolves to 'accept',
+// 'decline' or 'cancel'. launch.mjs uses it under the desktop app, which
+// declines MCP prompts without showing them. Session memory works the same way.
+//
 // `trace`, when given, receives every message as it passes, for debugging.
 
 import { randomUUID } from 'node:crypto';
@@ -66,6 +71,10 @@ function approvalKey(msg) {
   return JSON.stringify([app, meta.riskLevel ?? null]);
 }
 
+function isAppApproval(msg) {
+  return msg.method === 'elicitation/create' && msg.params?._meta?.connector_id === 'computer-use';
+}
+
 // The server marks turn_ended with `_meta.ui.visibility: []`, which Claude Code
 // reads as "callable by no one", the mod included. Drop that, and describe it
 // as internal; the mod refuses model calls to it.
@@ -83,6 +92,7 @@ export function createRelay({
   clientIn, clientOut, serverIn, serverOut,
   sessionId = randomUUID(),
   approvalScope = 'session',
+  ask,
   trace = () => {},
 }) {
   let turnId = randomUUID();
@@ -92,6 +102,7 @@ export function createRelay({
   const internalRequests = new Map();
   const approvalRequests = new Map(); // server request id -> approval key
   const approved = new Set(); // approval keys the user accepted this session
+  let asking = Promise.resolve(); // `ask` prompts, one at a time
 
   const toServer = msg => {
     trace('to-server', msg);
@@ -112,6 +123,31 @@ export function createRelay({
       session_id: sessionId,
       turn_id: turnId,
     };
+  }
+
+  // Answers an app approval through `ask`. Prompts queue, so a second request
+  // for an app the user is still being asked about waits for that answer.
+  function askUser(msg) {
+    const key = approvalScope === 'session' ? approvalKey(msg) : undefined;
+    asking = asking.then(async () => {
+      if (key !== undefined && approved.has(key)) {
+        trace('answered-for-session', msg);
+        return { action: 'accept', content: {}, _meta: { persist: 'session' } };
+      }
+      let action;
+      try {
+        action = await ask(msg.params?.message ?? 'Allow Computer Use?', key !== undefined);
+      } catch {
+        action = 'cancel';
+      }
+      if (action !== 'accept') return { action };
+      if (key === undefined) return { action, content: {} };
+      approved.add(key);
+      return { action, content: {}, _meta: { persist: 'session' } };
+    }).then(result => {
+      trace('answered-by-ask', { id: msg.id, result });
+      toServer({ jsonrpc: '2.0', id: msg.id, result });
+    });
   }
 
   function rotateTurn() {
@@ -167,6 +203,10 @@ export function createRelay({
     if (msg.id !== undefined && internalRequests.has(msg.id)) {
       internalRequests.get(msg.id)(msg);
       internalRequests.delete(msg.id);
+      return;
+    }
+    if (ask && isAppApproval(msg)) {
+      askUser(msg);
       return;
     }
     const key = approvalScope === 'session' ? approvalKey(msg) : undefined;

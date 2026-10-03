@@ -8,10 +8,11 @@
 //   launch.mjs           run the server over stdio, through relay.mjs
 //   launch.mjs --doctor  print what would run, and check it exists
 
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createRelay } from './relay.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
@@ -97,6 +98,38 @@ function traceTo(setting) {
     appendFileSync(file, JSON.stringify({ t: new Date().toISOString(), direction, msg }, cut) + '\n');
 }
 
+// Asks about an app approval with sleight's own prompt (ask.js). The desktop
+// app's Code tab (Claude 2.19675.0, 2026-10-03) declines MCP form prompts
+// without showing them, so under it the relay asks this way instead. The
+// prompt gives up (cancel) after five minutes; the engine waits that long.
+const LIB = dirname(fileURLToPath(import.meta.url));
+const ICON = join(LIB, '..', 'assets', 'icon.png');
+const ASK_SECONDS = 300;
+
+function askWithDialog(message, sessionScoped) {
+  const app = /"(.+)"/.exec(message)?.[1];
+  const question = app ? `Allow Claude to use ${app}?` : message;
+  const detail = `Claude can then click and type in ${app ?? 'the app'} in the background. ` +
+    (sessionScoped ? 'A yes lasts until this Claude session ends.' : 'It asks again next time.');
+  const args = ['-l', 'JavaScript', join(LIB, 'ask.js'), question, detail, ICON, String(ASK_SECONDS)];
+  return new Promise(resolve => {
+    execFile('osascript', args, (err, stdout, stderr) => {
+      const answer = stdout.trim();
+      if (!err && ['accept', 'decline', 'cancel'].includes(answer)) return resolve(answer);
+      // Logged, so a broken prompt doesn't pass for a decline.
+      process.stderr.write(`sleight: approval prompt failed: ${stderr || err?.message || answer}\n`);
+      resolve('decline');
+    });
+  });
+}
+
+// SLEIGHT_APPROVAL_PROMPT=dialog or client picks how approvals reach the user;
+// by default the desktop app gets the dialog and everything else Claude Code's prompt.
+function approvalPrompt(env = process.env) {
+  const setting = env.SLEIGHT_APPROVAL_PROMPT || (env.CLAUDE_CODE_ENTRYPOINT === 'claude-desktop' ? 'dialog' : 'client');
+  return setting === 'dialog' ? askWithDialog : undefined;
+}
+
 function run() {
   const s = resolveServer();
   if (s.error) fail(s.error);
@@ -116,6 +149,7 @@ function run() {
     serverOut: child.stdout,
     // SLEIGHT_APPROVAL_SCOPE=once asks again on every action instead.
     approvalScope: process.env.SLEIGHT_APPROVAL_SCOPE === 'once' ? 'once' : 'session',
+    ask: approvalPrompt(),
     trace: process.env.SLEIGHT_TRACE ? traceTo(process.env.SLEIGHT_TRACE) : undefined,
   });
 

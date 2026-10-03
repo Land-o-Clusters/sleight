@@ -216,3 +216,58 @@ test('answers a server/discover probe itself instead of forwarding it', async ()
   assert.equal(h.toServer.length, 0);
   assert.deepEqual(h.toClient[0], { jsonrpc: '2.0', id: 'server-discover-probe-1', error: { code: -32601, message: 'Method not found' } });
 });
+
+// An `ask` stand-in that records each prompt and answers from a list.
+function asker(...answers) {
+  const asked = [];
+  const ask = async (message, sessionScoped) => {
+    asked.push({ message, sessionScoped });
+    return answers.shift();
+  };
+  return { ask, asked };
+}
+
+test('with ask, answers app approvals itself and never forwards them', async () => {
+  const a = asker('accept');
+  const h = harness({ ask: a.ask });
+  h.fromServer(appApproval(1));
+  await tick();
+  await tick();
+  assert.equal(h.toClient.length, 0);
+  assert.deepEqual(a.asked, [{ message: 'Allow Computer Use to use "com.apple.calculator"?', sessionScoped: true }]);
+  assert.deepEqual(h.toServer[0], { jsonrpc: '2.0', id: 1, result: { action: 'accept', content: {}, _meta: { persist: 'session' } } });
+});
+
+test('with ask, an accepted app is not asked again, a declined one is', async () => {
+  const a = asker('accept', 'decline', 'cancel');
+  const h = harness({ ask: a.ask });
+  h.fromServer(appApproval(1));
+  h.fromServer(appApproval(2));
+  await tick(); await tick(); await tick();
+  h.fromServer(appApproval(3, undefined, 'com.apple.TextEdit'));
+  await tick(); await tick();
+  h.fromServer(appApproval(4, undefined, 'com.apple.TextEdit'));
+  await tick(); await tick();
+  assert.equal(a.asked.length, 3);
+  assert.deepEqual(h.toServer.map(m => [m.id, m.result.action]), [[1, 'accept'], [2, 'accept'], [3, 'decline'], [4, 'cancel']]);
+});
+
+test('with ask and approvalScope once, asks every time and never adds a scope', async () => {
+  const a = asker('accept', 'accept');
+  const h = harness({ ask: a.ask, approvalScope: 'once' });
+  h.fromServer(appApproval(1));
+  await tick(); await tick();
+  h.fromServer(appApproval(2));
+  await tick(); await tick();
+  assert.deepEqual(a.asked.map(q => q.sessionScoped), [false, false]);
+  assert.deepEqual(h.toServer.map(m => m.result), [{ action: 'accept', content: {} }, { action: 'accept', content: {} }]);
+});
+
+test('with ask, other elicitations still go to the client', async () => {
+  const a = asker();
+  const h = harness({ ask: a.ask });
+  h.fromServer({ jsonrpc: '2.0', id: 2, method: 'elicitation/create', params: { message: 'Other?', _meta: { connector_id: 'other' } } });
+  await tick();
+  assert.equal(a.asked.length, 0);
+  assert.equal(h.toClient[0].id, 2);
+});
