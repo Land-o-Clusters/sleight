@@ -9,7 +9,7 @@
 //   launch.mjs --doctor  print what would run, and check it exists
 
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createRelay } from './relay.mjs';
@@ -83,6 +83,20 @@ function doctor() {
   process.exit(ok ? 0 : 1);
 }
 
+// UNDERTOW_TRACE=1 logs every relayed message to
+// ~/Library/Logs/undertow/trace-<pid>.jsonl; any other value is used as the
+// directory. Long strings (screenshots, UI state) are cut to 300 characters.
+function traceTo(setting) {
+  const dir = setting === '1' ? join(homedir(), 'Library', 'Logs', 'undertow') : setting;
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `trace-${process.pid}.jsonl`);
+  process.stderr.write(`undertow: tracing to ${file}\n`);
+  const cut = (_key, value) =>
+    typeof value === 'string' && value.length > 300 ? `${value.slice(0, 300)}…(${value.length})` : value;
+  return (direction, msg) =>
+    appendFileSync(file, JSON.stringify({ t: new Date().toISOString(), direction, msg }, cut) + '\n');
+}
+
 function run() {
   const s = resolveServer();
   if (s.error) fail(s.error);
@@ -102,6 +116,7 @@ function run() {
     serverOut: child.stdout,
     // UNDERTOW_APPROVAL_SCOPE=once asks again on every action instead.
     approvalScope: process.env.UNDERTOW_APPROVAL_SCOPE === 'once' ? 'once' : 'session',
+    trace: process.env.UNDERTOW_TRACE ? traceTo(process.env.UNDERTOW_TRACE) : undefined,
   });
 
   // Claude Code closing the connection is the end of the session: end the

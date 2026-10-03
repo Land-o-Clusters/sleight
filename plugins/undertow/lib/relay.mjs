@@ -10,20 +10,26 @@
 //   undertow mod at the end of each Claude turn) gets the current ids filled
 //   in, then the next call starts a new turn.
 //
-// It also keeps the server's host-only tools out of the model's tool list,
-// and ends the open turn when Claude Code closes the connection.
+// It also keeps the server's js_add_node_module_dir tool out of the model's
+// tool list, marks turn_ended as internal (it stays listed because Claude Code
+// only lets the mod call listed tools; the mod refuses model calls to it), and
+// ends the open turn when Claude Code closes the connection.
 //
 // App approvals: the server remembers an approval for the session only when
 // the answer carries `_meta.persist: "session"`, which Codex sends for "Allow
 // for this session". Claude Code's prompt can only accept or decline, so the
-// relay adds that field to an accepted computer-use approval that offers it.
+// relay adds that field to an accepted computer-use approval that offers it,
+// in both `_meta` and `content`, the two places the server reads a scope.
 // It never adds "always". `approvalScope: 'once'` turns this off.
+//
+// `trace`, when given, receives every message as it passes, for debugging.
 
 import { randomUUID } from 'node:crypto';
 
 const META_KEY = 'x-codex-turn-metadata';
-const HIDDEN_TOOLS = new Set(['turn_ended', 'js_add_node_module_dir']);
+const HIDDEN_TOOLS = new Set(['js_add_node_module_dir']);
 const TURN_END_TOOL = 'turn_ended';
+const TURN_END_DESCRIPTION = 'Internal to undertow: its hooks call this when a Claude turn ends. Never call it yourself.';
 const SHUTDOWN_GRACE_MS = 3000;
 
 // Splits a stream into newline-delimited JSON-RPC messages.
@@ -54,6 +60,7 @@ export function createRelay({
   clientIn, clientOut, serverIn, serverOut,
   sessionId = randomUUID(),
   approvalScope = 'session',
+  trace = () => {},
 }) {
   let turnId = randomUUID();
   let turnUsed = false;
@@ -62,8 +69,14 @@ export function createRelay({
   const internalRequests = new Map();
   const approvalRequests = new Set();
 
-  const toServer = msg => serverIn.write(JSON.stringify(msg) + '\n');
-  const toClient = msg => clientOut.write(JSON.stringify(msg) + '\n');
+  const toServer = msg => {
+    trace('to-server', msg);
+    serverIn.write(JSON.stringify(msg) + '\n');
+  };
+  const toClient = msg => {
+    trace('to-client', msg);
+    clientOut.write(JSON.stringify(msg) + '\n');
+  };
 
   function turnMeta() {
     return JSON.stringify({ session_id: sessionId, turn_id: turnId });
@@ -94,6 +107,7 @@ export function createRelay({
     if (msg.method === undefined && approvalRequests.delete(msg.id)
         && msg.result?.action === 'accept' && msg.result._meta?.persist === undefined) {
       msg.result._meta = { ...msg.result._meta, persist: 'session' };
+      msg.result.content = { ...msg.result.content, persist: 'session' };
     }
     if (msg.method === 'tools/call' && msg.params) {
       const { name } = msg.params;
@@ -123,11 +137,10 @@ export function createRelay({
       return;
     }
     if (approvalScope === 'session' && isSessionScopableApproval(msg)) approvalRequests.add(msg.id);
-    if (msg.id !== undefined && listRequests.has(msg.id)) {
-      listRequests.delete(msg.id);
-      if (Array.isArray(msg.result?.tools)) {
-        msg.result.tools = msg.result.tools.filter(t => !HIDDEN_TOOLS.has(t.name));
-      }
+    if (msg.method === undefined && listRequests.delete(msg.id) && Array.isArray(msg.result?.tools)) {
+      msg.result.tools = msg.result.tools
+        .filter(t => !HIDDEN_TOOLS.has(t.name))
+        .map(t => (t.name === TURN_END_TOOL ? { ...t, description: TURN_END_DESCRIPTION } : t));
     }
     toClient(msg);
   });

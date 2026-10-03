@@ -48,13 +48,15 @@ test('keeps one turn id until turn_ended, then starts a new one', async () => {
   assert.equal(meta(next).session_id, 'session-1');
 });
 
-test('hides host-only tools from tools/list responses', async () => {
+test('hides js_add_node_module_dir and marks turn_ended internal in tools/list', async () => {
   const h = harness();
   h.fromClient({ jsonrpc: '2.0', id: 'list', method: 'tools/list' });
   await tick();
   h.fromServer({ jsonrpc: '2.0', id: 'list', result: { tools: [{ name: 'js' }, { name: 'js_reset' }, { name: 'turn_ended' }, { name: 'js_add_node_module_dir' }] } });
   await tick();
-  assert.deepEqual(h.toClient[0].result.tools.map(t => t.name), ['js', 'js_reset']);
+  const tools = h.toClient[0].result.tools;
+  assert.deepEqual(tools.map(t => t.name), ['js', 'js_reset', 'turn_ended']);
+  assert.match(tools[2].description, /Internal to undertow/);
 });
 
 test('passes other messages through unchanged', async () => {
@@ -101,7 +103,7 @@ test('scopes an accepted app approval to the session', async () => {
   await tick();
   h.fromClient({ jsonrpc: '2.0', id: 5, result: { action: 'accept', content: {} } });
   await tick();
-  assert.deepEqual(h.toServer[0].result, { action: 'accept', content: {}, _meta: { persist: 'session' } });
+  assert.deepEqual(h.toServer[0].result, { action: 'accept', content: { persist: 'session' }, _meta: { persist: 'session' } });
 });
 
 test('never changes a decline, a cancel, or a scope the client chose', async () => {
@@ -115,6 +117,15 @@ test('never changes a decline, a cancel, or a scope the client chose', async () 
   assert.deepEqual(h.toServer.map(m => m.result), [
     { action: 'decline' }, { action: 'cancel' }, { action: 'accept', _meta: { persist: 'always' } },
   ]);
+});
+
+test('does not treat a server request as the answer to a pending tools/list', async () => {
+  const h = harness();
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
+  await tick();
+  h.fromServer(appApproval(1));
+  await tick();
+  assert.equal(h.toClient[0].method, 'elicitation/create');
 });
 
 test('leaves approvals alone that do not offer a session scope or are not computer use', async () => {
