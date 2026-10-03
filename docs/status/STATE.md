@@ -32,6 +32,8 @@ later, and the desktop app bundles 2.1.286.
 
 - The icon's original PNG from ChatGPT, saved as `docs/assets/sleight-icon-source.png` (the repo has a
   compressed WebP), and optionally a simplified small-size version.
+- Before going public: the owner reads ChatGPT's terms on the bundled computer-use engine, since
+  publishing something that depends on it is a licensing call.
 - Going public. When the owner does it, add sleight to the org profile README
   (`Land-o-Clusters/.github`, `profile/README.md`, under "What lives here", matching the Floati and
   Puddle entries). The owner pushes that change.

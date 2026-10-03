@@ -10,6 +10,9 @@ belong in [STATE.md](STATE.md).
 - Going public, money, scope changes, and redistributing or bundling anything that depends on another
   vendor's app or engine are the owner's call.
 - The project's name is sleight, and its icon is the two-hands image from ChatGPT (2026-10-03).
+- sleight launches at 0.x (owner, 2026-10-03). 1.0 waits until it has survived two or three ChatGPT
+  engine updates, someone else has installed it from the marketplace, the desktop pane's picture is
+  verified, and the benchmark compares it with another tool.
 
 ## Approvals and safety
 
