@@ -26,3 +26,16 @@ jobs:
         run: npm run validate
       - name: Mod tests
         run: npm run test:mod
+      # Same Vale version as local development, checked against the
+      # release's published SHA-256 before it runs.
+      - name: Install Vale
+        run: |
+          curl -fsSL -o vale.tgz https://github.com/errata-ai/vale/releases/download/v3.24.0/vale_3.24.0_Linux_64-bit.tar.gz
+          echo "867534ddb678abca7f214bc4706ead0922bd5252ffe8035fc227013f66c8b214  vale.tgz" | sha256sum -c -
+          tar -xzf vale.tgz vale
+          sudo mv vale /usr/local/bin/vale
+          rm vale.tgz
+      - name: Prose lint
+        run: |
+          vale sync
+          npm run lint:prose
