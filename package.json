@@ -10,6 +10,6 @@
     "check": "npm test && npm run validate && npm run test:mod",
     "doctor": "plugins/sleight/bin/sleight-mcp --doctor",
     "bench": "node bench/run.mjs",
-    "lint:prose": "vale README.md CLAUDE.md docs/status/STATE.md docs/status/LAWS.md plugins/sleight/skills/drive-mac-apps/SKILL.md"
+    "lint:prose": "vale README.md CHANGELOG.md CLAUDE.md docs/status/STATE.md docs/status/LAWS.md plugins/sleight/skills/drive-mac-apps/SKILL.md"
   }
 }
