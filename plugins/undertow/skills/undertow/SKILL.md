@@ -26,11 +26,25 @@ then undertow. UI automation is the slowest and most fragile option.
 5. Use `app.getScreenshot()` with `nodeRepl.emitImage(...)` when the accessibility tree doesn't show what
    you need, such as canvases or images.
 
+## Hover: what to do instead
+
+Events go to the app, not through the real pointer, so nothing ever hovers. Most hover needs have a
+background equivalent. Try these in order:
+
+1. **Tooltips:** read them from the UI state. An element's tooltip is its `Help:` field, e.g.
+   `button Description: Delete, Help: Delete the last digit…`. No hover needed.
+2. **Hover-revealed menus and controls:** look at the element's `Secondary Actions:` in the UI state
+   (such as `ShowMenu`) and call `app.performSecondaryAction(index, "ShowMenu")`. A right-click,
+   `app.click(index, { mouseButton: "right" })`, often opens the same menu.
+3. **Keyboard:** many hover menus have a key equivalent (a menu bar item, a shortcut, Tab to focus then
+   Space). Use `app.pressKey(...)`.
+4. **Truly hover-only UI** (a canvas that reacts to the pointer, a preview that only shows on hover):
+   use a pointer-moving computer-use tool if one is available, for that step only, and tell the user
+   first that it will take over their screen.
+
 ## What it can't do
 
-- **Hover.** Events go to the app, not through the real pointer, so tooltips and hover menus never appear.
-  For those, use a pointer-moving computer-use tool if one is available, and tell the user it will take
-  over their screen.
+- **Real pointer hover**, beyond the workarounds above.
 - **Web pages.** The browser surface is off by default; use browser tools.
 
 If `js` fails to start, ask the user to run `bin/undertow-mcp --doctor` from the plugin folder and share
