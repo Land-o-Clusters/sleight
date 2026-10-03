@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/sleight-icon-256.png" width="128" height="128" alt="sleight icon: two hands passing a mouse pointer, trailing warm and cool pixels"></p>
+
 <h1 align="center">sleight</h1>
 <p align="center"><strong>Let Claude Code drive your Mac apps in the background, without taking your cursor.</strong></p>
 <p align="center">A Claude Code plugin that connects Claude to the computer-use engine bundled with the ChatGPT desktop app.</p>
