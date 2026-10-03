@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-const JS_TOOL = 'mcp__plugin_undertow_computer__js'
-const TURN_END_TOOL = 'mcp__plugin_undertow_computer__turn_ended'
-const PANE = { plugin: 'undertow', component: 'Pane', requestId: 'undertow' } as const
+const JS_TOOL = 'mcp__plugin_sleight_computer__js'
+const TURN_END_TOOL = 'mcp__plugin_sleight_computer__turn_ended'
+const PANE = { plugin: 'sleight', component: 'Pane', requestId: 'sleight' } as const
 const SURFACES = ['terminal', 'desktop'] as const
 
-describe('undertow mod', () => {
+describe('sleight mod', () => {
   test('the pane draws with no activity yet on each surface', async $ => {
     for (const surface of SURFACES) {
       const ui = await $.ui.mount({ ...PANE, surface, props: { bodyColumns: 60 } as never })
@@ -28,14 +28,14 @@ describe('undertow mod', () => {
 
   // Lifting the stop on the next message (prompt.submit) is checked in a live
   // session: the test kit raises no prompt.submit.
-  test('/undertow stop refuses js calls', async ($, on) => {
+  test('/sleight stop refuses js calls', async ($, on) => {
     on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [] } }) as never)
     const before = await $.tool.call({ tool: JS_TOOL, code: '1' } as never)
     expect(before.deny).toBeUndefined()
-    await $.command.run({ command: 'undertow', args: 'stop' } as never)
+    await $.command.run({ command: 'sleight', args: 'stop' } as never)
     const refused = await $.tool.call({ tool: JS_TOOL, code: '1' } as never)
     // A test's own $.tool.call sees a refusal as { deny }.
-    expect(String(refused.deny)).toMatch(/stopped undertow/)
+    expect(String(refused.deny)).toMatch(/stopped sleight/)
   })
 
   test('the pane’s Stop button stops it too', async ($, on) => {
@@ -43,12 +43,12 @@ describe('undertow mod', () => {
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { bodyColumns: 60 } as never })
     await ui.press({ key: 'stop' })
     const refused = await $.tool.call({ tool: JS_TOOL, code: '1' } as never)
-    expect(String(refused.deny)).toMatch(/stopped undertow/)
+    expect(String(refused.deny)).toMatch(/stopped sleight/)
     expect(await ui.find({ text: /Stopped until your next message/ })).toBeDefined()
   })
 
   test('Claude may not call turn_ended', async $ => {
     const refused = await $.tool.call({ tool: TURN_END_TOOL } as never)
-    expect(String(refused.deny)).toMatch(/internal to undertow/)
+    expect(String(refused.deny)).toMatch(/internal to sleight/)
   })
 })

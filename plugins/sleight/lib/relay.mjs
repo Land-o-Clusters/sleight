@@ -7,7 +7,7 @@
 // - session_id: one per relay process. Claude Code starts one server process
 //   per session, so approvals last for the session, as in Codex.
 // - turn_id: rotates each time the turn ends. A `turn_ended` call (sent by the
-//   undertow mod at the end of each Claude turn) gets the current ids filled
+//   sleight mod at the end of each Claude turn) gets the current ids filled
 //   in, then the next call starts a new turn.
 //
 // Claude Code 2.1.288 opens with a `server/discover` probe from a newer MCP
@@ -37,7 +37,7 @@ import { randomUUID } from 'node:crypto';
 const META_KEY = 'x-codex-turn-metadata';
 const HIDDEN_TOOLS = new Set(['js_add_node_module_dir']);
 const TURN_END_TOOL = 'turn_ended';
-const TURN_END_DESCRIPTION = 'Internal to undertow: its hooks call this when a Claude turn ends. Never call it yourself.';
+const TURN_END_DESCRIPTION = 'Internal to sleight: its hooks call this when a Claude turn ends. Never call it yourself.';
 const SHUTDOWN_GRACE_MS = 3000;
 
 // Splits a stream into newline-delimited JSON-RPC messages.
@@ -190,7 +190,7 @@ export function createRelay({
   // or after a short grace period.
   function endOpenTurn() {
     if (!turnUsed) return Promise.resolve();
-    const id = `undertow-${nextInternalId++}`;
+    const id = `sleight-${nextInternalId++}`;
     const done = new Promise(resolve => {
       internalRequests.set(id, resolve);
       setTimeout(resolve, SHUTDOWN_GRACE_MS).unref();

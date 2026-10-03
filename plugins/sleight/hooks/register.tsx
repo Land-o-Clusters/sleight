@@ -5,17 +5,17 @@ import type { Frame, LogEntry, ViewStatus } from '../types'
 import { FRAME_MARKER, snapshotCode } from './snapshot'
 
 // The server's own name in plugin.json; the session lists it as
-// plugin:undertow:computer, and its tools as mcp__plugin_undertow_computer__*.
+// plugin:sleight:computer, and its tools as mcp__plugin_sleight_computer__*.
 const SERVER = 'computer'
-const JS_TOOL = 'mcp__plugin_undertow_computer__js'
-const TURN_END_TOOL = 'mcp__plugin_undertow_computer__turn_ended'
-const PANE = 'undertow'
+const JS_TOOL = 'mcp__plugin_sleight_computer__js'
+const TURN_END_TOOL = 'mcp__plugin_sleight_computer__turn_ended'
+const PANE = 'sleight'
 const LOG_LIMIT = 200
 
-const log = atom({ plugin: 'undertow', key: 'log' } as const, [] as LogEntry[])
-const frame = atom({ plugin: 'undertow', key: 'frame' } as const, null as Frame | null)
-const view = atom({ plugin: 'undertow', key: 'view' } as const, { kind: 'idle' } as ViewStatus)
-const stopped = atom({ plugin: 'undertow', key: 'stopped' } as const, false)
+const log = atom({ plugin: 'sleight', key: 'log' } as const, [] as LogEntry[])
+const frame = atom({ plugin: 'sleight', key: 'frame' } as const, null as Frame | null)
+const view = atom({ plugin: 'sleight', key: 'view' } as const, { kind: 'idle' } as ViewStatus)
+const stopped = atom({ plugin: 'sleight', key: 'stopped' } as const, false)
 
 // Not drawn from, so plain module variables (a reload resets them, harmlessly).
 let usedThisTurn = false
@@ -25,7 +25,7 @@ let lastApp: string | undefined
 // Set while one of this mod's own calls is in flight, so its tool.call hooks
 // let the call through and don't log it.
 let ownCall = false
-// Apps the pane snapshotted since Claude last used undertow. The engine diffs
+// Apps the pane snapshotted since Claude last used sleight. The engine diffs
 // UI state against the latest read of an app, whoever made it, so Claude's
 // next diff would be against the pane's read; the next prompt says so.
 const snapshottedApps = new Set<string>()
@@ -40,7 +40,7 @@ function appFrom(code: string, text: string | undefined): string | undefined {
 }
 
 function setStatus($: { ui: { status: (text: string | undefined) => void } }) {
-  $.ui.status(lastApp ? `undertow · ${lastApp} · ${actions} action${actions === 1 ? '' : 's'}` : undefined)
+  $.ui.status(lastApp ? `sleight · ${lastApp} · ${actions} action${actions === 1 ? '' : 's'}` : undefined)
 }
 
 // Runs one call on the engine as this mod.
@@ -60,9 +60,9 @@ async function call($: any, tool: string, args: Record<string, unknown>) {
 async function endEngineTurn($: any, event: 'Stop' | 'Interrupt') {
   try {
     const ended = await call($, 'turn_ended', { hook_event_name: event })
-    $.ui.log(`undertow: turn_ended ${ended.isError ? `failed: ${JSON.stringify(ended.content)}` : 'sent'}`, { to: 'debug' })
+    $.ui.log(`sleight: turn_ended ${ended.isError ? `failed: ${JSON.stringify(ended.content)}` : 'sent'}`, { to: 'debug' })
   } catch (err) {
-    $.ui.log(`undertow: could not end the turn: ${(err as Error).message}`, { to: 'debug' })
+    $.ui.log(`sleight: could not end the turn: ${(err as Error).message}`, { to: 'debug' })
   }
 }
 
@@ -71,7 +71,7 @@ async function snapshot($: any, app: string) {
   try {
     const result = await call($, 'js', {
       code: snapshotCode(app, Math.max(8, paneColumns - 2), Math.max(4, paneRows - 8)),
-      title: 'undertow pane snapshot',
+      title: 'sleight pane snapshot',
     })
     const text = result.content.map((block: { text?: string }) => block.text ?? '').join('\n')
     const line = text.split('\n').find((l: string) => l.startsWith(FRAME_MARKER))
@@ -95,8 +95,8 @@ async function isPaneOpen($: any): Promise<boolean> {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
-      name: 'undertow',
-      description: 'Show what undertow is doing in a pane, or `stop` to halt its computer use',
+      name: 'sleight',
+      description: 'Show what sleight is doing in a pane, or `stop` to halt its computer use',
       argumentHint: '[stop]',
       immediate: true,
     })
@@ -111,7 +111,7 @@ export const register: Register = on => {
     const apps = [...snapshottedApps].join(', ')
     snapshottedApps.clear()
     const note =
-      `undertow: its pane re-read the UI state of ${apps} after your last undertow call. ` +
+      `sleight: its pane re-read the UI state of ${apps} after your last sleight call. ` +
       'The engine diffs against the latest read, so pass { disableDiffing: true } to your next ' +
       'getAXState() for that app before relying on a diff.'
     return next({ ...e, context: [...(e.context ?? []), note] })
@@ -125,7 +125,7 @@ export const register: Register = on => {
   on('tool.call', { tool: JS_TOOL }, async ($, e, next) => {
     if (ownCall) return next(e)
     if (await read($, stopped)) {
-      return { deny: 'The user stopped undertow with /undertow stop. Do not use it again until they ask.' }
+      return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
     }
     usedThisTurn = true
     snapshottedApps.clear()
@@ -149,7 +149,7 @@ export const register: Register = on => {
 
   // turn_ended stays listed so this mod can call it; Claude may not.
   on('tool.call', { tool: TURN_END_TOOL }, async ($, e, next) =>
-    ownCall ? next(e) : { deny: 'turn_ended is internal to undertow; its hooks call it when a turn ends.' },
+    ownCall ? next(e) : { deny: 'turn_ended is internal to sleight; its hooks call it when a turn ends.' },
   )
 
   on('turn.complete', async ($, e, next) => {
@@ -164,15 +164,15 @@ export const register: Register = on => {
     return result
   })
 
-  on('command.run', { command: 'undertow' }, async ($, e) => {
+  on('command.run', { command: 'sleight' }, async ($, e) => {
     if (e.args.trim() === 'stop') {
       await update($, stopped, () => true)
       await endEngineTurn($, 'Interrupt')
-      $.ui.status('undertow · stopped')
-      return { text: 'undertow stopped: Claude can’t use it again until your next message. Press Esc to stop the rest of the turn.' }
+      $.ui.status('sleight · stopped')
+      return { text: 'sleight stopped: Claude can’t use it again until your next message. Press Esc to stop the rest of the turn.' }
     }
-    await $.ui.open({ id: PANE, title: 'undertow' })
-    return { text: 'undertow pane opened.' }
+    await $.ui.open({ id: PANE, title: 'sleight' })
+    return { text: 'sleight pane opened.' }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -231,7 +231,7 @@ export const register: Register = on => {
             onPress={() => {
               void update($, stopped, () => true)
               void endEngineTurn($, 'Interrupt')
-              $.ui.status('undertow · stopped')
+              $.ui.status('sleight · stopped')
             }}
           />
         </Box>

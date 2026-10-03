@@ -1,6 +1,6 @@
-// What the undertow mod keeps in $.state for its pane.
+// What the sleight mod keeps in $.state for its pane.
 
-/** One action Claude took through undertow, newest last. */
+/** One action Claude took through sleight, newest last. */
 export type LogEntry = {
   id: string
   /** The short description Claude gave the call, or the start of its code. */
@@ -32,7 +32,7 @@ export type ViewStatus =
 
 declare module 'claude-code' {
   interface PluginState {
-    undertow: {
+    sleight: {
       log: LogEntry[]
       frame: Frame | null
       view: ViewStatus

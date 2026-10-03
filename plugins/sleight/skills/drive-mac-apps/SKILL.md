@@ -1,17 +1,17 @@
 ---
 name: drive-mac-apps
-description: Use when a task needs a native macOS app operated through its UI (clicking, typing, dragging, reading what is on screen) and no CLI, API or dedicated tool covers it. undertow drives the app in the background through the computer-use engine bundled with the ChatGPT desktop app, without moving the user's pointer.
+description: Use when a task needs a native macOS app operated through its UI (clicking, typing, dragging, reading what is on screen) and no CLI, API or dedicated tool covers it. sleight drives the app in the background through the computer-use engine bundled with the ChatGPT desktop app, without moving the user's pointer.
 ---
 
-# Driving Mac apps with undertow
+# Driving Mac apps with sleight
 
-undertow's tools are `mcp__plugin_undertow_computer__js` and `mcp__plugin_undertow_computer__js_reset`.
+sleight's tools are `mcp__plugin_sleight_computer__js` and `mcp__plugin_sleight_computer__js_reset`.
 `js` runs JavaScript in a persistent session that holds the `cua` API.
 
 ## Before you reach for it
 
 Prefer, in order: a CLI or API for the app, a dedicated MCP tool or connector, browser tools for web pages,
-then undertow. UI automation is the slowest and most fragile option.
+then sleight. UI automation is the slowest and most fragile option.
 
 ## How to use it
 
@@ -47,5 +47,5 @@ background equivalent. Try these in order:
 - **Real pointer hover**, beyond the workarounds above.
 - **Web pages.** The browser surface is off by default; use browser tools.
 
-If `js` fails to start, ask the user to run `bin/undertow-mcp --doctor` from the plugin folder and share
+If `js` fails to start, ask the user to run `bin/sleight-mcp --doctor` from the plugin folder and share
 the output.

@@ -1,14 +1,14 @@
 {
-  "name": "undertow",
+  "name": "sleight",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "test:mod": "claude plugin test plugins/undertow",
-    "validate": "claude plugin validate . && claude plugin validate plugins/undertow",
-    "typecheck": "tsc -p plugins/undertow/tsconfig.json",
+    "test:mod": "claude plugin test plugins/sleight",
+    "validate": "claude plugin validate . && claude plugin validate plugins/sleight",
+    "typecheck": "tsc -p plugins/sleight/tsconfig.json",
     "check": "npm test && npm run validate && npm run test:mod",
-    "doctor": "plugins/undertow/bin/undertow-mcp --doctor",
+    "doctor": "plugins/sleight/bin/sleight-mcp --doctor",
     "bench": "node bench/run.mjs"
   }
 }

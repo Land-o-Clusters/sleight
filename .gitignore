@@ -1,5 +1,5 @@
 .dev/
 node_modules/
 .DS_Store
-plugins/undertow/.claude-plugin/types/
+plugins/sleight/.claude-plugin/types/
 bench/results/

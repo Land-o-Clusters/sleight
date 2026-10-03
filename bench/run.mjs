@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Runs the undertow benchmark: each task through headless `claude -p` with the
+// Runs the sleight benchmark: each task through headless `claude -p` with the
 // plugin loaded, checked outside the agent. Writes bench/results/<stamp>.json
 // and prints a table.
 //
 //   node bench/run.mjs [--tasks id,id] [--runs N] [--model M] [--dry-run]
 //
-// A real run AUTO-APPROVES Calculator and TextEdit for undertow (approve.mjs),
+// A real run AUTO-APPROVES Calculator and TextEdit for sleight (approve.mjs),
 // because -p can't show approval prompts. Run it only when you're fine with
 // Claude driving those two apps unattended. --dry-run sets up and checks
 // tasks without launching Claude.
@@ -36,9 +36,9 @@ if (!selected.length) throw new Error(`no tasks match ${wanted}`);
 function runClaude(prompt) {
   const args = [
     '-p', prompt,
-    '--plugin-dir', join(ROOT, 'plugins', 'undertow'),
+    '--plugin-dir', join(ROOT, 'plugins', 'sleight'),
     '--settings', join(ROOT, 'bench', 'settings.json'),
-    '--allowedTools', 'mcp__plugin_undertow_computer__js',
+    '--allowedTools', 'mcp__plugin_sleight_computer__js',
     '--output-format', 'json',
     ...(model ? ['--model', model] : []),
   ];
@@ -63,7 +63,7 @@ const results = [];
 for (const task of selected) {
   for (let run = 1; run <= runs; run++) {
     const nonce = randomBytes(4).toString('hex');
-    const dir = join(tmpdir(), 'undertow-bench', stamp, `${task.id}-${run}`);
+    const dir = join(tmpdir(), 'sleight-bench', stamp, `${task.id}-${run}`);
     mkdirSync(dir, { recursive: true });
     const ctx = { dir, nonce };
     task.setup?.(ctx);

@@ -15,25 +15,25 @@ export const tasks = [
   {
     id: 'calculator-click',
     app: 'Calculator',
-    prompt: () => 'Use undertow to work out 17 × 23 in Calculator by clicking its buttons in the background. Reply with only the number the display shows.',
+    prompt: () => 'Use sleight to work out 17 × 23 in Calculator by clicking its buttons in the background. Reply with only the number the display shows.',
     check: ({ answer }) => hasNumber(answer, 391) || 'answer does not contain 391',
   },
   {
     id: 'calculator-menu',
     app: 'Calculator',
-    prompt: () => 'Use undertow to switch Calculator to Scientific mode from its View menu, then compute 2 to the power of 10 with its buttons. Reply with only the number the display shows.',
+    prompt: () => 'Use sleight to switch Calculator to Scientific mode from its View menu, then compute 2 to the power of 10 with its buttons. Reply with only the number the display shows.',
     check: ({ answer }) => hasNumber(answer, 1024) || 'answer does not contain 1024',
   },
   {
     id: 'textedit-save',
     app: 'TextEdit',
     prompt: ({ dir, nonce }) =>
-      `Use undertow to create a new TextEdit document, make it plain text (Format menu, Make Plain Text), type exactly "undertow bench ${nonce}", and save it as ${join(dir, `${nonce}.txt`)}. Then close the document.`,
+      `Use sleight to create a new TextEdit document, make it plain text (Format menu, Make Plain Text), type exactly "sleight bench ${nonce}", and save it as ${join(dir, `${nonce}.txt`)}. Then close the document.`,
     check: ({ dir, nonce }) => {
       const path = join(dir, `${nonce}.txt`);
       let text;
       try { text = readFileSync(path, 'utf8'); } catch { return `${path} was not saved`; }
-      return text.trim() === `undertow bench ${nonce}` || `${path} holds ${JSON.stringify(text.slice(0, 80))}`;
+      return text.trim() === `sleight bench ${nonce}` || `${path} holds ${JSON.stringify(text.slice(0, 80))}`;
     },
   },
   {
@@ -41,7 +41,7 @@ export const tasks = [
     app: 'TextEdit',
     setup: ({ dir, nonce }) => writeFileSync(join(dir, `${nonce}-edit.txt`), 'alpha beta gamma\n'),
     prompt: ({ dir, nonce }) =>
-      `Use undertow to open ${join(dir, `${nonce}-edit.txt`)} in TextEdit, replace the word "beta" with "delta", save, and close the document.`,
+      `Use sleight to open ${join(dir, `${nonce}-edit.txt`)} in TextEdit, replace the word "beta" with "delta", save, and close the document.`,
     check: ({ dir, nonce }) => {
       const text = readFileSync(join(dir, `${nonce}-edit.txt`), 'utf8');
       return text.trim() === 'alpha delta gamma' || `file holds ${JSON.stringify(text.slice(0, 80))}`;

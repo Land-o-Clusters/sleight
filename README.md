@@ -1,4 +1,4 @@
-<h1 align="center">undertow</h1>
+<h1 align="center">sleight</h1>
 <p align="center"><strong>Let Claude Code drive your Mac apps in the background, without taking your cursor.</strong></p>
 <p align="center">A Claude Code plugin that connects Claude to the computer-use engine bundled with the ChatGPT desktop app.</p>
 
@@ -20,7 +20,7 @@
 </p>
 
 > [!IMPORTANT]
-> **Unofficial.** undertow is not affiliated with, endorsed by, or supported by OpenAI or Anthropic.
+> **Unofficial.** sleight is not affiliated with, endorsed by, or supported by OpenAI or Anthropic.
 > It drives an undocumented runtime that ships inside the ChatGPT app, and any ChatGPT update can break it.
 > It contains no OpenAI code: it starts the copy already installed on your Mac.
 
@@ -28,7 +28,7 @@ Most computer-use tools take over your screen: the pointer moves, windows jump t
 wait. The engine inside the ChatGPT desktop app works differently. It sends clicks, drags and keystrokes
 straight to the target app, so the app can sit behind your other windows while you keep working.
 
-undertow lets Claude Code use that engine. Claude writes short JavaScript against the engine's API
+sleight lets Claude Code use that engine. Claude writes short JavaScript against the engine's API
 (`cua.getApp("Calculator")`, `app.click(...)`, `app.getScreenshot()`), and the engine does the rest.
 
 ## Install
@@ -39,26 +39,26 @@ undertow lets Claude Code use that engine. Claude writes short JavaScript agains
 - [ChatGPT desktop app](https://chatgpt.com/download/), with **Computer Use** turned on in Codex at least once.
   That first run installs the engine's helper and asks macOS for Accessibility and Screen Recording access.
   You don't need to stay signed in to Codex afterwards.
-- Claude Code v2.1.275 or later. The pane, status line, `/undertow stop` and per-turn cleanup are a
+- Claude Code v2.1.275 or later. The pane, status line, `/sleight stop` and per-turn cleanup are a
   [mod](https://code.claude.com/docs/en/plugins/mods/overview) and need v2.1.287 or later; on older
-  versions undertow still works without them.
+  versions sleight still works without them.
 
 ### Add the plugin
 
 In a Claude Code session:
 
 ```text
-/plugin install undertow --marketplace Land-o-Clusters/undertow
+/plugin install sleight --marketplace Land-o-Clusters/sleight
 ```
 
 Or from your shell:
 
 ```bash
-claude plugin marketplace add Land-o-Clusters/undertow
+claude plugin marketplace add Land-o-Clusters/sleight
 ```
 
 ```bash
-claude plugin install undertow@undertow
+claude plugin install sleight@sleight
 ```
 
 Run `/reload-plugins` in any open session, or start a new one.
@@ -66,13 +66,13 @@ Run `/reload-plugins` in any open session, or start a new one.
 ### Check it
 
 ```bash
-~/.claude/plugins/marketplaces/undertow/plugins/undertow/bin/undertow-mcp --doctor
+~/.claude/plugins/marketplaces/sleight/plugins/sleight/bin/sleight-mcp --doctor
 ```
 
 `--doctor` prints the engine version it found and checks each file it needs. Then ask Claude:
 
 ```text
-Use undertow to open Calculator in the background and work out 12 × 12 by clicking its buttons.
+Use sleight to open Calculator in the background and work out 12 × 12 by clicking its buttons.
 ```
 
 The first time Claude touches an app, you'll get a prompt like **Allow Computer Use to use "Calculator"?**
@@ -84,27 +84,27 @@ That prompt comes from the engine itself. Accepting it allows that app for the r
 Third-party marketplaces don't auto-update by default. To update:
 
 ```bash
-claude plugin marketplace update undertow
+claude plugin marketplace update sleight
 ```
 
 ```bash
-claude plugin update undertow@undertow
+claude plugin update sleight@sleight
 ```
 
-Or turn on auto-update for the `undertow` marketplace in `/plugin` → **Marketplaces**.
+Or turn on auto-update for the `sleight` marketplace in `/plugin` → **Marketplaces**.
 
 ## Watch and stop it
 
-Apps undertow drives stay in the background, so you can't watch them directly. On Claude Code v2.1.287
+Apps sleight drives stay in the background, so you can't watch them directly. On Claude Code v2.1.287
 or later:
 
-- **`/undertow`** opens a pane with the app's latest picture and a log of each action Claude took.
-  The picture refreshes after each turn that used undertow, or when you press **Refresh** (`r`) while
+- **`/sleight`** opens a pane with the app's latest picture and a log of each action Claude took.
+  The picture refreshes after each turn that used sleight, or when you press **Refresh** (`r`) while
   Claude is idle. In a terminal it's drawn in colored half-blocks; in the desktop app's Code tab it's
   the screenshot itself.
 - **The status line** shows the app and how many actions Claude has taken.
-- **`/undertow stop`**, or **Stop** (`s`) in the pane, ends the engine's turn and refuses any further
-  undertow call until your next message. It works mid-turn. Press Esc as well to stop the rest of
+- **`/sleight stop`**, or **Stop** (`s`) in the pane, ends the engine's turn and refuses any further
+  sleight call until your next message. It works mid-turn. Press Esc as well to stop the rest of
   Claude's turn.
 
 The pane never snapshots while Claude is working, because the engine reports UI changes as a diff
@@ -114,13 +114,13 @@ tells Claude to take a full read before trusting a diff.
 ## How it works
 
 ```
-Claude Code ──MCP──▶ bin/undertow-mcp ──▶ ChatGPT.app's cua-repl server ──▶ native helper ──▶ your apps
+Claude Code ──MCP──▶ bin/sleight-mcp ──▶ ChatGPT.app's cua-repl server ──▶ native helper ──▶ your apps
 ```
 
 1. The ChatGPT app writes its computer-use server config to
    `~/.codex/plugins/cache/openai-bundled/unified-computer-use/<version>/.mcp.json`,
    and replaces that folder on almost every update.
-2. `bin/undertow-mcp` runs with the Node that ships inside ChatGPT.app, finds the newest version folder,
+2. `bin/sleight-mcp` runs with the Node that ships inside ChatGPT.app, finds the newest version folder,
    and starts the server it describes. A hard-coded path would break within days; this one follows
    the updates.
 3. The server exposes a persistent JavaScript tool, `js`. Its first call returns the full API
@@ -133,8 +133,8 @@ Claude Code ──MCP──▶ bin/undertow-mcp ──▶ ChatGPT.app's cua-repl
 6. On Claude Code v2.1.287 or later, the plugin's mod (`hooks/register.ts`) also ends the engine's turn
    after each Claude turn that used it, as Codex does.
 
-By default undertow turns on native apps only (`CUA_REPL_ENABLED_SURFACES=computer`). The engine's
-in-app browser only exists inside ChatGPT. Set `UNDERTOW_SURFACES=browser,computer` in the plugin's
+By default sleight turns on native apps only (`CUA_REPL_ENABLED_SURFACES=computer`). The engine's
+in-app browser only exists inside ChatGPT. Set `SLEIGHT_SURFACES=browser,computer` in the plugin's
 environment to try the Chrome surface, which needs the Codex Chrome extension.
 
 ## What is still wrong
@@ -142,7 +142,7 @@ environment to try the Chrome surface, which needs the Codex Chrome extension.
 - **Foreground pointer activity interrupts it.** The engine watches real mouse and keyboard input to
   notice a person taking over an app, and asks Claude to re-read the app when it does. Anything moving
   the real pointer in that app counts, including another agent driving in the foreground. Several
-  background sessions (two undertow sessions, or undertow and Codex) can share the engine's helper at
+  background sessions (two sleight sessions, or sleight and Codex) can share the engine's helper at
   once. In one test with Codex driving the foreground at the same time, keystrokes typed during the run
   arrived twice. We haven't pinned down why.
 - **No real hover.** The engine sends events to the app, not through the real pointer. The skill teaches
@@ -159,7 +159,7 @@ environment to try the Chrome surface, which needs the Codex Chrome extension.
   for safety reasons"), and honors any app blocks your organization sets.
 - **`claude -p` can't answer approval prompts**, so headless runs can only use apps already approved
   for that session.
-- **macOS on Apple Silicon only.** The engine has Linux and Windows builds, but undertow has only been
+- **macOS on Apple Silicon only.** The engine has Linux and Windows builds, but sleight has only been
   tested on macOS.
 
 ### Approval scope
@@ -169,7 +169,7 @@ doesn't say so, so here it is plainly.
 
 The engine asks before every action on an app and doesn't remember answers for a session itself. In
 Codex, the host app remembers "Allow for this session" and answers the repeats. Claude Code's prompt can
-only accept or decline, so without help you'd be asked on every click. undertow's relay plays the
+only accept or decline, so without help you'd be asked on every click. sleight's relay plays the
 host's part:
 
 - Once you accept an app, the relay answers later requests for **the same app at the same risk level**
@@ -178,13 +178,13 @@ host's part:
 - Declines and cancels are never remembered.
 - Nothing is written to disk. The memory ends with the session.
 
-To be asked on every action instead, set `UNDERTOW_APPROVAL_SCOPE=once` in Claude Code's environment,
+To be asked on every action instead, set `SLEIGHT_APPROVAL_SCOPE=once` in Claude Code's environment,
 for example in the `env` block of `~/.claude/settings.json`.
 
 ## Safety
 
 - **`js` runs JavaScript as you.** Treat it like Bash: Claude Code asks before each call unless you allow
-  `mcp__plugin_undertow_computer__js`. Allowing it means no more prompts for any code Claude sends.
+  `mcp__plugin_sleight_computer__js`. Allowing it means no more prompts for any code Claude sends.
 - **Per-app approvals still apply.** The engine asks before touching each app, however the `js` tool is
   allowed. An accepted approval lasts for the session ([Approval scope](#approval-scope)).
 - **Read before you install.** This repository is small on purpose: a launcher, a relay, a mod, a skill
@@ -211,7 +211,7 @@ npm run bench -- --runs 3
 
 > [!WARNING]
 > Headless runs can't show approval prompts, so a benchmark run **auto-approves Calculator and
-> TextEdit** for undertow (`bench/approve.mjs`, used only through `bench/settings.json`). Run it only
+> TextEdit** for sleight (`bench/approve.mjs`, used only through `bench/settings.json`). Run it only
 > when you're fine with Claude driving those two apps unattended. `--dry-run` checks the setup without
 > launching Claude.
 
@@ -225,7 +225,7 @@ npm test               # relay unit tests
 npm run validate       # claude plugin validate, marketplace and plugin
 npm run test:mod       # the mod's tests, against the engine (claude plugin test)
 npm run typecheck      # needs the types Claude Code writes when it loads the mod
-UNDERTOW_TRACE=1 claude --plugin-dir plugins/undertow   # logs every relayed message to ~/Library/Logs/undertow/
+SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed message to ~/Library/Logs/sleight/
 ```
 
 ## Roadmap
@@ -234,10 +234,10 @@ UNDERTOW_TRACE=1 claude --plugin-dir plugins/undertow   # logs every relayed mes
 - [x] Session and turn ids, so the engine can scope approvals and cleanup
 - [x] Approvals that last for the session, as in Codex
 - [x] Hide the engine's internal tools (`turn_ended`, `js_add_node_module_dir`) from Claude
-- [x] A skill that tells Claude when to use undertow and when to fall back to a pointer-moving tool
+- [x] A skill that tells Claude when to use sleight and when to fall back to a pointer-moving tool
 - [x] Per-turn cleanup through the mod's `turn.complete` hook
 - [x] Live pane with the app's latest picture and an action log
-- [x] Status line entry and `/undertow stop`
+- [x] Status line entry and `/sleight stop`
 - [x] Hover workarounds in the skill
 - [x] A reproducible task benchmark
 - [ ] Benchmark arms for other computer-use tools
@@ -251,4 +251,4 @@ UNDERTOW_TRACE=1 claude --plugin-dir plugins/undertow   # logs every relayed mes
 ## License
 
 [MIT](LICENSE). The ChatGPT app and its computer-use runtime are OpenAI's and keep their own terms;
-undertow doesn't include or redistribute them.
+sleight doesn't include or redistribute them.

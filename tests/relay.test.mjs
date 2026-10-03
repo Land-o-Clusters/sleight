@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
-import { createRelay } from '../plugins/undertow/lib/relay.mjs';
+import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 
 // Wires a relay to in-memory streams and records what each side receives.
 function harness(options = {}) {
@@ -56,7 +56,7 @@ test('hides js_add_node_module_dir and marks turn_ended internal in tools/list',
   await tick();
   const tools = h.toClient[0].result.tools;
   assert.deepEqual(tools.map(t => t.name), ['js', 'js_reset', 'turn_ended']);
-  assert.match(tools[2].description, /Internal to undertow/);
+  assert.match(tools[2].description, /Internal to sleight/);
   assert.equal(tools[2]._meta, undefined);
 });
 

@@ -2,7 +2,7 @@
 // the `js` tool) to draw its pane. It must stay self-contained: it runs in the
 // engine, not here. snapshotCode() fills in the app and the frame size.
 //
-// It writes one line, `UNDERTOW_FRAME <json>`: the app's screenshot as
+// It writes one line, `SLEIGHT_FRAME <json>`: the app's screenshot as
 // terminal cells (upper half blocks, two pixels per cell) and as an image
 // small enough to embed in an SVG. The engine's sandbox can't load `sharp`,
 // so it decodes with the bundled pure-JS jpeg-js and pngjs.
@@ -54,13 +54,13 @@ const SNAPSHOT_JS = `await (async () => {
     image = { mime: 'image/png', base64: PNG.sync.write(small).toString('base64') };
   }
 
-  nodeRepl.write('UNDERTOW_FRAME ' + JSON.stringify({
+  nodeRepl.write('SLEIGHT_FRAME ' + JSON.stringify({
     app: APP, width, height, columns: outW, rows, cells: cells.toString('base64'), image,
   }));
 })()
 `
 
-export const FRAME_MARKER = 'UNDERTOW_FRAME '
+export const FRAME_MARKER = 'SLEIGHT_FRAME '
 
 export function snapshotCode(app: string, columns: number, rows: number): string {
   return SNAPSHOT_JS
