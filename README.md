@@ -110,6 +110,12 @@ environment to try the Chrome surface, which needs the Codex Chrome extension.
 
 ## What is still wrong
 
+- **Foreground pointer activity interrupts it.** The engine watches real mouse and keyboard input to
+  notice a person taking over an app, and asks Claude to re-read the app when it does. Anything moving
+  the real pointer in that app counts, including another agent driving in the foreground. Several
+  background sessions (two undertow sessions, or undertow and Codex) can share the engine's helper at
+  once. In one test with Codex driving the foreground at the same time, keystrokes typed during the run
+  arrived twice. We haven't pinned down why.
 - **No hover.** The engine sends events to the app, not through the real pointer, so hover-only UI
   (tooltips, hover menus) never sees a pointer. Use a pointer-moving computer-use tool for those.
 - **No end-of-turn cleanup yet.** In Codex, the end of each turn tells the engine to release the apps
@@ -117,10 +123,23 @@ environment to try the Chrome surface, which needs the Codex Chrome extension.
   This is the next thing on the roadmap.
 - **ChatGPT updates can break it.** The runtime is undocumented. The version lookup handles the
   folder changing; it can't handle the API changing. Run `--doctor` first when something stops working.
+- **Some apps are off limits.** The engine refuses terminal apps such as Terminal.app ("not allowed …
+  for safety reasons"), and honors any app blocks your organization sets.
+- **Approvals repeat on every action.** Claude Code's prompt can only accept or decline, so the engine
+  treats each accept as one-time and asks again on the next click. Codex avoids this by sending a
+  "for this session" choice. See [the open question](#open-question-approval-scope).
 - **`claude -p` can't answer approval prompts**, so headless runs can only use apps already approved
   for that session.
 - **macOS on Apple Silicon only.** The engine has Linux and Windows builds, but undertow has only been
   tested on macOS.
+
+### Open question: approval scope
+
+The engine remembers an approval for the rest of a session only when the answer says so
+(`_meta.persist: "session"`), which Claude Code's prompt can't express. The relay could add that field
+whenever you click Accept on a computer-use approval, so each app is approved once per Claude session,
+as in Codex. The cost is that Accept then silently means "for this session". This is undecided; it would
+ship as an opt-in setting, not a default, if at all.
 
 ## Safety
 
