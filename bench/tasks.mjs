@@ -5,6 +5,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+// Calculator shows digit grouping ("1,024"), and Claude reports what it shows.
+const hasNumber = (answer, n) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(answer.replace(/(?<=\d)[,\u202f\u00a0 ](?=\d{3})/g, ''));
+
 // The only apps a benchmark run may approve (see approve.mjs).
 export const BENCH_APPS = ['Calculator', 'TextEdit'];
 
@@ -13,13 +16,13 @@ export const tasks = [
     id: 'calculator-click',
     app: 'Calculator',
     prompt: () => 'Use undertow to work out 17 × 23 in Calculator by clicking its buttons in the background. Reply with only the number the display shows.',
-    check: ({ answer }) => /(^|\D)391(\D|$)/.test(answer) || 'answer does not contain 391',
+    check: ({ answer }) => hasNumber(answer, 391) || 'answer does not contain 391',
   },
   {
     id: 'calculator-menu',
     app: 'Calculator',
     prompt: () => 'Use undertow to switch Calculator to Scientific mode from its View menu, then compute 2 to the power of 10 with its buttons. Reply with only the number the display shows.',
-    check: ({ answer }) => /(^|\D)1024(\D|$)/.test(answer) || 'answer does not contain 1024',
+    check: ({ answer }) => hasNumber(answer, 1024) || 'answer does not contain 1024',
   },
   {
     id: 'textedit-save',
