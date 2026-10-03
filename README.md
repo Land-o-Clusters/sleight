@@ -172,6 +172,10 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   the session closes.
 - ChatGPT updates can break it. The version lookup handles the folder moving around, but not the API
   changing. Run `--doctor` first when something stops working.
+- sleight can't reach an app's status item in the menu bar or a notification banner. Those belong to
+  system apps the engine leaves out: its inventory has no Control Center or Notification Center, and
+  `getApp("com.apple.controlcenter")` times out (engine 26.930.31730, 2026-10-03). The menus in the
+  menu bar work.
 - The engine refuses terminal apps such as Terminal.app ("not allowed … for safety reasons") and respects
   any app blocks your organization sets.
 - `claude -p` can't answer approval prompts, so headless runs only get apps already approved in that
@@ -198,7 +202,8 @@ To get asked on every action instead, set `SLEIGHT_APPROVAL_SCOPE=once` in Claud
 The `env` block of `~/.claude/settings.json` works.
 
 In the desktop app's Code tab, sleight asks with its own prompt instead: a small panel with
-sleight's icon, Allow and Don't Allow. The Code tab (Claude 2.19675.0) declines MCP prompts without
+sleight's icon, Allow and Don't Allow. It plays a sound and opens on the display under the pointer,
+over full-screen apps too. The Code tab (Claude 2.19675.0) declines MCP prompts without
 showing them, so a forwarded prompt would always come back as no. Return does nothing in sleight's
 panel, Escape means no, and it gives up after five minutes. Session memory works the same way.
 `SLEIGHT_APPROVAL_PROMPT=dialog` or `client` overrides the choice.

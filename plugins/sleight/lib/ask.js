@@ -62,6 +62,9 @@ function run(argv) {
   panel.opaque = false;
   panel.backgroundColor = $.NSColor.clearColor;
   panel.level = $.NSModalPanelWindowLevel;
+  // Show on whatever Space is current, full-screen apps included.
+  panel.collectionBehavior = $.NSWindowCollectionBehaviorCanJoinAllSpaces |
+    $.NSWindowCollectionBehaviorFullScreenAuxiliary;
   panel.title = 'sleight';
   for (const b of [$.NSWindowCloseButton, $.NSWindowMiniaturizeButton, $.NSWindowZoomButton]) {
     panel.standardWindowButton(b).hidden = true;
@@ -124,8 +127,22 @@ function run(argv) {
   if (allow.respondsToSelector('setTintProminence:')) allow.tintProminence = 3;
   else allow.bezelColor = $.NSColor.controlAccentColor;
 
-  panel.center;
+  // Center on the display under the pointer, where the person most likely is.
+  const mouse = $.NSEvent.mouseLocation;
+  const screens = $.NSScreen.screens;
+  let screen = $.NSScreen.mainScreen;
+  for (let i = 0; i < screens.count; i++) {
+    const f = screens.objectAtIndex(i).frame;
+    if (mouse.x >= f.origin.x && mouse.x < f.origin.x + f.size.width &&
+        mouse.y >= f.origin.y && mouse.y < f.origin.y + f.size.height) screen = screens.objectAtIndex(i);
+  }
+  const area = screen.visibleFrame;
+  panel.setFrameOrigin($.NSMakePoint(
+    area.origin.x + (area.size.width - W) / 2,
+    area.origin.y + (area.size.height - H) * 0.62));
   app.activateIgnoringOtherApps(true);
+  const sound = $.NSSound.soundNamed('Glass');
+  if (!sound.isNil()) sound.play;
   const timer = $.NSTimer.timerWithTimeIntervalTargetSelectorUserInfoRepeats(Number(seconds), target, 'giveUp:', null, false);
   $.NSRunLoop.currentRunLoop.addTimerForMode(timer, $.NSModalPanelRunLoopMode);
   app.runModalForWindow(panel);

@@ -12,10 +12,11 @@
 // first on PATH (LCU_PATH_PREFIX, default .dev/py). BENCH_ROOT tells the
 // approval hook where this repo is, since an arm may run from another folder.
 //
-// A real run AUTO-APPROVES Calculator and TextEdit for either arm (approve.mjs),
+// A real run AUTO-APPROVES Calculator, TextEdit and Chess for either arm (approve.mjs),
 // because -p can't show approval prompts. Run it only when you're fine with
-// Claude driving those two apps unattended. --dry-run sets up and checks
-// tasks without launching Claude.
+// Claude driving those three apps unattended. --dry-run sets up and checks
+// tasks without a model call. Every run first checks that each arm loads its
+// own tool and not the other's.
 
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -45,6 +46,7 @@ const ARMS = {
     })(),
     args: ['--plugin-dir', join(ROOT, 'plugins', 'sleight'), '--allowedTools', 'mcp__plugin_sleight_computer__js'],
     env: {},
+    server: 'plugin:sleight:computer',
   },
   lcu: (() => {
     const dir = process.env.LCU_ARM_DIR || join(ROOT, '.dev', 'lcu-arm');
@@ -53,6 +55,7 @@ const ARMS = {
       cwd: dir,
       args: ['--mcp-config', join(dir, '.mcp.json'), '--allowedTools', 'mcp__lcu__js'],
       env: { PATH: `${prefix}:${process.env.PATH}` },
+      server: 'lcu',
       check: () => existsSync(join(dir, '.mcp.json')) || `no LCU registration in ${dir}`,
     };
   })(),
@@ -70,6 +73,49 @@ const claudeBin = process.env.CLAUDE_BIN || 'claude';
 const selected = wanted ? tasks.filter(t => wanted.includes(t.id)) : tasks;
 if (!selected.length) throw new Error(`no tasks match ${wanted}`);
 
+// SLEIGHT_APPROVAL_PROMPT=client keeps approvals going to approve.mjs, even
+// when the benchmark runs from a desktop app session.
+const armEnv = arm => ({ ...process.env, BENCH_ROOT: ROOT, SLEIGHT_APPROVAL_PROMPT: 'client', ...arm.env });
+
+// The MCP servers an arm's Claude Code starts, read from its init event and
+// stopped before any model call.
+function armServers(arm) {
+  const args = ['-p', 'hi', '--output-format', 'stream-json', '--verbose', ...arm.args, '--settings', join(ROOT, 'bench', 'settings.json')];
+  return new Promise((resolve, reject) => {
+    const child = spawn(claudeBin, args, { cwd: arm.cwd, env: armEnv(arm), stdio: ['ignore', 'pipe', 'ignore'] });
+    const timer = setTimeout(() => { child.kill(); reject(new Error('no init event within 60 s')); }, 60000);
+    let buffer = '';
+    child.stdout.on('data', chunk => {
+      buffer += chunk;
+      let i;
+      while ((i = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, i);
+        buffer = buffer.slice(i + 1);
+        let msg;
+        try { msg = JSON.parse(line); } catch { continue; }
+        if (msg.type === 'system' && msg.subtype === 'init') {
+          clearTimeout(timer);
+          child.kill();
+          resolve(msg.mcp_servers);
+        }
+      }
+    });
+  });
+}
+
+// Each arm must have its own tool connected and not the other's. A user-level
+// install of either would otherwise leak into both arms (it did, 2026-10-03,
+// until settings.json turned off the installed sleight).
+const otherServers = Object.values(ARMS).map(a => a.server);
+for (const name of armNames) {
+  const arm = ARMS[name];
+  const servers = await armServers(arm);
+  const own = servers.find(s => s.name === arm.server);
+  if (own?.status !== 'connected') throw new Error(`${name} arm: ${arm.server} is ${own?.status ?? 'missing'}`);
+  const leaked = servers.filter(s => s.name !== arm.server && otherServers.includes(s.name));
+  if (leaked.length) throw new Error(`${name} arm also loads ${leaked.map(s => s.name).join(', ')}`);
+}
+
 function runClaude(prompt, arm) {
   const args = [
     '-p', prompt,
@@ -79,10 +125,7 @@ function runClaude(prompt, arm) {
     ...(model ? ['--model', model] : []),
   ];
   return new Promise(resolve => {
-    // SLEIGHT_APPROVAL_PROMPT=client keeps approvals going to approve.mjs, even
-    // when the benchmark runs from a desktop app session.
-    const env = { ...process.env, BENCH_ROOT: ROOT, SLEIGHT_APPROVAL_PROMPT: 'client', ...arm.env };
-    const child = spawn(claudeBin, args, { cwd: arm.cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(claudeBin, args, { cwd: arm.cwd, env: armEnv(arm), stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', d => (stdout += d));
@@ -149,7 +192,7 @@ for (let run = 1; run <= runs; run++) {
 save();
 
 if (!isDryRun) {
-  console.log('\n| Arm | Task | Passed | Median s | Median turns | Total cost |');
+  console.log('\n| Arm | Task | Passed | Median s | Median turns | API-price cost |');
   console.log('|---|---|---|---|---|---|');
   const median = xs => { const s = xs.filter(x => x != null).sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : '–'; };
   for (const task of selected) {
