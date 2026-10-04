@@ -81,6 +81,8 @@ function findApp(wanted) {
     : `${wanted} isn't running`);
 }
 
+// The app's main window: the largest standard window, so popovers and small
+// auxiliary windows (drag's rule) don't win. Falls back to the front window.
 function frontWindow(proc, appName) {
   let windows;
   try {
@@ -90,7 +92,14 @@ function frontWindow(proc, appName) {
     if (/-1719|-25211|assistive/i.test(String(e.message))) throw e;
     windows = [];
   }
-  const win = attempt(() => windows[0], null);
+  const area = win => {
+    const [x, y] = attempt(() => win.position(), [0, 0]);
+    const [w, h] = attempt(() => win.size(), [0, 0]);
+    return w * h;
+  };
+  const standard = windows.filter(w => attempt(() => w.subrole(), '') === 'AXStandardWindow');
+  const pool = standard.length ? standard : windows;
+  const win = pool.reduce((a, b) => (area(a) >= area(b) ? a : b), null);
   if (!win) throw new Error(`${appName} has no open window`);
   return win;
 }

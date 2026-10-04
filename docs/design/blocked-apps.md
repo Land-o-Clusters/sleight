@@ -91,9 +91,13 @@ The gate is consent. It does not isolate the approved app from Claude, and a yes
 covers clicks on the app's approval buttons. The consent prompt says as much.
 Settings refusal depends on window titles, and localized or unusual titles can
 pass it. The screenshot needs Screen Recording for the app that runs Claude
-Code. The AX path needs Accessibility for it, as `menu_bar` and `drag` already
-do. Background scroll reaches the app's focused view and may not affect every
-view. Keystrokes go through System Events and need the app in front, which
-interrupts a person using that app, and counts as takeover by the engine for
-apps it can see. `screencapture` files stay in the session's temp folder until
-macOS cleans it.
+Code, and it captures only a window that is on screen. The AX path needs
+Accessibility for it, as `menu_bar` and `drag` already do. Background scroll
+reaches the app's focused view and may not affect every view. Keystrokes go
+through System Events and need the app in front, which interrupts a person using
+that app, and counts as takeover by the engine for apps it can see. System
+Events' keystroke doesn't act on an embedded newline in Terminal, so each
+newline becomes one Return key press. In the 2026-10-04 live check the ChatGPT
+app's window exposed only its window-control buttons to the walk (its UI is web
+content), so a harmless click there had no target. `screencapture` files stay in
+the session's temp folder until macOS cleans it.

@@ -17,10 +17,12 @@ if (!['terminal', 'codex'].includes(mode)) throw new Error('expected terminal or
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const started = new Date().toISOString();
 // Home paths as ~, and the account and machine names out of published logs.
+const HOST = hostname().replace(/\.local$/, '');
 const clean = text => String(text ?? '')
   .split(userInfo().homedir).join('~')
   .split(userInfo().username).join('user')
-  .split(hostname()).join('mac');
+  .split(hostname()).join('mac')
+  .split(HOST).join('mac');
 const output = join(root, 'docs/benchmarks', `${started.replace(/[:.]/g, '-')}-blocked-${mode}.json`);
 
 const fail = async error => {
@@ -50,9 +52,10 @@ const prompts = {
     'stop and report it.',
   codex: 'Use only the sleight blocked_app tool, and only on the ChatGPT app (bundle com.openai.codex). ' +
     'First call it with op read, app ChatGPT. Report what came back, verbatim if it is a refusal. If the ' +
-    'read returned elements, pick one button whose label is clearly harmless (a tab or view switcher, ' +
-    'never anything that sends a message or changes settings), click it by element, and report the ' +
-    'result. Do not touch settings. If any prompt is refused or times out, stop and report it.',
+    'read returned elements, click exactly one button: the one named "New chat" or the closest new-thread ' +
+    'button, by element. Never click close, minimize, full screen, or anything that sends a message or ' +
+    'changes settings. If no such button exists in the read, click nothing and report the elements you ' +
+    'saw. Report the click result. If any prompt is refused or times out, stop and report it.',
 };
 const args = ['-p', prompts[mode], '--model', 'claude-sonnet-5-5', '--effort', 'medium',
   '--setting-sources', '', '--settings', '{"enabledPlugins":{"sleight@sleight":false}}',
