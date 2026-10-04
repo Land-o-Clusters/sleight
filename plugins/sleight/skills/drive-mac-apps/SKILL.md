@@ -73,6 +73,17 @@ sleight's `menu_bar` and `notifications` tools can:
 - The user approves each app's icon, and notifications as a whole, once per session. If they don't,
   stop and tell them.
 
+## Review saved changes
+
+Before editing a document, use a standalone `let app = await cua.getApp("App")` call to identify its
+Window and URL. sleight snapshots a `file://` document before the first possible edit. Save changes
+before review. `review_changes` with `op: "list"` shows before/after diffs or size/date summaries.
+With `op: "review"`, the user chooses Keep, Undo or Later for each document. Never supply a decision
+yourself or restore the file through another tool. If undo succeeds, stop editing that app buffer
+until the document has been reopened. A conflict means the file changed after the last agent action.
+Tell the user and stop rather than overwriting it. Unsaved buffers and documents without files have
+no snapshot.
+
 ## Document scope
 
 When the user has set `SLEIGHT_APPROVAL_SCOPE=document`, approvals cover one window or document. Start

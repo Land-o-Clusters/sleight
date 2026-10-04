@@ -1,7 +1,17 @@
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const fixtureRoot = mkdtempSync('/private/tmp/sleight-relay-review-');
+const fixturePath = join(fixtureRoot, 'a.txt');
+const fixtureURL = pathToFileURL(fixturePath).href;
+writeFileSync(fixturePath, 'before\n');
+const relays = [];
+after(() => { for (const relay of relays) relay.dispose(); rmSync(fixtureRoot, { recursive: true, force: true }); });
 
 // Wires a relay to in-memory streams and records what each side receives.
 function harness(options = {}) {
@@ -14,6 +24,7 @@ function harness(options = {}) {
   serverIn.setEncoding('utf8').on('data', d => d.split('\n').filter(Boolean).forEach(l => toServer.push(JSON.parse(l))));
   clientOut.setEncoding('utf8').on('data', d => d.split('\n').filter(Boolean).forEach(l => toClient.push(JSON.parse(l))));
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, sessionId: 'session-1', ...options });
+  relays.push(relay);
   return {
     relay,
     toServer,
@@ -55,7 +66,7 @@ test('hides js_add_node_module_dir and marks turn_ended internal in tools/list',
   h.fromServer({ jsonrpc: '2.0', id: 'list', result: { tools: [{ name: 'js' }, { name: 'js_reset' }, { name: 'turn_ended', _meta: { ui: { visibility: [] } } }, { name: 'js_add_node_module_dir' }] } });
   await tick();
   const tools = h.toClient[0].result.tools;
-  assert.deepEqual(tools.map(t => t.name), ['js', 'js_reset', 'turn_ended']);
+  assert.deepEqual(tools.map(t => t.name), ['js', 'js_reset', 'turn_ended', 'review_changes']);
   assert.match(tools[2].description, /Internal to sleight/);
   assert.equal(tools[2]._meta, undefined);
 });
@@ -294,7 +305,7 @@ test('lists local tools after the server tools', async () => {
   await tick();
   h.fromServer({ jsonrpc: '2.0', id: 'list', result: { tools: [{ name: 'js' }] } });
   await tick();
-  assert.deepEqual(h.toClient[0].result.tools.map(t => t.name), ['js', 'menu_bar']);
+  assert.deepEqual(h.toClient[0].result.tools.map(t => t.name), ['js', 'menu_bar', 'review_changes']);
 });
 
 test('answers a local tool call itself and never forwards it', async () => {
@@ -388,7 +399,7 @@ test('without idleTurnEndMs, an idle turn stays open', async () => {
   assert.equal(h.toServer.filter(m => m.params?.name === 'turn_ended').length, 0);
 });
 
-const documentRead = (h, id, title = 'a.txt', url = 'file:///tmp/a.txt') => {
+const documentRead = (h, id, title = 'a.txt', url = fixtureURL) => {
   h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("TextEdit")' } } });
   h.fromServer({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: `Window: "${title}", App: TextEdit\nURL: ${url}\n1 text area` }] } });
 };
@@ -417,7 +428,7 @@ test('document approval names the observed window and URL, through client elicit
   await settle();
   const prompt = h.toClient.find(m => m.method === 'elicitation/create');
   assert.match(prompt.params.message, /a.txt/);
-  assert.match(prompt.params.message, /file:\/\/\/tmp\/a.txt/);
+  assert.ok(prompt.params.message.includes(fixtureURL));
   h.fromClient({ jsonrpc: '2.0', id: prompt.id, result: { action: 'accept' } });
   await settle();
   documentCall(h, 3);
@@ -492,7 +503,7 @@ test('document engine approvals stay tied to the observed app and risk without p
   h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("TextEdit")' } } });
   h.fromServer(appApproval('read', undefined, 'com.apple.TextEdit'));
   await settle();
-  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: 'Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt' }] } });
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: `Window: "a.txt", App: TextEdit\nURL: ${fixtureURL}` }] } });
   documentApprove(h, 2);
   await settle();
   documentCall(h, 3);
@@ -526,5 +537,100 @@ test('document tools/list advertises only tools supported in this mode', () => {
   const h = harness({ approvalScope: 'document', localTools: localTools() });
   h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { tools: [{ name: 'js' }, { name: 'js_reset' }, { name: 'turn_ended' }] } });
-  assert.deepEqual(h.toClient[0].result.tools.map(t => t.name), ['js', 'turn_ended', 'document_scope']);
+  assert.deepEqual(h.toClient[0].result.tools.map(t => t.name), ['js', 'turn_ended', 'document_scope', 'review_changes']);
+});
+
+function savedEdit(h, id, path, before, afterText) {
+  writeFileSync(path, before);
+  documentRead(h, id, path.split('/').pop(), pathToFileURL(path).href);
+  documentCall(h, id + 1);
+  assert.ok(h.toServer.some(m => m.id === id + 1), 'action forwarded after snapshot');
+  writeFileSync(path, afterText);
+  h.fromServer({ jsonrpc: '2.0', id: id + 1, result: { content: [{ type: 'text', text: `Window: "${path.split('/').pop()}", App: TextEdit\nURL: ${pathToFileURL(path).href}` }] } });
+}
+const reviewCall = (h, id, args = { op: 'review' }) => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'review_changes', arguments: args } });
+
+test('review lists two saved documents, asks for each user decision and never forwards undo', async () => {
+  const a = join(fixtureRoot, 'review-a.txt'), b = join(fixtureRoot, 'review-b.txt');
+  const h = harness();
+  savedEdit(h, 1, a, 'before a\n', 'after a\n'); savedEdit(h, 3, b, 'before b\n', 'after b\n');
+  reviewCall(h, 5, { op: 'list' });
+  assert.match(h.toClient.at(-1).result.content[0].text, /-before a\n\+after a[\s\S]*-before b\n\+after b/);
+  assert.equal(h.toClient.some(m => m.method === 'elicitation/create'), false);
+  reviewCall(h, 6); await settle();
+  const first = h.toClient.find(m => m.method === 'elicitation/create');
+  assert.deepEqual(first.params.requestedSchema.properties.decision.enum, ['keep', 'undo', 'later']);
+  h.fromClient({ jsonrpc: '2.0', id: first.id, result: { action: 'accept', content: { decision: 'undo' } } }); await settle();
+  const second = h.toClient.filter(m => m.method === 'elicitation/create').at(-1);
+  h.fromClient({ jsonrpc: '2.0', id: second.id, result: { action: 'accept', content: { decision: 'keep' } } }); await settle();
+  assert.equal(readFileSync(a, 'utf8'), 'before a\n'); assert.equal(readFileSync(b, 'utf8'), 'after b\n');
+  assert.match(h.toClient.find(m => m.id === 6).result.content[0].text, /undone[\s\S]*kept/);
+  assert.equal(h.toServer.some(m => m.params?.name === 'review_changes'), false);
+});
+
+test('model decisions and a bare accept cannot undo or keep, and actions wait during review', async () => {
+  const path = join(fixtureRoot, 'review-decision.txt');
+  const h = harness(); savedEdit(h, 1, path, 'before\n', 'after\n');
+  reviewCall(h, 3, { op: 'review', decision: 'undo' });
+  assert.equal(h.toClient.at(-1).result.isError, true);
+  reviewCall(h, 4); await settle();
+  documentCall(h, 5);
+  assert.equal(h.toServer.some(m => m.id === 5), false);
+  const prompt = h.toClient.find(m => m.method === 'elicitation/create');
+  h.fromClient({ jsonrpc: '2.0', id: prompt.id, result: { action: 'accept', content: {} } }); await settle();
+  assert.equal(readFileSync(path, 'utf8'), 'after\n');
+  assert.match(h.toClient.find(m => m.id === 4).result.content[0].text, /pending/);
+});
+
+test('desktop review uses ask with the before/after preview and rechecks edits during the prompt', async () => {
+  const path = join(fixtureRoot, 'review-prompt.txt');
+  const asked = [];
+  const h = harness({ ask: async (message, scoped, options) => {
+    asked.push({ message, scoped, options }); writeFileSync(path, 'user edit\n'); return 'undo';
+  } });
+  savedEdit(h, 1, path, 'before\n', 'agent edit\n'); reviewCall(h, 3); await settle();
+  assert.equal(asked[0].options.kind, 'review');
+  assert.match(asked[0].options.detail, /-before\n\+agent edit/);
+  assert.equal(h.toClient.find(m => m.id === 3).result.isError, true);
+  assert.equal(readFileSync(path, 'utf8'), 'user edit\n');
+});
+
+test('snapshot failures refuse forwarding and session disposal removes private backups', () => {
+  const h = harness(); documentRead(h, 1, 'missing.txt', pathToFileURL(join(fixtureRoot, 'missing.txt')).href);
+  documentCall(h, 2);
+  assert.equal(h.toServer.some(m => m.id === 2), false);
+  assert.match(h.toClient.at(-1).result.content[0].text, /cannot snapshot/);
+  const path = join(fixtureRoot, 'review-cleanup.txt');
+  savedEdit(h, 3, path, 'before\n', 'after\n');
+  const bank = h.relay.snapshotDirectory;
+  assert.ok(bank && existsSync(bank));
+  h.relay.dispose(); assert.equal(existsSync(bank), false);
+});
+
+test('ambiguous action results list newly observed files without inventing before copies', () => {
+  const a = join(fixtureRoot, 'ambiguous-a.txt'), b = join(fixtureRoot, 'ambiguous-b.txt');
+  writeFileSync(a, 'a before\n'); writeFileSync(b, 'b before\n');
+  const h = harness(); documentRead(h, 1, 'a.txt', pathToFileURL(a).href); documentCall(h, 2);
+  writeFileSync(a, 'a after\n'); writeFileSync(b, 'b after\n');
+  h.fromServer({ jsonrpc: '2.0', id: 2, result: { content: [{ type: 'text', text:
+    `Window: "a.txt", App: TextEdit\nURL: ${pathToFileURL(a).href}\nWindow: "b.txt", App: TextEdit\nURL: ${pathToFileURL(b).href}` }] } });
+  reviewCall(h, 3, { op: 'list' });
+  const listing = h.toClient.at(-1).result.content[0].text;
+  assert.ok(listing.includes(a) && listing.includes(b));
+  assert.match(listing, /Undo refused.*action was not confirmed/s);
+  assert.match(listing, /No snapshot before the action/);
+});
+
+test('cancelled review leaves changes pending and an engine failure cannot authorize undo', async () => {
+  const path = join(fixtureRoot, 'failed-action.txt'); writeFileSync(path, 'before\n');
+  const h = harness({ ask: async () => 'cancel' });
+  documentRead(h, 1, 'failed.txt', pathToFileURL(path).href); documentCall(h, 2);
+  writeFileSync(path, 'partial change\n');
+  h.fromServer({ jsonrpc: '2.0', id: 2, result: { isError: true, content: [{ type: 'text', text:
+    `Window: "failed.txt", App: TextEdit\nURL: ${pathToFileURL(path).href}` }] } });
+  reviewCall(h, 3); await settle();
+  assert.match(h.toClient.find(m => m.id === 3).result.content[0].text, /pending/);
+  reviewCall(h, 4, { op: 'list' });
+  assert.match(h.toClient.at(-1).result.content[0].text, /Undo refused/);
+  assert.equal(readFileSync(path, 'utf8'), 'partial change\n');
 });

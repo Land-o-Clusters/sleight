@@ -106,17 +106,18 @@ const LIB = dirname(fileURLToPath(import.meta.url));
 const ICON = join(LIB, '..', 'assets', 'icon.png');
 const ASK_SECONDS = 300;
 
-function askWithDialog(message, sessionScoped) {
+function askWithDialog(message, sessionScoped, options) {
   // The engine asks 'Allow Computer Use to use "App"?'; sleight's own tools ask in plain words.
   const app = /^Allow Computer Use to use "(.+)"\?$/.exec(message)?.[1];
   const question = app ? `Allow Claude to use ${app}?` : message;
-  const detail = (app ? `Claude can then click and type in ${app} in the background. ` : '') +
+  const review = options?.kind === 'review';
+  const detail = review ? `${options.detail}\n\nUndo restores the session's original saved file. Reopen it in the app afterward. Later leaves the decision pending.` : (app ? `Claude can then click and type in ${app} in the background. ` : '') +
     (sessionScoped ? 'A yes lasts until this Claude session ends.' : 'It asks again next time.');
-  const args = ['-l', 'JavaScript', join(LIB, 'ask.js'), question, detail, ICON, String(ASK_SECONDS)];
+  const args = ['-l', 'JavaScript', join(LIB, 'ask.js'), question, detail, ICON, String(ASK_SECONDS), review ? 'review' : 'approval'];
   return new Promise(resolve => {
     execFile('osascript', args, (err, stdout, stderr) => {
       const answer = stdout.trim();
-      if (!err && ['accept', 'decline', 'cancel'].includes(answer)) return resolve(answer);
+      if (!err && (review ? ['keep', 'undo', 'cancel'] : ['accept', 'decline', 'cancel']).includes(answer)) return resolve(answer);
       // Logged, so a broken prompt doesn't pass for a decline.
       process.stderr.write(`sleight: approval prompt failed: ${stderr || err?.message || answer}\n`);
       resolve('decline');
@@ -278,6 +279,8 @@ function run() {
     },
     trace: process.env.SLEIGHT_TRACE ? traceTo(process.env.SLEIGHT_TRACE) : undefined,
   });
+  // Also covers unexpected engine exit. Only this process's private bank is removed.
+  process.on('exit', () => relay.dispose());
 
   // Claude Code closing the connection is the end of the session: end the
   // open turn so the server releases what it holds, then stop the server.
@@ -286,8 +289,11 @@ function run() {
     if (stopping) return;
     stopping = true;
     await relay.endOpenTurn();
-    child.stdin.end();
-    setTimeout(() => child.kill(signal || 'SIGTERM'), 2000).unref();
+    try { relay.dispose(); }
+    finally {
+      child.stdin.end();
+      setTimeout(() => child.kill(signal || 'SIGTERM'), 2000).unref();
+    }
   }
   process.stdin.on('end', () => stop());
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {

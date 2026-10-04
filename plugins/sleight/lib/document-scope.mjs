@@ -31,7 +31,7 @@ export function readCode(code) {
 }
 
 // Advisory only: all of this runs in the same mutable JS realm as Claude's code.
-export function guardedCode(code, window) {
+export function guardedCode(code, window, stopMessage = 'Document scope stopped this action: window or URL changed. Read the window and ask the user with document_scope.') {
   return `(() => {
     const parse = ${windowFromText.toString()};
     const state = globalThis.__sleightDocumentGuard ||= {
@@ -49,7 +49,7 @@ export function guardedCode(code, window) {
         return async (...args) => {
           const observed = parse(await raw.getAXState({ disableDiffing: true, emit: false }));
           if (JSON.stringify(observed) !== JSON.stringify(state.expected)) {
-            throw new Error('Document scope stopped this action: window or URL changed. Read the window and ask the user with document_scope.');
+            throw new Error(${JSON.stringify(stopMessage)});
           }
           return value.apply(raw, args);
         };

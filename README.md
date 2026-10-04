@@ -211,6 +211,10 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   the turn until the session closed. Desktop sessions twice showed as busy after Claude had finished,
   and ending the turn cleared it once, so the open turn is the likely cause.
   `SLEIGHT_IDLE_TURN_END_MS` changes the wait, and 0 turns it off.
+- Change review covers saved files observed before `js` actions. Unsaved buffers, Save As targets,
+  menu bar and pointer tools have no before copy. Undo changes the saved file, so reopen it before
+  editing again. Autosave or a user edit after an action makes undo refuse. Arbitrary JavaScript can
+  bypass the window guard or forge headers. [The design](docs/design/change-review.md) lists the limits.
 - ChatGPT updates can break it. The version lookup handles the folder moving around, but not the API
   changing. Run `--doctor` first when something stops working.
 - The engine has no access to an app's icon in the menu bar or to notification banners: its inventory has
@@ -244,7 +248,7 @@ has accept and decline, so without help you'd get asked on every click. The rela
   the rest of the session.
 - A different app, a riskier request for the same app, or a new Claude Code session asks you again.
 - It never remembers a decline or a cancel.
-- The relay doesn't write anything to disk. The memory ends with the session.
+- Approval memory stays in the relay and ends with the session.
 
 To get asked on every action instead, set `SLEIGHT_APPROVAL_SCOPE=once` in Claude Code's environment.
 The `env` block of `~/.claude/settings.json` works.
@@ -263,6 +267,15 @@ over full-screen apps too. The Code tab (Claude 2.19675.0) declines MCP prompts 
 showing them, so a forwarded prompt would always come back as no. Return does nothing in sleight's
 panel, Escape means no, and it gives up after five minutes. Session memory works the same way.
 `SLEIGHT_APPROVAL_PROMPT=dialog` or `client` overrides the choice.
+
+## Review changes
+
+Read the intended window with a standalone `let app = await cua.getApp("TextEdit")` before editing.
+For a document with a `file://` URL, sleight saves a private copy before the first possible edit.
+Call `review_changes` with `op: "list"` to see text diffs or size/date summaries, or `op: "review"`
+to choose Keep, Undo or Later for each document in sleight's prompt. Only your prompt response can
+decide. Undo restores the original saved file if it still matches the last agent action, then you
+must reopen it in the app. Snapshots last until the session ends.
 
 ## Safety
 
@@ -385,7 +398,8 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 - [ ] Linux and Windows, where the engine has builds that sleight hasn't tried
 - [x] Approve one document instead of a whole app (`SLEIGHT_APPROVAL_SCOPE=document`, a guard against
   mistakes rather than a security boundary)
-- [ ] A before-and-after review of changes across apps, which you can accept or undo
+- [x] Review saved-file changes and choose Keep or Undo through a user prompt
+- [ ] Review unsaved changes and app state without backing files
 - [ ] Rules for what data may move from one app to another
 
 ## Credits
