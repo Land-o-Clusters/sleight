@@ -1,0 +1,105 @@
+{
+  "branch": "codex/local-hover",
+  "worktree": "~/Projects/sleight-wt/local-hover",
+  "liveRuns": 0,
+  "restoration": "Native hover restoration remains unmeasured separately from fixture cleanup; recorded in README Known problems.",
+  "privacy": {
+    "jsonAndPlanFiles": 40,
+    "removedPngs": 4,
+    "identifyingTokensRemaining": 0,
+    "history": "One sanitized commit above origin/main replaces all branch-only evidence commits.",
+    "branchOnlyCommits": 1,
+    "textBlobsAudited": 60,
+    "removedImagesRemainingInBranchHistory": 0
+  },
+  "attempts": [
+    {
+      "command": "node --test tests/hover.test.mjs",
+      "phase": "red",
+      "exitCode": 1,
+      "tests": 16,
+      "failed": 3
+    },
+    {
+      "command": "node --test tests/hover-publication.test.mjs",
+      "phase": "red before implementation",
+      "exitCode": 1,
+      "error": "ERR_MODULE_NOT_FOUND"
+    },
+    {
+      "command": "node --test tests/hover.test.mjs tests/hover-publication.test.mjs",
+      "phase": "green",
+      "exitCode": 0,
+      "tests": 19
+    },
+    {
+      "command": "node --test tests/hover-publication.test.mjs",
+      "phase": "renamed Chess window regression red",
+      "exitCode": 1,
+      "tests": 4,
+      "failed": 1
+    },
+    {
+      "command": "node --test tests/hover.test.mjs tests/hover-publication.test.mjs",
+      "phase": "green",
+      "exitCode": 0,
+      "tests": 20
+    },
+    {
+      "command": "npm run lint:prose",
+      "phase": "first run",
+      "exitCode": 1,
+      "errors": 3
+    },
+    {
+      "command": "npm run lint:prose",
+      "phase": "corrected",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run check",
+      "phase": "before rebase",
+      "exitCode": 0,
+      "unitTests": 189,
+      "modTests": 8
+    },
+    {
+      "command": "git rebase origin/main",
+      "phase": "package.json conflict",
+      "exitCode": 1
+    },
+    {
+      "command": "git -c core.editor=true rebase --continue",
+      "phase": "all lint targets preserved",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run check",
+      "phase": "after rebase",
+      "exitCode": 0,
+      "unitTests": 196,
+      "modTests": 8
+    },
+    {
+      "command": "npm run lint:prose",
+      "phase": "after rebase",
+      "exitCode": 0,
+      "files": 18
+    },
+    {
+      "command": "offline branch history privacy audit",
+      "phase": "after rebase",
+      "exitCode": 0,
+      "identifyingTokensRemaining": 0,
+      "removedImagesRemaining": 0,
+      "missingMainLintTargets": 0
+    },
+    {
+      "command": "npm run lint:prose",
+      "phase": "restoration wording clarified",
+      "exitCode": 0,
+      "files": 18
+    }
+  ],
+  "rebasedOnto": "27b052858d822bde115c6221ee5d557033ff91ec"
+}

@@ -34,9 +34,9 @@ and you keep working.
 
 sleight gives that engine to Claude Code. Claude writes a few lines of JavaScript against the engine's
 API (`cua.getApp("Calculator")`, `app.click(...)`, `app.getScreenshot()`) and the engine handles the rest.
-sleight adds its own tools for what the engine can't do. Two of them move your pointer for a moment,
+sleight adds its own tools for what the engine can't do. Three of them move your pointer for a moment,
 and each asks first: `drag` keeps the mouse down long enough for text views to start a drag, and
-`menu_bar` clicks some menu bar icons for real.
+`menu_bar` clicks some menu bar icons for real, and `hover` captures UI that needs a real pointer.
 
 <p align="center"><img src="docs/assets/demo.gif" width="900" alt="Claude playing macOS Chess against the computer through sleight, with the sleight pane logging each move"></p>
 <p align="center"><sub>Claude plays macOS Chess against the computer through sleight, at 6× speed. Every move is a drag. The sleight pane on the right logs each one.</sub></p>
@@ -52,7 +52,7 @@ Claude sees the screen through screenshots.
 sleight sends events to the app itself, which can be behind your other windows. Your other apps stay
 visible, and you keep using the Mac while Claude works. Several sessions can use sleight at once:
 we've run two sleight sessions together, and sleight next to Codex. Claude reads each app's
-accessibility tree as well as screenshots. The `drag` and `menu_bar` tools are the exceptions that briefly take the
+accessibility tree as well as screenshots. The `drag`, `hover` and `menu_bar` tools are the exceptions that briefly take the
 pointer.
 
 Claude's own computer use is supported by Anthropic and also runs on Windows in the desktop app.
@@ -176,6 +176,10 @@ Claude Code ──MCP──▶ bin/sleight-mcp ──▶ ChatGPT.app's cua-repl 
 8. The `drag` tool (`lib/drag.js`) holds the mouse down and moves in steps, for drags `app.drag` can't
    do. It posts real mouse events, so it brings the app forward and puts your pointer back afterwards.
    It asks once per app per session, and `SLEIGHT_DRAG=0` leaves it out.
+9. The `hover` tool (`lib/hover.js`) moves the real pointer after the skill's background options fail.
+   It refuses covered points. The app comes forward for a 1500 ms default wait and a screenshot,
+   then the pointer and front app go back. Each app needs approval once per session.
+   `SLEIGHT_HOVER=0` leaves it out. [Design and checks](docs/design/hover.md) lists its limits.
 
 sleight only turns on native apps by default (`CUA_REPL_ENABLED_SURFACES=computer`), because the engine's
 in-app browser only exists inside ChatGPT. To try Chrome control, which needs the Codex Chrome
@@ -185,7 +189,7 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
 
 - [Input leases](docs/design/input-lease.md) let one sleight session act on a window at a time.
   Another session gets the holder's name and time left, while reads remain available. Leases expire
-  after 30 seconds without renewal and end with the turn or session. Local drag reserves the app,
+  after 30 seconds without renewal and end with the turn or session. Local drag and hover reserve the app,
   while menu and notification actions reserve the desktop. Other tools, including Codex,
   do not take these leases, and arbitrary JavaScript can bypass the injected guard.
 - Anything moving your real pointer in the app interrupts it. The engine watches real mouse and keyboard
@@ -207,12 +211,30 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   Calculator content guards remain unmeasured with this revision.
   The [background prototype](docs/benchmarks/2026-10-04-background-text-drag.md) moved TextEdit text
   4/4 after correcting its drop geometry, but joined `gammaalpha`. It remains outside the plugin.
-- There's no real hover, since events go to the app and the real pointer never moves. The skill covers
+- There's no background hover, since engine events go to the app and the real pointer never moves. The skill covers
   most cases: tooltips are readable as `Help:` text in the UI state, and hover menus usually open through
   an element's secondary actions, a right-click or a key. Mouse-moved events posted to a background app
   arrive, but they don't trigger hover: no enter or exit fired on the probe app's hover area, and a
   GitHub Desktop button looked the same pixel for pixel (2026-10-04). UI that only reacts to a real
-  pointer needs a pointer-moving tool.
+  pointer can use sleight's local `hover`. The locked trials on 2026-10-04 support its 1500 ms default.
+  Calculator's sidebar tooltip was absent in 1/1 capture at 400 ms and 1/1 at 1000 ms, then readable
+  in 1/1 at 1500 ms. Chess's green-button hover menu was visible in 1/1 capture at 400 ms and 1/1
+  at 1500 ms in the final trial. These small samples support the default. Exact onset remains unmeasured.
+  Successful 1500 ms trials reported 1786 to 1798 ms for takeover. [All attempts](docs/benchmarks/2026-10-04-local-hover.md)
+  include the setup and capture failures too. Hover captures screen pixels in the selected window's rectangle.
+  A window spanning displays can include another app in that rectangle, as a Chess trial showed.
+  The point check does not guard the whole capture. Keep the window within one display and inspect
+  screenshots before sharing them. The affected trial's PNGs were withheld after privacy review.
+  Chess titles and TextEdit home-folder labels identified the user in published evidence. Those strings
+  are now placeholders, and the four affected PNGs were removed. Future hover trials redact text on
+  write and omit Chess and TextEdit PNGs. Historical Chess plans need a current title before reuse.
+  A tooltip or menu outside the rectangle is clipped. Hover requires Screen Recording permission
+  before takeover. It refuses coverage by another app or a different window of the same app;
+  do not retry unchanged.
+  Cleanup attempts to restore the pointer and front app on ordinary failures; forced helper termination
+  can interrupt it. Hover's own pointer and front-app restoration has not been measured separately in
+  live trials. The fixture also restores both, so its successful checks do not prove hover's restoration.
+  It does not restore the full window order. Earlier fixture pointer mismatches remain unresolved.
 - The desktop app's Code tab runs its own Claude Code, 2.1.286 as of 2026-10-03, which is too old
   for the mod. Approvals and every tool work there, and the engine's turn ends after 30 idle seconds.
   The pane, status line and `/sleight stop` don't, so nobody has checked the pane's picture there yet.
@@ -285,7 +307,7 @@ Set `SLEIGHT_APPROVAL_SCOPE=document` to approve a document or window for the se
 First call `js` with only `let app = await cua.getApp("TextEdit")` (or select a window with
 `cua.getApp({ windowId: 123 })`), then call `document_scope`: the prompt specifies the observed window
 and document URL. A different window stops further actions until you read it and ask the user again;
-`drag`, `menu_bar`, `notifications` and resets are unavailable in this mode.
+`drag`, `hover`, `menu_bar`, `notifications` and resets are unavailable in this mode.
 This guards mistakes in cooperative code. [The design](docs/design/document-scope.md) lists what
 the relay enforces and how arbitrary JavaScript can bypass the checks.
 
@@ -337,11 +359,12 @@ Source rules remember text fields and emitted values, then match exact substring
   `mcp__plugin_sleight_computer__js`, and allowing it means Claude can send any code without asking.
 - Per-app approvals apply however you've set up the `js` tool. An accepted approval lasts for the
   session ([Approval scope](#approval-scope)).
-- `drag` and the `menu_bar` fallback for SwiftUI icons post real mouse events and move your pointer for
+- `drag`, `hover` and the `menu_bar` fallback for SwiftUI icons post real mouse events and move your pointer for
   a moment. `drag` refuses to press when another window covers either endpoint or an endpoint falls
-  outside the chosen window's visible content.
-- The repo is small enough to read before you install it: a launcher and a relay, three small macOS
-  scripts (the approval panel, the menu bar tools and the drag), a mod, a skill and two manifests.
+  outside the chosen window's visible content. `hover` refuses points another window covers, including
+  another window of the same app, and takes about two seconds with the default dwell.
+- The repo is small enough to read before you install it. It holds a launcher, a relay, a mod, a skill,
+  two manifests and the macOS scripts for the approval panel, menu bar tools, drag and hover.
 
 ## Troubleshooting
 
@@ -400,7 +423,7 @@ The LCU arm needs LCU registered for Claude Code in a separate folder. `bench/ru
 
 > [!WARNING]
 > Headless runs can't show approval prompts, so a benchmark run auto-approves Calculator, TextEdit and
-> Chess for either arm, and sleight's `drag` in those apps (`bench/approve.mjs`, loaded only through
+> Chess for either arm, and sleight's `drag` and `hover` in those apps (`bench/approve.mjs`, loaded only through
 > `bench/settings.json`). Only run it when you're fine with Claude driving those three apps unattended. `--dry-run` checks the setup without
 > launching Claude.
 

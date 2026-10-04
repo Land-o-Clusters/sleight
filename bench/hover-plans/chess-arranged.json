@@ -1,0 +1,27 @@
+[
+  {
+    "op": "arrange",
+    "app": "Chess",
+    "windowTitle": "<chess-window-title>"
+  },
+  {
+    "op": "hover",
+    "app": "Chess",
+    "windowTitle": "<chess-window-title>",
+    "at": [
+      62,
+      16
+    ],
+    "waitMs": 400
+  },
+  {
+    "op": "hover",
+    "app": "Chess",
+    "windowTitle": "<chess-window-title>",
+    "at": [
+      62,
+      16
+    ],
+    "waitMs": 1500
+  }
+]

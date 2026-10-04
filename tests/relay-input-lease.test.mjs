@@ -363,6 +363,22 @@ test('local actions take an app lease; inventory reads stay available', async t 
   assert.equal(h.received.at(-1).result.isError, undefined);
 });
 
+test('hover reserves only its app and conflicts with another holder before approval', async t => {
+  const { harness, b } = setup(t);
+  let approvals = 0, actions = 0;
+  const h = harness('hover', { ask: async () => { approvals++; return 'accept'; },
+    localTools: { tools: [{ name: 'hover' }], target: async () => ({ appId: 'com.apple.TextEdit', app: 'TextEdit' }),
+      call: async (_name, _args, approve) => { if (await approve(['hover', 'TextEdit'], 'Allow hover?')) actions++; return { content: [] }; } } });
+  b.send(rpc(1, 'js', { code: 'await app.typeText("x")' })); b.reply(result(1));
+  h.send(rpc(2, 'hover', { app: 'TextEdit', at: [1, 2] })); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(actions, 0); assert.equal(approvals, 0);
+  b.send(rpc(3, 'turn_ended'));
+  h.send(rpc(4, 'hover', { app: 'TextEdit', at: [1, 2] })); await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc(5, 'hover', { app: 'TextEdit', at: [1, 2] })); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(actions, 2); assert.equal(approvals, 1);
+  assert.doesNotThrow(() => b.inputLease.acquire({ appId: 'com.apple.calculator', app: 'Calculator' }, 'app'));
+});
+
 test('a delayed local approval cannot act after expiry and another session takeover', async t => {
   t.mock.timers.enable({ apis: ['Date'] });
   const { harness, b } = setup(t);

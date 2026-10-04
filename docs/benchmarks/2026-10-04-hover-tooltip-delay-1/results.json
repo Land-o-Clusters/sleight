@@ -1,0 +1,160 @@
+{
+  "plan": [
+    {
+      "op": "hover",
+      "app": "Calculator",
+      "windowTitle": "Calculator",
+      "at": [
+        648,
+        26
+      ],
+      "waitMs": 400
+    },
+    {
+      "op": "hover",
+      "app": "Calculator",
+      "windowTitle": "Calculator",
+      "at": [
+        648,
+        26
+      ],
+      "waitMs": 1000
+    },
+    {
+      "op": "hover",
+      "app": "Calculator",
+      "windowTitle": "Calculator",
+      "at": [
+        648,
+        26
+      ],
+      "waitMs": 1500
+    }
+  ],
+  "attempts": [
+    {
+      "index": 0,
+      "step": {
+        "op": "hover",
+        "app": "Calculator",
+        "windowTitle": "Calculator",
+        "at": [
+          648,
+          26
+        ],
+        "waitMs": 400
+      },
+      "results": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "trusted Node process exited unexpectedly; kernel reset, rerun your request"
+            }
+          ],
+          "isError": true
+        }
+      ]
+    },
+    {
+      "error": "app acquisition failed"
+    },
+    {
+      "launcherExit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    {
+      "lockReleased": true
+    }
+  ],
+  "transcript": [
+    {
+      "direction": "client",
+      "msg": {
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-06-18",
+          "capabilities": {
+            "elicitation": {
+              "form": {}
+            }
+          },
+          "clientInfo": {
+            "name": "sleight-hover-live",
+            "version": "1"
+          }
+        }
+      }
+    },
+    {
+      "direction": "server",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "protocolVersion": "2025-06-18",
+          "capabilities": {
+            "experimental": {
+              "codex/sandbox-state-meta": {}
+            },
+            "tools": {
+              "listChanged": true
+            }
+          },
+          "serverInfo": {
+            "name": "rmcp",
+            "version": "1.5.0"
+          },
+          "instructions": "UI automation through cua_repl using the initialized cua API."
+        }
+      }
+    },
+    {
+      "direction": "client",
+      "msg": {
+        "method": "notifications/initialized"
+      }
+    },
+    {
+      "direction": "client",
+      "msg": {
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+          "name": "js",
+          "arguments": {
+            "code": "let app = await cua.getApp(\"Calculator\")"
+          }
+        }
+      }
+    },
+    {
+      "direction": "stderr",
+      "text": "WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1)\n"
+    },
+    {
+      "direction": "stderr",
+      "text": "sandbox-exec: sandbox_apply: Operation not permitted\n"
+    },
+    {
+      "direction": "server",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "trusted Node process exited unexpectedly; kernel reset, rerun your request"
+            }
+          ],
+          "isError": true
+        }
+      }
+    }
+  ],
+  "exitCode": 1
+}

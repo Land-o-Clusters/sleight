@@ -215,10 +215,35 @@ const DRAG_TOOL = {
   },
 };
 
-function runScript(script, request, { cleanup = false } = {}) {
+export const HOVER_TOOL = {
+  name: 'hover',
+  description: 'Hover with the real pointer only after Help text, secondary actions, right-click and keys fail. ' +
+    'Tell the user first that it will move their pointer and bring the app forward for about N seconds: ' +
+    'the dwell plus capture and restoration (about two seconds with the default dwell). ' +
+    '`at` is relative to the selected window\'s top-left corner. Supply an exact `windowTitle` when more than one window is on screen. ' +
+    'Requires Screen Recording permission. Refuses points covered by another app or a different window of the same app; do not retry unchanged. ' +
+    'Brings the app forward, waits for hover UI, captures a screenshot while hovered, then ' +
+    'restores the pointer and front app. Reports takeoverMs. The user approves each app once per session.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      app: { type: 'string', minLength: 1, description: 'App name, bundle ID or path' },
+      windowTitle: { type: 'string', minLength: 1, description: 'Exact on-screen window title; required when the app has several windows. Missing or duplicate matches refuse.' },
+      at: { type: 'array', items: { type: 'number', minimum: 0 }, minItems: 2, maxItems: 2 },
+      waitMs: { type: 'integer', minimum: 100, maximum: 4000, description: 'Hover dwell, default 1500 ms; increase only if needed' },
+    },
+    required: ['app', 'at'], additionalProperties: false,
+  },
+};
+
+export function runScript(script, request, options = {}) {
+  // Tests pass a stand-in for execFile directly; the drag cleanup path passes { cleanup: true }.
+  const { cleanup = false, run = execFile } = typeof options === 'function' ? { run: options } : options;
   if (helpersClosing && !cleanup) return Promise.resolve({ ok: false, error: 'sleight session is closing' });
+  // Base64 PNGs from ordinary app windows can exceed execFile's 1 MiB default.
+  const execOptions = { timeout: cleanup ? 3000 : 30000, ...(script === 'hover.js' ? { maxBuffer: 16 * 1024 * 1024 } : {}) };
   return new Promise(resolve => {
-    ownHelper(execFile('osascript', ['-l', 'JavaScript', join(LIB, script), JSON.stringify(request)], { timeout: cleanup ? 3000 : 30000 }, (err, stdout, stderr) => {
+    ownHelper(run('osascript', ['-l', 'JavaScript', join(LIB, script), JSON.stringify(request)], execOptions, (err, stdout, stderr) => {
       try {
         resolve(JSON.parse(stdout));
       } catch {
@@ -250,6 +275,15 @@ async function performDrag(args, runLocal) {
 }
 
 export async function callLocalTool(name, args, approve, runLocal = runScript) {
+  if (name === 'hover') {
+    if (!await approve(['hover', args.app], `Allow Claude to hover in ${args.app}? It moves your pointer briefly.`)) {
+      return text(`The user didn't allow hovering in ${args.app}. Stop and tell them; don't work around it.`, true);
+    }
+    const { ok, image, ...rest } = await runLocal('hover.js', args);
+    const result = text(rest, !ok);
+    if (ok && image) result.content.push({ type: 'image', data: image, mimeType: 'image/png' });
+    return result;
+  }
   if (name === 'drag') {
     if (!await approve(['drag', args.app], `Allow Claude to drag in ${args.app}? It moves your pointer for a few seconds.`)) {
       return text(`The user didn't allow dragging in ${args.app}. Stop and tell them; don't work around it.`, true);
@@ -334,11 +368,12 @@ export function run({ leaseDirectory } = {}) {
     inputLease: new InputLease({ directory: leaseDirectory, holder: `session ${sessionId} (pid ${process.pid})` }),
     onLeaseFault: err => { process.stderr.write(`sleight: ${err.message}; stopping the owned engine.\n`); terminateEngine(); },
     // SLEIGHT_MENU_BAR=0 leaves out the menu bar and notification tools,
-    // SLEIGHT_DRAG=0 the drag tool.
+    // SLEIGHT_DRAG=0 the drag tool, SLEIGHT_HOVER=0 the hover tool.
     localTools: {
       tools: [
         ...(process.env.SLEIGHT_MENU_BAR === '0' ? [] : MENU_BAR_TOOLS),
         ...(process.env.SLEIGHT_DRAG === '0' ? [] : [DRAG_TOOL]),
+        ...(process.env.SLEIGHT_HOVER === '0' ? [] : [HOVER_TOOL]),
       ],
       call: callLocalTool,
       target: async args => {

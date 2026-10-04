@@ -1,0 +1,16 @@
+[
+  {
+    "op": "click",
+    "app": "Calculator",
+    "element": 60
+  },
+  {
+    "op": "read",
+    "app": "Calculator"
+  },
+  {
+    "op": "key",
+    "app": "Calculator",
+    "key": "ESC"
+  }
+]
