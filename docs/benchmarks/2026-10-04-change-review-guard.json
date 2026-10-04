@@ -420,7 +420,7 @@
       "base": "b1a0556",
       "commit": "eb11c5f",
       "source": "/private/tmp/sleight-change-review-nku6Dm/results.json",
-      "note": "Both native review decisions recorded Keep; undo assertion failed; awaiting confirmation of first button choice",
+      "note": "Both native review decisions recorded Keep; undo assertion failed; owner confirmed clicking Keep by mistake in round-2 review",
       "stages": [
         {
           "name": "js",

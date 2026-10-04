@@ -7,6 +7,9 @@ failed TextEdit sequences from the `945ccf6` benchmark.
 It was then rebased onto `b1a0556`, retaining input leases and their read classifier.
 The combined regression opens an Open dialog, types a path in its sheet, and
 refuses further input if its lease token has been replaced.
+Round 2 rebased it onto `27b0528`, preserving the prose-lint files from both sides.
+The live harness now holds `/tmp/sleight-live.lock` through cleanup.
+The lock tests passed 2/2 for contention, release and replacement by another holder.
 
 `node bench/change-review.mjs` uses the default setting and two temporary
 TextEdit files. The user chooses Undo for the UNDO file and Keep for the KEEP
@@ -22,7 +25,7 @@ The fourth attempt also failed to access TextEdit in the sandbox.
 The fifth read and changed both files, but another live session held a lease
 and blocked review before prompting. The engine responded without a restart.
 The sixth changed both files and displayed review panels. Both decisions recorded Keep,
-so the undo assertion failed. The first button choice needs confirmation.
+so the undo assertion failed. The owner confirmed clicking Keep by mistake.
 The live Undo/Keep check is pending.
 
 [Results](2026-10-04-change-review-guard.json) preserve attempts 1 through 6, including
