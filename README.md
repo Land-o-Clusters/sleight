@@ -33,6 +33,9 @@ and you keep working.
 
 sleight gives that engine to Claude Code. Claude writes a few lines of JavaScript against the engine's
 API (`cua.getApp("Calculator")`, `app.click(...)`, `app.getScreenshot()`) and the engine handles the rest.
+sleight adds its own tools for what the engine can't do. Two of them move your pointer for a moment,
+and each asks first: `drag` keeps the mouse down long enough for text views to start a drag, and
+`menu_bar` clicks some menu bar icons for real.
 
 <p align="center"><img src="docs/assets/demo.gif" width="900" alt="Claude playing macOS Chess against the computer through sleight, with the sleight pane logging each move"></p>
 <p align="center"><sub>Claude plays macOS Chess against the computer through sleight, at 6× speed. Every move is a drag. The sleight pane on the right logs each one.</sub></p>
@@ -109,9 +112,9 @@ v2.1.287 or later you get three ways to keep an eye on things.
 
 `/sleight` opens a pane with the app's latest picture and a log of every action Claude took. Anything
 after it goes to Claude as a prompt, so `/sleight play chess in the background` opens the pane and starts
-the task. The picture
-refreshes after each turn that used sleight, or when you press Refresh (`r`) while Claude is idle. A
-terminal draws it in colored half-blocks. The desktop app's Code tab shows the screenshot itself.
+the task. The picture refreshes after each turn that used sleight, or when you press Refresh (`r`) while
+Claude is idle. A terminal draws it in colored half-blocks. The desktop app's Code tab shows the
+screenshot itself.
 
 The status line shows which app Claude is working in and how many actions it has taken.
 
@@ -137,23 +140,24 @@ Claude Code ──MCP──▶ bin/sleight-mcp ──▶ ChatGPT.app's cua-repl 
 3. The server has one main tool, `js`, a persistent JavaScript session. Its first call returns the API
    docs for whichever engine version is installed, so Claude always gets the current API.
 4. Per-app approvals arrive as MCP form elicitations, which Claude Code shows as an ordinary prompt.
+   The desktop app's Code tab gets sleight's own panel instead (`lib/ask.js`, see
+   [Approval scope](#approval-scope)).
 5. `lib/relay.mjs` sits between Claude Code and the server and fills in what Codex would have sent: a
    session and turn id on each call, session memory for approvals you accepted, and a `turn_ended` call
-   when the session closes. It hides `js_add_node_module_dir` from Claude and marks `turn_ended` as
-   internal. It also answers a protocol probe from newer Claude Code versions that would otherwise
-   crash the server.
+   after 30 idle seconds and when the session closes. It hides `js_add_node_module_dir` from Claude and
+   marks `turn_ended` as internal. It also answers a protocol probe from newer Claude Code versions that
+   would otherwise crash the server.
 6. On Claude Code v2.1.287 or later, the mod (`hooks/register.tsx`) ends the engine's turn after each
    Claude turn that used it, the way Codex does, and refuses Claude's own calls to `turn_ended`.
-
-7. sleight's own `menu_bar` and `notifications` tools handle the menu bar icons and banners the engine
-   leaves out. `menu_bar` opens an app's icon, reads its menu or window and clicks menu items.
-   `notifications` reads the banners on screen and presses their buttons. Both go through System
-   Events UI scripting (`lib/menubar.js`) with the Accessibility permission of the app running Claude
-   Code. Each app's icon needs your approval once per session, and so do notifications, the same way
-   as engine approvals. `SLEIGHT_MENU_BAR=0` leaves both tools out. sleight's `drag` tool holds the
-   mouse down and moves in steps, for drags `app.drag` can't do. It posts real mouse events, so it
-   brings the app forward and puts your pointer back afterwards. It asks once per app per session,
-   and `SLEIGHT_DRAG=0` leaves it out.
+7. The `menu_bar` and `notifications` tools handle the menu bar icons and banners the engine leaves
+   out. `menu_bar` opens an app's icon, reads its menu or window and clicks menu items, and
+   `notifications` reads the banners on screen and presses their buttons. Both go through System Events
+   UI scripting (`lib/menubar.js`) with the Accessibility permission of the app running Claude Code.
+   Each app's icon needs your approval once per session, as do notifications. `SLEIGHT_MENU_BAR=0`
+   leaves both tools out.
+8. The `drag` tool (`lib/drag.js`) holds the mouse down and moves in steps, for drags `app.drag` can't
+   do. It posts real mouse events, so it brings the app forward and puts your pointer back afterwards.
+   It asks once per app per session, and `SLEIGHT_DRAG=0` leaves it out.
 
 sleight only turns on native apps by default (`CUA_REPL_ENABLED_SURFACES=computer`), because the engine's
 in-app browser only exists inside ChatGPT. To try Chrome control, which needs the Codex Chrome
@@ -179,15 +183,13 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   GitHub Desktop button looked the same pixel for pixel (2026-10-04). UI that only reacts to a real
   pointer needs a pointer-moving tool.
 - The desktop app's Code tab runs its own Claude Code, 2.1.286 as of 2026-10-03, which is too old
-  for the mod. There you get approvals and the `js` tool, but no pane, status line, `/sleight stop`
-  or per-turn cleanup.
-- Nobody has checked the pane's picture in the desktop app's Code tab yet. It embeds the screenshot in an
-  SVG there, which the terminal doesn't need.
-- Per-turn cleanup needs Claude Code v2.1.287 or later. Without the mod, as in the desktop app, the relay
-  ends the engine's turn once no sleight call has run for 30 seconds, which releases the app the engine
-  was holding (its badge on the app's window). Before 0.3.1 nothing ended the turn until the session
-  closed. Desktop sessions twice showed as busy after Claude had finished, and ending the turn
-  cleared it once, so the open turn is the likely cause.
+  for the mod. Approvals and every tool work there, and the engine's turn ends after 30 idle seconds.
+  The pane, status line and `/sleight stop` don't, so nobody has checked the pane's picture there yet.
+  It embeds the screenshot in an SVG, which the terminal doesn't need.
+- Without the mod, the relay ends the engine's turn once no sleight call has run for 30 seconds, which
+  releases the app the engine was holding (its badge on the app's window). Before 0.3.1 nothing ended
+  the turn until the session closed. Desktop sessions twice showed as busy after Claude had finished,
+  and ending the turn cleared it once, so the open turn is the likely cause.
   `SLEIGHT_IDLE_TURN_END_MS` changes the wait, and 0 turns it off.
 - ChatGPT updates can break it. The version lookup handles the folder moving around, but not the API
   changing. Run `--doctor` first when something stops working.
@@ -207,8 +209,8 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
 
 ### Approval scope
 
-Saying yes to an app approval allows that app for the rest of the Claude Code session. The prompt itself
-doesn't mention that.
+Saying yes to an app approval allows that app for the rest of the Claude Code session. Claude Code's
+prompt doesn't mention that, but sleight's own panel does.
 
 The engine asks before every action on an app and doesn't remember your answers. In Codex, the app
 around the engine remembers "Allow for this session" and answers the repeats. Claude Code's prompt only
@@ -236,8 +238,10 @@ panel, Escape means no, and it gives up after five minutes. Session memory works
   `mcp__plugin_sleight_computer__js`, and allowing it means Claude can send any code without asking.
 - Per-app approvals apply however you've set up the `js` tool. An accepted approval lasts for the
   session ([Approval scope](#approval-scope)).
-- The repo is small enough to read before you install it. It's a launcher and a relay, plus a mod, a
-  skill and two manifests.
+- `drag` and the `menu_bar` fallback for SwiftUI icons post real mouse events and move your pointer for
+  a moment. `drag` refuses to press when another app's window covers the start point.
+- The repo is small enough to read before you install it: a launcher and a relay, three small macOS
+  scripts (the approval panel, the menu bar tools and the drag), a mod, a skill and two manifests.
 
 ## Troubleshooting
 
@@ -246,6 +250,7 @@ panel, Escape means no, and it gives up after five minutes. Session memory works
 | `no Codex computer-use plugin at …` | Computer Use never enabled in ChatGPT | Open ChatGPT → Codex, turn on Computer Use, and run one task |
 | `--doctor` shows `MISSING computer-use helper` | The helper app was removed or never installed | Same as above |
 | Approval prompt never appears | Claude Code too old for form elicitation | Update Claude Code |
+| "Not approved" right away in the desktop app, with no panel | The session started before sleight 0.1.1 | Start a new session |
 | Tool calls fail after a ChatGPT update | Runtime API changed | Open an issue with the `--doctor` output |
 
 ## Benchmark
@@ -268,6 +273,8 @@ Each arm ran from an empty folder, with only its own tool loaded:
 | Chess, drag a pawn and save the game | 3/3 | 3/3 | 68 s | 75 s |
 
 Both passed 15 of 18 and failed every text drag the same way (see [Known problems](#known-problems)).
+That was before sleight's `drag` tool: with it, the text drag task passed 3/3 on 2026-10-04 (Sonnet 5.5,
+[`2026-10-04-drag-tool.json`](docs/benchmarks/2026-10-04-drag-tool.json)).
 With 3 runs per task, the speed differences are noise. The valid runs came to $16.00 at API prices.
 Logged in through a claude.ai plan, runs use plan limits rather than money.
 
@@ -290,9 +297,9 @@ npm run bench -- --arm all --runs 3   # sleight and LCU
 The LCU arm needs LCU registered for Claude Code in a separate folder. `bench/run.mjs` has the steps.
 
 > [!WARNING]
-> Headless runs can't show approval prompts, so a benchmark run auto-approves Calculator and TextEdit
-> for either arm (`bench/approve.mjs`, loaded only through `bench/settings.json`). Only run it when
-> you're fine with Claude driving those two apps unattended. `--dry-run` checks the setup without
+> Headless runs can't show approval prompts, so a benchmark run auto-approves Calculator, TextEdit and
+> Chess for either arm, and sleight's `drag` in those apps (`bench/approve.mjs`, loaded only through
+> `bench/settings.json`). Only run it when you're fine with Claude driving those three apps unattended. `--dry-run` checks the setup without
 > launching Claude.
 
 ## Update watch
