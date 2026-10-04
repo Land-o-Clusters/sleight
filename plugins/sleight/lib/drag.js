@@ -31,6 +31,62 @@ function windows(onScreenOnly) {
 
 const inside = (b, p) => p.x >= b.X && p.x < b.X + b.Width && p.y >= b.Y && p.y < b.Y + b.Height;
 
+// Only repair a uniquely identified word move whose whole text matches, with
+// at most one source-side space removed by TextEdit's smart deletion.
+function textDropSpace(before, word, after, selected) {
+  if (typeof before !== 'string' || typeof after !== 'string' || !word || word !== selected ||
+      !/^[\p{L}\p{N}]+$/u.test(word) || before === after) return null;
+  const source = before.indexOf(word);
+  const drop = after.indexOf(word);
+  if (source < 0 || drop <= 0 || before.indexOf(word, source + 1) >= 0 || after.indexOf(word, drop + 1) >= 0) return null;
+  if (/[\p{L}\p{N}]$/u.test(before.slice(0, source)) || /^[\p{L}\p{N}]/u.test(before.slice(source + word.length))) return null;
+  if (!/[\p{L}\p{N}]$/u.test(after.slice(0, drop)) || !/^(?:\r?\n|$)/.test(after.slice(drop + word.length))) return null;
+  const left = before.slice(0, source), right = before.slice(source + word.length);
+  const remainder = after.slice(0, drop) + after.slice(drop + word.length);
+  const candidates = [left + right];
+  if (left.endsWith(' ')) candidates.push(left.slice(0, -1) + right);
+  if (right.startsWith(' ')) candidates.push(left + right.slice(1));
+  return candidates.includes(remainder) ? ` ${word}` : null;
+}
+
+function textEditSelection(pid, start) {
+  const proc = Application('System Events').processes.whose({ unixId: pid })[0];
+  const find = (el, depth) => {
+    if (depth > 12) return null;
+    try {
+      if (el.role() === 'AXTextArea') {
+        const p = el.position(), s = el.size();
+        if (inside({ X: p[0], Y: p[1], Width: s[0], Height: s[1] }, start)) {
+          const text = el.value();
+          const selected = el.attributes.byName('AXSelectedText').value();
+          if (typeof text === 'string' && typeof selected === 'string' && selected) return { el, text, selected };
+        }
+      }
+      for (const child of el.uiElements()) { const found = find(child, depth + 1); if (found) return found; }
+    } catch (_) { /* Missing AX text means the drag proceeds without a repair. */ }
+    return null;
+  };
+  for (const win of proc.windows()) { const found = find(win, 0); if (found) return found; }
+  return null;
+}
+
+function repairTextDrop(snapshot) {
+  if (!snapshot) return { spaceInserted: false };
+  try {
+    const after = snapshot.el.value();
+    const selected = snapshot.el.attributes.byName('AXSelectedText');
+    const replacement = textDropSpace(snapshot.text, snapshot.selected, after, selected.value());
+    if (!replacement) return { spaceInserted: false };
+    selected.value = replacement;
+    const at = after.indexOf(snapshot.selected);
+    const expected = after.slice(0, at) + ' ' + after.slice(at);
+    if (snapshot.el.value() !== expected) throw new Error('TextEdit did not confirm the spacing repair; read the document before continuing');
+    return { spaceInserted: true };
+  } catch (e) {
+    return { spaceInserted: false, spacingError: String(e.message || e) };
+  }
+}
+
 function findApp(name) {
   const apps = $.NSWorkspace.sharedWorkspace.runningApplications;
   for (let i = 0; i < apps.count; i++) {
@@ -72,6 +128,11 @@ function run(argv) {
       throw new Error(`the start point isn't on ${app}'s window (another window covers it); nothing was pressed`);
     }
 
+    let text = null;
+    if (ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit') {
+      try { text = textEditSelection(pid, start); } catch (_) { /* AX may be unavailable. */ }
+    }
+
     const post = (type, p) => {
       const e = $.CGEventCreateMouseEvent(null, type, $.CGPointMake(p.x, p.y), $.kCGMouseButtonLeft);
       $.CGEventSetIntegerValueField(e, 1, 1); // click state
@@ -87,9 +148,10 @@ function run(argv) {
     }
     post($.kCGEventLeftMouseUp, end);
     delay(0.2);
+    const spacing = repairTextDrop(text);
     $.CGWarpMouseCursorPosition(saved);
     if (!previous.isNil() && previous.processIdentifier !== pid) previous.activateWithOptions(0);
-    return JSON.stringify({ ok: true, app, from, to, holdMs, steps });
+    return JSON.stringify({ ok: true, app, from, to, holdMs, steps, ...spacing });
   } catch (e) {
     return JSON.stringify({ ok: false, error: String(e.message || e) });
   }

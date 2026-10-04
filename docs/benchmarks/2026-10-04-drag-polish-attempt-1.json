@@ -1,0 +1,42 @@
+{
+  "started": "2026-10-04T13:35:34.518Z",
+  "runs": [
+    {
+      "n": 1,
+      "path": "/private/tmp/sleight-drag-polish-rq92yR/drag-polish-1.txt",
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-drag-polish-rq92yR/drag-polish-1.txt\nUnable to find application named 'TextEdit'\n",
+      "stdout": "",
+      "cleanupError": "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-polish-rq92yR/drag-polish-1.txt\n2026-10-04 09:35:36.026 osascript[53538:87563707] Connection Invalid error for service com.apple.hiservices-xpcservice.\n2026-10-04 09:35:36.026 osascript[53538:87563706] Error received in message reply handler: Connection invalid\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n"
+    },
+    {
+      "n": 2,
+      "path": "/private/tmp/sleight-drag-polish-rq92yR/drag-polish-2.txt",
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-drag-polish-rq92yR/drag-polish-2.txt\nUnable to find application named 'TextEdit'\n",
+      "stdout": "",
+      "cleanupError": "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-polish-rq92yR/drag-polish-2.txt\n2026-10-04 09:35:37.182 osascript[53557:87563772] Error received in message reply handler: Connection invalid\n2026-10-04 09:35:37.182 osascript[53557:87563774] Connection Invalid error for service com.apple.hiservices-xpcservice.\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n"
+    },
+    {
+      "n": 3,
+      "path": "/private/tmp/sleight-drag-polish-rq92yR/drag-polish-3.txt",
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-drag-polish-rq92yR/drag-polish-3.txt\nUnable to find application named 'TextEdit'\n",
+      "stdout": "",
+      "cleanupError": "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-polish-rq92yR/drag-polish-3.txt\n2026-10-04 09:35:38.205 osascript[53572:87563819] Connection Invalid error for service com.apple.hiservices-xpcservice.\n2026-10-04 09:35:38.205 osascript[53572:87563818] Error received in message reply handler: Connection invalid\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n"
+    }
+  ],
+  "trace": [
+    {
+      "t": "2026-10-04T13:35:38.216Z",
+      "direction": "change-snapshots-deleted",
+      "msg": {}
+    }
+  ],
+  "approvals": [],
+  "finished": "2026-10-04T13:35:38.217Z",
+  "exitCode": 1
+}

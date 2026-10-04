@@ -55,6 +55,7 @@ function readMenu(menu, depth = 0) {
 // A window as a flat list of the elements worth acting on, numbered.
 function readWindow(win) {
   const out = [];
+  const origin = attempt(() => win.position(), null);
   const walk = (el, depth) => {
     if (depth > 12 || out.length > 300) return;
     const role = attempt(() => el.role(), '');
@@ -63,7 +64,11 @@ function readWindow(win) {
       attempt(() => el.help(), ''), attempt(() => el.attributes.byName('AXIdentifier').value(), '')]
       .filter(t => t && !['group', 'text', 'button', 'image', 'scroll area'].includes(t));
     if (['AXButton', 'AXCheckBox', 'AXRadioButton', 'AXPopUpButton', 'AXMenuButton', 'AXSlider', 'AXTextField', 'AXStaticText', 'AXLink', 'AXSwitch'].includes(role)) {
-      out.push({ element: out.length, role: role.replace(/^AX/, ''), text: text.join(' · ') });
+      const name = role.replace(/^AX/, '');
+      const pos = attempt(() => el.position(), null);
+      const positioned = Array.isArray(origin) && origin.length === 2 && Array.isArray(pos) && pos.length === 2 && [...origin, ...pos].every(Number.isFinite);
+      const fallback = positioned ? `${name} at (${Math.round(pos[0] - origin[0])}, ${Math.round(pos[1] - origin[1])})` : `${name} ${out.length}`;
+      out.push({ element: out.length, role: name, text: text.join(' · ') || fallback });
     }
     for (const kid of attempt(() => el.uiElements(), [])) walk(kid, depth + 1);
   };
