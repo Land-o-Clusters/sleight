@@ -212,6 +212,19 @@ test('document grants remain necessary and do not bypass another session lease',
   a.reply(result(3));
 });
 
+test('approved document screenshot reads preserve identity without snapshots or leases', async t => {
+  const { harness } = setup(t);
+  const h = harness('document screenshot', { approvalScope: 'document', ask: async () => 'accept' });
+  h.send(rpc(1, 'document_scope')); await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc(2, 'js', { code: 'await app.getScreenshot()' }));
+  h.reply({ jsonrpc: '2.0', id: 2, result: { content: [{ type: 'image', data: '', mimeType: 'image/png' }] } });
+  assert.equal(h.received.find(m => m.id === 2).result.isError, undefined);
+  assert.equal(h.relay.snapshotDirectory, undefined);
+  assert.equal(h.inputLease.owned.size, 0);
+  h.send(rpc(3, 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(h.forwarded.length, 2, 'the approved document remains usable'); h.reply(result(3));
+});
+
 test('local actions take an app lease; inventory reads stay available', async t => {
   const { harness, b } = setup(t);
   const h = harness('local', { localTools: { tools: [{ name: 'drag' }, { name: 'menu_bar' }],
@@ -224,6 +237,42 @@ test('local actions take an app lease; inventory reads stay available', async t 
   assert.match(b.received[0].result.content[0].text, /Input lease.*local/);
   h.send(rpc(2, 'menu_bar', { op: 'apps' })); await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.received.at(-1).result.isError, undefined);
+});
+
+test('a delayed local approval cannot act after expiry and another session takeover', async t => {
+  t.mock.timers.enable({ apis: ['Date'] });
+  const { harness, b } = setup(t);
+  let answer, actions = 0;
+  const h = harness('local approval', { ask: () => new Promise(resolve => { answer = resolve; }),
+    localTools: { tools: [{ name: 'drag' }], call: async (_name, _args, approve) => {
+      if (await approve(['drag', 'TextEdit'], 'Allow drag?')) actions++;
+      return { content: [] };
+    } } });
+  h.send(rpc(1, 'drag', { app: 'TextEdit' }));
+  await new Promise(resolve => setImmediate(resolve));
+  t.mock.timers.tick(31000);
+  b.send(rpc(2, 'js', { code: 'await app.typeText("x")' })); b.reply(result(2));
+  answer('accept'); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(actions, 0);
+  assert.match(h.received.find(m => m.id === 1).result.content[0].text, /Input lease.*expired/);
+  assert.doesNotThrow(() => b.inputLease.renew());
+});
+
+test('a delayed local approval is cancelled while the session drains on shutdown', async t => {
+  const { harness } = setup(t);
+  let answer, actions = 0;
+  const h = harness('local shutdown', { ask: () => new Promise(resolve => { answer = resolve; }),
+    localTools: { tools: [{ name: 'drag' }], call: async (_name, _args, approve) => {
+      if (await approve(['drag', 'TextEdit'], 'Allow drag?')) actions++;
+      return { content: [] };
+    } } });
+  h.send(rpc(1, 'drag', { app: 'TextEdit' }));
+  await new Promise(resolve => setImmediate(resolve));
+  const done = h.relay.shutdown();
+  answer('accept'); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(actions, 0);
+  assert.match(h.received.find(m => m.id === 1).result.content[0].text, /closing/);
+  const end = h.forwarded.at(-1); h.reply(result(end.id, 'ended')); await done;
 });
 
 test('transient heartbeat contention retries; repeated contention stops the owned engine', t => {

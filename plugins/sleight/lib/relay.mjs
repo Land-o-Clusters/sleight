@@ -493,7 +493,15 @@ export function createRelay({
         const key = inputLease.acquire(target, name === 'drag' ? 'app' : 'desktop');
         leaseCalls.set(msg.id, { key }); refreshHeartbeat();
       }
-      result = await localTools.call(msg.params.name, msg.params.arguments ?? {}, approve);
+      result = await localTools.call(msg.params.name, msg.params.arguments ?? {}, async (parts, message) => {
+        const allowed = await approve(parts, message);
+        if (closing || disposed) throw new Error('Input lease: this session is closing.');
+        if (allowed) {
+          const key = leaseCalls.get(msg.id)?.key;
+          if (key) inputLease.renew([key]);
+        }
+        return allowed;
+      });
     } catch (err) {
       result = { content: [{ type: 'text', text: String(err?.message ?? err) }], isError: true };
     }
@@ -567,7 +575,8 @@ export function createRelay({
         const read = isDocumentRead(code);
         if (!read && !documentAllowed()) { documentStop(msg, 'this window is not approved'); return; }
         if (!prepareLease(msg)) return;
-        documentCalls.set(msg.id, { read, expected: read ? undefined : documentKey(observedDocument), engines: new Set(), risks: new Set() });
+        documentCalls.set(msg.id, { read, expected: read ? undefined : documentKey(observedDocument),
+          observe: !isLeaseRead(code) || !/getScreenshot|rewriteDocumentation/.test(code), engines: new Set(), risks: new Set() });
       } else if (!prepareLease(msg)) return;
     } else if (!prepareLease(msg)) return;
     refreshHeartbeat();
@@ -664,18 +673,20 @@ export function createRelay({
     if (documentMode && msg.method === undefined && documentCalls.has(msg.id)) {
       const call = documentCalls.get(msg.id);
       documentCalls.delete(msg.id);
-      const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
-      observedDocument = windowFromText(text);
-      if (call.read) {
-        observedEngines = call.engines;
-        observedRisks = call.risks;
-        const appId = msg.result?._meta?.['codex/toolSurface']?.app?.appId;
-        if (typeof appId === 'string') observedEngines.add(appId);
-      }
-      if (!msg.error && (!observedDocument || (call.expected && call.expected !== documentKey(observedDocument)))) {
-        msg.result = { ...(msg.result ?? {}), isError: true, content: [...(msg.result?.content ?? []), { type: 'text', text:
-          'Document scope stopped: Window or URL changed, or a full header is missing. That call may already have acted. Stop and read the intended window, then ask the user with document_scope.' }] };
-        if (!call.read) observedDocument = undefined;
+      if (call.observe) {
+        const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+        observedDocument = windowFromText(text);
+        if (call.read) {
+          observedEngines = call.engines;
+          observedRisks = call.risks;
+          const appId = msg.result?._meta?.['codex/toolSurface']?.app?.appId;
+          if (typeof appId === 'string') observedEngines.add(appId);
+        }
+        if (!msg.error && (!observedDocument || (call.expected && call.expected !== documentKey(observedDocument)))) {
+          msg.result = { ...(msg.result ?? {}), isError: true, content: [...(msg.result?.content ?? []), { type: 'text', text:
+            'Document scope stopped: Window or URL changed, or a full header is missing. That call may already have acted. Stop and read the intended window, then ask the user with document_scope.' }] };
+          if (!call.read) observedDocument = undefined;
+        }
       }
     }
     if (inputLease && msg.method === undefined && leaseCalls.get(msg.id)?.observe) {
