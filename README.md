@@ -250,8 +250,10 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   iTerm2) and OpenAI's own apps (ChatGPT, Codex, Atlas, with their beta builds). The list is built
   into the engine's helper, so no approval changes it. It also respects any app blocks your
   organization sets. To stop Codex asking for approvals, change Codex's own approval setting.
-- `claude -p` can't answer approval prompts, so headless runs only get apps already approved in that
-  session.
+- `claude -p` can't answer approval prompts. List apps in the user's [preapproval file](#preapproved-apps)
+  before starting. Unlisted apps and requests above their listed risk still need a person.
+- User-list preapprovals have unit coverage, but the listed Calculator live trial is pending the
+  user's file on this Mac. The unlisted trial refused Calculator (2026-10-04).
 - Document scope checks the last observed window before forwarding a call and stops on changed or
   missing Window/URL headers. Its injected action guard checks again, but arbitrary JavaScript can
   bypass it or forge observations. Result checks cannot undo actions already taken. Discovery reads
@@ -292,6 +294,39 @@ over full-screen apps too. The Code tab (Claude 2.19675.0) declines MCP prompts 
 showing them, so a forwarded prompt would always come back as no. Return does nothing in sleight's
 panel, Escape means no, and it gives up after five minutes. Session memory works the same way.
 `SLEIGHT_APPROVAL_PROMPT=dialog` or `client` overrides the choice.
+
+### Preapproved apps
+
+Write `~/Library/Application Support/sleight/preapproved.json` yourself to allow selected apps without
+an approval prompt. This applies to interactive sessions too, including the desktop app's Code tab.
+Sample file:
+
+```json
+{
+  "version": 1,
+  "apps": [
+    { "app": "com.apple.calculator", "riskLevel": "high" },
+    { "app": "Calculator", "riskLevel": "high" }
+  ]
+}
+```
+
+Create the parent folder first and set the file's permissions to `600`. sleight refuses symlinks,
+files owned by someone else, and group- or world-writable files. Invalid files stop startup.
+It reads this fixed path once at startup. Edits take effect in a new session. No environment variable,
+project `settings.json` or plugin setting can select another file or add apps.
+
+App identifiers match exactly, including case. List the bundle ID in the engine's prompt and the name
+or path you use with local tools separately. There are no wildcards or inferred aliases.
+`riskLevel` is a ceiling: `low`, `medium`, then `high`. Higher, missing or unknown request levels still
+ask. Local `drag`, `menu_bar` and `hover` approvals require `high`, since they can move the real
+pointer. This list does not approve notifications, document scope, change reviews or flow exceptions,
+and it cannot override the engine's app blocks.
+
+The list also applies with `SLEIGHT_APPROVAL_SCOPE=once`. Each grant goes to stderr and the relay trace,
+and the tool result tells Claude that the app was pre-approved by the user's list, even if the action
+fails. A nonempty list turns tracing on at `~/Library/Logs/sleight/` unless `SLEIGHT_TRACE` selects a
+different trace folder. List grants never send an engine persistence setting.
 
 ## Review changes
 
