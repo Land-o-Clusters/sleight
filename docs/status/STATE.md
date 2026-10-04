@@ -21,7 +21,9 @@ In flight, all from the owner's Codex sessions working in their own worktrees un
 - `codex/input-lease` at `98dc858` (Codex A): per-window input leases. Live: two markers in 5/5
   trials without it, one marker and one refusal in 10/10 with it. It has 11 conflict hunks with the
   change review (relay, launch, document-scope, package.json). A was asked to rebase onto `origin/main`,
-  keep both features, rerun its live checks and push with `--force-with-lease`. Not started at the flush.
+  keep both features, rerun its live checks and push with `--force-with-lease`. Rebase under way
+  since 23:14 EDT in `~/Projects/sleight-wt/input-lease` (onto `be284c1`, 11 conflict markers left
+  in package.json, relay, launch and document-scope).
 - `codex/flow-rules` (Codex B, not pushed yet): user-written rules for data moving between apps, opt-in,
   enforced in the relay as a guard against mistakes. Prompt given at the flush.
 
