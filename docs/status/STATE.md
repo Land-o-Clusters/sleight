@@ -34,7 +34,7 @@ Accessibility permission, behind sleight's approval per app and once for notific
 with real approvals on Magnet's menu (read, then closed) and a test banner (listed, then closed by its
 Close button). A repeat call came from session memory. Notification Center hung at 100% CPU
 the same evening (a 9-day-old process, restarted with `kill`). It may or may not be our accessibility
-reads of it; watch for it when using `notifications`. Not yet tried: `choose` on a real menu item, a popover window (`press`), the terminal's elicitation path live (unit tests
+reads of it. Watch for it when using `notifications`. Not yet tried: `choose` on a real menu item, a popover window (`press`), the terminal's elicitation path live (unit tests
 only), and LogiJuice's Snooze button.
 
 Benchmark costs here are what Claude Code reports at API prices. Runs log in through the owner's
