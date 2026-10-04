@@ -68,6 +68,37 @@ test('actions carry both guards and retain the original saved snapshot across tu
   assert.equal(a.inputLease.owned.size, 0);
 });
 
+test('leases and change review allow Cmd+O followed by typing a path into its sheet', async t => {
+  const { a, path } = setup(t);
+  let ui = `Window: "a.txt", App: TextEdit\nURL: ${pathToFileURL(path).href}`;
+  const writes = [];
+  const raw = { getAXState: async () => ui,
+    pressKey: async key => { if (key === 'super+o') ui = 'Window: "Open", App: TextEdit\n0 standard window Open';
+      if (key === 'super+shift+g') ui = 'Window: "", App: TextEdit\n0 sheet ID: GoToWindow'; },
+    typeText: async value => writes.push(value) };
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  t.after(() => { delete globalThis.__sleightDocumentGuard; });
+  for (const [id, code] of [[1, 'await app.pressKey("super+o");'],
+    [2, 'await app.pressKey("super+shift+g"); await app.typeText("/tmp/next.txt"); await app.pressKey("Return");']]) {
+    a.send(rpc(id, 'js', { code }));
+    const forwarded = a.forwarded.find(m => m.id === id);
+    assert.ok(forwarded, 'dialog actions are forwarded with both features on');
+    await new AsyncFunction('app', 'cua', 'nodeRepl', forwarded.params.arguments.code)(raw, { getApp: async () => raw }, { write() {} });
+    a.reply(result(id, ui));
+  }
+  assert.deepEqual(writes, ['/tmp/next.txt']);
+  assert.equal(a.inputLease.owned.size, 2, 'both action calls acquired their observed window lease');
+  const key = [...a.inputLease.owned.keys()].at(-1);
+  const leasePath = join(a.inputLease.directory, key + '.json');
+  const record = readFileSync(leasePath, 'utf8');
+  const code = a.forwarded.find(m => m.id === 2).params.arguments.code;
+  try {
+    writeFileSync(leasePath, JSON.stringify({ ...JSON.parse(record), token: 'replaced' }));
+    await assert.rejects(new AsyncFunction('app', 'cua', 'nodeRepl', code)(raw, { getApp: async () => raw }, { write() {} }), /ownership lost/);
+    assert.deepEqual(writes, ['/tmp/next.txt'], 'dialog allowance never bypasses the lease token');
+  } finally { writeFileSync(leasePath, record); }
+});
+
 test('ordinary leased actions leave change review off', t => {
   const { harness } = setup(t);
   const h = harness('default lease', { changeReview: false });

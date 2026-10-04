@@ -1,6 +1,6 @@
 # Change review
 
-Off by default. `SLEIGHT_CHANGE_REVIEW=1` turns it on.
+On by default. `SLEIGHT_CHANGE_REVIEW=0` turns it off.
 
 ## Capture
 
@@ -8,17 +8,21 @@ The relay tracks Window and URL headers from completed `js` results. Before a
 potentially mutating `js` call, it copies the last observed `file://` document
 into a private session directory (mode 0700). A directory document is copied
 recursively. Later actions and review decisions retain the first copy.
-Standalone acquisition, inventory, AX-state and screenshot reads take no lease
-or snapshot. Other JavaScript counts as a possible edit. A failed snapshot stops the call before forwarding.
+Reads use `isLeaseRead`, including `inventory-read.mjs`, and don't take a lease.
+Escape and a click on a verified Cancel button don't require a snapshot. Other JavaScript
+counts as a possible edit. A failed snapshot stops edits, but leaves reads and cancels available.
+Same-app dialogs and sheets without a file URL don't require a copy. Lease checks still apply.
 
 After the action returns, the relay records hashes, file identities, sizes,
 permissions and modification/change timestamps for the document and its files.
-The result must confirm the same Window and URL. Missing or different headers
-leave undo unavailable. A document first discovered after an action is listed
-without a before copy, and undo refuses. Read the intended window before editing.
+The result must confirm the document or a same-app window without a file URL.
+Missing or other document headers leave undo unavailable. A document first discovered
+after an action has no before copy. A fresh standalone read takes a later copy so edits
+can resume. Review labels that copy: undo starts there, leaving earlier edits in place.
 
-An injected wrapper checks the window before common app actions and requests
-a full header afterward. This prevents some mistakes. Arbitrary JavaScript can
+An injected wrapper checks file targets before common app actions and requests
+a full header afterward. It permits same-app non-file windows and checks Cancel IDs again. Cached
+handles use the latest guard state. Arbitrary JavaScript can
 bypass it or forge headers. File snapshots and conflict checks run in the relay,
 but attribution to an app action still depends on those cooperative observations.
 
@@ -30,7 +34,7 @@ and modification dates. `op: "review"` presents each document separately through
 `ask.js` on the desktop or an MCP elicitation elsewhere. Keep, Undo and Later
 are user choices, and the tool doesn't accept a decision argument from Claude. A declined,
 cancelled or incomplete prompt leaves the decision pending. Keep retains the
-saved file. Undo restores the session's original saved copy.
+saved file. Undo restores the saved copy shown in the review.
 
 Undo checks the complete fingerprint after the prompt and again after staging
 the replacement. A changed, missing or redirected path refuses restoration,
@@ -51,3 +55,5 @@ Restoring bytes does not refresh an open app buffer, so reopen the document
 before further edits or autosave can overwrite the restored file. macOS copies
 preserve file contents, permissions, resource forks, ACLs and extended attributes.
 Large diffs can exceed the 16 MiB preview limit and then refuse review.
+Read/cancel recognition covers the narrow calls above. Runtime-built calls may
+be treated as edits. Dialog actions that open a file need a fresh read before editing it.

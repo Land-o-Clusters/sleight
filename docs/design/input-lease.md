@@ -35,7 +35,9 @@ Transient renewal contention retries, while persistent failures stop the owned e
 Shutdown bounds draining and collects the engine before releasing active leases.
 
 The injected app guard checks window identity and lease token before each usual
-engine action. Local drag reserves its resolved app since its helper can select
+engine action. With change review on, same-app dialogs without file URLs pass the
+window check, including sheets opened during a call. Token checks still apply.
+Document approval mode retains its strict window check. Local drag reserves its resolved app since its helper can select
 another window. A native read resolves the name or path to one running bundle ID.
 Menu and notification actions reserve the desktop and conflict with all leases.
 Change review reserves the desktop while the user decides, then releases it.

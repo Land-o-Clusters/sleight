@@ -131,7 +131,7 @@ function askWithDialog(message, sessionScoped, options) {
   const question = app ? `Allow Claude to use ${app}?` : message;
   const review = options?.kind === 'review';
   const flow = options?.kind === 'flow';
-  const detail = flow ? options.detail : review ? `${options.detail}\n\nUndo restores the session's original saved file. Reopen it in the app afterward. Later leaves the decision pending.` : (app ? `Claude can then click and type in ${app} in the background. ` : '') +
+  const detail = flow ? options.detail : review ? `${options.detail}\n\nUndo restores the saved copy shown above. Reopen it in the app afterward. Later leaves the decision pending.` : (app ? `Claude can then click and type in ${app} in the background. ` : '') +
     (sessionScoped ? 'A yes lasts until this Claude session ends.' : 'It asks again next time.');
   const args = ['-l', 'JavaScript', join(LIB, 'ask.js'), question, detail, ICON, String(ASK_SECONDS), flow ? 'flow' : review ? 'review' : 'approval'];
   return new Promise(resolve => {
@@ -301,7 +301,7 @@ export function run({ leaseDirectory } = {}) {
     approvalScope: ['once', 'document'].includes(process.env.SLEIGHT_APPROVAL_SCOPE) ? process.env.SLEIGHT_APPROVAL_SCOPE : 'session',
     ask: approvalPrompt(),
     flowRules,
-    changeReview: process.env.SLEIGHT_CHANGE_REVIEW === '1',
+    changeReview: process.env.SLEIGHT_CHANGE_REVIEW !== '0',
     // End the engine's turn after 30 s without a running call, so the app it
     // holds is released even where the mod doesn't run. 0 turns this off.
     idleTurnEndMs: Number(process.env.SLEIGHT_IDLE_TURN_END_MS ?? 30000),

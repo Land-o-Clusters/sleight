@@ -5,6 +5,18 @@ import { cpSync, lstatSync, readdirSync, readFileSync, realpathSync, mkdtempSync
 import { tmpdir } from 'node:os';
 import { join, dirname, basename, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCancelAction } from './document-scope.mjs';
+import { isLeaseRead } from './input-lease.mjs';
+
+export function isChangeCancel(code = '', text = '') {
+  return code.trim().replace(/;$/, '').split(';').every(statement => {
+    const s = statement.trim();
+    if (isLeaseRead(s)) return true;
+    if (/^await\s+app\.pressKey\(\s*"(?:Escape|esc)"\s*\)$/i.test(s)) return true;
+    const click = /^await\s+app\.click\(\s*(\d+)\s*\)$/.exec(s);
+    return !!click && isCancelAction('click', [Number(click[1])], text);
+  });
+}
 
 function copy(source, destination) {
   // ditto also preserves resource forks, ACLs and extended attributes on macOS.
@@ -67,9 +79,10 @@ function state(path) {
 export class ChangeReview {
   entries = new Map();
   directory;
+  nextSnapshot = 0;
   closed = false;
 
-  before(doc) {
+  before(doc, fromRead = false) {
     if (this.closed) throw new Error('session has ended');
     const requestedPath = filePath(doc);
     if (!requestedPath) return undefined;
@@ -77,7 +90,7 @@ export class ChangeReview {
     if (lstatSync(requestedPath).isSymbolicLink()) throw new Error('symbolic links are not supported');
     const path = realpathSync(requestedPath);
     const existing = this.entries.get(path);
-    if (existing) { this.verify(existing); return existing; }
+    if (existing?.snapshot || (existing && !fromRead)) { this.verify(existing); return existing; }
     const beforeState = state(path);
     const tempRoot = realpathSync(tmpdir());
     const toTemp = relative(path, tempRoot);
@@ -88,12 +101,12 @@ export class ChangeReview {
       this.directory = mkdtempSync(join(tempRoot, 'sleight-review-'));
       chmodSync(this.directory, 0o700);
     }
-    const snapshot = join(this.directory, String(this.entries.size));
+    const snapshot = join(this.directory, String(this.nextSnapshot++));
     try {
       copy(path, snapshot);
       if (state(path).key !== beforeState.key) throw new Error('file changed while taking the snapshot');
     } catch (err) { removePrivate(snapshot); throw err; }
-    const entry = { path, requestedPath, title: doc.title, snapshot, beforeState, expected: beforeState.key, status: 'pending' };
+    const entry = { path, requestedPath, title: doc.title, snapshot, beforeState, expected: beforeState.key, status: 'pending', laterCopy: !!existing };
     this.entries.set(path, entry);
     return entry;
   }
@@ -106,6 +119,14 @@ export class ChangeReview {
     try { path = realpathSync(requestedPath); } catch { path = requestedPath; }
     if (!this.entries.has(path)) this.entries.set(path, { path, requestedPath, title: doc.title, status: 'uncaptured' });
     return this.entries.get(path);
+  }
+
+  read(doc) {
+    const requestedPath = filePath(doc);
+    if (!requestedPath) return undefined;
+    const existing = this.entries.get(realpathSync(requestedPath));
+    // Keep an existing copy and its conflict state. Reads never adopt outside edits.
+    return existing && !existing.snapshot ? this.before(doc, true) : undefined;
   }
 
   after(entry, certain = true) {
@@ -155,7 +176,8 @@ export class ChangeReview {
       if (state(entry.path).key !== current.key) throw new Error('file changed during review');
       let conflict = '';
       try { this.verify(entry); } catch (err) { conflict = `\nUndo refused: ${err.message}`; }
-      return `${heading}\n${preview}${conflict}`;
+      const origin = entry.laterCopy ? '\nUndo starts at the later copy taken after a fresh read. Earlier changes are not captured.' : '';
+      return `${heading}${origin}\n${preview}${conflict}`;
     } catch (err) { entry.previewProblem = err.message; return `${heading}\nReview unavailable: ${err.message}. Undo will refuse.`; }
   }
 
