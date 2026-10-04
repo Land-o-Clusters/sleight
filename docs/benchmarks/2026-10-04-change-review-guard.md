@@ -15,9 +15,12 @@ file. The harness checks saved contents and deletion of session backups.
 The first attempt failed before opening TextEdit, with sandbox error -2700.
 The second changed both files and showed their diffs. The Undo panel timed out
 without a user decision. The remaining Keep panel was interrupted through the
-owned terminal. Session backup deletion passed. The live Undo/Keep check is pending.
+owned terminal. Session backup deletion passed.
+The third attempt, after the rebase, timed out on its first TextEdit read before
+any approval panel appeared. No file changed. The launcher collected its engine.
+The live Undo/Keep check is pending a restart of ChatGPT.
 
-[Results](2026-10-04-change-review-guard.json) preserve both attempts, including
+[Results](2026-10-04-change-review-guard.json) preserve attempts 1, 2 and 3, including
 their full harness results and relevant relay events. Home paths use `~`.
 Vendor API documentation is omitted. Dialog recovery is covered by unit tests.
 `bench/run.mjs` was not run, because sleight-arch runs that pass at merge.
