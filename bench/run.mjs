@@ -3,7 +3,10 @@
 // plugin loaded, checked outside the agent. Writes bench/results/<stamp>.json
 // and prints a table.
 //
-//   node bench/run.mjs [--arm sleight|lcu|all] [--tasks id,id] [--runs N] [--model M] [--dry-run]
+//   node bench/run.mjs [--arm sleight|lcu|all] [--tasks id,id] [--runs N] [--model M] [--effort E] [--dry-run]
+//
+// Model and effort default to Sonnet 5.5 at medium (owner, 2026-10-03). Runs
+// before that used Claude Code's default, Opus 5.5.
 //
 // Arms: `sleight` loads this repo's plugin. `lcu` runs from a folder where LCU
 // (github.com/0xpolarzero/lcu) was registered for Claude Code at project scope:
@@ -67,7 +70,8 @@ for (const name of armNames) {
   if (ok !== true) throw new Error(ok);
 }
 const runs = Number(option('runs', '1'));
-const model = option('model', undefined);
+const model = option('model', 'claude-sonnet-5-5');
+const effort = option('effort', 'medium');
 const wanted = option('tasks', undefined)?.split(',');
 const claudeBin = process.env.CLAUDE_BIN || 'claude';
 const selected = wanted ? tasks.filter(t => wanted.includes(t.id)) : tasks;
@@ -122,7 +126,8 @@ function runClaude(prompt, arm) {
     ...arm.args,
     '--settings', join(ROOT, 'bench', 'settings.json'),
     '--output-format', 'json',
-    ...(model ? ['--model', model] : []),
+    '--model', model,
+    '--effort', effort,
   ];
   return new Promise(resolve => {
     const child = spawn(claudeBin, args, { cwd: arm.cwd, env: armEnv(arm), stdio: ['ignore', 'pipe', 'pipe'] });
@@ -147,7 +152,7 @@ mkdirSync(resultsDir, { recursive: true });
 const file = join(resultsDir, `${stamp}${isDryRun ? '-dry' : ''}.json`);
 // Written after every run, so a run cut short keeps what it finished.
 const save = () =>
-  writeFileSync(file, JSON.stringify({ stamp, arms: armNames, model: model ?? 'default', claude: claudeBin, results }, null, 2) + '\n');
+  writeFileSync(file, JSON.stringify({ stamp, arms: armNames, model, effort, claude: claudeBin, results }, null, 2) + '\n');
 // Arms alternate task by task, so both see the same conditions over time.
 for (let run = 1; run <= runs; run++) {
   for (const task of selected) {
@@ -180,6 +185,8 @@ for (let run = 1; run <= runs; run++) {
         costUsd: out?.total_cost_usd,
         exitCode: code,
         answer: answer.slice(0, 300),
+        // What Claude Code reports it used, to catch a model setting that didn't apply.
+        models: Object.keys(out?.modelUsage ?? {}),
         stderr: code === 0 ? undefined : stderr,
       });
       save();

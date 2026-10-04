@@ -19,18 +19,21 @@ can't write TextEdit's sandboxed prefs) still failed the drag task, 0/2. We don'
 engine sends any mouse-drag events between press and release; finding out needs a probe app on the
 allowlist (owner's call). Cut and paste stays the documented workaround.
 
-Chess is on the benchmark allowlist (owner, 2026-10-03), with a `chess-drag` task that kills Chess
-before each run. All runs are in `docs/benchmarks/2026-10-03-chess-drag.json`. With Chess restarted,
-LCU passed 3/3 and sleight 2/3, then 3/3 once the sleight arm ran from an empty folder (set D,
-traced). Until set D the sleight arm ran inside this repo and read the project memory, which LCU's
-arm never did. The published 12/15 table has the same confound.
+Benchmark, fair at last (2026-10-03, Opus 5.5): sleight and LCU both passed 15/18. Each failed only
+the three text drags. The README table and `docs/benchmarks/2026-10-03-fair-rerun.json` have it. Two
+confounds are fixed: the sleight arm runs from an empty folder (it used to read this repo's memory),
+and `bench/settings.json` turns off the user-installed sleight, which had leaked into the LCU arm. The
+runner checks arm isolation before every run. From now on it defaults to Sonnet 5.5 at medium
+(owner), and it records the model each run used. The owner finds the runs tedious, so don't run more
+without a reason.
 
-Next: rerun the full benchmark on both arms from their empty folders (about $15 at today's costs, the
-owner's call) and replace the table. Then follow the owner's rule in LAWS, with LCU as the
-competitor. LCU's adapter passes the engine's instructions through untouched and doesn't add guidance
-of its own. The desktop approval prompt and the pane are already things LCU lacks.
+The engine has no access to menu bar status items or notification banners (measured: its inventory leaves
+out Control Center and Notification Center, and `getApp("com.apple.controlcenter")` times out).
+Reaching them would need sleight's own accessibility path behind its own approval panel. That's a
+scope change, so it's in the owner list below.
 
-The benchmarks this session cost $15.19 in all.
+Benchmark costs here are what Claude Code reports at API prices. Runs log in through the owner's
+claude.ai plan, so they use plan limits, not money.
 
 ## Machine state outside the repo
 
@@ -48,6 +51,9 @@ The benchmarks this session cost $15.19 in all.
 
 ## Waiting on the owner
 
+- Whether to build menu bar and notification reach (owner's tier 3): sleight's own accessibility
+  reads and clicks for status items and banners, behind sleight's approval panel. It needs macOS
+  Accessibility permission for sleight and steps outside the engine.
 - Whether to add a probe app to the benchmark allowlist, to learn if the engine's drag sends
   intermediate mouse events. Without it we can't tell why text drags fail.
 - Whether to report the desktop app declining MCP prompts to Anthropic (outward-facing).

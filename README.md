@@ -233,32 +233,32 @@ on disk or the exact answer. sleight and LCU get the same prompt for each task, 
 don't mention a tool by name.
 
 Comparison with [LCU](https://github.com/0xpolarzero/lcu) 0.8.8, which drives the same engine, on
-2026-10-03, with each task run 3 times per arm, the arms alternating, on Claude Code 2.1.288 and its
-default model:
+2026-10-03. Each task ran 3 times per arm on Claude Code 2.1.288 and its default model (Opus 5.5).
+Each arm ran from an empty folder, with only its own tool loaded:
 
 | Task | sleight | LCU | sleight median | LCU median |
 |---|---|---|---|---|
-| Calculator, clicking | 3/3 | 3/3 | 14 s | 15 s |
-| Calculator, Scientific mode via menu | 3/3 | 3/3 | 19 s | 23 s |
-| TextEdit, save a new file | 3/3 | 3/3 | 75 s | 70 s |
-| TextEdit, edit a file | 3/3 | 3/3 | 21 s | 31 s |
-| TextEdit, move a word by drag and drop | 0/3 | 0/3 | 53 s | 45 s |
+| Calculator, clicking | 3/3 | 3/3 | 22 s | 14 s |
+| Calculator, Scientific mode via menu | 3/3 | 3/3 | 24 s | 19 s |
+| TextEdit, save a new file | 3/3 | 3/3 | 54 s | 63 s |
+| TextEdit, edit a file | 3/3 | 3/3 | 34 s | 46 s |
+| TextEdit, move a word by drag and drop | 0/3 | 0/3 | 43 s | 43 s |
+| Chess, drag a pawn and save the game | 3/3 | 3/3 | 68 s | 75 s |
 
-Both passed 12 of 15 and failed every drag run the same way (see [Known problems](#known-problems)).
-The speed differences come from three runs on one Mac, so treat them as noise until more runs say
-otherwise. The 30 runs cost $12.90 in all. Every run is in
-[`docs/benchmarks/2026-10-03-sleight-vs-lcu.json`](docs/benchmarks/2026-10-03-sleight-vs-lcu.json).
+Both passed 15 of 18 and failed every text drag the same way (see [Known problems](#known-problems)).
+With 3 runs per task, the speed differences are noise. The valid runs came to $16.00 at API prices.
+Logged in through a claude.ai plan, runs use plan limits rather than money.
+
+Getting a fair comparison took three tries, and every run is published. In the first (12/15 each,
+[`2026-10-03-sleight-vs-lcu.json`](docs/benchmarks/2026-10-03-sleight-vs-lcu.json)) the sleight arm
+ran inside this repo and read the project's memory. The Chess runs
+([`2026-10-03-chess-drag.json`](docs/benchmarks/2026-10-03-chess-drag.json)) piled up Chess windows
+until it hung. Then a user-level sleight install leaked into the LCU arm and failed four of its runs
+([`2026-10-03-fair-rerun.json`](docs/benchmarks/2026-10-03-fair-rerun.json) has those and the
+rerun). The benchmark now checks before every run that each arm loads only its own tool.
 LCU warned that this engine version is one it hasn't tested, and so is ours.
 
-A Chess task followed the same day. Claude starts a game, drags the e2 pawn to e4 and saves the game
-as a file we name. Restarting Chess before each run, LCU passed 3/3. Sleight passed 2/3, then 3/3
-once its arm ran from an empty folder like LCU's. Until then the sleight arm ran inside this repo,
-where Claude also read the project's memory, including notes about failed drags. That affects the
-table above too, and we haven't rerun it yet. Over all runs sleight passed 7 of 13 and LCU 8 of 9.
-The earlier sets didn't restart Chess, which piled up windows and once hung it, one sleight run hit a
-bug in a change being made at the time, and one failed only because the first check was wrong. Most
-sleight failures came after a good drag, in the save dialog. Every run, with notes on each set, is in
-[`docs/benchmarks/2026-10-03-chess-drag.json`](docs/benchmarks/2026-10-03-chess-drag.json).
+From 2026-10-04 on, runs default to Sonnet 5.5 at medium effort (`--model`, `--effort`).
 
 ```bash
 npm run bench -- --runs 3             # sleight only
