@@ -116,6 +116,8 @@ export function createRelay({
   sessionId = randomUUID(),
   approvalScope = 'session',
   ask,
+  preapproved,
+  stderr = process.stderr,
   localTools,
   flowRules,
   // Off by default: its window guard stops Open dialogs and late-found documents (0/2 TextEdit
@@ -138,6 +140,7 @@ export function createRelay({
   const elicitations = new Map(); // our elicitation id -> resolve
   const running = new Set(); // ids of engine calls waiting for a result
   const localRunning = new Set();
+  const preapprovalNotes = new Map(); // call id -> grants made during that call
   let idleTimer;
   const documentMode = approvalScope === 'document';
   const documentGrants = new Set();
@@ -426,6 +429,28 @@ export function createRelay({
     return JSON.stringify({ session_id: sessionId, turn_id: turnId });
   }
 
+  function userListGrant(app, riskLevel, tool, ids) {
+    if (!preapproved?.allows(app, riskLevel)) return false;
+    const grant = { app, riskLevel, tool, source: '~/Library/Application Support/sleight/preapproved.json' };
+    // Audit before answering. A failed audit must not grant approval.
+    trace('preapproved-app', grant);
+    stderr.write(`sleight: ${app} (${riskLevel}, ${tool}) pre-approved by the user's list at ${grant.source}\n`);
+    for (const id of ids) {
+      const notes = preapprovalNotes.get(id) ?? [];
+      notes.push(grant); preapprovalNotes.set(id, notes);
+    }
+    return true;
+  }
+
+  function reportPreapprovals(msg) {
+    const grants = preapprovalNotes.get(msg.id);
+    preapprovalNotes.delete(msg.id);
+    if (!grants?.length) return;
+    const text = grants.map(g => `${g.app} (${g.riskLevel}, ${g.tool}) was pre-approved by the user's list at ${g.source}.`).join('\n');
+    if (msg.result) msg.result = { ...msg.result, content: [...(msg.result.content ?? []), { type: 'text', text }] };
+    else if (msg.error) msg.error = { ...msg.error, data: { detail: msg.error.data, preapprovals: grants } };
+  }
+
   function endTurnArgs(args = {}) {
     return {
       hook_event_name: args.hook_event_name || 'Stop',
@@ -477,10 +502,12 @@ export function createRelay({
   }
 
   // Approval for a local tool: once per key and session, like app approvals.
-  function approve(keyParts, message) {
+  function approve(keyParts, message, callId) {
     const key = JSON.stringify(['sleight', ...keyParts]);
     const scoped = approvalScope === 'session';
     const decided = asking.then(async () => {
+      if (keyParts.length === 2 && ['drag', 'menu_bar', 'hover'].includes(keyParts[0]) &&
+          userListGrant(keyParts[1], 'high', keyParts[0], [callId])) return true;
       if (scoped && approved.has(key)) return true;
       let action;
       try {
@@ -512,7 +539,7 @@ export function createRelay({
         leaseCalls.set(msg.id, { key }); refreshHeartbeat();
       }
       result = await localTools.call(msg.params.name, msg.params.arguments ?? {}, async (parts, message) => {
-        const allowed = await approve(parts, message);
+        const allowed = await approve(parts, message, msg.id);
         if (closing || disposed) throw new Error('Input lease: this session is closing.');
         if (allowed) {
           const key = leaseCalls.get(msg.id)?.key;
@@ -526,7 +553,9 @@ export function createRelay({
     localRunning.delete(msg.id);
     if (plan) flowRules.observe(result, plan);
     finishedCall(msg.id);
-    toClient({ jsonrpc: '2.0', id: msg.id, result });
+    const reply = { jsonrpc: '2.0', id: msg.id, result };
+    reportPreapprovals(reply);
+    toClient(reply);
   }
 
   function rotateTurn() {
@@ -732,7 +761,13 @@ export function createRelay({
         else if (window) recoveryTarget = `cua.getApp(${JSON.stringify(window.app)})`;
       }
     }
-    if (msg.method === undefined) finishedCall(msg.id);
+    if (msg.method === undefined) { reportPreapprovals(msg); finishedCall(msg.id); }
+    if (isAppApproval(msg) && userListGrant(msg.params?._meta?.tool_params?.app,
+      msg.params?._meta?.riskLevel, 'engine', [...running].filter(id => !localRunning.has(id)))) {
+      // No engine persistence: check and audit the user's startup list on every request.
+      toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'accept', content: {} } });
+      return;
+    }
     if (ask && isAppApproval(msg)) {
       askUser(msg);
       return;
@@ -784,6 +819,7 @@ export function createRelay({
     elicitations.clear();
     flowRules?.dispose();
     flowCalls.clear(); flowPending = undefined; flowPermit = undefined;
+    preapprovalNotes.clear();
     changes.dispose();
     trace('change-snapshots-deleted', { directory: changes.directory });
   }

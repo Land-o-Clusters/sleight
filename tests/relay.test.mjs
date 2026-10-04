@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
+import { PreapprovedApps } from '../plugins/sleight/lib/preapproved.mjs';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -178,6 +179,64 @@ const appApproval = (id, persist = ['session', 'always'], app = 'com.apple.calcu
   jsonrpc: '2.0', id, method: 'elicitation/create',
   params: { message: `Allow Computer Use to use "${app}"?`, mode: 'form', requestedSchema: { type: 'object', properties: {} },
     _meta: { connector_id: 'computer-use', persist, riskLevel, tool_params: { app } } },
+});
+
+const preapproved = () => new PreapprovedApps({ version: 1, apps: [
+  { app: 'com.apple.calculator', riskLevel: 'medium' }, { app: 'Calculator', riskLevel: 'high' },
+] });
+for (const approvalScope of ['session', 'once']) {
+  test(`user list approves engine calls in ${approvalScope} mode and reports each grant`, async () => {
+    const traces = [], logs = [], prompts = [];
+    const h = harness({ approvalScope, preapproved: preapproved(),
+      ask: async message => { prompts.push(message); return 'decline'; },
+      trace: (event, data) => traces.push([event, data]), stderr: { write: text => logs.push(text) } });
+    flowCall(h, 1, 'let app = await cua.getApp("com.apple.calculator")'); await tick();
+    h.fromServer(appApproval(11)); h.fromServer(appApproval(12, [])); await tick();
+    assert.equal(prompts.length, 0);
+    assert.equal(h.toServer.filter(m => m.result?.action === 'accept').length, 2);
+    assert.ok(h.toServer.filter(m => m.result).every(m => m.result._meta?.persist !== 'always'));
+    flowAnswer(h, 1, 'Calculator state'); await tick();
+    assert.match(h.toClient.find(m => m.id === 1).result.content.at(-1).text, /pre-approved.*user.*list/i);
+    assert.equal(traces.filter(([event]) => event === 'preapproved-app').length, 2);
+    assert.equal(logs.length, 2); assert.match(logs[0], /com.apple.calculator.*low/);
+    flowCall(h, 2); await tick(); flowAnswer(h, 2); await tick();
+    assert.doesNotMatch(h.toClient.find(m => m.id === 2).result.content.at(-1).text, /pre-approved/);
+  });
+}
+test('unlisted and higher or unknown engine risk still prompt, including without session persistence', async () => {
+  const h = harness({ preapproved: preapproved() });
+  h.fromServer(appApproval(1, undefined, 'Mail'));
+  h.fromServer(appApproval(2, [], 'com.apple.calculator', 'high'));
+  h.fromServer(appApproval(3, [], 'com.apple.calculator', 'unknown'));
+  await tick(); assert.deepEqual(h.toClient.map(m => m.id), [1, 2, 3]);
+  assert.equal(h.toServer.length, 0);
+});
+for (const name of ['drag', 'menu_bar', 'hover']) {
+  test(`user list covers ${name} at high risk, reports even failures, and prompts below that ceiling`, async () => {
+    const prompts = [], logs = [];
+    const h = harness({ preapproved: preapproved(), stderr: { write: text => logs.push(text) },
+      ask: async message => { prompts.push(message); return 'decline'; },
+      localTools: { tools: [{ name }], call: async (_name, args, approve) => {
+        const allowed = await approve([name, args.app], 'Allow local action?');
+        return { isError: true, content: [{ type: 'text', text: allowed ? 'action failed' : 'refused' }] };
+      } } });
+    for (let id = 1; id <= 2; id++) { flowCall(h, id, '', name, { app: 'Calculator' }); await tick(); await tick(); }
+    assert.equal(prompts.length, 0); assert.equal(logs.length, 2);
+    for (const msg of h.toClient) assert.match(msg.result.content.at(-1).text, /pre-approved.*user.*list/i);
+    flowCall(h, 3, '', name, { app: 'com.apple.calculator' }); await tick(); await tick();
+    assert.equal(prompts.length, 1);
+    assert.doesNotMatch(h.toClient.find(m => m.id === 3).result.content.at(-1).text, /pre-approved/);
+  });
+}
+test('the user list does not approve notifications, document grants, or unrelated elicitations', async () => {
+  const h = harness({ preapproved: preapproved(), localTools: { tools: [{ name: 'notifications' }],
+    call: async (_name, _args, approve) => ({ content: [{ type: 'text', text: String(await approve(['notifications'], 'Allow notifications?')) }] }) } });
+  flowCall(h, 1, '', 'notifications', {}); await tick();
+  assert.equal(h.toClient[0].method, 'elicitation/create');
+  const other = { jsonrpc: '2.0', id: 22, method: 'elicitation/create', params: { message: 'Other', _meta: { connector_id: 'other', tool_params: { app: 'Calculator' }, riskLevel: 'low' } } };
+  h.fromServer(other); await tick(); assert.deepEqual(h.toClient.at(-1), other);
+  const d = harness({ approvalScope: 'document', preapproved: preapproved(), ask: async () => 'decline' });
+  flowCall(d, 2); await tick(); assert.equal(d.toServer.length, 0);
 });
 
 test('scopes an accepted app approval to the session', async () => {

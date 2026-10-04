@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 import { createRelay } from './relay.mjs';
 import { loadFlowRules } from './flow-rules.mjs';
 import { InputLease } from './input-lease.mjs';
+import { loadPreapproved } from './preapproved.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
 const SERVER_KEY = 'cua_repl';
@@ -267,8 +268,11 @@ function approvalPrompt(env = process.env) {
 }
 
 export function run({ leaseDirectory } = {}) {
-  let flowRules;
-  try { flowRules = loadFlowRules(); } catch (err) { fail(err.message); }
+  let flowRules, preapproved;
+  try { flowRules = loadFlowRules(); preapproved = loadPreapproved(); } catch (err) { fail(err.message); }
+  // A user-list grant always has a trace, even without SLEIGHT_TRACE.
+  const trace = process.env.SLEIGHT_TRACE ? traceTo(process.env.SLEIGHT_TRACE)
+    : preapproved.size ? traceTo('1') : undefined;
   const s = resolveServer();
   if (s.error) fail(s.error);
   if (!existsSync(s.command)) fail(`server runtime missing: ${s.command}`);
@@ -300,6 +304,7 @@ export function run({ leaseDirectory } = {}) {
     // SLEIGHT_APPROVAL_SCOPE=once asks again on every action instead.
     approvalScope: ['once', 'document'].includes(process.env.SLEIGHT_APPROVAL_SCOPE) ? process.env.SLEIGHT_APPROVAL_SCOPE : 'session',
     ask: approvalPrompt(),
+    preapproved,
     flowRules,
     changeReview: process.env.SLEIGHT_CHANGE_REVIEW === '1',
     // End the engine's turn after 30 s without a running call, so the app it
@@ -321,7 +326,7 @@ export function run({ leaseDirectory } = {}) {
         return result.target;
       },
     },
-    trace: process.env.SLEIGHT_TRACE ? traceTo(process.env.SLEIGHT_TRACE) : undefined,
+    trace,
   });
   process.once('exit', () => relay.close());
 
