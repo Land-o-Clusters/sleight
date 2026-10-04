@@ -51,6 +51,21 @@ after the mouse is held down. Move text with the keyboard instead: select it, `a
 click where it goes, `app.pressKey("super+v")`. Drags that pick something up at once, like Chess
 pieces, work fine.
 
+## Menu bar icons and notifications
+
+The `js` tool can't reach an app's icon at the right end of the menu bar, or notification banners.
+sleight's `menu_bar` and `notifications` tools can:
+
+- `menu_bar` with op `apps` lists the apps that have an icon. `open` with `app` clicks it and returns
+  its menu, which is closed again right after, or the window it opened. To pick a menu item, call
+  `choose` with `path`, the titles from the top menu down, such as `["Debug", "Simulate 8%"]`. In a
+  window, `press` an `element` number from `open`, then `close` when done.
+- `notifications` with op `list` returns the banners on screen with their button names, and `press`
+  presses one, such as `Snooze 1 day`. Banners leave the screen after a few seconds, so list and press
+  without delay.
+- The user approves each app's icon, and notifications as a whole, once per session. If they don't,
+  stop and tell them.
+
 ## Saving to a path
 
 In a save dialog, `app.pressKey("super+shift+g")` opens Go to Folder. Set the folder there and press

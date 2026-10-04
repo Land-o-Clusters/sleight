@@ -23,6 +23,9 @@ belong in [STATE.md](STATE.md).
   sends `persist: "always"` and never remembers a decline. `SLEIGHT_APPROVAL_SCOPE=once` turns it off.
 - Apps get approved without a person only through the benchmark's allowlist (Calculator, TextEdit, and Chess since 2026-10-03), and
   only in benchmark runs. When a safety check blocks an action, the owner does it or it doesn't happen.
+- sleight's `menu_bar` and `notifications` tools act outside the engine, through macOS Accessibility
+  (owner's scope call, 2026-10-03). Each app's icon needs the user's approval, as do notifications,
+  with the same session memory as engine approvals. Every action on an app waits for that approval.
 - sleight's branding uses only its own marks, never another company's logo or mascot.
 
 ## The engine

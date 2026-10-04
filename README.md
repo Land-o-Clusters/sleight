@@ -145,6 +145,13 @@ Claude Code ──MCP──▶ bin/sleight-mcp ──▶ ChatGPT.app's cua-repl 
 6. On Claude Code v2.1.287 or later, the mod (`hooks/register.tsx`) ends the engine's turn after each
    Claude turn that used it, the way Codex does, and refuses Claude's own calls to `turn_ended`.
 
+7. sleight's own `menu_bar` and `notifications` tools handle the menu bar icons and banners the engine
+   leaves out. `menu_bar` opens an app's icon, reads its menu or window and clicks menu items.
+   `notifications` reads the banners on screen and presses their buttons. Both go through System
+   Events UI scripting (`lib/menubar.js`) with the Accessibility permission of the app running Claude
+   Code. Each app's icon needs your approval once per session, and so do notifications, the same way
+   as engine approvals. `SLEIGHT_MENU_BAR=0` leaves both tools out.
+
 sleight only turns on native apps by default (`CUA_REPL_ENABLED_SURFACES=computer`), because the engine's
 in-app browser only exists inside ChatGPT. To try Chrome control, which needs the Codex Chrome
 extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
@@ -175,10 +182,11 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   the session closes.
 - ChatGPT updates can break it. The version lookup handles the folder moving around, but not the API
   changing. Run `--doctor` first when something stops working.
-- sleight can't reach an app's status item in the menu bar or a notification banner. Those belong to
-  system apps the engine leaves out: its inventory has no Control Center or Notification Center, and
-  `getApp("com.apple.controlcenter")` times out (engine 26.930.31730, 2026-10-03). The menus in the
-  menu bar work.
+- The engine has no access to an app's icon in the menu bar or to notification banners: its inventory has
+  no Control Center or Notification Center, and `getApp("com.apple.controlcenter")` times out (engine
+  26.930.31730, 2026-10-03). sleight's `menu_bar` and `notifications` tools cover those instead (see
+  [How it works](#how-it-works)). They work in the foreground: an open menu shows on screen, and it
+  takes the keyboard until sleight closes it.
 - The engine refuses terminal apps such as Terminal.app ("not allowed … for safety reasons") and respects
   any app blocks your organization sets.
 - `claude -p` can't answer approval prompts, so headless runs only get apps already approved in that

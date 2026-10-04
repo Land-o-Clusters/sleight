@@ -35,6 +35,12 @@
 // 'decline' or 'cancel'. launch.mjs uses it under the desktop app, which
 // declines MCP prompts without showing them. Session memory works the same way.
 //
+// `localTools`, when given, are sleight's own tools, answered here and never
+// sent to the server: `{ tools, call(name, args, approve) }`. `approve(key,
+// message)` asks the user once per key and session, through `ask` when given,
+// else through an elicitation sent to Claude Code. launch.mjs uses this for the
+// menu bar and notifications, which the engine can't reach.
+//
 // `trace`, when given, receives every message as it passes, for debugging.
 
 import { randomUUID } from 'node:crypto';
@@ -93,6 +99,7 @@ export function createRelay({
   sessionId = randomUUID(),
   approvalScope = 'session',
   ask,
+  localTools,
   trace = () => {},
 }) {
   let turnId = randomUUID();
@@ -103,6 +110,9 @@ export function createRelay({
   const approvalRequests = new Map(); // server request id -> approval key
   const approved = new Set(); // approval keys the user accepted this session
   let asking = Promise.resolve(); // `ask` prompts, one at a time
+  const localNames = new Set(localTools?.tools.map(t => t.name) ?? []);
+  const elicitations = new Map(); // our elicitation id -> resolve
+  let nextElicitId = 0;
 
   const toServer = msg => {
     trace('to-server', msg);
@@ -150,6 +160,45 @@ export function createRelay({
     });
   }
 
+  // Asks Claude Code's user through an elicitation of our own.
+  function elicit(message) {
+    const id = `sleight-elicit-${nextElicitId++}`;
+    const answer = new Promise(resolve => elicitations.set(id, resolve));
+    toClient({ jsonrpc: '2.0', id, method: 'elicitation/create', params: { message, mode: 'form', requestedSchema: { type: 'object', properties: {} } } });
+    return answer.then(msg => msg.result?.action ?? 'cancel');
+  }
+
+  // Approval for a local tool: once per key and session, like app approvals.
+  function approve(keyParts, message) {
+    const key = JSON.stringify(['sleight', ...keyParts]);
+    const scoped = approvalScope === 'session';
+    const decided = asking.then(async () => {
+      if (scoped && approved.has(key)) return true;
+      let action;
+      try {
+        action = ask ? await ask(message, scoped) : await elicit(message);
+      } catch {
+        action = 'cancel';
+      }
+      trace('local-approval', { key, action });
+      if (action !== 'accept') return false;
+      if (scoped) approved.add(key);
+      return true;
+    });
+    asking = decided.catch(() => {});
+    return decided;
+  }
+
+  async function callLocal(msg) {
+    let result;
+    try {
+      result = await localTools.call(msg.params.name, msg.params.arguments ?? {}, approve);
+    } catch (err) {
+      result = { content: [{ type: 'text', text: String(err?.message ?? err) }], isError: true };
+    }
+    toClient({ jsonrpc: '2.0', id: msg.id, result });
+  }
+
   function rotateTurn() {
     turnId = randomUUID();
     turnUsed = false;
@@ -165,6 +214,16 @@ export function createRelay({
     }
     if (msg.method === 'server/discover' && msg.id !== undefined) {
       toClient({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'Method not found' } });
+      return;
+    }
+    if (msg.method === undefined && elicitations.has(msg.id)) {
+      elicitations.get(msg.id)(msg);
+      elicitations.delete(msg.id);
+      return;
+    }
+    if (msg.method === 'tools/call' && localNames.has(msg.params?.name)) {
+      trace('from-client', msg);
+      callLocal(msg);
       return;
     }
     if (msg.method === 'tools/list' && msg.id !== undefined) listRequests.add(msg.id);
@@ -221,7 +280,8 @@ export function createRelay({
     if (msg.method === undefined && listRequests.delete(msg.id) && Array.isArray(msg.result?.tools)) {
       msg.result.tools = msg.result.tools
         .filter(t => !HIDDEN_TOOLS.has(t.name))
-        .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t));
+        .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t))
+        .concat(localTools?.tools ?? []);
     }
     toClient(msg);
   });

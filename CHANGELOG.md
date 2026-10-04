@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 (2026-10-03)
+
+- New `menu_bar` and `notifications` tools for what the engine leaves out: apps' icons in the menu
+  bar (read the menu or window, choose an item, press a button) and notification banners (read, press
+  a button). They go through System Events UI scripting. Each app's icon needs the user's approval
+  once per session, as do notifications. `SLEIGHT_MENU_BAR=0` turns them off.
+- The approval panel opens on the display under the pointer, over full-screen apps, with a sound.
+- Benchmark: each arm loads only its own tool (checked before every run), runs default to Sonnet 5.5
+  at medium effort, and runs close the windows they leave behind.
+
 ## 0.1.1 (2026-10-03)
 
 - App approvals work in the desktop app's Code tab. It declines MCP prompts without showing them, so

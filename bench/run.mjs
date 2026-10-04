@@ -21,9 +21,9 @@
 // tasks without a model call. Every run first checks that each arm loads its
 // own tool and not the other's.
 
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -197,6 +197,17 @@ for (let run = 1; run <= runs; run++) {
 }
 
 save();
+
+// Leave the desktop as we found it: close the TextEdit documents the runs
+// made (only files under this run's scratch folder) and quit Chess, whose
+// games are throwaway. Chess isn't scriptable, so it's terminated.
+if (!isDryRun) {
+  const scratch = join(tmpdir(), 'sleight-bench', stamp);
+  const closeDocs = `tell application "TextEdit" to close (every document whose path starts with ${JSON.stringify(scratch)} or path starts with ${JSON.stringify(existsSync(scratch) ? realpathSync(scratch) : scratch)}) saving no`;
+  for (const [cmd, args] of [['osascript', ['-e', `if application "TextEdit" is running then ${closeDocs}`]], ['pkill', ['-x', 'Chess']]]) {
+    try { execFileSync(cmd, args, { stdio: 'ignore' }); } catch {} // nothing to close
+  }
+}
 
 if (!isDryRun) {
   console.log('\n| Arm | Task | Passed | Median s | Median turns | API-price cost |');

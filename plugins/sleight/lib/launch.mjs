@@ -107,9 +107,10 @@ const ICON = join(LIB, '..', 'assets', 'icon.png');
 const ASK_SECONDS = 300;
 
 function askWithDialog(message, sessionScoped) {
-  const app = /"(.+)"/.exec(message)?.[1];
+  // The engine asks 'Allow Computer Use to use "App"?'; sleight's own tools ask in plain words.
+  const app = /^Allow Computer Use to use "(.+)"\?$/.exec(message)?.[1];
   const question = app ? `Allow Claude to use ${app}?` : message;
-  const detail = `Claude can then click and type in ${app ?? 'the app'} in the background. ` +
+  const detail = (app ? `Claude can then click and type in ${app} in the background. ` : '') +
     (sessionScoped ? 'A yes lasts until this Claude session ends.' : 'It asks again next time.');
   const args = ['-l', 'JavaScript', join(LIB, 'ask.js'), question, detail, ICON, String(ASK_SECONDS)];
   return new Promise(resolve => {
@@ -121,6 +122,90 @@ function askWithDialog(message, sessionScoped) {
       resolve('decline');
     });
   });
+}
+
+// sleight's own tools for what the engine can't reach: apps' status items in
+// the menu bar and notification banners (lib/menubar.js, System Events UI
+// scripting). Each app's status item, and notifications as a whole, need the
+// user's approval once per session.
+const MENU_BAR_TOOLS = [
+  {
+    name: 'menu_bar',
+    description: "Use apps' status items in the macOS menu bar (the icons at the right end), which the js tool can't reach. " +
+      'op "apps" lists the apps that have one. "open" clicks an app\'s item and returns its menu (read, then closed again) ' +
+      'or the window it opened, with numbered elements. "choose" clicks the menu item at `path`, a list of titles from the ' +
+      'top menu down. "press" clicks `element` in the open window. "close" closes the menu. `item` picks among several ' +
+      'items of one app (default 0). The user approves each app once per session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        op: { type: 'string', enum: ['apps', 'open', 'choose', 'press', 'close'] },
+        app: { type: 'string', description: 'The app, as "apps" names it' },
+        path: { type: 'array', items: { type: 'string' } },
+        element: { type: 'integer' },
+        item: { type: 'integer' },
+      },
+      required: ['op'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'notifications',
+    description: 'Read the notification banners on screen and press their buttons (such as Close or Snooze), which the js tool ' +
+      'can\'t reach. op "list" returns each banner\'s texts and button names; "press" presses `button` on `banner`. ' +
+      'The user approves notifications once per session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        op: { type: 'string', enum: ['list', 'press'] },
+        banner: { type: 'integer' },
+        button: { type: 'string' },
+      },
+      required: ['op'],
+      additionalProperties: false,
+    },
+  },
+];
+
+function runMenuBar(request) {
+  return new Promise(resolve => {
+    execFile('osascript', ['-l', 'JavaScript', join(LIB, 'menubar.js'), JSON.stringify(request)], { timeout: 30000 }, (err, stdout, stderr) => {
+      try {
+        resolve(JSON.parse(stdout));
+      } catch {
+        resolve({ ok: false, error: stderr.trim() || err?.message || 'no output' });
+      }
+    });
+  });
+}
+
+const text = (value, isError) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 1) }], ...(isError ? { isError: true } : {}) });
+
+async function callMenuBar(name, args, approve) {
+  let request;
+  if (name === 'menu_bar') {
+    if (args.op !== 'apps') {
+      if (!args.app) return text('menu_bar needs `app` for this op.', true);
+      if (!await approve(['menu_bar', args.app], `Allow Claude to use ${args.app}'s menu bar item?`)) {
+        return text(`The user didn't allow ${args.app}'s menu bar item. Stop and tell them; don't work around it.`, true);
+      }
+    }
+    request = args;
+  } else {
+    if (!await approve(['notifications'], 'Allow Claude to read and use your notifications?')) {
+      return text("The user didn't allow notifications. Stop and tell them; don't work around it.", true);
+    }
+    request = args.op === 'list' ? { op: 'notifications' } : { op: 'notify-press', banner: args.banner, button: args.button };
+  }
+  const result = await runMenuBar(request);
+  if (result.ok) {
+    const { ok, ...rest } = result;
+    return text(rest);
+  }
+  const hint = result.accessibility
+    ? ' macOS hasn\'t given the app running Claude Code Accessibility permission. Turn it on under System Settings → Privacy & Security → Accessibility (for Terminal, iTerm or Claude, whichever runs this session).'
+    : '';
+  return text(`${result.error}${hint}`, true);
 }
 
 // SLEIGHT_APPROVAL_PROMPT=dialog or client picks how approvals reach the user;
@@ -150,6 +235,8 @@ function run() {
     // SLEIGHT_APPROVAL_SCOPE=once asks again on every action instead.
     approvalScope: process.env.SLEIGHT_APPROVAL_SCOPE === 'once' ? 'once' : 'session',
     ask: approvalPrompt(),
+    // SLEIGHT_MENU_BAR=0 leaves out the menu bar and notification tools.
+    localTools: process.env.SLEIGHT_MENU_BAR === '0' ? undefined : { tools: MENU_BAR_TOOLS, call: callMenuBar },
     trace: process.env.SLEIGHT_TRACE ? traceTo(process.env.SLEIGHT_TRACE) : undefined,
   });
 

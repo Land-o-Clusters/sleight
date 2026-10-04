@@ -5,8 +5,9 @@ What is true now. One banner, replaced in place as work happens. Always-true rul
 
 ## Banner (2026-10-03, late evening)
 
-Private repo `Land-o-Clusters/sleight`, `main` green in CI. `v0.1.1` is tagged (desktop
-approvals), and the user-scope install on this Mac is updated to it. Nothing is public.
+Private repo `Land-o-Clusters/sleight`, `main` green in CI. `v0.2.0` is tagged, and the user-scope
+install on this Mac is updated to it. Nothing is public. Running sessions keep the version they started
+with, because `/reload-plugins` doesn't restart the server.
 
 App approvals now work in the desktop app's Code tab (`a5f8f37`). The Code tab (Claude 2.19675.0)
 declines MCP prompts unseen, so under `CLAUDE_CODE_ENTRYPOINT=claude-desktop` the relay asks with
@@ -27,10 +28,13 @@ runner checks arm isolation before every run. From now on it defaults to Sonnet 
 (owner), and it records the model each run used. The owner finds the runs tedious, so don't run more
 without a reason.
 
-The engine has no access to menu bar status items or notification banners (measured: its inventory leaves
-out Control Center and Notification Center, and `getApp("com.apple.controlcenter")` times out).
-Reaching them would need sleight's own accessibility path behind its own approval panel. That's a
-scope change, so it's in the owner list below.
+0.2.0 adds `menu_bar` and `notifications` (owner's scope call), because the engine leaves out Control
+Center and Notification Center. They run `lib/menubar.js` through System Events with the host app's
+Accessibility permission, behind sleight's approval per app and once for notifications. Tested live
+with real approvals on Magnet's menu (read, then closed) and a test banner (listed, then closed by its
+Close button). A repeat call came from session memory. Not yet tried: `choose`
+on a real menu item, a popover window (`press`), the terminal's elicitation path live (unit tests
+only), and LogiJuice's Snooze button.
 
 Benchmark costs here are what Claude Code reports at API prices. Runs log in through the owner's
 claude.ai plan, so they use plan limits, not money.
@@ -51,14 +55,9 @@ claude.ai plan, so they use plan limits, not money.
 
 ## Waiting on the owner
 
-- Whether to build menu bar and notification reach (owner's tier 3): sleight's own accessibility
-  reads and clicks for status items and banners, behind sleight's approval panel. It needs macOS
-  Accessibility permission for sleight and steps outside the engine.
 - Whether to add a probe app to the benchmark allowlist, to learn if the engine's drag sends
   intermediate mouse events. Without it we can't tell why text drags fail.
 - Whether to report the desktop app declining MCP prompts to Anthropic (outward-facing).
-- `~/.local/bin/claude` is 2.1.278 and fails `claude plugin validate` on the mod. Checks pass with
-  `PATH=$PWD/.dev/cli/node_modules/.bin:$PATH` (2.1.288, what CI pins). Updating it is the owner's call.
 - The icon's original PNG from ChatGPT as `docs/assets/sleight-icon-source.png`, and optionally a
   small-size version.
 - Before going public: read ChatGPT's terms on the bundled computer-use engine, give LCU's author a

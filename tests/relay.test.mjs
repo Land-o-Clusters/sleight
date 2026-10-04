@@ -271,3 +271,82 @@ test('with ask, other elicitations still go to the client', async () => {
   assert.equal(a.asked.length, 0);
   assert.equal(h.toClient[0].id, 2);
 });
+
+// Local tools: sleight's own tools, answered by the relay.
+function localTools(calls = []) {
+  return {
+    tools: [{ name: 'menu_bar', description: 'local', inputSchema: { type: 'object' } }],
+    call: async (name, args, approve) => {
+      calls.push({ name, args });
+      if (args.app) {
+        const ok = await approve(['menu_bar', args.app], `Allow Claude to use ${args.app}'s menu bar item?`);
+        if (!ok) return { content: [{ type: 'text', text: 'declined' }], isError: true };
+      }
+      return { content: [{ type: 'text', text: `did ${args.op}` }] };
+    },
+  };
+}
+const settle = async () => { for (let i = 0; i < 5; i++) await tick(); };
+
+test('lists local tools after the server tools', async () => {
+  const h = harness({ localTools: localTools() });
+  h.fromClient({ jsonrpc: '2.0', id: 'list', method: 'tools/list' });
+  await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 'list', result: { tools: [{ name: 'js' }] } });
+  await tick();
+  assert.deepEqual(h.toClient[0].result.tools.map(t => t.name), ['js', 'menu_bar']);
+});
+
+test('answers a local tool call itself and never forwards it', async () => {
+  const calls = [];
+  const h = harness({ localTools: localTools(calls) });
+  h.fromClient({ jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'menu_bar', arguments: { op: 'apps' } } });
+  await settle();
+  assert.equal(h.toServer.length, 0);
+  assert.deepEqual(calls, [{ name: 'menu_bar', args: { op: 'apps' } }]);
+  assert.deepEqual(h.toClient[0], { jsonrpc: '2.0', id: 7, result: { content: [{ type: 'text', text: 'did apps' }] } });
+});
+
+test('local approvals go through ask, are remembered when accepted, never when declined', async () => {
+  const a = asker('accept', 'decline', 'accept');
+  const h = harness({ ask: a.ask, localTools: localTools() });
+  const call = (id, app) => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'menu_bar', arguments: { op: 'open', app } } });
+  call(1, 'Magnet'); await settle();
+  call(2, 'Magnet'); await settle();
+  call(3, 'LogiJuice'); await settle();
+  call(4, 'LogiJuice'); await settle();
+  assert.deepEqual(a.asked.map(q => q.message), [
+    "Allow Claude to use Magnet's menu bar item?",
+    "Allow Claude to use LogiJuice's menu bar item?",
+    "Allow Claude to use LogiJuice's menu bar item?",
+  ]);
+  assert.deepEqual(h.toClient.map(m => m.result.isError ?? false), [false, false, true, false]);
+});
+
+test('without ask, local approvals ask the client with an elicitation', async () => {
+  const h = harness({ localTools: localTools() });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'menu_bar', arguments: { op: 'open', app: 'Magnet' } } });
+  await settle();
+  const elicit = h.toClient[0];
+  assert.equal(elicit.method, 'elicitation/create');
+  assert.equal(elicit.params.message, "Allow Claude to use Magnet's menu bar item?");
+  h.fromClient({ jsonrpc: '2.0', id: elicit.id, result: { action: 'accept', content: {} } });
+  await settle();
+  assert.equal(h.toClient[1].id, 1);
+  assert.equal(h.toClient[1].result.isError, undefined);
+  // Remembered for the session: no second elicitation.
+  h.fromClient({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'menu_bar', arguments: { op: 'open', app: 'Magnet' } } });
+  await settle();
+  assert.deepEqual(h.toClient.slice(2).map(m => m.id), [2]);
+  assert.equal(h.toServer.length, 0);
+});
+
+test('a declined client elicitation refuses the local call', async () => {
+  const h = harness({ localTools: localTools() });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'menu_bar', arguments: { op: 'open', app: 'Magnet' } } });
+  await settle();
+  h.fromClient({ jsonrpc: '2.0', id: h.toClient[0].id, result: { action: 'decline' } });
+  await settle();
+  assert.equal(h.toClient[1].result.isError, true);
+  assert.equal(h.toServer.length, 0);
+});
