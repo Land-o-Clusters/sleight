@@ -18,9 +18,14 @@ without a user decision. The remaining Keep panel was interrupted through the
 owned terminal. Session backup deletion passed.
 The third attempt, after the rebase, timed out on its first TextEdit read before
 any approval panel appeared. No file changed. The launcher collected its engine.
-The live Undo/Keep check is pending a restart of ChatGPT.
+The fourth attempt also failed to access TextEdit in the sandbox.
+The fifth read and changed both files, but another live session held a lease
+and blocked review before prompting. The engine responded without a restart.
+The sixth changed both files and displayed review panels. Both decisions recorded Keep,
+so the undo assertion failed. The first button choice needs confirmation.
+The live Undo/Keep check is pending.
 
-[Results](2026-10-04-change-review-guard.json) preserve attempts 1, 2 and 3, including
+[Results](2026-10-04-change-review-guard.json) preserve attempts 1 through 6, including
 their full harness results and relevant relay events. Home paths use `~`.
 Vendor API documentation is omitted. Dialog recovery is covered by unit tests.
 `bench/run.mjs` was not run, because sleight-arch runs that pass at merge.

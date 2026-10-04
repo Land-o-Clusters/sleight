@@ -256,6 +256,317 @@
           "msg": {}
         }
       ]
+    },
+    {
+      "attempt": 4,
+      "command": "node bench/change-review.mjs",
+      "exitCode": 1,
+      "environment": "workspace sandbox",
+      "base": "b1a0556",
+      "commit": "eb11c5f",
+      "source": "/private/tmp/sleight-change-review-NEbs4M/results.json",
+      "note": "Sandbox fixture could not access TextEdit (-2700)",
+      "stages": [
+        {
+          "verdict": "FAIL",
+          "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/change-review-guard/bench/document-scope-fixture.js open /private/tmp/sleight-change-review-NEbs4M/UNDO-NEbs4M.txt /private/tmp/sleight-change-review-NEbs4M/KEEP-NEbs4M.txt\n~/Projects/sleight-wt/codex/change-review-guard/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+        },
+        {
+          "cleanupError": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/change-review-guard/bench/document-scope-fixture.js close /private/tmp/sleight-change-review-NEbs4M/UNDO-NEbs4M.txt /private/tmp/sleight-change-review-NEbs4M/KEEP-NEbs4M.txt\n~/Projects/sleight-wt/codex/change-review-guard/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+        }
+      ],
+      "traceFile": "/private/tmp/sleight-change-review-NEbs4M/trace.jsonl",
+      "relayEvents": []
+    },
+    {
+      "attempt": 5,
+      "command": "node bench/change-review.mjs",
+      "exitCode": 1,
+      "environment": "host",
+      "base": "b1a0556",
+      "commit": "eb11c5f",
+      "source": "/private/tmp/sleight-change-review-E1DWXM/results.json",
+      "note": "Engine read and changed both files; another live session held a lease and blocked review before prompting",
+      "stages": [
+        {
+          "name": "js",
+          "args": {
+            "code": "let app = await cua.getApp(\"TextEdit\")"
+          },
+          "isError": false,
+          "window": {
+            "title": "UNDO-E1DWXM.txt",
+            "app": "TextEdit",
+            "url": "file:///private/tmp/sleight-change-review-E1DWXM/UNDO-E1DWXM.txt"
+          },
+          "text": [
+            "Window: \"UNDO-E1DWXM.txt\", App: TextEdit.\n0 standard window UNDO-E1DWXM.txt, URL: file:///private/tmp/sleight-change-review-E1DWXM/UNDO-E1DWXM.txt, Secondary Actions: Raise\n\t1 scroll area Secondary Actions: Scroll Left, Scroll Right, Scroll Up, Scroll Down\n\t\t2 text entry area (settable) ID: First Text View, Value: UNDO ORIGINAL\n\n\t\t3 scroll bar (disabled, settable, float) 0.1851851791143417\n\t\t4 scroll bar (disabled, settable, float) 0\n\t5 close button\n\t6 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t7 minimize button\n\t8 menu button (disabled) document actions\n\t9 image UNDO-E1DWXM.txt\n\t10 text UNDO-E1DWXM.txt\n11 menu bar\n\t12 TextEdit\n\t13 File\n\t14 Edit\n\t15 Format\n\t16 View\n\t17 Window\n\t18 Help\n\nThe focused UI element is 2 text entry area (settable) ID: First Text View, Value: UNDO ORIGINAL\n"
+          ]
+        },
+        {
+          "name": "js",
+          "args": {
+            "code": "await app.pressKey(\"super+a\"); await app.typeText(\"UNDO AGENT CHANGE\\n\"); await app.pressKey(\"super+s\");"
+          },
+          "isError": false,
+          "window": {
+            "title": "UNDO-E1DWXM.txt",
+            "app": "TextEdit",
+            "url": "file:///private/tmp/sleight-change-review-E1DWXM/UNDO-E1DWXM.txt"
+          },
+          "text": [
+            "Window: \"UNDO-E1DWXM.txt\", App: TextEdit.\n0 standard window UNDO-E1DWXM.txt, URL: file:///private/tmp/sleight-change-review-E1DWXM/UNDO-E1DWXM.txt, Secondary Actions: Raise\n\t1 scroll area Secondary Actions: Scroll Left, Scroll Right, Scroll Up, Scroll Down\n\t\t2 text entry area (settable) ID: First Text View, Value: UNDO AGENT CHANGE\n\n\t\t3 scroll bar (disabled, settable, float) 0.1851851791143417\n\t\t4 scroll bar (disabled, settable, float) 0\n\t5 close button\n\t6 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t7 minimize button\n\t8 menu button (disabled) document actions\n\t9 image UNDO-E1DWXM.txt\n\t10 text UNDO-E1DWXM.txt\n11 menu bar\n\t12 TextEdit\n\t13 File\n\t14 Edit\n\t15 Format\n\t16 View\n\t17 Window\n\t18 Help\n\nThe focused UI element is 2 text entry area (settable) ID: First Text View, Value: UNDO AGENT CHANGE\n"
+          ]
+        },
+        {
+          "name": "js",
+          "args": {
+            "code": "let app = await cua.getApp(\"TextEdit\")"
+          },
+          "isError": false,
+          "window": {
+            "title": "KEEP-E1DWXM.txt",
+            "app": "TextEdit",
+            "url": "file:///private/tmp/sleight-change-review-E1DWXM/KEEP-E1DWXM.txt"
+          },
+          "text": [
+            "Window: \"KEEP-E1DWXM.txt\", App: TextEdit.\n0 standard window KEEP-E1DWXM.txt, URL: file:///private/tmp/sleight-change-review-E1DWXM/KEEP-E1DWXM.txt, Secondary Actions: Raise\n\t1 scroll area Secondary Actions: Scroll Left, Scroll Right, Scroll Up, Scroll Down\n\t\t2 text entry area (settable) ID: First Text View, Value: KEEP ORIGINAL\n\n\t\t3 scroll bar (disabled, settable, float) 0.1851851791143417\n\t\t4 scroll bar (disabled, settable, float) 0\n\t5 close button\n\t6 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t7 minimize button\n\t8 menu button (disabled) document actions\n\t9 image KEEP-E1DWXM.txt\n\t10 text KEEP-E1DWXM.txt\n11 menu bar\n\t12 TextEdit\n\t13 File\n\t14 Edit\n\t15 Format\n\t16 View\n\t17 Window\n\t18 Help\n\nThe focused UI element is 2 text entry area (settable) ID: First Text View, Value: KEEP ORIGINAL\n"
+          ]
+        },
+        {
+          "name": "js",
+          "args": {
+            "code": "await app.pressKey(\"super+a\"); await app.typeText(\"KEEP AGENT CHANGE\\n\"); await app.pressKey(\"super+s\");"
+          },
+          "isError": false,
+          "window": {
+            "title": "KEEP-E1DWXM.txt",
+            "app": "TextEdit",
+            "url": "file:///private/tmp/sleight-change-review-E1DWXM/KEEP-E1DWXM.txt"
+          },
+          "text": [
+            "Window: \"KEEP-E1DWXM.txt\", App: TextEdit.\n0 standard window KEEP-E1DWXM.txt, URL: file:///private/tmp/sleight-change-review-E1DWXM/KEEP-E1DWXM.txt, Secondary Actions: Raise\n\t1 scroll area Secondary Actions: Scroll Left, Scroll Right, Scroll Up, Scroll Down\n\t\t2 text entry area (settable) ID: First Text View, Value: KEEP AGENT CHANGE\n\n\t\t3 scroll bar (disabled, settable, float) 0.1851851791143417\n\t\t4 scroll bar (disabled, settable, float) 0\n\t5 close button\n\t6 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t7 minimize button\n\t8 menu button (disabled) document actions\n\t9 image KEEP-E1DWXM.txt\n\t10 text KEEP-E1DWXM.txt\n11 menu bar\n\t12 TextEdit\n\t13 File\n\t14 Edit\n\t15 Format\n\t16 View\n\t17 Window\n\t18 Help\n\nThe focused UI element is 2 text entry area (settable) ID: First Text View, Value: KEEP AGENT CHANGE\n"
+          ]
+        },
+        {
+          "name": "review_changes",
+          "args": {
+            "op": "list"
+          },
+          "isError": false,
+          "window": null,
+          "text": [
+            "UNDO-E1DWXM.txt: /private/tmp/sleight-change-review-E1DWXM/UNDO-E1DWXM.txt\nDecision: pending\nBefore: 14 bytes, modified 2026-10-04T15:04:00.912Z\nAfter: 18 bytes, modified 2026-10-04T15:04:04.471Z\n--- before: /private/tmp/sleight-change-review-E1DWXM/UNDO-E1DWXM.txt\n+++ after: /private/tmp/sleight-change-review-E1DWXM/UNDO-E1DWXM.txt\n@@ -1 +1 @@\n-UNDO ORIGINAL\n+UNDO AGENT CHANGE\n\n\nKEEP-E1DWXM.txt: /private/tmp/sleight-change-review-E1DWXM/KEEP-E1DWXM.txt\nDecision: pending\nBefore: 14 bytes, modified 2026-10-04T15:04:00.912Z\nAfter: 18 bytes, modified 2026-10-04T15:04:06.078Z\n--- before: /private/tmp/sleight-change-review-E1DWXM/KEEP-E1DWXM.txt\n+++ after: /private/tmp/sleight-change-review-E1DWXM/KEEP-E1DWXM.txt\n@@ -1 +1 @@\n-KEEP ORIGINAL\n+KEEP AGENT CHANGE\n"
+          ]
+        },
+        {
+          "name": "review_changes",
+          "args": {
+            "op": "review"
+          },
+          "isError": true,
+          "window": null,
+          "text": [
+            "Input lease: held by session 9608cfa3-7457-47a5-a816-566842cc1c12 (pid 59171); 29 s remaining. Stop actions and retry after that turn ends or the lease expires."
+          ]
+        },
+        {
+          "verdict": "FAIL",
+          "error": "Input lease: held by session 9608cfa3-7457-47a5-a816-566842cc1c12 (pid 59171); 29 s remaining. Stop actions and retry after that turn ends or the lease expires."
+        },
+        {
+          "backupCleanup": "PASS",
+          "directories": [
+            "/private/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-review-RqG3c4"
+          ]
+        }
+      ],
+      "traceFile": "/private/tmp/sleight-change-review-E1DWXM/trace.jsonl",
+      "relayEvents": [
+        {
+          "t": "2026-10-04T15:04:03.385Z",
+          "direction": "snapshot-before-call",
+          "msg": {
+            "id": 2,
+            "path": "/private/tmp/sleight-change-review-E1DWXM/UNDO-E1DWXM.txt",
+            "directory": "/private/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-review-RqG3c4",
+            "snapshot": "/private/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-review-RqG3c4/0"
+          }
+        },
+        {
+          "t": "2026-10-04T15:04:05.097Z",
+          "direction": "snapshot-before-call",
+          "msg": {
+            "id": 4,
+            "path": "/private/tmp/sleight-change-review-E1DWXM/KEEP-E1DWXM.txt",
+            "directory": "/private/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-review-RqG3c4",
+            "snapshot": "/private/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-review-RqG3c4/1"
+          }
+        },
+        {
+          "t": "2026-10-04T15:04:06.741Z",
+          "direction": "change-snapshots-deleted",
+          "msg": {
+            "directory": "/private/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-review-RqG3c4"
+          }
+        }
+      ]
+    },
+    {
+      "attempt": 6,
+      "command": "node bench/change-review.mjs",
+      "exitCode": 1,
+      "environment": "host",
+      "base": "b1a0556",
+      "commit": "eb11c5f",
+      "source": "/private/tmp/sleight-change-review-nku6Dm/results.json",
+      "note": "Both native review decisions recorded Keep; undo assertion failed; awaiting confirmation of first button choice",
+      "stages": [
+        {
+          "name": "js",
+          "args": {
+            "code": "let app = await cua.getApp(\"TextEdit\")"
+          },
+          "isError": false,
+          "window": {
+            "title": "UNDO-nku6Dm.txt",
+            "app": "TextEdit",
+            "url": "file:///private/tmp/sleight-change-review-nku6Dm/UNDO-nku6Dm.txt"
+          },
+          "text": [
+            "Window: \"UNDO-nku6Dm.txt\", App: TextEdit.\n0 standard window UNDO-nku6Dm.txt, URL: file:///private/tmp/sleight-change-review-nku6Dm/UNDO-nku6Dm.txt, Secondary Actions: Raise\n\t1 scroll area Secondary Actions: Scroll Left, Scroll Right, Scroll Up, Scroll Down\n\t\t2 text entry area (settable) ID: First Text View, Value: UNDO ORIGINAL\n\n\t\t3 scroll bar (disabled, settable, float) 0.1851851791143417\n\t\t4 scroll bar (disabled, settable, float) 0\n\t5 close button\n\t6 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t7 minimize button\n\t8 menu button (disabled) document actions\n\t9 image UNDO-nku6Dm.txt\n\t10 text UNDO-nku6Dm.txt\n11 menu bar\n\t12 TextEdit\n\t13 File\n\t14 Edit\n\t15 Format\n\t16 View\n\t17 Window\n\t18 Help\n\nThe focused UI element is 2 text entry area (settable) ID: First Text View, Value: UNDO ORIGINAL\n"
+          ]
+        },
+        {
+          "name": "js",
+          "args": {
+            "code": "await app.pressKey(\"super+a\"); await app.typeText(\"UNDO AGENT CHANGE\\n\"); await app.pressKey(\"super+s\");"
+          },
+          "isError": false,
+          "window": {
+            "title": "UNDO-nku6Dm.txt",
+            "app": "TextEdit",
+            "url": "file:///private/tmp/sleight-change-review-nku6Dm/UNDO-nku6Dm.txt"
+          },
+          "text": [
+            "Window: \"UNDO-nku6Dm.txt\", App: TextEdit.\n0 standard window UNDO-nku6Dm.txt, URL: file:///private/tmp/sleight-change-review-nku6Dm/UNDO-nku6Dm.txt, Secondary Actions: Raise\n\t1 scroll area Secondary Actions: Scroll Left, Scroll Right, Scroll Up, Scroll Down\n\t\t2 text entry area (settable) ID: First Text View, Value: UNDO AGENT CHANGE\n\n\t\t3 scroll bar (disabled, settable, float) 0.1851851791143417\n\t\t4 scroll bar (disabled, settable, float) 0\n\t5 close button\n\t6 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t7 minimize button\n\t8 menu button (disabled) document actions\n\t9 image UNDO-nku6Dm.txt\n\t10 text UNDO-nku6Dm.txt\n11 menu bar\n\t12 TextEdit\n\t13 File\n\t14 Edit\n\t15 Format\n\t16 View\n\t17 Window\n\t18 Help\n\nThe focused UI element is 2 text entry area (settable) ID: First Text View, Value: UNDO AGENT CHANGE\n"
+          ]
+        },
+        {
+          "name": "js",
+          "args": {
+            "code": "let app = await cua.getApp(\"TextEdit\")"
+          },
+          "isError": false,
+          "window": {
+            "title": "KEEP-nku6Dm.txt",
+            "app": "TextEdit",
+            "url": "file:///private/tmp/sleight-change-review-nku6Dm/KEEP-nku6Dm.txt"
+          },
+          "text": [
+            "Window: \"KEEP-nku6Dm.txt\", App: TextEdit.\n0 standard window KEEP-nku6Dm.txt, URL: file:///private/tmp/sleight-change-review-nku6Dm/KEEP-nku6Dm.txt, Secondary Actions: Raise\n\t1 scroll area Secondary Actions: Scroll Left, Scroll Right, Scroll Up, Scroll Down\n\t\t2 text entry area (settable) ID: First Text View, Value: KEEP ORIGINAL\n\n\t\t3 scroll bar (disabled, settable, float) 0.1851851791143417\n\t\t4 scroll bar (disabled, settable, float) 0\n\t5 close button\n\t6 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t7 minimize button\n\t8 menu button (disabled) document actions\n\t9 image KEEP-nku6Dm.txt\n\t10 text KEEP-nku6Dm.txt\n11 menu bar\n\t12 TextEdit\n\t13 File\n\t14 Edit\n\t15 Format\n\t16 View\n\t17 Window\n\t18 Help\n\nThe focused UI element is 2 text entry area (settable) ID: First Text View, Value: KEEP ORIGINAL\n"
+          ]
+        },
+        {
+          "name": "js",
+          "args": {
+            "code": "await app.pressKey(\"super+a\"); await app.typeText(\"KEEP AGENT CHANGE\\n\"); await app.pressKey(\"super+s\");"
+          },
+          "isError": false,
+          "window": {
+            "title": "KEEP-nku6Dm.txt",
+            "app": "TextEdit",
+            "url": "file:///private/tmp/sleight-change-review-nku6Dm/KEEP-nku6Dm.txt"
+          },
+          "text": [
+            "Window: \"KEEP-nku6Dm.txt\", App: TextEdit.\n0 standard window KEEP-nku6Dm.txt, URL: file:///private/tmp/sleight-change-review-nku6Dm/KEEP-nku6Dm.txt, Secondary Actions: Raise\n\t1 scroll area Secondary Actions: Scroll Left, Scroll Right, Scroll Up, Scroll Down\n\t\t2 text entry area (settable) ID: First Text View, Value: KEEP AGENT CHANGE\n\n\t\t3 scroll bar (disabled, settable, float) 0.1851851791143417\n\t\t4 scroll bar (disabled, settable, float) 0\n\t5 close button\n\t6 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t7 minimize button\n\t8 menu button (disabled) document actions\n\t9 image KEEP-nku6Dm.txt\n\t10 text KEEP-nku6Dm.txt\n11 menu bar\n\t12 TextEdit\n\t13 File\n\t14 Edit\n\t15 Format\n\t16 View\n\t17 Window\n\t18 Help\n\nThe focused UI element is 2 text entry area (settable) ID: First Text View, Value: KEEP AGENT CHANGE\n"
+          ]
+        },
+        {
+          "name": "review_changes",
+          "args": {
+            "op": "list"
+          },
+          "isError": false,
+          "window": null,
+          "text": [
+            "UNDO-nku6Dm.txt: /private/tmp/sleight-change-review-nku6Dm/UNDO-nku6Dm.txt\nDecision: pending\nBefore: 14 bytes, modified 2026-10-04T15:05:07.263Z\nAfter: 18 bytes, modified 2026-10-04T15:05:10.691Z\n--- before: /private/tmp/sleight-change-review-nku6Dm/UNDO-nku6Dm.txt\n+++ after: /private/tmp/sleight-change-review-nku6Dm/UNDO-nku6Dm.txt\n@@ -1 +1 @@\n-UNDO ORIGINAL\n+UNDO AGENT CHANGE\n\n\nKEEP-nku6Dm.txt: /private/tmp/sleight-change-review-nku6Dm/KEEP-nku6Dm.txt\nDecision: pending\nBefore: 14 bytes, modified 2026-10-04T15:05:07.263Z\nAfter: 18 bytes, modified 2026-10-04T15:05:12.399Z\n--- before: /private/tmp/sleight-change-review-nku6Dm/KEEP-nku6Dm.txt\n+++ after: /private/tmp/sleight-change-review-nku6Dm/KEEP-nku6Dm.txt\n@@ -1 +1 @@\n-KEEP ORIGINAL\n+KEEP AGENT CHANGE\n"
+          ]
+        },
+        {
+          "name": "review_changes",
+          "args": {
+            "op": "review"
+          },
+          "isError": false,
+          "window": null,
+          "text": [
+            "/private/tmp/sleight-change-review-nku6Dm/UNDO-nku6Dm.txt: kept. Saved file retained.\n/private/tmp/sleight-change-review-nku6Dm/KEEP-nku6Dm.txt: kept. Saved file retained."
+          ]
+        },
+        {
+          "contents": {
+            "first": "UNDO AGENT CHANGE\n",
+            "second": "KEEP AGENT CHANGE\n"
+          }
+        },
+        {
+          "verdict": "FAIL",
+          "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'UNDO AGENT CHANGE\\n'\n- 'UNDO ORIGINAL\\n'\n        ^\n"
+        },
+        {
+          "backupCleanup": "PASS",
+          "directories": [
+            "/private/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-review-HYBK9P"
+          ]
+        }
+      ],
+      "traceFile": "/private/tmp/sleight-change-review-nku6Dm/trace.jsonl",
+      "relayEvents": [
+        {
+          "t": "2026-10-04T15:05:09.635Z",
+          "direction": "snapshot-before-call",
+          "msg": {
+            "id": 2,
+            "path": "/private/tmp/sleight-change-review-nku6Dm/UNDO-nku6Dm.txt",
+            "directory": "/private/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-review-HYBK9P",
+            "snapshot": "/private/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-review-HYBK9P/0"
+          }
+        },
+        {
+          "t": "2026-10-04T15:05:11.317Z",
+          "direction": "snapshot-before-call",
+          "msg": {
+            "id": 4,
+            "path": "/private/tmp/sleight-change-review-nku6Dm/KEEP-nku6Dm.txt",
+            "directory": "/private/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-review-HYBK9P",
+            "snapshot": "/private/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-review-HYBK9P/1"
+          }
+        },
+        {
+          "t": "2026-10-04T15:05:17.996Z",
+          "direction": "review-decision",
+          "msg": {
+            "path": "/private/tmp/sleight-change-review-nku6Dm/UNDO-nku6Dm.txt",
+            "decision": "keep"
+          }
+        },
+        {
+          "t": "2026-10-04T15:05:19.416Z",
+          "direction": "review-decision",
+          "msg": {
+            "path": "/private/tmp/sleight-change-review-nku6Dm/KEEP-nku6Dm.txt",
+            "decision": "keep"
+          }
+        },
+        {
+          "t": "2026-10-04T15:05:19.424Z",
+          "direction": "change-snapshots-deleted",
+          "msg": {
+            "directory": "/private/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-review-HYBK9P"
+          }
+        }
+      ]
     }
   ]
 }
