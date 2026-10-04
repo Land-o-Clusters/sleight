@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 (2026-10-04)
+
+- `SLEIGHT_APPROVAL_SCOPE=document` approves one window or document for the session instead of a
+  whole app, through a new `document_scope` tool. The relay forwards actions only while the last
+  observed window matches, and stops when a result shows a different window. It guards against
+  mistakes; code running in the engine can get around it (`docs/design/document-scope.md`). Built by
+  Codex; live check: the approved TextEdit document was edited and a write to a second one never
+  reached the engine.
+- Background drag research (`bench/background-drag/`, not in the plugin): full sequences reached the
+  probe app in 5/5 quiet trials and 2/5 during real use, but TextEdit text moved 0/10.
+- The weekly watch saves the engine's API docs and diffs them when the engine updates.
+
 ## 0.3.1 (2026-10-04)
 
 - The relay ends the engine's turn after 30 s without a running call. In the desktop app, where the mod

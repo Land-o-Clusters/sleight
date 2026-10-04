@@ -73,6 +73,13 @@ sleight's `menu_bar` and `notifications` tools can:
 - The user approves each app's icon, and notifications as a whole, once per session. If they don't,
   stop and tell them.
 
+## Document scope
+
+When the user has set `SLEIGHT_APPROVAL_SCOPE=document`, approvals cover one window or document. Start
+with a `js` call that only gets the app, then call `document_scope` so the user can approve that
+document. If a result says document scope stopped, don't retry: read the intended window again and
+ask with `document_scope`.
+
 ## Saving to a path
 
 In a save dialog, `app.pressKey("super+shift+g")` opens Go to Folder. Set the folder there and press

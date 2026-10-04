@@ -383,7 +383,8 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 - [ ] The same drag in the background, without moving the pointer
 - [ ] The pane, status line and `/sleight stop` in the desktop app, once its Claude Code reaches 2.1.287
 - [ ] Linux and Windows, where the engine has builds that sleight hasn't tried
-- [ ] Approve one document instead of a whole app
+- [x] Approve one document instead of a whole app (`SLEIGHT_APPROVAL_SCOPE=document`, a guard against
+  mistakes rather than a security boundary)
 - [ ] A before-and-after review of changes across apps, which you can accept or undo
 - [ ] Rules for what data may move from one app to another
 
