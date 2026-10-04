@@ -259,7 +259,7 @@ panel, Escape means no, and it gives up after five minutes. Session memory works
 on disk or the exact answer. sleight and LCU get the same prompt for each task, and the prompts
 don't mention a tool by name.
 
-Comparison with [LCU](https://github.com/0xpolarzero/lcu) 0.8.8, which drives the same engine, on
+Comparison with [LCU](https://github.com/amontlabs/lcu) 0.8.8, which drives the same engine, on
 2026-10-03. Each task ran 3 times per arm on Claude Code 2.1.288 and its default model (Opus 5.5).
 Each arm ran from an empty folder, with only its own tool loaded:
 
@@ -352,7 +352,7 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 ## Credits
 
 - [@argofowl](https://x.com/argofowl) showed that the ChatGPT app's computer-use server works outside Codex.
-- [LCU](https://github.com/0xpolarzero/lcu) by 0xpolarzero takes the same idea across several harnesses, and its notes mapped out how the runtime's lifecycle works.
+- [LCU](https://github.com/amontlabs/lcu), started by 0xpolarzero, takes the same idea across several harnesses, and its notes mapped out how the runtime's lifecycle works.
 - The icon started as an image from ChatGPT's image generation.
 
 ## License

@@ -9,7 +9,7 @@
 // before that used Claude Code's default, Opus 5.5.
 //
 // Arms: `sleight` loads this repo's plugin. `lcu` runs from a folder where LCU
-// (github.com/0xpolarzero/lcu) was registered for Claude Code at project scope:
+// (github.com/amontlabs/lcu) was registered for Claude Code at project scope:
 //   lcu setup --agent claude-code --scope project --project <dir> --no-chrome --no-audio --yes
 // The folder is LCU_ARM_DIR (default .dev/lcu-arm), and LCU needs Python 3.12+
 // first on PATH (LCU_PATH_PREFIX, default .dev/py). BENCH_ROOT tells the
