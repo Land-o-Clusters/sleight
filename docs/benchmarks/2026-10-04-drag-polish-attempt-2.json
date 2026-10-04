@@ -1,0 +1,272 @@
+{
+  "started": "2026-10-04T13:36:15.354Z",
+  "runs": [
+    {
+      "n": 1,
+      "path": "/private/tmp/sleight-drag-polish-NMgtTm/drag-polish-1.txt",
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "selection": {
+        "active": false,
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": true,
+        "ok": true,
+        "selected": "alpha",
+        "to": [
+          118.9609375,
+          25.5
+        ],
+        "windowId": 235985
+      },
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"TextEdit\",\n \"from\": [\n  26.556396484375,\n  38.5\n ],\n \"to\": [\n  118.9609375,\n  25.5\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"spaceInserted\": false\n}"
+            }
+          ]
+        }
+      },
+      "after": {
+        "active": false,
+        "ok": true,
+        "text": "alpha beta gamma\n"
+      },
+      "passed": false
+    },
+    {
+      "n": 2,
+      "path": "/private/tmp/sleight-drag-polish-NMgtTm/drag-polish-2.txt",
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "selection": {
+        "active": false,
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": true,
+        "ok": true,
+        "selected": "alpha",
+        "to": [
+          118.9609375,
+          25.5
+        ],
+        "windowId": 235993
+      },
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"TextEdit\",\n \"from\": [\n  26.556396484375,\n  38.5\n ],\n \"to\": [\n  118.9609375,\n  25.5\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"spaceInserted\": false\n}"
+            }
+          ]
+        }
+      },
+      "after": {
+        "active": false,
+        "ok": true,
+        "text": "alpha beta gamma\n"
+      },
+      "passed": false
+    },
+    {
+      "n": 3,
+      "path": "/private/tmp/sleight-drag-polish-NMgtTm/drag-polish-3.txt",
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "selection": {
+        "active": false,
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": true,
+        "ok": true,
+        "selected": "alpha",
+        "to": [
+          118.9609375,
+          25.5
+        ],
+        "windowId": 235998
+      },
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"TextEdit\",\n \"from\": [\n  26.556396484375,\n  38.5\n ],\n \"to\": [\n  118.9609375,\n  25.5\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"spaceInserted\": false\n}"
+            }
+          ]
+        }
+      },
+      "after": {
+        "active": false,
+        "ok": true,
+        "text": "alpha beta gamma\n"
+      },
+      "passed": false
+    }
+  ],
+  "trace": [
+    {
+      "t": "2026-10-04T13:36:17.092Z",
+      "direction": "from-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+          "name": "drag",
+          "arguments": {
+            "app": "TextEdit",
+            "from": [
+              26.556396484375,
+              38.5
+            ],
+            "to": [
+              118.9609375,
+              25.5
+            ]
+          }
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T13:36:17.240Z",
+      "direction": "local-approval",
+      "msg": {
+        "key": "[\"sleight\",\"drag\",\"TextEdit\"]",
+        "action": "accept"
+      }
+    },
+    {
+      "t": "2026-10-04T13:36:24.384Z",
+      "direction": "to-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"TextEdit\",\n \"from\": [\n  26.556396484375,\n  38.5\n ],\n \"to\": [\n  118.9609375,\n  25.5\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"spaceInserted\": false\n}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T13:36:26.403Z",
+      "direction": "from-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+          "name": "drag",
+          "arguments": {
+            "app": "TextEdit",
+            "from": [
+              26.556396484375,
+              38.5
+            ],
+            "to": [
+              118.9609375,
+              25.5
+            ]
+          }
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T13:36:29.789Z",
+      "direction": "to-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"TextEdit\",\n \"from\": [\n  26.556396484375,\n  38.5\n ],\n \"to\": [\n  118.9609375,\n  25.5\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"spaceInserted\": false\n}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T13:36:31.824Z",
+      "direction": "from-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "name": "drag",
+          "arguments": {
+            "app": "TextEdit",
+            "from": [
+              26.556396484375,
+              38.5
+            ],
+            "to": [
+              118.9609375,
+              25.5
+            ]
+          }
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T13:36:35.239Z",
+      "direction": "to-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"TextEdit\",\n \"from\": [\n  26.556396484375,\n  38.5\n ],\n \"to\": [\n  118.9609375,\n  25.5\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"spaceInserted\": false\n}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T13:36:35.658Z",
+      "direction": "to-server",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": "sleight-0",
+        "method": "tools/call",
+        "params": {
+          "name": "turn_ended",
+          "arguments": {
+            "hook_event_name": "Stop",
+            "session_id": "drag-polish-54570",
+            "turn_id": "cf5b185a-9223-42d6-a8c1-90c656fef3a6"
+          }
+        }
+      }
+    }
+  ],
+  "approvals": [
+    {
+      "message": "Allow Claude to drag in TextEdit? It moves your pointer for a few seconds.",
+      "action": "accept"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "command": "sh bench/drag-polish-live.sh docs/benchmarks/2026-10-04-drag-polish-menu-attempt-1.json --menu-only",
+  "terminalSession": 67294,
+  "exitCode": 1,
+  "terminalOutput": "^C",
+  "stoppedBeforeLock": true,
+  "runs": [],
+  "approvals": [],
+  "note": "The shared live lock remained owned by another session. Interrupted the waiting command once through its retained terminal handle. The Node harness never started, no app was driven, and the other session's lock was preserved. No live popover result is claimed."
+}

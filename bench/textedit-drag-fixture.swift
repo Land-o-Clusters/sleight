@@ -37,9 +37,9 @@ if let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com
     }), let area = textArea(window) {
         if op == "select" {
             let status = AXUIElementSetAttributeValue(area, "AXSelectedTextRange" as CFString, rangeValue(0, 5))
-            let start = rect(area, 0, 5)
-            let end = rect(area, 16, 0)
-            let lastGlyph = rect(area, 15, 1)
+            let start = rect(area, 2, 1)
+            let end = rect(area, 15, 1)
+            let lastGlyph = end
             var point = CGPoint.zero
             if let pos = attr(window, "AXPosition"), CFGetTypeID(pos) == AXValueGetTypeID() {
                 _ = AXValueGetValue(unsafeBitCast(pos, to: AXValue.self), .cgPoint, &point)
@@ -48,7 +48,9 @@ if let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com
                       "active": app.isActive]
             if let start, let end {
                 output["from"] = [Double(start.midX - point.x), Double(start.midY - point.y)]
-                output["to"] = [Double(end.midX - point.x + 3), Double(end.midY - point.y)]
+                output["to"] = [Double(end.maxX - point.x + 3), Double(end.midY - point.y)]
+                output["sourceRect"] = [start.minX, start.minY, start.width, start.height]
+                output["lastGlyphRect"] = [end.minX, end.minY, end.width, end.height]
             }
             if let start, let lastGlyph {
                 output["startBounds"] = [Double(start.minX), Double(start.minY), Double(start.width), Double(start.height)]
@@ -64,7 +66,16 @@ if let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com
                       let rect = CGRect(dictionaryRepresentation: b) else { return false }
                 return rect.origin == point
             }
-            if matches.count == 1 { output["windowId"] = matches[0][kCGWindowNumber as String] }
+            if matches.count == 1 {
+                output["windowId"] = matches[0][kCGWindowNumber as String]
+                let own = info.filter { ($0[kCGWindowOwnerPID as String] as? Int) == Int(app.processIdentifier) && ($0[kCGWindowLayer as String] as? Int) == 0 }
+                let largest = own.max { a, b in
+                    let ra = CGRect(dictionaryRepresentation: a[kCGWindowBounds as String] as! NSDictionary)!
+                    let rb = CGRect(dictionaryRepresentation: b[kCGWindowBounds as String] as! NSDictionary)!
+                    return ra.width * ra.height < rb.width * rb.height
+                }
+                output["isLargestWindow"] = (largest?[kCGWindowNumber as String] as? Int) == (matches[0][kCGWindowNumber as String] as? Int)
+            }
             else { output["ok"] = false }
         } else if op == "ax-drag" {
             var names: CFArray?
