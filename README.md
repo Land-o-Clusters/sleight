@@ -222,6 +222,10 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   any app blocks your organization sets.
 - `claude -p` can't answer approval prompts, so headless runs only get apps already approved in that
   session.
+- Document scope checks the last observed window before forwarding a call and stops on changed or
+  missing Window/URL headers. Its injected action guard checks again, but arbitrary JavaScript can
+  bypass it or forge observations. Result checks cannot undo actions already taken. Discovery reads
+  can expose other windows' contents, and equal titles without URLs are indistinguishable.
 - It's macOS on Apple Silicon only. The engine has Linux and Windows builds, but sleight hasn't been
   tested on either.
 
@@ -242,6 +246,14 @@ has accept and decline, so without help you'd get asked on every click. The rela
 
 To get asked on every action instead, set `SLEIGHT_APPROVAL_SCOPE=once` in Claude Code's environment.
 The `env` block of `~/.claude/settings.json` works.
+
+Set `SLEIGHT_APPROVAL_SCOPE=document` to approve a document or window for the session instead.
+First call `js` with only `let app = await cua.getApp("TextEdit")` (or select a window with
+`cua.getApp({ windowId: 123 })`), then call `document_scope`: the prompt specifies the observed window
+and document URL. A different window stops further actions until you read it and ask the user again;
+`drag`, `menu_bar`, `notifications` and resets are unavailable in this mode.
+This guards mistakes in cooperative code. [The design](docs/design/document-scope.md) lists what
+the relay enforces and how arbitrary JavaScript can bypass the checks.
 
 In the desktop app's Code tab, sleight asks with its own prompt instead: a small panel with
 sleight's icon, Allow and Don't Allow. It plays a sound and opens on the display under the pointer,

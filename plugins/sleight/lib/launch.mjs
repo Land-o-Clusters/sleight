@@ -262,7 +262,7 @@ function run() {
     serverIn: child.stdin,
     serverOut: child.stdout,
     // SLEIGHT_APPROVAL_SCOPE=once asks again on every action instead.
-    approvalScope: process.env.SLEIGHT_APPROVAL_SCOPE === 'once' ? 'once' : 'session',
+    approvalScope: ['once', 'document'].includes(process.env.SLEIGHT_APPROVAL_SCOPE) ? process.env.SLEIGHT_APPROVAL_SCOPE : 'session',
     ask: approvalPrompt(),
     // End the engine's turn after 30 s without a running call, so the app it
     // holds is released even where the mod doesn't run. 0 turns this off.
