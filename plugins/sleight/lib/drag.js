@@ -61,8 +61,9 @@ function axWindow(pid, window) {
 }
 function content(win, bounds) {
   const areas = [], toolbars = [];
+  let visited = 0;
   const walk = (el, parent, depth) => {
-    if (depth > 12) return;
+    if (depth > 12 || ++visited > 300) throw new Error('AX content scan exceeded its depth or 300-element limit');
     const role = attempt(() => el.role(), '');
     const own = attempt(() => frame(el), null);
     const visible = own ? clip(parent, own) : parent;
@@ -225,7 +226,8 @@ function run(argv) {
     const outcome = finishTextDrop(text, main);
     return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, holdMs, steps, ...outcome });
   } catch (e) {
-    return JSON.stringify({ ok: false, error: String(e.message || e) + (!didPress ? '; nothing was pressed' : '') });
+    const message = String(e.message || e);
+    return JSON.stringify({ ok: false, error: message + (!didPress && !message.includes('nothing was pressed') ? '; nothing was pressed' : '') });
   } finally {
     if (pressed && post) attempt(() => post($.kCGEventLeftMouseUp, current));
     if (saved) attempt(() => $.CGWarpMouseCursorPosition(saved));

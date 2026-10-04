@@ -63,7 +63,8 @@ When the mouse has to stay down first, use sleight's `drag` tool: select the tex
 Without `windowId`, multiple possible windows refuse and return their IDs, titles and bounds.
 Both endpoints must be in that window's visible content. TextEdit requires both inside the same
 text area and a non-whitespace text selection. It brings the app
-to the front and moves the user's pointer for about two seconds, so prefer `app.drag` when that works.
+to the front and moves the user's pointer for about 4.5 seconds in the measured TextEdit calls,
+so prefer `app.drag` when that works. An AX tree above 300 elements or 12 levels refuses.
 Cut and paste (`super+x`, click, `super+v`) is the fallback when the user declines. A word dropped at
 the end of a line gets a space after a verified unique whole-word move. Check other selections for
 spacing. If the tool reports that dragged text disappeared, press Cmd+Z in the window it identifies and
