@@ -1,0 +1,170 @@
+{
+  "macOS": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+  "runs": [
+    {
+      "mode": "pid",
+      "n": 1,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"pid\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075536.390 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "pid",
+      "n": 2,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"pid\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075539.893 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "pid",
+      "n": 3,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"pid\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075543.419 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "pid",
+      "n": 4,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"pid\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075546.991 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "pid",
+      "n": 5,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"pid\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075550.501 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "window",
+      "n": 1,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"window\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075554.008 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "window",
+      "n": 2,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"window\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075557.640 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "window",
+      "n": 3,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"window\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075561.205 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "window",
+      "n": 4,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"window\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075564.677 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "window",
+      "n": 5,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"window\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075568.193 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "key-window",
+      "n": 1,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"key-window\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075571.704 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "key-window",
+      "n": 2,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"key-window\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075575.162 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "key-window",
+      "n": 3,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"key-window\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075579.014 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "key-window",
+      "n": 4,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"key-window\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075582.466 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    },
+    {
+      "mode": "key-window",
+      "n": 5,
+      "result": {
+        "ok": false,
+        "error": "Command failed: /Users/chrismenendez/Projects/sleight/.dev/background-drag {\"app\":\"DragProbe\",\"from\":[60,80],\"to\":[300,150],\"steps\":12,\"mode\":\"key-window\"}\nCould not cast value of type 'CoreGraphics.CGFloat' (0x1ff1720b8) to 'Swift.Double' (0x1fcfd6f30).\n",
+        "stdout": ""
+      },
+      "events": "1791075586.020 moved x=60 y=252 pressure=0.0\n",
+      "delivered": false
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "macOS": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+  "interrupted": false,
+  "runs": [
+    {
+      "mode": "window-location",
+      "n": 1,
+      "result": {
+        "error": "cannot read the front application",
+        "ok": false
+      },
+      "events": "",
+      "delivered": false
+    },
+    {
+      "mode": "window-location",
+      "n": 2,
+      "result": {
+        "error": "cannot read the front application",
+        "ok": false
+      },
+      "events": "",
+      "delivered": false
+    },
+    {
+      "mode": "window-location",
+      "n": 3,
+      "result": {
+        "error": "cannot read the front application",
+        "ok": false
+      },
+      "events": "",
+      "delivered": false
+    },
+    {
+      "mode": "window-location",
+      "n": 4,
+      "result": {
+        "error": "cannot read the front application",
+        "ok": false
+      },
+      "events": "",
+      "delivered": false
+    },
+    {
+      "mode": "window-location",
+      "n": 5,
+      "result": {
+        "error": "cannot read the front application",
+        "ok": false
+      },
+      "events": "",
+      "delivered": false
+    }
+  ]
+}

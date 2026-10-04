@@ -23,7 +23,7 @@ final class ProbeView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     private func record(_ name: String, _ event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
-        log("\(name) x=\(Int(p.x)) y=\(Int(p.y)) pressure=\(event.pressure)")
+        log("\(name) x=\(Int(p.x)) y=\(Int(p.y)) pressure=\(event.pressure) active=\(NSApp.isActive) key=\(window?.isKeyWindow ?? false) flags=\(event.modifierFlags.rawValue)")
     }
     override func mouseDown(with event: NSEvent) { record("down", event) }
     override func mouseDragged(with event: NSEvent) { record("dragged", event) }

@@ -1,0 +1,17 @@
+{
+  "macOS": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+  "interrupted": false,
+  "runs": [
+    {
+      "mode": "window-location",
+      "n": 1,
+      "result": {
+        "error": "front app changed during drag",
+        "ok": false
+      },
+      "events": "1791077185.341 moved x=60 y=252 pressure=1.0 active=false key=false flags=1048576\n1791077185.407 down x=60 y=252 pressure=1.0 active=false key=false flags=1048576\n1791077192.614 up x=300 y=182 pressure=0.0 active=false key=false flags=1048576\n",
+      "delivered": false,
+      "abortReleased": false
+    }
+  ]
+}

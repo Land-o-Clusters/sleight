@@ -33,6 +33,13 @@ against 0/9 for `app.drag`. A press right after the engine acts doesn't take, so
 Next: the same drag in the background. Posting to the app's process (`CGEventPostToPid`) delivers
 only mouse-moved events to an inactive app; the engine gets clicks through somehow, likely by making
 the window key without activating the app.
+The [Codex background prototype](../benchmarks/2026-10-03-background-drag.md) delivered
+complete DragProbe sequences in 5/5 trials, then 2/5 during concurrent Mac use, on macOS
+27.0 (26A428), followed by 1/1 with a longer hold. Pointer samples were unchanged in
+four complete trials. It uses NSEvent
+window identity and the private `CGEventSetWindowLocation`, without key-window records
+in its default path. TextEdit word moves remain 0/10. Those trials are paused while the
+owner uses the Mac. The prototype is separate from the MCP drag tool.
 
 Market research (Codex on gpt-6.1-sol, 2026-10-04) is in `.dev/research/2026-10-04-competitors.md`,
 untracked, with its GitHub evidence. Publishing it is the owner's call. The biggest finding is that

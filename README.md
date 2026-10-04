@@ -194,6 +194,12 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   (3/3 on the benchmark's text drag task, which `app.drag` failed 9/9), but in the foreground: the
   app comes to the front and your pointer moves for a few seconds before both go back. A drop at the
   end of a line doesn't put a space before the word.
+  A [standalone background prototype](docs/benchmarks/2026-10-03-background-drag.md)
+  delivered all mouse events in 5/5 DragProbe trials, then 2/5 during concurrent Mac use,
+  on macOS 27.0 (26A428). A later trial delivered 1/1 with a longer hold. Pointer
+  samples were unchanged in four successful trials.
+  TextEdit moved the selected word in 0/10 trials. It remains experimental and uses a
+  private CoreGraphics coordinate setter. The MCP tool still uses the foreground path.
 - There's no real hover, since events go to the app and the real pointer never moves. The skill covers
   most cases: tooltips are readable as `Help:` text in the UI state, and hover menus usually open through
   an element's secondary actions, a right-click or a key. Mouse-moved events posted to a background app
