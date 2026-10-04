@@ -195,33 +195,18 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   during the run showed up twice, and we still don't know why. A
   [two-engine probe](docs/benchmarks/2026-10-04-double-keys.md) didn't reproduce it in 30/30 trials
   (engine 26.930.31730, 2026-10-04).
-- The engine's `app.drag` can't move selected text. A probe app (`bench/drag-probe/`) logged its whole
-  drag lasting 14 ms, with two drag events between press and release, and text views only start a
-  text drag after the mouse stays down for a moment. sleight's `drag` tool does that drag instead
-  (3/3 on the benchmark's text drag task, which `app.drag` failed 9/9), but in the foreground: the
-  app comes to the front and your pointer moves for a few seconds before both go back. In TextEdit,
-  it adds a missing space after a verified single-word move to a line end. Repeated words, partial
-  words and selections containing punctuation or spaces need a caller's spacing check. The focused
-  check produced the exact text in 2/3 trials with corrected glyph coordinates; one trial removed
-  the word and left a newline. The old helper used the largest TextEdit window's origin for both
-  points, even when the selection belonged to another window, and allowed title-bar drops.
-  The helper now requires one identified window, checks both endpoints against its visible content,
-  and requires the same TextEdit text area. With multiple possible windows, supply `windowId` from
-  the window read. A missing-word snapshot returns an error directing Claude to press Cmd+Z in
-  that window. Whitespace-only selections refuse because the loss check cannot verify them.
-  With two TextEdit windows open, the revised helper passed 8/8 focused live cases: four refusals
-  left both documents unchanged, and four valid drags produced the exact spaced text in the requested
-  window only. Another session's larger Save window blocked the old-helper reproduction;
-  TextEdit accepted fixture resize requests but kept their old sizes. These are small trials, and
-  concurrent edits can still confuse snapshot comparisons.
-  [Every spacing attempt](docs/benchmarks/2026-10-04-drag-polish.md) and
-  [window safety attempt](docs/benchmarks/2026-10-04-drag-window-guards.md) is recorded. A background version
-  ([prototype and results](docs/benchmarks/2026-10-03-background-drag.md)) reached a test app in 5/5
-  quiet trials and 2/5 during real use. The first TextEdit trials moved text 0/10. A
-  [follow-up](docs/benchmarks/2026-10-04-background-text-drag.md) found the drop point 13 px above
-  the glyph line. With that point corrected, PID posting moved text 4/4 with unchanged pointer
-  samples and TextEdit inactive. Drops still join `gammaalpha` without a space. These are small
-  prototype trials on one macOS build. The background path remains outside the plugin.
+- The engine's `app.drag` failed TextEdit text moves 9/9. Local `drag` passed the benchmark 3/3
+  before the window/content guards. Later [two-window checks](docs/benchmarks/2026-10-04-drag-window-guards.md)
+  passed 8/8 (four refusals, four exact moves), with about 4.5 s of foreground pointer use per call.
+  Ambiguous windows require `windowId`. TextEdit endpoints must share a text area. AX scans refuse
+  above 300 elements or 12 levels ([review fixes](docs/benchmarks/2026-10-04-drag-round-2.md)).
+  Lost-text errors require Cmd+Z; whitespace-only selections refuse.
+  [Spacing repair](docs/benchmarks/2026-10-04-drag-polish.md) covers unique whole words at line ends.
+  Other selections need a spacing check, and concurrent edits can confuse snapshot comparisons.
+  The old-helper live reproduction was blocked by another session's larger window. Chess and
+  Calculator content guards remain unmeasured with this revision.
+  The [background prototype](docs/benchmarks/2026-10-04-background-text-drag.md) moved TextEdit text
+  4/4 after correcting its drop geometry, but joined `gammaalpha`. It remains outside the plugin.
 - There's no real hover, since events go to the app and the real pointer never moves. The skill covers
   most cases: tooltips are readable as `Help:` text in the UI state, and hover menus usually open through
   an element's secondary actions, a right-click or a key. Mouse-moved events posted to a background app
@@ -389,7 +374,8 @@ Each arm ran from an empty folder, with only its own tool loaded:
 | Chess, drag a pawn and save the game | 3/3 | 3/3 | 68 s | 75 s |
 
 Both passed 15 of 18 and failed every text drag the same way (see [Known problems](#known-problems)).
-That was before sleight's `drag` tool: with it, the text drag task passed 3/3 on 2026-10-04 (Sonnet 5.5,
+That was before sleight's `drag` tool. The local tool passed the text drag task 3/3 before the
+window/content guards on 2026-10-04 (Sonnet 5.5,
 [`2026-10-04-drag-tool.json`](docs/benchmarks/2026-10-04-drag-tool.json)).
 With 3 runs per task, the speed differences are noise. The valid runs came to $16.00 at API prices.
 Logged in through a claude.ai plan, runs use plan limits rather than money.

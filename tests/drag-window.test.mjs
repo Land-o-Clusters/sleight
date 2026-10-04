@@ -5,8 +5,9 @@ import vm from 'node:vm';
 
 // Only the native AX/CG boundary is replaced. run() does the real selection,
 // validation, coordinate conversion, mouse sequence and post-drop check.
-function harness({ second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection = 'alpha', repairDeletesText = false, movedOnActivate = false, coveredEnd = false, splitAreas = false, missingContent = false, appId = 'com.apple.TextEdit' } = {}) {
+function harness({ second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection = 'alpha', repairDeletesText = false, movedOnActivate = false, coveredEnd = false, splitAreas = false, missingContent = false, extraElements = 0, appId = 'com.apple.TextEdit' } = {}) {
   const events = [], restored = [];
+  let visited = 0;
   let order = [22, 11];
   const frames = new Map([[11, { X: 100, Y: 100, Width: 600, Height: 400 }], [22, { X: 900, Y: 200, Width: 800, Height: 500 }]]);
   const values = new Map([[11, before], [22, before]]);
@@ -29,7 +30,10 @@ function harness({ second = true, before = 'alpha beta gamma\n', after = 'beta g
     return {
       role: () => 'AXWindow', position: () => [b.X, b.Y], size: () => [b.Width, b.Height], name: () => `${id}.txt`,
       attributes: { byName: name => ({ value: () => name === 'AXWindowNumber' ? id : null }) },
-      uiElements: () => missingContent ? [toolbar] : [toolbar, area, ...(splitAreas ? [{ ...area, position: () => [b.X + 5, b.Y + 180] }] : [])], actions: { byName: () => ({ perform: () => { order = [id, ...order.filter(n => n !== id)]; } }) },
+      uiElements: () => missingContent ? [toolbar] : [toolbar, area, ...Array.from({ length: extraElements }, () => ({
+        role: () => { visited++; return 'AXButton'; }, subrole: () => '',
+        position: () => [b.X + 10, b.Y + 32], size: () => [10, 10], uiElements: () => [],
+      })), ...(splitAreas ? [{ ...area, position: () => [b.X + 5, b.Y + 180] }] : [])], actions: { byName: () => ({ perform: () => { order = [id, ...order.filter(n => n !== id)]; } }) },
     };
   }) };
   const previous = { isNil: () => false, processIdentifier: 99, activateWithOptions: () => restored.push('app') };
@@ -59,7 +63,7 @@ function harness({ second = true, before = 'alpha beta gamma\n', after = 'beta g
     ...order.filter(id => second || id === 11).map(id => ({ id, pid: 7, owner: 'TextEdit', title: `${id}.txt`, layer: 0, bounds: { ...frames.get(id) } })),
   ];
   const run = changes => JSON.parse(context.run([JSON.stringify({ app: 'TextEdit', from: [26.6, 38.5], to: [119, 38.5], ...changes })]));
-  return { run, events, restored, values };
+  return { run, events, restored, values, visits: () => visited };
 }
 test('two TextEdit windows refuse ambiguous relative points before mouse-down and list IDs', () => {
   const h = harness(); const result = h.run({});
@@ -147,4 +151,15 @@ test('Unicode text loss is detected and a conserved repeated selection is accept
 test('TextEdit smart spacing can change selected whitespace without a false loss error', () => {
   const h = harness({ selection: 'alpha ', after: 'beta gammaalpha\n' });
   assert.equal(h.run({ windowId: 11 }).ok, true);
+});
+test('large AX trees refuse before pressing after at most 300 elements and restore focus', () => {
+  const h = harness({ extraElements: 1000 });
+  const result = h.run({ windowId: 11 });
+  assert.equal(result.ok, false); assert.match(result.error, /300|limit/i);
+  assert.ok(h.visits() <= 300); assert.equal(h.events.length, 0);
+  assert.ok(h.restored.includes('app'));
+});
+test('a refusal states nothing was pressed exactly once', () => {
+  const h = harness(); const result = h.run({ windowId: 11, to: [119, 10] });
+  assert.equal(result.error.match(/nothing was pressed/g)?.length, 1);
 });
