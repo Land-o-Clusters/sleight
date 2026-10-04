@@ -387,3 +387,144 @@ test('without idleTurnEndMs, an idle turn stays open', async () => {
   await wait(40);
   assert.equal(h.toServer.filter(m => m.params?.name === 'turn_ended').length, 0);
 });
+
+const documentRead = (h, id, title = 'a.txt', url = 'file:///tmp/a.txt') => {
+  h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("TextEdit")' } } });
+  h.fromServer({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: `Window: "${title}", App: TextEdit\nURL: ${url}\n1 text area` }] } });
+};
+const documentCall = (h, id) => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code: 'await app.typeText("hello")' } } });
+const documentApprove = (h, id) => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'document_scope', arguments: {} } });
+
+test('document mode blocks action code until the observed document is approved', async () => {
+  const h = harness({ approvalScope: 'document', ask: async () => 'accept' });
+  documentCall(h, 1);
+  await settle();
+  assert.equal(h.toServer.length, 0);
+  assert.match(h.toClient[0].result.content[0].text, /document_scope/);
+  documentRead(h, 2);
+  documentApprove(h, 3);
+  await settle();
+  documentCall(h, 4);
+  await settle();
+  assert.ok(h.toServer.find(m => m.id === 4));
+  assert.match(h.toServer.find(m => m.id === 4).params.arguments.code, /getAXState/);
+});
+
+test('document approval names the observed window and URL, through client elicitation', async () => {
+  const h = harness({ approvalScope: 'document' });
+  documentRead(h, 1);
+  documentApprove(h, 2);
+  await settle();
+  const prompt = h.toClient.find(m => m.method === 'elicitation/create');
+  assert.match(prompt.params.message, /a.txt/);
+  assert.match(prompt.params.message, /file:\/\/\/tmp\/a.txt/);
+  h.fromClient({ jsonrpc: '2.0', id: prompt.id, result: { action: 'accept' } });
+  await settle();
+  documentCall(h, 3);
+  assert.ok(h.toServer.find(m => m.id === 3));
+});
+
+test('another document stops further actions before forwarding them', async () => {
+  const h = harness({ approvalScope: 'document', ask: async () => 'accept' });
+  documentRead(h, 1);
+  documentApprove(h, 2);
+  await settle();
+  documentRead(h, 3, 'b.txt', 'file:///tmp/b.txt');
+  documentCall(h, 4);
+  await settle();
+  assert.equal(h.toServer.some(m => m.id === 4), false);
+  assert.equal(h.toClient.find(m => m.id === 4).result.isError, true);
+  assert.match(h.toClient.find(m => m.id === 4).result.content[0].text, /b.txt.*document_scope/s);
+});
+
+test('equal titles with different URLs do not share a grant', async () => {
+  const h = harness({ approvalScope: 'document', ask: async () => 'accept' });
+  documentRead(h, 1);
+  documentApprove(h, 2);
+  await settle();
+  documentRead(h, 3, 'a.txt', 'file:///other/a.txt');
+  documentCall(h, 4);
+  assert.equal(h.toServer.some(m => m.id === 4), false);
+});
+
+test('mismatched or missing action-result headers close the relay gate', async () => {
+  for (const text of ['Window: "b.txt", App: TextEdit\nURL: file:///tmp/b.txt', 'no window header']) {
+    const h = harness({ approvalScope: 'document', ask: async () => 'accept' });
+    documentRead(h, 1);
+    documentApprove(h, 2);
+    await settle();
+    documentCall(h, 3);
+    h.fromServer({ jsonrpc: '2.0', id: 3, result: { content: [{ type: 'text', text }] } });
+    documentCall(h, 4);
+    assert.equal(h.toClient.find(m => m.id === 3).result.isError, true);
+    assert.equal(h.toServer.some(m => m.id === 4), false);
+  }
+});
+
+test('decline and cancel do not approve the document', async () => {
+  for (const answer of ['decline', 'cancel']) {
+    const h = harness({ approvalScope: 'document', ask: async () => answer });
+    documentRead(h, 1);
+    documentApprove(h, 2);
+    await settle();
+    documentCall(h, 3);
+    assert.equal(h.toServer.some(m => m.id === 3), false);
+  }
+});
+
+test('document mode refuses concurrent calls and local tools outside the scope', async () => {
+  const calls = [];
+  const h = harness({ approvalScope: 'document', ask: async () => 'accept', localTools: localTools(calls) });
+  documentRead(h, 1);
+  documentApprove(h, 2);
+  await settle();
+  documentCall(h, 3);
+  documentCall(h, 4);
+  h.fromClient({ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'menu_bar', arguments: { op: 'open', app: 'TextEdit' } } });
+  assert.equal(h.toServer.some(m => m.id === 4), false);
+  assert.equal(calls.length, 0);
+  assert.equal(h.toClient.find(m => m.id === 5).result.isError, true);
+});
+
+test('document engine approvals stay tied to the observed app and risk without persistence', async () => {
+  const a = asker('accept', 'accept', 'decline');
+  const h = harness({ approvalScope: 'document', ask: a.ask });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("TextEdit")' } } });
+  h.fromServer(appApproval('read', undefined, 'com.apple.TextEdit'));
+  await settle();
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: 'Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt' }] } });
+  documentApprove(h, 2);
+  await settle();
+  documentCall(h, 3);
+  h.fromServer(appApproval('action', undefined, 'com.apple.TextEdit'));
+  await settle();
+  assert.deepEqual(h.toServer.find(m => m.id === 'action').result, { action: 'accept', content: {} });
+  assert.equal(a.asked.length, 2);
+  h.fromServer(appApproval('higher', undefined, 'com.apple.TextEdit', 'high'));
+  await settle();
+  assert.equal(h.toServer.find(m => m.id === 'higher').result.action, 'decline');
+  assert.match(a.asked.at(-1).message, /a.txt.*high/);
+  h.fromServer(appApproval('wrong-app', undefined, 'com.apple.calculator'));
+  await settle();
+  assert.equal(h.toServer.find(m => m.id === 'wrong-app').result.action, 'decline');
+});
+
+test('discovery allows no trailing action, and grants do not cross relay sessions', async () => {
+  const h = harness({ approvalScope: 'document', ask: async () => 'accept' });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("TextEdit"); await app.typeText("oops")' } } });
+  assert.equal(h.toServer.length, 0);
+  documentRead(h, 2);
+  documentApprove(h, 3);
+  await settle();
+  const fresh = harness({ approvalScope: 'document' });
+  documentRead(fresh, 1);
+  documentCall(fresh, 2);
+  assert.equal(fresh.toServer.some(m => m.id === 2), false);
+});
+
+test('document tools/list advertises only tools supported in this mode', () => {
+  const h = harness({ approvalScope: 'document', localTools: localTools() });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { tools: [{ name: 'js' }, { name: 'js_reset' }, { name: 'turn_ended' }] } });
+  assert.deepEqual(h.toClient[0].result.tools.map(t => t.name), ['js', 'turn_ended', 'document_scope']);
+});

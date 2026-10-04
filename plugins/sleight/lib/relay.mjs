@@ -49,6 +49,7 @@
 // `trace`, when given, receives every message as it passes, for debugging.
 
 import { randomUUID } from 'node:crypto';
+import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRead, readCode, guardedCode } from './document-scope.mjs';
 
 const META_KEY = 'x-codex-turn-metadata';
 const HIDDEN_TOOLS = new Set(['js_add_node_module_dir']);
@@ -120,6 +121,68 @@ export function createRelay({
   const elicitations = new Map(); // our elicitation id -> resolve
   const running = new Set(); // ids of engine calls waiting for a result
   let idleTimer;
+  const documentMode = approvalScope === 'document';
+  const documentGrants = new Set();
+  const documentRisks = new Set();
+  const documentCalls = new Map();
+  let observedDocument;
+  let observedEngines = new Set();
+  let observedRisks = new Set();
+  let documentAsking = false;
+
+  const documentAllowed = () => documentGrants.has(documentKey(observedDocument));
+  function documentStop(msg, reason) {
+    toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text:
+      `Document scope: ${reason}. ${observedDocument ? `Observed ${documentLabel(observedDocument)}. ` : ''}` +
+      'Stop actions. Read the intended window with one standalone cua.getApp call, then ask the user with document_scope.' }] } });
+  }
+
+  function askDocument(message, scoped) {
+    const answer = asking.then(() => ask ? ask(message, scoped) : elicit(message));
+    asking = answer.catch(() => 'cancel');
+    return answer.catch(() => 'cancel');
+  }
+
+  async function approveDocument(msg) {
+    if (!observedDocument || running.size || documentAsking) {
+      documentStop(msg, 'a completed, unambiguous window read is required');
+      return;
+    }
+    const target = observedDocument;
+    const key = documentKey(target);
+    if (!documentGrants.has(key)) {
+      documentAsking = true;
+      const action = await askDocument(`Allow Claude to use ${documentLabel(target)} for this session? ` +
+        'Scope checks read window contents. This guards mistakes, not malicious JavaScript.', true);
+      documentAsking = false;
+      if (action !== 'accept') { documentStop(msg, 'the user did not approve this document'); return; }
+      documentGrants.add(key);
+      for (const risk of observedRisks) documentRisks.add(JSON.stringify([key, risk]));
+    }
+    toClient({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: `Approved ${documentLabel(target)} for this session.` }] } });
+  }
+
+  async function documentEngineApproval(msg) {
+    const call = [...documentCalls.values()][0];
+    const engine = msg.params?._meta?.tool_params?.app;
+    const risk = approvalKey(msg);
+    let action = 'decline';
+    if (call?.read && typeof engine === 'string') {
+      call.engines.add(engine);
+      if (risk) call.risks.add(risk);
+      action = await askDocument(`Read one window in ${engine} to identify its document? This read does not approve actions.`, false);
+    } else if (call && documentAllowed() && observedEngines.has(engine) && risk) {
+      const key = JSON.stringify([documentKey(observedDocument), risk]);
+      if (documentRisks.has(key)) action = 'accept';
+      else {
+        action = await askDocument(`Allow Claude to use ${documentLabel(observedDocument)} at risk level ` +
+          `${msg.params?._meta?.riskLevel ?? 'unspecified'} for this session?`, true);
+        if (action === 'accept') documentRisks.add(key);
+      }
+    }
+    // Keep document grants here. Never persist a whole-app grant in the engine.
+    toServer({ jsonrpc: '2.0', id: msg.id, result: { action, ...(action === 'accept' ? { content: {} } : {}) } });
+  }
 
   function scheduleIdleEnd() {
     clearTimeout(idleTimer);
@@ -227,6 +290,7 @@ export function createRelay({
     try {
       msg = JSON.parse(line);
     } catch {
+      if (documentMode) return;
       serverIn.write(line + '\n');
       return;
     }
@@ -238,6 +302,23 @@ export function createRelay({
       elicitations.get(msg.id)(msg);
       elicitations.delete(msg.id);
       return;
+    }
+    if (documentMode && msg.method === 'tools/call') {
+      const name = msg.params?.name;
+      if (name === DOCUMENT_TOOL.name) { approveDocument(msg); return; }
+      if (name !== 'js' && name !== TURN_END_TOOL) {
+        documentStop(msg, `${name} is unavailable in document mode`);
+        return;
+      }
+      if (name === 'js') {
+        if (running.size || documentAsking) { documentStop(msg, 'another call or approval is pending'); return; }
+        const code = msg.params.arguments?.code;
+        if (typeof code !== 'string' || msg.id === undefined) { documentStop(msg, 'js needs code and a request id'); return; }
+        const read = isDocumentRead(code);
+        if (!read && !documentAllowed()) { documentStop(msg, 'this window is not approved'); return; }
+        documentCalls.set(msg.id, { read, expected: read ? undefined : documentKey(observedDocument), engines: new Set(), risks: new Set() });
+        msg.params.arguments = { ...msg.params.arguments, code: read ? readCode(code) : guardedCode(code, observedDocument) };
+      }
     }
     if (msg.method === 'tools/call' && localNames.has(msg.params?.name)) {
       trace('from-client', msg);
@@ -279,10 +360,28 @@ export function createRelay({
       clientOut.write(line + '\n');
       return;
     }
-    if (msg.id !== undefined && internalRequests.has(msg.id)) {
+    if (msg.method === undefined && msg.id !== undefined && internalRequests.has(msg.id)) {
       internalRequests.get(msg.id)(msg);
       internalRequests.delete(msg.id);
       return;
+    }
+    if (documentMode && isAppApproval(msg)) { documentEngineApproval(msg); return; }
+    if (documentMode && msg.method === undefined && documentCalls.has(msg.id)) {
+      const call = documentCalls.get(msg.id);
+      documentCalls.delete(msg.id);
+      const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+      observedDocument = windowFromText(text);
+      if (call.read) {
+        observedEngines = call.engines;
+        observedRisks = call.risks;
+        const appId = msg.result?._meta?.['codex/toolSurface']?.app?.appId;
+        if (typeof appId === 'string') observedEngines.add(appId);
+      }
+      if (!msg.error && (!observedDocument || (call.expected && call.expected !== documentKey(observedDocument)))) {
+        msg.result = { ...(msg.result ?? {}), isError: true, content: [...(msg.result?.content ?? []), { type: 'text', text:
+          'Document scope stopped: Window or URL changed, or a full header is missing. That call may already have acted. Stop and read the intended window, then ask the user with document_scope.' }] };
+        if (!call.read) observedDocument = undefined;
+      }
     }
     if (msg.method === undefined && running.delete(msg.id)) scheduleIdleEnd();
     if (ask && isAppApproval(msg)) {
@@ -301,8 +400,9 @@ export function createRelay({
     if (msg.method === undefined && listRequests.delete(msg.id) && Array.isArray(msg.result?.tools)) {
       msg.result.tools = msg.result.tools
         .filter(t => !HIDDEN_TOOLS.has(t.name))
+        .filter(t => !documentMode || t.name === 'js' || t.name === TURN_END_TOOL)
         .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t))
-        .concat(localTools?.tools ?? []);
+        .concat(documentMode ? [DOCUMENT_TOOL] : (localTools?.tools ?? []));
     }
     toClient(msg);
   });
