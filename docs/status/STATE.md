@@ -3,76 +3,67 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-04, after midnight)
+## Banner (2026-10-04, before the owner's clear)
 
-Public: `Land-o-Clusters/sleight`, `main` green in CI, `v0.4.0` tagged, listed on the org profile
-after Puddle. A fresh install from GitHub into an empty Claude config worked (0.2.0, `--doctor` ok).
-The user-scope install on this Mac follows the working copy's releases. Running sessions keep the
-version they started with, because `/reload-plugins` doesn't restart the server.
+Public: `Land-o-Clusters/sleight`, `main` at `be284c1`, green in CI. Latest release `v0.4.0`
+(GitHub release published, as for every release since 0.3.1). Installed on this Mac at user scope
+from the local directory marketplace, now 0.4.0. Running sessions keep the version they started with,
+because `/reload-plugins` doesn't restart the server. At the flush all 11 running sleight servers
+predated 0.3.1, so those sessions can still show as busy after Claude finishes until restarted.
 
-Desktop approvals work through sleight's panel (0.1.1). The desktop's own Claude Code is 2.1.286,
-too old for the mod, so no pane there yet.
+On main, unreleased: the change review (`review_changes`, Codex B, cherry-picked as `844fa60` and
+`bc81e44`). Plan: release it as 0.5.0 together with the input lease once that merges.
 
-`menu_bar` and `notifications` (0.2.0, 0.2.1) cover the menu bar icons and banners the engine leaves
-out, through System Events, behind sleight's approval. Live-tested with real approvals on Magnet's menu
-(read, and `choose` "Settings…"), LogiJuice's SwiftUI panel (opened by a real click, then read), a
-test banner (listed, then closed) and the terminal approval path (a declined elicitation refused the
-call).
-LogiJuice's panel buttons have no labels. The logijuice session can add `.help` or
-`.accessibilityLabel`. Notification Center hung at 100% CPU once that evening (a 9-day-old process,
-restarted); cause unknown, so watch for it when using `notifications`.
+In flight, all from the owner's Codex sessions working in their own worktrees under
+`~/Projects/sleight-wt/` (prompts written by this session, run by the owner):
 
-Benchmark (fair, Opus 5.5): sleight and LCU both 15/18, each failing only the three text drags. The
-runner checks arm isolation, defaults to Sonnet 5.5 at medium, and closes what runs leave open. The
-owner finds runs tedious, so run them only with a reason.
+- `codex/input-lease` at `98dc858` (Codex A): per-window input leases. Live: two markers in 5/5
+  trials without it, one marker and one refusal in 10/10 with it. It has 11 conflict hunks with the
+  change review (relay, launch, document-scope, package.json). A was asked to rebase onto `be284c1`,
+  keep both features, rerun its live checks and push with `--force-with-lease`. Not started at the flush.
+- `codex/flow-rules` (Codex B, not pushed yet): user-written rules for data moving between apps, opt-in,
+  enforced in the relay as a guard against mistakes. Prompt given at the flush.
 
-Text drag is fixed in 0.3.0 by sleight's own `drag` tool (`lib/drag.js`): hold 500 ms, 25 steps,
-real mouse events in the foreground, pointer and front app restored, and no press if another app's
-window covers the start point. Benchmark text drag 3/3 on Sonnet 5.5 (`docs/benchmarks/2026-10-04-drag-tool.json`),
-against 0/9 for `app.drag`. A press right after the engine acts doesn't take, so it waits 1.5 s first.
-Background drag (Codex A, merged as research only): a private `CGEventSetWindowLocation` path
-delivered full drag sequences to the probe app in 5/5 quiet trials, 2/5 during real use and 1/1 with
-a longer hold, with the pointer unmoved, but moved TextEdit text 0/10. The prototype is in
-`bench/background-drag/`, outside the plugin, and the `drag` tool keeps the foreground path. The
-report is `docs/benchmarks/2026-10-03-background-drag.md`.
+Review recipe for each Codex branch: read its design note and safety paths (user-only decisions, no
+auto-approval outside the benchmark allowlist), cherry-pick onto `main`, replace home paths in
+published results with `~`, run `npm run check` and `npm run lint:prose`, push, release.
 
-Market research (Codex on gpt-6.1-sol, 2026-10-04) is in `.dev/research/2026-10-04-competitors.md`,
-untracked, with its GitHub evidence. Publishing it is the owner's call. The biggest finding is that
-Anthropic has its own computer use, in the Claude desktop app (background on macOS 15+, per-app
-approval) and in the Claude Code CLI (`/mcp computer-use`, Pro/Max, interactive only). Its
-shortcomings for the owner are the reason sleight exists, so there's no benchmark against it. The
-README compares the two from Anthropic's own docs instead. Other gaps it names: other harnesses (LCU covers Codex CLI and Pi), exact-window
-targeting, reporting whether an action took effect, finer approval scopes, clipboard ownership, and
-input leases across sessions. LCU moved to `amontlabs/lcu`. The owner picked the research's new-ground
-items for the roadmap. Document scope is in 0.4.0 (built by Codex B, opt-in, a guard against mistakes). The change
-review (Codex B, `review_changes`, file-backed documents, undo only on the user's decision) is on main,
-unreleased. The input lease (Codex A, `codex/input-lease`) conflicts with it in the relay and waits for
-A to rebase. Both go out together as 0.5.0. Next for Codex B: rules for data moving between apps.
+Branches already cherry-picked and safe to delete with their worktrees once their Codex sessions are
+done: `codex/watch-api-diff` (`c058475` as `2d48e5d`), `codex/background-drag` (`32fd681` as
+`ee49fd9`, prototype moved to `bench/background-drag/`), `codex/document-scope` (`9f3827a` as
+`ceebdca`), `codex/change-review` (`e4e4121` as `844fa60`).
 
-Owner's plan (2026-10-04), after the drag: work through every item in Known problems, and research
-the market for what sleight can do better.
-Codex is researching competitors in the background, and the owner runs Codex for build work from
-prompts this session writes. Linux is a headless box and there's no Windows machine, so both wait.
+What sleight is now: the engine through a relay, plus its own tools where the engine stops short:
+`menu_bar` and `notifications` (System Events), `drag` (held, stepped, foreground; text drag 3/3
+against 0/9 for `app.drag`), `document_scope` (opt-in, `SLEIGHT_APPROVAL_SCOPE=document`) and
+`review_changes`. The relay ends the engine's turn after 30 idle seconds (0.3.1). Background hover
+and background drag were measured and don't work reliably, as the README records. The
+fair benchmark tied LCU at 15/18 on Opus 5.5.
+
+Market research (Codex, gpt-6.1-sol) is in `.dev/research/2026-10-04-competitors.md`, untracked.
+Publishing it is the owner's call. Flow rules is the last of the three new-ground items on the roadmap.
+The research's other gaps (exact-window targeting, reporting whether an action took effect, clipboard
+ownership, more harnesses) are candidates the owner hasn't picked yet.
 
 ## Machine state outside the repo
 
-- Weekly launchd job `com.landoclusters.sleight-watch` (Mondays 9:00, `scripts/watch.sh`), installed
-  2026-10-03. Remove with `npm run watch:remove`. Log: `~/Library/Logs/sleight/watch.log`.
-- LCU 0.8.8 installed runtime-only at `~/.local/share/lcu`, registered for Claude Code only in
-  `.dev/lcu-arm` (untracked). `.dev/py/python3` links Homebrew Python 3.14 for it. The user-level Claude
-  Code config doesn't have LCU.
-- Installed by Homebrew this session: `vale`, `ffmpeg`.
-- `.dev/` (untracked) holds the 2.1.288 test CLI, pseudo-terminal test harnesses (`stop_test2.py`) and
-  `make-demo.sh`.
-- sleight is installed at user scope from the working copy (another session did it, 2026-10-03), so
-  every Claude session on this Mac starts a sleight server from `~/Projects/sleight/plugins/sleight`.
-- No background jobs are running besides benchmark runs this session starts.
+- Weekly launchd job `com.landoclusters.sleight-watch` (Mondays 9:00, `scripts/watch.sh`). It now
+  saves the engine's API docs (`~/Library/Logs/sleight/engine-api-26.930.31730.md` is the baseline)
+  and diffs them on an engine update. Remove with `npm run watch:remove`.
+- LCU 0.8.8 runtime-only at `~/.local/share/lcu`, registered only in `.dev/lcu-arm` (untracked).
+  `.dev/py/python3` links Homebrew Python 3.14 for it.
+- Homebrew: `vale`, `ffmpeg`, and the `codex` cask, upgraded to 0.160 on 2026-10-04 (0.153 rejected
+  gpt-6.1-sol). `~/.local/bin/claude` updated to 2.1.289 on 2026-10-04.
+- `.dev/` (untracked): the 2.1.288 test CLI, `sleight-arm` and `lcu-arm` bench folders,
+  `DragProbe.app` (built by `bench/drag-probe/build.sh`), pseudo-terminal harnesses, research.
+- No background jobs of this session are running. The `codex exec-server` process belongs to the
+  owner's ChatGPT app.
 
 ## Waiting on the owner
 
-Nothing. The owner took sleight public on 2026-10-03 and skipped the LCU heads-up and any report to
-Anthropic. The TextEdit approval cleanup isn't wanted. The icon source is the existing
-`sleight-icon-source.webp`.
+- Run the two Codex prompts (A: rebase the lease; B: flow rules), then hand the results to the next
+  sleight-arch session to review and merge.
+- Restart desktop sessions that started before 0.3.1 (21:17 EDT, 2026-10-03), so they stop hanging.
 
 ## Reading list
 

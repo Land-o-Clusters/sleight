@@ -15,9 +15,12 @@ belong in [STATE.md](STATE.md).
 - sleight launches at 0.x (owner, 2026-10-03). 1.0 waits until it has survived two or three ChatGPT
   engine updates, someone else has installed it from the marketplace, the desktop pane's picture is
   verified, and the benchmark compares it with another tool.
-
 - The owner's rule for every open-source project of theirs, sleight included (2026-10-03), in order:
   do what competitors do, but better. Improve on them where they haven't. Then build what nobody has.
+- No benchmark against Claude's own computer use (owner, 2026-10-04): its shortcomings are why sleight
+  exists. The README compares the two from Anthropic's documentation.
+- A release means a git tag plus a GitHub release with notes from the changelog (owner, 2026-10-04).
+- Codex runs on gpt-6.1-sol, never gpt-6-astra (owner, 2026-10-04).
 
 ## Approvals and safety
 
@@ -44,5 +47,11 @@ belong in [STATE.md](STATE.md).
 - Benchmark results are published in full: every run, failures included, with the raw results file
   in `docs/benchmarks/` and the caveats stated (owner, 2026-10-03). We never pick runs after seeing
   them.
+- Codex agents build on `codex/*` branches in their own worktrees and never push to `main`. sleight-arch
+  reviews each branch (design note, safety paths), cherry-picks it onto `main`, and releases.
+- The plugin folder contains only code the plugin runs. Research prototypes go in `bench/`.
+- Published results and logs show home paths as `~`. Check raw logs for personal data before publishing.
+- A guard that runs inside the engine's JavaScript can't be a security boundary, because Claude writes
+  that code. Features built on one say so plainly; only the user decides approvals, keeps and undos.
 - Docs pass `npm run lint:prose` with zero flags. Limitations go in the README's "Known problems" when we
   find them.
