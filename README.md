@@ -209,8 +209,11 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   and requires the same TextEdit text area. With multiple possible windows, supply `windowId` from
   the window read. A missing-word snapshot returns an error directing Claude to press Cmd+Z in
   that window. Whitespace-only selections refuse because the loss check cannot verify them.
-  The two-window live check is waiting for the owner to confirm an away window; native AX matching
-  and the revised drag behavior remain unverified live.
+  With two TextEdit windows open, the revised helper passed 8/8 focused live cases: four refusals
+  left both documents unchanged, and four valid drags produced the exact spaced text in the requested
+  window only. Another session's larger Save window blocked the old-helper reproduction;
+  TextEdit accepted fixture resize requests but kept their old sizes. These are small trials, and
+  concurrent edits can still confuse snapshot comparisons.
   [Every spacing attempt](docs/benchmarks/2026-10-04-drag-polish.md) and
   [window safety attempt](docs/benchmarks/2026-10-04-drag-window-guards.md) is recorded. A background version
   ([prototype and results](docs/benchmarks/2026-10-03-background-drag.md)) reached a test app in 5/5

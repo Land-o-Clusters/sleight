@@ -7,6 +7,7 @@ import { PassThrough } from 'node:stream';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { callLocalTool } from '../plugins/sleight/lib/launch.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
+import { prepareWindowPair } from './drag-window-fixture.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const call = (cmd, args, options = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', timeout: 30000, ...options });
@@ -73,17 +74,16 @@ try {
     const run = { kind, paths, before: 'alpha beta gamma\n', expected: 'beta gamma alpha\n' };
     results.runs.push(run); save();
     try {
-      for (let i = 0; i < paths.length; i++) {
-        writeFileSync(paths[i], run.before);
-        call('/usr/bin/open', ['-g', '-a', 'TextEdit', paths[i]]);
-        await new Promise(r => setTimeout(r, 800));
-        if (stopping) throw new Error('Run interrupted');
-        const place = JSON.parse(call(fixture, [paths[i], 'place', i ? 'other' : 'source']));
-        if (!place.ok) throw new Error('Fixture placement failed');
-      }
-      run.selection = JSON.parse(call(fixture, [paths[0], 'select-drag']));
-      run.otherSelection = JSON.parse(call(fixture, [paths[1], 'select-drag'])); save();
-      if (!run.selection.ok || !run.otherSelection.ok || !run.selection.windowId || !run.selection.from || !run.selection.to || run.selection.windowId === run.otherSelection.windowId) throw new Error('Two distinct fixture windows are required');
+      [run.selection, run.otherSelection] = await prepareWindowPair(paths, {
+        cancelled: () => stopping,
+        open: path => { writeFileSync(path, run.before); call('/usr/bin/open', ['-g', '-a', 'TextEdit', path]); },
+        wait: ms => new Promise(r => setTimeout(r, ms)),
+        place: (path, size) => {
+          const reply = JSON.parse(call(fixture, [path, 'place', size]));
+          (run.placements ??= []).push({ path, size, reply }); save(); return reply.ok;
+        },
+        select: path => JSON.parse(call(fixture, [path, 'select-drag'])),
+      }); save();
       useLegacy = kind.startsWith('before-');
       // The old largest-window helper must never act on an unrelated document.
       if (useLegacy && !run.otherSelection.isStrictlyLargestWindow) throw new Error('Owned other window is not strictly largest; legacy drag refused by fixture');

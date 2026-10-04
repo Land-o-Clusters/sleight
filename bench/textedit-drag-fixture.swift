@@ -38,14 +38,29 @@ if let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com
         if op == "place" {
             let display = CGDisplayBounds(CGMainDisplayID())
             let large = CommandLine.arguments[3] == "other"
+            // Settle activation before sizing an owned window. TextEdit can
+            // otherwise apply a newly opened window's default size afterward.
+            _ = app.activate(options: [])
+            _ = AXUIElementPerformAction(window, "AXRaise" as CFString)
+            Thread.sleep(forTimeInterval: 0.5)
             var point = CGPoint(x: display.minX + 100, y: display.minY + 100)
             var size = CGSize(width: large ? 800 : 600, height: large ? 500 : 400)
+            if large {
+                let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], 0) as? [[String: Any]] ?? []
+                for entry in info where (entry[kCGWindowOwnerPID as String] as? Int) == Int(app.processIdentifier) && (entry[kCGWindowLayer as String] as? Int) == 0 {
+                    if let bounds = entry[kCGWindowBounds as String] as? NSDictionary, let rect = CGRect(dictionaryRepresentation: bounds) {
+                        size.width = max(size.width, rect.width + 100)
+                        size.height = max(size.height, rect.height + 100)
+                    }
+                }
+            }
             let p = AXValueCreate(.cgPoint, &point)!
             let s = AXValueCreate(.cgSize, &size)!
             let sized = AXUIElementSetAttributeValue(window, "AXSize" as CFString, s)
             let placed = AXUIElementSetAttributeValue(window, "AXPosition" as CFString, p)
             let raised = AXUIElementPerformAction(window, "AXRaise" as CFString)
-            output = ["ok": sized == .success && placed == .success && raised == .success]
+            output = ["ok": sized == .success && placed == .success && raised == .success,
+                      "requestedSize": [size.width, size.height], "requestedPosition": [point.x, point.y]]
         } else if op == "select" || op == "select-drag" {
             let status = AXUIElementSetAttributeValue(area, "AXSelectedTextRange" as CFString, rangeValue(0, 5))
             let start = op == "select-drag" ? rect(area, 2, 1) : rect(area, 0, 5)

@@ -55,9 +55,19 @@ Concurrent edits remain a limitation of snapshot comparison.
 | Fixture preparation after preserving the research selection mode | Compiled; no app actions | 0 |
 | Final `npm run check` after rebase | 192 unit tests, plugin validation and 8 mod tests | 0 |
 | Prose lint after rebase | 0 errors, warnings or suggestions in 17 files | 0 |
+| [Direct shell launch](2026-10-04-drag-window-launch-failure.json) | Script has no executable bit; no app actions or lock | 126 |
+| [Live attempt 1](2026-10-04-drag-window-attempt-1.json) | Sandbox blocked TextEdit and Apple Events before any drag | 1 |
+| [Live attempt 2](2026-10-04-drag-window-attempt-2.json) | Fixture AX/CG geometry had not settled; all six refused before drag | 1 |
+| Fixture settling and cancellation tests | 2/2 | 0 |
+| [Live attempt 3](2026-10-04-drag-window-attempt-3.json) | Revised helper passed 4/4; two old-helper cases blocked by the owned-window guard | 1 |
+| Fixture preparation after adding activation and larger sizing | Compiled; no app actions | 0 |
+| [Live attempt 4](2026-10-04-drag-window-attempt-4.json) | Revised helper passed 4/4 again; old-helper cases still blocked by the owned-window guard | 1 |
+| `npm run check` with fixture tests | 194 unit tests, plugin validation and 8 mod tests | 0 |
+| Prose lint after adding live findings | 3 wording errors | 1 |
+| Prose lint after the first wording correction | 1 wording error | 1 |
+| Prose lint after correcting the live report | 0 errors, warnings or suggestions in 17 files | 0 |
 
-Read-only review found no further concrete defect after the loss-check corrections. Native AX
-matching and live behavior still require the owner's away window.
+Read-only review found no further concrete defect after the loss-check corrections.
 
 The focused live script uses the production relay, local handler, input lease and benchmark
 allowlist. It opens two owned temporary TextEdit documents for each case and closes them by exact
@@ -65,8 +75,20 @@ path. The old-helper check runs only when its largest window is strictly the own
 The shell holds `/tmp/sleight-live.lock` through cleanup of its child. Success, failure and interruption
 all release it. The harness does not start a shared engine child or run `bench/run.mjs`.
 
-Live checks are pending the owner's away window. The request for that window remains unanswered.
-No pointer-moving run has started for this followup.
+The owner confirmed they were stepping away before the live runs. Attempt 3 refused ambiguity and
+title-bar destinations without changing either document. Both valid `windowId` drags ended as
+`beta gamma alpha\n` in the source document and left the second document unchanged. Both confirmed
+the inserted space. The live path verified native AX matching and content validation.
+Another session had a larger Save window, so the fixture guard refused the old-helper cases.
+Attempt 4 activated only the owned document and requested a larger size. TextEdit accepted the
+980×605 size request but CG still reported 673×439. Both old-helper cases refused again. We did
+not close or change the other session's window. The requested live reproduction of the old failure
+remains incomplete; the production window-selection defect is covered by the failing-before-fix
+unit tests, while the revised helper passed eight live cases across attempts 3 and 4.
+
+All temporary documents in the host runs closed without a reported cleanup error, and the shell
+released its live lock after Node exited. Attempt 1's cleanup calls were also sandbox-blocked;
+the fixture documents had failed to open. No engine child was started and ChatGPT stayed running.
 
 The fixture keeps the background research's original `select` coordinates and range bounds.
 Focused foreground checks use `select-drag` for the corrected glyph coordinates.
