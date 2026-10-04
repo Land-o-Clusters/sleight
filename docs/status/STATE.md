@@ -30,9 +30,11 @@ Text drag is fixed in 0.3.0 by sleight's own `drag` tool (`lib/drag.js`): hold 5
 real mouse events in the foreground, pointer and front app restored, and no press if another app's
 window covers the start point. Benchmark text drag 3/3 on Sonnet 5.5 (`docs/benchmarks/2026-10-04-drag-tool.json`),
 against 0/9 for `app.drag`. A press right after the engine acts doesn't take, so it waits 1.5 s first.
-Next: the same drag in the background. Posting to the app's process (`CGEventPostToPid`) delivers
-only mouse-moved events to an inactive app; the engine gets clicks through somehow, likely by making
-the window key without activating the app.
+Background drag (Codex A, merged as research only): a private `CGEventSetWindowLocation` path
+delivered full drag sequences to the probe app in 5/5 quiet trials, 2/5 during real use and 1/1 with
+a longer hold, with the pointer unmoved, but moved TextEdit text 0/10. The prototype is in
+`bench/background-drag/`, outside the plugin, and the `drag` tool keeps the foreground path. The
+report is `docs/benchmarks/2026-10-03-background-drag.md`.
 
 Market research (Codex on gpt-6.1-sol, 2026-10-04) is in `.dev/research/2026-10-04-competitors.md`,
 untracked, with its GitHub evidence. Publishing it is the owner's call. The biggest finding is that

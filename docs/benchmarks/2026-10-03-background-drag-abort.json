@@ -1,0 +1,17 @@
+{
+  "macOS": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+  "interrupted": false,
+  "runs": [
+    {
+      "mode": "window-location",
+      "n": 1,
+      "result": {
+        "error": "requested probe abort",
+        "ok": false
+      },
+      "events": "1791076705.712 moved x=60 y=252 pressure=1.0 active=false key=false flags=1048576\n1791076705.763 down x=60 y=252 pressure=1.0 active=false key=false flags=1048576\n1791076706.453 dragged x=80 y=246 pressure=1.0 active=false key=false flags=1048576\n1791076706.480 up x=300 y=182 pressure=0.0 active=false key=false flags=1048576\n",
+      "delivered": false,
+      "abortReleased": true
+    }
+  ]
+}

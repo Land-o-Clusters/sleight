@@ -193,7 +193,9 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   text drag after the mouse stays down for a moment. sleight's `drag` tool does that drag instead
   (3/3 on the benchmark's text drag task, which `app.drag` failed 9/9), but in the foreground: the
   app comes to the front and your pointer moves for a few seconds before both go back. A drop at the
-  end of a line doesn't put a space before the word.
+  end of a line doesn't put a space before the word. A background version
+  ([prototype and results](docs/benchmarks/2026-10-03-background-drag.md)) reached a test app in 5/5
+  quiet trials and 2/5 during real use, but moved TextEdit text 0/10, so it isn't in the plugin.
 - There's no real hover, since events go to the app and the real pointer never moves. The skill covers
   most cases: tooltips are readable as `Help:` text in the UI state, and hover menus usually open through
   an element's secondary actions, a right-click or a key. Mouse-moved events posted to a background app
