@@ -1,6 +1,6 @@
 # Change review
 
-On by default. `SLEIGHT_CHANGE_REVIEW=0` turns it off.
+Off by default. `SLEIGHT_CHANGE_REVIEW=1` turns it on.
 
 ## Capture
 

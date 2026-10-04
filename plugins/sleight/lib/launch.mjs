@@ -373,7 +373,7 @@ export function run({ leaseDirectory } = {}) {
     preapproved,
     grantAudit,
     flowRules,
-    changeReview: process.env.SLEIGHT_CHANGE_REVIEW !== '0',
+    changeReview: process.env.SLEIGHT_CHANGE_REVIEW === '1',
     // End the engine's turn after 30 s without a running call, so the app it
     // holds is released even where the mod doesn't run. 0 turns this off.
     idleTurnEndMs: Number(process.env.SLEIGHT_IDLE_TURN_END_MS ?? 30000),

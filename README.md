@@ -361,7 +361,8 @@ An audit write failure falls back to asking. List grants never send an engine pe
 
 ## Review changes
 
-Change review is on by default. Set `SLEIGHT_CHANGE_REVIEW=0` to turn it off.
+Set `SLEIGHT_CHANGE_REVIEW=1` to turn this on. It's off by default: with it on, both benchmark tasks that open a
+TextEdit file through the Open dialog were refused before editing (0/2 on 2026-10-03 and again on 2026-10-04).
 Read the intended window with a standalone `let app = await cua.getApp("TextEdit")` before editing.
 For a document with a `file://` URL, sleight saves a private copy before the first possible edit.
 Open dialogs and same-app sheets can proceed without a copy. If a file was first seen after an
