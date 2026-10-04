@@ -1,0 +1,55 @@
+{
+  "terminalExitCode": 1,
+  "reason": "One Ctrl-C through the owned terminal after several minutes waiting for the shared live lock; no trial started and no lock was acquired.",
+  "preparation": {
+    "startedAt": "2026-10-04T13:42:29.735Z",
+    "commands": [
+      {
+        "command": "/usr/bin/sw_vers",
+        "args": [],
+        "startedAt": "2026-10-04T13:42:29.738Z",
+        "stdout": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+        "stderr": "",
+        "exitCode": 0,
+        "endedAt": "2026-10-04T13:42:29.772Z"
+      },
+      {
+        "command": "/usr/bin/swiftc",
+        "args": [
+          "-O",
+          "-module-cache-path",
+          "/private/tmp/sleight-text-drag-followup-RCZGKb/module-cache",
+          "-o",
+          "/private/tmp/sleight-text-drag-followup-RCZGKb/fixture",
+          "bench/textedit-drag-fixture.swift"
+        ],
+        "startedAt": "2026-10-04T13:42:29.773Z",
+        "stdout": "",
+        "stderr": "",
+        "exitCode": 0,
+        "endedAt": "2026-10-04T13:42:51.376Z"
+      },
+      {
+        "command": "/usr/bin/swiftc",
+        "args": [
+          "-O",
+          "-module-cache-path",
+          "/private/tmp/sleight-text-drag-followup-RCZGKb/module-cache",
+          "-o",
+          "/private/tmp/sleight-text-drag-followup-RCZGKb/drag",
+          "bench/background-drag/background-drag.swift"
+        ],
+        "startedAt": "2026-10-04T13:42:51.376Z",
+        "stdout": "",
+        "stderr": "",
+        "exitCode": 0,
+        "endedAt": "2026-10-04T13:42:52.544Z"
+      }
+    ],
+    "runs": [],
+    "platform": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+    "prepared": true,
+    "exitCode": 0
+  },
+  "recordedAt": "2026-10-04T13:51:26.310Z"
+}

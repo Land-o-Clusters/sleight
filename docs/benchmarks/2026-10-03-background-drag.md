@@ -4,6 +4,10 @@ Measured on macOS 27.0 (26A428), Apple Silicon, 2026-10-03. Background event del
 is possible in DragProbe. Moving selected text in TextEdit remains unproven.
 The existing MCP `drag` tool keeps its foreground code.
 
+A [2026-10-04 follow-up](2026-10-04-background-text-drag.md) corrected the TextEdit drop
+point, measured longer holds and compared PID and PSN posting. Its raw results include
+successful background text moves. The counts below describe the original attempts.
+
 ## Mechanism
 
 `bench/background-drag/helper.mjs` compiles the Swift helper on its first call

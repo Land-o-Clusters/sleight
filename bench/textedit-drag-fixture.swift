@@ -39,6 +39,7 @@ if let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com
             let status = AXUIElementSetAttributeValue(area, "AXSelectedTextRange" as CFString, rangeValue(0, 5))
             let start = rect(area, 0, 5)
             let end = rect(area, 16, 0)
+            let lastGlyph = rect(area, 15, 1)
             var point = CGPoint.zero
             if let pos = attr(window, "AXPosition"), CFGetTypeID(pos) == AXValueGetTypeID() {
                 _ = AXValueGetValue(unsafeBitCast(pos, to: AXValue.self), .cgPoint, &point)
@@ -48,6 +49,11 @@ if let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com
             if let start, let end {
                 output["from"] = [Double(start.midX - point.x), Double(start.midY - point.y)]
                 output["to"] = [Double(end.midX - point.x + 3), Double(end.midY - point.y)]
+            }
+            if let start, let lastGlyph {
+                output["startBounds"] = [Double(start.minX), Double(start.minY), Double(start.width), Double(start.height)]
+                output["endGlyphBounds"] = [Double(lastGlyph.minX), Double(lastGlyph.minY), Double(lastGlyph.width), Double(lastGlyph.height)]
+                output["windowOrigin"] = [Double(point.x), Double(point.y)]
             }
             let title = attr(window, "AXTitle") as? String
             let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], 0) as? [[String: Any]] ?? []
@@ -60,6 +66,25 @@ if let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com
             }
             if matches.count == 1 { output["windowId"] = matches[0][kCGWindowNumber as String] }
             else { output["ok"] = false }
+        } else if op == "ax-drag" {
+            var names: CFArray?
+            let status = AXUIElementCopyActionNames(area, &names)
+            let actions = names as? [String] ?? []
+            // An action must be advertised by this exact text area. AXPick is
+            // obsolete selection, not a drag API. Never substitute text editing.
+            let drag = actions.first { $0 == "AXDrag" }
+            let drop = actions.first { $0 == "AXDrop" }
+            output = ["ok": false, "active": app.isActive, "actionsStatus": status.rawValue, "actions": actions,
+                      "text": attr(area, "AXValue") as? String ?? ""]
+            if let drag, let drop, !app.isActive {
+                let dragStatus = AXUIElementPerformAction(area, drag as CFString)
+                output["dragStatus"] = dragStatus.rawValue
+                if dragStatus == .success {
+                    let dropStatus = AXUIElementPerformAction(area, drop as CFString)
+                    output["dropStatus"] = dropStatus.rawValue
+                    output["ok"] = dropStatus == .success
+                }
+            } else { output["error"] = "TextEdit does not advertise AXDrag and AXDrop, or is active" }
         } else {
             output = ["ok": true, "text": attr(area, "AXValue") as? String ?? "", "active": app.isActive]
         }

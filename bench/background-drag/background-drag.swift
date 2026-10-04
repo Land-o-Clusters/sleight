@@ -33,7 +33,9 @@ struct Request: Decodable {
     var settleMs: Int = 1500
     var mode: String = "window-location"
     var select: Bool = false // benchmark only: double click before the drag
-    enum CodingKeys: String, CodingKey { case app, from, to, windowTitle, windowId, holdMs, steps, settleMs, mode, select, abortAfterStep }
+    let command: Bool?
+    let posting: String
+    enum CodingKeys: String, CodingKey { case app, from, to, windowTitle, windowId, holdMs, steps, settleMs, mode, select, abortAfterStep, command, posting }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         app = try c.decode(String.self, forKey: .app)
@@ -47,6 +49,8 @@ struct Request: Decodable {
         settleMs = try c.decodeIfPresent(Int.self, forKey: .settleMs) ?? 1500
         mode = try c.decodeIfPresent(String.self, forKey: .mode) ?? "window-location"
         select = try c.decodeIfPresent(Bool.self, forKey: .select) ?? false
+        command = try c.decodeIfPresent(Bool.self, forKey: .command)
+        posting = try c.decodeIfPresent(String.self, forKey: .posting) ?? "pid"
     }
 }
 
@@ -57,20 +61,39 @@ func emit(_ value: [String: Any]) {
 func failure(_ message: String) -> NSError {
     NSError(domain: "background-drag", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
 }
-func perform(_ request: Request) throws -> [String: Any] {
+func validate(_ request: Request) throws {
     guard request.from.count == 2, request.to.count == 2,
           (request.from + request.to).allSatisfy({ $0.isFinite }),
           (0...5000).contains(request.holdMs), (1...100).contains(request.steps),
           (0...5000).contains(request.settleMs),
+          ["pid", "psn"].contains(request.posting),
           request.abortAfterStep == nil || (1...request.steps).contains(request.abortAfterStep!),
           ["pid", "window", "key-window", "nsevent", "nsevent-command", "window-location", "key-window-location"].contains(request.mode) else {
         throw failure("invalid coordinates, timing, steps or mode")
     }
+}
+func perform(_ request: Request) throws -> [String: Any] {
+    try validate(request)
     guard AXIsProcessTrusted() else { throw failure("Accessibility permission is required") }
     guard let app = NSWorkspace.shared.runningApplications.first(where: {
         $0.localizedName == request.app || $0.bundleIdentifier == request.app || $0.bundleURL?.path == request.app
     }) else { throw failure("\(request.app) isn't running") }
     let pid = app.processIdentifier
+    // Compare the legacy process-serial-number entry point with postToPid.
+    // Resolve Carbon at runtime because modern Swift marks GetProcessForPID unavailable.
+    var psn = ProcessSerialNumber()
+    var services: UnsafeMutableRawPointer?
+    defer { if let services { dlclose(services) } }
+    if request.posting == "psn" {
+        services = dlopen("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices", RTLD_NOW)
+        guard let services, let symbol = dlsym(services, "GetProcessForPID") else { throw failure("GetProcessForPID unavailable") }
+        typealias GetPSN = @convention(c) (Int32, UnsafeMutablePointer<ProcessSerialNumber>) -> Int32
+        guard unsafeBitCast(symbol, to: GetPSN.self)(pid, &psn) == 0 else { throw failure("GetProcessForPID failed") }
+    }
+    func send(_ event: CGEvent) {
+        if request.posting == "psn" { event.postToPSN(processSerialNumber: &psn) }
+        else { event.postToPid(pid) }
+    }
     func frontPid() -> Int32 {
         // NSWorkspace receives activation notifications on the run loop. Pump it
         // before reading, instead of keeping its first observation for the burst.
@@ -156,7 +179,7 @@ func perform(_ request: Request) throws -> [String: Any] {
             let nsType: NSEvent.EventType = type == .leftMouseDown ? .leftMouseDown : type == .leftMouseUp ? .leftMouseUp : type == .leftMouseDragged ? .leftMouseDragged : .mouseMoved
             guard let nsEvent = NSEvent.mouseEvent(with: nsType,
                     location: CGPoint(x: point.x - frame.minX, y: frame.height - (point.y - frame.minY)),
-                    modifierFlags: (request.mode == "nsevent-command" || request.mode.hasSuffix("window-location")) ? .command : [],
+                    modifierFlags: (request.command ?? (request.mode == "nsevent-command" || request.mode.hasSuffix("window-location"))) ? .command : [],
                     timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: Int(window),
                     context: nil, eventNumber: 1, clickCount: Int(clicks), pressure: type == .leftMouseUp ? 0 : 1),
                   let cg = nsEvent.cgEvent else { throw failure("NSEvent creation failed") }
@@ -179,13 +202,13 @@ func perform(_ request: Request) throws -> [String: Any] {
         try cancellation.check()
         guard frontPid() == front else { throw failure("front app changed during drag") }
         let event = try makeEvent(type, point, clicks: clicks)
-        event.postToPid(pid)
+        send(event)
         sample("event-\(type.rawValue)")
     }
     try wait(request.settleMs)
     var release = try makeEvent(.leftMouseUp, start, clicks: 2)
     var pressed = false
-    defer { if pressed { release.timestamp = DispatchTime.now().uptimeNanoseconds; release.postToPid(pid) } }
+    defer { if pressed { release.timestamp = DispatchTime.now().uptimeNanoseconds; send(release) } }
     if request.select {
         try post(.leftMouseDown, start, clicks: 2)
         pressed = true
@@ -214,12 +237,18 @@ func perform(_ request: Request) throws -> [String: Any] {
     let unchanged = samples.allSatisfy { ($0["pointer"] as! [Double]) == [Double(saved.x), Double(saved.y)] }
     let stayedBackground = samples.allSatisfy { ($0["frontPid"] as! Int32) == front }
     return ["ok": true, "posted": true, "deliveryVerified": false, "pid": pid, "window": window,
-            "mode": request.mode, "keyStatuses": keyStatuses, "pointerUnchanged": unchanged,
+            "mode": request.mode, "posting": request.posting, "holdMs": request.holdMs,
+            "command": request.command ?? (request.mode == "nsevent-command" || request.mode.hasSuffix("window-location")),
+            "keyStatuses": keyStatuses, "pointerUnchanged": unchanged,
             "stayedBackground": stayedBackground, "samples": samples]
 }
 do {
-    guard CommandLine.arguments.count == 2 else { throw failure("expected one JSON request") }
-    let request = try JSONDecoder().decode(Request.self, from: Data(CommandLine.arguments[1].utf8))
-    emit(try perform(request))
+    let validateOnly = CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--validate-only"
+    guard CommandLine.arguments.count == 2 || validateOnly else { throw failure("expected one JSON request") }
+    let request = try JSONDecoder().decode(Request.self, from: Data(CommandLine.arguments[validateOnly ? 2 : 1].utf8))
+    if validateOnly {
+        try validate(request)
+        emit(["ok": true, "posting": request.posting, "command": request.command ?? (request.mode == "nsevent-command" || request.mode.hasSuffix("window-location")), "select": request.select, "holdMs": request.holdMs])
+    } else { emit(try perform(request)) }
 } catch { emit(["ok": false, "error": error.localizedDescription]); exit(1) }
 withExtendedLifetime(signalSources) {}
