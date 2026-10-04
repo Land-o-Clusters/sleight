@@ -28,6 +28,12 @@ it has one, then a dedicated MCP tool or connector. Web pages belong to browser 
 5. Use `app.getScreenshot()` with `nodeRepl.emitImage(...)` when the accessibility tree doesn't show what
    you need, such as canvases or images.
 
+The relay takes a window lease before acting. If another sleight session holds it, the refusal names
+that session and the seconds left. Stop actions and tell the user, using reads if needed to inspect
+the window. The lease ends with the turn or after 30 seconds without renewal, but it cannot coordinate
+Codex or other tools that do not take it. Local drag reserves the entire app, while menu and
+notification actions reserve the desktop.
+
 ## Hover: what to do instead
 
 Events go to the app, not through the real pointer, so nothing ever hovers. Most hover needs have a

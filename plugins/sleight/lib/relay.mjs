@@ -54,6 +54,7 @@ import { randomUUID } from 'node:crypto';
 import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRead, readCode, guardedCode } from './document-scope.mjs';
 import { ChangeReview, REVIEW_TOOL } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
+import { isLeaseRead } from './input-lease.mjs';
 
 const META_KEY = 'x-codex-turn-metadata';
 const HIDDEN_TOOLS = new Set(['js_add_node_module_dir']);
@@ -120,6 +121,8 @@ export function createRelay({
   // benchmark tasks, 2026-10-04). SLEIGHT_CHANGE_REVIEW=1 turns it on.
   changeReview = false,
   idleTurnEndMs,
+  inputLease,
+  onLeaseFault = () => {},
   trace = () => {},
 }) {
   let turnId = randomUUID();
@@ -187,6 +190,13 @@ export function createRelay({
     if ((args.op ?? 'list') === 'list') {
       toClient({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: entries.map(e => changes.describe(e)).join('\n\n') || 'No saved-file changes captured this session.' }] } }); return;
     }
+    if (inputLease && entries.length) {
+      try {
+        const key = inputLease.acquire({ appId: 'desktop', app: 'macOS', title: 'change review', url: null }, 'desktop');
+        leaseCalls.set(msg.id, { key }); refreshHeartbeat();
+      } catch (err) { leaseStop(msg, err.message); return; }
+    }
+    clearTimeout(idleTimer);
     reviewing = true;
     const results = [];
     let failed = false;
@@ -200,11 +210,116 @@ export function createRelay({
         const decision = await answer.catch(() => 'cancel');
         if (disposed) return;
         trace('review-decision', { path: entry.path, decision });
-        try { results.push(['keep', 'undo'].includes(decision) ? changes.decide(entry, decision) : `${entry.path}: pending, no user decision.`); }
+        try {
+          if (['keep', 'undo'].includes(decision)) {
+            if (closing || leaseFault) throw new Error('Input lease: this session is closing.');
+            const key = leaseCalls.get(msg.id)?.key;
+            if (key) inputLease.renew([key]);
+            results.push(changes.decide(entry, decision));
+          } else results.push(`${entry.path}: pending, no user decision.`);
+        }
         catch (err) { failed = true; results.push(`Refused: ${err.message}`); }
       }
       toClient({ jsonrpc: '2.0', id: msg.id, result: { ...(failed ? { isError: true } : {}), content: [{ type: 'text', text: results.join('\n') || 'No saved-file changes captured this session.' }] } });
-    } finally { reviewing = false; }
+    } finally {
+      reviewing = false;
+      const key = leaseCalls.get(msg.id)?.key;
+      finishedCall(msg.id);
+      if (key) {
+        try { inputLease.release([key]); }
+        catch (err) { trace('input-lease-release-error', { error: err.message }); }
+      }
+      scheduleIdleEnd();
+    }
+  }
+  let leaseWindow;
+  let leaseFault;
+  let leaseTimer;
+  let closing;
+  let renewalFailures = 0;
+  const leaseCalls = new Map();
+  const drained = new Set();
+  function stopHeartbeat() { clearInterval(leaseTimer); leaseTimer = undefined; }
+
+  function failLease(error) {
+    leaseFault = error.message;
+    trace('input-lease-error', { error: leaseFault });
+    closing = true;
+    stopHeartbeat();
+    onLeaseFault(error);
+  }
+
+  function leaseStop(msg, reason) {
+    toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true,
+      content: [{ type: 'text', text: reason.startsWith('Input lease:') ? reason : `Input lease: ${reason}` }] } });
+  }
+  function refreshHeartbeat() {
+    if (disposed) { stopHeartbeat(); return; }
+    const keys = [...leaseCalls.values()].map(c => c.key).filter(Boolean);
+    if (!keys.length) { stopHeartbeat(); return; }
+    if (leaseTimer) return;
+    leaseTimer = setInterval(() => {
+      const active = new Set([...leaseCalls.values()].map(c => c.key).filter(Boolean));
+      try { inputLease.renew(active); renewalFailures = 0; }
+      catch (err) {
+        trace('input-lease-renewal-error', { error: err.message });
+        // Three busy ticks give up after 15 s, leaving time to stop the engine
+        // before a lease renewed on the preceding tick can expire at 30 s.
+        if (!err.leaseBusy || ++renewalFailures >= 3) failLease(err);
+      }
+    }, 5000);
+    leaseTimer.unref?.();
+  }
+  function finishedCall(id) {
+    const call = leaseCalls.get(id);
+    if (call) {
+      if (call.key && !leaseFault && !disposed) {
+        try { inputLease.renew([call.key]); }
+        catch (err) { if (!err.leaseBusy) failLease(err); else trace('input-lease-renewal-error', { error: err.message }); }
+      }
+      leaseCalls.delete(id);
+      refreshHeartbeat();
+    }
+    if (running.delete(id)) scheduleIdleEnd();
+    if (!running.size) { for (const resolve of drained) resolve(); drained.clear(); }
+  }
+  function releaseLeases() {
+    stopHeartbeat();
+    try { inputLease?.close(); }
+    catch (err) { trace('input-lease-release-error', { error: err.message }); }
+    leaseFault = undefined;
+    renewalFailures = 0;
+  }
+
+  function prepareLease(msg) {
+    if (!inputLease || msg.method !== 'tools/call') return true;
+    const name = msg.params?.name;
+    if (name === TURN_END_TOOL) {
+      if (running.size) { leaseStop(msg, 'an action or read is still running; end the turn after it finishes.'); return false; }
+      return true;
+    }
+    if (name === DOCUMENT_TOOL.name) return true;
+    if (name === 'js_reset') { leaseWindow = undefined; return true; }
+    if (name !== 'js' && !localNames.has(name)) return true;
+    const args = msg.params.arguments ?? {};
+    const code = args.code;
+    if (name === 'js' && typeof code !== 'string') { leaseStop(msg, 'js needs code.'); return false; }
+    const read = name === 'js' ? typeof code === 'string' && isLeaseRead(code)
+      : (name === 'menu_bar' && args.op === 'apps') || (name === 'notifications' && args.op === 'list');
+    if (msg.id === undefined) { leaseStop(msg, 'actions and reads need a request id.'); return false; }
+    let key;
+    if (!read) {
+      if (running.size) { leaseStop(msg, 'another call in this session is pending.'); return false; }
+      if (leaseFault) { leaseStop(msg, leaseFault); return false; }
+      if (name !== 'js') {
+        leaseCalls.set(msg.id, { localAction: true }); return true;
+      }
+      if (!leaseWindow?.appId) { leaseStop(msg, 'read the intended window with one standalone cua.getApp call before acting; a bundle ID and full window header are required.'); return false; }
+      try { key = inputLease.acquire(leaseWindow); }
+      catch (err) { leaseStop(msg, err.message); return false; }
+    }
+    leaseCalls.set(msg.id, { key, observe: name === 'js' && (!read || !/getScreenshot|rewriteDocumentation/.test(code)) });
+    return true;
   }
 
   const documentAllowed = () => documentGrants.has(documentKey(observedDocument));
@@ -263,7 +378,7 @@ export function createRelay({
 
   function scheduleIdleEnd() {
     clearTimeout(idleTimer);
-    if (!idleTurnEndMs || running.size || !turnUsed) return;
+    if (!idleTurnEndMs || running.size || reviewing || !turnUsed) return;
     idleTimer = setTimeout(() => {
       trace('idle-turn-end', { turnId });
       endOpenTurn();
@@ -273,13 +388,21 @@ export function createRelay({
   let nextElicitId = 0;
 
   const toServer = msg => {
+    if (serverIn.writableEnded || serverIn.destroyed) { trace('server-input-closed', { id: msg.id }); return; }
     trace('to-server', msg);
     serverIn.write(JSON.stringify(msg) + '\n');
   };
   const toClient = msg => {
+    if (clientOut.writableEnded || clientOut.destroyed) { trace('client-output-closed', { id: msg.id }); return; }
     trace('to-client', msg);
     clientOut.write(JSON.stringify(msg) + '\n');
   };
+  for (const [name, stream] of [['server-input', serverIn], ['client-output', clientOut]]) {
+    stream.on('error', err => {
+      trace('stream-error', { stream: name, error: err.message });
+      failLease(err);
+    });
+  }
 
   function turnMeta() {
     return JSON.stringify({ session_id: sessionId, turn_id: turnId });
@@ -360,16 +483,28 @@ export function createRelay({
     localRunning.add(msg.id);
     let result;
     try {
+      if (leaseCalls.get(msg.id)?.localAction) {
+        const name = msg.params.name;
+        const args = msg.params.arguments ?? {};
+        const target = name === 'drag' ? await (localTools.target?.(args) ?? Promise.resolve(
+          [leaseWindow?.app, leaseWindow?.appId].includes(args.app) ? leaseWindow : undefined))
+          : { appId: 'desktop', app: 'macOS', title: 'local desktop controls', url: null };
+        if (closing) throw new Error('Input lease: this session is closing.');
+        const key = inputLease.acquire(target, name === 'drag' ? 'app' : 'desktop');
+        leaseCalls.set(msg.id, { key }); refreshHeartbeat();
+      }
       result = await localTools.call(msg.params.name, msg.params.arguments ?? {}, approve);
     } catch (err) {
       result = { content: [{ type: 'text', text: String(err?.message ?? err) }], isError: true };
     }
     localRunning.delete(msg.id);
     if (plan) flowRules.observe(result, plan);
+    finishedCall(msg.id);
     toClient({ jsonrpc: '2.0', id: msg.id, result });
   }
 
   function rotateTurn() {
+    releaseLeases();
     turnId = randomUUID();
     turnUsed = false;
   }
@@ -392,6 +527,7 @@ export function createRelay({
       elicitations.delete(msg.id);
       return;
     }
+    if (closing && msg.method === 'tools/call') { leaseStop(msg, 'this session is closing.'); return; }
     if (msg.method === 'tools/call') {
       if (disposed) { changeStop(msg, 'session has ended'); return; }
       if (flowAsking) { flowStop(msg, 'wait for the user decision'); return; }
@@ -430,13 +566,17 @@ export function createRelay({
         if (typeof code !== 'string' || msg.id === undefined) { documentStop(msg, 'js needs code and a request id'); return; }
         const read = isDocumentRead(code);
         if (!read && !documentAllowed()) { documentStop(msg, 'this window is not approved'); return; }
+        if (!prepareLease(msg)) return;
         documentCalls.set(msg.id, { read, expected: read ? undefined : documentKey(observedDocument), engines: new Set(), risks: new Set() });
-        msg.params.arguments = { ...msg.params.arguments, code: read ? readCode(code) : guardedCode(code, observedDocument) };
-      }
-    }
+      } else if (!prepareLease(msg)) return;
+    } else if (!prepareLease(msg)) return;
+    refreshHeartbeat();
     if (msg.method === 'tools/call' && localNames.has(msg.params?.name)) {
       trace('from-client', msg);
       if (flowPlan) flowRules.forward(flowPlan);
+      turnUsed = true;
+      clearTimeout(idleTimer);
+      running.add(msg.id);
       callLocal(msg, flowPlan);
       return;
     }
@@ -460,20 +600,25 @@ export function createRelay({
         return;
       }
       if (name === 'js') {
-        const read = typeof originalCode === 'string' && isDocumentRead(originalCode);
+        const read = typeof originalCode === 'string' && isLeaseRead(originalCode);
         let entry;
         try {
-          if (changeReview && lastWindow?.url?.startsWith('file://') && changeCalls.size) throw new Error('another engine call is pending, wait for its result');
+          if (changeReview && !read && lastWindow?.url?.startsWith('file://') && changeCalls.size) throw new Error('another engine call is pending, wait for its result');
           if (changeReview && !read && lastWindow?.url?.startsWith('file://')) {
             entry = changes.before(lastWindow);
             trace('snapshot-before-call', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });
           }
-        } catch (err) { documentCalls.delete(msg.id); changeStop(msg, `cannot snapshot before acting: ${err.message}`); return; }
-        changeCalls.set(msg.id, { read, entry, expected: documentKey(lastWindow) });
-        if (!documentMode && typeof originalCode === 'string') {
+        } catch (err) { documentCalls.delete(msg.id); finishedCall(msg.id); changeStop(msg, `cannot snapshot before acting: ${err.message}`); return; }
+        changeCalls.set(msg.id, { read, entry, expected: documentKey(lastWindow),
+          observe: !read || !/getScreenshot|rewriteDocumentation/.test(originalCode) });
+        if (typeof originalCode === 'string') {
+          const target = documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow;
+          const reason = documentMode ? undefined : inputLease
+            ? 'Input lease stopped this action: window or URL changed. Read the intended window again before acting.'
+            : 'Change review stopped this action: window or URL changed. Read the intended window with one standalone cua.getApp call before editing.';
           if (read) msg.params.arguments.code = readCode(originalCode);
-          else if (entry) msg.params.arguments.code = guardedCode(originalCode, lastWindow,
-            'Change review stopped this action: window or URL changed. Read the intended window with one standalone cua.getApp call before editing.');
+          else if (documentMode || inputLease || entry) msg.params.arguments.code = guardedCode(originalCode, target, reason,
+            inputLease?.grant(leaseCalls.get(msg.id)?.key));
         }
       }
       msg.params._meta = { ...msg.params._meta, [META_KEY]: turnMeta() };
@@ -507,7 +652,7 @@ export function createRelay({
       const call = changeCalls.get(msg.id);
       changeCalls.delete(msg.id);
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
-      lastWindow = windowFromText(text);
+      if (call.observe) lastWindow = windowFromText(text);
       if (changeReview && !call.read) {
         changes.after(call.entry, !msg.error && !msg.result?.isError && documentKey(lastWindow) === call.expected);
         // A window first identified after an action has no trustworthy before copy.
@@ -533,7 +678,13 @@ export function createRelay({
         if (!call.read) observedDocument = undefined;
       }
     }
-    if (msg.method === undefined && running.delete(msg.id)) scheduleIdleEnd();
+    if (inputLease && msg.method === undefined && leaseCalls.get(msg.id)?.observe) {
+      const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+      const window = !msg.error && !msg.result?.isError && windowFromText(text);
+      const appId = msg.result?._meta?.['codex/toolSurface']?.app?.appId;
+      leaseWindow = window ? { ...window, ...(typeof appId === 'string' ? { appId } : {}) } : undefined;
+    }
+    if (msg.method === undefined) finishedCall(msg.id);
     if (ask && isAppApproval(msg)) {
       askUser(msg);
       return;
@@ -559,7 +710,8 @@ export function createRelay({
 
   // Ends the open turn, if any call used it. Resolves once the server answers
   // or after a short grace period.
-  function endOpenTurn() {
+  async function endOpenTurn() {
+    if (inputLease && running.size) await new Promise(resolve => drained.add(resolve));
     if (!turnUsed) return Promise.resolve();
     const id = `sleight-${nextInternalId++}`;
     const done = new Promise(resolve => {
@@ -587,5 +739,15 @@ export function createRelay({
     changes.dispose();
     trace('change-snapshots-deleted', { directory: changes.directory });
   }
-  return { endOpenTurn, dispose, get snapshotDirectory() { return changes.directory; }, get sessionId() { return sessionId; }, get turnId() { return turnId; } };
+  function close() {
+    closing = true;
+    clearTimeout(idleTimer);
+    try { dispose(); } finally { releaseLeases(); }
+  }
+  async function shutdown() {
+    closing = true;
+    await endOpenTurn();
+    close();
+  }
+  return { endOpenTurn, shutdown, close, dispose: close, get snapshotDirectory() { return changes.directory; }, get sessionId() { return sessionId; }, get turnId() { return turnId; } };
 }

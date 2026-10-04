@@ -8,8 +8,8 @@ The relay tracks Window and URL headers from completed `js` results. Before a
 potentially mutating `js` call, it copies the last observed `file://` document
 into a private session directory (mode 0700). A directory document is copied
 recursively. Later actions and review decisions retain the first copy.
-A standalone `cua.getApp` or inventory call counts as a read. Other JavaScript
-counts as a possible edit. A failed snapshot stops the call before forwarding.
+Standalone acquisition, inventory, AX-state and screenshot reads take no lease
+or snapshot. Other JavaScript counts as a possible edit. A failed snapshot stops the call before forwarding.
 
 After the action returns, the relay records hashes, file identities, sizes,
 permissions and modification/change timestamps for the document and its files.

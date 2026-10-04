@@ -31,13 +31,24 @@ export function readCode(code) {
 }
 
 // Advisory only: all of this runs in the same mutable JS realm as Claude's code.
-export function guardedCode(code, window, stopMessage = 'Document scope stopped this action: window or URL changed. Read the window and ask the user with document_scope.') {
+export function guardedCode(code, window, reason = 'Document scope stopped this action: window or URL changed. Read the window and ask the user with document_scope.', lease) {
   return `(() => {
     const parse = ${windowFromText.toString()};
     const state = globalThis.__sleightDocumentGuard ||= {
       getApp: cua.getApp.bind(cua), proxies: new WeakSet(), wrapped: new WeakMap()
     };
     state.expected = ${JSON.stringify(window)};
+    state.lease = ${JSON.stringify(lease) ?? 'undefined'};
+    const checkLease = async () => {
+      if (!state.lease) return;
+      const fs = await import('node:fs/promises');
+      let record;
+      try { record = JSON.parse(await fs.readFile(state.lease.path, 'utf8')); }
+      catch { throw new Error('Input lease stopped this action: the lease file is unavailable. End the turn and read the window again.'); }
+      if (record.token !== state.lease.token || record.expires <= Date.now()) {
+        throw new Error('Input lease stopped this action: ownership lost or expired. End the turn and read the window again.');
+      }
+    };
     const wrap = target => {
       if (state.proxies.has(target)) return target;
       if (state.wrapped.has(target)) return state.wrapped.get(target);
@@ -47,10 +58,12 @@ export function guardedCode(code, window, stopMessage = 'Document scope stopped 
         if (!['click', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction',
           'paste', 'pressKey', 'typeText'].includes(name)) return value.bind(raw);
         return async (...args) => {
+          await checkLease();
           const observed = parse(await raw.getAXState({ disableDiffing: true, emit: false }));
-          if (JSON.stringify(observed) !== JSON.stringify(state.expected)) {
-            throw new Error(${JSON.stringify(stopMessage)});
+          if (!observed || ['title', 'app', 'url'].some(key => observed[key] !== state.expected[key])) {
+            throw new Error(${JSON.stringify(reason)});
           }
+          await checkLease();
           return value.apply(raw, args);
         };
       } });

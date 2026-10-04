@@ -13,8 +13,10 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { createRelay } from './relay.mjs';
 import { loadFlowRules } from './flow-rules.mjs';
+import { InputLease } from './input-lease.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
 const SERVER_KEY = 'cua_repl';
@@ -106,8 +108,24 @@ function traceTo(setting) {
 const LIB = dirname(fileURLToPath(import.meta.url));
 const ICON = join(LIB, '..', 'assets', 'icon.png');
 const ASK_SECONDS = 300;
+const ownedHelpers = new Set();
+let helpersClosing = false;
+function ownHelper(child) {
+  ownedHelpers.add(child);
+  child.once('close', () => ownedHelpers.delete(child));
+  return child;
+}
+async function stopHelpers() {
+  helpersClosing = true;
+  await Promise.all([...ownedHelpers].map(child => new Promise(resolve => {
+    const force = setTimeout(() => child.kill('SIGKILL'), 2000);
+    child.once('close', () => { clearTimeout(force); resolve(); });
+    child.kill('SIGTERM');
+  })));
+}
 
 function askWithDialog(message, sessionScoped, options) {
+  if (helpersClosing) return Promise.resolve('cancel');
   // The engine asks 'Allow Computer Use to use "App"?'; sleight's own tools ask in plain words.
   const app = /^Allow Computer Use to use "(.+)"\?$/.exec(message)?.[1];
   const question = app ? `Allow Claude to use ${app}?` : message;
@@ -117,13 +135,13 @@ function askWithDialog(message, sessionScoped, options) {
     (sessionScoped ? 'A yes lasts until this Claude session ends.' : 'It asks again next time.');
   const args = ['-l', 'JavaScript', join(LIB, 'ask.js'), question, detail, ICON, String(ASK_SECONDS), flow ? 'flow' : review ? 'review' : 'approval'];
   return new Promise(resolve => {
-    execFile('osascript', args, (err, stdout, stderr) => {
+    ownHelper(execFile('osascript', args, (err, stdout, stderr) => {
       const answer = stdout.trim();
       if (!err && (review ? ['keep', 'undo', 'cancel'] : ['accept', 'decline', 'cancel']).includes(answer)) return resolve(answer);
       // Logged, so a broken prompt doesn't pass for a decline.
       process.stderr.write(`sleight: approval prompt failed: ${stderr || err?.message || answer}\n`);
       resolve('decline');
-    });
+    }));
   });
 }
 
@@ -191,14 +209,15 @@ const DRAG_TOOL = {
 };
 
 function runScript(script, request) {
+  if (helpersClosing) return Promise.resolve({ ok: false, error: 'sleight session is closing' });
   return new Promise(resolve => {
-    execFile('osascript', ['-l', 'JavaScript', join(LIB, script), JSON.stringify(request)], { timeout: 30000 }, (err, stdout, stderr) => {
+    ownHelper(execFile('osascript', ['-l', 'JavaScript', join(LIB, script), JSON.stringify(request)], { timeout: 30000 }, (err, stdout, stderr) => {
       try {
         resolve(JSON.parse(stdout));
       } catch {
         resolve({ ok: false, error: stderr.trim() || err?.message || 'no output' });
       }
-    });
+    }));
   });
 }
 
@@ -247,7 +266,7 @@ function approvalPrompt(env = process.env) {
   return setting === 'dialog' ? askWithDialog : undefined;
 }
 
-function run() {
+export function run({ leaseDirectory } = {}) {
   let flowRules;
   try { flowRules = loadFlowRules(); } catch (err) { fail(err.message); }
   const s = resolveServer();
@@ -259,13 +278,25 @@ function run() {
     env: { ...process.env, ...s.env },
   });
   child.on('error', err => fail(`could not start server: ${err.message}`));
-  child.on('exit', code => process.exit(code ?? 0));
+  child.on('close', async code => { await stopHelpers(); relay.close(); process.exit(code ?? 0); });
+  let terminating = false;
+  function terminateEngine(signal = 'SIGTERM') {
+    if (terminating) return;
+    terminating = true;
+    child.stdin.end();
+    // The launcher owns this child. Finish collecting it before exit cleanup
+    // releases the leases, including when a call or approval never answers.
+    setTimeout(() => child.kill(signal), 2000).unref();
+    setTimeout(() => child.kill('SIGKILL'), 5000).unref();
+  }
+  const sessionId = randomUUID();
 
   const relay = createRelay({
     clientIn: process.stdin,
     clientOut: process.stdout,
     serverIn: child.stdin,
     serverOut: child.stdout,
+    sessionId,
     // SLEIGHT_APPROVAL_SCOPE=once asks again on every action instead.
     approvalScope: ['once', 'document'].includes(process.env.SLEIGHT_APPROVAL_SCOPE) ? process.env.SLEIGHT_APPROVAL_SCOPE : 'session',
     ask: approvalPrompt(),
@@ -274,6 +305,8 @@ function run() {
     // End the engine's turn after 30 s without a running call, so the app it
     // holds is released even where the mod doesn't run. 0 turns this off.
     idleTurnEndMs: Number(process.env.SLEIGHT_IDLE_TURN_END_MS ?? 30000),
+    inputLease: new InputLease({ directory: leaseDirectory, holder: `session ${sessionId} (pid ${process.pid})` }),
+    onLeaseFault: err => { process.stderr.write(`sleight: ${err.message}; stopping the owned engine.\n`); terminateEngine(); },
     // SLEIGHT_MENU_BAR=0 leaves out the menu bar and notification tools,
     // SLEIGHT_DRAG=0 the drag tool.
     localTools: {
@@ -282,11 +315,15 @@ function run() {
         ...(process.env.SLEIGHT_DRAG === '0' ? [] : [DRAG_TOOL]),
       ],
       call: callLocalTool,
+      target: async args => {
+        const result = await runScript('lease-target.js', args);
+        if (!result.ok) throw new Error(`Input lease: ${result.error}`);
+        return result.target;
+      },
     },
     trace: process.env.SLEIGHT_TRACE ? traceTo(process.env.SLEIGHT_TRACE) : undefined,
   });
-  // Also covers unexpected engine exit. Only this process's private bank is removed.
-  process.on('exit', () => relay.dispose());
+  process.once('exit', () => relay.close());
 
   // Claude Code closing the connection is the end of the session: end the
   // open turn so the server releases what it holds, then stop the server.
@@ -294,12 +331,12 @@ function run() {
   async function stop(signal) {
     if (stopping) return;
     stopping = true;
-    await relay.endOpenTurn();
-    try { relay.dispose(); }
-    finally {
-      child.stdin.end();
-      setTimeout(() => child.kill(signal || 'SIGTERM'), 2000).unref();
-    }
+    // Begin the deadline before draining, not after an unanswered call.
+    const deadline = setTimeout(() => terminateEngine(signal), 3000);
+    deadline.unref();
+    await relay.shutdown();
+    clearTimeout(deadline);
+    terminateEngine(signal);
   }
   process.stdin.on('end', () => stop());
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
@@ -307,5 +344,7 @@ function run() {
   }
 }
 
-if (process.argv.includes('--doctor')) doctor();
-else run();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  if (process.argv.includes('--doctor')) doctor();
+  else run();
+}

@@ -183,10 +183,15 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
 
 ## Known problems
 
+- [Input leases](docs/design/input-lease.md) let one sleight session act on a window at a time.
+  Another session gets the holder's name and time left, while reads remain available. Leases expire
+  after 30 seconds without renewal and end with the turn or session. Local drag reserves the app,
+  while menu and notification actions reserve the desktop. Other tools, including Codex,
+  do not take these leases, and arbitrary JavaScript can bypass the injected guard.
 - Anything moving your real pointer in the app interrupts it. The engine watches real mouse and keyboard
   input to notice a person taking over, then makes Claude re-read the app. Another agent driving in the
-  foreground counts too. Background sessions can share the engine's helper fine (two sleight sessions, or
-  sleight next to Codex). In one test where Codex was also driving in the foreground, keystrokes typed
+  foreground counts too. Background sessions share the helper, with leases coordinating sleight's actions.
+  In one test where Codex was also driving in the foreground, keystrokes typed
   during the run showed up twice, and we still don't know why.
 - The engine's `app.drag` can't move selected text. A probe app (`bench/drag-probe/`) logged its whole
   drag lasting 14 ms, with two drag events between press and release, and text views only start a
