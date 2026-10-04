@@ -5,10 +5,10 @@
 // first (see launch.mjs).
 //
 //   osascript -l JavaScript drag.js '<json request>'
-//   { app, from: [x, y], to: [x, y], holdMs?, steps?, settleMs? }
+//   { app, from: [x, y], to: [x, y], windowId?, holdMs?, steps?, settleMs? }
 //
-// Coordinates are in the app's main window, from its top-left corner, the
-// same frame as the engine's screenshots. Prints one JSON object.
+// Coordinates are relative to one identified window's top-left corner, as in
+// the engine's screenshots. Ambiguous windows refuse. Prints one JSON object.
 
 ObjC.import('AppKit');
 ObjC.import('CoreGraphics');
@@ -20,6 +20,8 @@ function windows(onScreenOnly) {
   for (let i = 0; i < list.count; i++) {
     const w = list.objectAtIndex(i);
     out.push({
+      id: ObjC.unwrap(w.objectForKey('kCGWindowNumber')),
+      title: ObjC.unwrap(w.objectForKey('kCGWindowName')) || '',
       owner: ObjC.unwrap(w.objectForKey('kCGWindowOwnerName')),
       pid: ObjC.unwrap(w.objectForKey('kCGWindowOwnerPID')),
       layer: ObjC.unwrap(w.objectForKey('kCGWindowLayer')),
@@ -30,6 +32,130 @@ function windows(onScreenOnly) {
 }
 
 const inside = (b, p) => p.x >= b.X && p.x < b.X + b.Width && p.y >= b.Y && p.y < b.Y + b.Height;
+const attempt = (fn, fallback) => { try { return fn(); } catch (_) { return fallback; } };
+const at = (b, p) => ({ x: b.X + p[0], y: b.Y + p[1] });
+const sameBounds = (a, b) => ['X', 'Y', 'Width', 'Height'].every(k => Math.abs(a[k] - b[k]) < 0.5);
+function frame(el) {
+  const p = el.position(), s = el.size();
+  if (![...p, ...s].every(Number.isFinite) || s[0] <= 0 || s[1] <= 0) throw new Error('AX geometry is unavailable');
+  return { X: p[0], Y: p[1], Width: s[0], Height: s[1] };
+}
+function clip(a, b) {
+  const X = Math.max(a.X, b.X), Y = Math.max(a.Y, b.Y);
+  return { X, Y, Width: Math.max(0, Math.min(a.X + a.Width, b.X + b.Width) - X), Height: Math.max(0, Math.min(a.Y + a.Height, b.Y + b.Height) - Y) };
+}
+function resolveWindow(own, request) {
+  const list = () => JSON.stringify(own.map(w => ({ windowId: w.id, title: w.title, bounds: w.bounds })));
+  const candidates = request.windowId === undefined ? own.filter(w => inside(w.bounds, at(w.bounds, request.from))) : own.filter(w => w.id === request.windowId);
+  if (candidates.length !== 1) throw new Error(`drag target is ${candidates.length > 1 ? 'ambiguous; supply windowId' : 'unavailable; read the window again'}. Windows: ${list()}`);
+  return candidates[0];
+}
+function axWindow(pid, window) {
+  const proc = Application('System Events').processes.whose({ unixId: pid })[0];
+  const all = proc.windows();
+  const byId = all.filter(w => attempt(() => w.attributes.byName('AXWindowNumber').value(), null) === window.id);
+  const matches = byId.length ? byId : all.filter(w =>
+    attempt(() => sameBounds(frame(w), window.bounds) && (!window.title || w.name() === window.title), false));
+  if (matches.length !== 1) throw new Error(`cannot match window ${window.id} to one AX window; nothing was pressed`);
+  return matches[0];
+}
+function content(win, bounds) {
+  const areas = [], toolbars = [];
+  let visited = 0;
+  const walk = (el, parent, depth) => {
+    if (depth > 12 || ++visited > 300) throw new Error('AX content scan exceeded its depth or 300-element limit');
+    const role = attempt(() => el.role(), '');
+    const own = attempt(() => frame(el), null);
+    const visible = own ? clip(parent, own) : parent;
+    if (role === 'AXToolbar') { if (own) toolbars.push(visible); return; }
+    if (/^AX(?:Close|Minimize|Zoom|FullScreen|TitleBar)/.test(attempt(() => el.subrole(), ''))) return;
+    const body = ['AXScrollArea', 'AXTextArea', 'AXWebArea', 'AXTable', 'AXOutline', 'AXImage', 'AXSplitGroup'];
+    // A group covering the whole frame is not evidence of a content area.
+    if (own && (body.includes(role) || (role === 'AXGroup' && own.Y > bounds.Y))) areas.push({ el, role, bounds: visible });
+    for (const child of attempt(() => el.uiElements(), [])) walk(child, visible, depth + 1);
+  };
+  walk(win, bounds, 0);
+  return { areas, toolbars };
+}
+function validatePoints(info, bounds, from, to, isTextEdit) {
+  const start = at(bounds, from), end = at(bounds, to);
+  for (const [name, point] of [['from', start], ['to', end]]) {
+    if (!inside(bounds, point) || info.toolbars.some(b => inside(b, point)) || !info.areas.some(a => inside(a.bounds, point))) {
+      throw new Error(`${name} is outside the window content area (title bar, toolbar or frame); nothing was pressed`);
+    }
+  }
+  let text = null;
+  if (isTextEdit) {
+    const areas = info.areas.filter(a => a.role === 'AXTextArea' && inside(a.bounds, start));
+    if (areas.length !== 1 || !inside(areas[0].bounds, end)) throw new Error('TextEdit from and to must be inside the same visible text area; nothing was pressed');
+    const el = areas[0].el;
+    const value = el.value(), selected = el.attributes.byName('AXSelectedText').value();
+    if (typeof value !== 'string' || typeof selected !== 'string' || !selected.trim()) throw new Error('Select non-whitespace TextEdit text in this window before dragging; nothing was pressed');
+    text = { el, text: value, selected };
+  }
+  return { start, end, text };
+}
+
+// Only repair a uniquely identified word move whose whole text matches, with
+// at most one source-side space removed by TextEdit's smart deletion.
+function textDropSpace(before, word, after, selected) {
+  if (typeof before !== 'string' || typeof after !== 'string' || !word || word !== selected ||
+      !/^[\p{L}\p{N}]+$/u.test(word) || before === after) return null;
+  const source = before.indexOf(word);
+  const drop = after.indexOf(word);
+  if (source < 0 || drop <= 0 || before.indexOf(word, source + 1) >= 0 || after.indexOf(word, drop + 1) >= 0) return null;
+  if (/[\p{L}\p{N}]$/u.test(before.slice(0, source)) || /^[\p{L}\p{N}]/u.test(before.slice(source + word.length))) return null;
+  if (!/[\p{L}\p{N}]$/u.test(after.slice(0, drop)) || !/^(?:\r?\n|$)/.test(after.slice(drop + word.length))) return null;
+  const left = before.slice(0, source), right = before.slice(source + word.length);
+  const remainder = after.slice(0, drop) + after.slice(drop + word.length);
+  const candidates = [left + right];
+  if (left.endsWith(' ')) candidates.push(left.slice(0, -1) + right);
+  if (right.startsWith(' ')) candidates.push(left + right.slice(1));
+  return candidates.includes(remainder) ? ` ${word}` : null;
+}
+
+function repairTextDrop(snapshot) {
+  if (!snapshot) return { spaceInserted: false };
+  try {
+    const after = snapshot.el.value();
+    const selected = snapshot.el.attributes.byName('AXSelectedText');
+    const replacement = textDropSpace(snapshot.text, snapshot.selected, after, selected.value());
+    if (!replacement) return { spaceInserted: false };
+    selected.value = replacement;
+    const at = after.indexOf(snapshot.selected);
+    const expected = after.slice(0, at) + ' ' + after.slice(at);
+    if (snapshot.el.value() !== expected) throw new Error('TextEdit did not confirm the spacing repair; read the document before continuing');
+    return { spaceInserted: true };
+  } catch (e) {
+    return { spaceInserted: false, spacingError: String(e.message || e) };
+  }
+}
+
+function finishTextDrop(snapshot, window) {
+  if (!snapshot) return { spaceInserted: false };
+  const name = `TextEdit window ${window.id} (${window.title})`;
+  const lost = () => ({ lostText: true, error: `Dragged text disappeared from ${name} and was not inserted in its text area. Press Cmd+Z in that window now, then read it again before continuing.` });
+  // A deletion can join surrounding fragments into the selected word. Check
+  // its characters as well as presence. Smart deletion may change spaces.
+  const characters = text => {
+    const counts = new Map();
+    for (const c of text) if (!/\s/u.test(c)) counts.set(c, (counts.get(c) || 0) + 1);
+    return counts;
+  };
+  const before = characters(snapshot.text), selected = characters(snapshot.selected);
+  const verify = () => {
+    const after = snapshot.el.value();
+    if (typeof after !== 'string') throw new Error(`cannot verify the drop in ${name}; read that window before continuing`);
+    const counts = characters(after);
+    return !after.replace(/\s/gu, '').includes(snapshot.selected.replace(/\s/gu, '')) ||
+      [...selected.keys()].some(c => (counts.get(c) || 0) < before.get(c));
+  };
+  if (verify()) return lost();
+  const outcome = repairTextDrop(snapshot);
+  if (verify()) return lost();
+  if (outcome.spacingError) return { ...outcome, error: outcome.spacingError };
+  return outcome;
+}
 
 function findApp(name) {
   const apps = $.NSWorkspace.sharedWorkspace.runningApplications;
@@ -43,54 +169,68 @@ function findApp(name) {
 }
 
 function run(argv) {
+  let previous = null, saved = null, pid = null, pressed = false, didPress = false, post = null, current = null;
   try {
-    const { app, from, to, holdMs = 500, steps = 25, settleMs = 1500 } = JSON.parse(argv[0]);
+    const request = JSON.parse(argv[0]);
+    const { app, from, to, holdMs = 500, steps = 25, settleMs = 1500 } = request;
+    if (![from, to].every(p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite)) ||
+        (request.windowId !== undefined && (!Number.isInteger(request.windowId) || request.windowId <= 0)) ||
+        !Number.isInteger(steps) || steps < 1 || steps > 100 || !Number.isInteger(holdMs) || holdMs < 0 || holdMs > 5000 ||
+        !Number.isInteger(settleMs) || settleMs < 0 || settleMs > 5000) throw new Error('invalid drag points, windowId or timing');
     const target = findApp(app);
     if (!target) throw new Error(`${app} isn't running`);
-    const pid = target.processIdentifier;
-    // The app's main window: its largest normal-level window on screen.
+    pid = target.processIdentifier;
     const own = windows(true).filter(w => w.pid === pid && w.layer === 0);
     if (!own.length) throw new Error(`${app} has no window on screen`);
-    const main = own.reduce((a, b) => (a.bounds.Width * a.bounds.Height >= b.bounds.Width * b.bounds.Height ? a : b));
-    const at = ([x, y]) => ({ x: main.bounds.X + x, y: main.bounds.Y + y });
-    const start = at(from);
-    const end = at(to);
-
+    let main = resolveWindow(own, request);
+    const win = axWindow(pid, main);
     const ws = $.NSWorkspace.sharedWorkspace;
-    const previous = ws.frontmostApplication;
-    const saved = $.CGEventGetLocation($.CGEventCreate(null));
+    previous = ws.frontmostApplication;
+    saved = $.CGEventGetLocation($.CGEventCreate(null));
     target.activateWithOptions(0);
+    win.actions.byName('AXRaise').perform();
     // Right after the engine acts (say, selecting the text), a press that comes
     // at once doesn't take; 2 s later it does (2026-10-04). Wait for things to settle.
     delay(settleMs / 1000);
-    // Never press on another app's window: the topmost window at the start
-    // point must belong to this app. The engine's cursor overlay ("ChatGPT
-    // Computer Use") lets clicks through, so it doesn't count.
-    const top = windows(true).find(w => inside(w.bounds, start) && !/Computer Use$/.test(w.owner));
-    if (!top || top.pid !== pid) {
-      if (!previous.isNil()) previous.activateWithOptions(0);
-      throw new Error(`the start point isn't on ${app}'s window (another window covers it); nothing was pressed`);
+    main = windows(true).find(w => w.id === main.id && w.pid === pid && w.layer === 0);
+    if (!main || !sameBounds(frame(win), main.bounds)) throw new Error('the chosen window changed or disappeared; read it again');
+    const { start, end, text } = validatePoints(content(win, main.bounds), main.bounds, from, to, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit');
+    // Match the exact window at both endpoints, even for another window of
+    // the same app. The engine cursor overlay lets events through.
+    const currentWindows = windows(true);
+    const unchanged = currentWindows.find(w => w.id === main.id && w.pid === pid);
+    if (!unchanged || !sameBounds(unchanged.bounds, main.bounds)) throw new Error('the chosen window moved during validation; read it again');
+    for (const [name, point] of [['from', start], ['to', end]]) {
+      const top = currentWindows.find(w => inside(w.bounds, point) && !/Computer Use$/.test(w.owner));
+      if (!top || top.id !== main.id || top.pid !== pid) throw new Error(`${name} is covered by another window; nothing was pressed`);
     }
-
-    const post = (type, p) => {
+    post = (type, p) => {
       const e = $.CGEventCreateMouseEvent(null, type, $.CGPointMake(p.x, p.y), $.kCGMouseButtonLeft);
       $.CGEventSetIntegerValueField(e, 1, 1); // click state
       $.CGEventPost($.kCGHIDEventTap, e);
     };
     post($.kCGEventMouseMoved, start);
+    current = start;
     delay(0.05);
     post($.kCGEventLeftMouseDown, start);
+    pressed = true; didPress = true;
     delay(holdMs / 1000);
     for (let i = 1; i <= steps; i++) {
-      post($.kCGEventLeftMouseDragged, { x: start.x + (end.x - start.x) * i / steps, y: start.y + (end.y - start.y) * i / steps });
+      current = { x: start.x + (end.x - start.x) * i / steps, y: start.y + (end.y - start.y) * i / steps };
+      post($.kCGEventLeftMouseDragged, current);
       delay(0.02);
     }
     post($.kCGEventLeftMouseUp, end);
+    pressed = false;
     delay(0.2);
-    $.CGWarpMouseCursorPosition(saved);
-    if (!previous.isNil() && previous.processIdentifier !== pid) previous.activateWithOptions(0);
-    return JSON.stringify({ ok: true, app, from, to, holdMs, steps });
+    const outcome = finishTextDrop(text, main);
+    return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, holdMs, steps, ...outcome });
   } catch (e) {
-    return JSON.stringify({ ok: false, error: String(e.message || e) });
+    const message = String(e.message || e);
+    return JSON.stringify({ ok: false, error: message + (!didPress && !message.includes('nothing was pressed') ? '; nothing was pressed' : '') });
+  } finally {
+    if (pressed && post) attempt(() => post($.kCGEventLeftMouseUp, current));
+    if (saved) attempt(() => $.CGWarpMouseCursorPosition(saved));
+    if (previous && !previous.isNil() && previous.processIdentifier !== pid) attempt(() => previous.activateWithOptions(0));
   }
 }

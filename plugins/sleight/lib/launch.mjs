@@ -109,19 +109,23 @@ const LIB = dirname(fileURLToPath(import.meta.url));
 const ICON = join(LIB, '..', 'assets', 'icon.png');
 const ASK_SECONDS = 300;
 const ownedHelpers = new Set();
+const pendingDrags = new Set();
 let helpersClosing = false;
 function ownHelper(child) {
   ownedHelpers.add(child);
   child.once('close', () => ownedHelpers.delete(child));
   return child;
 }
-async function stopHelpers() {
+export async function stopHelpers() {
   helpersClosing = true;
   await Promise.all([...ownedHelpers].map(child => new Promise(resolve => {
     const force = setTimeout(() => child.kill('SIGKILL'), 2000);
     child.once('close', () => { clearTimeout(force); resolve(); });
     child.kill('SIGTERM');
   })));
+  // A cancelled drag may start its restoration helper after the child snapshot.
+  // The whole operation owns that cleanup, so drain it before the launcher exits.
+  await Promise.allSettled([...pendingDrags]);
 }
 
 function askWithDialog(message, sessionScoped, options) {
@@ -192,12 +196,15 @@ const DRAG_TOOL = {
   name: 'drag',
   description: 'A drag that holds the mouse down and moves in steps, for what app.drag in the js tool can\'t do, such as ' +
     'moving selected text (select it with js first). `from` and `to` are in the same frame as the app\'s engine ' +
-    'screenshot: its main window, from the top-left corner. It brings the app to the front and moves the real pointer ' +
+    'screenshot, from that window\'s top-left corner. Pass `windowId` when several windows fit; an ambiguous target refuses. ' +
+    'Both points must be in window content; TextEdit requires the same text area. A lost-text error tells you to press Cmd+Z in the named window. ' +
+    'It brings the app to the front and moves the real pointer ' +
     'for a few seconds, then puts both back, so use it only when app.drag fails. The user approves each app once per session.',
   inputSchema: {
     type: 'object',
     properties: {
       app: { type: 'string', description: 'App name, bundle ID or path' },
+      windowId: { type: 'integer', minimum: 1, description: 'Exact window ID from the engine inventory or app state' },
       from: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
       to: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
       holdMs: { type: 'integer', description: 'How long to hold before moving (default 500)' },
@@ -208,10 +215,10 @@ const DRAG_TOOL = {
   },
 };
 
-function runScript(script, request) {
-  if (helpersClosing) return Promise.resolve({ ok: false, error: 'sleight session is closing' });
+function runScript(script, request, { cleanup = false } = {}) {
+  if (helpersClosing && !cleanup) return Promise.resolve({ ok: false, error: 'sleight session is closing' });
   return new Promise(resolve => {
-    ownHelper(execFile('osascript', ['-l', 'JavaScript', join(LIB, script), JSON.stringify(request)], { timeout: 30000 }, (err, stdout, stderr) => {
+    ownHelper(execFile('osascript', ['-l', 'JavaScript', join(LIB, script), JSON.stringify(request)], { timeout: cleanup ? 3000 : 30000 }, (err, stdout, stderr) => {
       try {
         resolve(JSON.parse(stdout));
       } catch {
@@ -223,15 +230,34 @@ function runScript(script, request) {
 
 const text = (value, isError) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 1) }], ...(isError ? { isError: true } : {}) });
 
-async function callLocalTool(name, args, approve) {
+async function performDrag(args, runLocal) {
+  const focus = await runLocal('drag-focus.js', { op: 'capture', app: args.app });
+  if (!focus.ok) return text(focus.error, true);
+  let result;
+  try { result = await runLocal('drag.js', args); }
+  catch (e) { result = { ok: false, error: String(e.message || e) }; }
+  finally {
+    try {
+      const restored = await runLocal('drag-focus.js', { ...focus, op: 'restore' }, { cleanup: true });
+      if (!restored.ok) throw new Error(restored.error);
+    } catch (e) {
+      result = { ...result, ok: false, error: [result?.error, `Focus restoration failed: ${e.message || e}`].filter(Boolean).join('; ') };
+    }
+  }
+  if (!result.ok) return text(result.error, true);
+  const { ok, ...rest } = result;
+  return text(rest);
+}
+
+export async function callLocalTool(name, args, approve, runLocal = runScript) {
   if (name === 'drag') {
     if (!await approve(['drag', args.app], `Allow Claude to drag in ${args.app}? It moves your pointer for a few seconds.`)) {
       return text(`The user didn't allow dragging in ${args.app}. Stop and tell them; don't work around it.`, true);
     }
-    const result = await runScript('drag.js', args);
-    if (!result.ok) return text(result.error, true);
-    const { ok, ...rest } = result;
-    return text(rest);
+    const operation = performDrag(args, runLocal);
+    pendingDrags.add(operation);
+    try { return await operation; }
+    finally { pendingDrags.delete(operation); }
   }
   let request;
   if (name === 'menu_bar') {

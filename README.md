@@ -195,18 +195,18 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   during the run showed up twice, and we still don't know why. A
   [two-engine probe](docs/benchmarks/2026-10-04-double-keys.md) didn't reproduce it in 30/30 trials
   (engine 26.930.31730, 2026-10-04).
-- The engine's `app.drag` can't move selected text. A probe app (`bench/drag-probe/`) logged its whole
-  drag lasting 14 ms, with two drag events between press and release, and text views only start a
-  text drag after the mouse stays down for a moment. sleight's `drag` tool does that drag instead
-  (3/3 on the benchmark's text drag task, which `app.drag` failed 9/9), but in the foreground: the
-  app comes to the front and your pointer moves for a few seconds before both go back. A drop at the
-  end of a line doesn't put a space before the word. A background version
-  ([prototype and results](docs/benchmarks/2026-10-03-background-drag.md)) reached a test app in 5/5
-  quiet trials and 2/5 during real use. The first TextEdit trials moved text 0/10. A
-  [follow-up](docs/benchmarks/2026-10-04-background-text-drag.md) found the drop point 13 px above
-  the glyph line. With that point corrected, PID posting moved text 4/4 with unchanged pointer
-  samples and TextEdit inactive. Drops still join `gammaalpha` without a space. These are small
-  prototype trials on one macOS build. The background path remains outside the plugin.
+- The engine's `app.drag` failed TextEdit text moves 9/9. Local `drag` passed the benchmark 3/3
+  before the window/content guards. Later [two-window checks](docs/benchmarks/2026-10-04-drag-window-guards.md)
+  passed 8/8 (four refusals, four exact moves), with about 4.5 s of foreground pointer use per call.
+  Ambiguous windows require `windowId`. TextEdit endpoints must share a text area. AX scans refuse
+  above 300 elements or 12 levels ([review fixes](docs/benchmarks/2026-10-04-drag-round-2.md)).
+  Lost-text errors require Cmd+Z; whitespace-only selections refuse.
+  [Spacing repair](docs/benchmarks/2026-10-04-drag-polish.md) covers unique whole words at line ends.
+  Other selections need a spacing check, and concurrent edits can confuse snapshot comparisons.
+  The old-helper live reproduction was blocked by another session's larger window. Chess and
+  Calculator content guards remain unmeasured with this revision.
+  The [background prototype](docs/benchmarks/2026-10-04-background-text-drag.md) moved TextEdit text
+  4/4 after correcting its drop geometry, but joined `gammaalpha`. It remains outside the plugin.
 - There's no real hover, since events go to the app and the real pointer never moves. The skill covers
   most cases: tooltips are readable as `Help:` text in the UI state, and hover menus usually open through
   an element's secondary actions, a right-click or a key. Mouse-moved events posted to a background app
@@ -245,7 +245,10 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   [How it works](#how-it-works)). They work in the foreground: an open menu shows on screen and takes
   the keyboard until sleight closes it. Icons that open a SwiftUI window (`MenuBarExtra` in window
   style) ignore the accessibility press, so sleight clicks them for real and puts the pointer back.
-  Buttons without a label, tooltip or identifier show up nameless.
+  Controls without a label, tooltip or identifier get names such as `Button at (10, 20)`, measured
+  from the window's top-left corner, or `Button 3` if AX has no position. Their element numbers
+  remain the arguments to `press`. The fallback names and press mapping have unit tests; an
+  unnamed live popover button has not been checked with an approved app.
 - The engine refuses some apps outright ("not allowed … for safety reasons"): terminals (Terminal,
   iTerm2) and OpenAI's own apps (ChatGPT, Codex, Atlas, with their beta builds). The list is built
   into the engine's helper, so no approval changes it. It also respects any app blocks your
@@ -335,7 +338,8 @@ Source rules remember text fields and emitted values, then match exact substring
 - Per-app approvals apply however you've set up the `js` tool. An accepted approval lasts for the
   session ([Approval scope](#approval-scope)).
 - `drag` and the `menu_bar` fallback for SwiftUI icons post real mouse events and move your pointer for
-  a moment. `drag` refuses to press when another app's window covers the start point.
+  a moment. `drag` refuses to press when another window covers either endpoint or an endpoint falls
+  outside the chosen window's visible content.
 - The repo is small enough to read before you install it: a launcher and a relay, three small macOS
   scripts (the approval panel, the menu bar tools and the drag), a mod, a skill and two manifests.
 
@@ -370,7 +374,8 @@ Each arm ran from an empty folder, with only its own tool loaded:
 | Chess, drag a pawn and save the game | 3/3 | 3/3 | 68 s | 75 s |
 
 Both passed 15 of 18 and failed every text drag the same way (see [Known problems](#known-problems)).
-That was before sleight's `drag` tool: with it, the text drag task passed 3/3 on 2026-10-04 (Sonnet 5.5,
+That was before sleight's `drag` tool. The local tool passed the text drag task 3/3 before the
+window/content guards on 2026-10-04 (Sonnet 5.5,
 [`2026-10-04-drag-tool.json`](docs/benchmarks/2026-10-04-drag-tool.json)).
 With 3 runs per task, the speed differences are noise. The valid runs came to $16.00 at API prices.
 Logged in through a claude.ai plan, runs use plan limits rather than money.
