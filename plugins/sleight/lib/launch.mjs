@@ -10,7 +10,7 @@
 
 import { execFile, spawn } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -19,6 +19,7 @@ import { loadFlowRules } from './flow-rules.mjs';
 import { InputLease } from './input-lease.mjs';
 import { loadPreapproved } from './preapproved.mjs';
 import { createGrantAudit } from './preapproved-audit.mjs';
+import { BLOCKED_APP_TOOL, callBlockedApp } from './blocked-apps.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
 const SERVER_KEY = 'cua_repl';
@@ -144,7 +145,8 @@ function askWithDialog(message, sessionScoped, options) {
   const question = app ? `Allow Claude to use ${app}?` : message;
   const review = options?.kind === 'review';
   const flow = options?.kind === 'flow';
-  const detail = flow ? options.detail : review ? `${options.detail}\n\nUndo restores the saved copy shown above. Reopen it in the app afterward. Later leaves the decision pending.` : (app ? `Claude can then click and type in ${app} in the background. ` : '') +
+  // Blocked-app consent and terminal sends bring their own plain-words detail.
+  const detail = flow || options?.kind === 'blocked' ? options.detail : review ? `${options.detail}\n\nUndo restores the saved copy shown above. Reopen it in the app afterward. Later leaves the decision pending.` : (app ? `Claude can then click and type in ${app} in the background. ` : '') +
     (sessionScoped ? 'A yes lasts until this Claude session ends.' : 'It asks again next time.');
   const args = ['-l', 'JavaScript', join(LIB, 'ask.js'), question, detail, ICON, String(ASK_SECONDS), flow ? 'flow' : review ? 'review' : 'approval'];
   return new Promise(resolve => {
@@ -262,6 +264,10 @@ export function runScript(script, request, options = {}) {
   });
 }
 
+// Set in run(); the trace writer is on whenever tracing is asked for or the
+// blocked-apps feature is enabled, so every blocked_app action reaches it.
+let relayTrace = () => {};
+
 const text = (value, isError) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 1) }], ...(isError ? { isError: true } : {}) });
 
 async function performDrag(args, runLocal) {
@@ -283,17 +289,21 @@ async function performDrag(args, runLocal) {
   return text(rest);
 }
 
-export async function callLocalTool(name, args, approve, runLocal = runScript) {
-  if (name === 'hover') {
-    if (!await approve(['hover', args.app], `Allow Claude to hover in ${args.app}? It moves your pointer briefly.`)) {
-      return text(`The user didn't allow hovering in ${args.app}. Stop and tell them; don't work around it.`, true);
-    }
-    const { ok, image, ...rest } = await runLocal('hover.js', args);
-    const result = text(rest, !ok);
-    if (ok && image) result.content.push({ type: 'image', data: image, mimeType: 'image/png' });
-    return result;
+// target is the resolved lease target the relay passes (bundle ID and pid),
+// which pins blocked_app to exactly the app the consent named.
+export async function callLocalTool(name, args, approve, runLocal = runScript, target) {
+  if (name === 'blocked_app') {
+    // Consent, terminal per-send prompts, logging and settings refusal live in
+    // callBlockedApp; this only supplies the driver and a screenshot path.
+    return callBlockedApp(args, {
+      approve,
+      run: request => runLocal('blocked-app.js', request),
+      target,
+      shot: join(tmpdir(), `sleight-blocked-${process.pid}-${Date.now()}.png`),
+      trace: relayTrace,
+    });
   }
-  if (name === 'drag') {
+  if (name === 'hover') {
     if (!await approve(['drag', args.app], `Allow Claude to drag in ${args.app}? It moves your pointer for a few seconds.`)) {
       return text(`The user didn't allow dragging in ${args.app}. Stop and tell them; don't work around it.`, true);
     }
@@ -339,6 +349,19 @@ export function run({ leaseDirectory } = {}) {
   let flowRules, preapproved;
   try { flowRules = loadFlowRules(); preapproved = loadPreapproved(); } catch (err) { fail(err.message); }
   const { trace, grantAudit } = approvalLogging(preapproved);
+  // Driving the apps the engine refuses is off unless both keys are present:
+  // SLEIGHT_BLOCKED_APPS=1 in Claude Code's environment and the user's flag
+  // file (blocked-apps.mjs). A repo or plugin setting alone can't turn it on.
+  let blockedApps;
+  try { blockedApps = loadBlockedAppsFlag(); } catch (err) { fail(err.message); }
+  if (process.env.SLEIGHT_BLOCKED_APPS === '1' && !blockedApps) {
+    process.stderr.write(`sleight: SLEIGHT_BLOCKED_APPS is set, but ${FLAG_FILE} is missing or invalid; blocked_app stays off. See "Driving apps the engine refuses" in the README.\n`);
+  } else if (blockedApps && process.env.SLEIGHT_BLOCKED_APPS !== '1') {
+    process.stderr.write("sleight: blocked-apps.json is present; blocked_app also needs SLEIGHT_BLOCKED_APPS=1 in Claude Code's environment.\n");
+  }
+  const blockedEnabled = blockedApps && process.env.SLEIGHT_BLOCKED_APPS === '1';
+  const traceSetting = process.env.SLEIGHT_TRACE || (blockedEnabled ? '1' : undefined);
+  relayTrace = traceSetting ? traceTo(traceSetting) : trace;
   const s = resolveServer();
   if (s.error) fail(s.error);
   if (!existsSync(s.command)) fail(`server runtime missing: ${s.command}`);
@@ -381,11 +404,13 @@ export function run({ leaseDirectory } = {}) {
     onLeaseFault: err => { process.stderr.write(`sleight: ${err.message}; stopping the owned engine.\n`); terminateEngine(); },
     // SLEIGHT_MENU_BAR=0 leaves out the menu bar and notification tools,
     // SLEIGHT_DRAG=0 the drag tool, SLEIGHT_HOVER=0 the hover tool.
+    // blocked_app is listed only when the user opted in with both keys above.
     localTools: {
       tools: [
         ...(process.env.SLEIGHT_MENU_BAR === '0' ? [] : MENU_BAR_TOOLS),
         ...(process.env.SLEIGHT_DRAG === '0' ? [] : [DRAG_TOOL]),
         ...(process.env.SLEIGHT_HOVER === '0' ? [] : [HOVER_TOOL]),
+        ...(blockedEnabled ? [BLOCKED_APP_TOOL] : []),
       ],
       call: callLocalTool,
       target: async args => {
@@ -394,7 +419,8 @@ export function run({ leaseDirectory } = {}) {
         return result.target;
       },
     },
-    trace,
+    blockedApps: blockedEnabled,
+    trace: relayTrace,
   });
   process.once('exit', () => relay.close());
 

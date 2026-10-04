@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- `blocked_app`, opt-in with `SLEIGHT_BLOCKED_APPS=1` plus the user's
+  `~/Library/Application Support/sleight/blocked-apps.json`: drives the apps the engine's helper
+  refuses (Terminal, iTerm2, ChatGPT, Codex, Atlas and beta builds) through sleight's own macOS
+  Accessibility path, the one `menu_bar` and `drag` use (`docs/design/blocked-apps.md`). The
+  engine's refusal is OpenAI's code and is untouched. The user approves each app once per session;
+  the prompt says it covers approval buttons. In a terminal, every command send (typed text,
+  Return, Enter, paste) is shown exactly as it will be sent, with Allow Once and Don't Allow.
+  The relay forgets each answer, and the preapproved list cannot cover these sends. Settings
+  windows of these apps are refused. Actions take app-scope input leases and pass through the
+  flow rules; clicks on buttons named like Approve, Allow, Run or Accept are named in the result.
+  Built by Claude (GLM). `npm run check` passes (21 new tests). Live: with the owner clicking Allow,
+  a headless run read Terminal in the background, was shown the exact text `echo sleight\n` before
+  sending, typed it with the front app restored, and read again; a declined consent stopped the run
+  both times it happened (`docs/benchmarks/*-blocked-*.json` has every attempt). The final
+  echo-output confirmation and the Codex window click are reruns away:
+  `sh bench/blocked-live.sh terminal|codex`.
+
 ## 0.6.0 (2026-10-04)
 
 - Input leases: one sleight session acts on a window at a time. A second session gets the holder's
