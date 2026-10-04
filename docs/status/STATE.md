@@ -3,33 +3,33 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-04, before the owner's clear)
+## Banner (2026-10-04, 0.5.0 released)
 
-Public: `Land-o-Clusters/sleight`, `main` green in CI. CI on Linux failed from `bc81e44` to `5fb04d0`
-(change-review tests used `/private/tmp`), fixed in `b1f9d0d`. Latest release `v0.4.0`
-(GitHub release published, as for every release since 0.3.1). Installed on this Mac at user scope
-from the local directory marketplace, now 0.4.0. Running sessions keep the version they started with,
-because `/reload-plugins` doesn't restart the server. At the flush all 11 running sleight servers
-predated 0.3.1, so those sessions can still show as busy after Claude finishes until restarted.
+Public: `Land-o-Clusters/sleight`. Latest release `v0.5.0`: change review and flow rules, both opt-in
+(`SLEIGHT_CHANGE_REVIEW=1`, `SLEIGHT_FLOW_RULES=1`). The default path matches 0.4.0's behavior and
+passed 5/6 in one benchmark pass (Sonnet 5.5, medium). textedit-drag failed because the foreground
+drag collides with the owner using the Mac. Installed on this Mac at user scope from the local
+directory marketplace. Running sessions keep the version they started with until restarted.
 
-Engine problem at 23:50 EDT. A benchmark pass on `main` at `762db4a`, without the lease, passed 0/6. Every
-`cua.getApp` timed out with `-10005 timeoutReached`, and the Mac was unlocked and in use. The helper
-`SkyComputerUseService` had run since 09:29. No benchmark result means anything until that clears.
+The change review was on by default on `main` from `844fa60` to `570a1ab` and was never released.
+Its window guard failed both TextEdit tasks that open a file, so `570a1ab` made it opt-in.
 
-On main, unreleased: the change review (`review_changes`, Codex B, cherry-picked as `844fa60` and
-`bc81e44`). Plan: release it as 0.5.0 together with the input lease once that merges.
+The engine's helper wedged on 2026-10-03 at about 23:40 EDT: every `cua.getApp` timed out
+(`-10005 timeoutReached`) until the owner restarted ChatGPT at 00:04. Cause unknown; it followed a
+lease bench run that kills engine processes. Recorded in the README's known problems.
 
-In flight, all from the owner's Codex sessions working in their own worktrees under
-`~/Projects/sleight-wt/` (prompts written by this session, run by the owner):
+Codex time goes to known problems and enhancements, not benchmark runs (owner, 2026-10-04).
+sleight-arch runs one `--runs 1` pass per merge that changes default behavior.
 
-- `codex/input-lease` at `72f5a28` (Codex A, rebased onto `762db4a`): reviewed and not merged.
-  Safety paths pass, `npm run check` passes. One benchmark pass on it (Sonnet 5.5, medium) passed 1/6,
-  and in 4 of 6 tasks Claude got stuck: the lease counts only `let app = await cua.getApp(...)` as a
-  read, so `app = ...`, `let te = ...` and `listApps` re-reads were refused with an order to re-read.
-  Fix prompt for A: `.dev/prompts/codex-a-lease-fix.md` (untracked). Results
-  `bench/results/2026-10-04T03-41-11-216Z.json`.
-- `codex/flow-rules` (Codex B, not pushed yet): user-written rules for data moving between apps, opt-in,
-  enforced in the relay as a guard against mistakes. Prompt given at the flush.
+In flight, from the owner's Codex sessions in worktrees under `~/Projects/sleight-wt/` (prompts in
+`.dev/prompts/`, untracked, run by the owner):
+
+- `codex/input-lease` at `72f5a28` (Codex A, stopped by the owner for rerunning TextEdit benchmarks): reviewed, not merged. Safety paths pass. One benchmark
+  pass passed 1/6: the lease counts only `let app = await cua.getApp(...)` as a read, so `app = ...`,
+  `let te = ...` and `listApps` re-reads were refused, and Claude looped. Prompt:
+  `codex-a-lease-fix.md`.
+- `codex/change-review-guard` (Codex B, not started): fix the guard so the change review can be on by
+  default. Prompt: `codex-b-change-review-fix.md`.
 
 Review recipe for each Codex branch: read its design note and safety paths (user-only decisions, no
 auto-approval outside the benchmark allowlist), cherry-pick onto `main`, replace home paths in
@@ -38,17 +38,17 @@ published results with `~`, run `npm run check` and `npm run lint:prose`, push, 
 Branches already cherry-picked and safe to delete with their worktrees once their Codex sessions are
 done: `codex/watch-api-diff` (`c058475` as `2d48e5d`), `codex/background-drag` (`32fd681` as
 `ee49fd9`, prototype moved to `bench/background-drag/`), `codex/document-scope` (`9f3827a` as
-`ceebdca`), `codex/change-review` (`e4e4121` as `844fa60`).
+`ceebdca`), `codex/change-review` (`e4e4121` as `844fa60`), `codex/flow-rules` (`fdd29c7`, fast-forward).
 
 What sleight is now: the engine through a relay, plus its own tools where the engine stops short:
 `menu_bar` and `notifications` (System Events), `drag` (held, stepped, foreground; text drag 3/3
-against 0/9 for `app.drag`), `document_scope` (opt-in, `SLEIGHT_APPROVAL_SCOPE=document`) and
+against 0/9 for `app.drag`), `document_scope` (opt-in, `SLEIGHT_APPROVAL_SCOPE=document`), `flow_exception` (opt-in) and
 `review_changes`. The relay ends the engine's turn after 30 idle seconds (0.3.1). Background hover
 and background drag were measured and don't work reliably, as the README records. The
 fair benchmark tied LCU at 15/18 on Opus 5.5.
 
 Market research (Codex, gpt-6.1-sol) is in `.dev/research/2026-10-04-competitors.md`, untracked.
-Publishing it is the owner's call. Flow rules is the last of the three new-ground items on the roadmap.
+Publishing it is the owner's call. Flow rules finished the three new-ground items on the roadmap.
 The research's other gaps (exact-window targeting, reporting whether an action took effect, clipboard
 ownership, more harnesses) are candidates the owner hasn't picked yet.
 
@@ -68,8 +68,8 @@ ownership, more harnesses) are candidates the owner hasn't picked yet.
 
 ## Waiting on the owner
 
-- Run the two Codex prompts (A: rebase the lease; B: flow rules), then hand the results to the next
-  sleight-arch session to review and merge.
+- Run the two prompts in `.dev/prompts/` (A: lease read detection; B: change review guard), then
+  paste the reports here.
 - Restart desktop sessions that started before 0.3.1 (21:17 EDT, 2026-10-03), so they stop hanging.
 
 ## Reading list
