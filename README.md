@@ -252,8 +252,6 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   organization sets. To stop Codex asking for approvals, change Codex's own approval setting.
 - `claude -p` can't answer approval prompts. List apps in the user's [preapproval file](#preapproved-apps)
   before starting. Unlisted apps and requests above their listed risk still need a person.
-- User-list preapprovals have unit coverage, but the listed Calculator live trial is pending the
-  user's file on this Mac. The unlisted trial refused Calculator (2026-10-04).
 - Document scope checks the last observed window before forwarding a call and stops on changed or
   missing Window/URL headers. Its injected action guard checks again, but arbitrary JavaScript can
   bypass it or forge observations. Result checks cannot undo actions already taken. Discovery reads

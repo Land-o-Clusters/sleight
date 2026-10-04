@@ -16,20 +16,27 @@ export function judgePreapproval(mode, exit, events, timedOut = false, messages 
   const text = result => result.content.filter(block => block.type === 'text').map(block => block.text).join('\n');
   const reported = results.some(event => text(event.msg.result).includes('pre-approved by the user'));
   const calculator = results.at(-1);
-  const displayed = calculator && /^Window: .*App: Calculator\.?$/m.test(text(calculator.msg.result)) && !calculator.msg.result.isError &&
-    /^\s*\d+ (?:text entry area .*?Value: |static text |text )144\s*$/m.test(text(calculator.msg.result));
   const calls = new Map();
-  let clicked = false, finalRead = false;
+  let clicked = false, finalRead = false, finalContent;
   for (const message of messages) {
     for (const block of message.message?.content ?? []) {
       if (message.type === 'assistant' && block.type === 'tool_use' && block.name === 'mcp__sleight__js') calls.set(block.id, block.input?.code ?? '');
       if (message.type === 'user' && block.type === 'tool_result') {
         const code = calls.get(block.tool_use_id) ?? '';
-        if (!block.is_error && /\bapp\.click\s*\(/.test(code)) { clicked = true; finalRead = false; }
-        if (clicked && !block.is_error && /^\s*await app\.getAXState\(\{\s*disableDiffing\s*:\s*true\s*\}\)\s*;?\s*$/.test(code)) finalRead = true;
+        if (calls.has(block.tool_use_id)) { finalRead = false; finalContent = undefined; }
+        if (!block.is_error && /\bapp\.click\s*\(/.test(code)) clicked = true;
+        if (clicked && !block.is_error && /^\s*await app\.getAXState\(\{\s*disableDiffing\s*:\s*true\s*\}\)\s*;?\s*$/.test(code)) {
+          finalRead = true;
+          finalContent = typeof block.content === 'string' ? block.content : text({ content: block.content ?? [] });
+        }
       }
     }
   }
+  // Trace strings are shortened for debugging. Judge the corresponding full
+  // tool result from Claude's stream, where the current edit field is intact.
+  const displayed = calculator && /^Window: .*App: Calculator\.?$/m.test(text(calculator.msg.result)) && !calculator.msg.result.isError &&
+    /^Window: .*App: Calculator\.?$/m.test(finalContent ?? '') &&
+    /^\s*\d+ (?:text entry area .*?Value: |text Description: Edit field, Value: )144\s*$/m.test(finalContent ?? '');
   const passed = exit.code === 0 && !timedOut && (mode === 'listed'
     ? grants.length > 0 && reported && Boolean(displayed) && clicked && finalRead
     : grants.length === 0 && declines + cancels > 0 && results.some(event =>
