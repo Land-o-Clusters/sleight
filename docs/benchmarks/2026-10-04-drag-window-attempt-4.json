@@ -1,0 +1,1116 @@
+{
+  "started": "2026-10-04T15:32:29.025Z",
+  "beforeSha": "a01e3d8",
+  "runs": [
+    {
+      "kind": "before-wrong-window",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-UOCrNO/before-wrong-window-source.txt",
+        "/private/tmp/sleight-drag-windows-UOCrNO/before-wrong-window-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "placements": [
+        {
+          "path": "/private/tmp/sleight-drag-windows-UOCrNO/before-wrong-window-source.txt",
+          "size": "source",
+          "reply": {
+            "ok": true,
+            "requestedPosition": [
+              100,
+              100
+            ],
+            "requestedSize": [
+              600,
+              400
+            ]
+          }
+        },
+        {
+          "path": "/private/tmp/sleight-drag-windows-UOCrNO/before-wrong-window-other.txt",
+          "size": "other",
+          "reply": {
+            "ok": true,
+            "requestedPosition": [
+              100,
+              100
+            ],
+            "requestedSize": [
+              980,
+              605
+            ]
+          }
+        }
+      ],
+      "selection": {
+        "active": false,
+        "endGlyphBounds": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237878,
+        "windowOrigin": [
+          100,
+          61
+        ]
+      },
+      "otherSelection": {
+        "active": false,
+        "endGlyphBounds": [
+          209.33837890625,
+          298,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          298,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          298,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          298,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237880,
+        "windowOrigin": [
+          100,
+          266
+        ]
+      },
+      "error": "Owned other window is not strictly largest; legacy drag refused by fixture"
+    },
+    {
+      "kind": "before-title-bar",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-UOCrNO/before-title-bar-source.txt",
+        "/private/tmp/sleight-drag-windows-UOCrNO/before-title-bar-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "placements": [
+        {
+          "path": "/private/tmp/sleight-drag-windows-UOCrNO/before-title-bar-source.txt",
+          "size": "source",
+          "reply": {
+            "ok": true,
+            "requestedPosition": [
+              100,
+              100
+            ],
+            "requestedSize": [
+              600,
+              400
+            ]
+          }
+        },
+        {
+          "path": "/private/tmp/sleight-drag-windows-UOCrNO/before-title-bar-other.txt",
+          "size": "other",
+          "reply": {
+            "ok": true,
+            "requestedPosition": [
+              100,
+              100
+            ],
+            "requestedSize": [
+              980,
+              605
+            ]
+          }
+        }
+      ],
+      "selection": {
+        "active": true,
+        "endGlyphBounds": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237884,
+        "windowOrigin": [
+          100,
+          61
+        ]
+      },
+      "otherSelection": {
+        "active": true,
+        "endGlyphBounds": [
+          209.33837890625,
+          298,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          298,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          298,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          298,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237886,
+        "windowOrigin": [
+          100,
+          266
+        ]
+      },
+      "error": "Owned other window is not strictly largest; legacy drag refused by fixture"
+    },
+    {
+      "kind": "after-ambiguous",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-UOCrNO/after-ambiguous-source.txt",
+        "/private/tmp/sleight-drag-windows-UOCrNO/after-ambiguous-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "placements": [
+        {
+          "path": "/private/tmp/sleight-drag-windows-UOCrNO/after-ambiguous-source.txt",
+          "size": "source",
+          "reply": {
+            "ok": true,
+            "requestedPosition": [
+              100,
+              100
+            ],
+            "requestedSize": [
+              600,
+              400
+            ]
+          }
+        },
+        {
+          "path": "/private/tmp/sleight-drag-windows-UOCrNO/after-ambiguous-other.txt",
+          "size": "other",
+          "reply": {
+            "ok": true,
+            "requestedPosition": [
+              100,
+              100
+            ],
+            "requestedSize": [
+              980,
+              605
+            ]
+          }
+        }
+      ],
+      "selection": {
+        "active": true,
+        "endGlyphBounds": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237889,
+        "windowOrigin": [
+          100,
+          61
+        ]
+      },
+      "otherSelection": {
+        "active": true,
+        "endGlyphBounds": [
+          209.33837890625,
+          298,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          298,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          298,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          298,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237891,
+        "windowOrigin": [
+          100,
+          266
+        ]
+      },
+      "request": {
+        "app": "TextEdit",
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ]
+      },
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "drag target is ambiguous; supply windowId. Windows: [{\"windowId\":237891,\"title\":\"after-ambiguous-other.txt\",\"bounds\":{\"Width\":673,\"Height\":439,\"Y\":266,\"X\":100}},{\"windowId\":237889,\"title\":\"after-ambiguous-source.txt\",\"bounds\":{\"Width\":673,\"Height\":439,\"Y\":61,\"X\":100}},{\"windowId\":236311,\"title\":\"Save\",\"bounds\":{\"Width\":880,\"Height\":448,\"Y\":135,\"X\":2731}},{\"windowId\":236255,\"title\":\"/private/tmp/sleight-action-notes-tHhyrY/on-textedit-save-1.txt\",\"bounds\":{\"Width\":603,\"Height\":505,\"Y\":103,\"X\":2869}}]; nothing was pressed"
+            }
+          ],
+          "isError": true
+        }
+      },
+      "sourceAfter": {
+        "active": true,
+        "ok": true,
+        "selected": "alpha",
+        "text": "alpha beta gamma\n"
+      },
+      "otherAfter": {
+        "active": true,
+        "ok": true,
+        "selected": "alpha",
+        "text": "alpha beta gamma\n"
+      },
+      "passed": true
+    },
+    {
+      "kind": "after-title-bar",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-UOCrNO/after-title-bar-source.txt",
+        "/private/tmp/sleight-drag-windows-UOCrNO/after-title-bar-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "placements": [
+        {
+          "path": "/private/tmp/sleight-drag-windows-UOCrNO/after-title-bar-source.txt",
+          "size": "source",
+          "reply": {
+            "ok": true,
+            "requestedPosition": [
+              100,
+              100
+            ],
+            "requestedSize": [
+              600,
+              400
+            ]
+          }
+        },
+        {
+          "path": "/private/tmp/sleight-drag-windows-UOCrNO/after-title-bar-other.txt",
+          "size": "other",
+          "reply": {
+            "ok": true,
+            "requestedPosition": [
+              100,
+              100
+            ],
+            "requestedSize": [
+              980,
+              605
+            ]
+          }
+        }
+      ],
+      "selection": {
+        "active": true,
+        "endGlyphBounds": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237894,
+        "windowOrigin": [
+          100,
+          61
+        ]
+      },
+      "otherSelection": {
+        "active": true,
+        "endGlyphBounds": [
+          209.33837890625,
+          298,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          298,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          298,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          298,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237896,
+        "windowOrigin": [
+          100,
+          266
+        ]
+      },
+      "request": {
+        "app": "TextEdit",
+        "windowId": 237894,
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "to": [
+          119,
+          10
+        ]
+      },
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "to is outside the window content area (title bar, toolbar or frame); nothing was pressed; nothing was pressed"
+            }
+          ],
+          "isError": true
+        }
+      },
+      "sourceAfter": {
+        "active": true,
+        "ok": true,
+        "selected": "alpha",
+        "text": "alpha beta gamma\n"
+      },
+      "otherAfter": {
+        "active": true,
+        "ok": true,
+        "selected": "alpha",
+        "text": "alpha beta gamma\n"
+      },
+      "passed": true
+    },
+    {
+      "kind": "after-valid-1",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-UOCrNO/after-valid-1-source.txt",
+        "/private/tmp/sleight-drag-windows-UOCrNO/after-valid-1-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "placements": [
+        {
+          "path": "/private/tmp/sleight-drag-windows-UOCrNO/after-valid-1-source.txt",
+          "size": "source",
+          "reply": {
+            "ok": true,
+            "requestedPosition": [
+              100,
+              100
+            ],
+            "requestedSize": [
+              600,
+              400
+            ]
+          }
+        },
+        {
+          "path": "/private/tmp/sleight-drag-windows-UOCrNO/after-valid-1-other.txt",
+          "size": "other",
+          "reply": {
+            "ok": true,
+            "requestedPosition": [
+              100,
+              100
+            ],
+            "requestedSize": [
+              980,
+              605
+            ]
+          }
+        }
+      ],
+      "selection": {
+        "active": true,
+        "endGlyphBounds": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237901,
+        "windowOrigin": [
+          100,
+          61
+        ]
+      },
+      "otherSelection": {
+        "active": true,
+        "endGlyphBounds": [
+          209.33837890625,
+          298,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          298,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          298,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          298,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237903,
+        "windowOrigin": [
+          100,
+          266
+        ]
+      },
+      "request": {
+        "app": "TextEdit",
+        "windowId": 237901,
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ]
+      },
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"TextEdit\",\n \"windowId\": 237901,\n \"from\": [\n  26.556396484375,\n  38.5\n ],\n \"to\": [\n  118.9609375,\n  38.5\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"spaceInserted\": true\n}"
+            }
+          ]
+        }
+      },
+      "sourceAfter": {
+        "active": true,
+        "ok": true,
+        "selected": "",
+        "text": "beta gamma alpha\n"
+      },
+      "otherAfter": {
+        "active": true,
+        "ok": true,
+        "selected": "alpha",
+        "text": "alpha beta gamma\n"
+      },
+      "passed": true
+    },
+    {
+      "kind": "after-valid-2",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-UOCrNO/after-valid-2-source.txt",
+        "/private/tmp/sleight-drag-windows-UOCrNO/after-valid-2-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "placements": [
+        {
+          "path": "/private/tmp/sleight-drag-windows-UOCrNO/after-valid-2-source.txt",
+          "size": "source",
+          "reply": {
+            "ok": true,
+            "requestedPosition": [
+              100,
+              100
+            ],
+            "requestedSize": [
+              600,
+              400
+            ]
+          }
+        },
+        {
+          "path": "/private/tmp/sleight-drag-windows-UOCrNO/after-valid-2-other.txt",
+          "size": "other",
+          "reply": {
+            "ok": true,
+            "requestedPosition": [
+              100,
+              100
+            ],
+            "requestedSize": [
+              980,
+              605
+            ]
+          }
+        }
+      ],
+      "selection": {
+        "active": true,
+        "endGlyphBounds": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237910,
+        "windowOrigin": [
+          100,
+          61
+        ]
+      },
+      "otherSelection": {
+        "active": true,
+        "endGlyphBounds": [
+          209.33837890625,
+          298,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          298,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          298,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          298,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237912,
+        "windowOrigin": [
+          100,
+          266
+        ]
+      },
+      "request": {
+        "app": "TextEdit",
+        "windowId": 237910,
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ]
+      },
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"TextEdit\",\n \"windowId\": 237910,\n \"from\": [\n  26.556396484375,\n  38.5\n ],\n \"to\": [\n  118.9609375,\n  38.5\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"spaceInserted\": true\n}"
+            }
+          ]
+        }
+      },
+      "sourceAfter": {
+        "active": true,
+        "ok": true,
+        "selected": "",
+        "text": "beta gamma alpha\n"
+      },
+      "otherAfter": {
+        "active": true,
+        "ok": true,
+        "selected": "alpha",
+        "text": "alpha beta gamma\n"
+      },
+      "passed": true
+    }
+  ],
+  "trace": [
+    {
+      "t": "2026-10-04T15:32:46.722Z",
+      "direction": "from-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+          "name": "drag",
+          "arguments": {
+            "app": "TextEdit",
+            "from": [
+              26.556396484375,
+              38.5
+            ],
+            "to": [
+              118.9609375,
+              38.5
+            ]
+          }
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T15:32:46.842Z",
+      "direction": "local-approval",
+      "msg": {
+        "key": "[\"sleight\",\"drag\",\"TextEdit\"]",
+        "action": "accept"
+      }
+    },
+    {
+      "t": "2026-10-04T15:32:46.943Z",
+      "direction": "to-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "drag target is ambiguous; supply windowId. Windows: [{\"windowId\":237891,\"title\":\"after-ambiguous-other.txt\",\"bounds\":{\"Width\":673,\"Height\":439,\"Y\":266,\"X\":100}},{\"windowId\":237889,\"title\":\"after-ambiguous-source.txt\",\"bounds\":{\"Width\":673,\"Height\":439,\"Y\":61,\"X\":100}},{\"windowId\":236311,\"title\":\"Save\",\"bounds\":{\"Width\":880,\"Height\":448,\"Y\":135,\"X\":2731}},{\"windowId\":236255,\"title\":\"/private/tmp/sleight-action-notes-tHhyrY/on-textedit-save-1.txt\",\"bounds\":{\"Width\":603,\"Height\":505,\"Y\":103,\"X\":2869}}]; nothing was pressed"
+            }
+          ],
+          "isError": true
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T15:32:53.371Z",
+      "direction": "from-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+          "name": "drag",
+          "arguments": {
+            "app": "TextEdit",
+            "windowId": 237894,
+            "from": [
+              26.556396484375,
+              38.5
+            ],
+            "to": [
+              119,
+              10
+            ]
+          }
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T15:32:56.260Z",
+      "direction": "to-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "to is outside the window content area (title bar, toolbar or frame); nothing was pressed; nothing was pressed"
+            }
+          ],
+          "isError": true
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T15:33:02.675Z",
+      "direction": "from-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "name": "drag",
+          "arguments": {
+            "app": "TextEdit",
+            "windowId": 237901,
+            "from": [
+              26.556396484375,
+              38.5
+            ],
+            "to": [
+              118.9609375,
+              38.5
+            ]
+          }
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T15:33:07.239Z",
+      "direction": "to-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"TextEdit\",\n \"windowId\": 237901,\n \"from\": [\n  26.556396484375,\n  38.5\n ],\n \"to\": [\n  118.9609375,\n  38.5\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"spaceInserted\": true\n}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T15:33:13.815Z",
+      "direction": "from-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+          "name": "drag",
+          "arguments": {
+            "app": "TextEdit",
+            "windowId": 237910,
+            "from": [
+              26.556396484375,
+              38.5
+            ],
+            "to": [
+              118.9609375,
+              38.5
+            ]
+          }
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T15:33:18.368Z",
+      "direction": "to-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"TextEdit\",\n \"windowId\": 237910,\n \"from\": [\n  26.556396484375,\n  38.5\n ],\n \"to\": [\n  118.9609375,\n  38.5\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"spaceInserted\": true\n}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "t": "2026-10-04T15:33:19.482Z",
+      "direction": "change-snapshots-deleted",
+      "msg": {}
+    }
+  ],
+  "approvals": [
+    {
+      "message": "Allow Claude to drag in TextEdit? It moves your pointer for a few seconds.",
+      "action": "accept"
+    }
+  ],
+  "finished": "2026-10-04T15:33:19.484Z",
+  "interrupted": false,
+  "exitCode": 1
+}

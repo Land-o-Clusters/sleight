@@ -1,0 +1,587 @@
+{
+  "started": "2026-10-04T15:04:38.658Z",
+  "beforeSha": "a01e3d8",
+  "runs": [
+    {
+      "kind": "before-wrong-window",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-vKJ8mx/before-wrong-window-source.txt",
+        "/private/tmp/sleight-drag-windows-vKJ8mx/before-wrong-window-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "selection": {
+        "active": false,
+        "endGlyphBounds": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237616,
+        "windowOrigin": [
+          100,
+          61
+        ]
+      },
+      "otherSelection": {
+        "active": false,
+        "endGlyphBounds": [
+          1478.33837890625,
+          193,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          1295.556396484375,
+          38.5
+        ],
+        "lastGlyphRect": [
+          1478.33837890625,
+          193,
+          6.62255859375,
+          13
+        ],
+        "ok": false,
+        "selected": "alpha",
+        "sourceRect": [
+          1392.2451171875,
+          193,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          1392.2451171875,
+          193,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          1387.9609375,
+          38.5
+        ],
+        "windowOrigin": [
+          100,
+          161
+        ]
+      },
+      "error": "Two distinct fixture windows are required"
+    },
+    {
+      "kind": "before-title-bar",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-vKJ8mx/before-title-bar-source.txt",
+        "/private/tmp/sleight-drag-windows-vKJ8mx/before-title-bar-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "selection": {
+        "active": false,
+        "endGlyphBounds": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237621,
+        "windowOrigin": [
+          100,
+          61
+        ]
+      },
+      "otherSelection": {
+        "active": false,
+        "endGlyphBounds": [
+          691.33837890625,
+          193,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          508.556396484375,
+          38.5
+        ],
+        "lastGlyphRect": [
+          691.33837890625,
+          193,
+          6.62255859375,
+          13
+        ],
+        "ok": false,
+        "selected": "alpha",
+        "sourceRect": [
+          605.2451171875,
+          193,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          605.2451171875,
+          193,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          600.9609375,
+          38.5
+        ],
+        "windowOrigin": [
+          100,
+          161
+        ]
+      },
+      "error": "Two distinct fixture windows are required"
+    },
+    {
+      "kind": "after-ambiguous",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-vKJ8mx/after-ambiguous-source.txt",
+        "/private/tmp/sleight-drag-windows-vKJ8mx/after-ambiguous-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "selection": {
+        "active": false,
+        "endGlyphBounds": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237626,
+        "windowOrigin": [
+          100,
+          61
+        ]
+      },
+      "otherSelection": {
+        "active": false,
+        "endGlyphBounds": [
+          1863.33837890625,
+          193,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          1680.556396484375,
+          38.5
+        ],
+        "lastGlyphRect": [
+          1863.33837890625,
+          193,
+          6.62255859375,
+          13
+        ],
+        "ok": false,
+        "selected": "alpha",
+        "sourceRect": [
+          1777.2451171875,
+          193,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          1777.2451171875,
+          193,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          1772.9609375,
+          38.5
+        ],
+        "windowOrigin": [
+          100,
+          161
+        ]
+      },
+      "error": "Two distinct fixture windows are required"
+    },
+    {
+      "kind": "after-title-bar",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-vKJ8mx/after-title-bar-source.txt",
+        "/private/tmp/sleight-drag-windows-vKJ8mx/after-title-bar-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "selection": {
+        "active": false,
+        "endGlyphBounds": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237631,
+        "windowOrigin": [
+          100,
+          61
+        ]
+      },
+      "otherSelection": {
+        "active": false,
+        "endGlyphBounds": [
+          911.33837890625,
+          193,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          728.556396484375,
+          38.5
+        ],
+        "lastGlyphRect": [
+          911.33837890625,
+          193,
+          6.62255859375,
+          13
+        ],
+        "ok": false,
+        "selected": "alpha",
+        "sourceRect": [
+          825.2451171875,
+          193,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          825.2451171875,
+          193,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          820.9609375,
+          38.5
+        ],
+        "windowOrigin": [
+          100,
+          161
+        ]
+      },
+      "error": "Two distinct fixture windows are required"
+    },
+    {
+      "kind": "after-valid-1",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-vKJ8mx/after-valid-1-source.txt",
+        "/private/tmp/sleight-drag-windows-vKJ8mx/after-valid-1-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "selection": {
+        "active": false,
+        "endGlyphBounds": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237636,
+        "windowOrigin": [
+          100,
+          61
+        ]
+      },
+      "otherSelection": {
+        "active": false,
+        "endGlyphBounds": [
+          714.33837890625,
+          193,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          531.556396484375,
+          38.5
+        ],
+        "lastGlyphRect": [
+          714.33837890625,
+          193,
+          6.62255859375,
+          13
+        ],
+        "ok": false,
+        "selected": "alpha",
+        "sourceRect": [
+          628.2451171875,
+          193,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          628.2451171875,
+          193,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          623.9609375,
+          38.5
+        ],
+        "windowOrigin": [
+          100,
+          161
+        ]
+      },
+      "error": "Two distinct fixture windows are required"
+    },
+    {
+      "kind": "after-valid-2",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-vKJ8mx/after-valid-2-source.txt",
+        "/private/tmp/sleight-drag-windows-vKJ8mx/after-valid-2-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "selection": {
+        "active": false,
+        "endGlyphBounds": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          26.556396484375,
+          38.5
+        ],
+        "isLargestWindow": false,
+        "isStrictlyLargestWindow": false,
+        "lastGlyphRect": [
+          209.33837890625,
+          93,
+          6.62255859375,
+          13
+        ],
+        "ok": true,
+        "selected": "alpha",
+        "sourceRect": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          123.2451171875,
+          93,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          118.9609375,
+          38.5
+        ],
+        "windowId": 237641,
+        "windowOrigin": [
+          100,
+          61
+        ]
+      },
+      "otherSelection": {
+        "active": false,
+        "endGlyphBounds": [
+          714.33837890625,
+          193,
+          6.62255859375,
+          13
+        ],
+        "from": [
+          531.556396484375,
+          38.5
+        ],
+        "lastGlyphRect": [
+          714.33837890625,
+          193,
+          6.62255859375,
+          13
+        ],
+        "ok": false,
+        "selected": "alpha",
+        "sourceRect": [
+          628.2451171875,
+          193,
+          6.62255859375,
+          13
+        ],
+        "startBounds": [
+          628.2451171875,
+          193,
+          6.62255859375,
+          13
+        ],
+        "to": [
+          623.9609375,
+          38.5
+        ],
+        "windowOrigin": [
+          100,
+          161
+        ]
+      },
+      "error": "Two distinct fixture windows are required"
+    }
+  ],
+  "trace": [
+    {
+      "t": "2026-10-04T15:04:56.630Z",
+      "direction": "change-snapshots-deleted",
+      "msg": {}
+    }
+  ],
+  "approvals": [],
+  "finished": "2026-10-04T15:04:56.630Z",
+  "interrupted": false,
+  "exitCode": 1
+}

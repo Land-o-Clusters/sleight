@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-04",
+  "worktree": "~/Projects/sleight-wt/text-drag-menu-names",
+  "command": "bench/drag-polish-live.sh --windows docs/benchmarks/2026-10-04-drag-window-attempt-1.json",
+  "exitCode": 126,
+  "stderr": "zsh:1: permission denied: bench/drag-polish-live.sh",
+  "reason": "The checked-in shell script has no executable bit. Use sh as in prior live runs.",
+  "lockAcquired": false,
+  "appActions": false
+}

@@ -1,0 +1,107 @@
+{
+  "started": "2026-10-04T15:04:28.254Z",
+  "beforeSha": "a01e3d8",
+  "runs": [
+    {
+      "kind": "before-wrong-window",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-NOmxYu/before-wrong-window-source.txt",
+        "/private/tmp/sleight-drag-windows-NOmxYu/before-wrong-window-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-drag-windows-NOmxYu/before-wrong-window-source.txt\nUnable to find application named 'TextEdit'\n",
+      "stdout": "",
+      "cleanupErrors": [
+        "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-windows-NOmxYu/before-wrong-window-source.txt\n2026-10-04 11:04:28.529 osascript[59850:87975288] Error received in message reply handler: Connection invalid\n2026-10-04 11:04:28.529 osascript[59850:87975290] Connection Invalid error for service com.apple.hiservices-xpcservice.\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n",
+        "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-windows-NOmxYu/before-wrong-window-other.txt\n2026-10-04 11:04:28.673 osascript[59854:87975298] Error received in message reply handler: Connection invalid\n2026-10-04 11:04:28.673 osascript[59854:87975300] Connection Invalid error for service com.apple.hiservices-xpcservice.\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n"
+      ]
+    },
+    {
+      "kind": "before-title-bar",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-NOmxYu/before-title-bar-source.txt",
+        "/private/tmp/sleight-drag-windows-NOmxYu/before-title-bar-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-drag-windows-NOmxYu/before-title-bar-source.txt\nUnable to find application named 'TextEdit'\n",
+      "stdout": "",
+      "cleanupErrors": [
+        "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-windows-NOmxYu/before-title-bar-source.txt\n2026-10-04 11:04:28.886 osascript[59858:87975312] Error received in message reply handler: Connection invalid\n2026-10-04 11:04:28.886 osascript[59858:87975314] Connection Invalid error for service com.apple.hiservices-xpcservice.\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n",
+        "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-windows-NOmxYu/before-title-bar-other.txt\n2026-10-04 11:04:29.027 osascript[59860:87975319] Error received in message reply handler: Connection invalid\n2026-10-04 11:04:29.027 osascript[59860:87975320] Connection Invalid error for service com.apple.hiservices-xpcservice.\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n"
+      ]
+    },
+    {
+      "kind": "after-ambiguous",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-NOmxYu/after-ambiguous-source.txt",
+        "/private/tmp/sleight-drag-windows-NOmxYu/after-ambiguous-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-drag-windows-NOmxYu/after-ambiguous-source.txt\nUnable to find application named 'TextEdit'\n",
+      "stdout": "",
+      "cleanupErrors": [
+        "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-windows-NOmxYu/after-ambiguous-source.txt\n2026-10-04 11:04:29.242 osascript[59864:87975329] Error received in message reply handler: Connection invalid\n2026-10-04 11:04:29.242 osascript[59864:87975330] Connection Invalid error for service com.apple.hiservices-xpcservice.\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n",
+        "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-windows-NOmxYu/after-ambiguous-other.txt\n2026-10-04 11:04:29.387 osascript[59872:87975351] Connection Invalid error for service com.apple.hiservices-xpcservice.\n2026-10-04 11:04:29.387 osascript[59872:87975349] Error received in message reply handler: Connection invalid\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n"
+      ]
+    },
+    {
+      "kind": "after-title-bar",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-NOmxYu/after-title-bar-source.txt",
+        "/private/tmp/sleight-drag-windows-NOmxYu/after-title-bar-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-drag-windows-NOmxYu/after-title-bar-source.txt\nUnable to find application named 'TextEdit'\n",
+      "stdout": "",
+      "cleanupErrors": [
+        "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-windows-NOmxYu/after-title-bar-source.txt\n2026-10-04 11:04:29.602 osascript[59878:87975368] Connection Invalid error for service com.apple.hiservices-xpcservice.\n2026-10-04 11:04:29.602 osascript[59878:87975366] Error received in message reply handler: Connection invalid\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n",
+        "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-windows-NOmxYu/after-title-bar-other.txt\n2026-10-04 11:04:29.746 osascript[59885:87975388] Connection Invalid error for service com.apple.hiservices-xpcservice.\n2026-10-04 11:04:29.746 osascript[59885:87975386] Error received in message reply handler: Connection invalid\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n"
+      ]
+    },
+    {
+      "kind": "after-valid-1",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-NOmxYu/after-valid-1-source.txt",
+        "/private/tmp/sleight-drag-windows-NOmxYu/after-valid-1-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-drag-windows-NOmxYu/after-valid-1-source.txt\nUnable to find application named 'TextEdit'\n",
+      "stdout": "",
+      "cleanupErrors": [
+        "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-windows-NOmxYu/after-valid-1-source.txt\n2026-10-04 11:04:29.961 osascript[59889:87975401] Error received in message reply handler: Connection invalid\n2026-10-04 11:04:29.961 osascript[59889:87975404] Connection Invalid error for service com.apple.hiservices-xpcservice.\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n",
+        "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-windows-NOmxYu/after-valid-1-other.txt\n2026-10-04 11:04:30.102 osascript[59891:87975414] Error received in message reply handler: Connection invalid\n2026-10-04 11:04:30.102 osascript[59891:87975415] Connection Invalid error for service com.apple.hiservices-xpcservice.\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n"
+      ]
+    },
+    {
+      "kind": "after-valid-2",
+      "paths": [
+        "/private/tmp/sleight-drag-windows-NOmxYu/after-valid-2-source.txt",
+        "/private/tmp/sleight-drag-windows-NOmxYu/after-valid-2-other.txt"
+      ],
+      "before": "alpha beta gamma\n",
+      "expected": "beta gamma alpha\n",
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-drag-windows-NOmxYu/after-valid-2-source.txt\nUnable to find application named 'TextEdit'\n",
+      "stdout": "",
+      "cleanupErrors": [
+        "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-windows-NOmxYu/after-valid-2-source.txt\n2026-10-04 11:04:30.349 osascript[59902:87975448] Error received in message reply handler: Connection invalid\n2026-10-04 11:04:30.349 osascript[59902:87975449] Connection Invalid error for service com.apple.hiservices-xpcservice.\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n",
+        "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-drag-windows-NOmxYu/after-valid-2-other.txt\n2026-10-04 11:04:30.496 osascript[59910:87975535] Connection Invalid error for service com.apple.hiservices-xpcservice.\n2026-10-04 11:04:30.496 osascript[59910:87975534] Error received in message reply handler: Connection invalid\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n"
+      ]
+    }
+  ],
+  "trace": [
+    {
+      "t": "2026-10-04T15:04:30.500Z",
+      "direction": "change-snapshots-deleted",
+      "msg": {}
+    }
+  ],
+  "approvals": [],
+  "finished": "2026-10-04T15:04:30.500Z",
+  "interrupted": false,
+  "exitCode": 1
+}
