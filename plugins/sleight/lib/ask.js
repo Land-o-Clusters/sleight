@@ -10,7 +10,8 @@
 ObjC.import('Cocoa');
 
 function run(argv) {
-  const [question, detail, iconPath, seconds] = argv;
+  const [question, detail, iconPath, seconds, mode] = argv;
+  const review = mode === 'review';
   const app = $.NSApplication.sharedApplication;
   app.setActivationPolicy($.NSApplicationActivationPolicyAccessory);
 
@@ -25,11 +26,13 @@ function run(argv) {
       'allow:': { types: ['void', ['id']], implementation: finish('accept') },
       'deny:': { types: ['void', ['id']], implementation: finish('decline') },
       'giveUp:': { types: ['void', ['id']], implementation: finish('cancel') },
+      'keep:': { types: ['void', ['id']], implementation: finish('keep') },
+      'undo:': { types: ['void', ['id']], implementation: finish('undo') },
     },
   });
   const target = $.SleightAskTarget.alloc.init;
 
-  const W = 400;
+  const W = review ? 680 : 400;
   const PAD = 20;
   const ICON = 56;
   const TEXT_X = PAD + ICON + 16;
@@ -48,7 +51,7 @@ function run(argv) {
   // Says who is asking, for people who never saw sleight's icon.
   const eyebrow = label('sleight \u00b7 Claude Code computer use', $.NSFont.systemFontOfSizeWeight(10, $.NSFontWeightMedium), $.NSColor.tertiaryLabelColor);
   const title = label(question, $.NSFont.systemFontOfSizeWeight(13, $.NSFontWeightSemibold), $.NSColor.labelColor);
-  const body = label(detail, $.NSFont.systemFontOfSize(11), $.NSColor.secondaryLabelColor);
+  const body = review ? { height: 360 } : label(detail, $.NSFont.systemFontOfSize(11), $.NSColor.secondaryLabelColor);
   const textH = eyebrow.height + 2 + title.height + 4 + body.height;
   const topH = Math.max(ICON, textH);
   const H = PAD + topH + 18 + BUTTON_H + PAD;
@@ -106,13 +109,28 @@ function run(argv) {
   let y = textTop;
   for (const [part, gap] of [[eyebrow, 0], [title, 2], [body, 4]]) {
     y -= gap + part.height;
-    part.field.frame = $.NSMakeRect(TEXT_X, y, TEXT_W, part.height);
+    if (part.field) part.field.frame = $.NSMakeRect(TEXT_X, y, TEXT_W, part.height);
   }
   content.addSubview(eyebrow.field);
   content.addSubview(title.field);
-  content.addSubview(body.field);
+  if (review) {
+    const scroll = $.NSScrollView.alloc.initWithFrame($.NSMakeRect(TEXT_X, y, TEXT_W, body.height));
+    scroll.hasVerticalScroller = true;
+    scroll.hasHorizontalScroller = false;
+    const preview = $.NSTextView.alloc.initWithFrame($.NSMakeRect(0, 0, TEXT_W - 16, body.height));
+    preview.string = detail;
+    preview.editable = false;
+    preview.selectable = true;
+    preview.font = $.NSFont.monospacedSystemFontOfSizeWeight(11, $.NSFontWeightRegular);
+    preview.verticallyResizable = true;
+    preview.horizontallyResizable = false;
+    preview.textContainer.containerSize = $.NSMakeSize(TEXT_W - 16, 10000000);
+    preview.textContainer.widthTracksTextView = true;
+    scroll.documentView = preview;
+    content.addSubview(scroll);
+  } else content.addSubview(body.field);
 
-  const buttonW = (TEXT_W - 8) / 2;
+  const buttonW = review ? (TEXT_W - 16) / 3 : (TEXT_W - 8) / 2;
   const button = (text, action, x) => {
     const b = $.NSButton.buttonWithTitleTargetAction(text, target, action);
     b.frame = $.NSMakeRect(x, PAD, buttonW, BUTTON_H);
@@ -120,9 +138,10 @@ function run(argv) {
     content.addSubview(b);
     return b;
   };
-  const deny = button("Don't Allow", 'deny:', TEXT_X);
+  const deny = button(review ? 'Later' : "Don't Allow", review ? 'giveUp:' : 'deny:', TEXT_X);
   deny.keyEquivalent = '\u001b';
-  const allow = button('Allow', 'allow:', TEXT_X + buttonW + 8);
+  if (review) button('Undo', 'undo:', TEXT_X + buttonW + 8);
+  const allow = button(review ? 'Keep' : 'Allow', review ? 'keep:' : 'allow:', TEXT_X + (buttonW + 8) * (review ? 2 : 1));
   // macOS 26 fills a button with the accent color at primary prominence.
   if (allow.respondsToSelector('setTintProminence:')) allow.tintProminence = 3;
   else allow.bezelColor = $.NSColor.controlAccentColor;

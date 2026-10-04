@@ -34,6 +34,8 @@
 // them to Claude Code: `ask(message, sessionScoped)` resolves to 'accept',
 // 'decline' or 'cancel'. launch.mjs uses it under the desktop app, which
 // declines MCP prompts without showing them. Session memory works the same way.
+// Review calls supply a third argument `{ kind: 'review', detail }` and expect
+// the user's 'keep', 'undo' or 'cancel'. These answers are never session grants.
 //
 // `localTools`, when given, are sleight's own tools, answered here and never
 // sent to the server: `{ tools, call(name, args, approve) }`. `approve(key,
@@ -50,6 +52,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRead, readCode, guardedCode } from './document-scope.mjs';
+import { ChangeReview, REVIEW_TOOL } from './change-review.mjs';
 
 const META_KEY = 'x-codex-turn-metadata';
 const HIDDEN_TOOLS = new Set(['js_add_node_module_dir']);
@@ -87,6 +90,11 @@ function isAppApproval(msg) {
   return msg.method === 'elicitation/create' && msg.params?._meta?.connector_id === 'computer-use';
 }
 
+function windowsInText(text) {
+  const starts = [...text.matchAll(/^Window: /gm)].map(m => m.index);
+  return starts.map((start, i) => windowFromText(text.slice(start, starts[i + 1]))).filter(Boolean);
+}
+
 // The server marks turn_ended with `_meta.ui.visibility: []`, which Claude Code
 // reads as "callable by no one", the mod included. Drop that, and describe it
 // as internal; the mod refuses model calls to it.
@@ -120,6 +128,7 @@ export function createRelay({
   const localNames = new Set(localTools?.tools.map(t => t.name) ?? []);
   const elicitations = new Map(); // our elicitation id -> resolve
   const running = new Set(); // ids of engine calls waiting for a result
+  const localRunning = new Set();
   let idleTimer;
   const documentMode = approvalScope === 'document';
   const documentGrants = new Set();
@@ -129,6 +138,45 @@ export function createRelay({
   let observedEngines = new Set();
   let observedRisks = new Set();
   let documentAsking = false;
+  const changes = new ChangeReview();
+  const changeCalls = new Map();
+  let lastWindow;
+  let reviewing = false;
+  let disposed = false;
+
+  function changeStop(msg, reason) {
+    toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: `Change review: ${reason}. Stop and tell the user.` }] } });
+  }
+
+  async function reviewChanges(msg) {
+    const args = msg.params.arguments ?? {};
+    if (Object.keys(args).some(k => k !== 'op') || !['list', 'review'].includes(args.op ?? 'list')) {
+      changeStop(msg, 'only op list or review is accepted. Keep and Undo decisions must come from the user'); return;
+    }
+    if (running.size || localRunning.size || reviewing || documentAsking) { changeStop(msg, 'wait for the pending call or prompt'); return; }
+    const entries = [...changes.entries.values()];
+    if ((args.op ?? 'list') === 'list') {
+      toClient({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: entries.map(e => changes.describe(e)).join('\n\n') || 'No saved-file changes captured this session.' }] } }); return;
+    }
+    reviewing = true;
+    const results = [];
+    let failed = false;
+    try {
+      for (const entry of entries) {
+        const detail = changes.describe(entry);
+        const answer = asking.then(() => ask
+          ? ask(`Review ${entry.title}`, false, { kind: 'review', detail })
+          : elicitReview(`Review ${entry.title}\n${detail}\nChoose Keep, Undo or Later. Undo restores the session's original saved file. Reopen it in the app afterward.`));
+        asking = answer.catch(() => 'cancel');
+        const decision = await answer.catch(() => 'cancel');
+        if (disposed) return;
+        trace('review-decision', { path: entry.path, decision });
+        try { results.push(['keep', 'undo'].includes(decision) ? changes.decide(entry, decision) : `${entry.path}: pending, no user decision.`); }
+        catch (err) { failed = true; results.push(`Refused: ${err.message}`); }
+      }
+      toClient({ jsonrpc: '2.0', id: msg.id, result: { ...(failed ? { isError: true } : {}), content: [{ type: 'text', text: results.join('\n') || 'No saved-file changes captured this session.' }] } });
+    } finally { reviewing = false; }
+  }
 
   const documentAllowed = () => documentGrants.has(documentKey(observedDocument));
   function documentStop(msg, reason) {
@@ -249,6 +297,15 @@ export function createRelay({
     return answer.then(msg => msg.result?.action ?? 'cancel');
   }
 
+  function elicitReview(message) {
+    const id = `sleight-elicit-${nextElicitId++}`;
+    const answer = new Promise(resolve => elicitations.set(id, resolve));
+    toClient({ jsonrpc: '2.0', id, method: 'elicitation/create', params: { message, mode: 'form', requestedSchema: {
+      type: 'object', properties: { decision: { type: 'string', enum: ['keep', 'undo', 'later'], title: 'Your decision' } }, required: ['decision'],
+    } } });
+    return answer.then(msg => msg.result?.action === 'accept' ? msg.result.content?.decision : 'cancel');
+  }
+
   // Approval for a local tool: once per key and session, like app approvals.
   function approve(keyParts, message) {
     const key = JSON.stringify(['sleight', ...keyParts]);
@@ -271,12 +328,14 @@ export function createRelay({
   }
 
   async function callLocal(msg) {
+    localRunning.add(msg.id);
     let result;
     try {
       result = await localTools.call(msg.params.name, msg.params.arguments ?? {}, approve);
     } catch (err) {
       result = { content: [{ type: 'text', text: String(err?.message ?? err) }], isError: true };
     }
+    localRunning.delete(msg.id);
     toClient({ jsonrpc: '2.0', id: msg.id, result });
   }
 
@@ -303,6 +362,12 @@ export function createRelay({
       elicitations.delete(msg.id);
       return;
     }
+    if (msg.method === 'tools/call') {
+      if (disposed) { changeStop(msg, 'session has ended'); return; }
+      if (msg.params?.name === REVIEW_TOOL.name) { reviewChanges(msg); return; }
+      if (reviewing) { changeStop(msg, 'the user is reviewing changes, wait for their decision'); return; }
+    }
+    const originalCode = msg.params?.arguments?.code;
     if (documentMode && msg.method === 'tools/call') {
       const name = msg.params?.name;
       if (name === DOCUMENT_TOOL.name) { approveDocument(msg); return; }
@@ -344,6 +409,23 @@ export function createRelay({
         rotateTurn();
         return;
       }
+      if (name === 'js') {
+        const read = typeof originalCode === 'string' && isDocumentRead(originalCode);
+        let entry;
+        try {
+          if (lastWindow?.url?.startsWith('file://') && changeCalls.size) throw new Error('another engine call is pending, wait for its result');
+          if (!read && lastWindow?.url?.startsWith('file://')) {
+            entry = changes.before(lastWindow);
+            trace('snapshot-before-call', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });
+          }
+        } catch (err) { documentCalls.delete(msg.id); changeStop(msg, `cannot snapshot before acting: ${err.message}`); return; }
+        changeCalls.set(msg.id, { read, entry, expected: documentKey(lastWindow) });
+        if (!documentMode && typeof originalCode === 'string') {
+          if (read) msg.params.arguments.code = readCode(originalCode);
+          else if (entry) msg.params.arguments.code = guardedCode(originalCode, lastWindow,
+            'Change review stopped this action: window or URL changed. Read the intended window with one standalone cua.getApp call before editing.');
+        }
+      }
       msg.params._meta = { ...msg.params._meta, [META_KEY]: turnMeta() };
       turnUsed = true;
       clearTimeout(idleTimer);
@@ -366,6 +448,19 @@ export function createRelay({
       return;
     }
     if (documentMode && isAppApproval(msg)) { documentEngineApproval(msg); return; }
+    if (msg.method === undefined && changeCalls.has(msg.id)) {
+      const call = changeCalls.get(msg.id);
+      changeCalls.delete(msg.id);
+      const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+      lastWindow = windowFromText(text);
+      if (!call.read) {
+        changes.after(call.entry, !msg.error && !msg.result?.isError && documentKey(lastWindow) === call.expected);
+        // A window first identified after an action has no trustworthy before copy.
+        for (const window of windowsInText(text)) {
+          if (documentKey(window) !== call.expected) changes.uncaptured(window);
+        }
+      }
+    }
     if (documentMode && msg.method === undefined && documentCalls.has(msg.id)) {
       const call = documentCalls.get(msg.id);
       documentCalls.delete(msg.id);
@@ -402,7 +497,7 @@ export function createRelay({
         .filter(t => !HIDDEN_TOOLS.has(t.name))
         .filter(t => !documentMode || t.name === 'js' || t.name === TURN_END_TOOL)
         .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t))
-        .concat(documentMode ? [DOCUMENT_TOOL] : (localTools?.tools ?? []));
+        .concat(documentMode ? [DOCUMENT_TOOL] : (localTools?.tools ?? []), [REVIEW_TOOL]);
     }
     toClient(msg);
   });
@@ -426,5 +521,14 @@ export function createRelay({
     return done;
   }
 
-  return { endOpenTurn, get sessionId() { return sessionId; }, get turnId() { return turnId; } };
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    clearTimeout(idleTimer);
+    for (const resolve of elicitations.values()) resolve({ result: { action: 'cancel' } });
+    elicitations.clear();
+    changes.dispose();
+    trace('change-snapshots-deleted', { directory: changes.directory });
+  }
+  return { endOpenTurn, dispose, get snapshotDirectory() { return changes.directory; }, get sessionId() { return sessionId; }, get turnId() { return turnId; } };
 }
