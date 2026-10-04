@@ -1,0 +1,6467 @@
+{
+  "macOS": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+  "interrupted": false,
+  "runs": [
+    {
+      "mode": "window-location",
+      "n": 1,
+      "result": {
+        "deliveryVerified": false,
+        "keyStatuses": [],
+        "mode": "window-location",
+        "ok": true,
+        "pid": 16679,
+        "pointerUnchanged": false,
+        "posted": true,
+        "samples": [
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5020.47265625,
+              18.6875
+            ],
+            "stage": "before"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5015.77734375,
+              18.6875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5008.97265625,
+              18.6875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5002.75,
+              21.72265625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4996.26171875,
+              30.36328125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4992.7578125,
+              40.16015625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4991.22265625,
+              53.96484375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4992.03125,
+              67.76953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4995.37890625,
+              76.56640625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4997.1171875,
+              79.46484375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5004.515625,
+              84.9140625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5019.32421875,
+              88.00390625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5034.12890625,
+              88.76953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5050.9375,
+              88.76953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5050.9375,
+              88.76953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5065.7421875,
+              86.44140625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5077.54296875,
+              82.734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5084.33984375,
+              80.8515625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5086.640625,
+              79.6953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5091.4609375,
+              76.58984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5094.7109375,
+              73.53125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5095.51171875,
+              72.42578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5096.52734375,
+              71.3984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5097.828125,
+              70.38671875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5100.6171875,
+              68.8359375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5103.515625,
+              67.67578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5105.3046875,
+              67.07421875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5106.40234375,
+              66.56640625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5106.40234375,
+              66.56640625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5106.40234375,
+              66.56640625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5106.40234375,
+              66.56640625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5106.40234375,
+              66.56640625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5106.40234375,
+              66.15234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5107.80078125,
+              63.94140625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.52734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5108.00390625,
+              63.73046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5103.75,
+              71.73828125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5096.41015625,
+              82.07421875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5079.30859375,
+              104.92578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5073.43359375,
+              114.15625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5056.109375,
+              139.76171875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5043.34765625,
+              160.1796875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5031.6484375,
+              175.92578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5028.14453125,
+              180.125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5024.56640625,
+              184.26953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5019.63671875,
+              189.19140625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5016.1328125,
+              193.390625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5009.86328125,
+              201.5703125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              5000.65625,
+              212.25
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4992.1484375,
+              221.60546875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4977.5859375,
+              237.6953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4971.10546875,
+              244.171875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4966.109375,
+              249.0859375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.2890625,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-5"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-1"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-2"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "after"
+          }
+        ],
+        "stayedBackground": true,
+        "window": 224310
+      },
+      "events": "1791076574.506 moved x=60 y=252 pressure=1.0 active=false key=false flags=1048576\n1791076574.559 down x=60 y=252 pressure=1.0 active=false key=false flags=1048576\n1791076575.236 dragged x=80 y=246 pressure=1.0 active=false key=false flags=1048576\n1791076575.268 dragged x=100 y=240 pressure=1.0 active=false key=false flags=1048576\n1791076575.301 dragged x=120 y=234 pressure=1.0 active=false key=false flags=1048576\n1791076575.328 dragged x=140 y=228 pressure=1.0 active=false key=false flags=1048576\n1791076575.357 dragged x=160 y=222 pressure=1.0 active=false key=false flags=1048576\n1791076575.388 dragged x=180 y=217 pressure=1.0 active=false key=false flags=1048576\n1791076575.416 dragged x=200 y=211 pressure=1.0 active=false key=false flags=1048576\n1791076575.457 dragged x=220 y=205 pressure=1.0 active=false key=false flags=1048576\n1791076575.490 dragged x=240 y=199 pressure=1.0 active=false key=false flags=1048576\n1791076575.519 dragged x=260 y=193 pressure=1.0 active=false key=false flags=1048576\n1791076575.550 dragged x=280 y=187 pressure=1.0 active=false key=false flags=1048576\n1791076575.582 dragged x=300 y=182 pressure=1.0 active=false key=false flags=1048576\n1791076575.612 up x=300 y=182 pressure=0.0 active=false key=false flags=1048576\n",
+      "delivered": true
+    },
+    {
+      "mode": "window-location",
+      "n": 2,
+      "result": {
+        "deliveryVerified": false,
+        "keyStatuses": [],
+        "mode": "window-location",
+        "ok": true,
+        "pid": 16679,
+        "pointerUnchanged": true,
+        "posted": true,
+        "samples": [
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "before"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-5"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-1"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "event-2"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              4965.08203125,
+              249.8984375
+            ],
+            "stage": "after"
+          }
+        ],
+        "stayedBackground": true,
+        "window": 224310
+      },
+      "events": "1791076578.394 moved x=60 y=252 pressure=1.0 active=false key=false flags=1048576\n1791076578.445 down x=60 y=252 pressure=1.0 active=false key=false flags=1048576\n1791076579.115 dragged x=80 y=246 pressure=1.0 active=false key=false flags=1048576\n1791076579.143 dragged x=100 y=240 pressure=1.0 active=false key=false flags=1048576\n1791076579.175 dragged x=120 y=234 pressure=1.0 active=false key=false flags=1048576\n1791076579.208 dragged x=140 y=228 pressure=1.0 active=false key=false flags=1048576\n1791076579.236 dragged x=160 y=222 pressure=1.0 active=false key=false flags=1048576\n1791076579.263 dragged x=180 y=217 pressure=1.0 active=false key=false flags=1048576\n1791076579.294 dragged x=200 y=211 pressure=1.0 active=false key=false flags=1048576\n1791076579.324 dragged x=220 y=205 pressure=1.0 active=false key=false flags=1048576\n1791076579.362 dragged x=240 y=199 pressure=1.0 active=false key=false flags=1048576\n1791076579.391 dragged x=260 y=193 pressure=1.0 active=false key=false flags=1048576\n1791076579.420 dragged x=280 y=187 pressure=1.0 active=false key=false flags=1048576\n1791076579.446 dragged x=300 y=182 pressure=1.0 active=false key=false flags=1048576\n1791076579.478 up x=300 y=182 pressure=0.0 active=false key=false flags=1048576\n",
+      "delivered": true
+    },
+    {
+      "mode": "window-location",
+      "n": 3,
+      "result": {
+        "error": "front app changed during drag",
+        "ok": false
+      },
+      "events": "1791076582.491 moved x=60 y=252 pressure=1.0 active=false key=false flags=1048576\n1791076582.542 down x=60 y=252 pressure=1.0 active=false key=false flags=1048576\n",
+      "delivered": false
+    },
+    {
+      "mode": "window-location",
+      "n": 4,
+      "result": {
+        "error": "front app changed during drag",
+        "ok": false
+      },
+      "events": "",
+      "delivered": false
+    },
+    {
+      "mode": "window-location",
+      "n": 5,
+      "result": {
+        "deliveryVerified": false,
+        "keyStatuses": [],
+        "mode": "window-location",
+        "ok": true,
+        "pid": 16679,
+        "pointerUnchanged": false,
+        "posted": true,
+        "samples": [
+          {
+            "frontPid": 2311,
+            "pointer": [
+              518.76953125,
+              236.51953125
+            ],
+            "stage": "before"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              517.33984375,
+              245.1015625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              513.1484375,
+              266.9140625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              512.37890625,
+              273.81640625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              506.05078125,
+              313.65234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              494.125,
+              389.2578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              487.49609375,
+              435.6328125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              467.25390625,
+              570.01953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              453.11328125,
+              677.46484375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              444.66015625,
+              789.80859375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              444.66015625,
+              850.7578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              446.68359375,
+              901.80078125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              451.8515625,
+              929.625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              456.046875,
+              939.69140625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              466.43359375,
+              954.109375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              473.6484375,
+              958.5234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              476.4375,
+              958.99609375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              477.33203125,
+              958.99609375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              478.6328125,
+              958.7890625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              479.4453125,
+              958.58203125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              480.74609375,
+              958.375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              481.640625,
+              958.375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              483.4296875,
+              958.375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              484.2421875,
+              958.375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              484.2421875,
+              958.375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              484.2421875,
+              958.375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              484.2421875,
+              958.375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              484.2421875,
+              958.375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              484.03515625,
+              958.375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              481.23828125,
+              957.8984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              473.33203125,
+              956.31640625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              442.3671875,
+              948.40625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              405.52734375,
+              944.828125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              366.68359375,
+              942.109375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              329.84375,
+              941.23046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              308.01953125,
+              941.23046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              302.11328125,
+              940.4921875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              292.3046875,
+              939.83984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              291.484375,
+              939.6328125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              291.484375,
+              939.42578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              291.484375,
+              939.42578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              291.484375,
+              939.42578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              291.484375,
+              939.42578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              291.484375,
+              939.42578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              291.484375,
+              939.42578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              291.484375,
+              939.42578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              291.27734375,
+              939.42578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              290.86328125,
+              939.42578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              290.453125,
+              939.42578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              289.5546875,
+              939.42578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              286.65234375,
+              939.42578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              279.8515625,
+              938.94921875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              268.04296875,
+              938.12109375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              268.04296875,
+              938.12109375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              262.13671875,
+              937.3828125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              250.328125,
+              936.5546875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              242.421875,
+              934.97265625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              228.71484375,
+              930.53515625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              224.40234375,
+              928.82421875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              223.50390625,
+              928.5234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              223.09375,
+              928.11328125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              222.6796875,
+              927.69921875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              222.203125,
+              925.80078125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              222.203125,
+              925.38671875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              222.203125,
+              924.9765625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              222.203125,
+              924.9765625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              221.99609375,
+              924.76953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              221.99609375,
+              924.5625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              220.16015625,
+              922.7265625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "event-5"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.75,
+              922.51953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.54296875,
+              922.109375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              219.3359375,
+              921.69921875
+            ],
+            "stage": "event-1"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              212.06640625,
+              903.8828125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              206.7578125,
+              888.8515625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              197.64453125,
+              846.00390625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              188.43359375,
+              775.2890625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              178.953125,
+              638.4453125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              169.81640625,
+              508.94921875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              163.3671875,
+              433.1796875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              149.73828125,
+              340.421875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              140.296875,
+              295.71875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              134.8359375,
+              274.796875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              126.79296875,
+              239.9609375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              119.6484375,
+              205.12109375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              113.08984375,
+              173.4375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              92.02734375,
+              109.84375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              74.50390625,
+              67.33984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              66.39453125,
+              50.22265625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              61.53515625,
+              42.125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              51.14453125,
+              24.96875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              50.9375,
+              24.76171875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              50.9375,
+              24.5546875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              50.9375,
+              24.5546875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              50.9375,
+              24.5546875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              50.9375,
+              24.5546875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              50.9375,
+              24.5546875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              50.9375,
+              24.5546875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              50.9375,
+              24.5546875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              50.9375,
+              24.5546875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              50.9375,
+              24.5546875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              50.73046875,
+              24.7578125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              50.73046875,
+              28.859375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              50.73046875,
+              39.66015625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              53.3359375,
+              64.4765625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              54.0703125,
+              70.37890625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              59.92578125,
+              91.19140625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              72.25390625,
+              120.25390625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              81.2265625,
+              138.203125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              88.27734375,
+              152.18359375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              92.640625,
+              162.984375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              93.11328125,
+              164.87890625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              94.8671875,
+              168.671875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              95.0703125,
+              169.28125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              95.0703125,
+              169.28125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              95.0703125,
+              169.28125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              95.0703125,
+              169.28125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              95.0703125,
+              169.484375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              99.26953125,
+              174.9296875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              105.30859375,
+              179.61328125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              103.5625,
+              170.08203125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              100.51953125,
+              160.375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              98.91796875,
+              155.57421875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              98.6171875,
+              154.67578125
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              98.140625,
+              152.77734375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              97.6640625,
+              150.671875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              97.25,
+              149.84765625
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              97.25,
+              149.23046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              97.04296875,
+              148.61328125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.8359375,
+              148.40625
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.8359375,
+              147.5078125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              96.328125,
+              146.40234375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              95.9140625,
+              146.1953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              95.9140625,
+              146.1953125
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              94.1171875,
+              145.89453125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              90.21484375,
+              143.94140625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              88.31640625,
+              143.46484375
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              86.51953125,
+              142.26171875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              85.62109375,
+              141.9609375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              83.30078125,
+              140.21875
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              83.09375,
+              140.01171875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.8046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.8046875
+            ],
+            "stage": "event-6"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.8046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.8046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.8046875
+            ],
+            "stage": "event-2"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.8046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.8046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.8046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.8046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.8046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.8046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.8046875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.59765625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.59765625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              139.390625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              138.9765625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              138.76953125
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              138.5625
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              138.35546875
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              138.1484375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              138.1484375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              138.1484375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              138.1484375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              138.1484375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              138.1484375
+            ],
+            "stage": "wait"
+          },
+          {
+            "frontPid": 2311,
+            "pointer": [
+              82.88671875,
+              138.1484375
+            ],
+            "stage": "after"
+          }
+        ],
+        "stayedBackground": true,
+        "window": 224310
+      },
+      "events": "1791076586.742 moved x=251 y=310 pressure=0.0 active=false key=false flags=0\n1791076586.754 moved x=256 y=300 pressure=0.0 active=false key=false flags=0\n1791076586.771 moved x=266 y=285 pressure=0.0 active=false key=false flags=0\n1791076586.788 moved x=275 y=281 pressure=0.0 active=false key=false flags=0\n1791076586.804 moved x=277 y=281 pressure=0.0 active=false key=false flags=0\n1791076586.821 moved x=278 y=281 pressure=0.0 active=false key=false flags=0\n1791076586.838 moved x=279 y=281 pressure=0.0 active=false key=false flags=0\n1791076586.854 moved x=280 y=281 pressure=0.0 active=false key=false flags=0\n1791076586.871 moved x=283 y=281 pressure=0.0 active=false key=false flags=0\n1791076586.888 moved x=284 y=281 pressure=0.0 active=false key=false flags=0\n1791076586.952 moved x=284 y=281 pressure=0.0 active=false key=false flags=0\n1791076586.964 moved x=283 y=281 pressure=0.0 active=false key=false flags=0\n1791076586.971 moved x=281 y=282 pressure=0.0 active=false key=false flags=0\n1791076586.988 moved x=260 y=288 pressure=0.0 active=false key=false flags=0\n1791076587.005 moved x=225 y=294 pressure=0.0 active=false key=false flags=0\n1791076587.047 moved x=116 y=298 pressure=0.0 active=false key=false flags=0\n1791076587.055 moved x=108 y=298 pressure=0.0 active=false key=false flags=0\n1791076587.071 moved x=96 y=299 pressure=0.0 active=false key=false flags=0\n1791076587.088 moved x=91 y=300 pressure=0.0 active=false key=false flags=0\n1791076587.105 moved x=91 y=300 pressure=0.0 active=false key=false flags=0\n1791076587.193 moved x=91 y=300 pressure=0.0 active=false key=false flags=0\n1791076587.205 moved x=91 y=300 pressure=0.0 active=false key=false flags=0\n1791076587.221 moved x=90 y=300 pressure=0.0 active=false key=false flags=0\n1791076587.238 moved x=89 y=300 pressure=0.0 active=false key=false flags=0\n1791076587.255 moved x=84 y=301 pressure=0.0 active=false key=false flags=0\n1791076587.271 moved x=69 y=301 pressure=0.0 active=false key=false flags=0\n1791076587.288 moved x=68 y=301 pressure=0.0 active=false key=false flags=0\n1791076587.305 moved x=62 y=302 pressure=0.0 active=false key=false flags=0\n1791076587.321 moved x=42 y=305 pressure=0.0 active=false key=false flags=0\n1791076587.338 moved x=29 y=308 pressure=0.0 active=false key=false flags=0\n1791076587.355 moved x=24 y=310 pressure=0.0 active=false key=false flags=0\n1791076587.371 moved x=23 y=311 pressure=0.0 active=false key=false flags=0\n1791076587.388 moved x=22 y=312 pressure=0.0 active=false key=false flags=0\n1791076587.405 moved x=22 y=314 pressure=0.0 active=false key=false flags=0\n1791076587.422 moved x=22 y=314 pressure=0.0 active=false key=false flags=0\n1791076587.438 moved x=22 y=315 pressure=0.0 active=false key=false flags=0\n1791076587.472 moved x=21 y=315 pressure=0.0 active=false key=false flags=0\n1791076587.488 moved x=20 y=317 pressure=0.0 active=false key=false flags=0\n1791076587.505 moved x=19 y=317 pressure=0.0 active=false key=false flags=0\n1791076588.639 moved x=60 y=252 pressure=1.0 active=false key=false flags=1048576\n",
+      "delivered": false
+    }
+  ]
+}
