@@ -22,7 +22,8 @@ it has one, then a dedicated MCP tool or connector. Web pages belong to browser 
 2. Act by element index from the UI state (`app.click(12)`) when you can, and by coordinates only when an
    element has no index. Batch several actions in one call when you're sure of them.
 3. The first time you touch an app, the user gets an approval prompt. If the result says the app was not
-   approved, stop and tell the user. Don't retry around it.
+   approved, stop and tell the user. Don't retry around it. The engine refuses terminal apps such as
+   Terminal.app. Use Bash for that work instead, and don't look for another way to drive the terminal.
 4. If a result says the user changed the app, re-read its state before acting again. The person may be
    using it.
 5. Use `app.getScreenshot()` with `nodeRepl.emitImage(...)` when the accessibility tree doesn't show what

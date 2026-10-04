@@ -248,8 +248,9 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   missing Window/URL headers. Its injected action guard checks again, but arbitrary JavaScript can
   bypass it or forge observations. Result checks cannot undo actions already taken. Discovery reads
   can expose other windows' contents, and equal titles without URLs are indistinguishable.
-- It's macOS on Apple Silicon only. The engine has Linux and Windows builds, but sleight hasn't been
-  tested on either.
+- It's macOS on Apple Silicon only. The engine's JavaScript has Linux and Windows instructions, but
+  the helper that clicks and types comes only with the Mac ChatGPT app, and there's no ChatGPT desktop
+  app for Linux (checked 2026-10-04). We haven't checked the Windows app.
 
 ### Approval scope
 
@@ -437,7 +438,7 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 - [x] Text drags: a drag of sleight's own that holds the mouse down and moves in steps
 - [ ] The same drag in the background, without moving the pointer
 - [ ] The pane, status line and `/sleight stop` in the desktop app, once its Claude Code reaches 2.1.287
-- [ ] Linux and Windows, where the engine has builds that sleight hasn't tried
+- [ ] Windows, if the ChatGPT app there includes the computer-use helper (unchecked)
 - [x] Approve one document instead of a whole app (`SLEIGHT_APPROVAL_SCOPE=document`, a guard against
   mistakes rather than a security boundary)
 - [x] Review saved-file changes and choose Keep or Undo through a user prompt

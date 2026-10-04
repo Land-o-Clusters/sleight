@@ -26,8 +26,12 @@ belong in [STATE.md](STATE.md).
 
 - An accepted app approval lasts for one Claude Code session, kept in the relay's memory. The relay never
   sends `persist: "always"` and never remembers a decline. `SLEIGHT_APPROVAL_SCOPE=once` turns it off.
-- Apps get approved without a person only through the benchmark's allowlist (Calculator, TextEdit, and Chess since 2026-10-03), and
-  only in benchmark runs. When a safety check blocks an action, the owner does it or it doesn't happen.
+- Apps get approved without a person at the moment of use only two ways: the benchmark's allowlist
+  (Calculator, TextEdit, Chess) in benchmark runs, and a list the user writes in a file outside any
+  project, read by sleight for headless runs (owner, 2026-10-04). No project, plugin or Claude can add
+  to either. When a safety check blocks an action, the owner does it or it doesn't happen.
+- Terminal apps stay refused. The engine's refusal is a safety check, and Claude has Bash (owner,
+  2026-10-04).
 - sleight's `menu_bar`, `notifications` and `drag` tools act outside the engine, through macOS
   Accessibility and posted mouse events (owner's scope calls, 2026-10-03 and 2026-10-04). Each app's icon needs the user's approval, as do notifications,
   with the same session memory as engine approvals. Every action on an app waits for that approval.
