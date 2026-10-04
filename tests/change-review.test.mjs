@@ -115,6 +115,17 @@ test('a late-discovered document is listed as uncaptured and cannot be undone', 
   assert.throws(() => review.before(doc), /no snapshot/i);
 });
 
+test('a later copy and a newly captured document retain separate backups', t => {
+  const { review, doc, path, root } = fixture(t);
+  review.uncaptured(doc);
+  const late = review.read(doc);
+  const second = join(root, 'second.txt'); writeFileSync(second, 'second original\n');
+  review.before({ ...doc, url: pathToFileURL(second).href });
+  assert.equal(readFileSync(late.snapshot, 'utf8'), 'before\n');
+  writeFileSync(path, 'agent\n'); review.after(late);
+  review.decide(late, 'undo'); assert.equal(readFileSync(path, 'utf8'), 'before\n');
+});
+
 test('macOS undo preserves extended attributes and detects outside metadata edits', { skip: process.platform !== 'darwin' }, t => {
   const { review, path, doc } = fixture(t);
   const attr = 'com.sleight.review-test';

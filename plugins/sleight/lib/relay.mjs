@@ -52,7 +52,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRead, readCode, guardedCode } from './document-scope.mjs';
-import { ChangeReview, REVIEW_TOOL } from './change-review.mjs';
+import { ChangeReview, REVIEW_TOOL, isChangeCancel } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
 import { isLeaseRead } from './input-lease.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
@@ -121,9 +121,7 @@ export function createRelay({
   stderr = process.stderr,
   localTools,
   flowRules,
-  // Off by default: its window guard stops Open dialogs and late-found documents (0/2 TextEdit
-  // benchmark tasks, 2026-10-04). SLEIGHT_CHANGE_REVIEW=1 turns it on.
-  changeReview = false,
+  changeReview = true,
   idleTurnEndMs,
   inputLease,
   onLeaseFault = () => {},
@@ -166,6 +164,7 @@ export function createRelay({
   const changes = new ChangeReview();
   const changeCalls = new Map();
   let lastWindow;
+  let lastWindowText = '';
   let reviewing = false;
   let disposed = false;
   const flowCalls = new Map();
@@ -222,7 +221,7 @@ export function createRelay({
         const detail = changes.describe(entry);
         const answer = asking.then(() => ask
           ? ask(`Review ${entry.title}`, false, { kind: 'review', detail })
-          : elicitReview(`Review ${entry.title}\n${detail}\nChoose Keep, Undo or Later. Undo restores the session's original saved file. Reopen it in the app afterward.`));
+          : elicitReview(`Review ${entry.title}\n${detail}\nChoose Keep, Undo or Later. Undo restores the saved copy shown above. Reopen it in the app afterward.`));
         asking = answer.catch(() => 'cancel');
         const decision = await answer.catch(() => 'cancel');
         if (disposed) return;
@@ -675,15 +674,16 @@ export function createRelay({
       }
       if (name === 'js') {
         const read = typeof originalCode === 'string' && isLeaseRead(originalCode);
+        const safe = read || (typeof originalCode === 'string' && isChangeCancel(originalCode, lastWindowText));
         let entry;
         try {
-          if (changeReview && !read && lastWindow?.url?.startsWith('file://') && changeCalls.size) throw new Error('another engine call is pending, wait for its result');
-          if (changeReview && !read && lastWindow?.url?.startsWith('file://')) {
+          if (changeReview && !safe && lastWindow && changeCalls.size) throw new Error('another engine call is pending, wait for its result');
+          if (changeReview && !safe && lastWindow?.url?.startsWith('file://')) {
             entry = changes.before(lastWindow);
             trace('snapshot-before-call', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });
           }
         } catch (err) { documentCalls.delete(msg.id); finishedCall(msg.id); changeStop(msg, `cannot snapshot before acting: ${err.message}`); return; }
-        changeCalls.set(msg.id, { read, entry, expected: documentKey(lastWindow),
+        changeCalls.set(msg.id, { read, safe, entry, window: lastWindow, expected: documentKey(lastWindow), concurrent: changeCalls.size > 0,
           observe: !read || (!isInventoryRead(originalCode) && /cua\.getApp\(|\.(?:getAXState|getAXStateAndScreenshot)\(/.test(originalCode)) });
         if (typeof originalCode === 'string') {
           const target = documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow;
@@ -691,8 +691,9 @@ export function createRelay({
             ? 'Input lease stopped this action: window or URL changed. Read the intended window again before acting.'
             : 'Change review stopped this action: window or URL changed. Read the intended window with one standalone cua.getApp call before editing.';
           if (read) msg.params.arguments.code = readCode(originalCode);
-          else if (documentMode || inputLease || entry) msg.params.arguments.code = guardedCode(originalCode, target, reason,
-            inputLease?.grant(leaseCalls.get(msg.id)?.key));
+          else if (documentMode || inputLease || (changeReview && target)) msg.params.arguments.code = guardedCode(originalCode, target, reason,
+            inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
+            { fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe });
         }
       }
       msg.params._meta = { ...msg.params._meta, [META_KEY]: turnMeta() };
@@ -726,9 +727,19 @@ export function createRelay({
       const call = changeCalls.get(msg.id);
       changeCalls.delete(msg.id);
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
-      if (call.observe) lastWindow = windowFromText(text);
-      if (changeReview && !call.read) {
-        changes.after(call.entry, !msg.error && !msg.result?.isError && documentKey(lastWindow) === call.expected);
+      if (call.observe) { lastWindowText = text; lastWindow = windowFromText(text); }
+      if (changeReview && call.read && call.observe && !call.concurrent && !msg.error && !msg.result?.isError) {
+        try {
+          const entry = changes.read(lastWindow);
+          if (entry) trace('snapshot-after-read', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });
+        } catch (err) {
+          trace('snapshot-read-failed', { id: msg.id, error: err.message });
+          msg.result.content.push({ type: 'text', text: `Change review could not take a later copy: ${err.message}. Reads remain available.` });
+        }
+      }
+      if (changeReview && !call.safe) {
+        const dialog = lastWindow?.app === call.window?.app && !lastWindow?.url?.startsWith('file://');
+        changes.after(call.entry, !msg.error && !msg.result?.isError && (documentKey(lastWindow) === call.expected || dialog));
         // A window first identified after an action has no trustworthy before copy.
         for (const window of windowsInText(text)) {
           if (documentKey(window) !== call.expected) changes.uncaptured(window);

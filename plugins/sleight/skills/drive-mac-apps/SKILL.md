@@ -103,7 +103,7 @@ sleight's `menu_bar` and `notifications` tools can:
 
 ## Review saved changes
 
-This applies only when the user has set `SLEIGHT_CHANGE_REVIEW=1`.
+This applies by default, unless the user has set `SLEIGHT_CHANGE_REVIEW=0`.
 Before editing a document, use a standalone `let app = await cua.getApp("App")` call to identify its
 Window and URL. sleight snapshots a `file://` document before the first possible edit. Save changes
 before review. `review_changes` with `op: "list"` shows before/after diffs or size/date summaries.
@@ -111,7 +111,9 @@ With `op: "review"`, the user chooses Keep, Undo or Later for each document. Nev
 yourself or restore the file through another tool. If undo succeeds, stop editing that app buffer
 until the document has been reopened. A conflict means the file changed after the last agent action.
 Tell the user and stop rather than overwriting it. Unsaved buffers and documents without files have
-no snapshot.
+no snapshot. Same-app Open dialogs and sheets can proceed. If sleight first saw a file after an
+action, read it again in a standalone call before editing. Review will show that undo starts at
+the later copy.
 
 ## Document scope
 

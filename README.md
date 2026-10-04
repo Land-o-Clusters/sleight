@@ -244,9 +244,9 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   the turn until the session closed. Desktop sessions twice showed as busy after Claude had finished,
   and ending the turn cleared it once, so the open turn is the likely cause.
   `SLEIGHT_IDLE_TURN_END_MS` changes the wait, and 0 turns it off.
-- Change review (opt-in) stops the next action whenever the window changes, including an Open
-  dialog the action itself opened, and refuses edits to a document it first saw after an action.
-  It covers saved files observed before `js` actions. Unsaved buffers, Save As targets,
+- Change review covers saved files observed before `js` actions. A file first seen after an action
+  needs a fresh standalone read before editing. Undo then starts at that later copy.
+  Unsaved buffers, Save As targets,
   menu bar and pointer tools have no before copy. Undo changes the saved file, so reopen it before
   editing again. Autosave or a user edit after an action makes undo refuse. Arbitrary JavaScript can
   bypass the window guard or forge headers. [The design](docs/design/change-review.md) lists the limits.
@@ -361,13 +361,14 @@ An audit write failure falls back to asking. List grants never send an engine pe
 
 ## Review changes
 
-Set `SLEIGHT_CHANGE_REVIEW=1` to turn this on. It's off by default because its window guard stops
-normal work: in one benchmark pass it failed both TextEdit tasks that open a file (2026-10-04).
+Change review is on by default. Set `SLEIGHT_CHANGE_REVIEW=0` to turn it off.
 Read the intended window with a standalone `let app = await cua.getApp("TextEdit")` before editing.
 For a document with a `file://` URL, sleight saves a private copy before the first possible edit.
+Open dialogs and same-app sheets can proceed without a copy. If a file was first seen after an
+action, a fresh standalone read takes a later copy, and review shows where undo starts.
 Call `review_changes` with `op: "list"` to see text diffs or size/date summaries, or `op: "review"`
 to choose Keep, Undo or Later for each document in sleight's prompt. Only your prompt response can
-decide. Undo restores the original saved file if it still matches the last agent action, then you
+decide. Undo restores the saved copy if the file still matches the last agent action, then you
 must reopen it in the app. Snapshots last until the session ends.
 
 ## Flow rules

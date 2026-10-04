@@ -11,6 +11,29 @@ test('headers require one exact identity, including a document URL', () => {
   assert.equal(windowFromText('Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt\nURL: file:///tmp/b.txt'), undefined);
 });
 
+test('file-only guard refuses another file while cached read and cancel paths remain usable', async () => {
+  const writes = [];
+  const raw = { getAXState: async () => 'Window: "b.txt", App: TextEdit\nURL: file:///tmp/b.txt\n63 button Cancel, ID: CancelButton',
+    typeText: async text => writes.push(text), click: async id => writes.push(id), pressKey: async key => writes.push(key) };
+  const context = { app: raw, cua: { getApp: async () => raw }, nodeRepl: { write() {} } };
+  const expected = { title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' };
+  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  await assert.rejects(run(guardedCode('await app.typeText("oops")', expected, 'stopped', undefined, { fileOnly: true })), /stopped/);
+  await run(guardedCode('await app.click(63); await app.pressKey("Escape");', expected, 'stopped', undefined, { fileOnly: true }));
+  await run(readCode('await app.getAXState();'));
+  await assert.rejects(run(guardedCode('await app.typeText("oops")', expected, 'stopped', undefined, { fileOnly: true })), /stopped/);
+  assert.deepEqual(writes, [63, 'Escape']);
+});
+
+test('Escape cancellation does not depend on a successful window read', async () => {
+  let cancelled = false;
+  const app = { getAXState: async () => { if (!cancelled) throw new Error('unreadable dialog'); return 'Window: "Open", App: TextEdit'; },
+    pressKey: async () => { cancelled = true; } };
+  const code = guardedCode('await app.pressKey("Escape")', { title: 'Open', app: 'TextEdit', url: null }, 'stopped', undefined, { fileOnly: true, cancelOnly: true });
+  await runInNewContext(`(async () => { ${code} })()`, { app, cua: { getApp: async () => app }, nodeRepl: { write() {} } });
+  assert.equal(cancelled, true);
+});
+
 test('the advisory guard checks the cached app before mutating it', async () => {
   for (const name of ['a.txt', 'b.txt']) {
     const writes = [];

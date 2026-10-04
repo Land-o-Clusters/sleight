@@ -1,0 +1,40 @@
+# Change review guard, 2026-10-04
+
+Branch `codex/change-review-guard` starts at `8723d80`. The guard permits
+same-app dialogs without file URLs. A fresh read can capture a later undo copy
+for a file first discovered after an action. Regression tests replay the two
+failed TextEdit sequences from the `945ccf6` benchmark.
+It was then rebased onto `b1a0556`, retaining input leases and their read classifier.
+The combined regression opens an Open dialog, types a path in its sheet, and
+refuses further input if its lease token has been replaced.
+Round 2 rebased it onto `27b0528`, preserving the prose-lint files from both sides.
+The live harness now holds `/tmp/sleight-live.lock` through cleanup.
+The lock tests passed 2/2 for contention, release and replacement by another holder.
+
+`node bench/change-review.mjs` uses the default setting and two temporary
+TextEdit files. The user chooses Undo for the UNDO file and Keep for the KEEP
+file. The harness checks saved contents and deletion of session backups.
+
+The first attempt failed before opening TextEdit, with sandbox error -2700.
+The second changed both files and showed their diffs. The Undo panel timed out
+without a user decision. The remaining Keep panel was interrupted through the
+owned terminal. Session backup deletion passed.
+The third attempt, after the rebase, timed out on its first TextEdit read before
+any approval panel appeared. No file changed. The launcher collected its engine.
+The fourth attempt also failed to access TextEdit in the sandbox.
+The fifth read and changed both files, but another live session held a lease
+and blocked review before prompting. The engine responded without a restart.
+The sixth changed both files and displayed review panels. Both decisions recorded Keep,
+so the undo assertion failed. The owner confirmed clicking Keep by mistake.
+The seventh held the live lock, changed both files and displayed the first panel.
+The owner was away, so the run was interrupted through its owned terminal.
+The review decision remained pending. Backup deletion and live lock release passed.
+The eighth passed on `42f4be6`, with the owner clicking Undo, then Keep.
+The saved files contained `UNDO ORIGINAL` and `KEEP AGENT CHANGE`, each with a
+trailing newline. Session backups were deleted and the live lock was released.
+`node bench/change-review.mjs` exited 0.
+
+[Results](2026-10-04-change-review-guard.json) preserve attempts 1 through 8, including
+their full harness results and relevant relay events. Home paths use `~`.
+Vendor API documentation is omitted. Dialog recovery is covered by unit tests.
+`bench/run.mjs` was not run, because sleight-arch runs that pass at merge.

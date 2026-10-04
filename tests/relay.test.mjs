@@ -8,6 +8,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, realpathS
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { createContext, runInContext } from 'node:vm';
 
 const fixtureRoot = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-relay-review-')));
 const fixturePath = join(fixtureRoot, 'a.txt');
@@ -745,7 +746,7 @@ function savedEdit(h, id, path, before, afterText) {
 }
 const reviewCall = (h, id, args = { op: 'review' }) => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'review_changes', arguments: args } });
 
-test('change review is off unless enabled: no snapshot, no window guard, no review tool', async () => {
+test('change review can be disabled: no snapshot, no window guard, no review tool', async () => {
   const path = join(fixtureRoot, 'off.txt');
   writeFileSync(path, 'before\n');
   const h = harness({ changeReview: false, trace: (direction, msg) => { if (direction === 'snapshot-before-call') throw new Error('snapshot taken'); } });
@@ -759,6 +760,106 @@ test('change review is off unless enabled: no snapshot, no window guard, no revi
   h.fromServer({ jsonrpc: '2.0', id: 4, result: { tools: [{ name: 'js' }] } });
   assert.deepEqual(h.toClient.find(m => m.id === 4).result.tools.map(t => t.name), ['js']);
   assert.equal(h.relay.snapshotDirectory, undefined);
+});
+
+test('textedit-drag: cached guards allow Open, Go to Folder, reads and Cancel across calls', async () => {
+  const path = join(fixtureRoot, 'drag-transcript.txt'); writeFileSync(path, 'alpha beta gamma\n');
+  const header = `Window: "drag-transcript.txt", App: TextEdit\nURL: ${pathToFileURL(path).href}`;
+  let ui = header;
+  const actions = [];
+  const raw = {
+    getAXState: async () => ui,
+    pressKey: async key => { actions.push(key); if (key === 'super+o') ui = 'Window: "Open", App: TextEdit\n0 standard window Open\n63 button Cancel, ID: CancelButton';
+      if (key === 'super+shift+g') ui = 'Window: "", App: TextEdit\n0 sheet ID: GoToWindow'; },
+    typeText: async text => actions.push(text),
+    click: async id => { actions.push(id); ui = header; },
+  };
+  const context = createContext({ app: raw, cua: { getApp: async () => raw }, nodeRepl: { write() {} } });
+  const h = harness(); documentRead(h, 1, 'drag-transcript.txt', pathToFileURL(path).href);
+  const run = async (id, code) => {
+    flowCall(h, id, code);
+    const forwarded = h.toServer.find(m => m.id === id);
+    assert.ok(forwarded, 'reads and dialog actions reach the engine');
+    await runInContext(`(async () => { ${forwarded.params.arguments.code} })()`, context);
+    flowAnswer(h, id, ui);
+  };
+  await run(2, 'await app.pressKey("super+o"); await app.getAXState();');
+  await run(3, 'await app.pressKey("super+shift+g"); await app.typeText("/tmp/other.txt"); await app.pressKey("Return"); await app.getAXState();');
+  await run(4, 'await app.getAXState({disableDiffing:true});');
+  ui = 'Window: "Open", App: TextEdit\n0 standard window Open\n63 button Cancel, ID: CancelButton';
+  await run(5, 'app = await cua.getApp("TextEdit");');
+  await run(6, 'await app.click(63);');
+  assert.deepEqual(actions, ['super+o', 'super+shift+g', '/tmp/other.txt', 'Return', 63]);
+  await run(7, 'await app.pressKey("super+o");'); // Returning to the original file stays usable.
+});
+
+test('textedit-edit: a standalone read recovers a late document with a later undo copy', async () => {
+  const path = join(fixtureRoot, 'late-transcript.txt'); writeFileSync(path, 'alpha beta gamma\n');
+  const header = `Window: "late-transcript.txt", App: TextEdit\nURL: ${pathToFileURL(path).href}`;
+  const h = harness({ ask: async () => 'undo' });
+  flowCall(h, 1, 'await app.click(64);'); flowAnswer(h, 1, header);
+  flowCall(h, 2, 'await app.setValue(2,"alpha delta gamma\\n");');
+  assert.equal(h.toServer.some(m => m.id === 2), false, 'needs a fresh read before a late snapshot');
+  flowCall(h, 3, 'let app = await cua.getApp("TextEdit")'); flowAnswer(h, 3, header);
+  assert.ok(h.relay.snapshotDirectory, 'fresh read takes the later copy immediately');
+  flowCall(h, 4, 'await app.setValue(2,"alpha delta gamma\\n"); await app.pressKey("super+s");');
+  assert.ok(h.toServer.some(m => m.id === 4), 'editing resumes after the read');
+  writeFileSync(path, 'alpha delta gamma\n'); flowAnswer(h, 4, header);
+  reviewCall(h, 5, { op: 'list' });
+  assert.match(h.toClient.at(-1).result.content[0].text, /Undo starts at the later copy/);
+  reviewCall(h, 6); await settle();
+  assert.equal(readFileSync(path, 'utf8'), 'alpha beta gamma\n');
+});
+
+test('change review never snapshots or refuses read-only and cancel-only calls after a conflict', () => {
+  const path = join(fixtureRoot, 'conflict-read.txt'); const h = harness();
+  savedEdit(h, 1, path, 'before\n', 'agent\n'); writeFileSync(path, 'user\n');
+  const header = `Window: "conflict-read.txt", App: TextEdit\nURL: ${pathToFileURL(path).href}\n63 button Cancel, ID: CancelButton`;
+  for (const [id, code] of [[3, 'await app.getAXState({disableDiffing:true});'], [4, 'await app.pressKey("Escape");'], [5, 'await app.click(63);']]) {
+    flowCall(h, id, code); assert.ok(h.toServer.some(m => m.id === id)); flowAnswer(h, id, header);
+  }
+  documentCall(h, 6); assert.equal(h.toServer.some(m => m.id === 6), false, 'reads do not adopt outside edits');
+});
+
+test('change review is advertised by default', () => {
+  const h = harness({ changeReview: undefined });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { tools: [{ name: 'js' }] } });
+  assert.ok(h.toClient[0].result.tools.some(t => t.name === 'review_changes'));
+});
+
+test('a stale Cancel ID cannot bypass the runtime guard or mutate an outside edit', async () => {
+  const path = join(fixtureRoot, 'stale-cancel.txt'); const h = harness();
+  savedEdit(h, 1, path, 'before\n', 'agent\n');
+  const header = `Window: "stale-cancel.txt", App: TextEdit\nURL: ${pathToFileURL(path).href}`;
+  flowCall(h, 3, 'await app.getAXState();'); flowAnswer(h, 3, header + '\n63 button Cancel, ID: CancelButton');
+  writeFileSync(path, 'user\n');
+  flowCall(h, 4, 'await app.click(63);');
+  const code = h.toServer.find(m => m.id === 4).params.arguments.code;
+  const context = { app: { getAXState: async () => header + '\n63 button Delete', click: async () => writeFileSync(path, 'deleted\n') },
+    cua: { getApp() {} }, nodeRepl: { write() {} } };
+  await assert.rejects(runInContext(`(async () => { ${code} })()`, createContext(context)), /Cancel.*changed/);
+  assert.equal(readFileSync(path, 'utf8'), 'user\n');
+});
+
+test('a concurrent read cannot disable the guard of an in-flight mutation', async () => {
+  const path = join(fixtureRoot, 'concurrent-read.txt'); writeFileSync(path, 'before\n');
+  const header = `Window: "concurrent-read.txt", App: TextEdit\nURL: ${pathToFileURL(path).href}`;
+  let ui = header, resume;
+  const writes = [];
+  const raw = { getAXState: async () => ui, typeText: async value => {
+    writes.push(value); if (value === 'first') await new Promise(resolve => { resume = resolve; });
+  } };
+  const context = createContext({ app: raw, cua: { getApp: async () => raw }, nodeRepl: { write() {} } });
+  const h = harness(); documentRead(h, 1, 'concurrent-read.txt', pathToFileURL(path).href);
+  flowCall(h, 2, 'await app.typeText("first"); await app.typeText("second");');
+  const action = runInContext(`(async () => { ${h.toServer.find(m => m.id === 2).params.arguments.code} })()`, context);
+  await tick();
+  flowCall(h, 3, 'let app = await cua.getApp("TextEdit");');
+  await runInContext(`(async () => { ${h.toServer.find(m => m.id === 3).params.arguments.code} })()`, context);
+  ui = 'Window: "other.txt", App: TextEdit\nURL: file:///tmp/other.txt'; resume();
+  await assert.rejects(action, /Change review stopped/);
+  assert.deepEqual(writes, ['first']);
 });
 
 test('review lists two saved documents, asks for each user decision and never forwards undo', async () => {
