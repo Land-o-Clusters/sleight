@@ -44,8 +44,10 @@ shortcomings for the owner are the reason sleight exists, so there's no benchmar
 README compares the two from Anthropic's own docs instead. Other gaps it names: other harnesses (LCU covers Codex CLI and Pi), exact-window
 targeting, reporting whether an action took effect, finer approval scopes, clipboard ownership, and
 input leases across sessions. LCU moved to `amontlabs/lcu`. The owner picked the research's new-ground
-items for the roadmap. Document scope is in 0.4.0 (built by Codex B, opt-in, a guard against mistakes). Next for
-Codex: the cross-app change review, then rules for data moving between apps.
+items for the roadmap. Document scope is in 0.4.0 (built by Codex B, opt-in, a guard against mistakes). The change
+review (Codex B, `review_changes`, file-backed documents, undo only on the user's decision) is on main,
+unreleased. The input lease (Codex A, `codex/input-lease`) conflicts with it in the relay and waits for
+A to rebase. Both go out together as 0.5.0. Next for Codex B: rules for data moving between apps.
 
 Owner's plan (2026-10-04), after the drag: work through every item in Known problems, and research
 the market for what sleight can do better.
