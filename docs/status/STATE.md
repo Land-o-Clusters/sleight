@@ -35,7 +35,7 @@ published results with `~`, run `npm run check` and `npm run lint:prose`, push, 
 Branches already cherry-picked and safe to delete with their worktrees once their Codex sessions are
 done: `codex/watch-api-diff` (`c058475` as `2d48e5d`), `codex/background-drag` (`32fd681` as
 `ee49fd9`, prototype moved to `bench/background-drag/`), `codex/document-scope` (`9f3827a` as
-`ceebdca`), `codex/change-review` (`e4e4121` as `844fa60`), `codex/flow-rules` (`fdd29c7`, fast-forward), `codex/input-lease` (`112c878`, fast-forward).
+`ceebdca`), `codex/change-review` (`e4e4121` as `844fa60`), `codex/flow-rules` (`fdd29c7`, fast-forward), `codex/input-lease` (`112c878`, fast-forward), `codex/background-drag-2` (`91cdda0` as `f4fb71a`, research in `bench/`).
 
 What sleight is now: the engine through a relay, plus its own tools where the engine stops short:
 `menu_bar` and `notifications` (System Events), `drag` (held, stepped, foreground; text drag 3/3
