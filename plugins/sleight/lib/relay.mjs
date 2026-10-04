@@ -41,6 +41,11 @@
 // else through an elicitation sent to Claude Code. launch.mjs uses this for the
 // menu bar and notifications, which the engine can't reach.
 //
+// `idleTurnEndMs`, when given, ends a used turn once no engine call has been
+// running for that long. Hosts without the mod (the desktop app's Claude Code)
+// never end the engine's turn, and the engine keeps holding the app (its badge
+// on the window) until the session closes.
+//
 // `trace`, when given, receives every message as it passes, for debugging.
 
 import { randomUUID } from 'node:crypto';
@@ -100,6 +105,7 @@ export function createRelay({
   approvalScope = 'session',
   ask,
   localTools,
+  idleTurnEndMs,
   trace = () => {},
 }) {
   let turnId = randomUUID();
@@ -112,6 +118,18 @@ export function createRelay({
   let asking = Promise.resolve(); // `ask` prompts, one at a time
   const localNames = new Set(localTools?.tools.map(t => t.name) ?? []);
   const elicitations = new Map(); // our elicitation id -> resolve
+  const running = new Set(); // ids of engine calls waiting for a result
+  let idleTimer;
+
+  function scheduleIdleEnd() {
+    clearTimeout(idleTimer);
+    if (!idleTurnEndMs || running.size || !turnUsed) return;
+    idleTimer = setTimeout(() => {
+      trace('idle-turn-end', { turnId });
+      endOpenTurn();
+    }, idleTurnEndMs);
+    idleTimer.unref?.();
+  }
   let nextElicitId = 0;
 
   const toServer = msg => {
@@ -247,6 +265,8 @@ export function createRelay({
       }
       msg.params._meta = { ...msg.params._meta, [META_KEY]: turnMeta() };
       turnUsed = true;
+      clearTimeout(idleTimer);
+      if (msg.id !== undefined) running.add(msg.id);
     }
     toServer(msg);
   });
@@ -264,6 +284,7 @@ export function createRelay({
       internalRequests.delete(msg.id);
       return;
     }
+    if (msg.method === undefined && running.delete(msg.id)) scheduleIdleEnd();
     if (ask && isAppApproval(msg)) {
       askUser(msg);
       return;

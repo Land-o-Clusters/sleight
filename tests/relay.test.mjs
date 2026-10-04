@@ -350,3 +350,40 @@ test('a declined client elicitation refuses the local call', async () => {
   assert.equal(h.toClient[1].result.isError, true);
   assert.equal(h.toServer.length, 0);
 });
+
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+test('ends a used turn after the session goes idle', async () => {
+  const h = harness({ idleTurnEndMs: 30 });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: {} } });
+  await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [] } });
+  await wait(60);
+  const ended = h.toServer.find(m => m.params?.name === 'turn_ended');
+  assert.ok(ended, 'turn_ended was sent');
+  assert.equal(ended.params.arguments.session_id, 'session-1');
+});
+
+test('does not end the turn while a call is still running, or before the idle time', async () => {
+  const h = harness({ idleTurnEndMs: 40 });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: {} } });
+  await wait(70);
+  assert.equal(h.toServer.filter(m => m.params?.name === 'turn_ended').length, 0, 'not while the call runs');
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [] } });
+  await wait(10);
+  h.fromClient({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'js', arguments: {} } });
+  h.fromServer({ jsonrpc: '2.0', id: 2, result: { content: [] } });
+  await wait(20);
+  assert.equal(h.toServer.filter(m => m.params?.name === 'turn_ended').length, 0, 'a new call restarts the wait');
+  await wait(50);
+  assert.equal(h.toServer.filter(m => m.params?.name === 'turn_ended').length, 1);
+});
+
+test('without idleTurnEndMs, an idle turn stays open', async () => {
+  const h = harness();
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: {} } });
+  await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [] } });
+  await wait(40);
+  assert.equal(h.toServer.filter(m => m.params?.name === 'turn_ended').length, 0);
+});

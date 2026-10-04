@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1 (2026-10-04)
+
+- The relay ends the engine's turn after 30 s without a running call. In the desktop app, where the mod
+  can't run, the engine used to hold the last app (its badge on the window) until the session closed.
+  That's the likely cause of desktop sessions showing as busy after Claude finished. `SLEIGHT_IDLE_TURN_END_MS` sets the wait.
+- Hover: mouse events posted to a background app don't trigger hover, measured with the probe app and
+  GitHub Desktop.
+
 ## 0.3.0 (2026-10-04)
 
 - A `drag` tool that holds the mouse down and moves in steps, for drags the engine's `app.drag` can't

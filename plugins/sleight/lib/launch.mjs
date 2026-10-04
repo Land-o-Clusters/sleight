@@ -264,6 +264,9 @@ function run() {
     // SLEIGHT_APPROVAL_SCOPE=once asks again on every action instead.
     approvalScope: process.env.SLEIGHT_APPROVAL_SCOPE === 'once' ? 'once' : 'session',
     ask: approvalPrompt(),
+    // End the engine's turn after 30 s without a running call, so the app it
+    // holds is released even where the mod doesn't run. 0 turns this off.
+    idleTurnEndMs: Number(process.env.SLEIGHT_IDLE_TURN_END_MS ?? 30000),
     // SLEIGHT_MENU_BAR=0 leaves out the menu bar and notification tools,
     // SLEIGHT_DRAG=0 the drag tool.
     localTools: {

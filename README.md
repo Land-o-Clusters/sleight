@@ -183,8 +183,12 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   or per-turn cleanup.
 - Nobody has checked the pane's picture in the desktop app's Code tab yet. It embeds the screenshot in an
   SVG there, which the terminal doesn't need.
-- Per-turn cleanup needs Claude Code v2.1.287 or later. Without the mod, the engine's turn only ends when
-  the session closes.
+- Per-turn cleanup needs Claude Code v2.1.287 or later. Without the mod, as in the desktop app, the relay
+  ends the engine's turn once no sleight call has run for 30 seconds, which releases the app the engine
+  was holding (its badge on the app's window). Before 0.3.1 nothing ended the turn until the session
+  closed. Desktop sessions twice showed as busy after Claude had finished, and ending the turn
+  cleared it once, so the open turn is the likely cause.
+  `SLEIGHT_IDLE_TURN_END_MS` changes the wait, and 0 turns it off.
 - ChatGPT updates can break it. The version lookup handles the folder moving around, but not the API
   changing. Run `--doctor` first when something stops working.
 - The engine has no access to an app's icon in the menu bar or to notification banners: its inventory has
