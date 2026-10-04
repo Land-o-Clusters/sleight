@@ -187,10 +187,103 @@ export function createRelay({
   let disposed = false;
   const browserHandles = new Set();
   const browserCalls = new Map();
-  let readTimeouts = 0;
-  let helperStuck = false;
-  const helperReads = new Set();
-  const helperAdvice = 'The SkyComputerUseService helper appears stuck after repeated timeoutReached errors on reads. Stop retrying. Tell the user they need to restart ChatGPT to recover computer use. Restarting ends their Codex sessions; never restart or quit ChatGPT yourself.';
+  const helperStates = new Map();
+  const helperHandles = new Map();
+  const helperAliases = new Map();
+  const helperReads = new Map();
+  const helperProbes = new Map();
+  const helperFullReads = new Set();
+  const lateHelperReplies = new Set();
+  let helperActive;
+  const helperAdvice = key => `The SkyComputerUseService helper appears stuck when reading ${key}. Stop retrying. Tell the user they need to restart ChatGPT to recover computer use. sleight will retry by itself with one standalone read every 20 s and resume this app after a successful read. Restarting ends their Codex sessions; never restart or quit ChatGPT yourself.`;
+
+  function helperSelector(selector) {
+    let key;
+    try {
+      key = JSON.parse(selector.startsWith("'")
+        ? '"' + selector.slice(1, -1).replace(/\\'/g, "'").replace(/(?<!\\)"/g, '\\"') + '"' : selector);
+    } catch { key = selector.replace(/\s+/g, ''); }
+    key = typeof key === 'string' ? key.toLowerCase() : `window:${key.windowId}`;
+    return helperAliases.get(key) ?? key;
+  }
+  function helperPlan(code) {
+    if (typeof code !== 'string' || /cua\.rewriteDocumentation\(/.test(code)) return undefined;
+    code = code.trim();
+    const read = isLeaseRead(code);
+    if (read && isInventoryRead(code)) return { read, key: 'helper inventory', probe: code };
+    const literal = String.raw`("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\{\s*(?:windowId|"windowId")\s*:\s*\d+\s*\})`;
+    const acquisition = code.match(new RegExp(String.raw`^(?:(?:(?:let|const|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*)?await\s+cua\.getApp\(\s*${literal}\s*\)\s*;?$`));
+    if (read && acquisition) {
+      const selector = acquisition[2], key = helperSelector(selector);
+      return { read, key, selector, handle: acquisition[1] ?? 'app', probe: `var __sleightHelperRecovery = await cua.getApp(${selector})` };
+    }
+    const handles = [...code.matchAll(/\b([A-Za-z_$][\w$]*)\s*\./g)].map(m => m[1]);
+    if (read) {
+      const handle = handles.find(h => !['nodeRepl', 'cua'].includes(h));
+      const known = helperHandles.get(handle);
+      return { read, handle, key: known?.key ?? `handle:${handle}`, probe: known?.probe ?? code };
+    }
+    const explicit = [...code.matchAll(new RegExp(String.raw`cua\.getApp\(\s*${literal}\s*\)`, 'g'))].map(m => helperSelector(m[1]));
+    const keys = [...explicit, ...handles.map(h => helperHandles.get(h)?.key).filter(Boolean)];
+    return { read, keys: keys.length ? keys : helperActive ? [helperActive] : [] };
+  }
+  function scheduleHelperRead(state) {
+    clearTimeout(state.timer);
+    const retry = () => {
+      if (disposed || closing || !state.stuck || state.pending !== undefined) return;
+      if (running.size || localRunning.size || documentAsking || reviewing || flowAsking) {
+        state.timer = setTimeout(retry, 1000); state.timer.unref?.(); return;
+      }
+      const id = `sleight-helper-${nextInternalId++}`;
+      helperProbes.set(id, {});
+      handleClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code: state.probe, timeout_ms: 5000 } } });
+      if (!helperReads.has(id)) { scheduleHelperRead(state); return; }
+      const probe = helperProbes.get(id);
+      if (probe) {
+        probe.timer = setTimeout(() => {
+          const plan = helperReads.get(id); helperReads.delete(id);
+          updateHelperRead(plan, { error: { message: 'timeoutReached: automatic helper read timed out' } });
+          documentCalls.delete(id); changeCalls.delete(id); helperProbes.delete(id);
+          lateHelperReplies.add(id); finishedCall(id);
+          trace('helper-recovery-timeout', { id, app: state.key });
+        }, 5500);
+        probe.timer.unref?.();
+      }
+    };
+    state.timer = setTimeout(retry, Math.max(1000, state.retryAt - Date.now()));
+    state.timer.unref?.();
+  }
+  function updateHelperRead(plan, msg) {
+    if (!plan) return;
+    let state = helperStates.get(plan.key);
+    if (!state) { state = { key: plan.key, timeouts: 0, probe: plan.probe }; helperStates.set(plan.key, state); }
+    const error = msg.error?.message ?? (msg.result?.isError
+      ? (msg.result.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n') : '');
+    const success = !msg.error && !msg.result?.isError;
+    state.pending = undefined;
+    if (success) {
+      clearTimeout(state.timer); helperStates.delete(plan.key);
+      if (state.stuck) trace('helper-recovered', { app: plan.key });
+      if (helperProbes.has(msg.id) && plan.key !== 'helper inventory') helperFullReads.add(plan.key);
+      if (plan.fullVisible) helperFullReads.delete(plan.key);
+      const appId = msg.result?._meta?.['codex/toolSurface']?.app?.appId;
+      const window = windowFromText((msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n'));
+      if (plan.selector) for (const alias of [appId, window?.app]) {
+        if (typeof alias === 'string') helperAliases.set(alias.toLowerCase(), plan.key);
+      }
+      return;
+    }
+    state.timeouts = /\btimeoutReached\b/.test(error) ? state.timeouts + 1 : 0;
+    if (state.timeouts >= 2 && !state.stuck) {
+      state.stuck = true; state.retryAt = Date.now() + 20000;
+      trace('helper-stuck', { id: msg.id, app: plan.key, consecutiveReadTimeouts: state.timeouts });
+    }
+    if (state.stuck) {
+      scheduleHelperRead(state);
+      if (msg.error) msg.error.message += `\n\n${helperAdvice(plan.key)}`;
+      else msg.result = { ...msg.result, isError: true, content: [...(msg.result?.content ?? []), { type: 'text', text: helperAdvice(plan.key) }] };
+    }
+  }
   const flowCalls = new Map();
   let flowPending;
   let flowPermit;
@@ -474,6 +567,10 @@ export function createRelay({
     serverIn.write(JSON.stringify(msg) + '\n');
   };
   const toClient = msg => {
+    if (helperProbes.has(msg.id) && msg.method === undefined) {
+      clearTimeout(helperProbes.get(msg.id).timer); helperProbes.delete(msg.id);
+      trace('helper-recovery-result', msg); return;
+    }
     if (clientOut.writableEnded || clientOut.destroyed) { trace('client-output-closed', { id: msg.id }); return; }
     trace('to-client', msg);
     clientOut.write(JSON.stringify(msg) + '\n');
@@ -664,6 +761,9 @@ export function createRelay({
       serverIn.write(line + '\n');
       return;
     }
+    handleClient(msg);
+  });
+  function handleClient(msg) {
     if (msg.method === 'server/discover' && msg.id !== undefined) {
       toClient({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'Method not found' } });
       return;
@@ -674,10 +774,6 @@ export function createRelay({
       return;
     }
     if (closing && msg.method === 'tools/call') { leaseStop(msg, 'this session is closing.'); return; }
-    if (helperStuck && msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name)) {
-      toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: helperAdvice }] } });
-      return;
-    }
     if (msg.method === 'tools/call') {
       if (disposed) { changeStop(msg, 'session has ended'); return; }
       if (flowAsking) { flowStop(msg, 'wait for the user decision'); return; }
@@ -691,6 +787,21 @@ export function createRelay({
       const native = originalCode.match(/([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.getApp\(/);
       if (native) browserHandles.delete(native[1]);
     }
+    const healthPlan = msg.method === 'tools/call' && msg.params?.name === 'js' ? helperPlan(originalCode) : undefined;
+    const blockedApp = (healthPlan?.read ? [healthPlan.key] : healthPlan?.keys ?? []).find(key => {
+      const state = helperStates.get(key);
+      return state?.stuck && (!healthPlan.read || state.pending !== undefined || Date.now() < state.retryAt);
+    });
+    if (blockedApp) {
+      toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: helperAdvice(blockedApp) }] } });
+      return;
+    }
+    const needsFullRead = !healthPlan?.read && healthPlan?.keys?.find(key => helperFullReads.has(key));
+    if (needsFullRead) {
+      toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: `Computer use recovered for ${needsFullRead}. Send a standalone app read before acting. sleight will make it a full read because automatic recovery consumed the engine's UI diff.` }] } });
+      return;
+    }
+    if (msg.method === 'tools/call' && msg.params?.name === 'js_reset') { helperHandles.clear(); helperActive = undefined; }
     let flowPlan, clipboardAction;
     if (clipboard && msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name) && clipboard.pending) {
       clipboardStop(msg, 'Clipboard: wait for the pending clipboard action, then retry.'); return;
@@ -779,7 +890,16 @@ export function createRelay({
             trace('snapshot-before-call', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });
           }
         } catch (err) { documentCalls.delete(msg.id); finishedCall(msg.id); changeStop(msg, `cannot snapshot before acting: ${err.message}`); return; }
-        if (read && !/cua\.rewriteDocumentation\(/.test(originalCode) && msg.id !== undefined) helperReads.add(msg.id);
+        if (healthPlan?.read && msg.id !== undefined) {
+          helperReads.set(msg.id, healthPlan);
+          let state = helperStates.get(healthPlan.key);
+          if (!state) { state = { key: healthPlan.key, timeouts: 0, probe: healthPlan.probe }; helperStates.set(healthPlan.key, state); }
+          if (state.stuck) { state.pending = msg.id; state.retryAt = Date.now() + 20000; clearTimeout(state.timer); }
+          if (!helperProbes.has(msg.id)) {
+            helperActive = healthPlan.key;
+            if (healthPlan.handle) helperHandles.set(healthPlan.handle, healthPlan);
+          }
+        }
         changeCalls.set(msg.id, { read, safe, entry, window: lastWindow, expected: documentKey(lastWindow), target: leaseWindow ?? lastWindow,
           observe: !read || (!isInventoryRead(originalCode) && /cua\.getApp\(|\.(?:getAXState|getAXStateAndScreenshot)\(/.test(originalCode)) });
         if (typeof originalCode === 'string') {
@@ -787,7 +907,19 @@ export function createRelay({
           const reason = documentMode ? undefined : selectedWindow ? `Selected window changed. ${selectionRecovery()}` : inputLease
             ? 'Input lease stopped this action: window or URL changed. Read the intended window again before acting.'
             : 'Change review stopped this action: window or URL changed. Read the intended window with one standalone cua.getApp call before editing.';
-          if (read) msg.params.arguments.code = readCode(originalCode);
+          if (read) {
+            let code = originalCode;
+            if (healthPlan && !helperProbes.has(msg.id) && helperFullReads.has(healthPlan.key)) {
+              if (/\.(?:getAXState|getAXStateAndScreenshot)\(/.test(code)) {
+                code = code.replace(/(\.(?:getAXState|getAXStateAndScreenshot)\()\s*(\{[^}]*\})?\s*\)/,
+                  (_, prefix, options) => `${prefix}${options ? options.replace(/disableDiffing\s*:\s*(?:true|false)\s*,?/g, '').replace(/^\{\s*/, '{ disableDiffing: true, ') : '{ disableDiffing: true }'})`);
+              } else if (healthPlan.handle) {
+                code += `\nnodeRepl.write(await ${healthPlan.handle}.getAXState({ disableDiffing: true, emit: false }));`;
+              }
+              healthPlan.fullVisible = true;
+            }
+            msg.params.arguments.code = readCode(code);
+          }
           else if (documentMode || inputLease || (changeReview && target)) msg.params.arguments.code = guardedCode(originalCode, target, reason,
             inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
             { fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe });
@@ -817,7 +949,7 @@ export function createRelay({
         observeServerMessage(result);
       });
     } else toServer(msg);
-  });
+  }
 
   lines(serverOut, line => {
     let msg;
@@ -854,18 +986,11 @@ export function createRelay({
       const browser = browserCalls.get(msg.id); browserCalls.delete(msg.id);
       if (!msg.error && !msg.result?.isError) for (const handle of browser.handles) browserHandles.add(handle);
     }
-    if (msg.method === undefined && helperReads.delete(msg.id)) {
-      const error = msg.error?.message ?? (msg.result?.isError
-        ? (msg.result.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n') : '');
-      readTimeouts = /\btimeoutReached\b/.test(error) ? readTimeouts + 1 : 0;
-      if (readTimeouts >= 2) {
-        helperStuck = true;
-        clearTimeout(idleTimer);
-        trace('helper-stuck', { id: msg.id, consecutiveReadTimeouts: readTimeouts });
-        if (msg.error) msg.error.message += `\n\n${helperAdvice}`;
-        else msg.result = { ...msg.result, isError: true, content: [...(msg.result?.content ?? []), { type: 'text', text: helperAdvice }] };
-      }
-    }
+    if (msg.method === undefined && lateHelperReplies.delete(msg.id)) return;
+    const healthPlan = msg.method === undefined ? helperReads.get(msg.id) : undefined;
+    if (healthPlan) { helperReads.delete(msg.id); updateHelperRead(healthPlan, msg); }
+    const helperStuck = helperStates.get(healthPlan?.key)?.stuck;
+    const automatic = helperProbes.has(msg.id);
     if (msg.method === undefined && flowCalls.has(msg.id)) {
       flowRules.observe(msg.result, flowCalls.get(msg.id));
       flowCalls.delete(msg.id);
@@ -875,7 +1000,7 @@ export function createRelay({
       const call = changeCalls.get(msg.id);
       changeCalls.delete(msg.id);
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
-      if (call.observe) { lastWindowText = text; lastWindow = windowFromText(text); }
+      if (call.observe && !automatic) { lastWindowText = text; lastWindow = windowFromText(text); }
       if (selectedWindow && !call.read && call.target && msg.result &&
           (!lastWindow || ['title', 'app', 'url'].some(key => lastWindow[key] !== call.target[key]))) {
         windowNote = `Sleight: outcome unconfirmed. Intended ${documentLabel(call.target)}. ` +
@@ -883,15 +1008,15 @@ export function createRelay({
       }
       // Keep the initial acquisition check, but release a verified selection
       // when a successful full observation confirms a different window.
-      if (selectedWindow && selectionVerified && call.observe && !msg.error && !msg.result?.isError &&
+      if (selectedWindow && selectionVerified && !automatic && call.observe && !msg.error && !msg.result?.isError &&
           lastWindow && !sameWindow(lastWindow, selectedWindow)) clearSelection();
       // The Open click and its standalone reread can overlap. Judge safety at
       // the read's completion, after earlier action results have been recorded.
       const actionPending = [...changeCalls.values()].some(pending => !pending.safe);
-      if (changeReview && call.read && call.observe && actionPending && !msg.error && !msg.result?.isError) {
+      if (changeReview && !automatic && call.read && call.observe && actionPending && !msg.error && !msg.result?.isError) {
         msg.result.content.push({ type: 'text', text: 'Change review: an action is still pending, so this read cannot take a later copy. Wait for its result, then take another standalone cua.getApp read before editing.' });
       }
-      if (changeReview && call.read && call.observe && !actionPending && !msg.error && !msg.result?.isError) {
+      if (changeReview && !automatic && call.read && call.observe && !actionPending && !msg.error && !msg.result?.isError) {
         try {
           const entry = changes.read(lastWindow);
           if (entry) trace('snapshot-after-read', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });
@@ -912,7 +1037,7 @@ export function createRelay({
     if (documentMode && msg.method === undefined && documentCalls.has(msg.id)) {
       const call = documentCalls.get(msg.id);
       documentCalls.delete(msg.id);
-      if (call.observe) {
+      if (call.observe && !automatic) {
         const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
         observedDocument = windowFromText(text);
         if (call.read) {
@@ -928,7 +1053,7 @@ export function createRelay({
         }
       }
     }
-    if (inputLease && msg.method === undefined && leaseCalls.get(msg.id)?.observe) {
+    if (inputLease && !automatic && msg.method === undefined && leaseCalls.get(msg.id)?.observe) {
       const call = leaseCalls.get(msg.id);
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
       const window = !msg.error && !msg.result?.isError && windowFromText(text);
@@ -1053,6 +1178,9 @@ export function createRelay({
     flowCalls.clear(); flowPending = undefined; flowPermit = undefined;
     preapprovalNotes.clear();
     helperReads.clear();
+    for (const state of helperStates.values()) clearTimeout(state.timer);
+    for (const probe of helperProbes.values()) clearTimeout(probe.timer);
+    helperStates.clear(); helperHandles.clear(); helperAliases.clear(); helperProbes.clear(); helperFullReads.clear();
     changes.dispose();
     trace('change-snapshots-deleted', { directory: changes.directory });
   }

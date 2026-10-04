@@ -59,3 +59,33 @@ protocol tests passed (exit 0). The final checks passed 175 unit tests, both plu
 8 mod tests (`npm run check`, exit 0), and prose lint (`npm run lint:prose`, exit 0).
 The first prose pass on the completed results reported 7 flags (exit 1), which were corrected before
 the final pass.
+
+## Round 2 recovery review
+
+The branch was rebased onto `origin/main`. The prose-lint conflict keeps all file entries from
+both sides. The relay now tracks faults per app and retries a standalone read automatically, at
+most once every 20 seconds. Recovery in the same relay clears the fault. Hidden recovery requires
+a visible full app read before actions resume, so Claude does not miss UI changes consumed by
+the automatic probe. The managed process inspector resolves from the current user's home.
+The kill arm is owner-run only because helper signals interrupt all connected sessions.
+
+| Attempt | Result | Exit |
+|---|---|---|
+| [Sandbox recovery](2026-10-04-helper-recovery-sleight-helper-health-Ab1XPB.json) | The engine sandbox failed with `sandbox_apply: Operation not permitted`. No native app read succeeded | 1 |
+| [Host recovery](2026-10-04-helper-recovery-sleight-helper-health-cIKcWh.json) | 3/3 app-isolation and automatic-recovery trials passed. Engines collected, lock released | 0 |
+
+The host run injected two timeout replies after successful native Calculator reads in each trial.
+Chess remained readable while Calculator was gated. Automatic Calculator probes succeeded after
+20.099, 20.093 and 20.086 seconds, followed by successful visible full reads in the same relays.
+This tests recovery orchestration against a responding native engine, not recovery from a real
+helper wedge. There were no helper signals or ChatGPT restarts in these runs.
+
+New unit tests first failed seven recovery assertions (exit 1), then passed 63 relay cases (exit 0).
+A parallel-reply crash test failed (exit 1), then passed with both success/success and success/error
+reply orders (exit 0). Whitespace isolation and full-read requirements each failed before their
+fixes (exit 1), then all 68 relay cases passed (exit 0). The inspector home-path test failed before
+the path fix (exit 1), then all four protocol tests passed (exit 0). The first revised prose pass
+reported one flag (exit 1), which was corrected.
+Final checks passed 204 unit tests, both plugin validations and 8 mod tests (`npm run check`, exit 0).
+Prose lint passed with no flags (`npm run lint:prose`, exit 0). The initial rebase stopped at the
+package conflict (exit 1), and continuation succeeded after preserving both file lists (exit 0).

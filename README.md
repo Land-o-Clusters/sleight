@@ -329,9 +329,15 @@ engine instances despite the installed extension. The final run detected both af
   restarted. We don't know the cause. It started right after a test that kills engine processes.
   In 18 completed SIGKILL trials, reads passed before and after cleanup. Killing a responding helper
   relaunched it, but no wedge was reproduced, so helper-only recovery from a wedge remains unproven.
-  After two consecutive `timeoutReached` failures on standalone reads, the relay tells Claude to
-  stop retrying and ask the user to restart ChatGPT. It refuses further engine calls and resets in
-  that session. An app hang can produce the same symptom. The helper diagnosis is provisional.
+  After two consecutive `timeoutReached` failures on standalone reads of one app, the relay tells
+  Claude to stop retrying and ask the user to restart ChatGPT. sleight retries by itself.
+  For that app, `js` reads are refused between recovery attempts (at most one every 20 seconds),
+  and `js` actions using its known handles are refused until a read succeeds. After hidden recovery,
+  actions wait for a visible app read, which sleight makes a full read. Other apps, documentation,
+  `js_reset`, and turn cleanup remain available. Inventory failures have their own retry counter.
+  App identity comes from literal acquisitions, known handles and learned bundle aliases. Arbitrary
+  JavaScript can bypass this advisory check. An app hang can produce the same symptom, so the helper
+  diagnosis is provisional.
   Doctor probes inventory, which does not prove that every app's accessibility read
   works. [The investigation](docs/benchmarks/2026-10-04-helper-health.md) records each live attempt.
 - ChatGPT updates can break it. The version lookup handles the folder moving around, but not the API
