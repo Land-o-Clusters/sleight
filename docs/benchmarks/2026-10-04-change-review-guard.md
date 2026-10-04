@@ -29,9 +29,12 @@ so the undo assertion failed. The owner confirmed clicking Keep by mistake.
 The seventh held the live lock, changed both files and displayed the first panel.
 The owner was away, so the run was interrupted through its owned terminal.
 The review decision remained pending. Backup deletion and live lock release passed.
-The live Undo/Keep check is pending until the owner can use the prompts.
+The eighth passed on `42f4be6`, with the owner clicking Undo, then Keep.
+The saved files contained `UNDO ORIGINAL` and `KEEP AGENT CHANGE`, each with a
+trailing newline. Session backups were deleted and the live lock was released.
+`node bench/change-review.mjs` exited 0.
 
-[Results](2026-10-04-change-review-guard.json) preserve attempts 1 through 7, including
+[Results](2026-10-04-change-review-guard.json) preserve attempts 1 through 8, including
 their full harness results and relevant relay events. Home paths use `~`.
 Vendor API documentation is omitted. Dialog recovery is covered by unit tests.
 `bench/run.mjs` was not run, because sleight-arch runs that pass at merge.
