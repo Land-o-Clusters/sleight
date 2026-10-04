@@ -11,6 +11,7 @@
 </p>
 
 <p align="center">
+  <a href="#compared-with-claudes-own-computer-use">Compared with Claude's computer use</a> ·
   <a href="#install">Install</a> ·
   <a href="#watch-and-stop-it">Watch and stop it</a> ·
   <a href="#how-it-works">How it works</a> ·
@@ -39,6 +40,23 @@ and each asks first: `drag` keeps the mouse down long enough for text views to s
 
 <p align="center"><img src="docs/assets/demo.gif" width="900" alt="Claude playing macOS Chess against the computer through sleight, with the sleight pane logging each move"></p>
 <p align="center"><sub>Claude plays macOS Chess against the computer through sleight, at 6× speed. Every move is a drag. The sleight pane on the right logs each one.</sub></p>
+
+## Compared with Claude's own computer use
+
+Claude Code has a built-in computer use server, and the Claude desktop app has the same engine.
+Anthropic's [documentation](https://code.claude.com/docs/en/computer-use) (read 2026-10-04) says it
+controls your screen: other visible apps are hidden while Claude works and come back when the turn
+ends. Only one session can use the computer at a time, and it holds the lock until the session exits.
+Claude sees the screen through screenshots.
+
+sleight sends events to the app itself, which can be behind your other windows. Your other apps stay
+visible, and you keep using the Mac while Claude works. Several sessions can use sleight at once:
+we've run two sleight sessions together, and sleight next to Codex. Claude reads each app's
+accessibility tree as well as screenshots. The `drag` and `menu_bar` tools are the exceptions that briefly take the
+pointer.
+
+Claude's own computer use is supported by Anthropic and also runs on Windows in the desktop app.
+sleight is unofficial and depends on the ChatGPT app's engine.
 
 ## Install
 
@@ -251,6 +269,7 @@ panel, Escape means no, and it gives up after five minutes. Session memory works
 | `--doctor` shows `MISSING computer-use helper` | The helper app was removed or never installed | Same as above |
 | Approval prompt never appears | Claude Code too old for form elicitation | Update Claude Code |
 | "Not approved" right away in the desktop app, with no panel | The session started before sleight 0.1.1 | Start a new session |
+| A desktop session still shows as busy after Claude has finished | Before 0.3.1, nothing ended the engine's turn in the desktop app | Update sleight and start a new session |
 | Tool calls fail after a ChatGPT update | Runtime API changed | Open an issue with the `--doctor` output |
 
 ## Benchmark
@@ -348,6 +367,9 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 - [ ] The same drag in the background, without moving the pointer
 - [ ] The pane, status line and `/sleight stop` in the desktop app, once its Claude Code reaches 2.1.287
 - [ ] Linux and Windows, where the engine has builds that sleight hasn't tried
+- [ ] Approve one document instead of a whole app
+- [ ] A before-and-after review of changes across apps, which you can accept or undo
+- [ ] Rules for what data may move from one app to another
 
 ## Credits
 

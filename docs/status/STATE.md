@@ -37,10 +37,12 @@ the window key without activating the app.
 Market research (Codex on gpt-6.1-sol, 2026-10-04) is in `.dev/research/2026-10-04-competitors.md`,
 untracked, with its GitHub evidence. Publishing it is the owner's call. The biggest finding is that
 Anthropic has its own computer use, in the Claude desktop app (background on macOS 15+, per-app
-approval) and in the Claude Code CLI (`/mcp computer-use`, Pro/Max, interactive only). We haven't
-measured either against sleight. Other gaps it names: other harnesses (LCU covers Codex CLI and Pi), exact-window
+approval) and in the Claude Code CLI (`/mcp computer-use`, Pro/Max, interactive only). Its
+shortcomings for the owner are the reason sleight exists, so there's no benchmark against it. The
+README compares the two from Anthropic's own docs instead. Other gaps it names: other harnesses (LCU covers Codex CLI and Pi), exact-window
 targeting, reporting whether an action took effect, finer approval scopes, clipboard ownership, and
-input leases across sessions. LCU moved to `amontlabs/lcu`.
+input leases across sessions. LCU moved to `amontlabs/lcu`. The owner picked the research's new-ground
+items for the roadmap (README, last three lines).
 
 Owner's plan (2026-10-04), after the drag: work through every item in Known problems, and research
 the market for what sleight can do better.
