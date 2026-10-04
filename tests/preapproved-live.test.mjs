@@ -78,3 +78,17 @@ test('unlisted trial needs an actual declined engine approval without any grant'
     assert.equal(judgePreapproval('unlisted', { code: 0 }, events).passed, false);
   }
 });
+test('audit read trial needs successful Calculator selection, a full read and a reported grant', () => {
+  const messages = [
+    { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'select', name: 'mcp__sleight__js', input: { code: 'let app = await cua.getApp("com.apple.calculator")' } }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'select', content: displayed('0').msg.result.content }] } },
+    ...transcript.slice(2),
+  ];
+  assert.equal(judgePreapproval('listed-read', { code: 0 }, [grant, displayed('144')], false, messages).passed, true);
+  for (const bad of [messages.slice(2), messages.slice(0, 2), [messages[0],
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'select', is_error: true }] } }, ...messages.slice(2)]]) {
+    assert.equal(judgePreapproval('listed-read', { code: 0 }, [grant, displayed('144')], false, bad).passed, false);
+  }
+  assert.equal(judgePreapproval('listed-read', { code: 0 }, [displayed('144')], false, messages).passed, false);
+  assert.equal(judgePreapproval('listed-read', { code: 1 }, [grant, displayed('144')], false, messages).passed, false);
+});

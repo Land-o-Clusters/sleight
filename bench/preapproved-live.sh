@@ -2,6 +2,7 @@
 # One bounded Calculator run. Keep the shared lock only while this driver runs.
 set -eu
 case "${1:-}" in listed|unlisted) ;; *) echo 'usage: sh bench/preapproved-live.sh listed|unlisted' >&2; exit 2 ;; esac
+case "${2:-}" in ''|--audit-only|--audit-read) ;; *) echo 'expected --audit-only, --audit-read or no second argument' >&2; exit 2 ;; esac
 until mkdir /tmp/sleight-live.lock 2>/dev/null; do sleep 15; done
 trap 'rmdir /tmp/sleight-live.lock' EXIT
 driver=
@@ -12,6 +13,6 @@ stop() {
 }
 trap 'stop 130' INT
 trap 'stop 143' TERM
-node "$(dirname "$0")/preapproved-live.mjs" "$1" &
+node "$(dirname "$0")/preapproved-live.mjs" "$@" &
 driver=$!
 wait "$driver"

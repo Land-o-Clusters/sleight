@@ -252,6 +252,12 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   organization sets. To stop Codex asking for approvals, change Codex's own approval setting.
 - `claude -p` can't answer approval prompts. List apps in the user's [preapproval file](#preapproved-apps)
   before starting. Unlisted apps and requests above their listed risk still need a person.
+- The preapproval loader proves file ownership, not who wrote it. Any process running as you,
+  Claude included, can write the file. The skill tells Claude never to create or edit it, but this
+  rule depends on Claude following the instruction.
+- Calculator button indices changed during a [preapproval trial](docs/benchmarks/2026-10-04-preapproved-apps.md),
+  producing the wrong expression. A filtered read then lost the window header, and the input lease
+  stopped the retry. Use current indices from full UI reads, and preserve their window headers.
 - Document scope checks the last observed window before forwarding a call and stops on changed or
   missing Window/URL headers. Its injected action guard checks again, but arbitrary JavaScript can
   bypass it or forge observations. Result checks cannot undo actions already taken. Discovery reads
@@ -303,8 +309,8 @@ Sample file:
 {
   "version": 1,
   "apps": [
-    { "app": "com.apple.calculator", "riskLevel": "high" },
-    { "app": "Calculator", "riskLevel": "high" }
+    { "app": "com.apple.calculator", "riskLevel": "low" },
+    { "app": "Calculator", "riskLevel": "low" }
   ]
 }
 ```
@@ -317,14 +323,16 @@ project `settings.json` or plugin setting can select another file or add apps.
 App identifiers match exactly, including case. List the bundle ID in the engine's prompt and the name
 or path you use with local tools separately. There are no wildcards or inferred aliases.
 `riskLevel` is a ceiling: `low`, `medium`, then `high`. Higher, missing or unknown request levels still
-ask. Local `drag`, `menu_bar` and `hover` approvals require `high`, since they can move the real
+ask. `high` accepts every engine approval request for that app at a known risk level.
+Local `drag` and `menu_bar` approvals require `high`, since they can move the real
 pointer. This list does not approve notifications, document scope, change reviews or flow exceptions,
 and it cannot override the engine's app blocks.
 
-The list also applies with `SLEIGHT_APPROVAL_SCOPE=once`. Each grant goes to stderr and the relay trace,
+The list also applies with `SLEIGHT_APPROVAL_SCOPE=once`. Each grant goes to stderr and a grant audit,
 and the tool result tells Claude that the app was pre-approved by the user's list, even if the action
-fails. A nonempty list turns tracing on at `~/Library/Logs/sleight/` unless `SLEIGHT_TRACE` selects a
-different trace folder. List grants never send an engine persistence setting.
+fails. Each relay's audit at `~/Library/Logs/sleight/preapproved-<pid>.jsonl` contains grant fields only.
+It rotates at 64 KiB and keeps one prior file per process. Full relay tracing requires explicit `SLEIGHT_TRACE`.
+An audit write failure falls back to asking. List grants never send an engine persistence setting.
 
 ## Review changes
 

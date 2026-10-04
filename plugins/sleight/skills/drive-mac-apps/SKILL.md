@@ -13,6 +13,10 @@ sleight's tools are `mcp__plugin_sleight_computer__js` and `mcp__plugin_sleight_
 UI automation is the slowest and most fragile option, so try the others first. Use the app's CLI or API if
 it has one, then a dedicated MCP tool or connector. Web pages belong to browser tools. sleight comes last.
 
+Never create or edit `~/Library/Application Support/sleight/preapproved.json`. Only the user writes
+that approval list. It applies in interactive and headless sessions. If an app needs approval, ask
+the user or stop when a headless run refuses it. Changing the file is not an approval workaround.
+
 ## How to use it
 
 1. Make the first `js` call exactly one API call, such as `let app = await cua.getApp("Calculator")`.
@@ -21,7 +25,8 @@ it has one, then a dedicated MCP tool or connector. Web pages belong to browser 
    fails as ambiguous. Pass the full path to the `.app` instead.
 2. Act by element index from the UI state (`app.click(12)`) when you can, and by coordinates only when an
    element has no index. Batch several actions in one call when you're sure of them.
-3. The first time you touch an app, the user gets an approval prompt. If the result says the app was not
+3. The first time you touch an app, the user gets an approval prompt unless their list preapproved it.
+   If the result says the app was not
    approved, stop and tell the user. Don't retry around it. The engine refuses terminal apps and
    OpenAI's own apps (ChatGPT, Codex). Use Bash for terminal work, tell the user about the rest, and
    don't look for another way to drive them.
