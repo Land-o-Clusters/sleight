@@ -277,8 +277,10 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   organization sets. To stop Codex asking for approvals, change Codex's own approval setting. With
   your opt-in, sleight can drive these apps through its own Accessibility path (see
   [Driving apps the engine refuses](#driving-apps-the-engine-refuses)); the engine's refusal itself
-  stays. On that path, settings refusal checks the window title, so a localized or unusual title can
-  pass it. Background scroll reaches the app's focused view. System Events' keystroke doesn't act on
+  stays. On that path, settings refusal checks the window title and the window's toolbar (Terminal
+  titles its settings window after the open pane, like "General"), so a localized title and a pane
+  name can pass it. Background scroll reaches the app's focused view. System Events' keystroke
+  doesn't act on
   an embedded newline in Terminal, so blocked_app sends one Return key press per newline instead.
   The window screenshot needs Screen Recording for the app that runs Claude Code, on top of the
   The window screenshot needs Screen Recording for the app that runs Claude Code, on top of the
@@ -410,32 +412,30 @@ Source rules remember text fields and emitted values, then match exact substring
 
 The engine's helper refuses terminals (Terminal, iTerm2) and OpenAI's own apps (ChatGPT, Codex,
 Atlas, and their beta builds) before any approval prompt. That refusal is OpenAI's code, and sleight
-never modifies or wraps it. This feature is sleight's own: with your opt-in, the `blocked_app` tool
-drives those apps through macOS Accessibility, the same path as `menu_bar` and `drag`.
+never modifies or wraps it. The `blocked_app` tool is sleight's own. It drives those apps through
+macOS Accessibility, the same path as `menu_bar` and `drag`, and its prompt is the whole opt-in.
+When Claude reaches a refused app, the relay says so in the result and offers `blocked_app`;
+nothing happens until you approve the app, and Allow puts it on the session allowlist like any other
+app.
 
-It's off unless you do both: set `SLEIGHT_BLOCKED_APPS=1` in Claude Code's environment, and create
-`~/Library/Application Support/sleight/blocked-apps.json` containing exactly `{"version": 1}`. The
-file must be yours, private, and not a symlink, like the preapproved list. A repo or plugin setting
-alone can't turn this on.
+Once you approve, Claude can read the app's window (numbered elements plus a screenshot), click,
+type, press keys and scroll in it for the rest of the session. The prompt says what a yes means. For
+OpenAI's apps, it says the yes covers clicks in ChatGPT, approval buttons included. A yes for the
+session lets Claude answer Codex's approval dialogs by itself. Declines are never remembered.
 
-Once you approve an app in sleight's prompt, Claude can read its window (numbered elements plus a
-screenshot), click, type, press keys and scroll in it for the rest of the session. The prompt says
-what a yes means. For OpenAI's apps, it says the yes covers clicks in ChatGPT, approval buttons
-included. A yes for the session lets Claude answer Codex's approval dialogs by itself.
-Declines are never remembered.
-
-In a terminal, every send that can run a command (typed text, Return, Enter, paste) is shown to you
-first, exactly as it will be sent. The prompt offers Allow Once and Don't Allow, like Claude Code's
-Bash prompt. Those asks are never remembered and can't be pre-approved. Settings and preferences
-windows of these apps are refused, so Claude can't change their own approval or safety settings.
-Every action goes through the input leases and flow rules like sleight's other tools, and is logged
-to stderr and the trace. Actions that need the app in front (typing, keys, point clicks) bring it
-forward and put your front app and pointer back, as `drag` does.
+In a terminal, every key or text that can run a command (any typing, Return, paste, most chords) is
+shown to you first, exactly as it will be sent. The prompt offers Allow Once and Don't Allow, like
+Claude Code's Bash prompt. Those asks are never remembered and can't be pre-approved. Settings and
+preferences windows of these apps are refused, so Claude can't change their own approval or safety
+settings. Every action goes through the input leases and flow rules like sleight's other tools, and
+is logged to stderr and the trace. Actions that need the app in front (typing, keys, point clicks)
+bring it forward, check that the switch worked, and put your front app and pointer back, as `drag`
+does.
 
 One limit to keep in mind: the gate is your consent. It does not isolate the app. The engine still
 refuses these apps, and its own approvals, badges and background typing don't apply here. sleight's
 own code does the driving, with the limits above (Accessibility and Screen Recording permissions
-for the app that runs Claude Code, settings refusal by window title, foreground typing).
+for the app that runs Claude Code, settings refusal by window title, toolbar and foreground typing).
 [The design](docs/design/blocked-apps.md) has the details.
 
 ## Safety

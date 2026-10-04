@@ -2,115 +2,23 @@
 
 ## Unreleased
 
-- `blocked_app`, opt-in with `SLEIGHT_BLOCKED_APPS=1` plus the user's
-  `~/Library/Application Support/sleight/blocked-apps.json`: drives the apps the engine's helper
-  refuses (Terminal, iTerm2, ChatGPT, Codex, Atlas and beta builds) through sleight's own macOS
-  Accessibility path, the one `menu_bar` and `drag` use (`docs/design/blocked-apps.md`). The
-  engine's refusal is OpenAI's code and is untouched. The user approves each app once per session;
-  the prompt says it covers approval buttons. In a terminal, every command send (typed text,
-  Return, Enter, paste) is shown exactly as it will be sent, with Allow Once and Don't Allow.
-  The relay forgets each answer, and the preapproved list cannot cover these sends. Settings
-  windows of these apps are refused. Actions take app-scope input leases and pass through the
-  flow rules; clicks on buttons named like Approve, Allow, Run or Accept are named in the result.
-  Built by Claude (GLM). `npm run check` passes (21 new tests). Live, with the owner clicking Allow:
-  a headless run read Terminal in the background, was shown the exact text `echo sleight\n` before
-  sending, typed it with the front app restored, and the output line `sleight` appeared; a declined
-  consent stopped the run both times it happened; the Codex app's window was read in the background
-  (`docs/benchmarks/*-blocked-*.json` has every attempt, timeouts included). The Codex harmless
-  click didn't happen: the app's window exposed only its window-control buttons to the driver's
-  walk, and the agent refused to click those (see Known problems).
+- `blocked_app`: drives the apps the engine's helper refuses (Terminal, iTerm2, ChatGPT, Codex, Atlas
+  and beta builds) through sleight's own macOS Accessibility path, the one `menu_bar` and `drag` use
+  (`docs/design/blocked-apps.md`). The engine's refusal is OpenAI's code and is untouched, and
+  sleight's prompt is the whole opt-in. When Claude reaches a refused app, the relay says so in the
+  result and offers the tool. Allow puts the app on the session allowlist like any other app
+  approval, and the prompt says it covers approval buttons. In a terminal, every key or text that can
+  run a command (any typing, Return, paste, most chords; only arrows, Tab, Escape and ctrl+c are
+  inert) is shown exactly as it will be sent, with Allow Once and Don't Allow. The relay forgets
+  each answer, and the preapproved list cannot cover these sends. Settings windows of these apps are
+  refused by title plus a toolbar check, because the Terminal app titles its settings window after
+  the open pane. Actions take app-scope input leases and pass through the flow rules. The driver is
+  pinned to the consented app's bundle ID and pid, and checks the frontmost switch before sending
+  keystrokes. Clicks on buttons named like Approve, Allow, Run or Accept are named in the result.
+  `npm run check` passes (22 tests on this path). Live runs, with the owner clicking Allow, went as
+  follows. Terminal passed 1/1 (read, exact-text prompt, echo, output visible); three other runs
+  stopped on a declined or timed-out consent. The Codex window read passed 1/1; its harmless click
+  had no target, because the window exposed only window-control buttons to the walk.
+  `docs/benchmarks/` has all the attempts, timeouts included, with personal paths scrubbed.
 
 ## 0.6.0 (2026-10-04)
-
-- Input leases: one sleight session acts on a window at a time. A second session gets the holder's
-  name and seconds left, and reads still work. Before acting, Claude reads the window with
-  `cua.getApp`, and a refusal gives the exact call to send. Leases end with the turn, or after 30 s
-  without renewal (`docs/design/input-lease.md`). Built by Codex. With two relays typing into one
-  TextEdit document, text doubled in 5/5 trials without leases and appeared once with one refusal in
-  5/5 with them. Benchmark with leases on: 11/11 over two passes (Sonnet 5.5, medium). A Save sheet
-  stops the next action until Claude reads again, so textedit-save took 27 and 30 turns, against 13
-  without leases.
-
-## 0.5.0 (2026-10-04)
-
-- `review_changes`, opt-in with `SLEIGHT_CHANGE_REVIEW=1`: lists the saved files Claude changed this
-  session and lets the user choose Keep or Undo for each one in a prompt. The relay copies a `file://`
-  document before a `js` call that may edit it and deletes the copies when the session ends
-  (`docs/design/change-review.md`). Built by Codex. In the live check, Undo restored one TextEdit
-  file and Keep left the other in 1/5 attempts. The sandbox and a locked Mac stopped the first two,
-  and the user chose Keep for both files in the next two. It's off by default because its window
-  guard failed both benchmark tasks that open a TextEdit file.
-- Flow rules, opt-in with `SLEIGHT_FLOW_RULES=1`: user-written rules for text moving between apps,
-  checked in the relay before a call is forwarded, with a one-call exception only the user can grant
-  (`docs/design/flow-rules.md`). Built by Codex. It guards against mistakes, since code can build
-  strings at runtime. The live TextEdit check passed in 2/5 attempts. One failure forwarded a
-  protected value, and the parser fix that followed has a regression test.
-
-## 0.4.0 (2026-10-04)
-
-- `SLEIGHT_APPROVAL_SCOPE=document` approves one window or document for the session instead of a
-  whole app, through a new `document_scope` tool. The relay forwards actions only while the last
-  observed window matches, and stops when a result shows a different window. It guards against
-  mistakes; code running in the engine can get around it (`docs/design/document-scope.md`). Built by
-  Codex; live check: the approved TextEdit document was edited and a write to a second one never
-  reached the engine.
-- Background drag research (`bench/background-drag/`, not in the plugin): full sequences reached the
-  probe app in 5/5 quiet trials and 2/5 during real use, but TextEdit text moved 0/10.
-- The weekly watch saves the engine's API docs and diffs them when the engine updates.
-
-## 0.3.1 (2026-10-04)
-
-- The relay ends the engine's turn after 30 s without a running call. In the desktop app, where the mod
-  can't run, the engine used to hold the last app (its badge on the window) until the session closed.
-  That's the likely cause of desktop sessions showing as busy after Claude finished. `SLEIGHT_IDLE_TURN_END_MS` sets the wait.
-- Hover: mouse events posted to a background app don't trigger hover, measured with the probe app and
-  GitHub Desktop.
-
-## 0.3.0 (2026-10-04)
-
-- A `drag` tool that holds the mouse down and moves in steps, for drags the engine's `app.drag` can't
-  do, such as moving selected text. It works in the foreground and puts the pointer and the front
-  app back. It refuses to press when another app's window covers the start point. Benchmark text drag:
-  3/3 (Sonnet 5.5), against 0/9 for `app.drag`.
-
-## 0.2.1 (2026-10-03)
-
-- `menu_bar` opens SwiftUI window-style icons, which ignore the accessibility press, with a real
-  click and puts the pointer back. `close` clicks them again to shut the window. Icon-only buttons
-  report their tooltip or identifier when they have one.
-- `menu_bar` op `apps` takes about 4 s instead of 5.5 s.
-- Drag findings: a probe app (`bench/drag-probe/`) shows the engine's drag lasting 14 ms with two drag
-  events, so text drags can't work.
-
-## 0.2.0 (2026-10-03)
-
-- New `menu_bar` and `notifications` tools for what the engine leaves out: apps' icons in the menu
-  bar (read the menu or window, choose an item, press a button) and notification banners (read, press
-  a button). They go through System Events UI scripting. Each app's icon needs the user's approval
-  once per session, as do notifications. `SLEIGHT_MENU_BAR=0` turns them off.
-- The approval panel opens on the display under the pointer, over full-screen apps, with a sound.
-- Benchmark: each arm loads only its own tool (checked before every run), runs default to Sonnet 5.5
-  at medium effort, and runs close the windows they leave behind.
-
-## 0.1.1 (2026-10-03)
-
-- App approvals work in the desktop app's Code tab. It declines MCP prompts without showing them, so
-  there sleight asks with its own panel (Liquid Glass where macOS has it). `SLEIGHT_APPROVAL_PROMPT`
-  picks `dialog` or `client`.
-- Benchmark runs keep approvals on the benchmark's hook when started from a desktop app session, and
-  the sleight arm runs from an empty folder like LCU's. A Chess drag task joins the benchmark.
-- The skill covers saving to a path through Go to Folder, and apps whose bundle ID is ambiguous.
-
-## 0.1.0 (2026-10-03)
-
-First release. Tested on Claude Code 2.1.288 with ChatGPT engine 26.930.31730, on macOS (Apple Silicon).
-
-- Claude Code can drive Mac apps in the background through the computer-use engine bundled with the
-  ChatGPT desktop app. The launcher finds the newest engine version on every start.
-- One approval prompt per app per session. The relay replies to the engine's repeat requests itself, and
-  `SLEIGHT_APPROVAL_SCOPE=once` asks every time instead.
-- `/sleight` opens a pane with the app's latest picture, an action log and Refresh and Stop buttons.
-  Text after `/sleight` goes to Claude as a prompt. `/sleight stop` halts it mid-turn.
-- The engine's turn ends after each Claude turn, as in Codex (Claude Code 2.1.287 or later).
-- A skill tells Claude when to use sleight and how to work around the missing hover.
-- Benchmark: four Calculator and TextEdit tasks, 12/12 on the first run.

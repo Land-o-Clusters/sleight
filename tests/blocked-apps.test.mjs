@@ -8,52 +8,10 @@ import { pathToFileURL } from 'node:url';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
-import { approvalButton, callBlockedApp, isSettingsTitle, loadBlockedAppsFlag, matchBlockedApp,
+import { PreapprovedApps } from '../plugins/sleight/lib/preapproved.mjs';
+import { approvalButton, callBlockedApp, driverSettingsRegExp, isSettingsTitle, matchBlockedApp,
   refusedApp, SETTINGS_TITLE, terminalSend } from '../plugins/sleight/lib/blocked-apps.mjs';
-
-// ---- The opt-in flag file ------------------------------------------------
-
-const user = { uid: 501 };
-const file = (io, content, mode = 0o600) => {
-  io.lstatSync = () => ({ isSymbolicLink: () => false, isFile: () => true, uid: 501, mode });
-  io.readFileSync = () => content;
-  io.statSync = () => ({ isFile: () => true });
-};
-
-test('the flag file opts the feature in only when it is a trusted {"version": 1}', () => {
-  const missing = {};
-  missing.lstatSync = () => { throw Object.assign(new Error('x'), { code: 'ENOENT' }); };
-  assert.equal(loadBlockedAppsFlag(missing), false, 'missing file is off');
-  const valid = {};
-  file(valid, '{"version": 1}');
-  assert.equal(loadBlockedAppsFlag(valid), true);
-});
-
-test('the flag file refuses anything short of a user-owned, private, regular file', () => {
-  const checks = [
-    ['symlink', io => { io.lstatSync = () => ({ isSymbolicLink: () => true }); }],
-    ['not a regular file', io => { io.lstatSync = () => ({ isSymbolicLink: () => false, isFile: () => false }); }],
-    ['other owner', io => { io.lstatSync = () => ({ isSymbolicLink: () => false, isFile: () => true, uid: 0, mode: 0o600 }); }],
-    ['group-writable', io => file(io, '{"version": 1}', 0o660)],
-  ];
-  for (const [label, setup] of checks) {
-    const io = {};
-    setup(io);
-    assert.throws(() => loadBlockedAppsFlag(io), /Blocked apps:/, label);
-  }
-});
-
-test('the flag file content is exactly {"version": 1}', () => {
-  for (const content of ['{}', '{"version": 2}', '{"version": 1, "apps": []}', 'not json', '[]']) {
-    const io = {};
-    file(io, content);
-    assert.throws(() => loadBlockedAppsFlag(io), /Blocked apps:/, content);
-  }
-  const io = {};
-  file(io, '{"version": 1}');
-  io.statSync = () => { throw new Error('gone'); };
-  assert.throws(() => loadBlockedAppsFlag(io), /changed while reading/);
-});
+import { judgeBlockedLive, makeClean } from '../bench/blocked-live-result.mjs';
 
 // ---- What the engine refuses, and what sleight does about it -------------
 
@@ -64,7 +22,7 @@ test('the refused list matches terminals and OpenAI apps by bundle, name or path
   assert.deepEqual(matchBlockedApp('chatgpt'), { name: 'ChatGPT', openai: true });
   assert.deepEqual(matchBlockedApp('ChatGPT Beta'), { name: 'ChatGPT', openai: true });
   assert.deepEqual(matchBlockedApp('whatever', 'com.openai.codex'), { name: 'com.openai.codex', openai: true });
-  assert.equal(matchBlockedApp('whatever', 'com.openai.chat.beta').openai, true);
+  assert.equal(matchBlockedApp('whatever', 'COM.OPENAI.CHAT.BETA').openai, true, 'bundle matching ignores case');
   assert.equal(matchBlockedApp('Mail', 'com.apple.mail'), undefined);
   assert.equal(matchBlockedApp('Calculator', 'com.apple.calculator'), undefined);
 });
@@ -74,13 +32,19 @@ test('the engine refusal is recognized verbatim, with the refused identifier', (
   assert.equal(refusedApp('some other failure'), undefined);
 });
 
-test('settings and preferences windows are recognized for refusal', () => {
+test('settings and preferences windows are recognized, with the driver\'s own construction', () => {
   assert.equal(isSettingsTitle('Settings'), true);
   assert.equal(isSettingsTitle('Preferences…'), true);
   assert.equal(isSettingsTitle('settings'), true);
   assert.equal(isSettingsTitle('Réglages'), true);
   assert.equal(isSettingsTitle('Codex — chat'), false);
-  assert.equal(SETTINGS_TITLE.source.length > 10, true);
+  // The driver rebuilds the pattern from source plus flags; that construction
+  // must keep the case-insensitive behavior.
+  const driverPattern = driverSettingsRegExp();
+  assert.equal(SETTINGS_TITLE.flags, 'i');
+  assert.equal(driverPattern.test('Settings'), true);
+  assert.equal(driverPattern.test('Preferences...'), true);
+  assert.equal(driverPattern.test('General'), false, 'pane titles need the toolbar rule, not the title rule');
 });
 
 test('only approval-like buttons are named in results', () => {
@@ -92,13 +56,23 @@ test('only approval-like buttons are named in results', () => {
   assert.equal(approvalButton(''), undefined);
 });
 
-test('terminal sends that can run a command ask; reads, scrolls and inert keys do not', () => {
+test('in a terminal every key is a send except the inert allowlist', () => {
   assert.equal(terminalSend({ op: 'type', text: 'echo sleight\n' }), 'echo sleight\n');
   assert.equal(terminalSend({ op: 'key', key: 'Return' }), 'key Return');
   assert.equal(terminalSend({ op: 'key', key: 'Enter' }), 'key Enter');
   assert.equal(terminalSend({ op: 'key', key: 'super+v' }), 'key super+v');
+  // Chords that reach the shell as commands must prompt too.
+  assert.equal(terminalSend({ op: 'key', key: 'ctrl+m' }), 'key ctrl+m');
+  assert.equal(terminalSend({ op: 'key', key: 'ctrl+j' }), 'key ctrl+j');
+  assert.equal(terminalSend({ op: 'key', key: 'ctrl+o' }), 'key ctrl+o');
+  assert.equal(terminalSend({ op: 'key', key: 'shift+return' }), 'key shift+return');
+  assert.equal(terminalSend({ op: 'key', key: 'option+return' }), 'key option+return');
+  // The inert allowlist never asks.
   assert.equal(terminalSend({ op: 'key', key: 'Tab' }), undefined);
-  assert.equal(terminalSend({ op: 'key', key: 'super+c' }), undefined);
+  assert.equal(terminalSend({ op: 'key', key: 'Escape' }), undefined);
+  assert.equal(terminalSend({ op: 'key', key: 'ctrl+c' }), undefined);
+  assert.equal(terminalSend({ op: 'key', key: 'Up' }), undefined);
+  assert.equal(terminalSend({ op: 'key', key: 'down' }), undefined);
   assert.equal(terminalSend({ op: 'read' }), undefined);
   assert.equal(terminalSend({ op: 'scroll', amount: 3 }), undefined);
   assert.equal(terminalSend({ op: 'type' }), undefined);
@@ -107,7 +81,7 @@ test('terminal sends that can run a command ask; reads, scrolls and inert keys d
 // ---- callBlockedApp: consent, per-send prompts, result notes -------------
 
 const base = (over = {}) => ({
-  target: { appId: 'com.apple.Terminal', app: 'Terminal', title: null, url: null },
+  target: { appId: 'com.apple.Terminal', app: 'Terminal', pid: 4242, title: null, url: null },
   shot: '/tmp/shot.png',
   ...over,
 });
@@ -115,7 +89,7 @@ const base = (over = {}) => ({
 test('a non-refused app is refused before anything is asked or run', async () => {
   let asked = 0;
   const result = await callBlockedApp({ op: 'read', app: 'Calculator' }, base({
-    target: { appId: 'com.apple.calculator', app: 'Calculator', title: null, url: null },
+    target: { appId: 'com.apple.calculator', app: 'Calculator', pid: 1, title: null, url: null },
     approve: async () => { asked++; return true; },
     run: async () => { throw new Error('must not run'); },
   }));
@@ -128,7 +102,7 @@ test('consent asks plainly, and a decline stops everything', async () => {
   const approvals = [];
   const run = async () => { throw new Error('must not run'); };
   const declined = await callBlockedApp({ op: 'read', app: 'Codex' }, base({
-    target: { appId: 'com.openai.codex', app: 'ChatGPT', title: null, url: null },
+    target: { appId: 'com.openai.codex', app: 'ChatGPT', pid: 7, title: null, url: null },
     approve: async (parts, message, options) => { approvals.push([parts, message, options]); return false; },
     run,
   }));
@@ -139,6 +113,18 @@ test('consent asks plainly, and a decline stops everything', async () => {
   assert.equal(approvals[0][2].kind, 'blocked');
   assert.equal(approvals[0][2].detail, 'Claude will be able to click in ChatGPT, including approval buttons, for the rest of this session.');
   assert.equal(approvals[0][2].once, undefined, 'the app consent is remembered by the relay like other app approvals');
+});
+
+test('the driver request is pinned to the consented app and carries the settings flags', async () => {
+  const runs = [];
+  await callBlockedApp({ op: 'read', app: 'Terminal' }, base({
+    approve: async () => true,
+    run: async req => { runs.push(req); return { ok: true, app: 'Terminal' }; },
+  }));
+  assert.deepEqual(runs[0].pid, 4242, 'the resolved pid pins the driver');
+  assert.deepEqual(runs[0].bundle, 'com.apple.Terminal', 'the resolved bundle ID pins the driver');
+  assert.deepEqual(runs[0].settings, SETTINGS_TITLE.source);
+  assert.deepEqual(runs[0].settingsFlags, SETTINGS_TITLE.flags);
 });
 
 test('terminal consent says what it allows and every send asks again with the exact text', async () => {
@@ -158,7 +144,6 @@ test('terminal consent says what it allows and every send asks again with the ex
   assert.equal(approvals[2][2].once, true, 'sends are never remembered');
   assert.equal(approvals[2][2].kind, 'flow');
   assert.match(approvals[2][2].detail, /"echo sleight\\n"/);
-  assert.deepEqual(runs[1].settings, SETTINGS_TITLE.source);
 });
 
 test('a declined send stops before the driver, and inert keys send without asking', async () => {
@@ -168,24 +153,24 @@ test('a declined send stops before the driver, and inert keys send without askin
     approvals.push([parts, options]);
     return approvals.length < 2;
   };
-  const stopped = await callBlockedApp({ op: 'key', app: 'Terminal', key: 'Return' }, base({
+  const stopped = await callBlockedApp({ op: 'key', app: 'Terminal', key: 'ctrl+j' }, base({
     approve: okThenNo, run: async () => { throw new Error('must not run'); } }));
   assert.equal(stopped.isError, true);
   assert.match(stopped.content[0].text, /didn't allow this send to Terminal/);
-  assert.equal(approvals.length, 2);
+  assert.equal(approvals.length, 2, 'ctrl+j runs a command, so it asks');
 
   approvals.length = 0;
   const tabs = [];
   await callBlockedApp({ op: 'key', app: 'Terminal', key: 'Tab' }, base({
     approve: async (parts, message, options) => { tabs.push([parts, options]); return true; },
     run: async req => { runs.push(req); return { ok: true }; } }));
-  assert.equal(tabs.length, 1, 'Tab cannot run a command, so no send prompt');
+  assert.equal(tabs.length, 1, 'Tab is inert, so no send prompt');
   assert.equal(tabs[0][1].once, undefined);
 });
 
 test('results carry the foreground note, the screenshot path and the approval-button name', async () => {
   const result = await callBlockedApp({ op: 'click', app: 'Codex', element: 12 }, base({
-    target: { appId: 'com.openai.codex', app: 'ChatGPT', title: null, url: null },
+    target: { appId: 'com.openai.codex', app: 'ChatGPT', pid: 9, title: null, url: null },
     approve: async () => true,
     run: async () => ({ ok: true, app: 'ChatGPT', clicked: 12, via: 'AXPress', fronted: true, putBack: 'iTerm2',
       clickedLabel: 'Approve all', clickedRole: 'Button', shot: '/tmp/shot.png' }),
@@ -206,12 +191,12 @@ test('driver failures and settings refusals come back as errors', async () => {
   assert.match(failed.content[0].text, /no open window/);
   const settings = await callBlockedApp({ op: 'read', app: 'Terminal' }, base({
     approve: async () => true,
-    run: async () => ({ ok: false, error: 'refused: "Settings" is a settings or preferences window', settings: true }),
+    run: async () => ({ ok: false, error: 'refused: a settings or preferences window', settings: true }),
   }));
   assert.match(settings.content[0].text, /never drives these apps' settings windows/);
 });
 
-// ---- Relay: opt-in gating, refusal notes, flow rules, leases --------------
+// ---- Relay: refusal notes, flow rules, leases -----------------------------
 
 const tick = () => new Promise(r => setImmediate(r));
 const settle = async () => { for (let i = 0; i < 5; i++) await tick(); };
@@ -244,29 +229,68 @@ const blockedTool = (calls, answers = ['accept']) => ({
   },
 });
 
-test('an engine refusal offers blocked_app only when the user opted in', async () => {
-  for (const enabled of [true, false]) {
-    const h = harness({ blockedApps: enabled, ask: async () => 'accept', localTools: blockedTool([]) });
-    h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("Terminal")' } } });
-    h.fromServer({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [{ type: 'text', text: refusalText }] } });
-    await tick();
-    const texts = h.toClient[0].result.content.map(c => c.text).join('\n');
-    if (enabled) {
-      assert.match(texts, /refuses com\.apple\.Terminal before any approval/);
-      assert.match(texts, /blocked_app/);
-      assert.match(texts, /Ask the user, then use blocked_app/);
-    } else {
-      assert.doesNotMatch(texts, /blocked_app tool/);
-    }
-  }
+test('an engine refusal offers blocked_app whenever the tool is registered', async () => {
+  const h = harness({ ask: async () => 'accept', localTools: blockedTool([]) });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("Terminal")' } } });
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [{ type: 'text', text: refusalText }] } });
+  await tick();
+  const texts = h.toClient[0].result.content.map(c => c.text).join('\n');
+  assert.match(texts, /refuses com\.apple\.Terminal before any approval/);
+  assert.match(texts, /blocked_app/);
+  assert.match(texts, /Ask the user, then use blocked_app/);
 });
 
-test('an opt-in refusal note does not change results without the refusal', async () => {
-  const h = harness({ blockedApps: true, ask: async () => 'accept', localTools: blockedTool([]) });
+test('without the tool registered, a refusal passes through unannotated', async () => {
+  const h = harness({ ask: async () => 'accept' });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("Terminal")' } } });
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [{ type: 'text', text: refusalText }] } });
+  await tick();
+  assert.equal(h.toClient[0].result.content.length, 1);
+});
+
+test('an annotated refusal does not change results without the refusal', async () => {
+  const h = harness({ ask: async () => 'accept', localTools: blockedTool([]) });
   h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("TextEdit")' } } });
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: 'Window: "a.txt", App: TextEdit' }] } });
   await tick();
   assert.equal(h.toClient[0].result.content.length, 1);
+});
+
+test('the pre-approved list covers blocked_app consent but never a once send', async () => {
+  const asked = [];
+  const grants = [];
+  const h = harness({
+    preapproved: new PreapprovedApps({ version: 1, apps: [{ app: 'com.apple.Terminal', riskLevel: 'high' }] }),
+    grantAudit: grant => grants.push(grant),
+    ask: async (message, scoped, options) => { asked.push([message, scoped, options]); return 'accept'; },
+    localTools: { tools: [{ name: 'blocked_app' }], call: async (name, args, approve) => {
+      const consent = await approve(['blocked_app', 'com.apple.Terminal'], 'Allow Claude to drive Terminal through Accessibility?', { kind: 'blocked', detail: 'consent' });
+      const send = await approve(['blocked_app_send', 'com.apple.Terminal'], 'Allow Claude to send this to Terminal once?', { once: true, kind: 'flow', detail: 'x' });
+      return { content: [{ type: 'text', text: `${consent} ${send}` }] };
+    } },
+  });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'blocked_app', arguments: { op: 'type', app: 'Terminal', text: 'echo hi' } } });
+  await settle();
+  assert.equal(asked.length, 1, 'the consent came from the list; only the send reached the user');
+  assert.match(asked[0][0], /send this to Terminal once\?/);
+  assert.equal(grants.length, 1, 'the consent grant is audited');
+  assert.equal(grants[0].tool, 'blocked_app');
+  assert.equal(grants[0].riskLevel, 'high');
+  const text = h.toClient.find(m => m.id === 1).result.content.map(c => c.text).join('\n');
+  assert.match(text, /pre-approved by the user's list/, 'the grant note rides the result');
+});
+
+test('a once ask is never answered from session memory, even for the same app', async () => {
+  const asked = [];
+  const h = harness({ ask: async (message, scoped) => { asked.push(scoped); return 'accept'; },
+    localTools: { tools: [{ name: 'blocked_app' }], call: async (name, args, approve) => {
+      for (let i = 0; i < 2; i++) await approve(['blocked_app_send', 'com.apple.Terminal'], 'Allow Claude to send this to Terminal once?', { once: true });
+      return { content: [{ type: 'text', text: 'sent' }] };
+    } } });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'blocked_app', arguments: { op: 'key', app: 'Terminal', key: 'Return' } } });
+  await settle();
+  assert.equal(asked.length, 2, 'the same send asks again');
+  assert.deepEqual(asked, [false, false], 'no send ask is session-scoped');
 });
 
 test('blocked_app consent is remembered when accepted, and a decline is never remembered', async () => {
@@ -331,17 +355,16 @@ function leaseSetup(t, options = {}, directory = mkdtempSync(join(tmpdir(), 'sle
   const clientOut = new PassThrough();
   const serverIn = new PassThrough();
   const serverOut = new PassThrough();
-  const toServer = [];
   const toClient = [];
-  serverIn.setEncoding('utf8').on('data', d => d.split('\n').filter(Boolean).forEach(l => toServer.push(JSON.parse(l))));
+  serverIn.setEncoding('utf8');
   clientOut.setEncoding('utf8').on('data', d => d.split('\n').filter(Boolean).forEach(l => toClient.push(JSON.parse(l))));
   const inputLease = new InputLease({ directory, holder: options.holder ?? 'session A' });
   const relay = createRelay({
     clientIn, clientOut, serverIn, serverOut, sessionId: options.holder ?? 'A', inputLease,
-    blockedApps: true, ask: async () => 'accept',
+    ask: async () => 'accept',
     localTools: {
       tools: [{ name: 'blocked_app' }],
-      target: async () => ({ appId: 'com.apple.Terminal', app: 'Terminal', title: null, url: null }),
+      target: async () => ({ appId: 'com.apple.Terminal', app: 'Terminal', pid: 4242, title: null, url: null }),
       call: async (name, args) => {
         calls.push(args);
         return { content: [{ type: 'text', text: `did ${args.op}` }] };
@@ -384,11 +407,73 @@ test('a blocked_app read takes no lease and works while another session acts', a
 });
 
 test('the lease ends when the tool result is in and the turn goes idle', async t => {
-  const a = leaseSetup.call(null, t, { holder: 'A' });
+  const a = leaseSetup(t, { holder: 'A' });
   a.call(1, { op: 'type', text: 'echo hi' });
   await settle();
   assert.ok(a.inputLease.owned.size);
   a.relay.close();
   await settle();
   assert.equal(a.inputLease.owned.size, 0, 'close releases the lease');
+});
+
+// ---- The live-run judge and its scrubbing --------------------------------
+
+const okReadReply = {
+  direction: 'to-client',
+  msg: { id: 1, result: { content: [{ type: 'text', text: 'Window screenshot saved at /tmp/shot.png\n{\n "app": "Terminal",\n "ok": true,\n "elements": [\n  {\n   "text": "% echo sleight\nsleight\nuser@mac ~ %"\n  }\n ]\n }' }] } },
+};
+
+test('the judge passes only when consent, a successful read and the echo output are all present', () => {
+  const good = {
+    exit: { code: 0, signal: null }, timedOut: false,
+    events: [
+      { direction: 'local-approval', msg: { action: 'accept' } },
+      { direction: 'blocked-app-action', msg: { op: 'read' } },
+      okReadReply,
+    ],
+    messages: [{ type: 'result', result: 'the output line sleight appeared' }],
+  };
+  const verdict = judgeBlockedLive('terminal', good);
+  assert.equal(verdict.readOk, true);
+  assert.equal(verdict.echoSeen, true);
+  assert.equal(verdict.passed, true);
+
+  // A trace marker is not success: the driver replied ok:false.
+  const failedRead = {
+    ...good,
+    events: [good.events[0], good.events[1],
+      { direction: 'to-client', msg: { id: 1, result: { content: [{ type: 'text', text: '{"ok": false, "error": "no window"}' }] } } }],
+  };
+  assert.equal(judgeBlockedLive('terminal', failedRead).passed, false, 'a failed read never passes');
+
+  // No consent, no pass.
+  assert.equal(judgeBlockedLive('terminal', { ...good, events: good.events.slice(1) }).passed, false);
+
+  // Without the echo output in the last read, the terminal check fails.
+  const noEcho = { ...good, events: [good.events[0], good.events[1],
+    { direction: 'to-client', msg: { id: 1, result: { content: [{ type: 'text', text: '{"ok": true, "elements": [{"text": "% echo sleightecho sleight"}] }' }] } } }] };
+  assert.equal(judgeBlockedLive('terminal', noEcho).passed, false, 'an unexecuted command is not a pass');
+
+  // A codex run passes on a good read alone; the click stays optional.
+  const codex = { ...good, events: [good.events[0], good.events[1],
+    { direction: 'to-client', msg: { id: 1, result: { content: [{ type: 'text', text: '{"ok": true, "elements": [{"text": "close button"}] }' }] } } }] };
+  assert.equal(judgeBlockedLive('codex', codex).passed, true);
+  assert.equal(judgeBlockedLive('codex', codex).clicked, false);
+
+  // A timeout or a killed session never passes.
+  assert.equal(judgeBlockedLive('terminal', { ...good, timedOut: true }).passed, false);
+  assert.equal(judgeBlockedLive('terminal', { ...good, exit: { code: 1, signal: null } }).passed, false);
+});
+
+test('the scrubber removes home, account, machine and per-user temp paths', () => {
+  const clean = makeClean({ home: '/Users/chrismenendez', user: 'chrismenendez', host: 'CMs-M5-MBP.local', tmp: '/var/folders/1x/x/T' });
+  const scrubbed = clean([
+    'ran from /Users/chrismenendez/Projects and /private/var/folders/1x/x/T/trace-a.jsonl',
+    'trace /var/folders/1x/x/T/trace-a.jsonl saved by chrismenendez on CMs-M5-MBP.local',
+  ].join('\n'));
+  assert.equal(scrubbed.includes('chrismenendez'), false);
+  assert.equal(scrubbed.includes('CMs-M5-MBP'), false);
+  assert.equal(scrubbed.includes('/var/folders/1x'), false);
+  assert.match(scrubbed, /~\/Projects/);
+  assert.match(scrubbed, /~tmp\/trace-a\.jsonl/);
 });

@@ -349,18 +349,7 @@ export function run({ leaseDirectory } = {}) {
   let flowRules, preapproved;
   try { flowRules = loadFlowRules(); preapproved = loadPreapproved(); } catch (err) { fail(err.message); }
   const { trace, grantAudit } = approvalLogging(preapproved);
-  // Driving the apps the engine refuses is off unless both keys are present:
-  // SLEIGHT_BLOCKED_APPS=1 in Claude Code's environment and the user's flag
-  // file (blocked-apps.mjs). A repo or plugin setting alone can't turn it on.
-  let blockedApps;
-  try { blockedApps = loadBlockedAppsFlag(); } catch (err) { fail(err.message); }
-  if (process.env.SLEIGHT_BLOCKED_APPS === '1' && !blockedApps) {
-    process.stderr.write(`sleight: SLEIGHT_BLOCKED_APPS is set, but ${FLAG_FILE} is missing or invalid; blocked_app stays off. See "Driving apps the engine refuses" in the README.\n`);
-  } else if (blockedApps && process.env.SLEIGHT_BLOCKED_APPS !== '1') {
-    process.stderr.write("sleight: blocked-apps.json is present; blocked_app also needs SLEIGHT_BLOCKED_APPS=1 in Claude Code's environment.\n");
-  }
-  const blockedEnabled = blockedApps && process.env.SLEIGHT_BLOCKED_APPS === '1';
-  const traceSetting = process.env.SLEIGHT_TRACE || (blockedEnabled ? '1' : undefined);
+  const traceSetting = process.env.SLEIGHT_TRACE;
   relayTrace = traceSetting ? traceTo(traceSetting) : trace;
   const s = resolveServer();
   if (s.error) fail(s.error);
@@ -404,13 +393,14 @@ export function run({ leaseDirectory } = {}) {
     onLeaseFault: err => { process.stderr.write(`sleight: ${err.message}; stopping the owned engine.\n`); terminateEngine(); },
     // SLEIGHT_MENU_BAR=0 leaves out the menu bar and notification tools,
     // SLEIGHT_DRAG=0 the drag tool, SLEIGHT_HOVER=0 the hover tool.
-    // blocked_app is listed only when the user opted in with both keys above.
+    // blocked_app is always listed; the user's approval of its prompt is the
+    // whole opt-in.
     localTools: {
       tools: [
         ...(process.env.SLEIGHT_MENU_BAR === '0' ? [] : MENU_BAR_TOOLS),
         ...(process.env.SLEIGHT_DRAG === '0' ? [] : [DRAG_TOOL]),
         ...(process.env.SLEIGHT_HOVER === '0' ? [] : [HOVER_TOOL]),
-        ...(blockedEnabled ? [BLOCKED_APP_TOOL] : []),
+        BLOCKED_APP_TOOL,
       ],
       call: callLocalTool,
       target: async args => {
@@ -419,7 +409,6 @@ export function run({ leaseDirectory } = {}) {
         return result.target;
       },
     },
-    blockedApps: blockedEnabled,
     trace: relayTrace,
   });
   process.once('exit', () => relay.close());
