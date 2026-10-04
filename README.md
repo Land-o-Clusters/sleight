@@ -323,10 +323,12 @@ The LCU arm needs LCU registered for Claude Code in a separate folder. `bench/ru
 
 ## Update watch
 
-A ChatGPT update can change the engine under sleight at any time. `scripts/watch.sh` checks for that:
-it runs `--doctor`, and when the engine version differs from the last run, it runs one benchmark task.
-It logs to `~/Library/Logs/sleight/watch.log` and posts a macOS notification when something fails or
-the engine changed.
+`scripts/watch.sh` runs `--doctor` and saves the engine's runtime API docs to
+`~/Library/Logs/sleight/engine-api-<version>.md`, declining the app approval during capture.
+When the version changes, it writes `engine-api-<version>.diff` against the previous snapshot and runs
+one benchmark task, with the diff path in the macOS notification (the first run saves a baseline).
+It logs to `~/Library/Logs/sleight/watch.log` and also notifies when a check fails; an older watch
+without a previous snapshot reports that the diff is unavailable.
 
 ```bash
 npm run watch            # check now
