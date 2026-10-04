@@ -1,0 +1,100 @@
+{
+  "stamp": "2026-10-04T03-41-11-216Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 79.5,
+      "turns": 11,
+      "costUsd": 0.25961180000000006,
+      "exitCode": 0,
+      "answer": "I can't give you the display value, because Calculator stopped responding and I never read a result from it.\n\n- **Wrong input:** my first batch of clicks used the wrong buttons. It entered 19 × 23 instead of 17 × 23. The display may hold that result (437) or something half-entered. Don't use it as t",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 1,
+      "passed": false,
+      "reason": "answer does not contain 1024",
+      "seconds": 56.5,
+      "turns": 6,
+      "costUsd": 0.1608816,
+      "exitCode": 0,
+      "answer": "I couldn't get the number. Both attempts to open Calculator through sleight timed out with `Computer Use server error -10005: timeoutReached`, so I never saw the app's UI or clicked anything.\n\nAn approval prompt for Calculator may be waiting on your screen, or the computer-use engine may be hung. Ap",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": false,
+      "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-04T03-41-11-216Z/sleight-textedit-save-1/a6d8f06a.txt was not saved",
+      "seconds": 37,
+      "turns": 12,
+      "costUsd": 0.3040624,
+      "exitCode": 0,
+      "answer": "I haven't finished: TextEdit has an unsaved document and an open dialog, and I'm stopped on a permission and lease problem.\n\n- **Done:** I created a new document, pressed Shift+Cmd+T for Make Plain Text, and typed `sleight bench a6d8f06a`. I didn't read the text back to confirm it, or the Format men",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\\n\"",
+      "seconds": 49.4,
+      "turns": 14,
+      "costUsd": 0.2538392,
+      "exitCode": 0,
+      "answer": "The file is still unchanged: it reads \"alpha beta gamma\", and I haven't saved or closed anything.\n\nI'm blocked on the sleight session. My first edit failed with `noWindowsAvailable`. Since then every `cua.getApp` call, including ones using the bundle ID, fails with \"Input lease: read the intended wi",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 1,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\"",
+      "seconds": 90.9,
+      "turns": 10,
+      "costUsd": 0.2179844,
+      "exitCode": 0,
+      "answer": "I couldn't do the drag. Every attempt to connect to TextEdit through sleight's computer-use tool timed out, so I never read or touched the document.\n\n- **Setup:** I opened `09b416a5-drag.txt` in TextEdit in the background. The file still reads `alpha beta gamma`, and TextEdit is running with it open",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 1,
+      "passed": false,
+      "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-04T03-41-11-216Z/sleight-chess-drag-1/8420cc56.game was not saved",
+      "seconds": 44.8,
+      "turns": 13,
+      "costUsd": 0.2926358,
+      "exitCode": 0,
+      "answer": "I couldn't finish this. Chess is open with the \"Start a New Game?\" sheet showing, but I haven't started a game, and no move or save has happened.\n\nEvery action I try now fails with the same error: `Input lease: read the intended window with one standalone cua.getApp call before acting; a bundle ID a",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

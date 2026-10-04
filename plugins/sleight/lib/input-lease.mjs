@@ -7,6 +7,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { isDocumentRead } from './document-scope.mjs';
+import { isInventoryRead } from './inventory-read.mjs';
 
 export const LEASE_MS = 30000;
 export const leaseKey = (window, scope = 'window') => createHash('sha256')
@@ -16,9 +17,9 @@ export const leaseKey = (window, scope = 'window') => createHash('sha256')
 // Only literal, standalone reads pass without a lease. Arbitrary JS is treated
 // as an action, including read/action mixtures and expressions in read options.
 export function isLeaseRead(code = '') {
-  if (isDocumentRead(code)) return true;
+  if (isDocumentRead(code) || isInventoryRead(code)) return true;
   const options = String.raw`\s*(?:\{\s*(?:(?:disableDiffing|emit)\s*:\s*(?:true|false)\s*,?\s*)*\})?\s*`;
-  const call = String.raw`app\.(?:getAXState|getAXStateAndScreenshot|getScreenshot)\(${options}\)`;
+  const call = String.raw`[A-Za-z_$][\w$]*\.(?:getAXState|getAXStateAndScreenshot|getScreenshot)\(${options}\)`;
   return new RegExp(String.raw`^await\s+${call}\s*;?$`).test(code.trim()) ||
     new RegExp(String.raw`^(?:await\s+)?nodeRepl\.(?:emitImage|write)\(\s*await\s+${call}\s*\)\s*;?$`).test(code.trim()) ||
     /^await\s+cua\.rewriteDocumentation\(\s*\)\s*;?$/.test(code.trim());

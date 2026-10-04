@@ -1,0 +1,56 @@
+{
+  "stamp": "2026-10-04T04-10-59-034Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": false,
+      "reason": "answer does not contain 391",
+      "seconds": 48.4,
+      "turns": 19,
+      "costUsd": 0.246643,
+      "exitCode": 0,
+      "answer": "",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 1,
+      "passed": false,
+      "reason": "answer does not contain 1024",
+      "seconds": 41.6,
+      "turns": 16,
+      "costUsd": 0.2193652,
+      "exitCode": 0,
+      "answer": "",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": false,
+      "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-04T04-10-59-034Z/sleight-textedit-save-1/e9067c9e.txt was not saved",
+      "seconds": 45.7,
+      "turns": 18,
+      "costUsd": 0.2465476,
+      "exitCode": 0,
+      "answer": "",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

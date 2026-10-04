@@ -55,6 +55,7 @@ import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRe
 import { ChangeReview, REVIEW_TOOL } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
 import { isLeaseRead } from './input-lease.mjs';
+import { isInventoryRead } from './inventory-read.mjs';
 
 const META_KEY = 'x-codex-turn-metadata';
 const HIDDEN_TOOLS = new Set(['js_add_node_module_dir']);
@@ -233,6 +234,11 @@ export function createRelay({
     }
   }
   let leaseWindow;
+  let recoveryTarget;
+  let constApp = false;
+  const handleBundles = new Map();
+  const handleSelectors = new Map();
+  const selectorWindows = new Map();
   let leaseFault;
   let leaseTimer;
   let closing;
@@ -299,13 +305,20 @@ export function createRelay({
       return true;
     }
     if (name === DOCUMENT_TOOL.name) return true;
-    if (name === 'js_reset') { leaseWindow = undefined; return true; }
+    if (name === 'js_reset') { leaseWindow = undefined; handleBundles.clear(); handleSelectors.clear(); constApp = false; return true; }
     if (name !== 'js' && !localNames.has(name)) return true;
     const args = msg.params.arguments ?? {};
     const code = args.code;
     if (name === 'js' && typeof code !== 'string') { leaseStop(msg, 'js needs code.'); return false; }
     const read = name === 'js' ? typeof code === 'string' && isLeaseRead(code)
       : (name === 'menu_bar' && args.op === 'apps') || (name === 'notifications' && args.op === 'list');
+    const acquisition = read && code?.trim().match(/^(?:(?:(let|const|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*)?await\s+cua\.getApp\(\s*(.*?)\s*\)\s*;?$/s);
+    const handle = acquisition ? acquisition[2] ?? (constApp ? undefined : 'app')
+      : read && code?.match(/([A-Za-z_$][\w$]*)\.(?:getAXState|getAXStateAndScreenshot|getScreenshot)\(/)?.[1];
+    const selector = acquisition?.[3];
+    if (selector) recoveryTarget = `cua.getApp(${selector})`;
+    if (selector && handle) handleSelectors.set(handle, selector);
+    if (acquisition?.[1] === 'const' && handle === 'app') constApp = true;
     if (msg.id === undefined) { leaseStop(msg, 'actions and reads need a request id.'); return false; }
     let key;
     if (!read) {
@@ -314,11 +327,16 @@ export function createRelay({
       if (name !== 'js') {
         leaseCalls.set(msg.id, { localAction: true }); return true;
       }
-      if (!leaseWindow?.appId) { leaseStop(msg, 'read the intended window with one standalone cua.getApp call before acting; a bundle ID and full window header are required.'); return false; }
+      if (!leaseWindow?.appId) {
+        const recovery = recoveryTarget ? `${constApp ? '' : 'app = '}await ${recoveryTarget}` : 'await cua.getState()';
+        leaseStop(msg, `a bundle ID and full window header are required. Send exactly \u0060${recovery}\u0060 in js, then read the intended window before acting.`);
+        return false;
+      }
       try { key = inputLease.acquire(leaseWindow); }
       catch (err) { leaseStop(msg, err.message); return false; }
     }
-    leaseCalls.set(msg.id, { key, observe: name === 'js' && (!read || !/getScreenshot|rewriteDocumentation/.test(code)) });
+    const observe = name === 'js' && (!read || (!isInventoryRead(code) && /cua\.getApp\(|\.(?:getAXState|getAXStateAndScreenshot)\(/.test(code)));
+    leaseCalls.set(msg.id, { key, observe, selector, handle, acquisition: !!acquisition });
     return true;
   }
 
@@ -619,7 +637,7 @@ export function createRelay({
           }
         } catch (err) { documentCalls.delete(msg.id); finishedCall(msg.id); changeStop(msg, `cannot snapshot before acting: ${err.message}`); return; }
         changeCalls.set(msg.id, { read, entry, expected: documentKey(lastWindow),
-          observe: !read || !/getScreenshot|rewriteDocumentation/.test(originalCode) });
+          observe: !read || (!isInventoryRead(originalCode) && /cua\.getApp\(|\.(?:getAXState|getAXStateAndScreenshot)\(/.test(originalCode)) });
         if (typeof originalCode === 'string') {
           const target = documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow;
           const reason = documentMode ? undefined : inputLease
@@ -690,10 +708,29 @@ export function createRelay({
       }
     }
     if (inputLease && msg.method === undefined && leaseCalls.get(msg.id)?.observe) {
+      const call = leaseCalls.get(msg.id);
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
       const window = !msg.error && !msg.result?.isError && windowFromText(text);
       const appId = msg.result?._meta?.['codex/toolSurface']?.app?.appId;
-      leaseWindow = window ? { ...window, ...(typeof appId === 'string' ? { appId } : {}) } : undefined;
+      const cached = call.acquisition ? selectorWindows.get(call.selector)
+        : call.handle ? handleBundles.get(call.handle) : leaseWindow;
+      const matches = window && cached && (call.acquisition
+        ? documentKey(cached.window) === documentKey(window) : cached.app === window.app);
+      const known = window && (typeof appId === 'string' && appId ? appId : matches ? cached.appId : undefined);
+      leaseWindow = window ? { ...window, ...(known ? { appId: known } : {}) } : undefined;
+      if (call.handle) {
+        if (known) handleBundles.set(call.handle, leaseWindow);
+        else if (call.acquisition) handleBundles.delete(call.handle);
+      }
+      if (known) {
+        recoveryTarget = `cua.getApp(${JSON.stringify(known)})`;
+        if (call.selector) selectorWindows.set(call.selector, { window, appId: known });
+        selectorWindows.set(JSON.stringify(known), { window, appId: known });
+      } else {
+        const selector = call.selector ?? handleSelectors.get(call.handle);
+        if (selector) recoveryTarget = `cua.getApp(${selector})`;
+        else if (window) recoveryTarget = `cua.getApp(${JSON.stringify(window.app)})`;
+      }
     }
     if (msg.method === undefined) finishedCall(msg.id);
     if (ask && isAppApproval(msg)) {

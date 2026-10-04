@@ -1,5 +1,6 @@
 // Two independent relays and engine processes; auto-approve only TextEdit.
 // --baseline runs without the lease, before implementation. All output is retained.
+// --extended also checks heartbeat, expiry and handoff; the default is five races.
 import assert from 'node:assert/strict';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -17,6 +18,7 @@ const execute = promisify(execFile);
 const bank = await mkdtemp('/private/tmp/sleight-input-lease-');
 const path = join(bank, basename(bank) + '.txt');
 const baseline = process.argv.includes('--baseline');
+const extended = process.argv.includes('--extended');
 const records = [];
 const clients = [];
 const platform = (await execute('/usr/bin/sw_vers')).stdout.trim();
@@ -110,7 +112,7 @@ try {
     else { assert.equal(trial.copies, 1); assert.equal(replies.filter(r => r.isError && /Input lease/.test(text(r))).length, 1); }
   }
   console.log(JSON.stringify({ baseline, copies: trials.map(t => t.copies), refusals: trials.map(t => t.replies.filter(r => r.isError).length), bank }));
-  if (!baseline) {
+  if (!baseline && extended) {
     await a.call('turn_ended', {});
     const handoff = await b.call('js', { code: 'await app.typeText("HANDOFF|")' });
     trials.push({ phase: 'turn-release', reply: handoff }); assert.ok(!handoff.isError, text(handoff));
@@ -154,6 +156,6 @@ finally {
   trials.push({ phase: 'lease-cleanup', leasesRemaining });
   if (leasesRemaining) process.exitCode = 1;
   if (opened) { try { await fixture('close'); trials.push({ fixtureClosed: true }); } catch (err) { trials.push({ fixtureCleanupError: err.message }); process.exitCode = 1; } }
-  await writeFile(join(bank, 'results.json'), JSON.stringify({ baseline, platform, node: process.version, path, trials, records }, null, 2) + '\n');
+  await writeFile(join(bank, 'results.json'), JSON.stringify({ baseline, extended, platform, node: process.version, path, trials, records }, null, 2) + '\n');
   console.log(`Evidence: ${bank}/results.json`);
 }

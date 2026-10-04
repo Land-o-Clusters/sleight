@@ -2,13 +2,24 @@
 
 The relay takes a lease before forwarding an action. A second session gets an
 error naming the holder and seconds remaining. It never waits for that holder.
-Start with a standalone `let app = await cua.getApp("TextEdit")` read.
+Start with a standalone `let app = await cua.getApp("TextEdit")` read. Any
+identifier works with `let`, `const`, `var` or a plain reassignment. A bare
+acquisition also restores the global `app` handle without assigning a lexical
+`const app`.
 
 Window keys hash the bundle ID and observed URL, or title when no URL exists.
 The last completed full Window header and engine bundle ID identify the target.
-Ambiguous or missing identity stops actions until another standalone read.
+Bundle IDs stay attached to known handles across full reads and screenshots.
+After a guard stop, a full read restores the target. Reset clears handles and the
+current target; an acquisition can reuse a bundle ID only for a known selector
+and matching full window identity. Display names alone never supply a bundle ID.
+Ambiguous or missing identity stops actions with exact recovery code.
 Unknown JavaScript counts as an action. Standalone acquisition, inventory,
 AX-state and screenshot reads take no lease and can read a held window.
+Inventory expressions can inspect data with JSON output, filters, comparisons
+and literal regex tests. Assignments, extra statements and unknown calls remain
+actions. Each acquired handle receives the guard, including alternate and
+`const` bindings. Reads and actions update the handle used for the final header.
 
 Leases live in `~/Library/Application Support/sleight/leases/`. Each JSON file
 stores a random ownership token, session name, target and expiry. A shared SQLite
@@ -33,11 +44,13 @@ Inventory reads still pass. These broader reservations can block unrelated work.
 Only cooperating sleight relays using this directory participate. Codex computer
 use, other tools, older relays and the user do not take these leases. The guard
 runs in mutable JavaScript and can be bypassed or its observations forged.
+Blank titles are valid full headers and share a conservative window key.
 Equal unsaved titles share a key; Save As, dialogs and window changes can stop
 valid actions. Checks cannot undo an event already delivered to the native helper.
 
-`node bench/input-lease.mjs` uses two relays and a temporary TextEdit document.
-`--baseline` omits enforcement. All attempts and raw replies are retained in
+`node bench/input-lease.mjs` uses two relays and a temporary TextEdit document
+for five races. `--extended` also checks renewal, expiry, handoff and cleanup.
+`--baseline` omits enforcement. Earlier attempts and raw replies are retained in
 [the results](../benchmarks/2026-10-03-input-lease.json).
 
 Before the rebase, macOS 27.0 (26A428) trials doubled 5/5 baseline markers;
@@ -47,3 +60,13 @@ the fresh baseline doubled 5/5; enforcement left one marker and one refusal in
 10/10. Final renewal (35 s), expiry (31 s), handoff and cleanup checks passed.
 An earlier expiry check hit the autosave guard. An additional sandbox attempt failed.
 Fresh sessions keep other sessions' saved edits outside their review attribution.
+
+The October 4 repair passed 5/5 races after rebasing onto the opt-in change review
+and flow rules. Both engines exited, snapshots were removed and no leases
+remained. [Repair results](../benchmarks/2026-10-04-input-lease.md) include the failed attempts.
+The general benchmark belongs to sleight-arch at merge.
+
+The launcher and extended benchmark can force-kill an owned engine that does
+not exit, but collecting that process leaves the shared native helper's health
+unverified. The owner cleared the earlier helper timeouts by restarting ChatGPT.
+We have no measurement that attributes that wedge to a shutdown.

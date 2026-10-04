@@ -9,6 +9,30 @@ import { InputLease, isLeaseRead, leaseKey } from '../plugins/sleight/lib/input-
 import { guardedCode } from '../plugins/sleight/lib/document-scope.mjs';
 
 const window = { app: 'TextEdit', appId: 'com.apple.TextEdit', title: 'a.txt', url: 'file:///tmp/a.txt' };
+for (const code of [
+  'app = await cua.getApp("Chess")',
+  'let app2 = await cua.getApp("TextEdit")',
+  'let te = await cua.getApp("com.apple.TextEdit")',
+  'const te = await cua.getApp("TextEdit")',
+  'var chess = await cua.getApp("Chess")',
+  'await cua.getApp("Chess")',
+  'JSON.stringify((await cua.listApps()).filter(a => a.name === "TextEdit"))',
+  'JSON.stringify((await cua.listApps()).filter(a=>/calc/i.test(a.id+a.displayName)))',
+  'await cua.listWindows()',
+  'await cua.getState()',
+  'await te.getAXState({disableDiffing:true})',
+]) test('standalone read passes: ' + code, () => assert.equal(isLeaseRead(code), true));
+
+for (const code of [
+  'app = await cua.getApp("Chess"); await app.click(1)',
+  'let te = await cua.getApp(await app.typeText("oops"))',
+  '(await cua.listApps()).filter(a => app.typeText("oops"))',
+  'JSON.stringify((await cua.listApps()).filter(a => (a.name = "oops")))',
+  '(await cua.listApps()).filter(a => { app.click(1); return true })',
+  'cua.listApps = () => []',
+  'await cua.listApps(); await app.click(1)',
+  '(await cua.listApps()).forEach(a => app.click(1))',
+]) test('read/action mixture stays an action: ' + code, () => assert.equal(isLeaseRead(code), false));
 function bank(t) {
   const directory = mkdtempSync(join(tmpdir(), 'sleight-lease-test-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));

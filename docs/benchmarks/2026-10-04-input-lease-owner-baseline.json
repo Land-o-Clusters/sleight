@@ -1,0 +1,101 @@
+{
+  "stamp": "2026-10-04T03-50-35-213Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": false,
+      "reason": "answer does not contain 391",
+      "seconds": 72.7,
+      "turns": 8,
+      "costUsd": 0.1925914,
+      "exitCode": 0,
+      "answer": "I couldn't get the result. Calculator is running, but every attempt to attach to it timed out (`timeoutReached`), whether I used the name or the bundle ID `com.apple.calculator`. I never saw its display or clicked a button. I also wasn't allowed to reset the session, so I stopped there.\n\nTwo things ",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 1,
+      "passed": false,
+      "reason": "answer does not contain 1024",
+      "seconds": 69.9,
+      "turns": 7,
+      "costUsd": 0.18114000000000002,
+      "exitCode": 0,
+      "answer": "I couldn't get the number. Every attempt to attach to Calculator through sleight timed out with `timeoutReached` (error -10005), and nothing was clicked.\n\n- **What I tried:** `cua.getApp` by name (\"Calculator\") twice and once by bundle ID (`com.apple.calculator`).\n- **What worked:** `cua.listApps()`",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": false,
+      "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-04T03-50-35-213Z/sleight-textedit-save-1/f62a5d14.txt was not saved",
+      "seconds": 78.3,
+      "turns": 9,
+      "costUsd": 0.210489,
+      "exitCode": 0,
+      "answer": "I couldn't do the task: TextEdit never became available to sleight, and I changed nothing. No document was created or saved, and `f62a5d14.txt` doesn't exist.\n\n- **What failed:** `cua.getApp` timed out three times (by name, again by name, and by bundle ID `com.apple.TextEdit`). Each failed with `tim",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\\n\"",
+      "seconds": 74.9,
+      "turns": 9,
+      "costUsd": 0.19924300000000003,
+      "exitCode": 0,
+      "answer": "I couldn't edit the file. TextEdit opened it in the background, but `cua.getApp` timed out three times. I tried \"TextEdit\" twice and the bundle ID `com.apple.TextEdit` once, each with error -10005 (`timeoutReached`). `listApps` shows TextEdit running, so it's up but not answering the automation engi",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 1,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\"",
+      "seconds": 83.4,
+      "turns": 11,
+      "costUsd": 0.21653119999999998,
+      "exitCode": 0,
+      "answer": "I couldn't complete the task. The file is unchanged and still reads `alpha beta gamma`.\n\n- **Opened:** I opened the file in TextEdit in the background, and TextEdit is running.\n- **Blocked:** Every `cua.getApp(\"TextEdit\")` call in the sleight computer-use tool timed out with error -10005 (`timeoutRe",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 1,
+      "passed": false,
+      "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-04T03-50-35-213Z/sleight-chess-drag-1/f5d2c96f.game was not saved",
+      "seconds": 48,
+      "turns": 15,
+      "costUsd": 0.32332960000000005,
+      "exitCode": 0,
+      "answer": "I couldn't start the game, so nothing is done: no e2–e4 drag, no saved file, and I didn't close any window.\n\n- **What I did:** Chess already had an old game open (`2e4dff15.game`, with e4 and e5 played). I pressed Cmd+N, and Chess showed its \"Start a New Game?\" sheet (Regular, Human vs. Computer).\n-",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

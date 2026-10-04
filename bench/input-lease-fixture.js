@@ -2,7 +2,14 @@
 function run(argv) {
   const [op, path] = argv;
   const app = Application('TextEdit');
-  if (op === 'open') { app.open(Path(path)); return; }
+  if (op === 'open') {
+    app.open(Path(path));
+    const title = path.split('/').pop();
+    const windows = app.windows().filter(window => String(window.name()) === title);
+    if (windows.length !== 1) throw new Error('Expected exactly one fixture window at ' + path);
+    windows[0].index = 1;
+    return;
+  }
   const matches = app.documents().filter(doc => {
     try { return String(doc.path()) === path; } catch { return false; }
   });

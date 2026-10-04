@@ -25,7 +25,7 @@ function setup(t) {
       stream.setEncoding('utf8').on('data', d => d.split('\n').filter(Boolean).forEach(line => output.push(JSON.parse(line))));
     }
     const inputLease = new InputLease({ directory, holder });
-    const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, inputLease, ...options });
+    const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, inputLease, changeReview: true, ...options });
     relays.push(relay);
     const send = msg => clientIn.write(JSON.stringify(msg) + '\n');
     const reply = msg => serverOut.write(JSON.stringify(msg).replaceAll('file:///tmp/a.txt', pathToFileURL(path).href) + '\n');
@@ -66,6 +66,130 @@ test('actions carry both guards and retain the original saved snapshot across tu
   assert.match(a.received.at(-1).result.content[0].text, /-before\n\+second/);
   a.relay.close(); assert.equal(existsSync(bank), false);
   assert.equal(a.inputLease.owned.size, 0);
+});
+
+test('ordinary leased actions leave change review off', t => {
+  const { harness } = setup(t);
+  const h = harness('default lease', { changeReview: false });
+  h.send(rpc(1, 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(h.forwarded.length, 1);
+  assert.equal(h.relay.snapshotDirectory, undefined);
+  assert.match(h.forwarded[0].params.arguments.code, /record.token !== state.lease.token/);
+  h.reply(result(1));
+});
+
+test('AX re-read after a guard stop restores the known bundle identity', t => {
+  const { a } = setup(t);
+  a.send(rpc('unsaved', 'js', { code: 'app = await cua.getApp("TextEdit")' }));
+  a.reply(result('unsaved', 'Window: "Untitled", App: TextEdit'));
+  a.forwarded.length = 0;
+  a.send(rpc(1, 'js', { code: 'await app.pressKey("super+s")' }));
+  a.reply({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [
+    { type: 'text', text: 'Input lease stopped this action: window or URL changed.' },
+  ] } });
+  a.send(rpc(2, 'js', { code: 'await app.getAXState({disableDiffing:true})' }));
+  const reread = result(2, 'Window: "Untitled", App: TextEdit'); delete reread.result._meta; a.reply(reread);
+  a.send(rpc(3, 'js', { code: 'await app.typeText("restored")' }));
+  assert.equal(a.forwarded.length, 3, JSON.stringify(a.received));
+  a.reply(result(3));
+});
+
+test('inventory reads do not erase a completed window target', t => {
+  const { a } = setup(t);
+  a.send(rpc(1, 'js', { code: 'await cua.listApps()' }));
+  a.reply({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: 'TextEdit' }] } });
+  a.send(rpc(2, 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(a.forwarded.length, 2, JSON.stringify(a.received));
+  a.reply(result(2));
+});
+
+test('bare getApp after reset recovers the session window bundle identity', t => {
+  const { a } = setup(t);
+  a.send(rpc(1, 'js_reset')); a.reply(result(1, 'reset'));
+  a.send(rpc(2, 'js', { code: 'await cua.getApp("TextEdit")' }));
+  const reread = result(2); delete reread.result._meta; a.reply(reread);
+  a.send(rpc(3, 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(a.forwarded.length, 3, JSON.stringify(a.received));
+  a.reply(result(3));
+});
+
+test('missing identity refusal supplies an executable recovery assignment', t => {
+  const { a } = setup(t);
+  a.send(rpc(1, 'js_reset')); a.reply(result(1, 'reset'));
+  a.send(rpc(2, 'js', { code: 'await app.typeText("x")' }));
+  const message = a.received.at(-1).result.content[0].text;
+  const recovery = message.match(/`([^`]+)`/)?.[1];
+  assert.equal(recovery, 'app = await cua.getApp("com.apple.TextEdit")');
+  a.send(rpc(3, 'js', { code: recovery })); a.reply(result(3));
+  a.send(rpc(4, 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(a.forwarded.length, 3, JSON.stringify(a.received));
+  a.reply(result(4));
+});
+
+test('bundle identity is not inherited by an unrelated window or another session', t => {
+  const { a, b } = setup(t);
+  a.send(rpc(1, 'js', { code: 'await cua.getApp("Chess")' }));
+  const unknown = result(1, 'Window: "Game", App: Chess'); delete unknown.result._meta;
+  a.reply(unknown);
+  a.send(rpc(2, 'js', { code: 'await app.click(1)' }));
+  assert.equal(a.forwarded.length, 1);
+  assert.equal(a.received.at(-1).result.isError, true);
+  b.send(rpc(3, 'js', { code: 'await app.typeText("x")' })); b.reply(result(3));
+  assert.equal(b.forwarded.length, 1);
+});
+
+test('a new bundle with the same display name cannot inherit a cached lease target', t => {
+  const { a } = setup(t);
+  a.send(rpc(1, 'js', { code: 'let other = await cua.getApp("org.other.TextEdit")' }));
+  const unknown = result(1, 'Window: "Other", App: TextEdit'); delete unknown.result._meta;
+  a.reply(unknown);
+  a.send(rpc(2, 'js', { code: 'await other.typeText("x")' }));
+  assert.equal(a.forwarded.length, 1);
+  assert.equal(a.received.at(-1).result.isError, true);
+});
+
+test('a const app recovery uses a bare acquisition instead of reassigning the binding', t => {
+  const { a } = setup(t);
+  a.send(rpc(1, 'js', { code: 'const app = await cua.getApp("TextEdit")' })); a.reply(result(1));
+  a.send(rpc(2, 'js', { code: 'await app.pressKey("super+s")' }));
+  a.reply({ jsonrpc: '2.0', id: 2, result: { isError: true, content: [{ type: 'text', text: 'stopped' }] } });
+  a.send(rpc(3, 'js', { code: 'await app.click(1)' }));
+  assert.match(a.received.at(-1).result.content[0].text, /`await cua.getApp\("com.apple.TextEdit"\)`/);
+});
+
+test('interleaving known and unknown same-name handles never lends the known bundle ID', t => {
+  const { a } = setup(t);
+  a.send(rpc(1, 'js', { code: 'let te = await cua.getApp("com.apple.TextEdit")' })); a.reply(result(1));
+  a.send(rpc(2, 'js', { code: 'let other = await cua.getApp("org.other.TextEdit")' }));
+  const unknown = result(2, 'Window: "Other", App: TextEdit'); delete unknown.result._meta;
+  a.reply(unknown);
+  a.send(rpc(3, 'js', { code: 'await te.getAXState({disableDiffing:true})' }));
+  const knownRead = result(3); delete knownRead.result._meta; a.reply(knownRead);
+  a.send(rpc(4, 'js', { code: 'await other.getAXState({disableDiffing:true})' }));
+  a.reply({ ...unknown, id: 4 });
+  a.send(rpc(5, 'js', { code: 'await other.typeText("x")' }));
+  assert.equal(a.forwarded.length, 4);
+  assert.equal(a.received.at(-1).result.isError, true);
+});
+
+test('recovery follows an unknown handle after an interleaved read of another app', t => {
+  const { a } = setup(t);
+  a.send(rpc(1, 'js', { code: 'let chess = await cua.getApp("Chess")' }));
+  const unknown = result(1, 'Window: "Game", App: Chess'); delete unknown.result._meta; a.reply(unknown);
+  a.send(rpc(2, 'js', { code: 'await app.getAXState({disableDiffing:true})' }));
+  const knownRead = result(2); delete knownRead.result._meta; a.reply(knownRead);
+  a.send(rpc(3, 'js', { code: 'await chess.getAXState({disableDiffing:true})' })); a.reply({ ...unknown, id: 3 });
+  a.send(rpc(4, 'js', { code: 'await chess.click(1)' }));
+  assert.match(a.received.at(-1).result.content[0].text, /`app = await cua.getApp\("Chess"\)`/);
+});
+
+test('inventory search strings that mention getApp do not erase the target', t => {
+  const { a } = setup(t);
+  a.send(rpc(1, 'js', { code: 'JSON.stringify((await cua.listApps()).filter(a => a.name === "cua.getApp("))' }));
+  a.reply({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: '[]' }] } });
+  a.send(rpc(2, 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(a.forwarded.length, 2);
+  a.reply(result(2));
 });
 
 test('a failed snapshot prevents the leased action from reaching the engine', t => {

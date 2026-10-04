@@ -20,7 +20,7 @@ test('launcher bounds a hung call on EOF, collects its engine, then removes its 
   await writeFile(document, 'before\n');
   const traces = join(bank, 'traces');
   const child = spawn(process.execPath, [fileURLToPath(new URL('fixtures/lease-launcher.mjs', import.meta.url)), leases],
-    { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CODEX_HOME: codexHome, SLEIGHT_TEST_DOCUMENT: document, SLEIGHT_TRACE: traces } });
+    { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CODEX_HOME: codexHome, SLEIGHT_TEST_DOCUMENT: document, SLEIGHT_TRACE: traces, SLEIGHT_CHANGE_REVIEW: '1' } });
   const closed = new Promise((resolve, reject) => { child.on('error', reject); child.once('close', (code, signal) => resolve({ code, signal })); });
   let stderr = ''; child.stderr.on('data', d => stderr += d);
   const received = new Map(), waiting = new Map();

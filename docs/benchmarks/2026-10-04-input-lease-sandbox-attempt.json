@@ -1,0 +1,16 @@
+{
+  "baseline": false,
+  "platform": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428",
+  "node": "v26.4.0",
+  "path": "/private/tmp/sleight-input-lease-pCi0Wa/sleight-input-lease-pCi0Wa.txt",
+  "trials": [
+    {
+      "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/input-lease/bench/input-lease-fixture.js open /private/tmp/sleight-input-lease-pCi0Wa/sleight-input-lease-pCi0Wa.txt\n~/Projects/sleight-wt/input-lease/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+    },
+    {
+      "phase": "lease-cleanup",
+      "leasesRemaining": 0
+    }
+  ],
+  "records": []
+}
