@@ -56,6 +56,7 @@ import { ChangeReview, REVIEW_TOOL } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
 import { isLeaseRead } from './input-lease.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
+import { ActionNotes } from './action-notes.mjs';
 
 const META_KEY = 'x-codex-turn-metadata';
 const HIDDEN_TOOLS = new Set(['js_add_node_module_dir']);
@@ -121,6 +122,7 @@ export function createRelay({
   // Off by default: its window guard stops Open dialogs and late-found documents (0/2 TextEdit
   // benchmark tasks, 2026-10-04). SLEIGHT_CHANGE_REVIEW=1 turns it on.
   changeReview = false,
+  actionNotes = true,
   idleTurnEndMs,
   inputLease,
   onLeaseFault = () => {},
@@ -149,6 +151,7 @@ export function createRelay({
   let documentAsking = false;
   const changes = new ChangeReview();
   const changeCalls = new Map();
+  const notes = actionNotes ? new ActionNotes() : undefined;
   let lastWindow;
   let reviewing = false;
   let disposed = false;
@@ -647,7 +650,9 @@ export function createRelay({
           else if (documentMode || inputLease || entry) msg.params.arguments.code = guardedCode(originalCode, target, reason,
             inputLease?.grant(leaseCalls.get(msg.id)?.key));
         }
+        notes?.start(msg.id, originalCode ?? '');
       }
+      if (name === 'js_reset') notes?.clear();
       msg.params._meta = { ...msg.params._meta, [META_KEY]: turnMeta() };
       turnUsed = true;
       clearTimeout(idleTimer);
@@ -732,7 +737,11 @@ export function createRelay({
         else if (window) recoveryTarget = `cua.getApp(${JSON.stringify(window.app)})`;
       }
     }
-    if (msg.method === undefined) finishedCall(msg.id);
+    if (msg.method === undefined) {
+      const note = notes?.finish(msg.id, msg);
+      if (note && msg.result) msg.result.content = [...(msg.result.content ?? []), { type: 'text', text: note }];
+      finishedCall(msg.id);
+    }
     if (ask && isAppApproval(msg)) {
       askUser(msg);
       return;
@@ -783,6 +792,7 @@ export function createRelay({
     for (const resolve of elicitations.values()) resolve({ result: { action: 'cancel' } });
     elicitations.clear();
     flowRules?.dispose();
+    notes?.clear();
     flowCalls.clear(); flowPending = undefined; flowPermit = undefined;
     changes.dispose();
     trace('change-snapshots-deleted', { directory: changes.directory });

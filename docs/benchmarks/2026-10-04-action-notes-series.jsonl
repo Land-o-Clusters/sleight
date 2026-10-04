@@ -1,0 +1,11 @@
+{"arm":"on","task":"calculator-click","repetition":"1","code":0,"signal":null}
+{"arm":"off","task":"calculator-menu","repetition":"1","code":0,"signal":null}
+{"arm":"on","task":"calculator-menu","repetition":"1","code":0,"signal":null}
+{"arm":"off","task":"textedit-save","repetition":"1","code":0,"signal":null}
+{"arm":"on","task":"textedit-save","repetition":"1","code":1,"signal":null}
+{"arm":"on","task":"calculator-click","repetition":"2","code":0,"signal":null}
+{"arm":"off","task":"calculator-click","repetition":"2","code":0,"signal":null}
+{"arm":"on","task":"calculator-menu","repetition":"2","code":0,"signal":null}
+{"arm":"off","task":"calculator-menu","repetition":"2","code":0,"signal":null}
+{"arm":"on","task":"textedit-save","repetition":"2","code":1,"signal":null}
+{"arm":"off","task":"textedit-save","repetition":"2","code":1,"signal":null}

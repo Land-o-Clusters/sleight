@@ -165,6 +165,9 @@ Claude Code ──MCP──▶ bin/sleight-mcp ──▶ ChatGPT.app's cua-repl 
    after 30 idle seconds and when the session closes. It hides `js_add_node_module_dir` from Claude and
    marks `turn_ended` as internal. It also answers a protocol probe from newer Claude Code versions that
    would otherwise crash the server.
+   Each action reply also gets a short note with the observed UI change, window and dialog or sheet
+   state. `SLEIGHT_ACTION_NOTES=0` turns notes off. [The design](docs/design/action-notes.md) explains
+   what the returned accessibility data can prove.
 6. On Claude Code v2.1.287 or later, the mod (`hooks/register.tsx`) ends the engine's turn after each
    Claude turn that used it, the way Codex does, and refuses Claude's own calls to `turn_ended`.
 7. The `menu_bar` and `notifications` tools handle the menu bar icons and banners the engine leaves
@@ -182,6 +185,14 @@ in-app browser only exists inside ChatGPT. To try Chrome control, which needs th
 extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
 
 ## Known problems
+
+- Action notes describe accessibility changes, which do not prove a click or keypress succeeded.
+  Focus, selection and pixels can change without an AX change. Missing baselines, partial diffs,
+  errors and overlapping calls report unknown. Batched actions get one note for their final result.
+  Another session or a person can cause a change between observations.
+  The [12-run comparison](docs/benchmarks/2026-10-04-action-notes.md) didn't reduce Calculator
+  turns. Three TextEdit trials timed out, so its turn comparison is incomplete. The notes don't
+  fix helper hangs or the existing input guard's window recovery.
 
 - [Input leases](docs/design/input-lease.md) let one sleight session act on a window at a time.
   Another session gets the holder's name and time left, while reads remain available. Leases expire
@@ -244,6 +255,9 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   any app blocks your organization sets.
 - `claude -p` can't answer approval prompts, so headless runs only get apps already approved in that
   session.
+- The full benchmark's Calculator check matches a number in Claude's answer. It can accept an
+  arithmetic answer after engine failure. The focused action-note harness also requires successful
+  app actions and the answer in returned display data.
 - Document scope checks the last observed window before forwarding a call and stops on changed or
   missing Window/URL headers. Its injected action guard checks again, but arbitrary JavaScript can
   bypass it or forge observations. Result checks cannot undo actions already taken. Discovery reads

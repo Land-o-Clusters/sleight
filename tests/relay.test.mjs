@@ -37,6 +37,104 @@ function harness(options = {}) {
 }
 
 const tick = () => new Promise(r => setImmediate(r));
+
+const noteText = h => h.toClient.at(-1).result.content.filter(c => c.type === 'text' && c.text.startsWith('Action result:')).map(c => c.text).join('\n');
+const ax = (value, extra = '') => `Window: "Probe", App: TextEdit.\n0 standard window Probe\n\t1 text entry area Value: ${value}\n${extra}`;
+
+test('action notes compare returned trees without forwarding extra engine calls', () => {
+  const h = harness({ changeReview: false });
+  flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); flowAnswer(h, 1, ax('before'));
+  assert.equal(noteText(h), '');
+  flowCall(h, 2, 'await app.typeText("after")'); flowAnswer(h, 2, ax('after'));
+  assert.match(noteText(h), /UI changed.*Probe.*TextEdit.*dialog\/sheet: none/s);
+  assert.equal(h.toServer.length, 2);
+  flowCall(h, 3, 'await app.pressKey("LEFT")'); flowAnswer(h, 3, ax('after'));
+  assert.match(noteText(h), /UI unchanged/);
+});
+
+test('no-change replies use a labeled last observation and never imply task success', () => {
+  const h = harness({ changeReview: false });
+  flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); flowAnswer(h, 1, ax('before'));
+  flowCall(h, 2); flowAnswer(h, 2, 'There has been no change in the accessibility tree.');
+  assert.match(noteText(h), /UI unchanged.*window: unknown.*last observed:.*Probe/s);
+  assert.doesNotMatch(noteText(h), /succeeded|dialog\/sheet: none/);
+});
+
+test('sheet transitions are reported only from AX roles, not document text', () => {
+  const h = harness({ changeReview: false });
+  flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); flowAnswer(h, 1, ax('sheet dialog'));
+  flowCall(h, 2, 'await app.pressKey("CMD+S")'); flowAnswer(h, 2, ax('sheet dialog', '\t2 sheet Save'));
+  assert.match(noteText(h), /dialog\/sheet: sheet opened/);
+  flowCall(h, 3, 'await app.pressKey("ESC")'); flowAnswer(h, 3, ax('sheet dialog'));
+  assert.match(noteText(h), /dialog\/sheet: closed/);
+});
+
+test('errors, absent baselines, screenshots and resets do not invent changes', () => {
+  const h = harness({ changeReview: false });
+  flowCall(h, 1); flowAnswer(h, 1, ax('first'));
+  assert.match(noteText(h), /UI unknown.*baseline/);
+  flowCall(h, 2); h.fromServer({ jsonrpc: '2.0', id: 2, result: { isError: true, content: [{ type: 'text', text: ax('failed') }] } });
+  assert.match(noteText(h), /UI unknown.*error/);
+  assert.equal(h.toClient.at(-1).result.isError, true);
+  flowCall(h, 3, 'await app.getScreenshot()'); flowAnswer(h, 3, 'image only'); assert.equal(noteText(h), '');
+  flowCall(h, 4, '', 'js_reset', {}); flowAnswer(h, 4, 'reset');
+  flowCall(h, 5); flowAnswer(h, 5, ax('first')); assert.match(noteText(h), /UI unknown.*baseline/);
+});
+
+test('action notes can be disabled without altering results or forwarding', () => {
+  const h = harness({ changeReview: false, actionNotes: false });
+  flowCall(h, 1); flowAnswer(h, 1, ax('unchanged'));
+  assert.equal(noteText(h), ''); assert.equal(h.toServer.length, 1);
+});
+
+test('different apps, ambiguous windows and arbitrary output do not lend a baseline', () => {
+  const h = harness({ changeReview: false });
+  flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); flowAnswer(h, 1, ax('before'));
+  flowCall(h, 2); flowAnswer(h, 2, 'Window: "Calculator", App: Calculator.\n0 standard window Calculator\n1 text 391');
+  assert.match(noteText(h), /UI unknown.*baseline/);
+  flowCall(h, 3); flowAnswer(h, 3, '391'); assert.match(noteText(h), /UI unknown.*window: unknown.*dialog\/sheet: unknown/s);
+  flowCall(h, 4); flowAnswer(h, 4, ax('before') + '\nWindow: "Other", App: TextEdit.\n0 standard window Other');
+  assert.match(noteText(h), /UI unknown.*multiple windows/);
+});
+
+test('a new dialog window is a change and opening; multiline values also count', () => {
+  const h = harness({ changeReview: false });
+  flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); flowAnswer(h, 1, ax('one\ntwo'));
+  flowCall(h, 2); flowAnswer(h, 2, ax('one\nthree'));
+  assert.match(noteText(h), /UI changed/);
+  flowCall(h, 3); flowAnswer(h, 3, 'Window: "Open", App: TextEdit.\n0 dialog Open\n1 button Cancel');
+  assert.match(noteText(h), /UI changed.*window: "Open".*dialog\/sheet: dialog opened/s);
+});
+
+test('partial diffs cannot report no modal or retain an old comparable tree', () => {
+  const h = harness({ changeReview: false });
+  flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); flowAnswer(h, 1, ax('before'));
+  flowCall(h, 2); flowAnswer(h, 2, 'Window: "Probe", App: TextEdit.\n+ 2 sheet Save');
+  assert.match(noteText(h), /UI unknown.*dialog\/sheet: unknown/s);
+  flowCall(h, 3); flowAnswer(h, 3, ax('before')); assert.match(noteText(h), /UI unknown.*baseline/);
+});
+
+test('overlapping replies cannot be attributed to either action', () => {
+  const h = harness({ changeReview: false });
+  flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); flowAnswer(h, 1, ax('before'));
+  flowCall(h, 2); flowCall(h, 3); flowAnswer(h, 3, ax('after')); assert.match(noteText(h), /UI unknown.*overlapping/);
+  flowAnswer(h, 2, ax('before')); assert.match(noteText(h), /UI unknown.*overlapping/);
+});
+
+test('engine diff text joined directly to the full Window header remains comparable', () => {
+  const h = harness({ changeReview: false });
+  flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); flowAnswer(h, 1, ax('before'));
+  flowCall(h, 2); flowAnswer(h, 2, '~ 1 text Value: after' + ax('after'));
+  assert.match(noteText(h), /UI changed.*window: "Probe".*dialog\/sheet: none/s);
+});
+
+test('full AX window roots can start at a nonzero element ID after a menu closes', () => {
+  const h = harness({ changeReview: false });
+  const before = 'Window: "Probe", App: TextEdit.\n1 standard window Probe\n\t2 text entry area Value: before';
+  flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); flowAnswer(h, 1, before);
+  flowCall(h, 2); flowAnswer(h, 2, before.replace('Value: before', 'Value: after'));
+  assert.match(noteText(h), /UI changed.*window: "Probe".*dialog\/sheet: none/s);
+});
 const meta = msg => JSON.parse(msg.params._meta['x-codex-turn-metadata']);
 
 const flowFixture = () => new FlowRules({ version: 1, rules: [{ id: 'private', kind: 'pattern', pattern: 'SECRET', destinations: ['*'] }] });
