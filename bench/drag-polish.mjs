@@ -88,9 +88,9 @@ try {
         failed = true;
         continue;
       }
-      run.selection = JSON.parse(call(fixture, [path, 'select'])); save();
-      if (!run.selection.ok || run.selection.selected !== 'alpha' || !run.selection.from || !run.selection.to || !run.selection.isLargestWindow) throw new Error('No exact fixture selection in the drag tool main window');
-      run.reply = await tool('drag', { app: 'TextEdit', from: run.selection.from, to: run.selection.to }); save();
+      run.selection = JSON.parse(call(fixture, [path, 'select-drag'])); save();
+      if (!run.selection.ok || run.selection.selected !== 'alpha' || !run.selection.from || !run.selection.to || !run.selection.windowId) throw new Error('No exact fixture selection in the drag tool window');
+      run.reply = await tool('drag', { app: 'TextEdit', windowId: run.selection.windowId, from: run.selection.from, to: run.selection.to }); save();
       run.after = JSON.parse(call(fixture, [path, 'read']));
       run.passed = !run.reply.result?.isError && run.after.text === run.expected;
       if (!run.passed) failed = true;

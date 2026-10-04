@@ -2,7 +2,10 @@
 # The lock belongs only to this run, including its cleanup.
 until mkdir /tmp/sleight-live.lock 2>/dev/null; do sleep 15; done
 trap 'rmdir /tmp/sleight-live.lock' EXIT
-node bench/drag-polish.mjs "$@" &
+case "$1" in
+  --windows) shift; node bench/drag-windows.mjs "$@" & ;;
+  *) node bench/drag-polish.mjs "$@" & ;;
+esac
 child=$!
 stop() {
   trap '' INT TERM

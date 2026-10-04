@@ -203,8 +203,16 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   it adds a missing space after a verified single-word move to a line end. Repeated words, partial
   words and selections containing punctuation or spaces need a caller's spacing check. The focused
   check produced the exact text in 2/3 trials with corrected glyph coordinates; one trial removed
-  the word and left a newline, and we don't know why.
-  [Every attempt](docs/benchmarks/2026-10-04-drag-polish.md) is recorded. A background version
+  the word and left a newline. The old helper used the largest TextEdit window's origin for both
+  points, even when the selection belonged to another window, and allowed title-bar drops.
+  The helper now requires one identified window, checks both endpoints against its visible content,
+  and requires the same TextEdit text area. With multiple possible windows, supply `windowId` from
+  the window read. A missing-word snapshot returns an error directing Claude to press Cmd+Z in
+  that window. Whitespace-only selections refuse because the loss check cannot verify them.
+  The two-window live check is waiting for the owner to confirm an away window; native AX matching
+  and the revised drag behavior remain unverified live.
+  [Every spacing attempt](docs/benchmarks/2026-10-04-drag-polish.md) and
+  [window safety attempt](docs/benchmarks/2026-10-04-drag-window-guards.md) is recorded. A background version
   ([prototype and results](docs/benchmarks/2026-10-03-background-drag.md)) reached a test app in 5/5
   quiet trials and 2/5 during real use. The first TextEdit trials moved text 0/10. A
   [follow-up](docs/benchmarks/2026-10-04-background-text-drag.md) found the drop point 13 px above
@@ -342,7 +350,8 @@ Source rules remember text fields and emitted values, then match exact substring
 - Per-app approvals apply however you've set up the `js` tool. An accepted approval lasts for the
   session ([Approval scope](#approval-scope)).
 - `drag` and the `menu_bar` fallback for SwiftUI icons post real mouse events and move your pointer for
-  a moment. `drag` refuses to press when another app's window covers the start point.
+  a moment. `drag` refuses to press when another window covers either endpoint or an endpoint falls
+  outside the chosen window's visible content.
 - The repo is small enough to read before you install it: a launcher and a relay, three small macOS
   scripts (the approval panel, the menu bar tools and the drag), a mod, a skill and two manifests.
 
