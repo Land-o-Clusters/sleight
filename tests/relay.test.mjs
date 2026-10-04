@@ -211,7 +211,7 @@ test('unlisted and higher or unknown engine risk still prompt, including without
   await tick(); assert.deepEqual(h.toClient.map(m => m.id), [1, 2, 3]);
   assert.equal(h.toServer.length, 0);
 });
-for (const name of ['drag', 'menu_bar', 'hover']) {
+for (const name of ['drag', 'menu_bar']) {
   test(`user list covers ${name} at high risk, reports even failures, and prompts below that ceiling`, async () => {
     const prompts = [], logs = [];
     const h = harness({ preapproved: preapproved(), stderr: { write: text => logs.push(text) },
@@ -228,6 +228,71 @@ for (const name of ['drag', 'menu_bar', 'hover']) {
     assert.doesNotMatch(h.toClient.find(m => m.id === 3).result.content.at(-1).text, /pre-approved/);
   });
 }
+test('unmerged hover approval still asks despite the user list', async () => {
+  const prompts = [];
+  const h = harness({ preapproved: preapproved(), ask: async text => { prompts.push(text); return 'decline'; },
+    localTools: { tools: [{ name: 'hover' }], call: async (_name, _args, approve) => ({ content: [
+      { type: 'text', text: String(await approve(['hover', 'Calculator'], 'Allow hover?')) },
+    ] }) } });
+  flowCall(h, 1, '', 'hover', {}); await tick(); await tick();
+  assert.equal(prompts.length, 1);
+  assert.equal(h.toClient[0].result.content[0].text, 'false');
+});
+for (const failure of ['audit', 'trace', 'all-traces', 'stderr']) {
+  for (const prompt of ['dialog', 'client']) {
+    test(`${failure} write failure falls back to ${prompt} approval without a list grant`, async () => {
+      const prompts = [];
+      const h = harness({ preapproved: preapproved(),
+        grantAudit: () => { if (failure === 'audit') throw new Error('disk full'); },
+        trace: event => { if (failure === 'all-traces' || (failure === 'trace' && event === 'preapproved-app')) throw new Error('disk full'); },
+        stderr: { write() { if (failure === 'stderr') throw new Error('closed'); } },
+        ...(prompt === 'dialog' ? { ask: async text => { prompts.push(text); return 'decline'; } } : {}),
+      });
+      assert.doesNotThrow(() => flowCall(h, 1, 'let app = await cua.getApp("com.apple.calculator")')); await tick();
+      assert.doesNotThrow(() => h.fromServer(appApproval(11)));
+      await tick(); await tick();
+      if (prompt === 'dialog') {
+        assert.equal(prompts.length, 1); assert.equal(h.toServer.at(-1).result.action, 'decline');
+      } else {
+        assert.equal(h.toClient.at(-1).method, 'elicitation/create');
+        h.fromClient({ jsonrpc: '2.0', id: 11, result: { action: 'cancel' } }); await tick();
+        assert.equal(h.toServer.at(-1).result.action, 'cancel');
+      }
+      flowAnswer(h, 1); await tick();
+      assert.doesNotMatch(h.toClient.at(-1).result.content.at(-1).text, /pre-approved/);
+    });
+  }
+}
+test('failed list audit asks again even after a remembered engine approval', async () => {
+  let audits = 0;
+  const prompts = [];
+  const h = harness({ preapproved: preapproved(), grantAudit: () => { audits++; throw new Error('disk full'); },
+    ask: async text => { prompts.push(text); return prompts.length === 1 ? 'accept' : 'decline'; } });
+  h.fromServer(appApproval(1)); await tick(); await tick();
+  h.fromServer(appApproval(2)); await tick(); await tick();
+  assert.equal(audits, 2); assert.equal(prompts.length, 2);
+  assert.deepEqual(h.toServer.map(msg => msg.result.action), ['accept', 'decline']);
+});
+test('audit fallback in once mode forwards the user accept without session persistence', async () => {
+  const h = harness({ approvalScope: 'once', preapproved: preapproved(), grantAudit: () => { throw new Error('disk full'); } });
+  h.fromServer(appApproval(1)); await tick();
+  const answer = { action: 'accept', content: {} };
+  h.fromClient({ jsonrpc: '2.0', id: 1, result: answer }); await tick();
+  assert.deepEqual(h.toServer.at(-1).result, answer);
+  h.fromServer(appApproval(2)); await tick();
+  assert.equal(h.toClient.at(-1).id, 2);
+  assert.equal(h.toClient.at(-1).method, 'elicitation/create');
+});
+test('failed local grant audit falls back to asking and reports no list grant', async () => {
+  const prompts = [];
+  const h = harness({ preapproved: preapproved(), grantAudit: () => { throw new Error('disk full'); },
+    ask: async text => { prompts.push(text); return 'decline'; }, localTools: { tools: [{ name: 'drag' }],
+      call: async (_name, _args, approve) => ({ content: [{ type: 'text', text: String(await approve(['drag', 'Calculator'], 'Allow drag?')) }] }) } });
+  flowCall(h, 1, '', 'drag', {}); await tick(); await tick();
+  assert.equal(prompts.length, 1);
+  assert.equal(h.toClient.at(-1).result.content[0].text, 'false');
+  assert.doesNotMatch(JSON.stringify(h.toClient.at(-1)), /pre-approved/);
+});
 test('the user list does not approve notifications, document grants, or unrelated elicitations', async () => {
   const h = harness({ preapproved: preapproved(), localTools: { tools: [{ name: 'notifications' }],
     call: async (_name, _args, approve) => ({ content: [{ type: 'text', text: String(await approve(['notifications'], 'Allow notifications?')) }] }) } });

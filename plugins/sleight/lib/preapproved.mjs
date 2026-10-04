@@ -3,8 +3,6 @@ import * as fs from 'node:fs';
 import { userInfo } from 'node:os';
 import { join } from 'node:path';
 
-const USER = userInfo();
-const FILE = join(USER.homedir, 'Library/Application Support/sleight/preapproved.json');
 const RISK = new Map([['low', 0], ['medium', 1], ['high', 2]]);
 const error = message => new Error(`Preapproved apps: ${message}`);
 const fields = (object, keys) => object && typeof object === 'object' && !Array.isArray(object) &&
@@ -29,10 +27,10 @@ export class PreapprovedApps {
   }
 }
 
-function validate(stat) {
+function validate(stat, uid) {
   if (stat.isSymbolicLink()) throw error('symlinks are refused');
   if (!stat.isFile()) throw error('expected a regular file');
-  if (stat.uid !== USER.uid) throw error('file owner must be the current user');
+  if (stat.uid !== uid) throw error('file owner must be the current user');
   if (stat.mode & 0o022) throw error('group- or world-writable files are refused');
   if (stat.size > 1024 * 1024) throw error('file exceeds 1 MiB');
 }
@@ -42,16 +40,18 @@ function validate(stat) {
 export function loadPreapproved(io = fs) {
   let fd;
   try {
+    const user = userInfo();
+    const file = join(user.homedir, 'Library/Application Support/sleight/preapproved.json');
     let before;
-    try { before = io.lstatSync(FILE); } catch (err) {
+    try { before = io.lstatSync(file); } catch (err) {
       if (err.code === 'ENOENT') return new PreapprovedApps({ version: 1, apps: [] });
       throw err;
     }
-    validate(before);
-    if (io.realpathSync(FILE) !== FILE) throw error('symlinked paths are refused');
-    fd = io.openSync(FILE, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    validate(before, user.uid);
+    if (io.realpathSync(file) !== file) throw error('symlinked paths are refused');
+    fd = io.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
     const opened = io.fstatSync(fd);
-    validate(opened);
+    validate(opened, user.uid);
     if (opened.dev !== before.dev || opened.ino !== before.ino) throw error('file changed while opening');
     return new PreapprovedApps(JSON.parse(io.readFileSync(fd, 'utf8')));
   } catch (err) { throw err.message.startsWith('Preapproved apps:') ? err : error(err.message); }

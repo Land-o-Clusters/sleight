@@ -117,6 +117,7 @@ export function createRelay({
   approvalScope = 'session',
   ask,
   preapproved,
+  grantAudit = () => {},
   stderr = process.stderr,
   localTools,
   flowRules,
@@ -126,8 +127,20 @@ export function createRelay({
   idleTurnEndMs,
   inputLease,
   onLeaseFault = () => {},
-  trace = () => {},
+  trace: writeTrace = () => {},
 }) {
+  let traceFailed = false;
+  function trace(direction, msg) {
+    if (traceFailed) {
+      if (direction === 'preapproved-app') throw new Error('preapproval trace unavailable');
+      return;
+    }
+    try { writeTrace(direction, msg); }
+    catch (error) {
+      traceFailed = true;
+      if (direction === 'preapproved-app') throw error;
+    }
+  }
   let turnId = randomUUID();
   let turnUsed = false;
   let nextInternalId = 0;
@@ -433,6 +446,7 @@ export function createRelay({
     if (!preapproved?.allows(app, riskLevel)) return false;
     const grant = { app, riskLevel, tool, source: '~/Library/Application Support/sleight/preapproved.json' };
     // Audit before answering. A failed audit must not grant approval.
+    grantAudit(grant);
     trace('preapproved-app', grant);
     stderr.write(`sleight: ${app} (${riskLevel}, ${tool}) pre-approved by the user's list at ${grant.source}\n`);
     for (const id of ids) {
@@ -461,10 +475,10 @@ export function createRelay({
 
   // Answers an app approval through `ask`. Prompts queue, so a second request
   // for an app the user is still being asked about waits for that answer.
-  function askUser(msg) {
+  function askUser(msg, ignoreMemory = false) {
     const key = approvalScope === 'session' ? approvalKey(msg) : undefined;
     asking = asking.then(async () => {
-      if (key !== undefined && approved.has(key)) {
+      if (!ignoreMemory && key !== undefined && approved.has(key)) {
         trace('answered-for-session', msg);
         return { action: 'accept', content: {}, _meta: { persist: 'session' } };
       }
@@ -506,9 +520,12 @@ export function createRelay({
     const key = JSON.stringify(['sleight', ...keyParts]);
     const scoped = approvalScope === 'session';
     const decided = asking.then(async () => {
-      if (keyParts.length === 2 && ['drag', 'menu_bar', 'hover'].includes(keyParts[0]) &&
-          userListGrant(keyParts[1], 'high', keyParts[0], [callId])) return true;
-      if (scoped && approved.has(key)) return true;
+      let auditFailed = false;
+      try {
+        if (keyParts.length === 2 && ['drag', 'menu_bar'].includes(keyParts[0]) &&
+            userListGrant(keyParts[1], 'high', keyParts[0], [callId])) return true;
+      } catch { auditFailed = true; }
+      if (!auditFailed && scoped && approved.has(key)) return true;
       let action;
       try {
         action = ask ? await ask(message, scoped) : await elicit(message);
@@ -762,11 +779,26 @@ export function createRelay({
       }
     }
     if (msg.method === undefined) { reportPreapprovals(msg); finishedCall(msg.id); }
-    if (isAppApproval(msg) && userListGrant(msg.params?._meta?.tool_params?.app,
-      msg.params?._meta?.riskLevel, 'engine', [...running].filter(id => !localRunning.has(id)))) {
-      // No engine persistence: check and audit the user's startup list on every request.
-      toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'accept', content: {} } });
-      return;
+    if (isAppApproval(msg)) {
+      let granted;
+      try {
+        granted = userListGrant(msg.params?._meta?.tool_params?.app,
+          msg.params?._meta?.riskLevel, 'engine', [...running].filter(id => !localRunning.has(id)));
+      } catch {
+        // An audit failure must reach a person, even with a remembered approval.
+        if (ask) askUser(msg, true);
+        else {
+          const key = approvalScope === 'session' ? approvalKey(msg) : undefined;
+          if (key !== undefined) approvalRequests.set(msg.id, key);
+          toClient(msg);
+        }
+        return;
+      }
+      if (granted) {
+        // No engine persistence: check and audit the user's startup list on every request.
+        toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'accept', content: {} } });
+        return;
+      }
     }
     if (ask && isAppApproval(msg)) {
       askUser(msg);

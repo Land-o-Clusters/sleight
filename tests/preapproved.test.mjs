@@ -4,9 +4,27 @@ import * as fs from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { loadPreapproved, PreapprovedApps } from '../plugins/sleight/lib/preapproved.mjs';
+import os from 'node:os';
+import { syncBuiltinESMExports } from 'node:module';
 
 const config = { version: 1, apps: [{ app: 'com.apple.calculator', riskLevel: 'medium' }] };
 const fixed = join(userInfo().homedir, 'Library/Application Support/sleight/preapproved.json');
+test('OS identity is resolved when loading, never while importing', async t => {
+  const original = os.userInfo;
+  t.after(() => { os.userInfo = original; syncBuiltinESMExports(); });
+  let calls = 0;
+  os.userInfo = () => { calls++; return { ...original(), homedir: '/private/tmp/account-' + calls }; };
+  syncBuiltinESMExports();
+  const fresh = await import('../plugins/sleight/lib/preapproved.mjs?identity-at-load');
+  assert.equal(calls, 0);
+  for (let n = 1; n <= 2; n++) {
+    fresh.loadPreapproved({ lstatSync(path) {
+      assert.equal(path, `/private/tmp/account-${n}/Library/Application Support/sleight/preapproved.json`);
+      throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+    } });
+    assert.equal(calls, n);
+  }
+});
 function fixture(t) {
   const bank = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'sleight-preapproved-')));
   t.after(() => fs.rmSync(bank, { recursive: true, force: true }));

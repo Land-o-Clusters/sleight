@@ -18,6 +18,7 @@ import { createRelay } from './relay.mjs';
 import { loadFlowRules } from './flow-rules.mjs';
 import { InputLease } from './input-lease.mjs';
 import { loadPreapproved } from './preapproved.mjs';
+import { createGrantAudit } from './preapproved-audit.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
 const SERVER_KEY = 'cua_repl';
@@ -100,6 +101,13 @@ function traceTo(setting) {
     typeof value === 'string' && value.length > 300 ? `${value.slice(0, 300)}…(${value.length})` : value;
   return (direction, msg) =>
     appendFileSync(file, JSON.stringify({ t: new Date().toISOString(), direction, msg }, cut) + '\n');
+}
+
+export function approvalLogging(preapproved, env = process.env, auditDirectory) {
+  return {
+    trace: env.SLEIGHT_TRACE ? traceTo(env.SLEIGHT_TRACE) : undefined,
+    grantAudit: preapproved.size ? createGrantAudit(auditDirectory) : undefined,
+  };
 }
 
 // Asks about an app approval with sleight's own prompt (ask.js). The desktop
@@ -270,9 +278,7 @@ function approvalPrompt(env = process.env) {
 export function run({ leaseDirectory } = {}) {
   let flowRules, preapproved;
   try { flowRules = loadFlowRules(); preapproved = loadPreapproved(); } catch (err) { fail(err.message); }
-  // A user-list grant always has a trace, even without SLEIGHT_TRACE.
-  const trace = process.env.SLEIGHT_TRACE ? traceTo(process.env.SLEIGHT_TRACE)
-    : preapproved.size ? traceTo('1') : undefined;
+  const { trace, grantAudit } = approvalLogging(preapproved);
   const s = resolveServer();
   if (s.error) fail(s.error);
   if (!existsSync(s.command)) fail(`server runtime missing: ${s.command}`);
@@ -305,6 +311,7 @@ export function run({ leaseDirectory } = {}) {
     approvalScope: ['once', 'document'].includes(process.env.SLEIGHT_APPROVAL_SCOPE) ? process.env.SLEIGHT_APPROVAL_SCOPE : 'session',
     ask: approvalPrompt(),
     preapproved,
+    grantAudit,
     flowRules,
     changeReview: process.env.SLEIGHT_CHANGE_REVIEW === '1',
     // End the engine's turn after 30 s without a running call, so the app it
