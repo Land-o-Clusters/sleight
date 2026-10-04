@@ -26,9 +26,12 @@ The fifth read and changed both files, but another live session held a lease
 and blocked review before prompting. The engine responded without a restart.
 The sixth changed both files and displayed review panels. Both decisions recorded Keep,
 so the undo assertion failed. The owner confirmed clicking Keep by mistake.
-The live Undo/Keep check is pending.
+The seventh held the live lock, changed both files and displayed the first panel.
+The owner was away, so the run was interrupted through its owned terminal.
+The review decision remained pending. Backup deletion and live lock release passed.
+The live Undo/Keep check is pending until the owner can use the prompts.
 
-[Results](2026-10-04-change-review-guard.json) preserve attempts 1 through 6, including
+[Results](2026-10-04-change-review-guard.json) preserve attempts 1 through 7, including
 their full harness results and relevant relay events. Home paths use `~`.
 Vendor API documentation is omitted. Dialog recovery is covered by unit tests.
 `bench/run.mjs` was not run, because sleight-arch runs that pass at merge.
