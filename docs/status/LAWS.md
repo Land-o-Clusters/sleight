@@ -30,8 +30,10 @@ belong in [STATE.md](STATE.md).
   (Calculator, TextEdit, Chess) in benchmark runs, and a list the user writes in a file outside any
   project, read by sleight for headless runs (owner, 2026-10-04). No project, plugin or Claude can add
   to either. When a safety check blocks an action, the owner does it or it doesn't happen.
-- sleight never works around the engine's refusals of terminals and OpenAI's own apps (ChatGPT,
-  Codex, Atlas), for this Mac or for users. The refusals are a safety check built into OpenAI's helper.
+- The engine refuses terminals and OpenAI's own apps (ChatGPT, Codex, Atlas). sleight never modifies or
+  wraps OpenAI's helper to change that. Users may opt in to drive those apps through sleight's own
+  Accessibility path once they consent for each app. Each terminal command is shown to them before it
+  runs (owner, 2026-10-04).
 - sleight's `menu_bar`, `notifications` and `drag` tools act outside the engine, through macOS
   Accessibility and posted mouse events (owner's scope calls, 2026-10-03 and 2026-10-04). Each app's icon needs the user's approval, as do notifications,
   with the same session memory as engine approvals. Every action on an app waits for that approval.

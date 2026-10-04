@@ -48,7 +48,7 @@ Market research (Codex, gpt-6.1-sol) is in `.dev/research/2026-10-04-competitors
 Publishing it is the owner's call. Flow rules finished the three new-ground items on the roadmap.
 Codex backlog in `.dev/prompts/backlog.md` (untracked), in order: helper wedge, clipboard, action
 effect, doubled keystrokes, exact-window targeting, drag polish, background text drag, foreground
-hover, pre-approved apps for headless runs. The owner asked
+hover, pre-approved apps for headless runs, user-consented driving of apps the engine refuses. The owner asked
 for Codex on all of it (2026-10-04).
 
 ## Machine state outside the repo
