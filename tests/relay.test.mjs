@@ -2,11 +2,12 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const fixtureRoot = mkdtempSync('/private/tmp/sleight-relay-review-');
+const fixtureRoot = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-relay-review-')));
 const fixturePath = join(fixtureRoot, 'a.txt');
 const fixtureURL = pathToFileURL(fixturePath).href;
 writeFileSync(fixturePath, 'before\n');

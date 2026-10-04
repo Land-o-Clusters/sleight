@@ -1,13 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync, existsSync, statSync, symlinkSync, chmodSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync, existsSync, statSync, symlinkSync, chmodSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { ChangeReview } from '../plugins/sleight/lib/change-review.mjs';
 
 function fixture(t) {
-  const root = mkdtempSync('/private/tmp/sleight-review-test-');
+  // The system temp folder, resolved (macOS links /var to /private/var), so CI on Linux works too.
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-review-test-')));
   const review = new ChangeReview();
   t.after(() => { review.dispose(); rmSync(root, { recursive: true, force: true }); });
   const path = join(root, 'a.txt');
