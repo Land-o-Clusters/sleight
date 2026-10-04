@@ -11,11 +11,11 @@ function read(board) {
     for (let j = 0; j < item.types.count; j++) {
       const type = ObjC.unwrap(item.types.objectAtIndex(j));
       // File promises need their original owner to deliver files later.
-      if (/promise/i.test(type)) throw new Error('File promises cannot be restored; shortcut refused');
+      if (/promise/i.test(type)) throw new Error('File promises cannot be snapshotted');
       const data = item.dataForType(type);
-      if (data.isNil()) throw new Error('Unreadable clipboard format; shortcut refused');
+      if (data.isNil()) throw new Error('Unreadable clipboard format');
       total += Number(data.length);
-      if (total > LIMIT) throw new Error('Clipboard exceeds 64 MiB; shortcut refused');
+      if (total > LIMIT) throw new Error('Clipboard exceeds 64 MiB');
       reps.push({ type, data: ObjC.unwrap(data.base64EncodedStringWithOptions(0)) });
     }
     items.push(reps);

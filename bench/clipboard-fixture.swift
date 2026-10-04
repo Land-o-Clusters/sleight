@@ -55,6 +55,7 @@ do {
         case "files": items = [[rep("public.file-url", URL(fileURLWithPath: args[3]).absoluteString)], [rep("public.file-url", URL(fileURLWithPath: args[4]).absoluteString)]]
         case "rich": items = [[rep("public.utf8-plain-text", "SLEIGHT RICH TEXT"), rep("public.rtf", "{\\rtf1\\ansi\\b SLEIGHT RICH TEXT}"), rep("public.html", "<b>SLEIGHT RICH TEXT</b>")]]
         case "empty": items = []
+        case "promise": items = [[rep("com.apple.pasteboard.promised-file-url", "synthetic promise")]]
         default: throw NSError(domain: "clipboard", code: 5, userInfo: [NSLocalizedDescriptionKey: "Unknown seed"])
         }
         try write(items); try output(summary(snapshot()))

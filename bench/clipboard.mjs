@@ -20,6 +20,8 @@ const fixed = process.argv.includes('--fixed');
 const diagnose = process.argv.includes('--diagnose');
 const recover = process.argv.includes('--recover');
 const filesOnly = process.argv.includes('--files-only');
+const round2 = process.argv.includes('--round2');
+let clipboardIOMs = 0;
 const equalItems = (a, b) => JSON.stringify(a.map(reps => [...reps].sort((x, y) => x.type.localeCompare(y.type)))) === JSON.stringify(b.map(reps => [...reps].sort((x, y) => x.type.localeCompare(y.type))));
 const native = (...args) => execute(join(bank, 'clipboard-fixture'), args).then(r => JSON.parse(r.stdout));
 const path = join(bank, 'clipboard-benchmark.txt');
@@ -67,8 +69,11 @@ try {
   relay = createRelay({ clientIn: input, clientOut: output, serverIn: child.stdin, serverOut: child.stdout,
     inputLease: new InputLease({ holder: 'clipboard benchmark' }),
     clipboardHelper: fixed ? join(root, 'plugins/sleight/lib/clipboard.js') : undefined,
+    clipboardMode: fixed ? 'preserve' : undefined,
     clipboardIO: clipboardIO ? async request => {
+      const start = performance.now();
       const result = await clipboardIO(request);
+      clipboardIOMs += performance.now() - start;
       records.push({ direction: 'clipboard-host', op: request.op, count: result?.count, itemCount: result?.items?.length, writeItems: request.items?.length });
       return result;
     } : undefined,
@@ -93,6 +98,39 @@ try {
   if (read.isError) throw new Error(text(read));
   const element = /^\s*(\d+) text (?:entry|area)/m.exec(text(read))?.[1];
   trials.push({ phase: 'discovery', element, text: text(read).split('## Computer Use')[0] });
+  if (round2) {
+    for (let repetition = 1; repetition <= 3; repetition++) {
+      const before = await native('seed', 'rich', path, original); ownedCount = before.count;
+      await call('app = await cua.getApp("TextEdit")');
+      await call('await app.pressKey("super+a")');
+      for (const [method, key] of [['copy', 'c'], ['cut', 'x'], ['paste', 'v']]) {
+        const ioBefore = clipboardIOMs, start = performance.now();
+        const result = await call(`await app.pressKey("super+${key}")`);
+        const elapsedMs = performance.now() - start, addedClipboardIOMs = clipboardIOMs - ioBefore;
+        const after = await native('inspect'); ownedCount = after.count;
+        const document = JSON.parse((await fixture('read')).stdout).text;
+        const copiedText = method === 'copy' ? (await execute('/usr/bin/pbpaste', [])).stdout : undefined;
+        const restoredBytes = equalItems(before.items, after.items);
+        const pass = !result.isError && (fixed ? restoredBytes : after.items[0]?.some(r => r.type === 'public.utf8-plain-text')) &&
+          (method === 'cut' ? document === '' : document === 'alpha beta gamma\n') &&
+          (method !== 'copy' || (fixed ? copiedText === 'SLEIGHT RICH TEXT' : copiedText === 'alpha beta gamma\n'));
+        trials.push({ mode: fixed ? 'preserve' : 'native', repetition, method, elapsedMs, addedClipboardIOMs, before, after, restoredBytes, copiedText, document, result: text(result), isError: result.isError ?? false, pass });
+        console.log(JSON.stringify({ repetition, method, elapsedMs, addedClipboardIOMs, pass }));
+        if (!pass) { process.exitCode = 1; break; }
+      }
+    }
+    if (fixed) {
+      await native('seed', 'promise', path, original);
+      await call('app = await cua.getApp("TextEdit")'); await call('await app.pressKey("super+a")');
+      const result = await call('await app.pressKey("super+c")');
+      const after = await native('inspect'); ownedCount = after.count;
+      const copiedText = (await execute('/usr/bin/pbpaste', [])).stdout;
+      const pass = !result.isError && /Clipboard not preserved/.test(text(result)) && copiedText === 'alpha beta gamma\n';
+      trials.push({ mode: 'preserve', method: 'promise-fallback', after, copiedText, result: text(result), isError: result.isError ?? false, pass });
+      if (!pass) process.exitCode = 1;
+      console.log(JSON.stringify({ method: 'promise-fallback', pass }));
+    }
+  }
   if (diagnose) {
     const hostNative = await new Promise(resolve => {
       const helper = spawn('/usr/bin/osascript', ['-l', 'JavaScript', join(root, 'plugins/sleight/lib/clipboard.js')], { stdio: ['pipe', 'pipe', 'inherit'] });
@@ -131,7 +169,7 @@ try {
     trials.push({ diagnostic: text(diagnostic), isError: diagnostic.isError ?? false });
     console.log(text(diagnostic));
   }
-  for (const kind of diagnose ? [] : filesOnly ? ['files'] : extra ? ['rich', 'files'] : ['text', 'image', 'files', 'rich']) {
+  for (const kind of diagnose || round2 ? [] : filesOnly ? ['files'] : extra ? ['rich', 'files'] : ['text', 'image', 'files', 'rich']) {
     for (const [method, code] of fixed ? [
       ['copy', 'await app.pressKey("super+a"); await app.pressKey("super+c")'],
       ['cut-paste', ['await app.pressKey("super+a"); await app.pressKey("super+x")', 'await app.pressKey("super+v")']],

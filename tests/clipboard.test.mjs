@@ -27,8 +27,9 @@ function fixture({ rawError = false, outside = false, restoreOutside = false, un
     scope.board = { count: scope.board.count + 1, items: structuredClone(request.items) }; writes.push(structuredClone(request.items));
     return structuredClone(scope.board);
   };
-  installClipboardGuard(cua, io);
-  return { cua, io, raw, calls, writes, board: () => scope.board, unreadable: value => { failRead = value; } };
+  const notices = [];
+  installClipboardGuard(cua, io, message => notices.push(message));
+  return { cua, io, raw, calls, writes, notices, board: () => scope.board, unreadable: value => { failRead = value; } };
 }
 for (const key of ['super+c', 'super+x', 'cmd+c', 'meta+x', 'command+shift+c']) {
   test(`restores every clipboard item and binary format after ${key}`, async () => {
@@ -50,11 +51,15 @@ test('a session without a copy passes Paste through, and sessions do not share c
   await (await b.cua.getApp('TextEdit')).pressKey('super+v');
   assert.equal(b.writes.length, 0); assert.deepEqual(b.calls[0].items, old);
 });
-test('an unreadable or oversized snapshot refuses Copy before input', async () => {
-  const h = fixture({ unreadable: true });
-  await assert.rejects((await h.cua.getApp('TextEdit')).pressKey('super+c'), /Unreadable/);
-  assert.equal(h.calls.length, 0); assert.deepEqual(h.board().items, old);
-});
+for (const failure of ['Unreadable representation', 'File promises cannot be restored', 'Clipboard exceeds 64 MiB']) {
+  test(`snapshot failure falls back to native Copy and warns: ${failure}`, async () => {
+    const h = fixture(); const cua = { getApp: async () => h.raw }, notices = [];
+    installClipboardGuard(cua, request => request.op === 'read' ? Promise.reject(new Error(failure)) : h.io(request), message => notices.push(message));
+    assert.equal(await (await cua.getApp('TextEdit')).pressKey('super+c'), 'done');
+    assert.equal(h.calls.length, 1); assert.equal(h.writes.length, 0); assert.deepEqual(h.board().items, copied);
+    assert.match(notices[0], /not preserved/); assert.match(notices[0], /Never modify/);
+  });
+}
 test('a newer clipboard generation during Copy or before restore is never overwritten', async () => {
   for (const options of [{ outside: true }, { restoreOutside: true }]) {
     const h = fixture(options);
@@ -157,4 +162,32 @@ test('runtime permits stop computed shortcuts, repeated calls, and mismatched pl
   assert.equal(await app.paste('x'), 'ok');
   await assert.rejects(app.paste('x'), /one clipboard/);
   assert.equal(await app.pressKey('Right'), 'ok');
+});
+
+test('both clipboard wrappers forward every pressKey argument for ordinary keys and clipboard shortcuts', async () => {
+  for (const install of [installClipboardGuard, installClipboardPermit]) {
+    const h = fixture(), received = [];
+    const cua = { getApp: async () => ({ pressKey: async (...args) => { received.push(args); return 'ok'; } }) };
+    const state = install(cua, h.io), app = await cua.getApp('TextEdit');
+    const options = { repeat: 2 };
+    if (state) { state.action = 'c'; state.used = false; }
+    await app.pressKey('super+c', options, 3); await app.pressKey('Right', options, 4);
+    assert.deepEqual(received, [['super+c', options, 3], ['Right', options, 4]]);
+  }
+});
+test('literal clipboard planning accepts trailing pressKey arguments', () => {
+  assert.equal(clipboardPlan('await app.pressKey("super+c", { repeat: 2 })'), 'c');
+});
+test('preserved Copy explicitly identifies the private destination to its caller', async () => {
+  const h = fixture(); await (await h.cua.getApp('TextEdit')).pressKey('super+c');
+  assert.match(h.notices.join(' '), /private session clipboard/);
+  assert.match(h.notices.join(' '), /Menu Paste.*pbpaste.*browser/);
+});
+
+test('a failed Paste snapshot uses the native clipboard instead of installing a stale private copy', async () => {
+  const h = fixture(), app = await h.cua.getApp('TextEdit');
+  await app.pressKey('super+c'); h.unreadable(true);
+  await app.pressKey('super+v');
+  assert.deepEqual(h.calls.at(-1).items, old); assert.equal(h.writes.length, 1);
+  assert.match(h.notices.at(-1), /not preserved/);
 });

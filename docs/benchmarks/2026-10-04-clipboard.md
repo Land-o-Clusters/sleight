@@ -29,12 +29,15 @@ types, byte lengths, hashes and generation counts. Home paths are `~`.
 | [20](2026-10-04-clipboard-attempt-20.json) | 1 | Relay trace confirmed two file items in the snapshot and restore request. Copy still returned only one item after helper exit. |
 | [21](2026-10-04-clipboard-attempt-21.json) | 0 | File Copy and Cut/Paste preserved both items after read-back verification, 2/2. |
 | [22](2026-10-04-clipboard-attempt-22.json) | 0 | Final Copy and Cut/Paste checks restored every representation in text, image, two-file and rich-text fixtures, 8/8. All test documents retained their original text. |
+| [23](2026-10-04-clipboard-attempt-23.json) | 1 | Round 2 sandbox could not resolve TextEdit. No app action ran. |
+| [24](2026-10-04-clipboard-attempt-24.json) | 0 | Default native mode passed 9/9 Copy/Cut/Paste trials. Copy remained readable through `pbpaste`, with a notice to Claude. |
+| [25](2026-10-04-clipboard-attempt-25.json) | 0 | Opt-in preservation passed 9/9 rich-text trials plus one promised-format fallback. Copy results explained the private destination. Fallback copied natively with a warning. |
 
 The final relay check returned no tool errors. It restored the user's snapshot after the synthetic
 fixtures. The helper materializes and verifies every published item before exiting. The file-only
 check and final run preserved both file URLs after that process had exited.
 
-Verification: `npm run check` exited 0 with 191 unit tests, manifest validation and 8 mod tests.
+Round 1 verification: `npm run check` exited 0 with 191 unit tests, manifest validation and 8 mod tests.
 `npm run lint:prose` exited 0. Regression tests first failed for missing guard exports, shortcut
 classification, relay restoration, reset and close cleanup, and a writer dropping an item. The
 fixed tests passed. Earlier prose checks failed on the missing Vale pack and style rules. Installing
@@ -43,6 +46,33 @@ the pinned pack and revising the prose resolved them.
 Attempt 3's `restoredBytes: false` for rich text compared the format arrays in order. The engine
 reordered the formats; each type, byte length and hash was preserved. Later comparisons sort formats
 within each item. The raw result remains as captured.
+
+Round 2 makes preservation opt-in with `SLEIGHT_CLIPBOARD=preserve`, because the relay cannot reliably
+observe a later menu or browser paste consuming Claude's copy. Default Copy/Cut now leave that copy
+on the user's clipboard. Attempts 24 and 25 both restored the original snapshot after cleanup.
+The promised-format fixture contained synthetic readable bytes under a promise type. It tests the
+type rejection and native fallback. A real delayed file provider remains untested. Unit tests also cover
+unreadable data and the 64 MiB limit without changing the clipboard before the native shortcut.
+
+The latency samples used three repetitions per shortcut and mode with the same rich-text fixture.
+Whole-call time includes the engine response. Clipboard I/O time includes the helper and shared
+reservation operations, measured separately inside the relay.
+
+| Shortcut | Native median | Preserve median | Difference | Clipboard I/O median |
+|---|---:|---:|---:|---:|
+| Copy | 533 ms | 768 ms | 236 ms | 180 ms |
+| Cut | 555 ms | 760 ms | 205 ms | 177 ms |
+| Paste | 540 ms | 766 ms | 226 ms | 179 ms |
+
+These are separate runs on one Mac. The difference includes engine timing variation. Large
+payloads may take longer. Native mode does not run the clipboard helper or reserve the clipboard.
+
+Round 2 verification: `npm run check` exited 0 with 218 unit tests, manifest validation and 8 mod tests.
+The first regression run failed 10/33 tests before the fixes. A further reset-during-snapshot test
+failed 1/10 before the relay stopped dispatch into the reset realm. The fixed tests passed, including
+both `pressKey` argument wrappers, split-and-retry messages, native fallback and reset cleanup.
+Prose checks exited 1 on three style flags, then one, then five in the added report. The final check
+exited 0 after revision.
 
 The local drags returned success but did not move the selected word. These trials measure clipboard
 changes. They do not qualify text drag. The conflict trial confirms that a replacement clipboard
@@ -56,6 +86,8 @@ sh bench/clipboard-build.sh /private/tmp/sleight-clipboard-EXAMPLE
 sh bench/clipboard-live.sh /private/tmp/sleight-clipboard-EXAMPLE
 sh bench/clipboard-live.sh /private/tmp/sleight-clipboard-EXAMPLE --extra
 sh bench/clipboard-live.sh /private/tmp/sleight-clipboard-EXAMPLE --fixed
+sh bench/clipboard-live.sh /private/tmp/sleight-clipboard-EXAMPLE --round2
+sh bench/clipboard-live.sh /private/tmp/sleight-clipboard-EXAMPLE --round2 --fixed
 ```
 
 Each invocation writes `results.json` in that folder. Save it before another invocation; the file is
