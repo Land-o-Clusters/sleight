@@ -192,7 +192,10 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   input to notice a person taking over, then makes Claude re-read the app. Another agent driving in the
   foreground counts too. Background sessions share the helper, with leases coordinating sleight's actions.
   In one test where Codex was also driving in the foreground, keystrokes typed
-  during the run showed up twice, and we still don't know why.
+  during the run showed up twice, and we still don't know why. A
+  [two-engine probe](docs/benchmarks/2026-10-04-double-keys.md) is prepared; foreground trials await
+  an owner-agreed away window. Unit checks found one forwarded request and one wrapped typing
+  invocation per call. They do not establish the cause or a workaround.
 - The engine's `app.drag` can't move selected text. A probe app (`bench/drag-probe/`) logged its whole
   drag lasting 14 ms, with two drag events between press and release, and text views only start a
   text drag after the mouse stays down for a moment. sleight's `drag` tool does that drag instead
