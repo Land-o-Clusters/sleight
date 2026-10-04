@@ -240,8 +240,10 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   the keyboard until sleight closes it. Icons that open a SwiftUI window (`MenuBarExtra` in window
   style) ignore the accessibility press, so sleight clicks them for real and puts the pointer back.
   Buttons without a label, tooltip or identifier show up nameless.
-- The engine refuses terminal apps such as Terminal.app ("not allowed … for safety reasons") and respects
-  any app blocks your organization sets.
+- The engine refuses some apps outright ("not allowed … for safety reasons"): terminals (Terminal,
+  iTerm2) and OpenAI's own apps (ChatGPT, Codex, Atlas, with their beta builds). The list is built
+  into the engine's helper, so no approval changes it. It also respects any app blocks your
+  organization sets. To stop Codex asking for approvals, change Codex's own approval setting.
 - `claude -p` can't answer approval prompts, so headless runs only get apps already approved in that
   session.
 - Document scope checks the last observed window before forwarding a call and stops on changed or
