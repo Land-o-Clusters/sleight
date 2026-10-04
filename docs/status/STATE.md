@@ -12,18 +12,22 @@ from the local directory marketplace, now 0.4.0. Running sessions keep the versi
 because `/reload-plugins` doesn't restart the server. At the flush all 11 running sleight servers
 predated 0.3.1, so those sessions can still show as busy after Claude finishes until restarted.
 
+Engine problem at 23:50 EDT. A benchmark pass on `main` at `762db4a`, without the lease, passed 0/6. Every
+`cua.getApp` timed out with `-10005 timeoutReached`, and the Mac was unlocked and in use. The helper
+`SkyComputerUseService` had run since 09:29. No benchmark result means anything until that clears.
+
 On main, unreleased: the change review (`review_changes`, Codex B, cherry-picked as `844fa60` and
 `bc81e44`). Plan: release it as 0.5.0 together with the input lease once that merges.
 
 In flight, all from the owner's Codex sessions working in their own worktrees under
 `~/Projects/sleight-wt/` (prompts written by this session, run by the owner):
 
-- `codex/input-lease` at `98dc858` (Codex A): per-window input leases. Live: two markers in 5/5
-  trials without it, one marker and one refusal in 10/10 with it. It has 11 conflict hunks with the
-  change review (relay, launch, document-scope, package.json). A was asked to rebase onto `origin/main`,
-  keep both features, rerun its live checks and push with `--force-with-lease`. Rebase under way
-  since 23:14 EDT in `~/Projects/sleight-wt/input-lease` (onto `be284c1`, 11 conflict markers left
-  in package.json, relay, launch and document-scope).
+- `codex/input-lease` at `72f5a28` (Codex A, rebased onto `762db4a`): reviewed and not merged.
+  Safety paths pass, `npm run check` passes. One benchmark pass on it (Sonnet 5.5, medium) passed 1/6,
+  and in 4 of 6 tasks Claude got stuck: the lease counts only `let app = await cua.getApp(...)` as a
+  read, so `app = ...`, `let te = ...` and `listApps` re-reads were refused with an order to re-read.
+  Fix prompt for A: `.dev/prompts/codex-a-lease-fix.md` (untracked). Results
+  `bench/results/2026-10-04T03-41-11-216Z.json`.
 - `codex/flow-rules` (Codex B, not pushed yet): user-written rules for data moving between apps, opt-in,
   enforced in the relay as a guard against mistakes. Prompt given at the flush.
 
