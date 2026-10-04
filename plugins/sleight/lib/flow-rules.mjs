@@ -37,7 +37,7 @@ export function loadFlowRules(env = process.env, { cwd = process.cwd() } = {}) {
 }
 
 // A small tokenizer, deliberately narrower than a JavaScript interpreter.
-function tokens(code) {
+export function tokens(code) {
   const out = [];
   let i = 0;
   while (i < code.length) {

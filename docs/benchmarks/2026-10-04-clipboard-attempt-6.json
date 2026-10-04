@@ -1,0 +1,8 @@
+{
+  "trials": [
+    {
+      "error": "Command failed: /usr/bin/osascript -l JavaScript ~/Projects/sleight-wt/clipboard-preservation/bench/input-lease-fixture.js open /private/tmp/sleight-clipboard-nSQqBy/clipboard-benchmark.txt\n~/Projects/sleight-wt/clipboard-preservation/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+    }
+  ],
+  "records": []
+}

@@ -190,6 +190,22 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
 
 ## Known problems
 
+- Native `app.paste` temporarily changed the clipboard, then restored text, image, file and rich-text
+  bytes in 4/4 fixtures.
+  Text entry and engine drag left the clipboard unchanged in 4/4 each. Local drag did in 2/2.
+  Copy replaced it. sleight now keeps a private session copy for Copy/Cut/Paste shortcuts and restores
+  the user's readable clipboard formats, verified in 8/8 final trials. [Every probe attempt](docs/benchmarks/2026-10-04-clipboard.md)
+  is published, including errors. Use one clipboard action per JavaScript request and literal shortcut
+  keys. Separate Cut and Paste requests retain the private copy. Computed shortcuts stop before
+  input. Menu-driven Copy/Cut and browser paste are outside this guard.
+- Clipboard restoration refuses unreadable formats, file promises and snapshots above 64 MiB before
+  a shortcut runs. A failed Copy/Cut cannot identify who wrote new clipboard data, so it leaves that
+  data alone. Two or more clipboard generations during Copy/Cut stop restoration. One generation
+  could be an outside copy if the app did not copy. macOS has no atomic compare-and-restore, so a
+  copy between the last generation check and the write can still be lost. The shortcut guard shares
+  the engine's JavaScript realm and arbitrary code can bypass it. Private copies end with a reset or
+  session exit. A process crash during private Paste can leave its temporary clipboard contents.
+  File URLs preserve references, not deleted files or file-promise providers.
 - [Input leases](docs/design/input-lease.md) let one sleight session act on a window at a time.
   Another session gets the holder's name and time left, while reads remain available. Leases expire
   after 30 seconds without renewal and end with the turn or session. Local drag and hover reserve the app,

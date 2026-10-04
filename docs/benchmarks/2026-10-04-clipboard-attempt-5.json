@@ -1,0 +1,11 @@
+{
+  "source": "terminal receipt, no clipboard measurement",
+  "phase": "waiting for /tmp/sleight-live.lock",
+  "command": "sh bench/clipboard-live.sh /private/tmp/sleight-clipboard-nSQqBy --fixed",
+  "fixtureStarted": false,
+  "evidence": "original.json remained dated 09:37 ET and clipboard-benchmark.txt 09:38 ET during the wait",
+  "cancelled": "one Ctrl-C on original owned terminal session 93422",
+  "terminalExitCode": 1,
+  "reason": "review found two bugs to fix before the waiting live invocation started",
+  "records": []
+}

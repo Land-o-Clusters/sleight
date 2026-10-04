@@ -91,6 +91,11 @@ the end of a line gets a space after a verified unique whole-word move. Check ot
 spacing. If the tool reports that dragged text disappeared, press Cmd+Z in the window it identifies and
 read it again before continuing. Never treat that error as a successful drop.
 
+Copy/Cut shortcuts keep a private session clipboard. Paste shortcuts use that copy and restore the
+user's clipboard. Use one clipboard action per js request and a literal shortcut key. Send Cut and
+Paste in separate requests. The private copy persists between them. Use `app.paste(text)` to insert
+explicit text. Clipboard menu actions bypass the shortcut guard.
+
 ## Apps the engine refuses
 
 The engine refuses terminals (Terminal, iTerm2) and OpenAI's own apps (ChatGPT, Codex, Atlas) before
