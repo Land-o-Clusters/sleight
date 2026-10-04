@@ -5,7 +5,8 @@ What is true now. One banner, replaced in place as work happens. Always-true rul
 
 ## Banner (2026-10-04, before the owner's clear)
 
-Public: `Land-o-Clusters/sleight`, `main` at `be284c1`, green in CI. Latest release `v0.4.0`
+Public: `Land-o-Clusters/sleight`, `main` green in CI. CI on Linux failed from `bc81e44` to `5fb04d0`
+(change-review tests used `/private/tmp`), fixed in `b1f9d0d`. Latest release `v0.4.0`
 (GitHub release published, as for every release since 0.3.1). Installed on this Mac at user scope
 from the local directory marketplace, now 0.4.0. Running sessions keep the version they started with,
 because `/reload-plugins` doesn't restart the server. At the flush all 11 running sleight servers
@@ -19,7 +20,7 @@ In flight, all from the owner's Codex sessions working in their own worktrees un
 
 - `codex/input-lease` at `98dc858` (Codex A): per-window input leases. Live: two markers in 5/5
   trials without it, one marker and one refusal in 10/10 with it. It has 11 conflict hunks with the
-  change review (relay, launch, document-scope, package.json). A was asked to rebase onto `be284c1`,
+  change review (relay, launch, document-scope, package.json). A was asked to rebase onto `origin/main`,
   keep both features, rerun its live checks and push with `--force-with-lease`. Not started at the flush.
 - `codex/flow-rules` (Codex B, not pushed yet): user-written rules for data moving between apps, opt-in,
   enforced in the relay as a guard against mistakes. Prompt given at the flush.
