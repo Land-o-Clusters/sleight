@@ -22,6 +22,7 @@ import { loadPreapproved } from './preapproved.mjs';
 import { createGrantAudit } from './preapproved-audit.mjs';
 import { BLOCKED_APP_TOOL, callBlockedApp } from './blocked-apps.mjs';
 import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
+import { probeHelper } from './helper-health.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
 const SERVER_KEY = 'cua_repl';
@@ -81,26 +82,33 @@ export async function selectSurfaces(server, env = process.env, options) {
   server.env.BROWSER_USE_AVAILABLE_BACKENDS = 'chrome';
 }
 
-async function doctor() {
-  const s = resolveServer();
-  if (s.error) fail(s.error);
-  await selectSurfaces(s);
+export async function doctor({ env = process.env, log = console.log, timeoutMs = 5000, startupTimeoutMs = 10000 } = {}) {
+  const s = resolveServer(env);
+  if (s.error) { log(`sleight: ${s.error}`); return 1; }
+  await selectSurfaces(s, env);
   const checks = [
     ['node', s.command],
     ['server script', s.args[0]],
     ['node_repl', s.env.CUA_REPL_NODE_REPL_PATH],
     ['computer-use helper', s.env.SKY_CUA_SERVICE_PATH],
   ];
-  console.log(`Codex computer-use ${s.version}`);
-  console.log(`config    ${s.configPath}`);
-  console.log(`surfaces  ${s.env.CUA_REPL_ENABLED_SURFACES}`);
+  log(`Codex computer-use ${s.version}`);
+  log(`config    ${s.configPath}`);
+  log(`surfaces  ${s.env.CUA_REPL_ENABLED_SURFACES}`);
   let ok = true;
   for (const [label, path] of checks) {
     const found = Boolean(path) && existsSync(path);
     ok &&= found;
-    console.log(`${found ? 'ok     ' : 'MISSING'}   ${label}: ${path ?? '(not set)'}`);
+    log(`${found ? 'ok     ' : 'MISSING'}   ${label}: ${path ?? '(not set)'}`);
   }
-  process.exit(ok ? 0 : 1);
+  if (!ok) return 1;
+  let probe;
+  try { probe = await probeHelper(s, { timeoutMs, startupTimeoutMs }); }
+  catch (err) { log(`live read cleanup FAILED: ${err.message}`); return 1; }
+  if (probe.ok) { log('live read ok (helper inventory)'); return 0; }
+  log(`live read FAILED: ${probe.error}`);
+  if (probe.stuck) log('SkyComputerUseService helper appears stuck. Stop retrying. The user needs to restart ChatGPT; this ends their Codex sessions. Never quit or restart ChatGPT automatically.');
+  return 1;
 }
 
 // SLEIGHT_TRACE=1 logs every relayed message to
@@ -469,6 +477,6 @@ export async function run({ leaseDirectory } = {}) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  if (process.argv.includes('--doctor')) doctor();
+  if (process.argv.includes('--doctor')) process.exitCode = await doctor();
   else run();
 }
