@@ -28,7 +28,7 @@ belong in [STATE.md](STATE.md).
   sends `persist: "always"` and never remembers a decline. `SLEIGHT_APPROVAL_SCOPE=once` turns it off.
 - Apps get approved without a person at the moment of use only two ways: the benchmark's allowlist
   (Calculator, TextEdit, Chess) in benchmark runs, and a list the user writes in a file outside any
-  project, read by sleight for headless runs (owner, 2026-10-04). No project, plugin or Claude can add
+  project, read by sleight in every session, headless or not (owner, 2026-10-04). No project, plugin or Claude can add
   to either. When a safety check blocks an action, the owner does it or it doesn't happen.
 - The engine refuses terminals and OpenAI's own apps (ChatGPT, Codex, Atlas). sleight never modifies or
   wraps OpenAI's helper to change that. Users may opt in to drive those apps through sleight's own
