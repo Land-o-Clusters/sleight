@@ -53,7 +53,8 @@ something up at once, like Chess pieces, work fine with `app.drag`.
 When the mouse has to stay down first, use sleight's `drag` tool: select the text with `js` first, then call
 `drag` with the app and the same `from` and `to` coordinates you'd give `app.drag`. It brings the app
 to the front and moves the user's pointer for about two seconds, so prefer `app.drag` when that works.
-Cut and paste (`super+x`, click, `super+v`) is the fallback when the user declines.
+Cut and paste (`super+x`, click, `super+v`) is the fallback when the user declines. A word dropped at
+the end of a line lands without a space before it, so check the result and fix the spacing if needed.
 
 ## Menu bar icons and notifications
 

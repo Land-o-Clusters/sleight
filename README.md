@@ -174,8 +174,10 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   end of a line doesn't put a space before the word.
 - There's no real hover, since events go to the app and the real pointer never moves. The skill covers
   most cases: tooltips are readable as `Help:` text in the UI state, and hover menus usually open through
-  an element's secondary actions, a right-click or a key. UI that only reacts to a real pointer needs a
-  pointer-moving tool.
+  an element's secondary actions, a right-click or a key. Mouse-moved events posted to a background app
+  arrive, but they don't trigger hover: no enter or exit fired on the probe app's hover area, and a
+  GitHub Desktop button looked the same pixel for pixel (2026-10-04). UI that only reacts to a real
+  pointer needs a pointer-moving tool.
 - The desktop app's Code tab runs its own Claude Code, 2.1.286 as of 2026-10-03, which is too old
   for the mod. There you get approvals and the `js` tool, but no pane, status line, `/sleight stop`
   or per-turn cleanup.

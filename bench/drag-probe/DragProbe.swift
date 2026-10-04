@@ -1,5 +1,5 @@
 // A window that logs every mouse event it receives, to see what the engine's
-// drag sends between press and release. Built by build.sh into
+// drag sends between press and release, and whether hover (enter/exit) fires. Built by build.sh into
 // .dev/DragProbe.app. Log: ~/Library/Logs/sleight/drag-probe.log
 import AppKit
 
@@ -29,6 +29,16 @@ final class ProbeView: NSView {
     override func mouseDragged(with event: NSEvent) { record("dragged", event) }
     override func mouseUp(with event: NSEvent) { record("up", event) }
     override func mouseMoved(with event: NSEvent) { record("moved", event) }
+    override func mouseEntered(with event: NSEvent) { record("entered", event) }
+    override func mouseExited(with event: NSEvent) { record("exited", event) }
+    // A hover target in the left half, the way apps show hover-only controls.
+    // activeAlways, so it can fire while the app isn't frontmost.
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: NSRect(x: 0, y: 0, width: bounds.width / 2, height: bounds.height),
+                                       options: [.mouseEnteredAndExited, .activeAlways], owner: self))
+    }
     override func draw(_ dirtyRect: NSRect) {
         NSColor.windowBackgroundColor.setFill()
         dirtyRect.fill()
