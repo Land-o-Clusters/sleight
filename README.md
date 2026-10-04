@@ -326,7 +326,12 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 - [x] Hover workarounds in the skill
 - [x] A reproducible task benchmark
 - [x] Weekly update watch
-- [ ] Check the pane's picture in the desktop app's Code tab
+- [x] Approvals in the desktop app's Code tab, through sleight's own panel
+- [x] Menu bar icons and notification banners, which the engine leaves out
+- [x] A fair benchmark against LCU, with each arm checked to load only its own tool
+- [ ] Text drags: a drag of sleight's own that holds the mouse down and moves in steps
+- [ ] The pane, status line and `/sleight stop` in the desktop app, once its Claude Code reaches 2.1.287
+- [ ] Linux and Windows, where the engine has builds that sleight hasn't tried
 
 ## Credits
 
