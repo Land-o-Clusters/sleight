@@ -12,6 +12,7 @@ ObjC.import('Cocoa');
 function run(argv) {
   const [question, detail, iconPath, seconds, mode] = argv;
   const review = mode === 'review';
+  const wide = review || mode === 'flow';
   const app = $.NSApplication.sharedApplication;
   app.setActivationPolicy($.NSApplicationActivationPolicyAccessory);
 
@@ -32,7 +33,7 @@ function run(argv) {
   });
   const target = $.SleightAskTarget.alloc.init;
 
-  const W = review ? 680 : 400;
+  const W = wide ? 680 : 400;
   const PAD = 20;
   const ICON = 56;
   const TEXT_X = PAD + ICON + 16;
@@ -51,7 +52,7 @@ function run(argv) {
   // Says who is asking, for people who never saw sleight's icon.
   const eyebrow = label('sleight \u00b7 Claude Code computer use', $.NSFont.systemFontOfSizeWeight(10, $.NSFontWeightMedium), $.NSColor.tertiaryLabelColor);
   const title = label(question, $.NSFont.systemFontOfSizeWeight(13, $.NSFontWeightSemibold), $.NSColor.labelColor);
-  const body = review ? { height: 360 } : label(detail, $.NSFont.systemFontOfSize(11), $.NSColor.secondaryLabelColor);
+  const body = wide ? { height: 360 } : label(detail, $.NSFont.systemFontOfSize(11), $.NSColor.secondaryLabelColor);
   const textH = eyebrow.height + 2 + title.height + 4 + body.height;
   const topH = Math.max(ICON, textH);
   const H = PAD + topH + 18 + BUTTON_H + PAD;
@@ -113,7 +114,7 @@ function run(argv) {
   }
   content.addSubview(eyebrow.field);
   content.addSubview(title.field);
-  if (review) {
+  if (wide) {
     const scroll = $.NSScrollView.alloc.initWithFrame($.NSMakeRect(TEXT_X, y, TEXT_W, body.height));
     scroll.hasVerticalScroller = true;
     scroll.hasHorizontalScroller = false;
@@ -141,7 +142,7 @@ function run(argv) {
   const deny = button(review ? 'Later' : "Don't Allow", review ? 'giveUp:' : 'deny:', TEXT_X);
   deny.keyEquivalent = '\u001b';
   if (review) button('Undo', 'undo:', TEXT_X + buttonW + 8);
-  const allow = button(review ? 'Keep' : 'Allow', review ? 'keep:' : 'allow:', TEXT_X + (buttonW + 8) * (review ? 2 : 1));
+  const allow = button(review ? 'Keep' : mode === 'flow' ? 'Allow Once' : 'Allow', review ? 'keep:' : 'allow:', TEXT_X + (buttonW + 8) * (review ? 2 : 1));
   // macOS 26 fills a button with the accent color at primary prominence.
   if (allow.respondsToSelector('setTintProminence:')) allow.tintProminence = 3;
   else allow.bezelColor = $.NSColor.controlAccentColor;

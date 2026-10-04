@@ -215,6 +215,10 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   menu bar and pointer tools have no before copy. Undo changes the saved file, so reopen it before
   editing again. Autosave or a user edit after an action makes undo refuse. Arbitrary JavaScript can
   bypass the window guard or forge headers. [The design](docs/design/change-review.md) lists the limits.
+- Flow rules check literals and text values observed earlier. Runtime-built strings, encoded values,
+  clipboard shortcuts, screenshots and coordinate drags can pass without a match. Source attribution
+  and UI parsing can miss values or block harmless text. This guards mistakes; arbitrary JavaScript
+  can bypass it. [The design](docs/design/flow-rules.md) lists the limits.
 - ChatGPT updates can break it. The version lookup handles the folder moving around, but not the API
   changing. Run `--doctor` first when something stops working.
 - The engine has no access to an app's icon in the menu bar or to notification banners: its inventory has
@@ -276,6 +280,30 @@ Call `review_changes` with `op: "list"` to see text diffs or size/date summaries
 to choose Keep, Undo or Later for each document in sleight's prompt. Only your prompt response can
 decide. Undo restores the original saved file if it still matches the last agent action, then you
 must reopen it in the app. Snapshots last until the session ends.
+
+## Flow rules
+
+Write `~/Library/Application Support/sleight/flow-rules.json` yourself, outside the project, then set
+`SLEIGHT_FLOW_RULES=1` in Claude Code's environment. An absolute path selects another user-owned file.
+The relay reads it once before starting. Edits take effect in the next session. A sample file:
+
+```json
+{
+  "version": 1,
+  "rules": [
+    { "id": "contacts-mail", "kind": "source", "sources": ["Contacts"], "destinations": ["Mail"] },
+    { "id": "ssns", "kind": "pattern", "pattern": "\\b\\d{3}-\\d{2}-\\d{4}\\b", "destinations": ["*"], "except": ["1Password"] },
+    { "id": "cards", "kind": "pattern", "pattern": "\\b(?:\\d[ -]?){13,19}\\b", "destinations": ["*"], "except": ["1Password"] }
+  ]
+}
+```
+
+Rules stop matching literal transfers before forwarding and tell Claude which rule matched.
+`flow_exception` shows the exact stopped call for your decision. Allow Once permits one identical
+retry. Another call cancels it. Claude cannot grant an exception through tool arguments. Pattern
+rules accept optional regex `flags` (i/m/s/u). App names and observed bundle IDs ignore case.
+Source rules remember text fields and emitted values, then match exact substrings sent later.
+[The design](docs/design/flow-rules.md) explains the gaps in literal checks and source attribution.
 
 ## Safety
 
@@ -377,6 +405,8 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 ```
 
 ## Roadmap
+
+- [x] Optional user flow rules, with literal checks and one-call user exceptions
 
 - [x] MCP server that survives ChatGPT updates
 - [x] Session and turn ids, so the engine can scope approvals and cleanup

@@ -2,6 +2,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
+import { FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -37,6 +38,75 @@ function harness(options = {}) {
 
 const tick = () => new Promise(r => setImmediate(r));
 const meta = msg => JSON.parse(msg.params._meta['x-codex-turn-metadata']);
+
+const flowFixture = () => new FlowRules({ version: 1, rules: [{ id: 'private', kind: 'pattern', pattern: 'SECRET', destinations: ['*'] }] });
+const flowCall = (h, id, code = 'await app.typeText("SECRET")', name = 'js', args) => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args ?? { code } } });
+const flowAnswer = (h, id, text = 'Window: "Test", App: TextEdit\n0 standard window Test\n1 text entry area Value: safe') => h.fromServer({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }] } });
+
+test('flow rules refuse before engine forwarding and local tool effects', async () => {
+  let effects = 0;
+  const h = harness({ flowRules: flowFixture(), localTools: { tools: [{ name: 'drag' }], call: async () => { effects++; return { content: [] }; } } });
+  flowCall(h, 1); flowCall(h, 2, '', 'drag', { app: 'TextEdit', note: 'SECRET' }); await tick();
+  assert.equal(h.toServer.length, 0); assert.equal(effects, 0);
+  assert.match(h.toClient[0].result.content[0].text, /private.*flow_exception/s);
+  assert.equal(h.toClient[0].result.isError, true);
+});
+
+test('flow exception is a user decision for one identical retry, never a session grant', async () => {
+  const prompts = [];
+  const h = harness({ flowRules: flowFixture(), ask: async (...args) => { prompts.push(args); return 'accept'; } });
+  flowCall(h, 1); flowCall(h, 2, '', 'flow_exception', { action: 'accept' }); await tick();
+  assert.equal(prompts.length, 0);
+  flowCall(h, 3, '', 'flow_exception', {}); await tick(); await tick();
+  assert.equal(prompts.length, 1); assert.equal(prompts[0][1], false);
+  assert.equal(prompts[0][2].kind, 'flow'); assert.match(prompts[0][2].detail, /SECRET/);
+  flowCall(h, 4); await tick(); assert.equal(h.toServer.length, 1);
+  flowAnswer(h, 4); await tick();
+  flowCall(h, 5); await tick(); assert.equal(h.toServer.length, 1);
+  assert.equal(h.toClient.find(m => m.id === 5).result.isError, true);
+});
+
+test('flow exception elicitation declines and cancels without forwarding or permission', async () => {
+  for (const action of ['decline', 'cancel']) {
+    const h = harness({ flowRules: flowFixture() }); flowCall(h, 1); flowCall(h, 2, '', 'flow_exception', {}); await tick();
+    const prompt = h.toClient.find(m => m.method === 'elicitation/create');
+    assert.match(prompt.params.message, /SECRET/);
+    h.fromClient({ jsonrpc: '2.0', id: prompt.id, result: { action } }); await tick(); await tick();
+    flowCall(h, 3); await tick(); assert.equal(h.toServer.length, 0);
+  }
+});
+
+test('different calls invalidate an exception and calls wait while its prompt is open', async () => {
+  let answer;
+  const h = harness({ flowRules: flowFixture(), ask: () => new Promise(r => { answer = r; }) });
+  flowCall(h, 1); flowCall(h, 2, '', 'flow_exception', {}); await tick();
+  flowCall(h, 3, 'await app.typeText("safe")'); await tick(); assert.equal(h.toServer.length, 0);
+  answer('accept'); await tick(); await tick();
+  flowCall(h, 4, 'await app.typeText("safe")'); await tick(); flowAnswer(h, 4); await tick();
+  flowCall(h, 5); await tick(); assert.equal(h.toServer.length, 1);
+});
+
+test('flow rules serialize reads and record protected values before the next call', async () => {
+  const h = harness({ flowRules: new FlowRules({ version: 1, rules: [{ id: 'source', kind: 'source', sources: ['TextEdit'], destinations: ['TextEdit'] }] }) });
+  flowCall(h, 1, 'let app=await cua.getApp("TextEdit")'); flowCall(h, 2, 'await app.typeText("safe")'); await tick();
+  assert.equal(h.toServer.length, 1);
+  flowAnswer(h, 1, 'Window: "Source", App: TextEdit\n0 standard window Source\n1 text entry area Value: private value'); await tick();
+  flowCall(h, 3, 'await app.typeText("private value")'); await tick();
+  assert.equal(h.toServer.length, 1); assert.match(h.toClient.find(m => m.id === 3).result.content[0].text, /source/);
+});
+
+test('enabled flow tools are advertised and engine failure consumes a user exception', async () => {
+  const h = harness({ flowRules: flowFixture(), ask: async () => 'accept' });
+  h.fromClient({ jsonrpc: '2.0', id: 'list', method: 'tools/list' });
+  h.fromServer({ jsonrpc: '2.0', id: 'list', result: { tools: [{ name: 'js' }] } }); await tick();
+  assert.ok(h.toClient.find(m => m.id === 'list').result.tools.some(t => t.name === 'flow_exception'));
+  flowCall(h, 1); flowCall(h, 2, '', 'flow_exception', {}); await tick(); await tick();
+  flowCall(h, 3); await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 3, result: { isError: true, content: [{ type: 'text', text: 'failed action' }] } }); await tick();
+  flowCall(h, 4); await tick();
+  assert.equal(h.toServer.filter(m => m.method === 'tools/call').length, 1);
+  assert.equal(h.toClient.find(m => m.id === 4).result.isError, true);
+});
 
 test('adds session and turn metadata to tool calls, keeping existing _meta', async () => {
   const h = harness();

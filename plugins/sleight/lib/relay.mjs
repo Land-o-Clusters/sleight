@@ -53,6 +53,7 @@
 import { randomUUID } from 'node:crypto';
 import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRead, readCode, guardedCode } from './document-scope.mjs';
 import { ChangeReview, REVIEW_TOOL } from './change-review.mjs';
+import { FLOW_TOOL } from './flow-rules.mjs';
 
 const META_KEY = 'x-codex-turn-metadata';
 const HIDDEN_TOOLS = new Set(['js_add_node_module_dir']);
@@ -114,6 +115,7 @@ export function createRelay({
   approvalScope = 'session',
   ask,
   localTools,
+  flowRules,
   idleTurnEndMs,
   trace = () => {},
 }) {
@@ -143,6 +145,30 @@ export function createRelay({
   let lastWindow;
   let reviewing = false;
   let disposed = false;
+  const flowCalls = new Map();
+  let flowPending;
+  let flowPermit;
+  let flowAsking = false;
+  const fingerprint = msg => JSON.stringify([msg.params.name, msg.params.arguments ?? {}]);
+  function flowStop(msg, reason) {
+    toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: `Flow rules: ${reason}. Stop. Ask the user with flow_exception for one identical retry; never work around the rule.` }] } });
+  }
+  async function flowException(msg) {
+    if (Object.keys(msg.params.arguments ?? {}).length) { flowStop(msg, 'only the user can decide; no arguments are accepted'); return; }
+    if (!flowPending || running.size || localRunning.size || reviewing || documentAsking || flowAsking) { flowStop(msg, 'a stopped call and no pending call or prompt are required'); return; }
+    const pending = flowPending;
+    flowAsking = true;
+    const detail = `${pending.reason}\n\nTool: ${pending.name}\nArguments:\n${JSON.stringify(pending.args, null, 2)}\n\nAllow this exact call once? The rule stays active afterward.`;
+    try {
+      const answer = asking.then(() => ask ? ask('Allow one flow-rule exception?', false, { kind: 'flow', detail }) : elicit(detail));
+      asking = answer.catch(() => 'cancel');
+      const action = await answer.catch(() => 'cancel');
+      if (disposed) return;
+      flowPermit = action === 'accept' ? { fingerprint: pending.fingerprint, revision: flowRules.revision } : undefined;
+      trace('flow-exception-decision', { rules: pending.rules, action });
+      toClient({ jsonrpc: '2.0', id: msg.id, result: { ...(action !== 'accept' ? { isError: true } : {}), content: [{ type: 'text', text: action === 'accept' ? 'The user allowed one identical retry. Any other call cancels this exception.' : 'The user did not allow this transfer. Stop and tell them.' }] } });
+    } finally { flowAsking = false; }
+  }
 
   function changeStop(msg, reason) {
     toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: `Change review: ${reason}. Stop and tell the user.` }] } });
@@ -153,7 +179,7 @@ export function createRelay({
     if (Object.keys(args).some(k => k !== 'op') || !['list', 'review'].includes(args.op ?? 'list')) {
       changeStop(msg, 'only op list or review is accepted. Keep and Undo decisions must come from the user'); return;
     }
-    if (running.size || localRunning.size || reviewing || documentAsking) { changeStop(msg, 'wait for the pending call or prompt'); return; }
+    if (running.size || localRunning.size || reviewing || documentAsking || flowAsking) { changeStop(msg, 'wait for the pending call or prompt'); return; }
     const entries = [...changes.entries.values()];
     if ((args.op ?? 'list') === 'list') {
       toClient({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: entries.map(e => changes.describe(e)).join('\n\n') || 'No saved-file changes captured this session.' }] } }); return;
@@ -327,7 +353,7 @@ export function createRelay({
     return decided;
   }
 
-  async function callLocal(msg) {
+  async function callLocal(msg, plan) {
     localRunning.add(msg.id);
     let result;
     try {
@@ -336,6 +362,7 @@ export function createRelay({
       result = { content: [{ type: 'text', text: String(err?.message ?? err) }], isError: true };
     }
     localRunning.delete(msg.id);
+    if (plan) flowRules.observe(result, plan);
     toClient({ jsonrpc: '2.0', id: msg.id, result });
   }
 
@@ -349,7 +376,7 @@ export function createRelay({
     try {
       msg = JSON.parse(line);
     } catch {
-      if (documentMode) return;
+      if (documentMode || flowRules) return;
       serverIn.write(line + '\n');
       return;
     }
@@ -364,10 +391,29 @@ export function createRelay({
     }
     if (msg.method === 'tools/call') {
       if (disposed) { changeStop(msg, 'session has ended'); return; }
+      if (flowAsking) { flowStop(msg, 'wait for the user decision'); return; }
+      if (flowRules && msg.params?.name === FLOW_TOOL.name) { flowException(msg); return; }
+      if (flowRules && !['js', 'drag', 'menu_bar'].includes(msg.params?.name)) { flowPermit = undefined; flowPending = undefined; }
       if (msg.params?.name === REVIEW_TOOL.name) { reviewChanges(msg); return; }
       if (reviewing) { changeStop(msg, 'the user is reviewing changes, wait for their decision'); return; }
     }
     const originalCode = msg.params?.arguments?.code;
+    let flowPlan;
+    if (flowRules && msg.method === 'tools/call' && ['js', 'drag', 'menu_bar'].includes(msg.params?.name)) {
+      if (running.size || localRunning.size || documentAsking || reviewing) { flowStop(msg, 'wait for the pending call or prompt'); return; }
+      if (msg.id === undefined || (msg.params.name === 'js' && typeof originalCode !== 'string')) { flowStop(msg, 'a request id and JavaScript code are required'); return; }
+      flowPlan = flowRules.analyze(msg.params.name, msg.params.arguments, lastWindow);
+      const print = fingerprint(msg);
+      const permitted = flowPermit?.fingerprint === print && flowPermit.revision === flowRules.revision;
+      flowPermit = undefined;
+      if (flowPlan.violations.length && !permitted) {
+        const reason = flowPlan.violations.map(v => `rule '${v.rule}' stopped a transfer${v.source ? ` from ${v.source}` : ''} to ${v.app}`).join('; ');
+        flowPending = { fingerprint: print, name: msg.params.name, args: structuredClone(msg.params.arguments ?? {}), reason, rules: flowPlan.violations.map(v => v.rule) };
+        trace('flow-refused', { id: msg.id, violations: flowPlan.violations });
+        flowStop(msg, reason); return;
+      }
+      flowPending = undefined;
+    }
     if (documentMode && msg.method === 'tools/call') {
       const name = msg.params?.name;
       if (name === DOCUMENT_TOOL.name) { approveDocument(msg); return; }
@@ -387,7 +433,8 @@ export function createRelay({
     }
     if (msg.method === 'tools/call' && localNames.has(msg.params?.name)) {
       trace('from-client', msg);
-      callLocal(msg);
+      if (flowPlan) flowRules.forward(flowPlan);
+      callLocal(msg, flowPlan);
       return;
     }
     if (msg.method === 'tools/list' && msg.id !== undefined) listRequests.add(msg.id);
@@ -430,6 +477,7 @@ export function createRelay({
       turnUsed = true;
       clearTimeout(idleTimer);
       if (msg.id !== undefined) running.add(msg.id);
+      if (flowPlan) { flowRules.forward(flowPlan); flowCalls.set(msg.id, flowPlan); }
     }
     toServer(msg);
   });
@@ -446,6 +494,10 @@ export function createRelay({
       internalRequests.get(msg.id)(msg);
       internalRequests.delete(msg.id);
       return;
+    }
+    if (msg.method === undefined && flowCalls.has(msg.id)) {
+      flowRules.observe(msg.result, flowCalls.get(msg.id));
+      flowCalls.delete(msg.id);
     }
     if (documentMode && isAppApproval(msg)) { documentEngineApproval(msg); return; }
     if (msg.method === undefined && changeCalls.has(msg.id)) {
@@ -497,7 +549,7 @@ export function createRelay({
         .filter(t => !HIDDEN_TOOLS.has(t.name))
         .filter(t => !documentMode || t.name === 'js' || t.name === TURN_END_TOOL)
         .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t))
-        .concat(documentMode ? [DOCUMENT_TOOL] : (localTools?.tools ?? []), [REVIEW_TOOL]);
+        .concat(documentMode ? [DOCUMENT_TOOL] : (localTools?.tools ?? []), [REVIEW_TOOL], flowRules ? [FLOW_TOOL] : []);
     }
     toClient(msg);
   });
@@ -527,6 +579,8 @@ export function createRelay({
     clearTimeout(idleTimer);
     for (const resolve of elicitations.values()) resolve({ result: { action: 'cancel' } });
     elicitations.clear();
+    flowRules?.dispose();
+    flowCalls.clear(); flowPending = undefined; flowPermit = undefined;
     changes.dispose();
     trace('change-snapshots-deleted', { directory: changes.directory });
   }

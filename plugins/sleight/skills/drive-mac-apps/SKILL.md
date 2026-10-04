@@ -91,6 +91,13 @@ with a `js` call that only gets the app, then call `document_scope` so the user 
 document. If a result says document scope stopped, don't retry: read the intended window again and
 ask with `document_scope`.
 
+## Flow rules
+
+If a result says a flow rule stopped a transfer, tell the user which rule matched and stop.
+Use `flow_exception` with no arguments only to ask for one exception. After the user accepts,
+retry the identical stopped call once. Never construct strings differently, use clipboard shortcuts,
+switch tools or alter the rules file to get around a refusal. Another call cancels the exception.
+
 ## Saving to a path
 
 In a save dialog, `app.pressKey("super+shift+g")` opens Go to Folder. Set the folder there and press
