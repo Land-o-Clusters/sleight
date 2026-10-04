@@ -1,7 +1,36 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { benchmarkApproval, probeClient } from '../bench/double-keys-client.mjs';
+import { runInNewContext } from 'node:vm';
+import { benchmarkApproval, probeClient, probeReadCode, probeInputCode, probeCleanupPath } from '../bench/double-keys-client.mjs';
+
+test('cleanup accepts only a normalized temporary probe document', () => {
+  const path = '/private/tmp/sleight-double-keys-Zk4nfu/double-keys.txt';
+  assert.equal(probeCleanupPath(path), path);
+  for (const wrong of ['/private/tmp/other/double-keys.txt', path + '/../other.txt',
+    '/private/tmp/sleight-double-keys-Zk4nfu/other.txt', '~/Documents/notes.txt']) {
+    assert.throws(() => probeCleanupPath(wrong), /probe document/);
+  }
+});
+
+test('keypress trials send characters once then dismiss suggestions; text trials send one string', async () => {
+  for (const keysOnly of [false, true]) {
+    const sent = [];
+    await runInNewContext(`(async () => { ${probeInputCode('ab', keysOnly)} })()`, {
+      app: { typeText: async text => sent.push(['text', text]), pressKey: async key => sent.push(['key', key]) },
+    });
+    assert.deepEqual(sent, keysOnly ? [['key', 'a'], ['key', 'b'], ['key', 'Escape']] : [['text', 'ab']]);
+  }
+});
+
+test('probe app acquisition declares its handle in a strict engine session', async () => {
+  const target = { name: 'owned fixture' };
+  const acquired = [];
+  const result = await runInNewContext(`(async () => { "use strict"; ${probeReadCode('TextEdit')}; return app; })()`,
+    { cua: { getApp: async name => { acquired.push(name); return target; } } });
+  assert.equal(result, target);
+  assert.deepEqual(acquired, ['TextEdit']);
+});
 
 // Removing the existing allowlist delegation would allow a fourth app or a
 // differently worded prompt. These run the real hook without touching an app.

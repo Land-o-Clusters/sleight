@@ -8,6 +8,16 @@ import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 
 const approveHook = fileURLToPath(new URL('./approve.mjs', import.meta.url));
+export const probeReadCode = app => `var app = await cua.getApp(${JSON.stringify(app)})`;
+export const probeInputCode = (text, keysOnly = false) => keysOnly
+  ? [...text, 'Escape'].map(key => `await app.pressKey(${JSON.stringify(key)})`).join('; ')
+  : `await app.typeText(${JSON.stringify(text)})`;
+export function probeCleanupPath(path) {
+  if (!/^\/private\/tmp\/sleight-double-keys-[A-Za-z0-9]+\/double-keys\.txt$/.test(path ?? '')) {
+    throw new Error('Expected an owned temporary probe document');
+  }
+  return path;
+}
 
 // Invoke the existing benchmark allowlist, rather than creating another policy.
 export async function benchmarkApproval(params) {

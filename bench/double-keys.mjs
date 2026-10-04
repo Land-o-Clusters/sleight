@@ -8,17 +8,20 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolveServer } from '../plugins/sleight/lib/launch.mjs';
 import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
-import { probeClient } from './double-keys-client.mjs';
+import { probeClient, probeReadCode, probeInputCode } from './double-keys-client.mjs';
 
 const awayWindow = process.argv[2];
 if (!awayWindow || awayWindow.startsWith('--')) throw new Error('An owner-agreed away window is required');
 const rawOnly = process.argv.includes('--raw-only');
+const keysOnly = process.argv.includes('--keypress-only');
 const execute = promisify(execFile);
 const bank = await mkdtemp('/private/tmp/sleight-double-keys-');
 const path = join(bank, 'double-keys.txt');
 const fixturePath = fileURLToPath(new URL('./double-keys-fixture.js', import.meta.url));
 const records = [], trials = [], clients = [];
-const report = { started: new Date().toISOString(), awayWindow, rawOnly, bank, trials, records };
+const report = { started: new Date().toISOString(), awayWindow, rawOnly, keysOnly, bank, trials, records };
+if (keysOnly) report.inputSequence = 'Each token character via pressKey, followed by Escape to dismiss suggestions';
+const inputCode = text => probeInputCode(text, keysOnly);
 const record = entry => records.push({ t: new Date().toISOString(), ...structuredClone(entry) });
 const text = reply => (reply?.content ?? []).filter(block => block.type === 'text').map(block => block.text).join('\n');
 const fixture = async (op, foreground) => {
@@ -35,7 +38,7 @@ const checked = async (client, code) => {
   return reply;
 };
 const read = async client => {
-  const reply = await checked(client, 'app = await cua.getApp("TextEdit")');
+  const reply = await checked(client, probeReadCode('TextEdit'));
   assert.equal(windowFromText(text(reply))?.url, pathToFileURL(path).href, 'engine did not select the owned document');
 };
 try {
@@ -70,18 +73,18 @@ try {
     if (entry.error || entry.readError) throw new Error(`trial ${condition}/${index} failed`);
   };
   for (let i = 0; i < 3; i++) await trial('one-engine-background', i, 'Calculator', async entry => {
-    const token = `A${i}|`; entry.replies = [await checked(a, `await app.typeText(${JSON.stringify(token)})`)]; return token;
+    const token = keysOnly ? 'a' : `A${i}|`; entry.replies = [await checked(a, inputCode(token))]; return token;
   });
   const b = await probeClient(server, { relay: false, label: 'direct-B', record }); clients.push(b);
   await read(b);
   for (let i = 0; i < 3; i++) await trial('two-engines-second-idle', i, 'Calculator', async entry => {
-    const token = `C${i}|`; entry.replies = [await checked(a, `await app.typeText(${JSON.stringify(token)})`)]; return token;
+    const token = keysOnly ? 'c' : `C${i}|`; entry.replies = [await checked(a, inputCode(token))]; return token;
   });
   for (let i = 0; i < 3; i++) await trial('two-engines-calculator-foreground', i, 'Calculator', async entry => {
-    await checked(b, 'app = await cua.getApp("Calculator")');
-    const token = `D${i}|`;
+    await checked(b, probeReadCode('Calculator'));
+    const token = keysOnly ? 'd' : `D${i}|`;
     entry.replies = await Promise.allSettled([
-      checked(a, `await app.typeText(${JSON.stringify(token)})`),
+      checked(a, inputCode(token)),
       checked(b, 'await app.pressKey("Escape"); await app.pressKey("1")'),
     ]);
     entry.replies = entry.replies.map(r => r.status === 'fulfilled' ? r : { status: r.status, error: r.reason.message });
@@ -89,18 +92,16 @@ try {
   });
   for (let i = 0; i < 3; i++) await trial('two-engines-textedit-foreground', i, 'TextEdit', async entry => {
     await read(b);
-    const first = `E${i}|`, second = `F${i}|`;
+    const first = keysOnly ? 'e' : `E${i}|`, second = keysOnly ? 'f' : `F${i}|`;
     entry.tokens = [first, second];
-    entry.replies = await Promise.allSettled([checked(a, `await app.typeText(${JSON.stringify(first)})`),
-      checked(b, `await app.typeText(${JSON.stringify(second)})`)]);
+    entry.replies = await Promise.allSettled([checked(a, inputCode(first)), checked(b, inputCode(second))]);
     entry.replies = entry.replies.map(r => r.status === 'fulfilled' ? r : { status: r.status, error: r.reason.message });
     return first + second;
   });
   for (let i = 0; i < 3; i++) await trial('two-engines-serialized-textedit', i, 'TextEdit', async entry => {
     await read(b);
-    const first = `G${i}|`, second = `H${i}|`; entry.tokens = [first, second];
-    entry.replies = [await checked(a, `await app.typeText(${JSON.stringify(first)})`),
-      await checked(b, `await app.typeText(${JSON.stringify(second)})`)];
+    const first = keysOnly ? 'g' : `G${i}|`, second = keysOnly ? 'h' : `H${i}|`; entry.tokens = [first, second];
+    entry.replies = [await checked(a, inputCode(first)), await checked(b, inputCode(second))];
     return first + second;
   });
 } catch (error) { report.error = error.message; process.exitCode = 1; }
