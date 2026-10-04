@@ -3,12 +3,12 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-04, 0.5.0 released)
+## Banner (2026-10-04, 0.6.0 released)
 
-Public: `Land-o-Clusters/sleight`. Latest release `v0.5.0`: change review and flow rules, both opt-in
-(`SLEIGHT_CHANGE_REVIEW=1`, `SLEIGHT_FLOW_RULES=1`). The default path matches 0.4.0's behavior and
-passed 5/6 in one benchmark pass (Sonnet 5.5, medium). textedit-drag failed because the foreground
-drag collides with the owner using the Mac. Installed on this Mac at user scope from the local
+Public: `Land-o-Clusters/sleight`. Latest release `v0.6.0`: input leases, on by default (Codex A,
+`112c878`, fast-forward). Benchmark with leases: 11/11 over two passes (Sonnet 5.5, medium);
+textedit-save took 27 and 30 turns against 13, because a Save sheet stops the next action. 0.5.0
+added change review and flow rules, both opt-in. Installed on this Mac at user scope from the local
 directory marketplace. Running sessions keep the version they started with until restarted.
 
 The change review was on by default on `main` from `844fa60` to `570a1ab` and was never released.
@@ -24,12 +24,9 @@ sleight-arch runs one `--runs 1` pass per merge that changes default behavior.
 In flight, from the owner's Codex sessions in worktrees under `~/Projects/sleight-wt/` (prompts in
 `.dev/prompts/`, untracked, run by the owner):
 
-- `codex/input-lease` at `72f5a28` (Codex A, stopped by the owner for rerunning TextEdit benchmarks): reviewed, not merged. Safety paths pass. One benchmark
-  pass passed 1/6: the lease counts only `let app = await cua.getApp(...)` as a read, so `app = ...`,
-  `let te = ...` and `listApps` re-reads were refused, and Claude looped. Prompt:
-  `codex-a-lease-fix.md`.
-- `codex/change-review-guard` (Codex B, not started): fix the guard so the change review can be on by
-  default. Prompt: `codex-b-change-review-fix.md`.
+- `codex/change-review-guard` at `ea159cc` (Codex B): guard fixes, change review on by default. It
+  conflicts with the lease in the shared window guard. Next: `codex-b-rebase.md` (rebase, one test
+  with both on, then the live check where the owner clicks Undo and Keep).
 
 Review recipe for each Codex branch: read its design note and safety paths (user-only decisions, no
 auto-approval outside the benchmark allowlist), cherry-pick onto `main`, replace home paths in
@@ -38,7 +35,7 @@ published results with `~`, run `npm run check` and `npm run lint:prose`, push, 
 Branches already cherry-picked and safe to delete with their worktrees once their Codex sessions are
 done: `codex/watch-api-diff` (`c058475` as `2d48e5d`), `codex/background-drag` (`32fd681` as
 `ee49fd9`, prototype moved to `bench/background-drag/`), `codex/document-scope` (`9f3827a` as
-`ceebdca`), `codex/change-review` (`e4e4121` as `844fa60`), `codex/flow-rules` (`fdd29c7`, fast-forward).
+`ceebdca`), `codex/change-review` (`e4e4121` as `844fa60`), `codex/flow-rules` (`fdd29c7`, fast-forward), `codex/input-lease` (`112c878`, fast-forward).
 
 What sleight is now: the engine through a relay, plus its own tools where the engine stops short:
 `menu_bar` and `notifications` (System Events), `drag` (held, stepped, foreground; text drag 3/3
@@ -68,8 +65,7 @@ ownership, more harnesses) are candidates the owner hasn't picked yet.
 
 ## Waiting on the owner
 
-- Run the two prompts in `.dev/prompts/` (A: lease read detection; B: change review guard), then
-  paste the reports here.
+- Paste `.dev/prompts/codex-b-rebase.md` to Codex B, then click Undo and Keep in its live check.
 - Restart desktop sessions that started before 0.3.1 (21:17 EDT, 2026-10-03), so they stop hanging.
 
 ## Reading list

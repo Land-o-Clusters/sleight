@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 (2026-10-04)
+
+- Input leases: one sleight session acts on a window at a time. A second session gets the holder's
+  name and seconds left, and reads still work. Before acting, Claude reads the window with
+  `cua.getApp`, and a refusal gives the exact call to send. Leases end with the turn, or after 30 s
+  without renewal (`docs/design/input-lease.md`). Built by Codex. With two relays typing into one
+  TextEdit document, text doubled in 5/5 trials without leases and appeared once with one refusal in
+  5/5 with them. Benchmark with leases on: 11/11 over two passes (Sonnet 5.5, medium). A Save sheet
+  stops the next action until Claude reads again, so textedit-save took 27 and 30 turns, against 13
+  without leases.
+
 ## 0.5.0 (2026-10-04)
 
 - `review_changes`, opt-in with `SLEIGHT_CHANGE_REVIEW=1`: lists the saved files Claude changed this

@@ -226,6 +226,8 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   clipboard shortcuts, screenshots and coordinate drags can pass without a match. Source attribution
   and UI parsing can miss values or block harmless text. This guards mistakes; arbitrary JavaScript
   can bypass it. [The design](docs/design/flow-rules.md) lists the limits.
+- With input leases, a dialog or sheet the action opened (Open, Save) stops the next action until
+  Claude reads the window again. Claude recovers, but textedit-save took about twice the turns.
 - The engine's helper can stop answering. On 2026-10-04 every `cua.getApp` timed out
   (`-10005 timeoutReached`) for about 25 minutes, with the Mac unlocked and in use, until ChatGPT was
   restarted. We don't know the cause. It started right after a test that kills engine processes.
