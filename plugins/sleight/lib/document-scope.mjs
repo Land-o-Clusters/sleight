@@ -19,6 +19,15 @@ export function windowFromText(text) {
 export const documentKey = window => window && JSON.stringify(window);
 export const documentLabel = window => `${JSON.stringify(window.title)} in ${window.app}${window.url ? ` (${window.url})` : ''}`;
 
+export function isCancelAction(name, args, text = '') {
+  if (name === 'pressKey') return /^(?:Escape|esc)$/i.test(args[0]);
+  if (name !== 'click' || !Number.isInteger(Number(args[0]))) return false;
+  return text.split('\n').some(line => {
+    const button = /^\s*(\d+) button(?: \(.*?\))? Cancel(?:,|$)/.exec(line);
+    return button && Number(button[1]) === Number(args[0]);
+  });
+}
+
 // Only a standalone acquisition or inventory read can cross a closed gate.
 // No comments, arbitrary acquisition arguments or extra statements.
 export function isDocumentRead(code = '') {
@@ -34,8 +43,8 @@ export function readCode(code) {
 }
 
 // Advisory only: all of this runs in the same mutable JS realm as Claude's code.
-export function guardedCode(code, window, reason = 'Document scope stopped this action: window or URL changed. Read the window and ask the user with document_scope.', lease) {
-  return guardSetup({ window, reason, lease }) + `\n${code}
+export function guardedCode(code, window, reason = 'Document scope stopped this action: window or URL changed. Read the window and ask the user with document_scope.', lease, options = {}) {
+  return guardSetup({ window, reason, lease, ...options }) + `\n${code}
 if (globalThis.__sleightDocumentGuard.activeApp) {
   nodeRepl.write(await globalThis.__sleightDocumentGuard.activeApp.getAXState({ disableDiffing: true, emit: false }));
 }`;
@@ -44,11 +53,13 @@ if (globalThis.__sleightDocumentGuard.activeApp) {
 function guardSetup(update) {
   return `(() => {
     const parse = ${windowFromText.toString()};
+    const isCancel = ${isCancelAction.toString()};
     const state = globalThis.__sleightDocumentGuard ||= {
       getApp: cua.getApp.bind(cua), proxies: new WeakSet(), wrapped: new WeakMap()
     };
     ${update ? `state.expected = ${JSON.stringify(update.window)}; state.reason = ${JSON.stringify(update.reason)};
-    state.lease = ${JSON.stringify(update.lease) ?? 'undefined'};` : ''}
+    state.lease = ${JSON.stringify(update.lease) ?? 'undefined'};
+    state.fileOnly = ${!!update.fileOnly}; state.cancelOnly = ${!!update.cancelOnly};` : ''}
     const checkLease = async () => {
       if (!state.lease) return;
       const fs = await import('node:fs/promises');
@@ -74,8 +85,16 @@ function guardSetup(update) {
           'paste', 'pressKey', 'typeText'].includes(name)) return value.bind(raw);
         return async (...args) => {
           await checkLease();
-          const observed = parse(await raw.getAXState({ disableDiffing: true, emit: false }));
-          if (!observed || ['title', 'app', 'url'].some(key => observed[key] !== state.expected[key])) {
+          if (state.fileOnly && name === 'pressKey' && isCancel(name, args)) {
+            state.activeApp = proxy;
+            return value.apply(raw, args);
+          }
+          const text = await raw.getAXState({ disableDiffing: true, emit: false });
+          const observed = parse(text);
+          const cancel = state.fileOnly && isCancel(name, args, text);
+          if (state.cancelOnly && !cancel) throw new Error('Change review: Cancel target changed. Read the current window before retrying.');
+          const dialog = state.fileOnly && observed?.app === state.expected?.app && !observed.url?.startsWith('file://');
+          if (!cancel && !dialog && (!observed || ['title', 'app', 'url'].some(key => observed[key] !== state.expected[key]))) {
             throw new Error(state.reason + ' Observed ' + JSON.stringify(observed));
           }
           await checkLease();

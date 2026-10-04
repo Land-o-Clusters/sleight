@@ -43,7 +43,7 @@ try {
   console.log(`Fixtures: ${bank}\nApprove the TextEdit app prompt. Then choose Undo for the UNDO document and Keep for the KEEP document. These decisions must be made by the user.`);
   child = spawn(join(ROOT, 'plugins/sleight/bin/sleight-mcp'), [], { stdio: ['pipe', 'pipe', 'inherit'],
     env: { ...process.env, SLEIGHT_APPROVAL_SCOPE: 'session', SLEIGHT_APPROVAL_PROMPT: 'dialog',
-      SLEIGHT_IDLE_TURN_END_MS: '0', SLEIGHT_CHANGE_REVIEW: '1', SLEIGHT_TRACE: bank } });
+      SLEIGHT_IDLE_TURN_END_MS: '0', SLEIGHT_CHANGE_REVIEW: '', SLEIGHT_TRACE: bank } });
   closed = new Promise(resolve => child.once('close', resolve));
   const rejectAll = err => { for (const p of pending.values()) p.reject(err); pending.clear(); };
   child.on('error', rejectAll);
@@ -89,7 +89,7 @@ try {
     await closed; clearTimeout(timer);
     try {
       const relayTrace = (await readFile(join(bank, `trace-${child.pid}.jsonl`), 'utf8')).trim().split('\n').map(JSON.parse);
-      const directories = [...new Set(relayTrace.filter(e => e.direction === 'snapshot-before-call').map(e => e.msg.directory))];
+      const directories = [...new Set(relayTrace.filter(e => ['snapshot-before-call', 'snapshot-after-read'].includes(e.direction)).map(e => e.msg.directory))];
       for (const directory of directories) {
         const exists = await access(directory).then(() => true, () => false);
         assert.equal(exists, false, 'session backups removed');
