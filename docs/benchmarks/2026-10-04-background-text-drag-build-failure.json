@@ -1,0 +1,52 @@
+{
+  "startedAt": "2026-10-04T13:35:50.462Z",
+  "commands": [
+    {
+      "command": "/usr/bin/sw_vers",
+      "args": [],
+      "startedAt": "2026-10-04T13:35:50.462Z",
+      "stdout": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+      "stderr": "",
+      "exitCode": 0,
+      "endedAt": "2026-10-04T13:35:50.471Z"
+    },
+    {
+      "command": "/usr/bin/swiftc",
+      "args": [
+        "-O",
+        "-module-cache-path",
+        "/private/tmp/sleight-text-drag-followup-KG9NRf/module-cache",
+        "-o",
+        "/private/tmp/sleight-text-drag-followup-KG9NRf/fixture",
+        "bench/textedit-drag-fixture.swift"
+      ],
+      "startedAt": "2026-10-04T13:35:50.471Z",
+      "stdout": "",
+      "stderr": "",
+      "exitCode": 0,
+      "endedAt": "2026-10-04T13:36:13.929Z"
+    },
+    {
+      "command": "/usr/bin/swiftc",
+      "args": [
+        "-O",
+        "-module-cache-path",
+        "/private/tmp/sleight-text-drag-followup-KG9NRf/module-cache",
+        "-o",
+        "/private/tmp/sleight-text-drag-followup-KG9NRf/drag",
+        "bench/background-drag/background-drag.swift"
+      ],
+      "startedAt": "2026-10-04T13:36:13.929Z",
+      "stdout": "",
+      "stderr": "bench/background-drag/background-drag.swift:91:39: error: 'CGEventPostToPSN' has been replaced by instance method 'CGEvent.postToPSN(processSerialNumber:)'\n 89 |     }\n 90 |     func send(_ event: CGEvent) {\n 91 |         if request.posting == \"psn\" { CGEventPostToPSN(&psn, event) }\n    |                                       `- error: 'CGEventPostToPSN' has been replaced by instance method 'CGEvent.postToPSN(processSerialNumber:)'\n 92 |         else { event.postToPid(pid) }\n 93 |     }\n\n/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/CoreGraphics.framework/Headers/CGEvent.h:368:16: note: 'CGEventPostToPSN' was obsoleted in Swift 3\n366 | \n367 | /* DEPRECATED; use CGEventPostToPid instead. */\n368 | CG_EXTERN void CGEventPostToPSN(void * __nullable processSerialNumber,\n    |                `- note: 'CGEventPostToPSN' was obsoleted in Swift 3\n369 |     CGEventRef __nullable event)\n370 |     API_AVAILABLE(macos(10.4));\n",
+      "exitCode": 1,
+      "signal": null,
+      "error": "Command failed: /usr/bin/swiftc -O -module-cache-path /private/tmp/sleight-text-drag-followup-KG9NRf/module-cache -o /private/tmp/sleight-text-drag-followup-KG9NRf/drag bench/background-drag/background-drag.swift\nbench/background-drag/background-drag.swift:91:39: error: 'CGEventPostToPSN' has been replaced by instance method 'CGEvent.postToPSN(processSerialNumber:)'\n 89 |     }\n 90 |     func send(_ event: CGEvent) {\n 91 |         if request.posting == \"psn\" { CGEventPostToPSN(&psn, event) }\n    |                                       `- error: 'CGEventPostToPSN' has been replaced by instance method 'CGEvent.postToPSN(processSerialNumber:)'\n 92 |         else { event.postToPid(pid) }\n 93 |     }\n\n/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/CoreGraphics.framework/Headers/CGEvent.h:368:16: note: 'CGEventPostToPSN' was obsoleted in Swift 3\n366 | \n367 | /* DEPRECATED; use CGEventPostToPid instead. */\n368 | CG_EXTERN void CGEventPostToPSN(void * __nullable processSerialNumber,\n    |                `- note: 'CGEventPostToPSN' was obsoleted in Swift 3\n369 |     CGEventRef __nullable event)\n370 |     API_AVAILABLE(macos(10.4));\n",
+      "endedAt": "2026-10-04T13:36:14.313Z"
+    }
+  ],
+  "runs": [],
+  "platform": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+  "error": "Command failed: /usr/bin/swiftc -O -module-cache-path /private/tmp/sleight-text-drag-followup-KG9NRf/module-cache -o /private/tmp/sleight-text-drag-followup-KG9NRf/drag bench/background-drag/background-drag.swift\nbench/background-drag/background-drag.swift:91:39: error: 'CGEventPostToPSN' has been replaced by instance method 'CGEvent.postToPSN(processSerialNumber:)'\n 89 |     }\n 90 |     func send(_ event: CGEvent) {\n 91 |         if request.posting == \"psn\" { CGEventPostToPSN(&psn, event) }\n    |                                       `- error: 'CGEventPostToPSN' has been replaced by instance method 'CGEvent.postToPSN(processSerialNumber:)'\n 92 |         else { event.postToPid(pid) }\n 93 |     }\n\n/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/CoreGraphics.framework/Headers/CGEvent.h:368:16: note: 'CGEventPostToPSN' was obsoleted in Swift 3\n366 | \n367 | /* DEPRECATED; use CGEventPostToPid instead. */\n368 | CG_EXTERN void CGEventPostToPSN(void * __nullable processSerialNumber,\n    |                `- note: 'CGEventPostToPSN' was obsoleted in Swift 3\n369 |     CGEventRef __nullable event)\n370 |     API_AVAILABLE(macos(10.4));\n",
+  "exitCode": 1
+}
