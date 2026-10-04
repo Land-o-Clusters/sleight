@@ -47,7 +47,7 @@ const ARMS = {
       mkdirSync(dir, { recursive: true });
       return dir;
     })(),
-    args: ['--plugin-dir', join(ROOT, 'plugins', 'sleight'), '--allowedTools', 'mcp__plugin_sleight_computer__js'],
+    args: ['--plugin-dir', join(ROOT, 'plugins', 'sleight'), '--allowedTools', 'mcp__plugin_sleight_computer__js,mcp__plugin_sleight_computer__drag'],
     env: {},
     server: 'plugin:sleight:computer',
   },

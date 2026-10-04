@@ -46,10 +46,14 @@ background equivalent. Try these in order:
 
 ## Moving text
 
-Dragging selected text doesn't work: the engine's drag lasts about 14 ms and jumps straight to the end
-point, and text views only move a selection after the mouse stays down for a moment. Move text with the keyboard instead: select it, `app.pressKey("super+x")`,
-click where it goes, `app.pressKey("super+v")`. Drags that pick something up at once, like Chess
-pieces, work fine.
+`app.drag` can't move selected text: the engine's drag lasts about 14 ms and jumps straight to the end
+point, and text views only move a selection after the mouse stays down for a moment. Drags that pick
+something up at once, like Chess pieces, work fine with `app.drag`.
+
+When the mouse has to stay down first, use sleight's `drag` tool: select the text with `js` first, then call
+`drag` with the app and the same `from` and `to` coordinates you'd give `app.drag`. It brings the app
+to the front and moves the user's pointer for about two seconds, so prefer `app.drag` when that works.
+Cut and paste (`super+x`, click, `super+v`) is the fallback when the user declines.
 
 ## Menu bar icons and notifications
 

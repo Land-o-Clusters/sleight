@@ -5,7 +5,7 @@ What is true now. One banner, replaced in place as work happens. Always-true rul
 
 ## Banner (2026-10-04, after midnight)
 
-Public: `Land-o-Clusters/sleight`, `main` green in CI, `v0.2.1` tagged, listed on the org profile
+Public: `Land-o-Clusters/sleight`, `main` green in CI, `v0.3.0` tagged, listed on the org profile
 after Puddle. A fresh install from GitHub into an empty Claude config worked (0.2.0, `--doctor` ok).
 The user-scope install on this Mac follows the working copy's releases. Running sessions keep the
 version they started with, because `/reload-plugins` doesn't restart the server.
@@ -26,9 +26,18 @@ Benchmark (fair, Opus 5.5): sleight and LCU both 15/18, each failing only the th
 runner checks arm isolation, defaults to Sonnet 5.5 at medium, and closes what runs leave open. The
 owner finds runs tedious, so run them only with a reason.
 
-Text drag, measured with `bench/drag-probe/`: the engine's drag lasts 14 ms with two drag events,
-jumping straight to the end point. Fixing it would take a drag of sleight's own (posted mouse events
-with a hold and steps, behind sleight's approval). Not started, since the owner hasn't asked for it.
+Text drag is fixed in 0.3.0 by sleight's own `drag` tool (`lib/drag.js`): hold 500 ms, 25 steps,
+real mouse events in the foreground, pointer and front app restored, and no press if another app's
+window covers the start point. Benchmark text drag 3/3 on Sonnet 5.5 (`docs/benchmarks/2026-10-04-drag-tool.json`),
+against 0/9 for `app.drag`. A press right after the engine acts doesn't take, so it waits 1.5 s first.
+Next: the same drag in the background. Posting to the app's process (`CGEventPostToPid`) delivers
+only mouse-moved events to an inactive app; the engine gets clicks through somehow, likely by making
+the window key without activating the app.
+
+Owner's plan (2026-10-04), after the drag: work through every item in Known problems, and research
+the market for what sleight can do better.
+Codex is researching competitors in the background, and the owner runs Codex for build work from
+prompts this session writes. Linux is a headless box and there's no Windows machine, so both wait.
 
 ## Machine state outside the repo
 

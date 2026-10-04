@@ -1,0 +1,54 @@
+{
+ "note": "The TextEdit drag task with sleight 0.3.0's drag tool (hold 500 ms, 25 steps, foreground), sleight arm only, Sonnet 5.5 at medium, Claude Code 2.1.289, engine 26.930.31730. Each run made one drag call and it moved the word. Dropping at the end of the line leaves no space before it, and in 2 of 3 runs Claude then typed one space and said so; the check splits on whitespace, so it passes either way. Before this tool, sleight and LCU each failed this task 9 of 9 times.",
+ "stamp": "2026-10-04T00-47-52-160Z",
+ "arms": [
+  "sleight"
+ ],
+ "model": "claude-sonnet-5-5",
+ "effort": "medium",
+ "claude": "claude",
+ "results": [
+  {
+   "arm": "sleight",
+   "task": "textedit-drag",
+   "run": 1,
+   "passed": true,
+   "seconds": 65.2,
+   "turns": 16,
+   "costUsd": 0.3603482,
+   "exitCode": 0,
+   "answer": "The document now reads `beta gamma alpha`, and it's saved and closed. I used a space I typed, so that last step wasn't pure drag and drop.\n\n- **The move:** I selected \"alpha\" and dragged it to the end of the line with sleight's `drag` tool. That tool moves your real pointer for about two seconds, be",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  },
+  {
+   "arm": "sleight",
+   "task": "textedit-drag",
+   "run": 2,
+   "passed": true,
+   "seconds": 63.2,
+   "turns": 16,
+   "costUsd": 0.34618819999999995,
+   "exitCode": 0,
+   "answer": "The file now reads \"beta gamma alpha\", and it's saved and closed. I checked the saved file on disk.\n\n- I selected \"alpha\" and dragged it to the end of the line with sleight's `drag` tool. That tool holds the mouse down before moving, so it briefly takes over your real pointer.\n- The drop left no spa",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  },
+  {
+   "arm": "sleight",
+   "task": "textedit-drag",
+   "run": 3,
+   "passed": true,
+   "seconds": 38.6,
+   "turns": 12,
+   "costUsd": 0.2828978,
+   "exitCode": 0,
+   "answer": "The file now reads \"beta gamma alpha\", and it's saved and closed. The move itself was a drag and drop, but I typed one space afterwards.\n\n- **Space:** the drop left \"beta gammaalpha\", with no space before \"alpha\". I typed that single space to finish the line.\n- **Pointer:** the plain background drag",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  }
+ ]
+}

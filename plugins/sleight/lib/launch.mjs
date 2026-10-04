@@ -167,9 +167,29 @@ const MENU_BAR_TOOLS = [
   },
 ];
 
-function runMenuBar(request) {
+const DRAG_TOOL = {
+  name: 'drag',
+  description: 'A drag that holds the mouse down and moves in steps, for what app.drag in the js tool can\'t do, such as ' +
+    'moving selected text (select it with js first). `from` and `to` are in the same frame as the app\'s engine ' +
+    'screenshot: its main window, from the top-left corner. It brings the app to the front and moves the real pointer ' +
+    'for a few seconds, then puts both back, so use it only when app.drag fails. The user approves each app once per session.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      app: { type: 'string', description: 'App name, bundle ID or path' },
+      from: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
+      to: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
+      holdMs: { type: 'integer', description: 'How long to hold before moving (default 500)' },
+      steps: { type: 'integer', description: 'Moves between start and end (default 25)' },
+    },
+    required: ['app', 'from', 'to'],
+    additionalProperties: false,
+  },
+};
+
+function runScript(script, request) {
   return new Promise(resolve => {
-    execFile('osascript', ['-l', 'JavaScript', join(LIB, 'menubar.js'), JSON.stringify(request)], { timeout: 30000 }, (err, stdout, stderr) => {
+    execFile('osascript', ['-l', 'JavaScript', join(LIB, script), JSON.stringify(request)], { timeout: 30000 }, (err, stdout, stderr) => {
       try {
         resolve(JSON.parse(stdout));
       } catch {
@@ -181,7 +201,16 @@ function runMenuBar(request) {
 
 const text = (value, isError) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 1) }], ...(isError ? { isError: true } : {}) });
 
-async function callMenuBar(name, args, approve) {
+async function callLocalTool(name, args, approve) {
+  if (name === 'drag') {
+    if (!await approve(['drag', args.app], `Allow Claude to drag in ${args.app}? It moves your pointer for a few seconds.`)) {
+      return text(`The user didn't allow dragging in ${args.app}. Stop and tell them; don't work around it.`, true);
+    }
+    const result = await runScript('drag.js', args);
+    if (!result.ok) return text(result.error, true);
+    const { ok, ...rest } = result;
+    return text(rest);
+  }
   let request;
   if (name === 'menu_bar') {
     if (args.op !== 'apps') {
@@ -197,7 +226,7 @@ async function callMenuBar(name, args, approve) {
     }
     request = args.op === 'list' ? { op: 'notifications' } : { op: 'notify-press', banner: args.banner, button: args.button };
   }
-  const result = await runMenuBar(request);
+  const result = await runScript('menubar.js', request);
   if (result.ok) {
     const { ok, ...rest } = result;
     return text(rest);
@@ -235,8 +264,15 @@ function run() {
     // SLEIGHT_APPROVAL_SCOPE=once asks again on every action instead.
     approvalScope: process.env.SLEIGHT_APPROVAL_SCOPE === 'once' ? 'once' : 'session',
     ask: approvalPrompt(),
-    // SLEIGHT_MENU_BAR=0 leaves out the menu bar and notification tools.
-    localTools: process.env.SLEIGHT_MENU_BAR === '0' ? undefined : { tools: MENU_BAR_TOOLS, call: callMenuBar },
+    // SLEIGHT_MENU_BAR=0 leaves out the menu bar and notification tools,
+    // SLEIGHT_DRAG=0 the drag tool.
+    localTools: {
+      tools: [
+        ...(process.env.SLEIGHT_MENU_BAR === '0' ? [] : MENU_BAR_TOOLS),
+        ...(process.env.SLEIGHT_DRAG === '0' ? [] : [DRAG_TOOL]),
+      ],
+      call: callLocalTool,
+    },
     trace: process.env.SLEIGHT_TRACE ? traceTo(process.env.SLEIGHT_TRACE) : undefined,
   });
 

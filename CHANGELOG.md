@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 (2026-10-04)
+
+- A `drag` tool that holds the mouse down and moves in steps, for drags the engine's `app.drag` can't
+  do, such as moving selected text. It works in the foreground and puts the pointer and the front
+  app back. It refuses to press when another app's window covers the start point. Benchmark text drag:
+  3/3 (Sonnet 5.5), against 0/9 for `app.drag`.
+
 ## 0.2.1 (2026-10-03)
 
 - `menu_bar` opens SwiftUI window-style icons, which ignore the accessibility press, with a real

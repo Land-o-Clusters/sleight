@@ -150,7 +150,10 @@ Claude Code ──MCP──▶ bin/sleight-mcp ──▶ ChatGPT.app's cua-repl 
    `notifications` reads the banners on screen and presses their buttons. Both go through System
    Events UI scripting (`lib/menubar.js`) with the Accessibility permission of the app running Claude
    Code. Each app's icon needs your approval once per session, and so do notifications, the same way
-   as engine approvals. `SLEIGHT_MENU_BAR=0` leaves both tools out.
+   as engine approvals. `SLEIGHT_MENU_BAR=0` leaves both tools out. sleight's `drag` tool holds the
+   mouse down and moves in steps, for drags `app.drag` can't do. It posts real mouse events, so it
+   brings the app forward and puts your pointer back afterwards. It asks once per app per session,
+   and `SLEIGHT_DRAG=0` leaves it out.
 
 sleight only turns on native apps by default (`CUA_REPL_ENABLED_SURFACES=computer`), because the engine's
 in-app browser only exists inside ChatGPT. To try Chrome control, which needs the Codex Chrome
@@ -163,13 +166,12 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   foreground counts too. Background sessions can share the engine's helper fine (two sleight sessions, or
   sleight next to Codex). In one test where Codex was also driving in the foreground, keystrokes typed
   during the run showed up twice, and we still don't know why.
-- Dragging selected text doesn't move it. The engine's drag on macOS presses, moves and releases at
-  once, and text views like TextEdit's only start a text drag after the mouse is held down for a
-  moment, so they read it as a new selection. LCU fails the same way. Launching TextEdit with
-  `-NSDragAndDropTextDelay 0` didn't help (0/2). A probe app (`bench/drag-probe/`) logged the engine's
-  whole drag lasting 14 ms, with two drag events between press and release (2026-10-03). The second
-  jumps straight to the end point. Drags that pick something up right away, like
-  Chess pieces, work. To move text, use cut and paste.
+- The engine's `app.drag` can't move selected text. A probe app (`bench/drag-probe/`) logged its whole
+  drag lasting 14 ms, with two drag events between press and release, and text views only start a
+  text drag after the mouse stays down for a moment. sleight's `drag` tool does that drag instead
+  (3/3 on the benchmark's text drag task, which `app.drag` failed 9/9), but in the foreground: the
+  app comes to the front and your pointer moves for a few seconds before both go back. A drop at the
+  end of a line doesn't put a space before the word.
 - There's no real hover, since events go to the app and the real pointer never moves. The skill covers
   most cases: tooltips are readable as `Help:` text in the UI state, and hover menus usually open through
   an element's secondary actions, a right-click or a key. UI that only reacts to a real pointer needs a
@@ -329,7 +331,8 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 - [x] Approvals in the desktop app's Code tab, through sleight's own panel
 - [x] Menu bar icons and notification banners, which the engine leaves out
 - [x] A fair benchmark against LCU, with each arm checked to load only its own tool
-- [ ] Text drags: a drag of sleight's own that holds the mouse down and moves in steps
+- [x] Text drags: a drag of sleight's own that holds the mouse down and moves in steps
+- [ ] The same drag in the background, without moving the pointer
 - [ ] The pane, status line and `/sleight stop` in the desktop app, once its Claude Code reaches 2.1.287
 - [ ] Linux and Windows, where the engine has builds that sleight hasn't tried
 
