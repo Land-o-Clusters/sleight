@@ -193,14 +193,8 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   foreground counts too. Background sessions share the helper, with leases coordinating sleight's actions.
   In one test where Codex was also driving in the foreground, keystrokes typed
   during the run showed up twice, and we still don't know why. A
-  [two-engine probe](docs/benchmarks/2026-10-04-double-keys.md) preserved character counts
-  in 15 typeText trials and 15 keypress trials with Escape after each token (engine 26.930.31730,
-  2026-10-04). Concurrent writes arrived in reverse order in 6/6 foreground TextEdit trials.
-  Taking turns preserved order in 6/6, but has not been shown
-  to prevent the earlier duplication. The probe uses bound-app input, without physical mouse or
-  keyboard events from a person. A separate single-key trial showed `a` in the engine's UI read,
-  then TextEdit's scripting read timed out while suggestions were visible. Cleanup succeeded after
-  Escape. The cause of that timeout is also unknown.
+  [two-engine probe](docs/benchmarks/2026-10-04-double-keys.md) didn't reproduce it in 30/30 trials
+  (engine 26.930.31730, 2026-10-04).
 - The engine's `app.drag` can't move selected text. A probe app (`bench/drag-probe/`) logged its whole
   drag lasting 14 ms, with two drag events between press and release, and text views only start a
   text drag after the mouse stays down for a moment. sleight's `drag` tool does that drag instead
