@@ -7,10 +7,10 @@
       "stages": [
         {
           "verdict": "FAIL",
-          "error": "Command failed: osascript -l JavaScript /Users/chrismenendez/Projects/sleight-wt/codex/change-review/bench/document-scope-fixture.js open /private/tmp/sleight-change-review-gUN3jJ/sleight-UNDO-sleight-change-review-gUN3jJ.txt /private/tmp/sleight-change-review-gUN3jJ/sleight-KEEP-sleight-change-review-gUN3jJ.txt\n/Users/chrismenendez/Projects/sleight-wt/codex/change-review/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+          "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/change-review/bench/document-scope-fixture.js open /private/tmp/sleight-change-review-gUN3jJ/sleight-UNDO-sleight-change-review-gUN3jJ.txt /private/tmp/sleight-change-review-gUN3jJ/sleight-KEEP-sleight-change-review-gUN3jJ.txt\n~/Projects/sleight-wt/codex/change-review/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
         },
         {
-          "cleanupError": "Command failed: osascript -l JavaScript /Users/chrismenendez/Projects/sleight-wt/codex/change-review/bench/document-scope-fixture.js close /private/tmp/sleight-change-review-gUN3jJ/sleight-UNDO-sleight-change-review-gUN3jJ.txt /private/tmp/sleight-change-review-gUN3jJ/sleight-KEEP-sleight-change-review-gUN3jJ.txt\n/Users/chrismenendez/Projects/sleight-wt/codex/change-review/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+          "cleanupError": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/change-review/bench/document-scope-fixture.js close /private/tmp/sleight-change-review-gUN3jJ/sleight-UNDO-sleight-change-review-gUN3jJ.txt /private/tmp/sleight-change-review-gUN3jJ/sleight-KEEP-sleight-change-review-gUN3jJ.txt\n~/Projects/sleight-wt/codex/change-review/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
         }
       ],
       "traceFile": "/private/tmp/sleight-change-review-gUN3jJ/trace.jsonl",
