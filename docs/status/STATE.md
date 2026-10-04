@@ -46,11 +46,12 @@ fair benchmark tied LCU at 15/18 on Opus 5.5.
 
 Market research (Codex, gpt-6.1-sol) is in `.dev/research/2026-10-04-competitors.md`, untracked.
 Publishing it is the owner's call. Flow rules finished the three new-ground items on the roadmap.
-Codex backlog in `.dev/prompts/backlog.md`, round-2 fixes in `.dev/prompts/round-2.md` (both
-untracked). Merged from the backlog: #7 background drag research, #4 doubled-keys probe (30/30 trials
-without duplication). Not merged: #3 action notes (no turn reduction measured). Sent back with review
-findings: #1, #2, #5, #6, #8 (evidence held the owner's name), #9, #10 (simplified by the owner: the
-prompt is the opt-in), and B (rerun, the owner clicked Keep by mistake).
+Codex backlog in `.dev/prompts/backlog.md`, fixes in `.dev/prompts/round-2.md` (both untracked).
+Merged to main since 0.6.0 (unreleased): #7 background drag research, #4 doubled-keys probe, #6 drag
+window guards, #8 hover tool, #9 pre-approved apps, B change review (on by default again, provisional
+until a benchmark pass). Not merged: #3 action notes (no turn reduction). Waiting: #10 blocked apps to
+rebase (`codex-10-rebase.md`), round-2 fixes from #1, #2, #5, and #7's product prompt
+(`codex-7-background-drag-product.md`). Next: one benchmark pass while the owner is away, then 0.7.0.
 
 ## Machine state outside the repo
 
