@@ -19,6 +19,16 @@ export function validateBackgroundDrag(input) {
     if (!Number.isInteger(result[key]) || result[key] < min || result[key] > max) throw new Error(`${key} must be ${min}..${max}`);
   }
   if (!modes.includes(result.mode)) throw new Error('unknown event mode');
+  for (const key of ['command', 'select']) {
+    if (input[key] !== undefined) {
+      if (typeof input[key] !== 'boolean') throw new Error(`${key} must be boolean`);
+      result[key] = input[key];
+    }
+  }
+  if (input.posting !== undefined) {
+    if (!['pid', 'psn'].includes(input.posting)) throw new Error('posting must be pid or psn');
+    result.posting = input.posting;
+  }
   if (input.abortAfterStep !== undefined) {
     if (!Number.isInteger(input.abortAfterStep) || input.abortAfterStep < 1 || input.abortAfterStep > result.steps) throw new Error('abortAfterStep outside drag');
     result.abortAfterStep = input.abortAfterStep;
@@ -32,6 +42,42 @@ export function validateBackgroundDrag(input) {
     result.windowId = input.windowId;
   }
   return result;
+}
+// AXBoundsForRange for a zero-length range can refer to the insertion caret
+// above the glyph line. Use the final visible glyph for this single-line fixture.
+export function textDragPoints({ startBounds, endGlyphBounds, windowOrigin }) {
+  for (const [value, size] of [[startBounds, 4], [endGlyphBounds, 4], [windowOrigin, 2]]) {
+    if (!Array.isArray(value) || value.length !== size || !value.every(Number.isFinite)) throw new Error('glyph bounds unavailable');
+  }
+  if (startBounds[2] <= 0 || startBounds[3] <= 0 || endGlyphBounds[2] <= 0 || endGlyphBounds[3] <= 0 ||
+      Math.abs(startBounds[1] + startBounds[3] / 2 - endGlyphBounds[1] - endGlyphBounds[3] / 2) > 1) {
+    throw new Error('expected visible glyphs on one line');
+  }
+  return { from: [startBounds[0] + startBounds[2] / 2 - windowOrigin[0], startBounds[1] + startBounds[3] / 2 - windowOrigin[1]],
+    to: [endGlyphBounds[0] + endGlyphBounds[2] + 3 - windowOrigin[0], endGlyphBounds[1] + endGlyphBounds[3] / 2 - windowOrigin[1]] };
+}
+export function judgeTextDrag(drag, after) {
+  const moved = after?.ok === true && typeof after.text === 'string' && /^\s*beta gamma\s*alpha\s*$/.test(after.text);
+  return { moved, backgroundMove: moved && drag?.ok === true && drag.pointerUnchanged === true &&
+    drag.stayedBackground === true && after.active === false };
+}
+// Only app dependencies are injected. The sequence and cancellation policy are
+// shared by the live runner and the no-app regression tests.
+export async function runTextDragTrial({ cancelled, open, wait, select, drag, read, close }) {
+  const check = () => { if (cancelled()) throw new Error('cancelled'); };
+  let openAttempted = false;
+  try {
+    check(); openAttempted = true; await open();
+    check(); await wait(1200);
+    check(); await select();
+    check(); await drag();
+    check(); await wait(1000);
+    check(); await read();
+  } finally { if (openAttempted) await close(); }
+}
+export function textDragExitCode(runs, cancelled = false) {
+  return cancelled || !runs.some(r => r.backgroundMove) ||
+    runs.some(r => r.error || r.cleanupError || r.drag?.ok === false || r.after?.ok !== true) ? 1 : 0;
 }
 let helper;
 async function compile() {

@@ -200,7 +200,11 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   app comes to the front and your pointer moves for a few seconds before both go back. A drop at the
   end of a line doesn't put a space before the word. A background version
   ([prototype and results](docs/benchmarks/2026-10-03-background-drag.md)) reached a test app in 5/5
-  quiet trials and 2/5 during real use, but moved TextEdit text 0/10, so it isn't in the plugin.
+  quiet trials and 2/5 during real use. The first TextEdit trials moved text 0/10. A
+  [follow-up](docs/benchmarks/2026-10-04-background-text-drag.md) found the drop point 13 px above
+  the glyph line. With that point corrected, PID posting moved text 4/4 with unchanged pointer
+  samples and TextEdit inactive. Drops still join `gammaalpha` without a space. These are small
+  prototype trials on one macOS build. The background path remains outside the plugin.
 - There's no real hover, since events go to the app and the real pointer never moves. The skill covers
   most cases: tooltips are readable as `Help:` text in the UI state, and hover menus usually open through
   an element's secondary actions, a right-click or a key. Mouse-moved events posted to a background app

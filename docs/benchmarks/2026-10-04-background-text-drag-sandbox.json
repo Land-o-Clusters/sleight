@@ -1,0 +1,100 @@
+{
+  "startedAt": "2026-10-04T13:38:23.855Z",
+  "commands": [
+    {
+      "command": "/usr/bin/sw_vers",
+      "args": [],
+      "startedAt": "2026-10-04T13:38:23.856Z",
+      "stdout": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+      "stderr": "",
+      "exitCode": 0,
+      "endedAt": "2026-10-04T13:38:23.863Z"
+    },
+    {
+      "command": "/usr/bin/swiftc",
+      "args": [
+        "-O",
+        "-module-cache-path",
+        "/private/tmp/sleight-text-drag-followup-lsHIpA/module-cache",
+        "-o",
+        "/private/tmp/sleight-text-drag-followup-lsHIpA/fixture",
+        "bench/textedit-drag-fixture.swift"
+      ],
+      "startedAt": "2026-10-04T13:38:23.863Z",
+      "stdout": "",
+      "stderr": "",
+      "exitCode": 0,
+      "endedAt": "2026-10-04T13:38:45.558Z"
+    },
+    {
+      "command": "/usr/bin/swiftc",
+      "args": [
+        "-O",
+        "-module-cache-path",
+        "/private/tmp/sleight-text-drag-followup-lsHIpA/module-cache",
+        "-o",
+        "/private/tmp/sleight-text-drag-followup-lsHIpA/drag",
+        "bench/background-drag/background-drag.swift"
+      ],
+      "startedAt": "2026-10-04T13:38:45.558Z",
+      "stdout": "",
+      "stderr": "",
+      "exitCode": 0,
+      "endedAt": "2026-10-04T13:38:46.917Z"
+    },
+    {
+      "command": "/usr/bin/open",
+      "args": [
+        "-g",
+        "-a",
+        "TextEdit",
+        "/private/tmp/sleight-text-drag-followup-lsHIpA/sleight-text-drag-followup-lsHIpA-corrected-control.txt"
+      ],
+      "startedAt": "2026-10-04T13:38:46.990Z",
+      "stdout": "",
+      "stderr": "Unable to find application named 'TextEdit'\n",
+      "exitCode": 1,
+      "signal": null,
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-text-drag-followup-lsHIpA/sleight-text-drag-followup-lsHIpA-corrected-control.txt\nUnable to find application named 'TextEdit'\n",
+      "endedAt": "2026-10-04T13:38:47.086Z"
+    },
+    {
+      "command": "/usr/bin/osascript",
+      "args": [
+        "bench/close-textedit-fixture.applescript",
+        "/private/tmp/sleight-text-drag-followup-lsHIpA/sleight-text-drag-followup-lsHIpA-corrected-control.txt"
+      ],
+      "startedAt": "2026-10-04T13:38:47.086Z",
+      "stdout": "",
+      "stderr": "2026-10-04 09:38:47.299 osascript[57463:87580077] Error received in message reply handler: Connection invalid\n2026-10-04 09:38:47.299 osascript[57463:87580079] Connection Invalid error for service com.apple.hiservices-xpcservice.\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n",
+      "exitCode": 1,
+      "signal": null,
+      "error": "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-text-drag-followup-lsHIpA/sleight-text-drag-followup-lsHIpA-corrected-control.txt\n2026-10-04 09:38:47.299 osascript[57463:87580077] Error received in message reply handler: Connection invalid\n2026-10-04 09:38:47.299 osascript[57463:87580079] Connection Invalid error for service com.apple.hiservices-xpcservice.\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n",
+      "endedAt": "2026-10-04T13:38:47.303Z"
+    }
+  ],
+  "runs": [
+    {
+      "id": "corrected-control",
+      "holdMs": 500,
+      "command": true,
+      "posting": "pid",
+      "path": "/private/tmp/sleight-text-drag-followup-lsHIpA/sleight-text-drag-followup-lsHIpA-corrected-control.txt",
+      "startedAt": "2026-10-04T13:38:46.989Z",
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-text-drag-followup-lsHIpA/sleight-text-drag-followup-lsHIpA-corrected-control.txt\nUnable to find application named 'TextEdit'\n",
+      "cleanupError": "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-text-drag-followup-lsHIpA/sleight-text-drag-followup-lsHIpA-corrected-control.txt\n2026-10-04 09:38:47.299 osascript[57463:87580077] Error received in message reply handler: Connection invalid\n2026-10-04 09:38:47.299 osascript[57463:87580079] Connection Invalid error for service com.apple.hiservices-xpcservice.\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n",
+      "endedAt": "2026-10-04T13:38:47.304Z"
+    }
+  ],
+  "platform": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+  "prepared": true,
+  "exitCode": 1,
+  "approval": {
+    "hookSpecificOutput": {
+      "hookEventName": "Elicitation",
+      "action": "accept",
+      "content": {}
+    }
+  },
+  "error": "cancelled"
+}
