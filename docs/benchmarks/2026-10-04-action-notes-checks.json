@@ -1,0 +1,28 @@
+{
+  "worktree": "~/Projects/sleight-wt/action-result-note",
+  "branch": "codex/action-result-note",
+  "checks": [
+    { "command": "npm test", "phase": "baseline", "exit": 0, "passed": 157 },
+    { "command": "node --test (action-note cases) tests/relay.test.mjs", "phase": "red", "exit": 1, "failed": 5, "passed": 1 },
+    { "command": "node --test (action-note cases) tests/relay.test.mjs", "phase": "green", "exit": 0, "passed": 6 },
+    { "command": "node --test (dialog, partial, concurrent cases) tests/relay.test.mjs", "phase": "red", "exit": 1, "failed": 1, "passed": 2 },
+    { "command": "node --test (action-note cases) tests/relay.test.mjs", "phase": "green", "exit": 0, "passed": 9 },
+    { "command": "npm run check", "phase": "first check", "exit": 0, "unitPassed": 166, "modPassed": 8 },
+    { "command": "node --test (joined-header case) tests/relay.test.mjs", "phase": "red", "exit": 1, "failed": 1 },
+    { "command": "node --test (action-note cases) tests/relay.test.mjs", "phase": "green", "exit": 0, "passed": 10 },
+    { "command": "npm run lint:prose", "phase": "missing local style pack", "exit": 2 },
+    { "command": "vale sync", "exit": 0 },
+    { "command": "npm run lint:prose", "phase": "first docs", "exit": 1, "flags": 5 },
+    { "command": "npm run lint:prose", "phase": "corrected design", "exit": 0, "flags": 0 },
+    { "command": "node --test tests/action-notes-verdict.test.mjs", "exit": 0, "passed": 3 },
+    { "command": "node --test (nonzero-root case) tests/relay.test.mjs", "phase": "red", "exit": 1, "failed": 1 },
+    { "command": "node --test (nonzero-root case) tests/relay.test.mjs", "phase": "green", "exit": 0, "passed": 1 },
+    { "command": "npm run check", "phase": "final code", "exit": 0, "unitPassed": 171, "modPassed": 8 },
+    { "command": "npm run lint:prose", "phase": "results added", "exit": 1, "flags": 3 },
+    { "command": "npm run lint:prose", "phase": "final docs", "exit": 0, "flags": 0, "files": 16 },
+    { "command": "node --check bench/action-notes-live.mjs", "phase": "final harness", "exit": 0 },
+    { "command": "git diff --check", "exit": 0 },
+    { "command": "test ! -d /tmp/sleight-live.lock", "exit": 0 }
+  ],
+  "note": "Parenthesized case names abbreviate the test-name-pattern selection. Expected red tests preceded their fixes. Live exits are in the raw attempts and series log."
+}
