@@ -393,6 +393,7 @@ export function run({ leaseDirectory } = {}) {
     serverOut: child.stdout,
     sessionId,
     clipboardHelper: join(LIB, 'clipboard.js'),
+    clipboardMode: process.env.SLEIGHT_CLIPBOARD,
     // SLEIGHT_APPROVAL_SCOPE=once asks again on every action instead.
     approvalScope: ['once', 'document'].includes(process.env.SLEIGHT_APPROVAL_SCOPE) ? process.env.SLEIGHT_APPROVAL_SCOPE : 'session',
     ask: approvalPrompt(),
