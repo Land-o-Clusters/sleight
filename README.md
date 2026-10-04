@@ -281,7 +281,11 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   pass it. Background scroll reaches the app's focused view. System Events' keystroke doesn't act on
   an embedded newline in Terminal, so blocked_app sends one Return key press per newline instead.
   The window screenshot needs Screen Recording for the app that runs Claude Code, on top of the
-  Accessibility permission `menu_bar` and `drag` already need.
+  The window screenshot needs Screen Recording for the app that runs Claude Code, on top of the
+  Accessibility permission `menu_bar` and `drag` already need, and it captures only a window that is
+  on screen. In the live check the Codex app's window exposed only its window-control buttons to the
+  driver's walk (its UI is web content), so a harmless click there had no target; Claude refused the
+  window controls and reported, which is the intended behavior.
 - `claude -p` can't answer approval prompts. List apps in the user's [preapproval file](#preapproved-apps)
   before starting. Unlisted apps and requests above their listed risk still need a person.
 - The preapproval loader proves file ownership, not who wrote it. Any process running as you,

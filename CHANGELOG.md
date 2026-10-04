@@ -12,12 +12,13 @@
   The relay forgets each answer, and the preapproved list cannot cover these sends. Settings
   windows of these apps are refused. Actions take app-scope input leases and pass through the
   flow rules; clicks on buttons named like Approve, Allow, Run or Accept are named in the result.
-  Built by Claude (GLM). `npm run check` passes (21 new tests). Live: with the owner clicking Allow,
+  Built by Claude (GLM). `npm run check` passes (21 new tests). Live, with the owner clicking Allow:
   a headless run read Terminal in the background, was shown the exact text `echo sleight\n` before
-  sending, typed it with the front app restored, and read again; a declined consent stopped the run
-  both times it happened (`docs/benchmarks/*-blocked-*.json` has every attempt). The final
-  echo-output confirmation and the Codex window click are reruns away:
-  `sh bench/blocked-live.sh terminal|codex`.
+  sending, typed it with the front app restored, and the output line `sleight` appeared; a declined
+  consent stopped the run both times it happened; the Codex app's window was read in the background
+  (`docs/benchmarks/*-blocked-*.json` has every attempt, timeouts included). The Codex harmless
+  click didn't happen: the app's window exposed only its window-control buttons to the driver's
+  walk, and the agent refused to click those (see Known problems).
 
 ## 0.6.0 (2026-10-04)
 
