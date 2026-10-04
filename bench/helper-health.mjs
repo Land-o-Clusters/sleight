@@ -12,13 +12,13 @@ import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { resolveServer, doctor } from '../plugins/sleight/lib/launch.mjs';
 import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 import { BENCH_APPS } from './tasks.mjs';
-import { requirePendingKill, killHelper, requireIdleKill } from './helper-kill-protocol.mjs';
+import { requirePendingKill, killHelper, requireIdleKill, inspectHelperProcesses } from './helper-kill-protocol.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const execute = promisify(execFile);
 const mode = process.argv[2];
 const remaining = process.argv.includes('--remaining');
-assert.ok(['smoke', 'kill'].includes(mode), 'choose smoke or kill');
+assert.ok(['smoke', 'recovery', 'kill'].includes(mode), 'choose smoke, recovery or kill');
 const bank = await mkdtemp('/private/tmp/sleight-helper-health-');
 const document = join(bank, basename(bank) + '.txt');
 const output = join(root, 'docs/benchmarks', `2026-10-04-helper-${mode}-${basename(bank)}.json`);
@@ -52,18 +52,10 @@ async function helperPids() {
 }
 
 async function inspect(pids) {
-  if (!pids.length) return [];
-  try {
-    return JSON.parse((await execute('/Users/chrismenendez/.codex/bin/codex-macos-inspect', ['process-status', ...pids.map(String)])).stdout);
-  } catch (err) {
-    if (err.code !== 70) throw err;
-    // All observed descendants may exit before the fixed process snapshot.
-    // Keep the diagnostic failure as evidence, without treating it as a wedge.
-    return [{ pids, inspectionUnavailable: err.stderr?.trim() || err.message }];
-  }
+  return inspectHelperProcesses(pids, execute);
 }
 
-async function client(label) {
+async function client(label, injectTimeouts = 0) {
   const s = resolveServer(); assert.ok(!s.error, s.error);
   const child = spawn(s.command, s.args, { detached: true, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...s.env } });
   let collected = false;
@@ -75,7 +67,10 @@ async function client(label) {
   let armed;
   let killed;
   const started = Date.now();
-  const cancel = () => { for (const p of pending.values()) p.reject(new Error('cancelled')); pending.clear(); };
+  let recoveryResolve, recoveryReject, latchedAt;
+  const recovery = new Promise((resolve, reject) => { recoveryResolve = resolve; recoveryReject = reject; });
+  recovery.catch(() => {});
+  const cancel = () => { for (const p of pending.values()) p.reject(new Error('cancelled')); pending.clear(); recoveryReject(new Error('cancelled')); };
   child.on('error', cancel);
   child.on('exit', (code, signal) => {
     for (const p of pending.values()) p.reject(new Error(`engine exited (${signal || code})`)); pending.clear();
@@ -89,7 +84,26 @@ async function client(label) {
     killed = receipt;
     records.push({ label, event: 'SIGKILL', ...killed });
   };
-  const relay = createRelay({ clientIn, clientOut, serverIn: child.stdin, serverOut: child.stdout, sessionId: label,
+  let serverOut = child.stdout;
+  if (injectTimeouts) {
+    serverOut = new PassThrough();
+    let nativeBuffer = '';
+    child.stdout.setEncoding('utf8').on('data', chunk => {
+      nativeBuffer += chunk;
+      let end;
+      while ((end = nativeBuffer.indexOf('\n')) >= 0) {
+        const line = nativeBuffer.slice(0, end); nativeBuffer = nativeBuffer.slice(end + 1);
+        const msg = JSON.parse(line);
+        if (injectTimeouts && typeof msg.id === 'number' && msg.id > 0 && !msg.method && msg.result && !msg.result.isError) {
+          records.push({ label, event: 'native-result-before-injected-timeout', msg });
+          msg.result = { ...msg.result, isError: true, content: [{ type: 'text', text: 'Benchmark injected -10005 timeoutReached (native read succeeded)' }] };
+          injectTimeouts--;
+        }
+        serverOut.write(JSON.stringify(msg) + '\n');
+      }
+    });
+  }
+  const relay = createRelay({ clientIn, clientOut, serverIn: child.stdin, serverOut, sessionId: label,
     ask: async message => {
       const app = /^Allow Computer Use to use "(.+)"\?$/.exec(message)?.[1];
       const action = BENCH_APPS.includes(app) ? 'accept' : 'decline';
@@ -97,9 +111,11 @@ async function client(label) {
       return action;
     },
     trace: (direction, msg) => {
+      if (direction === 'helper-stuck') latchedAt = Date.now();
+      if (direction === 'helper-recovered') recoveryResolve({ ...msg, afterLatchMs: Date.now() - latchedAt });
       // getState inventories unrelated apps. Retain its success, not private window titles.
       if (direction === 'to-client' && msg.id === 1 && mode === 'kill') records.push({ label, direction, inventory: { isError: msg.result?.isError ?? false, error: msg.error } });
-      else records.push({ label, direction, msg });
+      else records.push({ label, direction, elapsedMs: Date.now() - started, msg });
       if (armed && direction === 'to-server' && msg.result?.action === 'accept' && !killed) {
         killTimer = setTimeout(doKill, armed.delayMs);
       }
@@ -129,6 +145,10 @@ async function client(label) {
   });
   const c = {
     child, cancel,
+    waitRecovery: () => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('automatic recovery did not complete within 30 s')), 30000);
+      recovery.then(value => { clearTimeout(timer); resolve(value); }, err => { clearTimeout(timer); reject(err); });
+    }),
     read: () => c.call('let app = await cua.getApp("Calculator")'),
     call: code => request('tools/call', { name: 'js', arguments: { code, timeout_ms: 8000 } }),
     killDuring: async (code, delayMs, target, afterForward = false) => {
@@ -208,6 +228,30 @@ try {
       const code = await doctor({ log: line => logs.push(line) });
       await record({ trial, doctor: { code, logs } });
       assert.equal(code, 0);
+    }
+  } else if (mode === 'recovery') {
+    for (let trial = 0; trial < 3; trial++) {
+      if (stopping) throw new Error('cancelled');
+      console.log(`Recovery trial: ${trial}`);
+      const c = await client(`recovery-${trial}`, 2);
+      try {
+        for (let read = 0; read < 2; read++) {
+          const result = await c.read();
+          await record({ trial, injectedRead: read, result });
+          assert.ok(result.isError, 'native read must succeed before the synthetic timeout is injected');
+          if (read === 1) assert.match(texts(result), /sleight will retry by itself/);
+        }
+        const other = await c.call('let chess = await cua.getApp("Chess")');
+        await record({ trial, otherApp: other }); assert.ok(!other.isError, texts(other));
+        const stopped = await c.read();
+        await record({ trial, stoppedRetry: stopped }); assert.ok(stopped.isError);
+        const recovered = await c.waitRecovery();
+        await record({ trial, automaticRecovery: recovered });
+        assert.ok(recovered.afterLatchMs >= 20000);
+        const full = await c.read();
+        await record({ trial, visibleReadAfterRecovery: full });
+        assert.ok(!full.isError && /Window:.*Calculator/.test(texts(full)), texts(full));
+      } finally { await c.close(); }
     }
   } else {
     if (!await health('pre-kill-baseline')) {

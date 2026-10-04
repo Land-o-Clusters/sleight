@@ -43,19 +43,215 @@ const tick = () => new Promise(r => setImmediate(r));
 const helperRead = (h, id, code = 'let app = await cua.getApp("Calculator")') => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } });
 const helperReply = (h, id, text = 'Error: -10005 timeoutReached', isError = true) => h.fromServer({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }], isError } });
 
-test('two failed helper reads tell Claude to stop and ask the user to restart ChatGPT', () => {
+test('two failed helper reads stop that app and promise automatic recovery reads', () => {
   const h = harness();
   helperRead(h, 1); helperReply(h, 1);
   assert.doesNotMatch(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
   helperRead(h, 2, 'await app.getAXState({ disableDiffing: true })'); helperReply(h, 2);
   assert.equal(h.toClient.at(-1).result.isError, true);
-  assert.match(h.toClient.at(-1).result.content.at(-1).text, /SkyComputerUseService.*stuck.*Stop retrying.*user.*restart ChatGPT/s);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /SkyComputerUseService.*stuck.*Stop retrying.*user.*restart ChatGPT.*sleight will retry by itself/s);
   const sent = h.toServer.length;
   helperRead(h, 3);
   helperRead(h, 4, 'await app.click(1)');
-  h.fromClient({ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'js_reset', arguments: {} } });
   assert.equal(h.toServer.length, sent, 'no engine retry or action after the stuck diagnosis');
-  assert.ok(h.toClient.slice(-3).every(m => m.result.isError));
+  assert.ok(h.toClient.slice(-2).every(m => m.result.isError));
+});
+
+test('a stuck Calculator does not disable TextEdit reads or actions on its known handle', () => {
+  const h = harness();
+  helperRead(h, 1, 'const te = await cua.getApp("TextEdit")');
+  helperReply(h, 1, 'Window: "Untitled", App: TextEdit', false);
+  helperRead(h, 2); helperReply(h, 2);
+  helperRead(h, 3); helperReply(h, 3);
+  const sent = h.toServer.length;
+  helperRead(h, 4, 'await te.getAXState()');
+  helperReply(h, 4, 'Window: "Untitled", App: TextEdit', false);
+  helperRead(h, 5, 'await te.pressKey("super+a")');
+  assert.equal(h.toServer.length, sent + 2);
+  helperRead(h, 6, 'await app.click(1)');
+  assert.equal(h.toServer.length, sent + 2, 'the Calculator handle remains blocked');
+  helperRead(h, 7, 'await cua.getState()');
+  helperReply(h, 7, 'inventory', false);
+  helperRead(h, 8);
+  assert.equal(h.toServer.length, sent + 3, 'inventory success does not clear Calculator');
+});
+
+test('timeout counts stay separate across apps and a reset cannot erase them', () => {
+  const h = harness();
+  helperRead(h, 1); helperReply(h, 1);
+  helperRead(h, 2, 'let te = await cua.getApp("TextEdit")'); helperReply(h, 2);
+  assert.doesNotMatch(JSON.stringify(h.toClient), /restart ChatGPT/);
+  helperRead(h, 3); helperReply(h, 3);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+  h.fromClient({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'js_reset', arguments: {} } });
+  assert.equal(h.toServer.at(-1).params.name, 'js_reset');
+  helperRead(h, 5);
+  assert.equal(h.toServer.at(-1).id, 4, 'reset is available but does not clear the app fault');
+  helperRead(h, 6, 'let te = await cua.getApp("TextEdit")'); helperReply(h, 6);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+});
+
+test('automatic recovery reads run every 20 s and a successful read clears the app fault', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const h = harness();
+  helperRead(h, 1); helperReply(h, 1);
+  helperRead(h, 2); helperReply(h, 2);
+  const sent = h.toServer.length;
+  t.mock.timers.tick(19999);
+  assert.equal(h.toServer.length, sent);
+  t.mock.timers.tick(1);
+  const first = h.toServer.at(-1);
+  assert.equal(h.toServer.length, sent + 1);
+  assert.equal(first.params.name, 'js');
+  assert.match(first.params.arguments.code, /await cua.getApp\("Calculator"\)/);
+  assert.ok(first.params.arguments.timeout_ms <= 5000);
+  helperRead(h, 3);
+  assert.equal(h.toServer.length, sent + 1, 'no parallel recovery read');
+  helperReply(h, first.id);
+  t.mock.timers.tick(19999);
+  assert.equal(h.toServer.length, sent + 1);
+  t.mock.timers.tick(1);
+  const second = h.toServer.at(-1);
+  assert.equal(h.toServer.length, sent + 2);
+  helperReply(h, second.id, 'Window: "Calculator", App: Calculator', false);
+  assert.ok(!h.toClient.some(m => m.id === second.id), 'internal probes do not leak RPC responses');
+  helperRead(h, 4);
+  helperReply(h, 4, 'Window: "Calculator", App: Calculator', false);
+  helperRead(h, 5, 'await app.click(1)');
+  assert.equal(h.toServer.at(-1).id, 5, 'actions can resume without a new relay');
+  helperReply(h, 5, 'Window: "Calculator", App: Calculator', false);
+  const recovered = h.toServer.length;
+  t.mock.timers.tick(60000);
+  assert.equal(h.toServer.length, recovered, 'success cancels future probes');
+  h.relay.dispose();
+});
+
+test('a failed recovery read cannot clear the fault and disposal cancels future probes', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const h = harness();
+  helperRead(h, 1); helperReply(h, 1);
+  helperRead(h, 2); helperReply(h, 2);
+  t.mock.timers.tick(20000);
+  const probe = h.toServer.at(-1);
+  assert.notEqual(probe.id, 2);
+  helperReply(h, probe.id, 'permission denied');
+  helperRead(h, 3, 'await app.click(1)');
+  assert.equal(h.toServer.at(-1).id, probe.id);
+  h.relay.dispose();
+  const sent = h.toServer.length;
+  t.mock.timers.tick(60000);
+  assert.equal(h.toServer.length, sent);
+});
+
+test('a stalled automatic read is bounded, does not leak late replies and can retry', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const h = harness();
+  helperRead(h, 1); helperReply(h, 1);
+  helperRead(h, 2); helperReply(h, 2);
+  t.mock.timers.tick(20000);
+  const probe = h.toServer.at(-1);
+  assert.notEqual(probe.id, 2);
+  t.mock.timers.tick(5500);
+  helperReply(h, probe.id);
+  assert.ok(!h.toClient.some(m => m.id === probe.id));
+  t.mock.timers.tick(14500);
+  assert.notEqual(h.toServer.at(-1).id, probe.id);
+  h.relay.dispose();
+});
+
+test('recovery reads wait while another engine call is pending', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const h = harness();
+  helperRead(h, 1); helperReply(h, 1);
+  helperRead(h, 2); helperReply(h, 2);
+  helperRead(h, 3, 'let te = await cua.getApp("TextEdit")');
+  const sent = h.toServer.length;
+  t.mock.timers.tick(20000);
+  assert.equal(h.toServer.length, sent);
+  helperReply(h, 3, 'Window: "Untitled", App: TextEdit', false);
+  t.mock.timers.tick(1000);
+  assert.equal(h.toServer.length, sent + 1);
+  h.relay.dispose();
+});
+
+test('parallel replies for one app remain valid after another read succeeds', () => {
+  const h = harness();
+  helperRead(h, 1); helperRead(h, 2);
+  helperReply(h, 1, 'Window: "Calculator", App: Calculator', false);
+  assert.doesNotThrow(() => helperReply(h, 2));
+  helperRead(h, 3); helperReply(h, 3);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+  const other = harness();
+  helperRead(other, 1); helperRead(other, 2);
+  helperReply(other, 1, 'Window: "Calculator", App: Calculator', false);
+  assert.doesNotThrow(() => helperReply(other, 2, 'Window: "Calculator", App: Calculator', false));
+});
+
+test('an eligible foreground read takes the recovery slot without a second automatic probe', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const h = harness();
+  helperRead(h, 1); helperReply(h, 1);
+  helperRead(h, 2); helperReply(h, 2);
+  helperRead(h, 3, 'let chess = await cua.getApp("Chess")');
+  t.mock.timers.tick(20000);
+  helperRead(h, 4);
+  assert.equal(h.toServer.at(-1).id, 4);
+  helperRead(h, 5);
+  assert.equal(h.toServer.at(-1).id, 4);
+  helperReply(h, 4);
+  helperReply(h, 3, 'Window: "Chess", App: Chess', false);
+  const sent = h.toServer.length;
+  t.mock.timers.tick(19999);
+  assert.equal(h.toServer.length, sent);
+  t.mock.timers.tick(1);
+  assert.equal(h.toServer.length, sent + 1);
+  h.relay.dispose();
+});
+
+test('learned bundle aliases and screenshot reads share the same app fault', () => {
+  const h = harness();
+  helperRead(h, 1, "const calc = await cua.getApp('Calculator')");
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: 'Window: "Calculator", App: Calculator' }], _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.calculator' } } } } });
+  helperRead(h, 2, 'await calc.getScreenshot()'); helperReply(h, 2);
+  helperRead(h, 3, 'await cua.getApp("com.apple.calculator")'); helperReply(h, 3);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+  const sent = h.toServer.length;
+  helperRead(h, 4, 'await calc.getAXStateAndScreenshot()');
+  assert.equal(h.toServer.length, sent);
+});
+
+test('surrounding whitespace cannot combine timeout counts for different apps', () => {
+  const h = harness();
+  helperRead(h, 1, '  let app = await cua.getApp("Calculator")  '); helperReply(h, 1);
+  helperRead(h, 2, '\n const te = await cua.getApp("TextEdit")\n'); helperReply(h, 2);
+  assert.doesNotMatch(JSON.stringify(h.toClient), /restart ChatGPT/);
+  helperRead(h, 3, ' await app.getAXState() '); helperReply(h, 3);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+  const sent = h.toServer.length;
+  helperRead(h, 4, '  await cua.getApp("Chess")  ');
+  assert.equal(h.toServer.length, sent + 1);
+});
+
+test('hidden recovery forces a visible full AX read before actions can resume', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const h = harness();
+  helperRead(h, 1); helperReply(h, 1);
+  helperRead(h, 2); helperReply(h, 2);
+  t.mock.timers.tick(20000);
+  helperReply(h, h.toServer.at(-1).id, 'Window: "Calculator", App: Calculator', false);
+  const sent = h.toServer.length;
+  helperRead(h, 3, 'await app.click(1)');
+  assert.equal(h.toServer.length, sent);
+  assert.match(h.toClient.at(-1).result.content[0].text, /full.*read/i);
+  helperRead(h, 4, 'await app.getAXState({disableDiffing:false,emit:false})');
+  const expression = h.toServer.at(-1).params.arguments.code.split('\n').at(-1);
+  assert.match(expression, /getAXState\(\{\s*disableDiffing:\s*true/);
+  assert.doesNotMatch(expression, /disableDiffing:\s*false/);
+  helperReply(h, 4, 'Window: "Calculator", App: Calculator\n1 button 1', false);
+  helperRead(h, 5, 'await app.click(1)');
+  assert.equal(h.toServer.at(-1).id, 5);
+  helperReply(h, 5, 'Window: "Calculator", App: Calculator', false);
+  h.relay.dispose();
 });
 
 test('a successful helper read resets consecutive timeouts, but documentation does not', () => {

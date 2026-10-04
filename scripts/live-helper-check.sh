@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-case "${1:-}" in smoke|kill) ;; *) echo 'choose smoke or kill' >&2; exit 2 ;; esac
+case "${1:-}" in smoke|recovery|kill) ;; *) echo 'choose smoke, recovery or kill' >&2; exit 2 ;; esac
 held=0
 child=
 release() { if [ "$held" -eq 1 ]; then rmdir /tmp/sleight-live.lock; fi; }
