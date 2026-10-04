@@ -116,6 +116,9 @@ export function createRelay({
   ask,
   localTools,
   flowRules,
+  // Off by default: its window guard stops Open dialogs and late-found documents (0/2 TextEdit
+  // benchmark tasks, 2026-10-04). SLEIGHT_CHANGE_REVIEW=1 turns it on.
+  changeReview = false,
   idleTurnEndMs,
   trace = () => {},
 }) {
@@ -394,7 +397,7 @@ export function createRelay({
       if (flowAsking) { flowStop(msg, 'wait for the user decision'); return; }
       if (flowRules && msg.params?.name === FLOW_TOOL.name) { flowException(msg); return; }
       if (flowRules && !['js', 'drag', 'menu_bar'].includes(msg.params?.name)) { flowPermit = undefined; flowPending = undefined; }
-      if (msg.params?.name === REVIEW_TOOL.name) { reviewChanges(msg); return; }
+      if (changeReview && msg.params?.name === REVIEW_TOOL.name) { reviewChanges(msg); return; }
       if (reviewing) { changeStop(msg, 'the user is reviewing changes, wait for their decision'); return; }
     }
     const originalCode = msg.params?.arguments?.code;
@@ -460,8 +463,8 @@ export function createRelay({
         const read = typeof originalCode === 'string' && isDocumentRead(originalCode);
         let entry;
         try {
-          if (lastWindow?.url?.startsWith('file://') && changeCalls.size) throw new Error('another engine call is pending, wait for its result');
-          if (!read && lastWindow?.url?.startsWith('file://')) {
+          if (changeReview && lastWindow?.url?.startsWith('file://') && changeCalls.size) throw new Error('another engine call is pending, wait for its result');
+          if (changeReview && !read && lastWindow?.url?.startsWith('file://')) {
             entry = changes.before(lastWindow);
             trace('snapshot-before-call', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });
           }
@@ -505,7 +508,7 @@ export function createRelay({
       changeCalls.delete(msg.id);
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
       lastWindow = windowFromText(text);
-      if (!call.read) {
+      if (changeReview && !call.read) {
         changes.after(call.entry, !msg.error && !msg.result?.isError && documentKey(lastWindow) === call.expected);
         // A window first identified after an action has no trustworthy before copy.
         for (const window of windowsInText(text)) {
@@ -549,7 +552,7 @@ export function createRelay({
         .filter(t => !HIDDEN_TOOLS.has(t.name))
         .filter(t => !documentMode || t.name === 'js' || t.name === TURN_END_TOOL)
         .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t))
-        .concat(documentMode ? [DOCUMENT_TOOL] : (localTools?.tools ?? []), [REVIEW_TOOL], flowRules ? [FLOW_TOOL] : []);
+        .concat(documentMode ? [DOCUMENT_TOOL] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : []);
     }
     toClient(msg);
   });

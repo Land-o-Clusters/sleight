@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0 (unreleased)
+
+- `review_changes`, opt-in with `SLEIGHT_CHANGE_REVIEW=1`: lists the saved files Claude changed this
+  session and lets the user choose Keep or Undo for each one in a prompt. The relay copies a `file://`
+  document before a `js` call that may edit it and deletes the copies when the session ends
+  (`docs/design/change-review.md`). Built by Codex. In the live check, Undo restored one TextEdit
+  file and Keep left the other in 1/5 attempts. The sandbox and a locked Mac stopped the first two,
+  and the user chose Keep for both files in the next two. It's off by default because its window
+  guard failed both benchmark tasks that open a TextEdit file.
+- Flow rules, opt-in with `SLEIGHT_FLOW_RULES=1`: user-written rules for text moving between apps,
+  checked in the relay before a call is forwarded, with a one-call exception only the user can grant
+  (`docs/design/flow-rules.md`). Built by Codex. It guards against mistakes, since code can build
+  strings at runtime. The live TextEdit check passed in 2/5 attempts. One failure forwarded a
+  protected value, and the parser fix that followed has a regression test.
+
 ## 0.4.0 (2026-10-04)
 
 - `SLEIGHT_APPROVAL_SCOPE=document` approves one window or document for the session instead of a

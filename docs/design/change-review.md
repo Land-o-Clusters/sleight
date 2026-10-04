@@ -1,5 +1,7 @@
 # Change review
 
+Off by default. `SLEIGHT_CHANGE_REVIEW=1` turns it on.
+
 ## Capture
 
 The relay tracks Window and URL headers from completed `js` results. Before a

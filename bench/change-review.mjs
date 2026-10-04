@@ -43,7 +43,7 @@ try {
   console.log(`Fixtures: ${bank}\nApprove the TextEdit app prompt. Then choose Undo for the UNDO document and Keep for the KEEP document. These decisions must be made by the user.`);
   child = spawn(join(ROOT, 'plugins/sleight/bin/sleight-mcp'), [], { stdio: ['pipe', 'pipe', 'inherit'],
     env: { ...process.env, SLEIGHT_APPROVAL_SCOPE: 'session', SLEIGHT_APPROVAL_PROMPT: 'dialog',
-      SLEIGHT_IDLE_TURN_END_MS: '0', SLEIGHT_TRACE: bank } });
+      SLEIGHT_IDLE_TURN_END_MS: '0', SLEIGHT_CHANGE_REVIEW: '1', SLEIGHT_TRACE: bank } });
   closed = new Promise(resolve => child.once('close', resolve));
   const rejectAll = err => { for (const p of pending.values()) p.reject(err); pending.clear(); };
   child.on('error', rejectAll);

@@ -25,7 +25,7 @@ function harness(options = {}) {
   const toClient = [];
   serverIn.setEncoding('utf8').on('data', d => d.split('\n').filter(Boolean).forEach(l => toServer.push(JSON.parse(l))));
   clientOut.setEncoding('utf8').on('data', d => d.split('\n').filter(Boolean).forEach(l => toClient.push(JSON.parse(l))));
-  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, sessionId: 'session-1', ...options });
+  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, sessionId: 'session-1', changeReview: true, ...options });
   relays.push(relay);
   return {
     relay,
@@ -620,6 +620,22 @@ function savedEdit(h, id, path, before, afterText) {
   h.fromServer({ jsonrpc: '2.0', id: id + 1, result: { content: [{ type: 'text', text: `Window: "${path.split('/').pop()}", App: TextEdit\nURL: ${pathToFileURL(path).href}` }] } });
 }
 const reviewCall = (h, id, args = { op: 'review' }) => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'review_changes', arguments: args } });
+
+test('change review is off unless enabled: no snapshot, no window guard, no review tool', async () => {
+  const path = join(fixtureRoot, 'off.txt');
+  writeFileSync(path, 'before\n');
+  const h = harness({ changeReview: false, trace: (direction, msg) => { if (direction === 'snapshot-before-call') throw new Error('snapshot taken'); } });
+  documentRead(h, 1, 'off.txt', pathToFileURL(path).href);
+  documentCall(h, 2);
+  assert.equal(h.toServer.find(m => m.id === 2).params.arguments.code, 'await app.typeText("hello")');
+  h.fromServer({ jsonrpc: '2.0', id: 2, result: { content: [{ type: 'text', text: 'Window: "Open", App: TextEdit' }] } });
+  documentCall(h, 3);
+  assert.ok(h.toServer.some(m => m.id === 3), 'a changed window does not stop the next action');
+  h.fromClient({ jsonrpc: '2.0', id: 4, method: 'tools/list' });
+  h.fromServer({ jsonrpc: '2.0', id: 4, result: { tools: [{ name: 'js' }] } });
+  assert.deepEqual(h.toClient.find(m => m.id === 4).result.tools.map(t => t.name), ['js']);
+  assert.equal(h.relay.snapshotDirectory, undefined);
+});
 
 test('review lists two saved documents, asks for each user decision and never forwards undo', async () => {
   const a = join(fixtureRoot, 'review-a.txt'), b = join(fixtureRoot, 'review-b.txt');

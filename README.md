@@ -211,7 +211,9 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   the turn until the session closed. Desktop sessions twice showed as busy after Claude had finished,
   and ending the turn cleared it once, so the open turn is the likely cause.
   `SLEIGHT_IDLE_TURN_END_MS` changes the wait, and 0 turns it off.
-- Change review covers saved files observed before `js` actions. Unsaved buffers, Save As targets,
+- Change review (opt-in) stops the next action whenever the window changes, including an Open
+  dialog the action itself opened, and refuses edits to a document it first saw after an action.
+  It covers saved files observed before `js` actions. Unsaved buffers, Save As targets,
   menu bar and pointer tools have no before copy. Undo changes the saved file, so reopen it before
   editing again. Autosave or a user edit after an action makes undo refuse. Arbitrary JavaScript can
   bypass the window guard or forge headers. [The design](docs/design/change-review.md) lists the limits.
@@ -274,6 +276,8 @@ panel, Escape means no, and it gives up after five minutes. Session memory works
 
 ## Review changes
 
+Set `SLEIGHT_CHANGE_REVIEW=1` to turn this on. It's off by default because its window guard stops
+normal work: in one benchmark pass it failed both TextEdit tasks that open a file (2026-10-04).
 Read the intended window with a standalone `let app = await cua.getApp("TextEdit")` before editing.
 For a document with a `file://` URL, sleight saves a private copy before the first possible edit.
 Call `review_changes` with `op: "list"` to see text diffs or size/date summaries, or `op: "review"`
@@ -406,8 +410,6 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 
 ## Roadmap
 
-- [x] Optional user flow rules, with literal checks and one-call user exceptions
-
 - [x] MCP server that survives ChatGPT updates
 - [x] Session and turn ids, so the engine can scope approvals and cleanup
 - [x] Approvals that last for the session, as in Codex
@@ -430,7 +432,8 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
   mistakes rather than a security boundary)
 - [x] Review saved-file changes and choose Keep or Undo through a user prompt
 - [ ] Review unsaved changes and app state without backing files
-- [ ] Rules for what data may move from one app to another
+- [x] Rules for what data may move from one app to another (`SLEIGHT_FLOW_RULES=1`, a guard against
+  mistakes rather than a security boundary)
 
 ## Credits
 

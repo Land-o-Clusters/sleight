@@ -75,6 +75,7 @@ sleight's `menu_bar` and `notifications` tools can:
 
 ## Review saved changes
 
+This applies only when the user has set `SLEIGHT_CHANGE_REVIEW=1`.
 Before editing a document, use a standalone `let app = await cua.getApp("App")` call to identify its
 Window and URL. sleight snapshots a `file://` document before the first possible edit. Save changes
 before review. `review_changes` with `op: "list"` shows before/after diffs or size/date summaries.
