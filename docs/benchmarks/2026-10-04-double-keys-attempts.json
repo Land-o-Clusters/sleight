@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-04",
+  "worktree": "~/Projects/sleight-wt/double-keys",
+  "branch": "codex/double-keys",
+  "base": "4409f1c9513cd3f51fd200de2da99ad0d956e4af",
+  "liveTrials": [],
+  "liveStatus": "awaiting owner-agreed foreground away window",
+  "attempts": [
+    { "command": "npm test", "exitCode": 0, "tests": 157, "passed": 157 },
+    {
+      "command": "node --test tests/relay-double-keys.test.mjs",
+      "exitCode": 1,
+      "tests": 2,
+      "passed": 1,
+      "failed": "repeated app reads and guards invoke native typing once per submitted call",
+      "error": "TypeError: Cannot read properties of undefined (reading 'title')",
+      "cause": "The test fixture lacked a saved-file URL, so it did not initialize the intended change-review guard.",
+      "correction": "Use a real temporary document and its URL; no plugin code changed."
+    },
+    { "command": "node --test tests/relay-double-keys.test.mjs", "exitCode": 0, "tests": 2, "passed": 2 },
+    { "command": "node --check bench/double-keys.mjs", "exitCode": 0 },
+    { "command": "node --check bench/double-keys-client.mjs", "exitCode": 0 },
+    { "command": "sh -n bench/double-keys-live.sh", "exitCode": 0 },
+    { "command": "node --test tests/double-keys-bench.test.mjs tests/relay-double-keys.test.mjs", "exitCode": 0, "tests": 3, "passed": 3 },
+    { "command": "npm run check", "exitCode": 0, "tests": 160, "passed": 160, "manifestValidations": 2, "modTests": 8, "modPassed": 8 },
+    { "command": "npm run lint:prose", "exitCode": 2, "error": "E201: .vale/styles does not exist in the new worktree" },
+    { "command": "vale sync", "exitCode": 0 },
+    { "command": "npm run lint:prose", "exitCode": 1, "errors": 6,
+      "rules": ["ai-tells.NegatedObject", "ai-tells.CataphoricForecasting", "ai-tells.VerbTricolon", "ai-tells.SemicolonUsage"],
+      "correction": "Reword the investigation note without suppressions" },
+    { "command": "npm run lint:prose", "exitCode": 0, "errors": 0, "warnings": 0, "suggestions": 0 },
+    { "command": "git diff --check", "exitCode": 0 },
+    { "command": "node --test tests/double-keys-bench.test.mjs tests/relay-double-keys.test.mjs", "exitCode": 0, "tests": 4, "passed": 4 },
+    { "command": "npm run check", "exitCode": 0, "tests": 161, "passed": 161, "manifestValidations": 2, "modTests": 8, "modPassed": 8 },
+    { "command": "node --check bench/double-keys.mjs", "exitCode": 0 },
+    { "command": "npm run lint:prose", "exitCode": 0, "errors": 0, "warnings": 0, "suggestions": 0 },
+    { "command": "git diff --cached --check", "exitCode": 0 }
+  ]
+}
