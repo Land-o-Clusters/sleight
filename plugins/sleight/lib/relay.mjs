@@ -45,10 +45,11 @@
 // `options.once` asks and is never remembered (a terminal command send);
 // `options.kind` and `options.detail` shape the prompt.
 //
-// `blockedApps`, when true, annotates the engine's refusals of Terminal,
-// iTerm2 and OpenAI's own apps with an offer of the local blocked_app tool,
-// which drives those apps through sleight's own Accessibility path (see
-// blocked-apps.mjs). The refusal itself is OpenAI's and is never changed.
+// When the local blocked_app tool is registered, the relay annotates the
+// engine's refusals of Terminal, iTerm2 and OpenAI's own apps with an offer of
+// it: that tool drives those apps through sleight's own Accessibility path
+// (see blocked-apps.mjs), and the user's approval of the prompt is the whole
+// opt-in. The refusal itself is OpenAI's and is never changed.
 //
 // `idleTurnEndMs`, when given, ends a used turn once no engine call has been
 // running for that long. Hosts without the mod (the desktop app's Claude Code)
@@ -128,7 +129,6 @@ export function createRelay({
   grantAudit = () => {},
   stderr = process.stderr,
   localTools,
-  blockedApps = false,
   flowRules,
   changeReview = true,
   idleTurnEndMs,
@@ -587,7 +587,9 @@ export function createRelay({
           if (key) inputLease.renew([key]);
         }
         return allowed;
-      }, resolved);
+      // The fourth argument stays runLocal for callLocalTool; the resolved
+      // lease target rides fifth, where blocked_app reads it.
+      }, undefined, resolved);
     } catch (err) {
       result = { content: [{ type: 'text', text: String(err?.message ?? err) }], isError: true };
     }
@@ -816,16 +818,16 @@ export function createRelay({
     }
     // The engine refuses Terminal, iTerm2 and OpenAI's own apps before any
     // approval, so a user consent can never enable the engine on them. Say so,
-    // and offer sleight's own Accessibility path when the user opted in.
-    if (blockedApps && msg.method === undefined && msg.result) {
+    // and offer sleight's own Accessibility path: the prompt is the opt-in.
+    if (localNames.has('blocked_app') && msg.method === undefined && msg.result) {
       const text = (msg.result.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
       const refused = refusedApp(text);
       if (refused) {
         trace('blocked-app-refusal', { app: refused });
         msg.result = { ...msg.result, content: [...(msg.result.content ?? []), { type: 'text', text:
-          `The engine's helper refuses ${refused} before any approval, so the js tool cannot drive it, now or with a consent. ` +
-          "The user has opted in to sleight's blocked_app tool, which drives the app through macOS Accessibility instead: " +
-          'the user approves the app once per session, and each command send to a terminal is shown to them first. ' +
+          `The engine's helper refuses ${refused} before any approval, so the js tool cannot drive it. ` +
+          "sleight's blocked_app tool drives the app through macOS Accessibility instead: the user approves " +
+          'the app once per session, and each command send to a terminal is shown to them first. ' +
           'Ask the user, then use blocked_app; its settings windows are refused.' }] };
       }
     }

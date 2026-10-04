@@ -1,47 +1,29 @@
 // A small live check for blocked_app, independent of bench/run.mjs and its
 // approval hook. Each run holds the shared live lock (bench/blocked-live.sh)
-// and publishes everything it launched, failures included, home paths as ~.
-//
-// Consent travels through sleight's own dialog (ask.js), because headless
-// Claude can't answer MCP prompts. A person must click Allow on screen within
-// five minutes, or the ask gives up and the attempt is published as refused.
+// and publishes everything it launched, failures included, personal paths
+// scrubbed. Consent travels through sleight's own dialog (ask.js), because
+// headless Claude can't answer MCP prompts: a person clicks Allow on screen
+// within five minutes, or the ask gives up and the attempt is published as
+// refused.
 import { spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir, userInfo, hostname } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FLAG_FILE, loadBlockedAppsFlag } from '../plugins/sleight/lib/blocked-apps.mjs';
+import { judgeBlockedLive, makeClean } from './blocked-live-result.mjs';
 
 const mode = process.argv[2];
 if (!['terminal', 'codex'].includes(mode)) throw new Error('expected terminal or codex');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const started = new Date().toISOString();
-// Home paths as ~, and the account and machine names out of published logs.
-const HOST = hostname().replace(/\.local$/, '');
-const clean = text => String(text ?? '')
-  .split(userInfo().homedir).join('~')
-  .split(userInfo().username).join('user')
-  .split(hostname()).join('mac')
-  .split(HOST).join('mac');
+const clean = makeClean({ home: userInfo().homedir, user: userInfo().username, host: hostname(), tmp: tmpdir() });
 const output = join(root, 'docs/benchmarks', `${started.replace(/[:.]/g, '-')}-blocked-${mode}.json`);
-
-const fail = async error => {
-  writeFileSync(output, JSON.stringify({ started, mode, launched: false, passed: false, error: clean(error) }, null, 2) + '\n');
-  console.error(clean(JSON.stringify({ output, error })));
-  process.exit(1);
-};
-
-let flagOn;
-try { flagOn = loadBlockedAppsFlag(); } catch (error) { await fail(`flag file: ${error.message}`); }
-if (!flagOn) {
-  await fail(`${FLAG_FILE} is missing or not {"version": 1}. The owner creates it; this driver never does.`);
-}
 
 const bank = mkdtempSync(join(tmpdir(), 'sleight-blocked-live-'));
 const cwd = join(bank, 'empty'); mkdirSync(cwd);
 const trace = join(bank, 'trace'); mkdirSync(trace);
 const config = { mcpServers: { sleight: { command: join(root, 'plugins/sleight/bin/sleight-mcp'),
-  env: { SLEIGHT_BLOCKED_APPS: '1', SLEIGHT_APPROVAL_PROMPT: 'dialog', SLEIGHT_TRACE: trace } } } };
+  env: { SLEIGHT_APPROVAL_PROMPT: 'dialog', SLEIGHT_TRACE: trace } } } };
 const prompts = {
   terminal: 'Use only the sleight blocked_app tool, and only on Terminal. First call it with op read, ' +
     'app Terminal. Report what came back, verbatim if it is a refusal. If the read returned elements, ' +
@@ -75,7 +57,7 @@ const timer = setTimeout(() => { try { child.kill('SIGTERM'); } catch {} }, TIME
 const exit = await new Promise(resolve => child.on('close', (code, signal) => { clearTimeout(timer); resolve({ code, signal }) }));
 const timedOut = exit.signal !== null;
 
-// Publish every launched attempt, including timeouts and errors, with home paths removed.
+// Publish every launched attempt, including timeouts and errors, scrubbed.
 const traces = readdirSync(trace).filter(file => file.endsWith('.jsonl')).map(file => ({
   file, text: clean(readFileSync(join(trace, file), 'utf8')),
 }));
@@ -85,25 +67,16 @@ const events = traces.flatMap(file => file.text.trim().split('\n').filter(Boolea
 const messages = stdout.trim().split('\n').filter(Boolean).map(line => {
   try { return JSON.parse(line); } catch { return { raw: line }; }
 });
-const kinds = events.map(e => e.direction === 'blocked-app-action' || e.direction === 'local-approval'
-  || e.direction === 'blocked-app-refusal' ? e.direction : null).filter(Boolean);
-const consents = events.filter(e => e.direction === 'local-approval' && e.msg?.action === 'accept').length;
-const all = JSON.stringify({ events, messages, stdout });
+const verdict = judgeBlockedLive(mode, { exit, timedOut, events, messages, stdout: clean(stdout) });
 const result = {
-  started, mode, prompt: prompts[mode], command: ['claude', ...args.map(clean)], exit, timedOut,
-  traceEvents: kinds,
-  consentAsked: consents,
-  sendAsked: (all.match(/send this to/g) ?? []).length,
-  refusalOffered: all.includes('blocked-app-refusal') || /offers? blocked_app|refuses com\./.test(all),
-  assistiveDenied: /-25211|-1719|assistive access/i.test(all),
-  actionRan: kinds.includes('blocked-app-action'),
-  reported: messages.filter(m => m.type === 'result').map(m => clean(m.result ?? '')),
-  stdout: clean(stdout).slice(0, 20000), stderr: clean(stderr).slice(0, 4000), traces,
+  started, mode, prompt: prompts[mode], command: ['claude', ...args.map(clean)],
+  ...verdict, reported: verdict.reported.map(clean), stdout: clean(verdict.stdout),
+  stderr: clean(stderr).slice(0, 4000), traces,
 };
-// The pass bar is the full behavior: consent granted, the action executed, and
-// a report. A run stopped by missing host Accessibility fails the bar, and
-// assistiveDenied says so.
-result.passed = !timedOut && result.actionRan && !result.assistiveDenied && result.consentAsked > 0;
 writeFileSync(output, JSON.stringify(result, null, 2) + '\n');
-console.log(clean(JSON.stringify({ output, exit, timedOut, ...result, stdout: undefined, stderr: undefined, traces: traces.length, reported: result.reported.slice(0, 2) })));
+console.log(clean(JSON.stringify({
+  output, exit, timedOut, passed: result.passed, consentAsked: result.consentAsked,
+  readOk: result.readOk, clicked: result.clicked, echoSeen: result.echoSeen,
+  assistiveDenied: result.assistiveDenied, traces: traces.length,
+})));
 process.exitCode = result.passed ? 0 : 1;

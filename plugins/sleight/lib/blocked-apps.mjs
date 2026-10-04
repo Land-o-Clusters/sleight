@@ -2,18 +2,9 @@
 // sleight's own Accessibility path — the one menu_bar and drag use (owner
 // decision, docs/status/LAWS.md, 2026-10-04). OpenAI's helper and engine are
 // never modified, patched or wrapped here; their refusal list is only
-// recognized, and sleight's own code does the driving.
-//
-// Off unless both are true: SLEIGHT_BLOCKED_APPS=1 in Claude Code's
-// environment, and the user's flag file next to the preapproved list. No
-// project or plugin setting can turn it on.
-import { homedir, userInfo } from 'node:os';
-import { lstatSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
-
-export const FLAG_FILE = join(homedir(), 'Library', 'Application Support', 'sleight', 'blocked-apps.json');
-
-const error = message => new Error(`Blocked apps: ${message}`);
+// recognized, and sleight's own code does the driving. There is no other
+// opt-in: when Claude reaches a refused app, the user gets sleight's prompt,
+// and Allow puts the app on the session allowlist like any other app.
 
 // The apps the engine's helper refuses before any approval prompt (README,
 // "Known problems"): terminals, and OpenAI's own apps with their beta builds.
@@ -49,10 +40,14 @@ export function refusedApp(text) {
 }
 
 // Settings and preferences windows of the refused apps are never driven, so
-// Claude cannot change the apps' own approval or safety settings. Titles
-// beyond these English forms are a known gap (README).
+// Claude cannot change the apps' own approval or safety settings. Terminal
+// titles its settings window after the open pane ("General", "Profiles"), so
+// the driver also refuses windows with a toolbar, and builds this pattern with
+// its flags (blocked-app.js), which these checks mirror.
 export const SETTINGS_TITLE = /^(?:settings|preferences|réglages|einstellungen|impostazioni|configuración|ajustes|preferencias|設定|设置|偏好设置)(?:…|\.{3})?$/i;
 export const isSettingsTitle = title => typeof title === 'string' && SETTINGS_TITLE.test(title.trim());
+// The exact RegExp construction the driver performs with the relay's request.
+export const driverSettingsRegExp = () => new RegExp(SETTINGS_TITLE.source, SETTINGS_TITLE.flags);
 
 // A click on a button named like these is named in the result, so the
 // transcript shows that Claude clicked, say, an approval button in Codex.
@@ -61,45 +56,19 @@ export function approvalButton(label) {
   return APPROVAL_BUTTON.exec(String(label ?? '').trim())?.[1].toLowerCase();
 }
 
-// Sends that can run a command in a terminal: typed text (newlines included),
-// and the keys that execute or paste. Other keys, reads and scrolling never
-// ask. The exact text goes to the user first, every time, and nothing about
-// this is ever remembered or pre-approved.
-const SEND_KEYS = new Set(['return', 'enter', 'super+v', 'cmd+v', 'command+v']);
+// In a terminal, every key or text that can run a command asks first, so the
+// rule is an allowlist of inert keys: everything outside it is a send, shown
+// exactly as it will be sent, every time, never remembered or pre-approved.
+// ctrl+m, ctrl+j and ctrl+o are Return/C-j/C-o in a shell, and shifted or
+// optioned Returns execute too, which is why the allowlist is this short.
+const INERT_KEYS = new Set(['up', 'down', 'left', 'right', 'tab', 'escape', 'ctrl+c', 'control+c']);
 export function terminalSend(args = {}) {
   if (args.op === 'type') return typeof args.text === 'string' ? args.text : undefined;
   if (args.op === 'key') {
     const key = String(args.key ?? '').trim().toLowerCase().replace(/\s+/g, '');
-    return SEND_KEYS.has(key) ? `key ${args.key}` : undefined;
+    return INERT_KEYS.has(key) ? undefined : `key ${args.key}`;
   }
   return undefined;
-}
-
-// The user's flag file, held to the same standard as the preapproved list:
-// a regular file, owned by the OS user, not group- or world-writable, no
-// symlinks, content exactly {"version": 1}. Missing is off; invalid fails
-// startup loudly rather than silently ignoring what the user wrote.
-export function loadBlockedAppsFlag(io = { lstatSync, readFileSync, statSync }) {
-  let before;
-  try { before = io.lstatSync(FLAG_FILE); }
-  catch (err) {
-    if (err.code === 'ENOENT') return false;
-    throw error(err.message);
-  }
-  if (before.isSymbolicLink()) throw error('the flag file must not be a symlink');
-  if (!before.isFile()) throw error('the flag file must be a regular file');
-  if (before.uid !== userInfo().uid) throw error('the flag file must be owned by the current user');
-  if (before.mode & 0o022) throw error('group- or world-writable flag files are refused');
-  let config;
-  try { config = JSON.parse(io.readFileSync(FLAG_FILE, 'utf8')); }
-  catch (err) { throw error(`could not read the flag file: ${err.message}`); }
-  if (!config || typeof config !== 'object' || Array.isArray(config) ||
-      Object.keys(config).length !== 1 || config.version !== 1) {
-    throw error('expected {"version": 1} and nothing else');
-  }
-  try { io.statSync(FLAG_FILE); }
-  catch (err) { throw error(`the flag file changed while reading: ${err.message}`); }
-  return true;
 }
 
 export const BLOCKED_APP_TOOL = {
@@ -108,8 +77,9 @@ export const BLOCKED_APP_TOOL = {
     'Accessibility, which the js tool cannot reach. op "read" returns the window as numbered elements plus a ' +
     'screenshot file; "click" presses `element` (or a window-relative `point`, which brings the app to the front); ' +
     '"type" sends `text`; "key" presses `key` ("Return", "super+v"); "scroll" moves `amount` lines, positive up. ' +
-    'The user approves the app once per session. In a terminal, every command send (typing, Return, Enter, paste) ' +
-    'is shown to the user first and never remembered. Settings windows are refused.',
+    'The user approves the app once per session. In a terminal, every key or text that can run a command ' +
+    '(any typing, Return, paste, most chords) is shown to the user first and never remembered. Settings ' +
+    'windows are refused.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -128,12 +98,14 @@ export const BLOCKED_APP_TOOL = {
 
 const text = (value, isError) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 1) }], ...(isError ? { isError: true } : {}) });
 
-// Runs one blocked_app op. `target` is the resolved lease target (app name and
-// bundle ID), `approve` is the relay's once-per-session approval with options
-// (the app consent is remembered; terminal sends pass once: true, which is
-// never remembered), `run` executes the driver script, and `shot` is the file
-// a window screenshot is saved to. Everything the user must decide happens
-// before `run`, and every executed action is logged with app, element and text.
+// Runs one blocked_app op. `target` is the resolved lease target (app name,
+// bundle ID and pid), `approve` is the relay's once-per-session approval with
+// options (the app consent is remembered; terminal sends pass once: true,
+// which is never remembered), `run` executes the driver script, and `shot` is
+// the file a window screenshot is saved to. Everything the user must decide
+// happens before `run`, and every executed action is logged with app, element
+// and text. The resolved pid and bundle ID pin the driver to exactly the app
+// the consent named, so a name alias can never land on a sibling app.
 export async function callBlockedApp(args, { approve, run, target, shot, trace = () => {}, stderr = process.stderr }) {
   const entry = matchBlockedApp(args.app, target?.appId);
   if (!entry) {
@@ -172,7 +144,10 @@ export async function callBlockedApp(args, { approve, run, target, shot, trace =
     (typeof args.text === 'string' ? ` text ${JSON.stringify(args.text)}` : '') +
     (args.key !== undefined ? ` key ${args.key}` : '') + '\n');
   trace('blocked-app-action', logged);
-  const result = await run({ ...args, settings: SETTINGS_TITLE.source, shot });
+  const result = await run({
+    ...args, settings: SETTINGS_TITLE.source, settingsFlags: SETTINGS_TITLE.flags,
+    pid: target?.pid, bundle: target?.appId, shot,
+  });
   if (!result.ok) return text(result.settings ? `${result.error} sleight never drives these apps' settings windows.` : result.error, true);
   const { ok, ...rest } = result;
   const notes = [];

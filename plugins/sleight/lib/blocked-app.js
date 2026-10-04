@@ -5,8 +5,9 @@
 //
 //   osascript -l JavaScript blocked-app.js '<json request>'
 //
-// Requests (app is a name, bundle ID or path; settings is a RegExp source the
-// relay passes in):
+// Requests (app is a name, bundle ID or path; the relay also passes the
+// resolved pid and bundle so the driver hits exactly the consented app, plus
+// the settings pattern with its flags):
 //   { op: "read", app, shot? }               the window's numbered elements, plus a
 //                                            screenshot of it saved to shot
 //   { op: "click", app, element? | point? }  AXPress the element, else a real click
@@ -58,21 +59,28 @@ function wantedBundles(wanted) {
   return [bare];
 }
 
-function findApp(wanted) {
+function findApp(wanted, pin) {
   const apps = $.NSWorkspace.sharedWorkspace.runningApplications;
+  const wantedBundle = pin?.bundle ? String(pin.bundle).trim().toLowerCase() : null;
+  const wantedPid = pin?.pid !== undefined && pin?.pid !== null ? Number(pin.pid) : null;
   let seen = false;
   for (let i = 0; i < apps.count; i++) {
     const a = apps.objectAtIndex(i);
     const id = ObjC.unwrap(a.bundleIdentifier);
     const path = a.bundleURL.isNil() ? null : ObjC.unwrap(a.bundleURL.path);
     const name = ObjC.unwrap(a.localizedName);
-    // The wanted identifier must pick this app, and the app's own identity
-    // (name plus bundle) must be refused. A name rule never fires for an app
-    // whose bundle says otherwise.
+    const pid = Number(a.processIdentifier);
+    // When the relay pins the app, only that exact process (case-insensitive
+    // bundle compare) qualifies, so a name alias can never land on a sibling.
+    if (wantedBundle !== null && String(id ?? '').toLowerCase() !== wantedBundle) continue;
+    if (wantedPid !== null && pid !== wantedPid) continue;
+    // Otherwise the wanted identifier must pick this app, and the app's own
+    // identity (name plus bundle) must be refused. A name rule never fires for
+    // an app whose bundle says otherwise.
     const picked = [id, name, path].includes(wanted) ||
-      wantedBundles(wanted).some(b => b === 'com.openai.' ? String(id ?? '').startsWith(b) : b === String(id ?? ''));
+      wantedBundles(wanted).some(b => b === 'com.openai.' ? String(id ?? '').toLowerCase().startsWith(b) : b === String(id ?? '').toLowerCase());
     if (picked) {
-      if (blockedEntry(name, id)) return { ref: a, name, id, pid: Number(a.processIdentifier) };
+      if (blockedEntry(name, id)) return { ref: a, name, id, pid };
       seen = true;
     }
   }
@@ -106,14 +114,23 @@ function frontWindow(proc, appName) {
 
 // Settings and preferences windows of these apps are never driven, read or
 // otherwise, so Claude cannot reach the apps' own approval or safety settings.
-function refuseSettings(win, pattern) {
-  const title = attempt(() => win.title(), '') ?? '';
-  if (pattern && new RegExp(pattern).test(title.trim())) {
-    const err = new Error(`refused: "${title}" is a settings or preferences window`);
+// The title decides, with the relay's pattern and its flags; Terminal titles
+// its settings window after the open pane ("General", "Profiles"), so a
+// window with a toolbar is refused too. The check errs toward refusal.
+function isSettingsWindow(win, patternSource, patternFlags) {
+  const title = (attempt(() => win.title(), '') ?? '').trim();
+  if (patternSource && new RegExp(patternSource, patternFlags ?? '').test(title)) return true;
+  if (attempt(() => win.toolbars().length, 0) > 0) return true;
+  return attempt(() => win.uiElements(), []).some(el => attempt(() => el.role(), '') === 'AXToolbar');
+}
+
+function settingsTitleOrRefuse(win, patternSource, patternFlags) {
+  if (isSettingsWindow(win, patternSource, patternFlags)) {
+    const err = new Error(`refused: the window ${JSON.stringify(attempt(() => win.title(), '') ?? '')} looks like a settings or preferences window`);
     err.settings = true;
     throw err;
   }
-  return title;
+  return attempt(() => win.title(), '') ?? '';
 }
 
 // The window as a flat list of the elements worth acting on, numbered, in the
@@ -201,7 +218,8 @@ function windowsOnScreen() {
 const inside = (b, p) => p.x >= b.X && p.x < b.X + b.Width && p.y >= b.Y && p.y < b.Y + b.Height;
 
 // Bring the app forward for one action, then put the front app and the
-// pointer back (drag's pattern).
+// pointer back (drag's pattern). Typing goes to whatever is frontmost, so the
+// caller verifies the switch before sending anything and aborts otherwise.
 function foreground(app) {
   const ws = $.NSWorkspace.sharedWorkspace;
   const previous = ws.frontmostApplication;
@@ -209,6 +227,14 @@ function foreground(app) {
   const saved = $.CGEventGetLocation($.CGEventCreate(null));
   app.ref.activateWithOptions(0);
   delay(0.4);
+  let front;
+  try { front = ws.frontmostApplication; } catch (e) { front = null; }
+  const frontPid = front && !front.isNil() ? Number(front.processIdentifier) : null;
+  if (frontPid !== app.pid) {
+    $.CGWarpMouseCursorPosition(saved);
+    if (!previous.isNil() && previous.processIdentifier !== app.pid) previous.activateWithOptions(0);
+    throw new Error(`could not bring ${app.name} to the front (frontmost is ${frontPid ? 'another app' : 'unknown'}); nothing was sent`);
+  }
   return {
     fronted: true,
     putBack: previousName && previousName !== app.name ? previousName : undefined,
@@ -274,13 +300,13 @@ function run(argv) {
   try {
     request = JSON.parse(argv[0]);
     const { op, app: wanted } = request;
-    const app = findApp(wanted);
+    const app = findApp(wanted, { pid: request.pid, bundle: request.bundle });
     const entry = blockedEntry(wanted, app.id) ?? blockedEntry(app.name, app.id);
     if (!entry) throw new Error(`${wanted} (${app.id}) is not one of the apps the engine refuses; use the js tool for it`);
     const proc = se.processes.whose({ unixId: app.pid })[0] ?? se.processes.byName(app.name);
     if (!proc || !attempt(() => proc.exists(), false)) throw new Error(`${app.name} has no accessibility process; is it running?`);
     const win = frontWindow(proc, app.name);
-    const title = refuseSettings(win, request.settings);
+    const title = settingsTitleOrRefuse(win, request.settings, request.settingsFlags);
     const window = { title };
     let result;
     if (op === 'read') {
