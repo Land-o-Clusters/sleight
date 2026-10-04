@@ -1,0 +1,694 @@
+{
+  "date": "2026-10-04",
+  "branch": "codex/local-hover",
+  "workspace": "~/Projects/sleight-wt/local-hover",
+  "liveStatus": "Tooltip and hover-menu observations completed in the second owner-away window. Default 1500 ms is supported by these captures. See 2026-10-04-local-hover.md.",
+  "defaultWaitMs": 1500,
+  "delayMeasured": true,
+  "attempts": [
+    {
+      "command": "npm test",
+      "exitCode": 0,
+      "pass": 157,
+      "fail": 0,
+      "phase": "baseline"
+    },
+    {
+      "command": "node --test tests/hover.test.mjs tests/relay-input-lease.test.mjs",
+      "exitCode": 1,
+      "pass": 31,
+      "fail": 6,
+      "phase": "initial red",
+      "reason": "Five tests could not load the missing hover script. The lease test showed hover incorrectly reserving the desktop."
+    },
+    {
+      "command": "node --test tests/hover.test.mjs",
+      "exitCode": 1,
+      "pass": 0,
+      "fail": 5,
+      "phase": "red with controller stub",
+      "reason": "Controller did not implement the requested behavior."
+    },
+    {
+      "command": "node --test tests/hover.test.mjs tests/relay-input-lease.test.mjs",
+      "exitCode": 0,
+      "pass": 37,
+      "fail": 0,
+      "phase": "green"
+    },
+    {
+      "command": "node --test tests/hover.test.mjs",
+      "exitCode": 0,
+      "pass": 7,
+      "fail": 0,
+      "phase": "approval and allowlist"
+    },
+    {
+      "command": "osascript -l JavaScript plugins/sleight/lib/hover.js '{\"app\":\"TextEdit\",\"at\":[-1,2]}'",
+      "exitCode": 0,
+      "result": {
+        "ok": false,
+        "takeoverMs": 0,
+        "error": "hover needs an app, two nonnegative finite coordinates and waitMs from 100 to 4000"
+      },
+      "phase": "native validation without app input"
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 0,
+      "unitPass": 165,
+      "modPass": 8,
+      "phase": "first full check"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 2,
+      "phase": "fresh worktree",
+      "reason": "Vale style pack missing"
+    },
+    {
+      "command": "vale sync",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "errors": 8,
+      "phase": "first prose pass"
+    },
+    {
+      "command": "node --check bench/hover-live.mjs",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 0,
+      "unitPass": 165,
+      "modPass": 8,
+      "phase": "second full check"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "errors": 2,
+      "phase": "second prose pass"
+    },
+    {
+      "command": "/usr/bin/git diff --check",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "errors": 0,
+      "phase": "third prose pass"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "errors": 0,
+      "phase": "final prose pass"
+    },
+    {
+      "command": "node --check bench/hover-live.mjs",
+      "exitCode": 0,
+      "phase": "final syntax check"
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 0,
+      "unitPass": 166,
+      "modPass": 8,
+      "phase": "final full check"
+    }
+  ],
+  "liveAttempts": [
+    {
+      "name": "2026-10-04-hover-arranged-1",
+      "exit": 1,
+      "lockReleased": false,
+      "hovers": 0
+    },
+    {
+      "name": "2026-10-04-hover-arranged-2",
+      "exit": 0,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "restoredWindow": {
+        "checkpoint": {
+          "app": "Calculator",
+          "op": "restore",
+          "pid": 20527,
+          "x": 1500,
+          "y": 100
+        },
+        "frontPid": 20527,
+        "ok": true,
+        "position": [
+          4226,
+          483
+        ]
+      },
+      "lockReleased": true,
+      "hovers": 2
+    },
+    {
+      "name": "2026-10-04-hover-chess-arranged-1",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "restoredWindow": {
+        "checkpoint": {
+          "app": "Chess",
+          "op": "restore",
+          "pid": 42234,
+          "windowTitle": "<chess-window-title>",
+          "x": 1500,
+          "y": 100
+        },
+        "frontPid": 83422,
+        "ok": true,
+        "position": [
+          3973,
+          477
+        ]
+      },
+      "lockReleased": true,
+      "hovers": 2
+    },
+    {
+      "name": "2026-10-04-hover-chess-arranged-2",
+      "exit": 0,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "restoredWindow": {
+        "checkpoint": {
+          "app": "Chess",
+          "op": "restore",
+          "pid": 42234,
+          "windowTitle": "<chess-window-title>",
+          "x": 1500,
+          "y": 100
+        },
+        "frontPid": 42234,
+        "ok": true,
+        "position": [
+          3973,
+          477
+        ]
+      },
+      "lockReleased": true,
+      "privacy": "rejected for publication",
+      "hovers": 2
+    },
+    {
+      "name": "2026-10-04-hover-chess-arranged-3",
+      "exit": 0,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "restoredWindow": {
+        "checkpoint": {
+          "app": "Chess",
+          "op": "restore",
+          "pid": 42234,
+          "windowTitle": "<chess-window-title>",
+          "x": 100,
+          "y": 100
+        },
+        "frontPid": 42234,
+        "ok": true,
+        "position": [
+          3973,
+          477
+        ]
+      },
+      "lockReleased": true,
+      "hovers": 2
+    },
+    {
+      "name": "2026-10-04-hover-chess-discovery-1",
+      "exit": 0,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "lockReleased": true,
+      "hovers": 0
+    },
+    {
+      "name": "2026-10-04-hover-chess-hover-1",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "lockReleased": true,
+      "hovers": 2
+    },
+    {
+      "name": "2026-10-04-hover-chess-titles-1",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": false
+      },
+      "lockReleased": true,
+      "hovers": 0
+    },
+    {
+      "name": "2026-10-04-hover-chess-window-1",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "lockReleased": true,
+      "hovers": 0
+    },
+    {
+      "name": "2026-10-04-hover-discovery-1",
+      "exit": 1,
+      "lockReleased": true,
+      "hovers": 0
+    },
+    {
+      "name": "2026-10-04-hover-discovery-2",
+      "exit": 0,
+      "lockReleased": true,
+      "hovers": 0
+    },
+    {
+      "name": "2026-10-04-hover-menu-discovery-1",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "lockReleased": true,
+      "hovers": 0
+    },
+    {
+      "name": "2026-10-04-hover-raised-active-1",
+      "exit": 1,
+      "restored": {
+        "ok": false,
+        "error": "invalid checkpoint"
+      },
+      "lockReleased": true,
+      "hovers": 0
+    },
+    {
+      "name": "2026-10-04-hover-raised-active-2",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "lockReleased": true,
+      "hovers": 0
+    },
+    {
+      "name": "2026-10-04-hover-sidebar-delay-1",
+      "exit": 0,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "restoredWindow": {
+        "checkpoint": {
+          "app": "Calculator",
+          "op": "restore",
+          "pid": 20527,
+          "windowTitle": "Calculator",
+          "x": 1500,
+          "y": 100
+        },
+        "frontPid": 20527,
+        "ok": true,
+        "position": [
+          4226,
+          483
+        ]
+      },
+      "lockReleased": true,
+      "hovers": 3
+    },
+    {
+      "name": "2026-10-04-hover-tooltip-active-1",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "lockReleased": true,
+      "hovers": 3
+    },
+    {
+      "name": "2026-10-04-hover-tooltip-active-2",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "lockReleased": true,
+      "hovers": 3
+    },
+    {
+      "name": "2026-10-04-hover-tooltip-active-3",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "lockReleased": true,
+      "hovers": 3
+    },
+    {
+      "name": "2026-10-04-hover-tooltip-active-4",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "lockReleased": true,
+      "hovers": 3
+    },
+    {
+      "name": "2026-10-04-hover-tooltip-active-5",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": false
+      },
+      "lockReleased": true,
+      "hovers": 3
+    },
+    {
+      "name": "2026-10-04-hover-tooltip-active-6",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "lockReleased": true,
+      "hovers": 0
+    },
+    {
+      "name": "2026-10-04-hover-tooltip-delay-1",
+      "exit": 1,
+      "lockReleased": true,
+      "hovers": 1
+    },
+    {
+      "name": "2026-10-04-hover-tooltip-delay-2",
+      "exit": 1,
+      "lockReleased": true,
+      "hovers": 3
+    },
+    {
+      "name": "2026-10-04-hover-tooltip-diagnose-1",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "lockReleased": true,
+      "hovers": 1
+    },
+    {
+      "name": "2026-10-04-hover-tooltip-raised-1",
+      "exit": 1,
+      "restored": {
+        "ok": true,
+        "frontRestored": true,
+        "pointerRestored": true
+      },
+      "lockReleased": true,
+      "hovers": 3
+    }
+  ],
+  "reviewAttempts": [
+    {
+      "command": "node --test tests/hover.test.mjs",
+      "exitCode": 1,
+      "pass": 8,
+      "fail": 2,
+      "phase": "title selection red"
+    },
+    {
+      "command": "node --test tests/hover.test.mjs",
+      "exitCode": 0,
+      "pass": 10,
+      "fail": 0,
+      "phase": "title selection green"
+    },
+    {
+      "command": "node --test tests/hover.test.mjs",
+      "exitCode": 1,
+      "pass": 10,
+      "fail": 1,
+      "phase": "same-app coverage red"
+    },
+    {
+      "command": "node --test tests/hover.test.mjs",
+      "exitCode": 0,
+      "pass": 11,
+      "fail": 0,
+      "phase": "same-app coverage green"
+    },
+    {
+      "command": "node --test tests/hover.test.mjs",
+      "exitCode": 1,
+      "pass": 11,
+      "fail": 1,
+      "phase": "experimental activation options red"
+    },
+    {
+      "command": "node --test tests/hover.test.mjs",
+      "exitCode": 0,
+      "pass": 12,
+      "fail": 0,
+      "phase": "experimental activation options green"
+    },
+    {
+      "command": "node --test tests/hover.test.mjs",
+      "exitCode": 1,
+      "pass": 11,
+      "fail": 1,
+      "phase": "experimental AllWindows flag red; production experiment later reverted"
+    },
+    {
+      "command": "node --test tests/hover.test.mjs",
+      "exitCode": 1,
+      "pass": 12,
+      "fail": 1,
+      "phase": "native capture attributes red"
+    },
+    {
+      "command": "node --test tests/hover.test.mjs",
+      "exitCode": 0,
+      "pass": 13,
+      "fail": 0,
+      "phase": "native capture attributes green; activation test later removed"
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 0,
+      "phase": "review corrections before capture fix"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "phase": "review corrections before live report"
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 0,
+      "pass": 170,
+      "modPass": 8,
+      "phase": "before rebase"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "errors": 4,
+      "phase": "Known problems update"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "errors": 6,
+      "phase": "live report added"
+    },
+    {
+      "command": "git rebase --autostash origin/main",
+      "exitCode": 1,
+      "phase": "README and package conflicts"
+    },
+    {
+      "command": "git -c core.editor=true rebase --continue",
+      "exitCode": 0,
+      "phase": "preserved background text-drag report; resolved autostash package conflict"
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 0,
+      "pass": 180,
+      "modPass": 8,
+      "phase": "after rebase"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "phase": "after rebase; 17 files"
+    },
+    {
+      "command": "node --check bench/hover-live.mjs",
+      "exitCode": 0
+    },
+    {
+      "command": "node --check bench/hover-fixture.js",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 0,
+      "pass": 180,
+      "modPass": 8,
+      "phase": "final, including second-window coordinate assertion"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "phase": "final, 17 files"
+    },
+    {
+      "command": "npm run build:hover-fixture",
+      "exitCode": 0,
+      "phase": "initial fixture, compiler warned activation flag has no effect"
+    },
+    {
+      "command": "npm run build:hover-fixture",
+      "exitCode": 0,
+      "phase": "removed deprecated flag"
+    },
+    {
+      "command": "npm run build:hover-fixture",
+      "exitCode": 0,
+      "phase": "exact Chess title support"
+    },
+    {
+      "command": "node --test tests/hover-fixture.test.mjs",
+      "exitCode": 0,
+      "pass": 1
+    },
+    {
+      "command": "node --test tests/hover.test.mjs",
+      "exitCode": 1,
+      "pass": 12,
+      "fail": 1,
+      "phase": "large native response red, stdout maxBuffer exceeded"
+    },
+    {
+      "command": "node --test tests/hover.test.mjs tests/hover-fixture.test.mjs",
+      "exitCode": 0,
+      "pass": 15,
+      "phase": "bounded 16 MiB hover output green"
+    },
+    {
+      "command": "npm run build:hover-fixture",
+      "exitCode": 0,
+      "phase": "require fixture window to fit wholly on one display"
+    },
+    {
+      "command": "git rebase --autostash origin/main",
+      "exitCode": 0,
+      "phase": "second away window"
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 0,
+      "pass": 183,
+      "modPass": 8,
+      "phase": "second away window final code"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "errors": 3,
+      "phase": "second away window report"
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0,
+      "phase": "second away window"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "phase": "second away window final, 17 files"
+    }
+  ],
+  "rebasedOnto": "3f280cda60be8873baf4526171544371ffb86cf1",
+  "measurement": {
+    "tooltip": {
+      "app": "Calculator",
+      "point": [
+        113,
+        26
+      ],
+      "absentWaitMs": [
+        400,
+        1000
+      ],
+      "visibleWaitMs": 1500,
+      "takeoverMs": 1786
+    },
+    "menu": {
+      "app": "Chess",
+      "point": [
+        62,
+        16
+      ],
+      "visibleWaitMs": [
+        400,
+        1500
+      ],
+      "takeoverMs": [
+        693,
+        1798
+      ]
+    },
+    "scope": "Capture observations on this Mac, not exact onset timestamps."
+  }
+}

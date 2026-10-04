@@ -504,11 +504,12 @@ export function createRelay({
       if (leaseCalls.get(msg.id)?.localAction) {
         const name = msg.params.name;
         const args = msg.params.arguments ?? {};
-        const target = name === 'drag' ? await (localTools.target?.(args) ?? Promise.resolve(
+        const appTool = ['drag', 'hover'].includes(name);
+        const target = appTool ? await (localTools.target?.(args) ?? Promise.resolve(
           [leaseWindow?.app, leaseWindow?.appId].includes(args.app) ? leaseWindow : undefined))
           : { appId: 'desktop', app: 'macOS', title: 'local desktop controls', url: null };
         if (closing) throw new Error('Input lease: this session is closing.');
-        const key = inputLease.acquire(target, name === 'drag' ? 'app' : 'desktop');
+        const key = inputLease.acquire(target, appTool ? 'app' : 'desktop');
         leaseCalls.set(msg.id, { key }); refreshHeartbeat();
       }
       result = await localTools.call(msg.params.name, msg.params.arguments ?? {}, async (parts, message) => {

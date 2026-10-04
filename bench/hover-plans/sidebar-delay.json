@@ -1,0 +1,36 @@
+[
+  {
+    "op": "arrange",
+    "app": "Calculator"
+  },
+  {
+    "op": "hover",
+    "app": "Calculator",
+    "windowTitle": "Calculator",
+    "at": [
+      113,
+      26
+    ],
+    "waitMs": 400
+  },
+  {
+    "op": "hover",
+    "app": "Calculator",
+    "windowTitle": "Calculator",
+    "at": [
+      113,
+      26
+    ],
+    "waitMs": 1000
+  },
+  {
+    "op": "hover",
+    "app": "Calculator",
+    "windowTitle": "Calculator",
+    "at": [
+      113,
+      26
+    ],
+    "waitMs": 1500
+  }
+]
