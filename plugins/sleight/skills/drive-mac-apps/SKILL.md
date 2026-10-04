@@ -59,10 +59,15 @@ point, and text views only move a selection after the mouse stays down for a mom
 something up at once, like Chess pieces, work fine with `app.drag`.
 
 When the mouse has to stay down first, use sleight's `drag` tool: select the text with `js` first, then call
-`drag` with the app and the same `from` and `to` coordinates you'd give `app.drag`. It brings the app
+`drag` with the app, `windowId` from the window read, and window-relative `from` and `to` coordinates.
+Without `windowId`, multiple possible windows refuse and return their IDs, titles and bounds.
+Both endpoints must be in that window's visible content. TextEdit requires both inside the same
+text area and a non-whitespace text selection. It brings the app
 to the front and moves the user's pointer for about two seconds, so prefer `app.drag` when that works.
 Cut and paste (`super+x`, click, `super+v`) is the fallback when the user declines. A word dropped at
-the end of a line lands without a space before it, so check the result and fix the spacing if needed.
+the end of a line gets a space after a verified unique whole-word move. Check other selections for
+spacing. If the tool reports that dragged text disappeared, press Cmd+Z in the window it identifies and
+read it again before continuing. Never treat that error as a successful drop.
 
 ## Menu bar icons and notifications
 

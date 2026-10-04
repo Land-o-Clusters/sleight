@@ -10,7 +10,7 @@
     "check": "npm test && npm run validate && npm run test:mod",
     "doctor": "plugins/sleight/bin/sleight-mcp --doctor",
     "bench": "node bench/run.mjs",
-    "lint:prose": "vale README.md CHANGELOG.md CLAUDE.md docs/status/STATE.md docs/status/LAWS.md docs/design/document-scope.md docs/design/change-review.md docs/design/input-lease.md docs/design/flow-rules.md plugins/sleight/skills/drive-mac-apps/SKILL.md docs/benchmarks/2026-10-03-background-drag.md docs/benchmarks/2026-10-03-change-review.md docs/benchmarks/2026-10-03-flow-rules.md docs/benchmarks/2026-10-04-input-lease.md docs/benchmarks/2026-10-04-background-text-drag.md docs/benchmarks/2026-10-04-double-keys.md docs/benchmarks/2026-10-04-drag-polish.md",
+    "lint:prose": "vale README.md CHANGELOG.md CLAUDE.md docs/status/STATE.md docs/status/LAWS.md docs/design/document-scope.md docs/design/change-review.md docs/design/input-lease.md docs/design/flow-rules.md plugins/sleight/skills/drive-mac-apps/SKILL.md docs/benchmarks/2026-10-03-background-drag.md docs/benchmarks/2026-10-03-change-review.md docs/benchmarks/2026-10-03-flow-rules.md docs/benchmarks/2026-10-04-input-lease.md docs/benchmarks/2026-10-04-background-text-drag.md docs/benchmarks/2026-10-04-double-keys.md docs/benchmarks/2026-10-04-drag-polish.md docs/benchmarks/2026-10-04-drag-window-guards.md",
     "watch": "scripts/watch.sh",
     "watch:install": "scripts/watch-install.sh",
     "watch:remove": "scripts/watch-install.sh --remove"

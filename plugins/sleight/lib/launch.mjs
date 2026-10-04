@@ -192,12 +192,15 @@ const DRAG_TOOL = {
   name: 'drag',
   description: 'A drag that holds the mouse down and moves in steps, for what app.drag in the js tool can\'t do, such as ' +
     'moving selected text (select it with js first). `from` and `to` are in the same frame as the app\'s engine ' +
-    'screenshot: its main window, from the top-left corner. It brings the app to the front and moves the real pointer ' +
+    'screenshot, from that window\'s top-left corner. Pass `windowId` when several windows fit; an ambiguous target refuses. ' +
+    'Both points must be in window content; TextEdit requires the same text area. A lost-text error tells you to press Cmd+Z in the named window. ' +
+    'It brings the app to the front and moves the real pointer ' +
     'for a few seconds, then puts both back, so use it only when app.drag fails. The user approves each app once per session.',
   inputSchema: {
     type: 'object',
     properties: {
       app: { type: 'string', description: 'App name, bundle ID or path' },
+      windowId: { type: 'integer', minimum: 1, description: 'Exact window ID from the engine inventory or app state' },
       from: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
       to: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
       holdMs: { type: 'integer', description: 'How long to hold before moving (default 500)' },
