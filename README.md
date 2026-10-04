@@ -99,6 +99,9 @@ claude plugin update sleight@sleight
 
 Or turn on auto-update for the `sleight` marketplace under `/plugin` → Marketplaces.
 
+A session runs the sleight version it started with. `/reload-plugins` keeps the sleight server that's
+already running, at least in the desktop app's Code tab (seen 2026-10-03), so start a new session.
+
 ## Watch and stop it
 
 The apps sleight drives stay in the background, which also means you can't see them. On Claude Code
