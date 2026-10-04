@@ -166,8 +166,9 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
 - Dragging selected text doesn't move it. The engine's drag on macOS presses, moves and releases at
   once, and text views like TextEdit's only start a text drag after the mouse is held down for a
   moment, so they read it as a new selection. LCU fails the same way. Launching TextEdit with
-  `-NSDragAndDropTextDelay 0` didn't help (0/2), and we don't know whether the engine's drag sends
-  any mouse-drag events between press and release. Drags that pick something up right away, like
+  `-NSDragAndDropTextDelay 0` didn't help (0/2). A probe app (`bench/drag-probe/`) logged the engine's
+  whole drag lasting 14 ms, with two drag events between press and release (2026-10-03). The second
+  jumps straight to the end point. Drags that pick something up right away, like
   Chess pieces, work. To move text, use cut and paste.
 - There's no real hover, since events go to the app and the real pointer never moves. The skill covers
   most cases: tooltips are readable as `Help:` text in the UI state, and hover menus usually open through
@@ -185,8 +186,10 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
 - The engine has no access to an app's icon in the menu bar or to notification banners: its inventory has
   no Control Center or Notification Center, and `getApp("com.apple.controlcenter")` times out (engine
   26.930.31730, 2026-10-03). sleight's `menu_bar` and `notifications` tools cover those instead (see
-  [How it works](#how-it-works)). They work in the foreground: an open menu shows on screen, and it
-  takes the keyboard until sleight closes it.
+  [How it works](#how-it-works)). They work in the foreground: an open menu shows on screen and takes
+  the keyboard until sleight closes it. Icons that open a SwiftUI window (`MenuBarExtra` in window
+  style) ignore the accessibility press, so sleight clicks them for real and puts the pointer back.
+  Buttons without a label, tooltip or identifier show up nameless.
 - The engine refuses terminal apps such as Terminal.app ("not allowed … for safety reasons") and respects
   any app blocks your organization sets.
 - `claude -p` can't answer approval prompts, so headless runs only get apps already approved in that

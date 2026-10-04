@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 (2026-10-03)
+
+- `menu_bar` opens SwiftUI window-style icons, which ignore the accessibility press, with a real
+  click and puts the pointer back. `close` clicks them again to shut the window. Icon-only buttons
+  report their tooltip or identifier when they have one.
+- `menu_bar` op `apps` takes about 4 s instead of 5.5 s.
+- Drag findings: a probe app (`bench/drag-probe/`) shows the engine's drag lasting 14 ms with two drag
+  events, so text drags can't work.
+
 ## 0.2.0 (2026-10-03)
 
 - New `menu_bar` and `notifications` tools for what the engine leaves out: apps' icons in the menu

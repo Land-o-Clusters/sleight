@@ -46,8 +46,8 @@ background equivalent. Try these in order:
 
 ## Moving text
 
-Dragging selected text doesn't work: the engine's drag is instant, and text views only move a selection
-after the mouse is held down. Move text with the keyboard instead: select it, `app.pressKey("super+x")`,
+Dragging selected text doesn't work: the engine's drag lasts about 14 ms and jumps straight to the end
+point, and text views only move a selection after the mouse stays down for a moment. Move text with the keyboard instead: select it, `app.pressKey("super+x")`,
 click where it goes, `app.pressKey("super+v")`. Drags that pick something up at once, like Chess
 pieces, work fine.
 
@@ -60,6 +60,8 @@ sleight's `menu_bar` and `notifications` tools can:
   its menu, which is closed again right after, or the window it opened. To pick a menu item, call
   `choose` with `path`, the titles from the top menu down, such as `["Debug", "Simulate 8%"]`. In a
   window, `press` an `element` number from `open`, then `close` when done.
+- An element with empty text is an icon-only button. Its number still works with `press`, but say
+  which one you guessed.
 - `notifications` with op `list` returns the banners on screen with their button names, and `press`
   presses one, such as `Snooze 1 day`. Banners leave the screen after a few seconds, so list and press
   without delay.

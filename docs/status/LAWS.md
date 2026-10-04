@@ -9,6 +9,8 @@ belong in [STATE.md](STATE.md).
   `no-workflow-edits-without-disabling-this-ruleset` blocks everyone else. Only the owner toggles it.
 - Going public, money, scope changes, and redistributing or bundling anything that depends on another
   vendor's app or engine are the owner's call.
+- sleight is public (owner, 2026-10-03). LCU gets a link and credit in the README, no heads-up, and
+  the desktop app's declined prompts aren't reported to Anthropic.
 - The project's name is sleight, and its icon is the two-hands image from ChatGPT (2026-10-03).
 - sleight launches at 0.x (owner, 2026-10-03). 1.0 waits until it has survived two or three ChatGPT
   engine updates, someone else has installed it from the marketplace, the desktop pane's picture is

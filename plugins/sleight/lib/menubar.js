@@ -16,6 +16,7 @@
 //   { op: "notify-press", banner, button }  press a banner's button by name
 
 ObjC.import('Foundation');
+ObjC.import('CoreGraphics');
 
 const se = Application('System Events');
 
@@ -57,7 +58,9 @@ function readWindow(win) {
   const walk = (el, depth) => {
     if (depth > 12 || out.length > 300) return;
     const role = attempt(() => el.role(), '');
-    const text = [attempt(() => el.title(), ''), attempt(() => el.description(), ''), attempt(() => String(el.value() ?? ''), '')]
+    // Icon-only buttons often have only a tooltip (help) or an identifier.
+    const text = [attempt(() => el.title(), ''), attempt(() => el.description(), ''), attempt(() => String(el.value() ?? ''), ''),
+      attempt(() => el.help(), ''), attempt(() => el.attributes.byName('AXIdentifier').value(), '')]
       .filter(t => t && !['group', 'text', 'button', 'image', 'scroll area'].includes(t));
     if (['AXButton', 'AXCheckBox', 'AXRadioButton', 'AXPopUpButton', 'AXMenuButton', 'AXSlider', 'AXTextField', 'AXStaticText', 'AXLink', 'AXSwitch'].includes(role)) {
       out.push({ element: out.length, role: role.replace(/^AX/, ''), text: text.join(' · ') });
@@ -68,6 +71,27 @@ function readWindow(win) {
   return out;
 }
 
+// A real click at the status item's center, then the pointer goes back where
+// it was. SwiftUI's window-style menu bar items ignore the accessibility press.
+function realClick(item) {
+  const pos = item.position();
+  const size = item.size();
+  const point = $.CGPointMake(pos[0] + size[0] / 2, pos[1] + size[1] / 2);
+  const saved = $.CGEventGetLocation($.CGEventCreate(null));
+  for (const type of [$.kCGEventLeftMouseDown, $.kCGEventLeftMouseUp]) {
+    $.CGEventPost($.kCGHIDEventTap, $.CGEventCreateMouseEvent(null, type, point, $.kCGMouseButtonLeft));
+  }
+  $.CGWarpMouseCursorPosition(saved);
+}
+
+function waitForWindow(proc, before, seconds) {
+  for (let i = 0; i < seconds * 10; i++) {
+    delay(0.1);
+    if (popoverWindows(proc).length > before) return true;
+  }
+  return false;
+}
+
 function popoverWindows(proc) {
   return proc.windows().filter(w => attempt(() => w.subrole(), '') !== 'AXStandardWindow');
 }
@@ -75,13 +99,16 @@ function popoverWindows(proc) {
 function open(app, itemIndex, keepOpen = false) {
   const { proc, items } = statusItems(app);
   const item = pick(items, itemIndex);
-  const before = proc.windows().length;
+  const before = popoverWindows(proc).length;
+  // A classic menu is listed under the item even while closed, so it can be
+  // opened and read through accessibility. Anything else may be a window.
+  const hasMenu = attempt(() => item.menus().length, 0) > 0;
   item.click();
-  for (let i = 0; i < 10; i++) {
-    delay(0.1);
-    if (attempt(() => item.menus().length, 0) || proc.windows().length > before) break;
+  if (!hasMenu && !waitForWindow(proc, before, 0.6)) {
+    realClick(item);
+    waitForWindow(proc, before, 1.5);
   }
-  const menus = attempt(() => item.menus(), []);
+  const menus = hasMenu ? attempt(() => item.menus(), []) : [];
   if (menus.length) {
     // An open menu holds the user's keyboard and mouse, so read it and close it.
     // choose opens it again and clicks in one go.
@@ -140,10 +167,16 @@ function press(app, element) {
 // A status item lists its menu even while closed, and AXSelected doesn't say
 // whether it's open, so this always cancels; that does nothing to a closed menu.
 function close(app, itemIndex) {
-  const { items } = statusItems(app);
-  const menus = attempt(() => pick(items, itemIndex).menus(), []);
+  const { proc, items } = statusItems(app);
+  const item = pick(items, itemIndex);
+  const menus = attempt(() => item.menus(), []);
   if (menus.length) attempt(() => menus[0].actions.byName('AXCancel').perform());
-  return { app, closed: true };
+  // A window-style item closes when its icon is clicked again.
+  if (popoverWindows(proc).length) {
+    realClick(item);
+    delay(0.3);
+  }
+  return { app, closed: true, windowStillOpen: popoverWindows(proc).length > 0 || undefined };
 }
 
 // A banner's buttons are named AX actions ("Name:Close\nTarget:…").
@@ -193,9 +226,15 @@ function run(argv) {
     request = JSON.parse(argv[0]);
     let result;
     switch (request.op) {
-      case 'apps':
-        result = { apps: se.processes().filter(p => attempt(() => p.menuBars().length, 0) > 1).map(p => p.name()) };
+      case 'apps': {
+        // Two bulk queries instead of one per process. Status items aren't
+        // windows of their apps on current macOS, so the window list can't
+        // find them; accessibility is the only source, and it takes seconds.
+        const names = se.processes.name();
+        const bars = se.processes.menuBars();
+        result = { apps: names.filter((n, i) => bars[i] && bars[i].length > 1) };
         break;
+      }
       case 'open': result = open(request.app, request.item ?? 0); break;
       case 'choose': result = choose(request.app, request.path ?? [], request.item ?? 0); break;
       case 'press': result = press(request.app, request.element); break;
