@@ -5,7 +5,7 @@ What is true now. One banner, replaced in place as work happens. Always-true rul
 
 ## Banner (2026-10-04, after midnight)
 
-Public: `Land-o-Clusters/sleight`, `main` green in CI, `v0.3.0` tagged, listed on the org profile
+Public: `Land-o-Clusters/sleight`, `main` green in CI, `v0.3.1` tagged, listed on the org profile
 after Puddle. A fresh install from GitHub into an empty Claude config worked (0.2.0, `--doctor` ok).
 The user-scope install on this Mac follows the working copy's releases. Running sessions keep the
 version they started with, because `/reload-plugins` doesn't restart the server.
@@ -33,6 +33,14 @@ against 0/9 for `app.drag`. A press right after the engine acts doesn't take, so
 Next: the same drag in the background. Posting to the app's process (`CGEventPostToPid`) delivers
 only mouse-moved events to an inactive app; the engine gets clicks through somehow, likely by making
 the window key without activating the app.
+
+Market research (Codex on gpt-6.1-sol, 2026-10-04) is in `.dev/research/2026-10-04-competitors.md`,
+untracked, with its GitHub evidence. Publishing it is the owner's call. The biggest finding is that
+Anthropic has its own computer use, in the Claude desktop app (background on macOS 15+, per-app
+approval) and in the Claude Code CLI (`/mcp computer-use`, Pro/Max, interactive only). We haven't
+measured either against sleight. Other gaps it names: other harnesses (LCU covers Codex CLI and Pi), exact-window
+targeting, reporting whether an action took effect, finer approval scopes, clipboard ownership, and
+input leases across sessions. LCU moved to `amontlabs/lcu`.
 
 Owner's plan (2026-10-04), after the drag: work through every item in Known problems, and research
 the market for what sleight can do better.
