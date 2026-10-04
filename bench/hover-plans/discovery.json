@@ -1,0 +1,10 @@
+[
+  {
+    "op": "read",
+    "app": "Calculator"
+  },
+  {
+    "op": "read",
+    "app": "TextEdit"
+  }
+]

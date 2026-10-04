@@ -33,12 +33,12 @@ it has one, then a dedicated MCP tool or connector. Web pages belong to browser 
 The relay takes a window lease before acting. If another sleight session holds it, the refusal names
 that session and the seconds left. Stop actions and tell the user, using reads if needed to inspect
 the window. The lease ends with the turn or after 30 seconds without renewal, but it cannot coordinate
-Codex or other tools that do not take it. Local drag reserves the entire app, while menu and
+Codex or other tools that do not take it. Local drag and hover reserve the entire app, while menu and
 notification actions reserve the desktop.
 
-## Hover: what to do instead
+## Hover
 
-Events go to the app, not through the real pointer, so nothing ever hovers. Most hover needs have a
+Engine events go to the app, not through the real pointer, so they do not trigger hover. Most hover needs have a
 background equivalent. Try these in order:
 
 1. Tooltips: read them from the UI state, where an element's tooltip is its `Help:` field, e.g.
@@ -48,9 +48,18 @@ background equivalent. Try these in order:
    `app.click(index, { mouseButton: "right" })`, often opens the same menu.
 3. Keyboard: many hover menus have a key equivalent (a menu bar item, a shortcut, Tab to focus then
    Space). Use `app.pressKey(...)`.
-4. UI that only reacts to the pointer (a canvas that reacts to the pointer, a preview that only shows on hover):
-   use a pointer-moving computer-use tool if one is available, for that step only, and tell the user
-   first that it will take over their screen.
+4. Only after those background options fail, use sleight's `hover` tool for that step. Tell the user
+   first that it will move their pointer and bring the app forward for about N seconds, the dwell
+   plus capture and restoration (about two seconds with the default dwell). Call it with
+   `app` and `at: [x, y]`, relative to the selected window's top-left corner. Supply an exact
+   `windowTitle` when the app has more than one on-screen window. Missing or duplicate title matches
+   refuse before activation. It waits
+   1500 ms by default (`waitMs`, 100 to 4000), takes a screenshot while hovered, and restores the
+   pointer and the front app. The result reports `takeoverMs`. Tell the user that duration.
+   Screen Recording permission is required before takeover. It refuses a point another app's window
+   or a different window of the same app covers. Do not retry unchanged; inspect the window layout
+   and choose an uncovered point in the intended window. Inspect the screenshot for the tooltip or menu,
+   since the hover UI may disappear when the pointer goes back. If the user declines, stop.
 
 ## Moving text
 
@@ -115,7 +124,7 @@ the dialog anywhere. The slashes end up in the file name.
 
 ## What it can't do
 
-- Real pointer hover, beyond the workarounds above.
+- Background hover beyond the workarounds above. Local `hover` takes the pointer briefly.
 - Web pages. sleight's Chrome control is off by default, so use browser tools.
 
 If `js` fails to start, ask the user to run `bin/sleight-mcp --doctor` from the plugin folder and share
