@@ -1,0 +1,9 @@
+{
+  "mode": "kill",
+  "verdict": "CANCELLED_BEFORE_LIVE_RUN",
+  "reason": "Interrupted through the retained terminal control channel while waiting for the shared lock, to repair review findings.",
+  "lockAcquired": false,
+  "engineStarted": false,
+  "signalsSentToEngineOrHelper": 0,
+  "exitCode": 1
+}

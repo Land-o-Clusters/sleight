@@ -187,6 +187,10 @@ export function createRelay({
   let disposed = false;
   const browserHandles = new Set();
   const browserCalls = new Map();
+  let readTimeouts = 0;
+  let helperStuck = false;
+  const helperReads = new Set();
+  const helperAdvice = 'The SkyComputerUseService helper appears stuck after repeated timeoutReached errors on reads. Stop retrying. Tell the user they need to restart ChatGPT to recover computer use. Restarting ends their Codex sessions; never restart or quit ChatGPT yourself.';
   const flowCalls = new Map();
   let flowPending;
   let flowPermit;
@@ -670,6 +674,10 @@ export function createRelay({
       return;
     }
     if (closing && msg.method === 'tools/call') { leaseStop(msg, 'this session is closing.'); return; }
+    if (helperStuck && msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name)) {
+      toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: helperAdvice }] } });
+      return;
+    }
     if (msg.method === 'tools/call') {
       if (disposed) { changeStop(msg, 'session has ended'); return; }
       if (flowAsking) { flowStop(msg, 'wait for the user decision'); return; }
@@ -771,6 +779,7 @@ export function createRelay({
             trace('snapshot-before-call', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });
           }
         } catch (err) { documentCalls.delete(msg.id); finishedCall(msg.id); changeStop(msg, `cannot snapshot before acting: ${err.message}`); return; }
+        if (read && !/cua\.rewriteDocumentation\(/.test(originalCode) && msg.id !== undefined) helperReads.add(msg.id);
         changeCalls.set(msg.id, { read, safe, entry, window: lastWindow, expected: documentKey(lastWindow), target: leaseWindow ?? lastWindow,
           observe: !read || (!isInventoryRead(originalCode) && /cua\.getApp\(|\.(?:getAXState|getAXStateAndScreenshot)\(/.test(originalCode)) });
         if (typeof originalCode === 'string') {
@@ -845,6 +854,18 @@ export function createRelay({
       const browser = browserCalls.get(msg.id); browserCalls.delete(msg.id);
       if (!msg.error && !msg.result?.isError) for (const handle of browser.handles) browserHandles.add(handle);
     }
+    if (msg.method === undefined && helperReads.delete(msg.id)) {
+      const error = msg.error?.message ?? (msg.result?.isError
+        ? (msg.result.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n') : '');
+      readTimeouts = /\btimeoutReached\b/.test(error) ? readTimeouts + 1 : 0;
+      if (readTimeouts >= 2) {
+        helperStuck = true;
+        clearTimeout(idleTimer);
+        trace('helper-stuck', { id: msg.id, consecutiveReadTimeouts: readTimeouts });
+        if (msg.error) msg.error.message += `\n\n${helperAdvice}`;
+        else msg.result = { ...msg.result, isError: true, content: [...(msg.result?.content ?? []), { type: 'text', text: helperAdvice }] };
+      }
+    }
     if (msg.method === undefined && flowCalls.has(msg.id)) {
       flowRules.observe(msg.result, flowCalls.get(msg.id));
       flowCalls.delete(msg.id);
@@ -900,7 +921,7 @@ export function createRelay({
           const appId = msg.result?._meta?.['codex/toolSurface']?.app?.appId;
           if (typeof appId === 'string') observedEngines.add(appId);
         }
-        if (!msg.error && (!observedDocument || (call.expected && call.expected !== documentKey(observedDocument)))) {
+        if (!helperStuck && !msg.error && (!observedDocument || (call.expected && call.expected !== documentKey(observedDocument)))) {
           msg.result = { ...(msg.result ?? {}), isError: true, content: [...(msg.result?.content ?? []), { type: 'text', text:
             'Document scope stopped: Window or URL changed, or a full header is missing. That call may already have acted. Stop and read the intended window, then ask the user with document_scope.' }] };
           if (!call.read) observedDocument = undefined;
@@ -1031,6 +1052,7 @@ export function createRelay({
     flowRules?.dispose();
     flowCalls.clear(); flowPending = undefined; flowPermit = undefined;
     preapprovalNotes.clear();
+    helperReads.clear();
     changes.dispose();
     trace('change-snapshots-deleted', { directory: changes.directory });
   }

@@ -39,6 +39,68 @@ function harness(options = {}) {
 }
 
 const tick = () => new Promise(r => setImmediate(r));
+
+const helperRead = (h, id, code = 'let app = await cua.getApp("Calculator")') => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } });
+const helperReply = (h, id, text = 'Error: -10005 timeoutReached', isError = true) => h.fromServer({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }], isError } });
+
+test('two failed helper reads tell Claude to stop and ask the user to restart ChatGPT', () => {
+  const h = harness();
+  helperRead(h, 1); helperReply(h, 1);
+  assert.doesNotMatch(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+  helperRead(h, 2, 'await app.getAXState({ disableDiffing: true })'); helperReply(h, 2);
+  assert.equal(h.toClient.at(-1).result.isError, true);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /SkyComputerUseService.*stuck.*Stop retrying.*user.*restart ChatGPT/s);
+  const sent = h.toServer.length;
+  helperRead(h, 3);
+  helperRead(h, 4, 'await app.click(1)');
+  h.fromClient({ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'js_reset', arguments: {} } });
+  assert.equal(h.toServer.length, sent, 'no engine retry or action after the stuck diagnosis');
+  assert.ok(h.toClient.slice(-3).every(m => m.result.isError));
+});
+
+test('a successful helper read resets consecutive timeouts, but documentation does not', () => {
+  const h = harness();
+  helperRead(h, 1); helperReply(h, 1);
+  helperRead(h, 2); helperReply(h, 2, 'Window: Calculator', false);
+  helperRead(h, 3); helperReply(h, 3);
+  assert.doesNotMatch(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+  helperRead(h, 4, 'await cua.rewriteDocumentation()'); helperReply(h, 4, '# API', false);
+  helperRead(h, 5); helperReply(h, 5);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+});
+
+test('action timeouts, unrelated failures, UI text and server requests cannot diagnose a stuck helper', () => {
+  const h = harness();
+  for (const id of [1, 2]) { helperRead(h, id, 'await app.click(1)'); helperReply(h, id); }
+  for (const id of [3, 4]) { helperRead(h, id); helperReply(h, id, 'app not found'); }
+  for (const id of [5, 6]) { helperRead(h, id); helperReply(h, id, 'a document mentioning timeoutReached', false); }
+  helperRead(h, 7); helperReply(h, 7);
+  h.fromServer({ jsonrpc: '2.0', id: 7, method: 'notifications/progress', params: { text: 'timeoutReached' } });
+  helperRead(h, 8); helperReply(h, 8, 'permission denied');
+  helperRead(h, 9); helperReply(h, 9);
+  assert.ok(h.toClient.every(m => !JSON.stringify(m).includes('restart ChatGPT')));
+});
+
+test('RPC timeout errors are diagnosed and turn cleanup stays available', () => {
+  const h = harness();
+  for (const id of [1, 2]) {
+    helperRead(h, id);
+    h.fromServer({ jsonrpc: '2.0', id, error: { code: -32000, message: 'Sky error -10005: timeoutReached' } });
+  }
+  assert.match(h.toClient.at(-1).error.message, /restart ChatGPT/);
+  h.fromClient({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'turn_ended', arguments: {} } });
+  assert.equal(h.toServer.at(-1).params.name, 'turn_ended');
+  const fresh = harness(); helperRead(fresh, 1); helperReply(fresh, 1);
+  assert.doesNotMatch(JSON.stringify(fresh.toClient), /restart ChatGPT/);
+});
+
+test('stuck-helper guidance in document mode does not ask Claude for another read', () => {
+  const h = harness({ approvalScope: 'document' });
+  for (const id of [1, 2]) { helperRead(h, id); helperReply(h, id); }
+  const blocks = h.toClient.at(-1).result.content;
+  assert.match(blocks.at(-1).text, /restart ChatGPT/);
+  assert.ok(blocks.every(c => !c.text.includes('then ask the user with document_scope')));
+});
 const meta = msg => JSON.parse(msg.params._meta['x-codex-turn-metadata']);
 
 const flowFixture = () => new FlowRules({ version: 1, rules: [{ id: 'private', kind: 'pattern', pattern: 'SECRET', destinations: ['*'] }] });
