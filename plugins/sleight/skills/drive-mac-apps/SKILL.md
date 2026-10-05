@@ -12,7 +12,9 @@ sleight's tools are `mcp__plugin_sleight_computer__js` and `mcp__plugin_sleight_
 
 UI automation is the slowest and most fragile option, so try the others first. Use the app's CLI or API if
 it has one, then a dedicated MCP tool or connector. Use sleight's browser surface for web pages when an extension browser is connected, and its native
-surface for macOS apps. Use another browser tool if browser control is unavailable.
+surface for macOS apps. For a public page, a built-in browser tool is usually faster. sleight's
+browser surface fits pages that need the user's own logged-in browser. Use another browser tool if
+browser control is unavailable.
 
 Never create or edit `~/Library/Application Support/sleight/preapproved.json`. Only the user writes
 that approval list. It applies in interactive and headless sessions. If an app needs approval, ask
@@ -42,6 +44,12 @@ the user or stop when a headless run refuses it. Changing the file is not an app
    using it.
 5. Use `app.getScreenshot()` with `nodeRepl.emitImage(...)` when the accessibility tree doesn't show what
    you need, such as canvases or images.
+6. Read only what you need. After a page re-renders, the engine's diff repeats the whole tree, sidebars and
+   recent-item lists included, which costs tokens and shows more of the user's screen than the task
+   needs. When you only need part of it, read with `emit: false` and print the lines you need, for
+   example `const s = await app.getAXState({ emit: false }); nodeRepl.write(s.split("\n").filter(l => /Save|Name/.test(l)).join("\n"))`.
+   Keep a full, emitted read right after acquiring the app and before acting on a new window: the
+   input lease and document scope check its Window header, and a filtered read can drop it.
 
 The relay takes a window lease before acting. If another sleight session holds it, the refusal names
 that session and the seconds left. Stop actions and tell the user, using reads if needed to inspect
