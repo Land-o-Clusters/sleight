@@ -7,6 +7,7 @@ test('literal browser calls are classified as browser', () => {
   assert.ok(browserCall('let tab = await cua.createBrowserTab("abc", "https://example.com")'));
   assert.ok(browserCall('await tab.getByRole("link", { name: "More" }).click()', new Set(['tab'])));
   assert.ok(browserCall('const rows = [1, 2]; await tab.goto("https://example.com")', new Set(['tab'])));
+  assert.ok(browserCall('const tabs = await cua.listTabs(); nodeRepl.write(tabs[0])'));
 });
 
 test('native access in any form keeps the call on the native path', () => {
@@ -23,5 +24,7 @@ test('native access in any form keeps the call on the native path', () => {
     'const t = `${await cua.getApp("TextEdit")}`; await tab.reload()',
     'await tab.constructor.constructor("return cua")().getApp("TextEdit"); await tab.reload()',
     'await tab.__proto__.reload.call(tab)',
+    'const k = "con" + "structor"; await tab[k][k]("return cua")().getApp("TextEdit")',
+    'await tab["con" + "structor"]; await tab.reload()',
   ]) assert.equal(browserCall(code, tab), undefined, code);
 });
