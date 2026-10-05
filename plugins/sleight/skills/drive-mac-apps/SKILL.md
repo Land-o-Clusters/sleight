@@ -1,6 +1,6 @@
 ---
 name: drive-mac-apps
-description: Use when a task needs a native macOS app operated through its UI (clicking, typing, dragging, reading what is on screen) and no CLI, API or dedicated tool covers it. sleight drives the app in the background through the computer-use engine bundled with the ChatGPT desktop app, without moving the user's pointer.
+description: Use when a task needs a web page or native macOS app operated through its UI (clicking, typing, dragging, reading what is on screen) and no CLI, API or dedicated tool covers it. sleight drives the app in the background through the computer-use engine bundled with the ChatGPT desktop app, without moving the user's pointer.
 ---
 
 # Driving Mac apps with sleight
@@ -11,7 +11,8 @@ sleight's tools are `mcp__plugin_sleight_computer__js` and `mcp__plugin_sleight_
 ## Before you use it
 
 UI automation is the slowest and most fragile option, so try the others first. Use the app's CLI or API if
-it has one, then a dedicated MCP tool or connector. Web pages belong to browser tools. sleight comes last.
+it has one, then a dedicated MCP tool or connector. Use sleight's browser surface for web pages when an extension browser is connected, and its native
+surface for macOS apps. Use another browser tool if browser control is unavailable.
 
 Never create or edit `~/Library/Application Support/sleight/preapproved.json`. Only the user writes
 that approval list. It applies in interactive and headless sessions. If an app needs approval, ask
@@ -41,6 +42,39 @@ that session and the seconds left. Stop actions and tell the user, using reads i
 the window. The lease ends with the turn or after 30 seconds without renewal, but it cannot coordinate
 Codex or other tools that do not take it. Local drag and hover reserve the entire app, while menu and
 notification actions reserve the desktop.
+
+## Browser pages
+
+Browser control turns on when startup discovery finds a connected ChatGPT extension. Without one,
+only native apps are enabled. `SLEIGHT_SURFACES` overrides discovery. Use `computer` to keep
+browser control off. The in-app browser needs ChatGPT host context and is excluded from automatic mode.
+
+Start with one call: `await cua.listBrowsers()`. Read the returned documentation. Several Chromium
+browsers can report as Chrome, including Helium. Match `metadata.extensionInstanceId` to the owner's
+chosen browser, then select it with a standalone call:
+
+```javascript
+let browser = await cua.getBrowser({ extensionInstanceId: "the observed instance ID" });
+```
+
+Open the page directly with `let tab = await cua.createBrowserTab(browser.browserId, url)`.
+The instance ID selects the browser. `browser.browserId` is the ID used to open tabs.
+A raw instance ID passed to `createBrowserTab` failed in our live trial.
+Read the page with `tab.getAXState()` or the documented `tab.playwright.domSnapshot()`.
+Click observed links with the documented Playwright locators when native element actions are unavailable.
+Use only methods in the returned documentation. Leave tabs in the background in the owner's profile.
+
+Browser approvals go to the owner's prompt. Never accept them yourself or change an approval file.
+A decline stops the task. The relay does not remember or preapprove browser requests.
+Browser handles do not take native window leases. Separate sessions can act on the same
+page. Flow rules use `browser` for every tab's source and destination; they cannot distinguish
+sites, browsers or tabs. Literal typing, fills and navigation URLs are checked. Clipboard transfers,
+runtime strings and other DOM actions have the existing flow-rule limits.
+Document scope and saved-file change review apply to native apps, not tabs.
+
+Finish the Claude turn so the mod sends `turn_ended`. Without the mod, idle or session cleanup does it.
+Do not mark a probe tab as a deliverable or handoff. The measured extension removed its ordinary tab
+at turn end. Close any probe tabs left open before releasing a live-check lock.
 
 ## Hover
 
@@ -166,7 +200,7 @@ the dialog anywhere. The slashes end up in the file name.
 ## What it can't do
 
 - Background hover beyond the workarounds above. Local `hover` takes the pointer briefly.
-- Web pages. sleight's Chrome control is off by default, so use browser tools.
+- Browser pages without a connected extension, unless `SLEIGHT_SURFACES` enables another backend.
 
 If `js` fails to start, ask the user to run `bin/sleight-mcp --doctor` from the plugin folder and share
 the output.

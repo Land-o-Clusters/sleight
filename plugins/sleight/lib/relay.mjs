@@ -62,6 +62,7 @@ import { randomUUID } from 'node:crypto';
 import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRead, readCode, guardedCode } from './document-scope.mjs';
 import { ChangeReview, REVIEW_TOOL, isChangeCancel } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
+import { browserCall } from './browser-call.mjs';
 import { isLeaseRead } from './input-lease.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
 import { refusedApp } from './blocked-apps.mjs';
@@ -176,6 +177,8 @@ export function createRelay({
   let lastWindowText = '';
   let reviewing = false;
   let disposed = false;
+  const browserHandles = new Set();
+  const browserCalls = new Map();
   const flowCalls = new Map();
   let flowPending;
   let flowPermit;
@@ -329,11 +332,15 @@ export function createRelay({
       return true;
     }
     if (name === DOCUMENT_TOOL.name) return true;
-    if (name === 'js_reset') { leaseWindow = undefined; handleBundles.clear(); handleSelectors.clear(); constApp = false; return true; }
+    if (name === 'js_reset') { browserHandles.clear(); leaseWindow = undefined; handleBundles.clear(); handleSelectors.clear(); constApp = false; return true; }
     if (name !== 'js' && !localNames.has(name)) return true;
     const args = msg.params.arguments ?? {};
     const code = args.code;
     if (name === 'js' && typeof code !== 'string') { leaseStop(msg, 'js needs code.'); return false; }
+    if (name === 'js' && browserCall(code, browserHandles)) {
+      if (running.size) { leaseStop(msg, 'another call in this session is pending.'); return false; }
+      return true; // Native window leases do not apply to tabs.
+    }
     const read = name === 'js' ? typeof code === 'string' && isLeaseRead(code)
       : (name === 'menu_bar' && args.op === 'apps') || (name === 'notifications' && args.op === 'list') ||
         (name === 'blocked_app' && args.op === 'read');
@@ -635,6 +642,10 @@ export function createRelay({
       if (reviewing) { changeStop(msg, 'the user is reviewing changes, wait for their decision'); return; }
     }
     const originalCode = msg.params?.arguments?.code;
+    if (typeof originalCode === 'string') {
+      const native = originalCode.match(/([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.getApp\(/);
+      if (native) browserHandles.delete(native[1]);
+    }
     let flowPlan;
     if (flowRules && msg.method === 'tools/call' && ['js', 'drag', 'menu_bar', 'blocked_app'].includes(msg.params?.name)) {
       if (running.size || localRunning.size || documentAsking || reviewing) { flowStop(msg, 'wait for the pending call or prompt'); return; }
@@ -698,7 +709,9 @@ export function createRelay({
         rotateTurn();
         return;
       }
-      if (name === 'js') {
+      const browser = name === 'js' && browserCall(originalCode ?? '', browserHandles);
+      if (browser) browserCalls.set(msg.id, browser);
+      if (name === 'js' && !browser) {
         const read = typeof originalCode === 'string' && isLeaseRead(originalCode);
         const safe = read || (typeof originalCode === 'string' && isChangeCancel(originalCode, lastWindowText));
         let entry;
@@ -743,6 +756,10 @@ export function createRelay({
       internalRequests.get(msg.id)(msg);
       internalRequests.delete(msg.id);
       return;
+    }
+    if (msg.method === undefined && browserCalls.has(msg.id)) {
+      const browser = browserCalls.get(msg.id); browserCalls.delete(msg.id);
+      if (!msg.error && !msg.result?.isError) for (const handle of browser.handles) browserHandles.add(handle);
     }
     if (msg.method === undefined && flowCalls.has(msg.id)) {
       flowRules.observe(msg.result, flowCalls.get(msg.id));
@@ -853,7 +870,7 @@ export function createRelay({
         return;
       }
     }
-    if (ask && isAppApproval(msg)) {
+    if (ask && (isAppApproval(msg) || (msg.method === 'elicitation/create' && msg.params?._meta?.connector_id === 'browser-use'))) {
       askUser(msg);
       return;
     }

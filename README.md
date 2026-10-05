@@ -184,11 +184,32 @@ Claude Code ──MCP──▶ bin/sleight-mcp ──▶ ChatGPT.app's cua-repl 
    then the pointer and front app go back. Each app needs approval once per session.
    `SLEIGHT_HOVER=0` leaves it out. [Design and checks](docs/design/hover.md) lists its limits.
 
-sleight only turns on native apps by default (`CUA_REPL_ENABLED_SURFACES=computer`), because the engine's
-in-app browser only exists inside ChatGPT. To try Chrome control, which needs the Codex Chrome
-extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
+### Browser surface
+
+At startup sleight asks the installed engine for connected ChatGPT browser extensions. If one is
+available, it enables browser and native control. Empty, failed or timed-out discovery leaves only
+native apps enabled, without adding discovery errors to tool results. `SLEIGHT_SURFACES` overrides
+this choice. Use `computer` or `browser,computer`. Automatic mode excludes the in-app browser,
+which needs ChatGPT host context. Extension discovery adds a short engine launch before the session.
+
+Use `cua.listBrowsers()`, select by `metadata.extensionInstanceId`, then open the URL with
+`cua.createBrowserTab(browser.browserId, url)`. Helium and Chrome can both report as Chrome.
+Browser requests go through sleight's approval prompts. The relay never preapproves them.
+
+On 2026-10-04, engine 26.930.31730 opened Example Domain, read it and clicked its Learn more link in
+1/1 connected extension trial. `turn_ended` removed the tab. A later close returned "No tab with id".
+The owner has not identified that extension as Helium or Chrome, and the second browser is unmeasured.
+[Every attempt](docs/benchmarks/2026-10-04-browser-surface.json) includes detection and routing failures.
 
 ## Known problems
+
+- Browser tabs do not take native input leases. Flow rules use one `browser` source and destination
+  for all tabs, with literal fills, typing and navigation URLs checked. They do not distinguish
+  sites or tabs. Clipboard transfers and runtime strings remain outside those checks. Native
+  document scope and saved-file change review do not cover browser tabs. Browser discovery runs
+  once at startup; connecting an extension later requires a new sleight session or an explicit
+  `SLEIGHT_SURFACES` override. Helium and Chrome identification and the second browser trial remain
+  pending the owner's response.
 
 - [Input leases](docs/design/input-lease.md) let one sleight session act on a window at a time.
   Another session gets the holder's name and time left, while reads remain available. Leases expire
