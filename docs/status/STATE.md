@@ -50,9 +50,10 @@ Prompts are in `.dev/prompts/` (untracked), and the latest round is `round-4.md`
 since 0.6.0, unreleased: #7 background drag (research, then background-first in the drag tool), #4
 doubled-keys probe, #6 drag window guards, #8 hover, #9 pre-approved apps, #10 blocked_app, B change
 review with the re-read fix (opt-in), #2 clipboard preservation (opt-in), #5 select_window, #11 browser
-surface (on when the extension is connected). Not merged: #3 action notes. Waiting: #1 helper stall
-(rebase again onto the browser merge), #6 drag raise (stacked-Chess trials need the owner away), #9's
-flaky process-group test. 0.7.0 waits for a clean pass of the two drag tasks.
+surface (on when the extension is connected), #1 engine-stall recovery, and fixes for two flaky tests.
+The browser-call check was tightened over four security-review rounds; #12 (`round-4.md`) replaces it
+with runtime isolation. Not merged: #3 action notes. Waiting: #6 drag raise (stacked-Chess trials need
+the owner away), #12. 0.7.0 waits for a clean pass of the two drag tasks.
 The marketplace installs from the default branch, so users installing now get main, not the 0.6.0 tag.
 
 ## Machine state outside the repo
