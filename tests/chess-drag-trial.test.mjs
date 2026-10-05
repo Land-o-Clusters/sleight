@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stackedChessTrial } from '../bench/chess-drag-trial.mjs';
+import { screenshotCoordinates, stackedChessTrial } from '../bench/chess-drag-trial.mjs';
 
 function fixture(failure) {
   const windows = [{ id: 99 }], closed = [], calls = [];
@@ -58,4 +58,36 @@ test('missing CG document mappings cannot falsely confirm cleanup', async () => 
   assert.equal(run.closedAllOpenedWindows, false);
   assert.deepEqual(run.remainingPaths, ['a', 'b']);
   assert.equal(run.cleanup.length, 6);
+});
+test('screenshot coordinates replace reversed AX square points for the exact stacked game', async () => {
+  const f = fixture();
+  f.api.coordinates = source => { assert.equal(source.windowId, 11); return { from: [250, 500], to: [250, 350] }; };
+  f.api.drag = request => { assert.deepEqual(request.from, [250, 500]); assert.deepEqual(request.to, [250, 350]); return { result: {} }; };
+  const run = await stackedChessTrial(['a', 'b'], f.api);
+  assert.equal(run.error, undefined); assert.equal(run.closedAllOpenedWindows, true);
+});
+test('screenshot measurements refuse changed frames and points outside the owned window', () => {
+  const source = { bounds: [100, 100, 600, 600] };
+  const measured = { bounds: [100, 100, 600, 600], from: [250, 500], to: [250, 350] };
+  assert.deepEqual(screenshotCoordinates(measured, source), { from: [250, 500], to: [250, 350] });
+  for (const change of [{ bounds: [100, 100, 800, 600] }, { from: [-1, 500] }, { to: [600, 350] }, { to: [250, NaN] }]) {
+    assert.throws(() => screenshotCoordinates({ ...measured, ...change }, source), /geometry/);
+  }
+});
+test('cancellation while measuring screenshot points closes games without submitting a drag', async () => {
+  const f = fixture(); let cancelled = false, posts = 0;
+  f.api.cancelled = () => cancelled;
+  f.api.coordinates = async () => { cancelled = true; return { from: [250, 500], to: [250, 350] }; };
+  f.api.drag = () => { posts++; return { result: {} }; };
+  const run = await stackedChessTrial(['a', 'b'], f.api);
+  assert.equal(posts, 0); assert.match(run.error, /interrupted/);
+  assert.equal(run.closedAllOpenedWindows, true); assert.deepEqual(f.closed, [11, 22]);
+});
+test('Chess exiting before document verification retains every pending fixture path', async () => {
+  const f = fixture();
+  f.api.closePath = () => ({ ok: false, error: 'Chess exited; document cleanup unconfirmed' });
+  f.api.snapshot = () => [];
+  const run = await stackedChessTrial(['a', 'b'], f.api);
+  assert.equal(run.closedAllOpenedWindows, false);
+  assert.deepEqual(run.remainingPaths, ['a', 'b']);
 });
