@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.1 (2026-10-05)
+
+- Guard-read compaction works when a `js` call writes its own output before the guard's read. In
+  0.9.0 those reads went whole with the relay's internal mark visible. Benchmark 12/12. In Helium, a
+  click on a page with a 120-item sidebar sent 428 characters instead of 35,532; scrolls on the CNN
+  front page still go whole, because lazy loading renumbers the elements
+  (`docs/benchmarks/2026-10-05-compact-reads.md`).
+
 ## 0.9.0 (2026-10-05)
 
 - Smaller results after actions. The window guard's read after each `js` action now reaches Claude

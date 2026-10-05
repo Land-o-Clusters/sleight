@@ -48,3 +48,16 @@ test('engine diffs and other output never replace the copy', () => {
   const [out] = apply(c, GUARD_MARK + tree([...sidebar, '\t99 button X']));
   assert.match(out, /\+ \t99 button X$/, 'changes Claude saw in an engine diff are shown again, never lost');
 });
+
+test("a guard read after Claude's own output in the same item is compacted, and that output counts as seen", () => {
+  const c = createReadCompactor();
+  const [first] = apply(c, '<notes>\n' + tree(sidebar));
+  assert.match(first, /<notes>/, 'a full tree mid-item passes through');
+  const [out] = apply(c, 'RAW 123' + GUARD_MARK + tree([...sidebar, '\t70 text 1']));
+  assert.match(out, /^RAW 123\nWindow: "a\.txt"/);
+  assert.match(out, /\+ \t70 text 1$/);
+  assert.doesNotMatch(out, /sleight:guard-read|Chat 7/);
+  const own = tree([...sidebar, '\t70 text 2']);
+  const [next] = apply(c, own + '\n' + GUARD_MARK + own);
+  assert.match(next, /no change since the last full tree/, "Claude's own full read in the same call is the baseline");
+});

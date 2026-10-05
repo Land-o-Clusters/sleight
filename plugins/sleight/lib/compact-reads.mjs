@@ -48,7 +48,7 @@ export function createReadCompactor() {
 
   function compact(tree) {
     const window = windowFromText(tree);
-    const lines = tree.split('\n');
+    const lines = tree.replace(/\n+$/, '').split('\n');
     if (!window) return tree;
     const key = documentKey(window);
     const before = seen.get(key);
@@ -64,19 +64,30 @@ export function createReadCompactor() {
     return text.length > tree.length * MAX_SHARE ? tree : text;
   }
 
+  // Remembers the last full tree in a stretch of output Claude sees: from the
+  // last line that starts with a Window header to the end.
+  function remember(text) {
+    const starts = [...text.matchAll(/^Window: /gm)];
+    if (!starts.length) return;
+    const tree = text.slice(starts.at(-1).index).replace(/\n+$/, '');
+    const window = windowFromText(tree);
+    if (window) seen.set(documentKey(window), tree.split('\n'));
+  }
+
   return {
-    // Rewrites a result's text items in place: guard reads become diffs,
-    // other full trees update the copy.
+    // Rewrites a result's text items. Everything one js call writes arrives
+    // as one item, so the guard's read (always written last) can follow
+    // Claude's own output in the same item.
     process(content) {
       if (!Array.isArray(content)) return content;
       return content.map(item => {
         if (item?.type !== 'text' || typeof item.text !== 'string') return item;
-        if (item.text.startsWith(GUARD_MARK)) return { ...item, text: compact(item.text.slice(GUARD_MARK.length)) };
-        if (item.text.startsWith('Window: ')) {
-          const window = windowFromText(item.text);
-          if (window) seen.set(documentKey(window), item.text.split('\n'));
-        }
-        return item;
+        const at = item.text.lastIndexOf(GUARD_MARK);
+        if (at < 0) { remember(item.text); return item; }
+        const before = item.text.slice(0, at).replaceAll(GUARD_MARK, '');
+        remember(before);
+        const gap = before && !before.endsWith('\n') ? '\n' : '';
+        return { ...item, text: before + gap + compact(item.text.slice(at + GUARD_MARK.length)) };
       });
     },
     reset() { seen.clear(); },

@@ -342,8 +342,9 @@ engine instances despite the installed extension. The final run detected both af
   check the window header. Since 0.9.0 Claude gets only the lines that changed since the last full
   tree it saw for that window ([measurements](docs/benchmarks/2026-10-05-compact-reads.md)). A first
   read, a new window or dialog, or a page that re-renders and renumbers its elements still comes
-  through whole. On TextEdit and Chess the result text per run fell 1 to 23%. Busy browser pages
-  are unmeasured. If Claude Code summarizes the conversation, Claude can lose the tree a diff refers
+  through whole. On TextEdit and Chess the result text per run fell 1 to 23%. In Helium, a click on
+  a local page with a 120-item sidebar sent 428 characters instead of 35,532, but 5/5 scrolls on
+  the CNN front page went whole, because lazy loading renumbers the elements. If Claude Code summarizes the conversation, Claude can lose the tree a diff refers
   to, as with the engine's own diffs. A read with `disableDiffing: true` comes through whole.
 - TextEdit hung 2/2 when Claude pressed Cmd+Shift+S (Duplicate, in apps with autosave) right after
   setting a document's text. Its main thread waits forever on the document's save lock, so every

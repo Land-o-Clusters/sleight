@@ -1,0 +1,32 @@
+{
+ "note": "Guard-read compaction (0.9.1 code) in Helium 0.18.3.1, driven by a deterministic script through sleight's launcher, approvals from the user's list (Helium listed by the owner for this testing). Owner away. Sizes are characters of text. 'full' is a read with diffing off right after the action; 'sent' is what the relay passed on for the guard's read.",
+ "localPage": {
+  "page": "local HTML: 120-item sidebar of links and an Add one button",
+  "action": "click Add one",
+  "clicks": [
+   { "full": 35532, "sent": 684, "kind": "diff" },
+   { "full": 35532, "sent": 428, "kind": "diff" },
+   { "full": 35532, "sent": 428, "kind": "diff" },
+   { "full": 35532, "sent": 428, "kind": "diff" },
+   { "full": 35532, "sent": 428, "kind": "diff" }
+  ],
+  "counterReadBack": "0 to 5, correct after every click"
+ },
+ "cnn": {
+  "page": "https://www.cnn.com front page",
+  "action": "scroll down one page",
+  "scrolls": [
+   { "full": 32671, "sent": 32969, "kind": "whole" },
+   { "full": 36178, "sent": 36178, "kind": "whole" },
+   { "full": 38785, "sent": 38785, "kind": "whole" },
+   { "full": 45851, "sent": 45851, "kind": "whole" },
+   { "full": 48089, "sent": 48089, "kind": "whole" }
+  ],
+  "why": "lazy loading inserts elements, which renumbers every later element, so most lines change and the diff is longer than 60% of the tree"
+ },
+ "earlierAttempts": [
+  "0.9.0 code: the mark sat after the script's own output in the same text item, so nothing was compacted and the mark leaked into the text",
+  "the engine first read Helium's crash-report sheet (from a crash before this session); the script pressed No Thanks",
+  "select_window is not covered by the user's list and was declined"
+ ]
+}

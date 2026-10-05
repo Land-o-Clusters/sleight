@@ -25,3 +25,18 @@ new windows and dialogs, which go whole. The complaint that started this came fr
 with a long sidebar. The savings there should be larger. No browser is on the benchmark's
 allowlist, so we haven't measured it. A page that re-renders and renumbers its elements still comes
 through whole, from the engine and from the guard.
+
+## Fix in 0.9.1, and Helium
+
+Everything one `js` call writes reaches the relay as one text item. In 0.9.0 the compactor only
+looked for the guard's read at the start of an item, so a call that wrote its own output first got
+the whole tree, with the relay's internal mark visible in it. 0.9.1 finds the read anywhere in the
+item, and a full tree Claude read earlier in the same item counts as seen. The benchmark passed
+12/12 again on the fixed code; 46 guard reads were cut down, 32 of them to "no change".
+
+A script drove Helium through sleight's launcher, with Helium on the owner's pre-approved list
+([sizes](2026-10-05-compact-reads-helium.json)). On a local page with a 120-item sidebar, each click
+sent 428 characters instead of 35,532, and the counter read back correctly 5/5. On the CNN front
+page, all 5 scrolls went whole, from 32,671 to 48,089 characters. Lazy loading inserts elements and
+renumbers every element after them, so most lines change. The engine's own diff has the same
+limit. Pages that hold still get the savings, and pages that keep loading don't.
