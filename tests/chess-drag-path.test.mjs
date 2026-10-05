@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-test('native Chess fixture accepts the owned private temporary path before Foundation normalizes it', () => {
+test('native Chess fixture accepts the owned private temporary path before Foundation normalizes it', { skip: process.platform !== 'darwin' }, () => {
   const dir = mkdtempSync('/private/tmp/sleight-chess-path-test-');
   try {
     const helper = join(dir, 'fixture');

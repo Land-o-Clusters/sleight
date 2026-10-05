@@ -5,11 +5,12 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createClipboardCoordinator } from '../plugins/sleight/lib/clipboard.mjs';
 
 test('independent coordinators refuse overlap and release without leaking the reservation', () => {
-  const bank = mkdtempSync('/private/tmp/sleight-clipboard-lock-');
+  const bank = mkdtempSync(join(tmpdir(), 'sleight-clipboard-lock-'));
   const a = createClipboardCoordinator(DatabaseSync, join(bank, 'lock.sqlite'));
   const b = createClipboardCoordinator(DatabaseSync, join(bank, 'lock.sqlite'));
   try {
@@ -19,7 +20,7 @@ test('independent coordinators refuse overlap and release without leaking the re
   } finally { a.release(); b.release(); rmSync(bank, { recursive: true }); }
 });
 test('a process exit releases the transaction without stale-lock takeover', async () => {
-  const bank = mkdtempSync('/private/tmp/sleight-clipboard-lock-'), path = join(bank, 'lock.sqlite');
+  const bank = mkdtempSync(join(tmpdir(), 'sleight-clipboard-lock-')), path = join(bank, 'lock.sqlite');
   const contender = createClipboardCoordinator(DatabaseSync, path);
   const child = spawn(process.execPath, [fileURLToPath(new URL('./fixtures/clipboard-lock.mjs', import.meta.url)), path], { stdio: ['pipe', 'pipe', 'pipe'] });
   const closed = once(child, 'close');
