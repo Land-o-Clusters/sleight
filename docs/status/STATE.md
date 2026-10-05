@@ -10,7 +10,7 @@ scope: 0.12.0, which also stops a batch of clicks once an earlier click renumber
 stale-number refusals. 0.11.0 reuses Claude's reads for the guard (CNN 242 to 332 ms per call down
 to 10 to 14 ms) and has the launch README. A fresh-config install from GitHub worked. Launch files
 are in `.dev/launch/` (untracked): `demo.mp4` and `demo.gif` (recorded by sleight-arch from window
-captures only, no desktop), `thread.md`. Posting waits on the owner's yes to that exact content.
+captures only, no desktop), `thread.md`. Copies are in `~/Desktop/sleight-launch/` for the owner's social-media bot to post (owner, 2026-10-05).
 Promotion starts next (owner, 2026-10-05).
 
 0.8.0 adds the opt-in engine path for terminals and OpenAI's apps: the user sets the helper's own
