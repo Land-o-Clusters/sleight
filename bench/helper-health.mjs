@@ -13,6 +13,7 @@ import { resolveServer, doctor } from '../plugins/sleight/lib/launch.mjs';
 import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 import { BENCH_APPS } from './tasks.mjs';
 import { requirePendingKill, killHelper, requireIdleKill, inspectHelperProcesses } from './helper-kill-protocol.mjs';
+import { sanitizeHelperEvidence } from './helper-evidence.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const execute = promisify(execFile);
@@ -26,7 +27,7 @@ const records = [];
 const clients = new Set();
 let opened = false;
 let stopping = false;
-const sanitize = value => JSON.stringify(value, null, 2).split(homedir()).join('~');
+const sanitize = sanitizeHelperEvidence;
 const record = value => {
   records.push({ at: new Date().toISOString(), ...value });
   // Write after each stage, including failures and interruptions.

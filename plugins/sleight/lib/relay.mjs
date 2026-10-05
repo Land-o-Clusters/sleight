@@ -787,7 +787,8 @@ export function createRelay({
       const native = originalCode.match(/([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.getApp\(/);
       if (native) browserHandles.delete(native[1]);
     }
-    const healthPlan = msg.method === 'tools/call' && msg.params?.name === 'js' ? helperPlan(originalCode) : undefined;
+    const browser = msg.method === 'tools/call' && msg.params?.name === 'js' && browserCall(originalCode ?? '', browserHandles);
+    const healthPlan = msg.method === 'tools/call' && msg.params?.name === 'js' && !browser ? helperPlan(originalCode) : undefined;
     const blockedApp = (healthPlan?.read ? [healthPlan.key] : healthPlan?.keys ?? []).find(key => {
       const state = helperStates.get(key);
       return state?.stuck && (!healthPlan.read || state.pending !== undefined || Date.now() < state.retryAt);
@@ -876,7 +877,6 @@ export function createRelay({
         rotateTurn();
         return;
       }
-      const browser = name === 'js' && browserCall(originalCode ?? '', browserHandles);
       if (browser) browserCalls.set(msg.id, browser);
       if (name === 'js' && !browser) {
         if (!clipboard && typeof originalCode === 'string' && clipboardActions(originalCode).some(action => ['c', 'x'].includes(action))) nativeCopies.add(msg.id);

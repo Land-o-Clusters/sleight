@@ -80,6 +80,25 @@ async function selectedHarness(t, options = {}) {
   h.forwarded.length = h.received.length = 0;
   return { h, target, failSelection: () => { failSelection = true; } };
 }
+test('hidden recovery for another app keeps the confirmed selected window and its action note', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const { h } = await selectedHarness(t);
+  for (const id of [1, 2]) {
+    h.send(rpc(id, 'js', { code: 'let calc = await cua.getApp("Calculator")' }));
+    h.reply({ jsonrpc: '2.0', id, result: { isError: true, content: [{ type: 'text', text: '-10005 timeoutReached' }] } });
+  }
+  h.send(rpc(3, 'js', { code: 'app = await cua.getApp("TextEdit")' })); h.reply(result(3));
+  t.mock.timers.tick(20000);
+  const probe = h.forwarded.at(-1);
+  assert.match(String(probe.id), /^sleight-helper-/);
+  h.reply({ jsonrpc: '2.0', id: probe.id, result: { content: [{ type: 'text', text: 'Window: "Calculator", App: Calculator' }],
+    _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.calculator' } } } } });
+  h.send(rpc(4, 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(h.forwarded.at(-1).id, 4);
+  h.reply(result(4, 'Window: "b.txt", App: TextEdit'));
+  assert.match(h.received.at(-1).result.content.at(-1).text, /outcome unconfirmed.*a.txt.*b.txt/);
+});
+
 test('reset releases a selection and a new document read permits later actions', async t => {
   const { h } = await selectedHarness(t);
   h.send(rpc(1, 'js_reset')); h.reply(result(1, 'reset'));

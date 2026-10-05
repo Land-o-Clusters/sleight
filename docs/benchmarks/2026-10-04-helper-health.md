@@ -125,3 +125,42 @@ Final `npm run check` passed all 362 unit tests, both plugin validations and 8 m
 The first prose pass on this rebase report found two flags (exit 1). The next pass found one
 punctuation flag (exit 1). Those sentences were revised. Final prose lint passed all 29 files
 with no flags (`npm run lint:prose`, exit 0).
+
+## Rebase after clipboard, window selection and browser merges
+
+The branch now builds on `origin/main` at `f35565c`. The shared request handler includes clipboard
+planning and `clipboard.run`, with replies returning through `observeServerMessage`. The stream
+callback and automatic recovery both call that handler. Browser handles and call classification,
+window selection clearing and outcome notes, and the completion-time `actionPending` check remain.
+The prose-lint script retains the union of 34 files from both sides.
+
+The initial replay and its continuation stopped at conflicts (exit 1). A combined staging request
+hit an index-lock sandbox denial (exit 128), and continuation still needed staged resolutions
+(exit 1). Staging through a direct Git request succeeded (exit 0), followed by the final continuation
+(exit 0). The browser regression test failed after the merge because the native helper gate refused
+a browser acquisition (exit 1). Browser calls now bypass that gate, and the test passes (exit 0).
+It covers acquisitions, DOM actions and saved tab reads during a native fault and after hidden
+recovery. Added integration cases also verify clipboard restoration before publication and selected
+window notes after another app's recovery. All 187 integration tests passed (exit 0).
+
+The recovery receipt contained the owner's name in Chess game titles. Those titles and their
+repeated AX labels are now `[Chess window]`. The originating feature commit was amended before
+replaying the later commit. All 12 helper receipts and all three feature commit snapshots passed
+the privacy scan (exit 0). The first history scan exceeded Node's default output buffer and did not
+verify the history. A standalone rerun passed with a larger buffer (exit 0).
+Future writes use the same scrubber. Its missing-module test
+first failed (exit 1), then both privacy cases passed (exit 0), including quoted and escaped titles.
+Doctor's native-read fixtures set `SLEIGHT_SURFACES=computer`. Main's browser discovery
+tests still cover automatic selection and explicit overrides.
+
+Full `npm run check` passed 463 unit tests, both plugin validations and 8 mod tests (exit 0).
+The first prose pass on this section found one flag (exit 1), which was corrected.
+
+| Attempt | Result | Exit |
+|---|---|---|
+| [Latest sandbox smoke](2026-10-04-helper-smoke-sleight-helper-health-UEbgBn.json) | Engine startup failed with `sandbox_apply: Operation not permitted`. Owned engine collected and lock released | 1 |
+| [Latest host smoke](2026-10-04-helper-smoke-sleight-helper-health-EL8ya7.json) | 3/3 Calculator reads and 3/3 doctor probes passed. All owned engines exited 0 and the lock was released | 0 |
+
+Both attempts used the locked runner. The host run followed the sandbox denial. Helper signals and
+ChatGPT restarts were absent. The final prose check passed all 34 files with no flags
+(`npm run lint:prose`, exit 0).

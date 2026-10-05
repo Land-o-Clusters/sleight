@@ -20,7 +20,8 @@ the fault, and later probes remain at least 20 seconds apart. Cleanup cancels th
 Automatic results remain internal. Because they advance the engine's UI diff baseline, actions on
 the recovered app wait for a visible app read. That read disables diffing or appends a full AX read
 to an acquisition or screenshot. It must succeed before actions resume. Automatic observations do
-not replace the relay's current document or lease target.
+not replace the relay's current document, selected window or lease target. Browser calls stay on
+the browser path. A native helper fault does not block browser acquisitions or saved tab handles.
 
 The guidance names SkyComputerUseService and tells Claude to stop retrying. It asks the user to restart
 ChatGPT and says sleight will retry by itself. The relay never kills the shared helper or restarts
@@ -40,6 +41,8 @@ rather than waiting indefinitely for a descendant that retained an output pipe.
 
 `scripts/live-helper-check.sh` holds `/tmp/sleight-live.lock` only during a live run and removes it on
 exit. `bench/helper-health.mjs` publishes every run, including failures, with home paths as `~`.
+Chess game titles are replaced with `[Chess window]` throughout receipts, including repeated AX
+labels. The same scrubber handles future writes and the published recovery receipts.
 The shell forwards cancellation to its child and waits for cleanup before removing the lock.
 Cancellation prevents any further helper signal. An in-call trial counts only if a signal was sent
 while a request was pending. A completed-before-kill attempt is published as incomplete.
