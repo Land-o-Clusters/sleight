@@ -940,5 +940,18 @@
       "note": "Open panel inventory and vendor API docs omitted from harness previews. Review responses included from the private MCP trace."
     }
   ],
-  "liveStatus": "Four overlapping Open/re-read trials and owner-selected Undo/Keep check passed, both exit 0. Fixture windows closed, backups deleted and locks released."
+  "liveStatus": "Four overlapping Open/re-read trials and owner-selected Undo/Keep check passed, both exit 0. Fixture windows closed, backups deleted and locks released.",
+  "postRebaseChecks": {
+    "base": "7540224",
+    "candidate": "6b158d3",
+    "check": {
+      "exitCode": 0,
+      "unitTests": 338,
+      "modTests": 8
+    },
+    "lintProse": {
+      "exitCode": 0,
+      "files": 28
+    }
+  }
 }
