@@ -221,6 +221,15 @@ function exposedEndpoints(list, main, points, sameAppOnly) {
   }
 }
 
+// The other app on top at either drag point, or null when the window is exposed at both.
+function coveringApp(list, main, points) {
+  for (const point of [points.start, points.end]) {
+    const top = list.find(w => w.layer === 0 && inside(w.bounds, point) && !/Computer Use$/.test(w.owner));
+    if (top && top.pid !== main.pid) return top.owner || 'another app';
+  }
+  return null;
+}
+
 function run(argv) {
   let previous = null, saved = null, pid = null, pressed = false, didPress = false, post = null, current = null;
   let path = 'none', fallbackReason = null;
@@ -258,11 +267,17 @@ function run(argv) {
       delay(settleMs / 1000);
       checkWindow(main, pid, win);
       const points = validatePoints(content(win, main.bounds), main.bounds, from, to, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit');
-      // Other apps may cover PID delivery, but another document of this app
-      // must not receive the press. Check fresh own-app order at both ends.
-      exposedEndpoints(checkWindow(main, pid, win), main, points, true);
+      // Another document of this app must not receive the press: check fresh
+      // own-app order at both ends, then other apps' coverage below.
+      const ordered = checkWindow(main, pid, win);
+      exposedEndpoints(ordered, main, points, true);
+      // The window server picks the drop target from what is on screen at the
+      // drop point, so a window another app covers never receives a background
+      // drop (0/3 covered, 3/3 uncovered, 2026-10-05). Go straight to foreground.
+      const cover = coveringApp(ordered, main, points);
+      if (cover) fallbackReason = `background skipped: ${cover} covers the window at the drag points`;
       let sequence;
-      try {
+      if (!cover) try {
         const moves = Array.from({ length: steps }, (_, i) => ({
           x: points.start.x + (points.end.x - points.start.x) * (i + 1) / steps,
           y: points.start.y + (points.end.y - points.start.y) * (i + 1) / steps,

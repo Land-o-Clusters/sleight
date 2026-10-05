@@ -275,7 +275,11 @@ engine instances despite the installed extension. The final run detected both af
   Calculator content guards remain unmeasured.
   The [background prototype](docs/benchmarks/2026-10-04-background-text-drag.md) moved TextEdit text
   4/4 after correcting its drop geometry, but joined `gammaalpha`. The product now uses that path
-  first and repairs the verified space. Before the named-window raise guard,
+  first and repairs the verified space. It only works when no other app's window covers the drag
+  points, because macOS picks the drop target from what's on screen there: 3/3 TextEdit moves with
+  the window uncovered, 0/3 with this Claude window over it (2026-10-05). When another app covers
+  either point, the tool goes straight to the foreground drag and names that app. Before the
+  named-window raise guard,
   [product trials](docs/benchmarks/2026-10-04-background-drag-product.md)
   passed 3/3 TextEdit moves, with TextEdit inactive and the front app unchanged. The owner moved the
   pointer during one trial; it was unchanged throughout the other two.
@@ -544,7 +548,7 @@ for the app that runs Claude Code, settings refusal by window title, toolbar and
   session ([Approval scope](#approval-scope)).
 - Foreground `drag` fallback, `hover` and the `menu_bar` fallback for SwiftUI icons move your pointer
   briefly. `drag` refuses points outside the chosen window's visible content; foreground also refuses
-  covered endpoints. Background PID events can reach covered content in the exact target window.
+  covered endpoints, after bringing the app forward.
   `hover` refuses points another window covers, including
   another window of the same app, and takes about two seconds with the default dwell.
 - The repo is small enough to read before you install it. It holds a launcher, a relay, a mod, a skill,

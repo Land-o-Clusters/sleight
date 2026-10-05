@@ -97,6 +97,11 @@ test('unchanged background text alone permits the foreground fallback', () => {
   assert.equal(r.ok, true); assert.equal(r.path, 'foreground'); assert.equal(r.fallbackReason, 'background text unchanged');
   assert.equal(h.pidEvents.length, 28); assert.equal(h.activations.length, 1); assert.equal(h.events.length, 28);
 });
+test('another app covering the drag points skips background posting and says which app', () => {
+  const h = harness({ background: true, coveredEnd: true, coveredPid: 9 }); const r = h.run({ windowId: 11 });
+  assert.equal(r.path, 'foreground'); assert.equal(r.fallbackReason, 'background skipped: Other app covers the window at the drag points');
+  assert.equal(h.pidEvents.length, 0);
+});
 test('missing or failing private setter skips posting and names the foreground path', () => {
   for (const options of [{ background: false }, { background: true, setterFails: true }]) {
     const h = harness(options); const r = h.run({ windowId: 11 });
@@ -278,10 +283,6 @@ test('a failed background raise refuses at both same-app endpoints before PID or
     assert.equal(result.ok, false); assert.match(result.error, /covered|topmost/i);
     assert.equal(h.pidEvents.length, 0); assert.equal(h.events.length, 0);
   }
-});
-test('background still posts to the named window when only another app covers the destination', () => {
-  const h = harness({ background: true, coveredEnd: true, coveredPid: 99 }); const result = h.run({ windowId: 11 });
-  assert.equal(result.ok, true, result.error); assert.equal(result.path, 'background'); assert.equal(h.events.length, 0);
 });
 test('the prior front app is restored if AXRaise brings a background target forward, even on refusal', () => {
   for (const coveredEnd of [false, true]) {
