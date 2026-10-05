@@ -217,6 +217,10 @@ In a save dialog, `app.pressKey("super+shift+g")` opens Go to Folder. Set the fo
 Return, then set the file name. A full path set into the name field with `app.setValue` doesn't move
 the dialog anywhere. The slashes end up in the file name.
 
+In TextEdit and other apps with autosave, `super+shift+s` is Duplicate, not Save As. Use
+`super+s` for an untitled document, or File > Save As from the menu. Sending Duplicate right after
+setting text hung TextEdit twice (2026-10-05).
+
 ## What it can't do
 
 - Background hover beyond the workarounds above. Local `hover` takes the pointer briefly.

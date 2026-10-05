@@ -11,7 +11,11 @@
   window was refused 1/1.
 - The skill says a built-in browser is usually faster for public pages, and sleight's browser
   surface fits pages that need the user's logged-in browser.
-- Known problem added: the window guard adds a full, non-diffed tree to every action result.
+- Known problems added: the window guard adds a full, non-diffed tree to every action result, and
+  TextEdit hung 2/2 on Cmd+Shift+S (Duplicate) right after its text was set. The skill now steers
+  Claude to Cmd+S or File > Save As, and the benchmark's TextEdit setup times out on a hung TextEdit.
+- Benchmark: 6/6 TextEdit runs after the skill hint, and 1/1 each on the other tasks
+  (`docs/benchmarks/2026-10-05-release-0.8.0.md`, the hung runs included).
 
 ## 0.7.0 (2026-10-05)
 

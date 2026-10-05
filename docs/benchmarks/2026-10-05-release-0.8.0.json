@@ -1,0 +1,227 @@
+{
+ "note": "Every benchmark run made for the 0.8.0 release on 2026-10-05, in order, failures included. sleight arm only (folder outside any repo), Sonnet 5.5 at medium effort, Claude Code 2.1.289, engine 26.930.31730, ComputerUseAllowForbiddenTargets on (it only affects terminals and OpenAI's apps). Temporary paths are shown as $TMPDIR. See 2026-10-05-release-0.8.0.md.",
+ "passes": [
+  {
+   "stamp": "2026-10-05T13-32-57-456Z",
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "claude",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "calculator-click",
+     "run": 1,
+     "passed": true,
+     "seconds": 124.1,
+     "turns": 14,
+     "costUsd": 0.432929,
+     "exitCode": 0,
+     "answer": "391",
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    {
+     "arm": "sleight",
+     "task": "calculator-menu",
+     "run": 1,
+     "passed": true,
+     "seconds": 44.1,
+     "turns": 13,
+     "costUsd": 0.39924499999999996,
+     "exitCode": 0,
+     "answer": "1,024",
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    {
+     "arm": "sleight",
+     "task": "textedit-save",
+     "run": 1,
+     "passed": false,
+     "reason": "$TMPDIR/sleight-bench/2026-10-05T13-32-57-456Z/sleight-textedit-save-1/5bd25109.txt was not saved",
+     "seconds": 75.6,
+     "turns": 11,
+     "costUsd": 0.277593,
+     "exitCode": 0,
+     "answer": "I couldn't finish this. The computer-use helper stopped responding partway through, and the file was never saved to the path you gave.\n\n**Done so far**\n- A new TextEdit document (\"Untitled 6\") is open and set to plain text.\n- TextEdit autosaved it to `~/Library/Mobile Documents/com~apple~TextEdit/Do",
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   ],
+   "label": "smoke pass on the 0.8.0 candidate; textedit-save hung TextEdit (Cmd+Shift+S), then the TextEdit setup crashed the run"
+  },
+  {
+   "stamp": "2026-10-05T13-42-20-622Z",
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "claude",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "textedit-save",
+     "run": 1,
+     "passed": false,
+     "reason": "$TMPDIR/sleight-bench/2026-10-05T13-42-20-622Z/sleight-textedit-save-1/6fd5cf63.txt was not saved",
+     "seconds": 90.8,
+     "turns": 11,
+     "costUsd": 0.27784000000000003,
+     "exitCode": 0,
+     "answer": "I couldn't finish this. The computer-use helper got stuck partway through, and the file at `6fd5cf63.txt` has not been saved.\n\n- **Done:** I opened a new TextEdit document and pressed Shift+Cmd+T (Make Plain Text). I typed \"sleight bench 6fd5cf63\", and TextEdit auto-capitalized it to \"Sleight bench ",
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    {
+     "arm": "sleight",
+     "task": "textedit-edit",
+     "run": 1,
+     "passed": false,
+     "reason": "file holds \"alpha beta gamma\\n\"",
+     "seconds": 47.7,
+     "turns": 5,
+     "costUsd": 0.1560868,
+     "exitCode": 0,
+     "answer": "I couldn't make the edit. The computer-use helper (SkyComputerUseService) is stuck, and TextEdit never became readable. Both attempts to open it timed out, so the file hasn't been changed, saved or closed.\n\nTo recover, you'd need to restart ChatGPT yourself. That will end your Codex sessions, so I h",
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    {
+     "arm": "sleight",
+     "task": "textedit-drag",
+     "run": 1,
+     "passed": false,
+     "reason": "file holds \"alpha beta gamma\"",
+     "seconds": 46.5,
+     "turns": 6,
+     "costUsd": 0.1608468,
+     "exitCode": 0,
+     "answer": "I couldn't do this one. The document is open in TextEdit but unchanged: it still reads \"alpha beta gamma\". I didn't select, drag, save or close anything.\n\nThe computer-use helper (SkyComputerUseService) timed out twice when I tried to read TextEdit. It looks stuck, so I stopped retrying. You'll need",
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    {
+     "arm": "sleight",
+     "task": "chess-drag",
+     "run": 1,
+     "passed": true,
+     "seconds": 46.3,
+     "turns": 14,
+     "costUsd": 0.3676533999999999,
+     "exitCode": 0,
+     "answer": "I started a new Chess game, dragged White's e-pawn from e2 to e4, saved the game, and closed that window.\n\n- **Move:** the board showed the pawn on e4, and the computer replied with a Black pawn to e6.\n- **Save:** `0ee25933.game` now exists in `sleight-chess-drag-1/` (1364 bytes). I saved it before ",
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   ],
+   "label": "rerun of the remaining tasks; textedit-save hung TextEdit again, which failed the next two TextEdit tasks"
+  },
+  {
+   "stamp": "2026-10-05T13-52-18-342Z",
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "claude",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "textedit-save",
+     "run": 1,
+     "passed": true,
+     "seconds": 97.4,
+     "turns": 29,
+     "costUsd": 0.7307594,
+     "exitCode": 0,
+     "answer": "I created the TextEdit document, made it plain text, typed the text and saved it to `$TMPDIR/sleight-bench/2026-10-05T13-52-18-342Z/sleight-textedit-save-1/6d01d5d4.txt`. I then closed it. The file on disk holds exactly `sleight bench 6d01d5d4` with no traili",
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    {
+     "arm": "sleight",
+     "task": "textedit-edit",
+     "run": 1,
+     "passed": true,
+     "seconds": 34.7,
+     "turns": 9,
+     "costUsd": 0.24493740000000003,
+     "exitCode": 0,
+     "answer": "I changed \"beta\" to \"delta\" in `98220c59-edit.txt`, saved it, and closed the document. The file now reads `alpha delta gamma`, which I confirmed by reading it from disk after the save.\n\nTextEdit now shows an empty Open dialog, which it does when its last document closes. Clicking Cancel just brings ",
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    {
+     "arm": "sleight",
+     "task": "textedit-drag",
+     "run": 1,
+     "passed": true,
+     "seconds": 50.5,
+     "turns": 15,
+     "costUsd": 0.3427034,
+     "exitCode": 0,
+     "answer": "I moved \"alpha\" to the end of the line by drag and drop, then saved and closed the document. The file on disk now reads `beta gamma alpha`.\n\nThe drag needed the mouse held down before moving, so it used sleight's `drag` tool. The tool fell back to a foreground drag because the Claude window covered ",
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    {
+     "arm": "sleight",
+     "task": "textedit-save",
+     "run": 2,
+     "passed": true,
+     "seconds": 67.2,
+     "turns": 18,
+     "costUsd": 0.4760890000000001,
+     "exitCode": 0,
+     "answer": "The file is saved at `$TMPDIR/sleight-bench/2026-10-05T13-52-18-342Z/sleight-textedit-save-2/3cc2b3f3.txt`, and the document is closed. It is 22 bytes, plain text, and reads `sleight bench 3cc2b3f3` with no trailing newline (checked with `od -c`).\n\n- **Plain ",
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    {
+     "arm": "sleight",
+     "task": "textedit-edit",
+     "run": 2,
+     "passed": true,
+     "seconds": 37.4,
+     "turns": 11,
+     "costUsd": 0.2879196,
+     "exitCode": 0,
+     "answer": "I opened `feabbb18-edit.txt` in TextEdit and replaced \"beta\" with \"delta\". The file on disk now reads `alpha delta gamma`, which I confirmed by reading it back.\n\nI saved with Cmd+S and then closed the window with Cmd+W. After the close, TextEdit reported no windows available, so no document is left ",
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    {
+     "arm": "sleight",
+     "task": "textedit-drag",
+     "run": 2,
+     "passed": true,
+     "seconds": 66.1,
+     "turns": 14,
+     "costUsd": 0.357826,
+     "exitCode": 0,
+     "answer": "I opened the file in TextEdit, dragged \"alpha\" to the end of the line, then saved and closed it. TextEdit showed \"beta gamma alpha\" before I saved. The close went through with no unsaved-changes prompt. I didn't reopen the file to check the saved contents.\n\nThe drag used the mouse tool with a 500 ms",
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   ],
+   "label": "TextEdit tasks twice after the skill hint about Cmd+Shift+S"
+  }
+ ]
+}

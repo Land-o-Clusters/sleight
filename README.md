@@ -345,6 +345,10 @@ engine instances despite the installed extension. The final run detected both af
   2026-10-05). Filtering in Claude's own code doesn't help, since the guard's read comes after it.
 - With input leases, a dialog or sheet the action opened (Open, Save) stops the next action until
   Claude reads the window again. Claude recovers, but textedit-save took about twice the turns.
+- TextEdit hung 2/2 when Claude pressed Cmd+Shift+S (Duplicate, in apps with autosave) right after
+  setting a document's text. Its main thread waits forever on the document's save lock, so every
+  read times out and the relay reports a stuck helper and suggests restarting ChatGPT, when only
+  TextEdit needs quitting. The skill now steers Claude to Cmd+S or File > Save As.
 - The engine's helper can stop answering. On 2026-10-04 every `cua.getApp` timed out
   (`-10005 timeoutReached`) for about 25 minutes, with the Mac unlocked and in use, until ChatGPT was
   restarted. We don't know the cause. It started right after a test that kills engine processes.
