@@ -26,7 +26,7 @@ for (const [mode, code, message] of [
       command: process.execPath, args: [script, mode], env: { CUA_REPL_NODE_REPL_PATH: script, SKY_CUA_SERVICE_PATH: script },
     } } }));
     const lines = [];
-    assert.equal(await doctor({ env: { CODEX_HOME: bank }, log: line => lines.push(line), timeoutMs: 100, startupTimeoutMs: 200 }), code);
+    assert.equal(await doctor({ env: { CODEX_HOME: bank, SLEIGHT_SURFACES: 'computer' }, log: line => lines.push(line), timeoutMs: 100, startupTimeoutMs: 200 }), code);
     assert.match(lines.join('\n'), message);
   });
 }

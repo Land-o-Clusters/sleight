@@ -282,6 +282,28 @@ test('hidden helper recovery cannot create a later copy or erase another app dia
   h.relay.dispose();
 });
 
+test('a native helper fault and hidden recovery do not block browser calls or their saved handles', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const h = harness();
+  helperRead(h, 1); helperReply(h, 1);
+  helperRead(h, 2); helperReply(h, 2);
+  helperRead(h, 3, 'let tab = await cua.getTab("1")');
+  assert.equal(h.toServer.at(-1).id, 3);
+  helperReply(h, 3, 'Browser tab: 1', false);
+  helperRead(h, 4, 'await tab.playwright.getByRole("link").click()');
+  assert.equal(h.toServer.at(-1).id, 4);
+  helperReply(h, 4, 'Browser tab: 1', false);
+  t.mock.timers.tick(20000);
+  helperReply(h, h.toServer.at(-1).id, 'Window: "Calculator", App: Calculator', false);
+  helperRead(h, 5, 'await tab.getAXState()');
+  assert.equal(h.toServer.at(-1).id, 5);
+  assert.equal(h.toServer.at(-1).params.arguments.code, 'await tab.getAXState()');
+  helperReply(h, 5, 'Browser tab: 1', false);
+  helperRead(h, 6, 'await app.click(1)');
+  assert.equal(h.toServer.some(m => m.id === 6), false);
+  h.relay.dispose();
+});
+
 test('a successful helper read resets consecutive timeouts, but documentation does not', () => {
   const h = harness();
   helperRead(h, 1); helperReply(h, 1);
