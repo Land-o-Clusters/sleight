@@ -229,7 +229,11 @@ function run(argv) {
     if (!target) throw new Error(`${app} isn't running`);
     pid = target.processIdentifier;
     const own = windows(true).filter(w => w.pid === pid && w.layer === 0);
-    if (!own.length) throw new Error(`${app} has no window on screen`);
+    if (!own.length || (request.windowId !== undefined && !own.some(w => w.id === request.windowId))) {
+      const offScreen = windows(false).filter(w => w.pid === pid && w.layer === 0 && (request.windowId === undefined || w.id === request.windowId));
+      if (offScreen.length) throw new Error(`${app}'s window is off screen, on another desktop or Space (or hidden/minimized). Drag needs that window on screen; bring it to the current desktop first`);
+      if (!own.length) throw new Error(`${app} has no window; open one on the current desktop before dragging`);
+    }
     let main = resolveWindow(own, request);
     const win = axWindow(pid, main);
     let build;
@@ -303,6 +307,10 @@ function run(argv) {
     previous = ws.frontmostApplication;
     saved = $.CGEventGetLocation($.CGEventCreate(null));
     target.activateWithOptions(0);
+    // AXRaise alone can leave another stacked document as the app's main window.
+    // Some apps expose AXMain as read-only, so coverage still decides whether
+    // the raise succeeded. Never ignore a covering window of the same app.
+    attempt(() => { win.attributes.byName('AXMain').value = true; });
     win.actions.byName('AXRaise').perform();
     // Right after the engine acts (say, selecting the text), a press that comes
     // at once doesn't take; 2 s later it does (2026-10-04). Wait for things to settle.

@@ -1,0 +1,59 @@
+{
+  "started": "2026-10-04T23:50:54.529Z",
+  "runs": [
+    {
+      "n": 1,
+      "paths": [
+        "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-1-target.game",
+        "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-1-cover.game"
+      ],
+      "placements": [],
+      "cleanup": [],
+      "error": "Error Domain=owned game path required Code=1 \"(null)\"",
+      "passed": false,
+      "remainingWindows": [],
+      "closedAllOpenedWindows": true
+    },
+    {
+      "n": 2,
+      "paths": [
+        "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-2-target.game",
+        "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-2-cover.game"
+      ],
+      "placements": [],
+      "cleanup": [],
+      "error": "Error Domain=owned game path required Code=1 \"(null)\"",
+      "passed": false,
+      "remainingWindows": [],
+      "closedAllOpenedWindows": true
+    },
+    {
+      "n": 3,
+      "paths": [
+        "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-3-target.game",
+        "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-3-cover.game"
+      ],
+      "placements": [],
+      "cleanup": [],
+      "error": "Error Domain=owned game path required Code=1 \"(null)\"",
+      "passed": false,
+      "remainingWindows": [],
+      "closedAllOpenedWindows": true
+    }
+  ],
+  "approvals": [
+    {
+      "message": "Allow Claude to drag in Chess? It moves your pointer for a few seconds.",
+      "action": "accept"
+    }
+  ],
+  "trace": [
+    {
+      "t": "2026-10-04T23:50:58.312Z",
+      "direction": "change-snapshots-deleted",
+      "message": {}
+    }
+  ],
+  "finished": "2026-10-04T23:50:58.312Z",
+  "exitCode": 1
+}

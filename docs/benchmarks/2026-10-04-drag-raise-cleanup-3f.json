@@ -1,0 +1,1320 @@
+{
+  "input": "docs/benchmarks/2026-10-04-drag-raise-live-3.json",
+  "paths": [
+    "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-1-target.game",
+    "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-1-cover.game",
+    "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-2-target.game",
+    "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-2-cover.game",
+    "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-3-target.game",
+    "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-3-cover.game"
+  ],
+  "cleanup": [
+    {
+      "path": "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-1-target.game",
+      "result": {
+        "closeClickSent": true,
+        "closeKeySent": true,
+        "closePointTopWindow": 241127,
+        "error": "Error Domain=owned window remains open Code=1 \"(null)\"",
+        "mainAccepted": 0,
+        "ok": false,
+        "ownedChildren": [
+          {
+            "description": "white rook, a1",
+            "role": "AXButton",
+            "title": "white rook, a1",
+            "value": ""
+          },
+          {
+            "description": "white knight, b1",
+            "role": "AXButton",
+            "title": "white knight, b1",
+            "value": ""
+          },
+          {
+            "description": "white bishop, c1",
+            "role": "AXButton",
+            "title": "white bishop, c1",
+            "value": ""
+          },
+          {
+            "description": "white queen, d1",
+            "role": "AXButton",
+            "title": "white queen, d1",
+            "value": ""
+          },
+          {
+            "description": "white king, e1",
+            "role": "AXButton",
+            "title": "white king, e1",
+            "value": ""
+          },
+          {
+            "description": "white bishop, f1",
+            "role": "AXButton",
+            "title": "white bishop, f1",
+            "value": ""
+          },
+          {
+            "description": "white knight, g1",
+            "role": "AXButton",
+            "title": "white knight, g1",
+            "value": ""
+          },
+          {
+            "description": "white rook, h1",
+            "role": "AXButton",
+            "title": "white rook, h1",
+            "value": ""
+          },
+          {
+            "description": "white pawn, a2",
+            "role": "AXButton",
+            "title": "white pawn, a2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, b2",
+            "role": "AXButton",
+            "title": "white pawn, b2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, c2",
+            "role": "AXButton",
+            "title": "white pawn, c2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, d2",
+            "role": "AXButton",
+            "title": "white pawn, d2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, e2",
+            "role": "AXButton",
+            "title": "white pawn, e2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, f2",
+            "role": "AXButton",
+            "title": "white pawn, f2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, g2",
+            "role": "AXButton",
+            "title": "white pawn, g2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, h2",
+            "role": "AXButton",
+            "title": "white pawn, h2",
+            "value": ""
+          },
+          {
+            "description": "a3",
+            "role": "AXButton",
+            "title": "a3",
+            "value": ""
+          },
+          {
+            "description": "b3",
+            "role": "AXButton",
+            "title": "b3",
+            "value": ""
+          },
+          {
+            "description": "c3",
+            "role": "AXButton",
+            "title": "c3",
+            "value": ""
+          },
+          {
+            "description": "d3",
+            "role": "AXButton",
+            "title": "d3",
+            "value": ""
+          },
+          {
+            "description": "e3",
+            "role": "AXButton",
+            "title": "e3",
+            "value": ""
+          },
+          {
+            "description": "f3",
+            "role": "AXButton",
+            "title": "f3",
+            "value": ""
+          },
+          {
+            "description": "g3",
+            "role": "AXButton",
+            "title": "g3",
+            "value": ""
+          },
+          {
+            "description": "h3",
+            "role": "AXButton",
+            "title": "h3",
+            "value": ""
+          },
+          {
+            "description": "a4",
+            "role": "AXButton",
+            "title": "a4",
+            "value": ""
+          },
+          {
+            "description": "b4",
+            "role": "AXButton",
+            "title": "b4",
+            "value": ""
+          },
+          {
+            "description": "c4",
+            "role": "AXButton",
+            "title": "c4",
+            "value": ""
+          },
+          {
+            "description": "d4",
+            "role": "AXButton",
+            "title": "d4",
+            "value": ""
+          },
+          {
+            "description": "e4",
+            "role": "AXButton",
+            "title": "e4",
+            "value": ""
+          },
+          {
+            "description": "f4",
+            "role": "AXButton",
+            "title": "f4",
+            "value": ""
+          },
+          {
+            "description": "g4",
+            "role": "AXButton",
+            "title": "g4",
+            "value": ""
+          },
+          {
+            "description": "h4",
+            "role": "AXButton",
+            "title": "h4",
+            "value": ""
+          },
+          {
+            "description": "a5",
+            "role": "AXButton",
+            "title": "a5",
+            "value": ""
+          },
+          {
+            "description": "b5",
+            "role": "AXButton",
+            "title": "b5",
+            "value": ""
+          },
+          {
+            "description": "c5",
+            "role": "AXButton",
+            "title": "c5",
+            "value": ""
+          },
+          {
+            "description": "d5",
+            "role": "AXButton",
+            "title": "d5",
+            "value": ""
+          },
+          {
+            "description": "e5",
+            "role": "AXButton",
+            "title": "e5",
+            "value": ""
+          },
+          {
+            "description": "f5",
+            "role": "AXButton",
+            "title": "f5",
+            "value": ""
+          },
+          {
+            "description": "g5",
+            "role": "AXButton",
+            "title": "g5",
+            "value": ""
+          },
+          {
+            "description": "h5",
+            "role": "AXButton",
+            "title": "h5",
+            "value": ""
+          },
+          {
+            "description": "a6",
+            "role": "AXButton",
+            "title": "a6",
+            "value": ""
+          },
+          {
+            "description": "b6",
+            "role": "AXButton",
+            "title": "b6",
+            "value": ""
+          },
+          {
+            "description": "c6",
+            "role": "AXButton",
+            "title": "c6",
+            "value": ""
+          },
+          {
+            "description": "d6",
+            "role": "AXButton",
+            "title": "d6",
+            "value": ""
+          },
+          {
+            "description": "e6",
+            "role": "AXButton",
+            "title": "e6",
+            "value": ""
+          },
+          {
+            "description": "f6",
+            "role": "AXButton",
+            "title": "f6",
+            "value": ""
+          },
+          {
+            "description": "g6",
+            "role": "AXButton",
+            "title": "g6",
+            "value": ""
+          },
+          {
+            "description": "h6",
+            "role": "AXButton",
+            "title": "h6",
+            "value": ""
+          },
+          {
+            "description": "black pawn, a7",
+            "role": "AXButton",
+            "title": "black pawn, a7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, b7",
+            "role": "AXButton",
+            "title": "black pawn, b7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, c7",
+            "role": "AXButton",
+            "title": "black pawn, c7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, d7",
+            "role": "AXButton",
+            "title": "black pawn, d7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, e7",
+            "role": "AXButton",
+            "title": "black pawn, e7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, f7",
+            "role": "AXButton",
+            "title": "black pawn, f7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, g7",
+            "role": "AXButton",
+            "title": "black pawn, g7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, h7",
+            "role": "AXButton",
+            "title": "black pawn, h7",
+            "value": ""
+          },
+          {
+            "description": "black rook, a8",
+            "role": "AXButton",
+            "title": "black rook, a8",
+            "value": ""
+          },
+          {
+            "description": "black knight, b8",
+            "role": "AXButton",
+            "title": "black knight, b8",
+            "value": ""
+          },
+          {
+            "description": "black bishop, c8",
+            "role": "AXButton",
+            "title": "black bishop, c8",
+            "value": ""
+          },
+          {
+            "description": "black queen, d8",
+            "role": "AXButton",
+            "title": "black queen, d8",
+            "value": ""
+          },
+          {
+            "description": "black king, e8",
+            "role": "AXButton",
+            "title": "black king, e8",
+            "value": ""
+          },
+          {
+            "description": "black bishop, f8",
+            "role": "AXButton",
+            "title": "black bishop, f8",
+            "value": ""
+          },
+          {
+            "description": "black knight, g8",
+            "role": "AXButton",
+            "title": "black knight, g8",
+            "value": ""
+          },
+          {
+            "description": "black rook, h8",
+            "role": "AXButton",
+            "title": "black rook, h8",
+            "value": ""
+          },
+          {
+            "description": "",
+            "role": "AXButton",
+            "title": "",
+            "value": ""
+          },
+          {
+            "description": "",
+            "role": "AXButton",
+            "title": "",
+            "value": ""
+          },
+          {
+            "description": "",
+            "role": "AXButton",
+            "title": "",
+            "value": ""
+          },
+          {
+            "description": "",
+            "role": "AXStaticText",
+            "title": "",
+            "value": "sleight-stacked-1-target.game | Sleight White - Sleight Black   (White to Move)"
+          }
+        ],
+        "ownedSheets": [],
+        "raised": 0,
+        "remainingOwnedDocuments": [
+          "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-1-target.game",
+          "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-3-target.game",
+          "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-2-target.game"
+        ]
+      }
+    },
+    {
+      "path": "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-1-cover.game",
+      "result": {
+        "alreadyClosed": true,
+        "ok": true
+      }
+    },
+    {
+      "path": "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-2-target.game",
+      "result": {
+        "closeClickSent": true,
+        "closeKeySent": true,
+        "closePointTopWindow": 241129,
+        "error": "Error Domain=owned window remains open Code=1 \"(null)\"",
+        "mainAccepted": 0,
+        "ok": false,
+        "ownedChildren": [
+          {
+            "description": "white rook, a1",
+            "role": "AXButton",
+            "title": "white rook, a1",
+            "value": ""
+          },
+          {
+            "description": "white knight, b1",
+            "role": "AXButton",
+            "title": "white knight, b1",
+            "value": ""
+          },
+          {
+            "description": "white bishop, c1",
+            "role": "AXButton",
+            "title": "white bishop, c1",
+            "value": ""
+          },
+          {
+            "description": "white queen, d1",
+            "role": "AXButton",
+            "title": "white queen, d1",
+            "value": ""
+          },
+          {
+            "description": "white king, e1",
+            "role": "AXButton",
+            "title": "white king, e1",
+            "value": ""
+          },
+          {
+            "description": "white bishop, f1",
+            "role": "AXButton",
+            "title": "white bishop, f1",
+            "value": ""
+          },
+          {
+            "description": "white knight, g1",
+            "role": "AXButton",
+            "title": "white knight, g1",
+            "value": ""
+          },
+          {
+            "description": "white rook, h1",
+            "role": "AXButton",
+            "title": "white rook, h1",
+            "value": ""
+          },
+          {
+            "description": "white pawn, a2",
+            "role": "AXButton",
+            "title": "white pawn, a2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, b2",
+            "role": "AXButton",
+            "title": "white pawn, b2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, c2",
+            "role": "AXButton",
+            "title": "white pawn, c2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, d2",
+            "role": "AXButton",
+            "title": "white pawn, d2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, e2",
+            "role": "AXButton",
+            "title": "white pawn, e2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, f2",
+            "role": "AXButton",
+            "title": "white pawn, f2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, g2",
+            "role": "AXButton",
+            "title": "white pawn, g2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, h2",
+            "role": "AXButton",
+            "title": "white pawn, h2",
+            "value": ""
+          },
+          {
+            "description": "a3",
+            "role": "AXButton",
+            "title": "a3",
+            "value": ""
+          },
+          {
+            "description": "b3",
+            "role": "AXButton",
+            "title": "b3",
+            "value": ""
+          },
+          {
+            "description": "c3",
+            "role": "AXButton",
+            "title": "c3",
+            "value": ""
+          },
+          {
+            "description": "d3",
+            "role": "AXButton",
+            "title": "d3",
+            "value": ""
+          },
+          {
+            "description": "e3",
+            "role": "AXButton",
+            "title": "e3",
+            "value": ""
+          },
+          {
+            "description": "f3",
+            "role": "AXButton",
+            "title": "f3",
+            "value": ""
+          },
+          {
+            "description": "g3",
+            "role": "AXButton",
+            "title": "g3",
+            "value": ""
+          },
+          {
+            "description": "h3",
+            "role": "AXButton",
+            "title": "h3",
+            "value": ""
+          },
+          {
+            "description": "a4",
+            "role": "AXButton",
+            "title": "a4",
+            "value": ""
+          },
+          {
+            "description": "b4",
+            "role": "AXButton",
+            "title": "b4",
+            "value": ""
+          },
+          {
+            "description": "c4",
+            "role": "AXButton",
+            "title": "c4",
+            "value": ""
+          },
+          {
+            "description": "d4",
+            "role": "AXButton",
+            "title": "d4",
+            "value": ""
+          },
+          {
+            "description": "e4",
+            "role": "AXButton",
+            "title": "e4",
+            "value": ""
+          },
+          {
+            "description": "f4",
+            "role": "AXButton",
+            "title": "f4",
+            "value": ""
+          },
+          {
+            "description": "g4",
+            "role": "AXButton",
+            "title": "g4",
+            "value": ""
+          },
+          {
+            "description": "h4",
+            "role": "AXButton",
+            "title": "h4",
+            "value": ""
+          },
+          {
+            "description": "a5",
+            "role": "AXButton",
+            "title": "a5",
+            "value": ""
+          },
+          {
+            "description": "b5",
+            "role": "AXButton",
+            "title": "b5",
+            "value": ""
+          },
+          {
+            "description": "c5",
+            "role": "AXButton",
+            "title": "c5",
+            "value": ""
+          },
+          {
+            "description": "d5",
+            "role": "AXButton",
+            "title": "d5",
+            "value": ""
+          },
+          {
+            "description": "e5",
+            "role": "AXButton",
+            "title": "e5",
+            "value": ""
+          },
+          {
+            "description": "f5",
+            "role": "AXButton",
+            "title": "f5",
+            "value": ""
+          },
+          {
+            "description": "g5",
+            "role": "AXButton",
+            "title": "g5",
+            "value": ""
+          },
+          {
+            "description": "h5",
+            "role": "AXButton",
+            "title": "h5",
+            "value": ""
+          },
+          {
+            "description": "a6",
+            "role": "AXButton",
+            "title": "a6",
+            "value": ""
+          },
+          {
+            "description": "b6",
+            "role": "AXButton",
+            "title": "b6",
+            "value": ""
+          },
+          {
+            "description": "c6",
+            "role": "AXButton",
+            "title": "c6",
+            "value": ""
+          },
+          {
+            "description": "d6",
+            "role": "AXButton",
+            "title": "d6",
+            "value": ""
+          },
+          {
+            "description": "e6",
+            "role": "AXButton",
+            "title": "e6",
+            "value": ""
+          },
+          {
+            "description": "f6",
+            "role": "AXButton",
+            "title": "f6",
+            "value": ""
+          },
+          {
+            "description": "g6",
+            "role": "AXButton",
+            "title": "g6",
+            "value": ""
+          },
+          {
+            "description": "h6",
+            "role": "AXButton",
+            "title": "h6",
+            "value": ""
+          },
+          {
+            "description": "black pawn, a7",
+            "role": "AXButton",
+            "title": "black pawn, a7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, b7",
+            "role": "AXButton",
+            "title": "black pawn, b7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, c7",
+            "role": "AXButton",
+            "title": "black pawn, c7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, d7",
+            "role": "AXButton",
+            "title": "black pawn, d7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, e7",
+            "role": "AXButton",
+            "title": "black pawn, e7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, f7",
+            "role": "AXButton",
+            "title": "black pawn, f7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, g7",
+            "role": "AXButton",
+            "title": "black pawn, g7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, h7",
+            "role": "AXButton",
+            "title": "black pawn, h7",
+            "value": ""
+          },
+          {
+            "description": "black rook, a8",
+            "role": "AXButton",
+            "title": "black rook, a8",
+            "value": ""
+          },
+          {
+            "description": "black knight, b8",
+            "role": "AXButton",
+            "title": "black knight, b8",
+            "value": ""
+          },
+          {
+            "description": "black bishop, c8",
+            "role": "AXButton",
+            "title": "black bishop, c8",
+            "value": ""
+          },
+          {
+            "description": "black queen, d8",
+            "role": "AXButton",
+            "title": "black queen, d8",
+            "value": ""
+          },
+          {
+            "description": "black king, e8",
+            "role": "AXButton",
+            "title": "black king, e8",
+            "value": ""
+          },
+          {
+            "description": "black bishop, f8",
+            "role": "AXButton",
+            "title": "black bishop, f8",
+            "value": ""
+          },
+          {
+            "description": "black knight, g8",
+            "role": "AXButton",
+            "title": "black knight, g8",
+            "value": ""
+          },
+          {
+            "description": "black rook, h8",
+            "role": "AXButton",
+            "title": "black rook, h8",
+            "value": ""
+          },
+          {
+            "description": "",
+            "role": "AXButton",
+            "title": "",
+            "value": ""
+          },
+          {
+            "description": "",
+            "role": "AXButton",
+            "title": "",
+            "value": ""
+          },
+          {
+            "description": "",
+            "role": "AXButton",
+            "title": "",
+            "value": ""
+          },
+          {
+            "description": "",
+            "role": "AXStaticText",
+            "title": "",
+            "value": "sleight-stacked-2-target.game | Sleight White - Sleight Black   (White to Move)"
+          }
+        ],
+        "ownedSheets": [],
+        "raised": 0,
+        "remainingOwnedDocuments": [
+          "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-2-target.game",
+          "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-1-target.game",
+          "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-3-target.game"
+        ]
+      }
+    },
+    {
+      "path": "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-2-cover.game",
+      "result": {
+        "alreadyClosed": true,
+        "ok": true
+      }
+    },
+    {
+      "path": "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-3-target.game",
+      "result": {
+        "closeClickSent": true,
+        "closeKeySent": true,
+        "closePointTopWindow": 241131,
+        "error": "Error Domain=owned window remains open Code=1 \"(null)\"",
+        "mainAccepted": 0,
+        "ok": false,
+        "ownedChildren": [
+          {
+            "description": "white rook, a1",
+            "role": "AXButton",
+            "title": "white rook, a1",
+            "value": ""
+          },
+          {
+            "description": "white knight, b1",
+            "role": "AXButton",
+            "title": "white knight, b1",
+            "value": ""
+          },
+          {
+            "description": "white bishop, c1",
+            "role": "AXButton",
+            "title": "white bishop, c1",
+            "value": ""
+          },
+          {
+            "description": "white queen, d1",
+            "role": "AXButton",
+            "title": "white queen, d1",
+            "value": ""
+          },
+          {
+            "description": "white king, e1",
+            "role": "AXButton",
+            "title": "white king, e1",
+            "value": ""
+          },
+          {
+            "description": "white bishop, f1",
+            "role": "AXButton",
+            "title": "white bishop, f1",
+            "value": ""
+          },
+          {
+            "description": "white knight, g1",
+            "role": "AXButton",
+            "title": "white knight, g1",
+            "value": ""
+          },
+          {
+            "description": "white rook, h1",
+            "role": "AXButton",
+            "title": "white rook, h1",
+            "value": ""
+          },
+          {
+            "description": "white pawn, a2",
+            "role": "AXButton",
+            "title": "white pawn, a2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, b2",
+            "role": "AXButton",
+            "title": "white pawn, b2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, c2",
+            "role": "AXButton",
+            "title": "white pawn, c2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, d2",
+            "role": "AXButton",
+            "title": "white pawn, d2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, e2",
+            "role": "AXButton",
+            "title": "white pawn, e2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, f2",
+            "role": "AXButton",
+            "title": "white pawn, f2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, g2",
+            "role": "AXButton",
+            "title": "white pawn, g2",
+            "value": ""
+          },
+          {
+            "description": "white pawn, h2",
+            "role": "AXButton",
+            "title": "white pawn, h2",
+            "value": ""
+          },
+          {
+            "description": "a3",
+            "role": "AXButton",
+            "title": "a3",
+            "value": ""
+          },
+          {
+            "description": "b3",
+            "role": "AXButton",
+            "title": "b3",
+            "value": ""
+          },
+          {
+            "description": "c3",
+            "role": "AXButton",
+            "title": "c3",
+            "value": ""
+          },
+          {
+            "description": "d3",
+            "role": "AXButton",
+            "title": "d3",
+            "value": ""
+          },
+          {
+            "description": "e3",
+            "role": "AXButton",
+            "title": "e3",
+            "value": ""
+          },
+          {
+            "description": "f3",
+            "role": "AXButton",
+            "title": "f3",
+            "value": ""
+          },
+          {
+            "description": "g3",
+            "role": "AXButton",
+            "title": "g3",
+            "value": ""
+          },
+          {
+            "description": "h3",
+            "role": "AXButton",
+            "title": "h3",
+            "value": ""
+          },
+          {
+            "description": "a4",
+            "role": "AXButton",
+            "title": "a4",
+            "value": ""
+          },
+          {
+            "description": "b4",
+            "role": "AXButton",
+            "title": "b4",
+            "value": ""
+          },
+          {
+            "description": "c4",
+            "role": "AXButton",
+            "title": "c4",
+            "value": ""
+          },
+          {
+            "description": "d4",
+            "role": "AXButton",
+            "title": "d4",
+            "value": ""
+          },
+          {
+            "description": "e4",
+            "role": "AXButton",
+            "title": "e4",
+            "value": ""
+          },
+          {
+            "description": "f4",
+            "role": "AXButton",
+            "title": "f4",
+            "value": ""
+          },
+          {
+            "description": "g4",
+            "role": "AXButton",
+            "title": "g4",
+            "value": ""
+          },
+          {
+            "description": "h4",
+            "role": "AXButton",
+            "title": "h4",
+            "value": ""
+          },
+          {
+            "description": "a5",
+            "role": "AXButton",
+            "title": "a5",
+            "value": ""
+          },
+          {
+            "description": "b5",
+            "role": "AXButton",
+            "title": "b5",
+            "value": ""
+          },
+          {
+            "description": "c5",
+            "role": "AXButton",
+            "title": "c5",
+            "value": ""
+          },
+          {
+            "description": "d5",
+            "role": "AXButton",
+            "title": "d5",
+            "value": ""
+          },
+          {
+            "description": "e5",
+            "role": "AXButton",
+            "title": "e5",
+            "value": ""
+          },
+          {
+            "description": "f5",
+            "role": "AXButton",
+            "title": "f5",
+            "value": ""
+          },
+          {
+            "description": "g5",
+            "role": "AXButton",
+            "title": "g5",
+            "value": ""
+          },
+          {
+            "description": "h5",
+            "role": "AXButton",
+            "title": "h5",
+            "value": ""
+          },
+          {
+            "description": "a6",
+            "role": "AXButton",
+            "title": "a6",
+            "value": ""
+          },
+          {
+            "description": "b6",
+            "role": "AXButton",
+            "title": "b6",
+            "value": ""
+          },
+          {
+            "description": "c6",
+            "role": "AXButton",
+            "title": "c6",
+            "value": ""
+          },
+          {
+            "description": "d6",
+            "role": "AXButton",
+            "title": "d6",
+            "value": ""
+          },
+          {
+            "description": "e6",
+            "role": "AXButton",
+            "title": "e6",
+            "value": ""
+          },
+          {
+            "description": "f6",
+            "role": "AXButton",
+            "title": "f6",
+            "value": ""
+          },
+          {
+            "description": "g6",
+            "role": "AXButton",
+            "title": "g6",
+            "value": ""
+          },
+          {
+            "description": "h6",
+            "role": "AXButton",
+            "title": "h6",
+            "value": ""
+          },
+          {
+            "description": "black pawn, a7",
+            "role": "AXButton",
+            "title": "black pawn, a7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, b7",
+            "role": "AXButton",
+            "title": "black pawn, b7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, c7",
+            "role": "AXButton",
+            "title": "black pawn, c7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, d7",
+            "role": "AXButton",
+            "title": "black pawn, d7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, e7",
+            "role": "AXButton",
+            "title": "black pawn, e7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, f7",
+            "role": "AXButton",
+            "title": "black pawn, f7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, g7",
+            "role": "AXButton",
+            "title": "black pawn, g7",
+            "value": ""
+          },
+          {
+            "description": "black pawn, h7",
+            "role": "AXButton",
+            "title": "black pawn, h7",
+            "value": ""
+          },
+          {
+            "description": "black rook, a8",
+            "role": "AXButton",
+            "title": "black rook, a8",
+            "value": ""
+          },
+          {
+            "description": "black knight, b8",
+            "role": "AXButton",
+            "title": "black knight, b8",
+            "value": ""
+          },
+          {
+            "description": "black bishop, c8",
+            "role": "AXButton",
+            "title": "black bishop, c8",
+            "value": ""
+          },
+          {
+            "description": "black queen, d8",
+            "role": "AXButton",
+            "title": "black queen, d8",
+            "value": ""
+          },
+          {
+            "description": "black king, e8",
+            "role": "AXButton",
+            "title": "black king, e8",
+            "value": ""
+          },
+          {
+            "description": "black bishop, f8",
+            "role": "AXButton",
+            "title": "black bishop, f8",
+            "value": ""
+          },
+          {
+            "description": "black knight, g8",
+            "role": "AXButton",
+            "title": "black knight, g8",
+            "value": ""
+          },
+          {
+            "description": "black rook, h8",
+            "role": "AXButton",
+            "title": "black rook, h8",
+            "value": ""
+          },
+          {
+            "description": "",
+            "role": "AXButton",
+            "title": "",
+            "value": ""
+          },
+          {
+            "description": "",
+            "role": "AXButton",
+            "title": "",
+            "value": ""
+          },
+          {
+            "description": "",
+            "role": "AXButton",
+            "title": "",
+            "value": ""
+          },
+          {
+            "description": "",
+            "role": "AXStaticText",
+            "title": "",
+            "value": "sleight-stacked-3-target.game | Sleight White - Sleight Black   (White to Move)"
+          }
+        ],
+        "ownedSheets": [],
+        "raised": 0,
+        "remainingOwnedDocuments": [
+          "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-3-target.game",
+          "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-2-target.game",
+          "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-1-target.game"
+        ]
+      }
+    },
+    {
+      "path": "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-3-cover.game",
+      "result": {
+        "alreadyClosed": true,
+        "ok": true
+      }
+    }
+  ],
+  "closedAllOpenedWindows": false,
+  "exitCode": 73
+}

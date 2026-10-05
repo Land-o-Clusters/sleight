@@ -138,7 +138,7 @@ test('benchmark approval admits hover only for its three apps and expected serve
   }
 });
 
-function windowPlatform(windows) {
+function windowPlatform(windows, allWindows = windows) {
   const c = controller();
   const collection = values => ({ count: values.length, objectAtIndex: i => values[i] });
   const app = { localizedName: 'TextEdit', bundleIdentifier: 'com.apple.TextEdit', processIdentifier: 123,
@@ -147,7 +147,8 @@ function windowPlatform(windows) {
   c.ObjC.unwrap = c.ObjC.deepUnwrap = c.ObjC.castRefToObject = value => value;
   c.$ = { NSWorkspace: { sharedWorkspace: { runningApplications: collection([app]) } },
     CGPreflightScreenCaptureAccess: () => true,
-    CGWindowListCopyWindowInfo: () => collection(windows.map(win)) };
+    kCGWindowListOptionOnScreenOnly: 1, kCGWindowListOptionAll: 0, kCGWindowListExcludeDesktopElements: 16,
+    CGWindowListCopyWindowInfo: options => collection(((options & 1) ? windows : allWindows).map(win)) };
   return { c, app, collection, native: c.nativeHover() };
 }
 test('native hover resolves one app and refuses points outside its only normal window', () => {
@@ -219,6 +220,18 @@ test('native coverage reports the blocker and refuses a different window of the 
   assert.equal(native.visible(target, point), false);
   assert.equal(target.blocker.id, 1);
   assert.equal(target.blocker.owner, 'TextEdit');
+});
+test('hover identifies an off-Space window before saving, activating or moving', () => {
+  const { c, native } = windowPlatform([], [
+    { id: 2, title: 'a.txt', bounds: { X: 100, Y: 200, Width: 400, Height: 300 } },
+  ]);
+  const effects = [];
+  for (const name of ['save', 'activate', 'move']) native[name] = () => effects.push(name);
+  const result = c.performHover({ app: 'TextEdit', at: [10, 20] }, native);
+  assert.equal(result.ok, false); assert.match(result.error, /another desktop or Space/i);
+  assert.match(result.error, /on screen/i); assert.deepEqual(effects, []);
+  const empty = windowPlatform([]);
+  assert.match(empty.c.performHover({ app: 'TextEdit', at: [10, 20] }, empty.native).error, /has no window/);
 });
 
 test('native capture passes an empty NSDictionary and cleans up its temporary image', () => {
