@@ -15,7 +15,15 @@ The live harness has four overlapping Open/re-read trials and a separate
 Undo/Keep check. It holds `/tmp/sleight-live.lock` through document cleanup,
 and verifies that the session backups were deleted. Only the owner chooses Undo and Keep.
 
-[Results](2026-10-04-change-review-reread.json) will preserve every attempt,
-including failures. Open panel inventory and vendor API docs stay in local
+[Results](2026-10-04-change-review-reread.json) contain the full result for attempt 1.
+It waited for another thread's lock and was interrupted through its owned
+terminal, exiting 1. It didn't open windows or start the engine.
+The Chess thread retained the lock during cleanup and
+was waiting on an approval card. Both TextEdit checks remain pending.
+
+`npm run check` exited 0, with 298 unit tests and 8 mod tests passing.
+`npm run lint:prose` exited 0 across 25 files. Its earlier exits were 2 for
+missing Vale styles and 1 for prose flags. Those were corrected before committing.
+Open panel inventory and vendor API docs stay in local
 traces. Published results retain the dialog header and Open/Cancel buttons.
 Home paths use `~`. `bench/run.mjs` is reserved for sleight-arch at merge.
