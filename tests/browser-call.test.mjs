@@ -20,5 +20,8 @@ test('native access in any form keeps the call on the native path', () => {
     'await eval("cua.getApp(\\"TextEdit\\")"); await tab.reload()',
     'await Function("return cua")().getApp("TextEdit"); await tab.reload()',
     'await app.click(3); await tab.reload()',
+    'const t = `${await cua.getApp("TextEdit")}`; await tab.reload()',
+    'await tab.constructor.constructor("return cua")().getApp("TextEdit"); await tab.reload()',
+    'await tab.__proto__.reload.call(tab)',
   ]) assert.equal(browserCall(code, tab), undefined, code);
 });

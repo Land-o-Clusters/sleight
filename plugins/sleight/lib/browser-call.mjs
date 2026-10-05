@@ -1,6 +1,8 @@
 // Cooperative classification, not a boundary against arbitrary JavaScript.
 export function browserCall(code, handles = new Set()) {
-  const source = code.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '""');
+  // Template expressions and prototype chains would hide native access from the checks below.
+  if (/`(?:[^`\\]|\\.)*\$\{/.test(code) || /\b(?:constructor|__proto__|prototype)\b/.test(code)) return undefined;
+  const source =code.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '""');
   if (/cua\.(?:getApp|computer)\b/.test(source)) return undefined;
   // Fail closed: cua reached other than by a literal browser method (computed access, destructuring,
   // aliasing), or a global escape hatch, keeps the call on the native path and its guards.
