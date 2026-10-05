@@ -66,6 +66,8 @@ belong in [STATE.md](STATE.md).
 - A Codex report is a claim until sleight-arch reproduces it under normal use: the owner at the Mac,
   other apps open. Results measured while the owner was away say so.
 - Live checks that drive apps hold `/tmp/sleight-live.lock`, taken with `mkdir`, released on exit.
+- Benchmark arms run from folders outside any git repo. Claude Code loads CLAUDE.md from parent
+  folders and keys project memory by the git root, so a folder inside this repo leaks both.
 - The marketplace installs from the default branch, so `main` is what new users get. Keep it releasable:
   a default that fails the benchmark goes back to opt-in at once.
 - Window titles can include the owner's name (Chess games do). Scrub evidence and screenshots of them.
