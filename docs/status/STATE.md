@@ -3,24 +3,30 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-05, 0.7.0 release in progress)
+## Banner (2026-10-05, 0.7.0 released)
 
-Public: `Land-o-Clusters/sleight`. Latest release `v0.6.0`. The marketplace installs from the default
-branch, so users installing now get `main`, not the tag. Installed on this Mac at user scope: 0.6.0
-from the local directory marketplace.
+Public: `Land-o-Clusters/sleight`. Latest release `v0.7.0` (`2bd3a00`, CI green), with GitHub release
+notes from the CHANGELOG. The marketplace installs from the default branch, so users get `main`.
+Installed on this Mac at user scope: 0.7.0 from the local directory marketplace (doctor ok).
 
-This session (owner asleep, asked for the release, docs and testing):
+Done this session, owner asleep:
 
-- CI had been red on `main` since `b5f109c`: two tests hard-coded `/private/tmp` and one needed
-  `swiftc`, neither on Linux. Fixed in `d9db1d9`, CI green.
-- The `blocked_app` squash merge had cut CHANGELOG to 24 lines. 0.6.0 and earlier restored (`867a0a1`).
-- The first benchmark attempt failed every task: the engine's helper wouldn't launch ("Sky Computer
-  Use service startup request failed", launchd "Operation already in progress"). Doctor said "ok"
-  all along. `launchctl remove` of the stale job fixed it without restarting ChatGPT. Doctor now
-  fails on that and prints the command (`170fb21`). The aborted runs (3 tasks, all failed for this
-  reason) get published with the full benchmark.
-- Full benchmark (`--runs 3`, Sonnet 5.5 medium) running under the live lock. Then: 0.7.0 CHANGELOG
-  (drafted in the working tree), bump, tag, release, update the installed plugin.
+- CI was red on `main` since `b5f109c` (Linux has no `/private/tmp` or `swiftc`). Fixed, green.
+- The `blocked_app` squash merge had cut CHANGELOG to 24 lines. 0.6.0 and earlier restored.
+- The helper wouldn't launch (launchd kept a quit helper's job, "Operation already in progress")
+  while doctor said ok. `launchctl remove` fixed it without restarting ChatGPT. Doctor now fails on
+  it and prints the command.
+- Benchmark arm folders were inside this repo since 2026-10-03, so both arms loaded the repo's
+  CLAUDE.md and project memory. They now live in `~/Library/Caches/sleight-bench/<arm>`, and
+  `bench/run.mjs` refuses a folder inside a repo. The README says so for the LCU comparison.
+- Release check 16/18 from the clean folder, every run published in
+  `docs/benchmarks/2026-10-05-release-0.7.0.*`. chess-drag passed 1/3. In both failures Claude
+  aimed at e5 (y ≈ 475) instead of e4 (y ≈ 545), an illegal move. All three clean text drags went foreground
+  because this Claude window covers TextEdit on the second display.
+
+Next, Chess square estimates are the weakest task. A skill hint or reading square positions would
+help, though AX square coordinates are vertically reversed. The LCU arm needs re-registering in
+`~/Library/Caches/sleight-bench/lcu-arm` before any new comparison.
 
 Codex threads (the owner runs them in worktrees under `~/Projects/sleight-wt/`; prompts in
 `.dev/prompts/`, untracked, latest `round-4.md` and `backlog.md`): all reported work is merged. No
@@ -28,7 +34,7 @@ thread has open work. Every remote `codex/*` and `claude/blocked-apps` branch is
 `main` except `codex/action-result-note`. Git counts them as ahead because squash merges leave no
 shared commits. The 24 worktrees can be deleted with their branches once the owner closes those Codex threads.
 
-Background jobs: the benchmark (`node bench/run.mjs`, holding `/tmp/sleight-live.lock`).
+Background jobs: none.
 
 Market research (Codex, gpt-6.1-sol) is in `.dev/research/2026-10-04-competitors.md`, untracked.
 Publishing it is the owner's call.
@@ -39,14 +45,16 @@ Publishing it is the owner's call.
   the engine's API docs (`~/Library/Logs/sleight/engine-api-26.930.31730.md` is the baseline) and
   diffs them on an engine update. Remove with `npm run watch:remove`.
 - `~/Library/Application Support/sleight/preapproved.json` lists Calculator at `high`, written by the
-  owner for Codex 9's live check on 2026-10-04. Only builds from `main` read it. The installed 0.6.0
-  ignores it.
-- LCU 0.8.8 runtime-only at `~/.local/share/lcu`, registered only in `.dev/lcu-arm` (untracked).
+  owner for Codex 9's live check on 2026-10-04. The installed 0.7.0 reads it, so Calculator is
+  approved without a prompt in every session until the owner edits the file.
+- LCU 0.8.8 runtime-only at `~/.local/share/lcu`, registered only in `.dev/lcu-arm` (untracked),
+  which the benchmark now refuses because it's inside the repo.
   `.dev/py/python3` links Homebrew Python 3.14 for it.
 - Homebrew: `vale`, `ffmpeg`, and the `codex` cask 0.160 (0.153 rejected gpt-6.1-sol).
   `~/.local/bin/claude` 2.1.289. The desktop app's Code tab bundles Claude Code 2.1.286 (checked
   2026-10-04), too old for the mod.
-- `.dev/` (untracked): test CLI, `sleight-arm` and `lcu-arm` bench folders, `DragProbe.app`, the
+- `~/Library/Caches/sleight-bench/sleight-arm`: the benchmark's sleight arm folder.
+- `.dev/` (untracked): test CLI, old `sleight-arm` and `lcu-arm` bench folders, `DragProbe.app`, the
   compiled `textedit-drag-fixture`, pseudo-terminal harnesses, research, prompts.
 - Direct drag test scripts from 2026-10-05 live only in this session's scratchpad. To repeat: open a
   temp file with `open -g -a TextEdit`, run `.dev/textedit-drag-fixture <path> select-drag`, call
