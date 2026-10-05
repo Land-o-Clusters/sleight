@@ -190,6 +190,28 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
 
 ## Known problems
 
+- Native `app.paste` temporarily changed the clipboard, then restored all measured bytes in 4/4
+  fixtures. Text entry and engine drag left it unchanged in 4/4 each. Local drag did in 2/2.
+  Copy/Cut use the user's clipboard by default, so deliberate copies remain available to menu Paste,
+  `pbpaste` and browser pastes. Preservation is opt-in with `SLEIGHT_CLIPBOARD=preserve`. In that mode,
+  Copy/Cut save a private session copy and restore the prior bytes. Their results say the copy is
+  private. [The measurements](docs/benchmarks/2026-10-04-clipboard.md) include every attempt and failure.
+- Opt-in preservation added median call times of 236 ms for Copy, 205 ms for Cut and 226 ms for Paste
+  in three trials each on this Mac. Clipboard helper and coordination time accounted for about
+  180, 177 and 179 ms respectively. Separate runs include engine timing variation; larger payloads
+  may cost more. Native sessions skip this work.
+- Preservation cannot snapshot unreadable formats, file promises or more than 64 MiB. It falls back
+  to the native shortcut and tells Claude the clipboard was not preserved. Claude must never modify
+  the user's clipboard to get around that fallback. Menu actions and browser handles are outside
+  preservation, so those pastes cannot use the private copy. Use a native session to copy for the user.
+  In preservation mode use literal shortcut keys and one clipboard action per JavaScript request.
+  Split calls and retry when the clipboard message asks. Ordinary native sessions have no such limit.
+- A failed Copy/Cut cannot attribute new clipboard data, so preservation leaves that data alone.
+  Two or more generations stop restoration. One generation could be an outside copy if the app did
+  not copy. macOS has no atomic compare-and-restore, and arbitrary JavaScript can bypass the proxy.
+  Private copies end with a successful reset or session exit. A process crash during private Paste
+  can leave temporary data on the clipboard. File URLs preserve references, not deleted files or
+  file-promise providers. Native sessions and other tools do not take the preservation lock.
 - [Input leases](docs/design/input-lease.md) let one sleight session act on a window at a time.
   Another session gets the holder's name and time left, while reads remain available. Leases expire
   after 30 seconds without renewal and end with the turn or session. Local drag and hover reserve the app,

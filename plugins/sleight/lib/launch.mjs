@@ -373,7 +373,7 @@ export function run({ leaseDirectory } = {}) {
     env: { ...process.env, ...s.env },
   });
   child.on('error', err => fail(`could not start server: ${err.message}`));
-  child.on('close', async code => { await stopHelpers(); relay.close(); process.exit(code ?? 0); });
+  child.on('close', async code => { await stopHelpers(); await relay.close(); process.exit(code ?? 0); });
   let terminating = false;
   function terminateEngine(signal = 'SIGTERM') {
     if (terminating) return;
@@ -392,6 +392,8 @@ export function run({ leaseDirectory } = {}) {
     serverIn: child.stdin,
     serverOut: child.stdout,
     sessionId,
+    clipboardHelper: join(LIB, 'clipboard.js'),
+    clipboardMode: process.env.SLEIGHT_CLIPBOARD,
     // SLEIGHT_APPROVAL_SCOPE=once asks again on every action instead.
     approvalScope: ['once', 'document'].includes(process.env.SLEIGHT_APPROVAL_SCOPE) ? process.env.SLEIGHT_APPROVAL_SCOPE : 'session',
     ask: approvalPrompt(),

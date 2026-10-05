@@ -91,6 +91,16 @@ the end of a line gets a space after a verified unique whole-word move. Check ot
 spacing. If the tool reports that dragged text disappeared, press Cmd+Z in the window it identifies and
 read it again before continuing. Never treat that error as a successful drop.
 
+Copy/Cut use
+native clipboard behavior by default, so copies are available to the user outside sleight.
+`SLEIGHT_CLIPBOARD=preserve` keeps a private copy instead. The result explains which behavior ran.
+In preservation mode use one clipboard action per js request with a literal shortcut key. Split a
+stopped call and retry the actions separately. Menu Paste, `pbpaste` and browser pastes cannot use
+that private copy. If the user needs a copy there, explain that they need a native session.
+If the result says the clipboard was not preserved, the native shortcut already ran. Never clear,
+replace or otherwise modify the user's clipboard to get around that fallback. Check the app result
+before continuing. Use `app.paste(text)` to insert explicit text.
+
 ## Apps the engine refuses
 
 The engine refuses terminals (Terminal, iTerm2) and OpenAI's own apps (ChatGPT, Codex, Atlas) before

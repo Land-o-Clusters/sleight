@@ -65,6 +65,7 @@ import { FLOW_TOOL } from './flow-rules.mjs';
 import { isLeaseRead } from './input-lease.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
 import { refusedApp } from './blocked-apps.mjs';
+import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
 
 const META_KEY = 'x-codex-turn-metadata';
 const HIDDEN_TOOLS = new Set(['js_add_node_module_dir']);
@@ -129,6 +130,9 @@ export function createRelay({
   grantAudit = () => {},
   stderr = process.stderr,
   localTools,
+  clipboardHelper,
+  clipboardIO,
+  clipboardMode,
   flowRules,
   changeReview = true,
   idleTurnEndMs,
@@ -151,6 +155,10 @@ export function createRelay({
   let turnId = randomUUID();
   let turnUsed = false;
   let nextInternalId = 0;
+  const clipboard = clipboardMode === 'preserve' && (clipboardIO || clipboardHelper) ? createClipboardSession(clipboardIO ?? createNativeClipboardIO(clipboardHelper)) : undefined;
+  const clipboardReplies = new Map();
+  const clipboardResets = new Set();
+  const nativeCopies = new Set();
   const listRequests = new Set();
   const internalRequests = new Map();
   const approvalRequests = new Map(); // server request id -> approval key
@@ -203,6 +211,14 @@ export function createRelay({
 
   function changeStop(msg, reason) {
     toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: `Change review: ${reason}. Stop and tell the user.` }] } });
+  }
+
+  function clipboardStop(msg, reason) {
+    toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: reason }] } });
+  }
+  function clipboardNotices(msg, notices) {
+    if (!notices?.length) return;
+    msg.result = { ...(msg.result ?? {}), content: [...(msg.result?.content ?? []), ...notices.map(text => ({ type: 'text', text }))] };
   }
 
   async function reviewChanges(msg) {
@@ -635,7 +651,14 @@ export function createRelay({
       if (reviewing) { changeStop(msg, 'the user is reviewing changes, wait for their decision'); return; }
     }
     const originalCode = msg.params?.arguments?.code;
-    let flowPlan;
+    let flowPlan, clipboardAction;
+    if (clipboard && msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name) && clipboard.pending) {
+      clipboardStop(msg, 'Clipboard: wait for the pending clipboard action, then retry.'); return;
+    }
+    if (clipboard && msg.method === 'tools/call' && msg.params?.name === 'js' && typeof originalCode === 'string') {
+      try { clipboardAction = clipboardPlan(originalCode); }
+      catch (error) { clipboardStop(msg, error.message); return; }
+    }
     if (flowRules && msg.method === 'tools/call' && ['js', 'drag', 'menu_bar', 'blocked_app'].includes(msg.params?.name)) {
       if (running.size || localRunning.size || documentAsking || reviewing) { flowStop(msg, 'wait for the pending call or prompt'); return; }
       if (msg.id === undefined || (msg.params.name === 'js' && typeof originalCode !== 'string')) { flowStop(msg, 'a request id and JavaScript code are required'); return; }
@@ -692,6 +715,7 @@ export function createRelay({
     }
     if (msg.method === 'tools/call' && msg.params) {
       const { name } = msg.params;
+      if (clipboard && name === 'js_reset') clipboardResets.add(msg.id);
       if (name === TURN_END_TOOL) {
         msg.params.arguments = endTurnArgs(msg.params.arguments);
         toServer(msg);
@@ -699,6 +723,7 @@ export function createRelay({
         return;
       }
       if (name === 'js') {
+        if (!clipboard && typeof originalCode === 'string' && clipboardActions(originalCode).some(action => ['c', 'x'].includes(action))) nativeCopies.add(msg.id);
         const read = typeof originalCode === 'string' && isLeaseRead(originalCode);
         const safe = read || (typeof originalCode === 'string' && isChangeCancel(originalCode, lastWindowText));
         let entry;
@@ -720,6 +745,7 @@ export function createRelay({
           else if (documentMode || inputLease || (changeReview && target)) msg.params.arguments.code = guardedCode(originalCode, target, reason,
             inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
             { fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe });
+          if (clipboard) msg.params.arguments.code = clipboardCode(msg.params.arguments.code, clipboardAction);
         }
       }
       msg.params._meta = { ...msg.params._meta, [META_KEY]: turnMeta() };
@@ -728,7 +754,23 @@ export function createRelay({
       if (msg.id !== undefined) running.add(msg.id);
       if (flowPlan) { flowRules.forward(flowPlan); flowCalls.set(msg.id, flowPlan); }
     }
-    toServer(msg);
+    if (clipboardAction) {
+      let response;
+      clipboard.run(clipboardAction, () => new Promise((resolve, reject) => {
+        if (closing) { reject(new Error('Clipboard guard: session closed before input.')); return; }
+        clipboardReplies.set(msg.id, { reject, receive: reply => {
+          response = reply;
+          if (reply.error || reply.result?.isError) reject(new Error('Clipboard guard: engine action failed; Copy/Cut ownership cannot be attributed.'));
+          else resolve(reply);
+        } });
+        toServer(msg);
+      })).then(({ notices }) => { clipboardNotices(response, notices); observeServerMessage(response); }, error => {
+        const result = response ?? { jsonrpc: '2.0', id: msg.id, result: { content: [] } };
+        result.result = { ...(result.result ?? {}), isError: true, content: [...(result.result?.content ?? []), { type: 'text', text: error.message }] };
+        clipboardNotices(result, error.clipboardNotices);
+        observeServerMessage(result);
+      });
+    } else toServer(msg);
   });
 
   lines(serverOut, line => {
@@ -738,6 +780,23 @@ export function createRelay({
     } catch {
       clientOut.write(line + '\n');
       return;
+    }
+    if (msg.method === undefined && clipboardReplies.has(msg.id)) {
+      const pending = clipboardReplies.get(msg.id); clipboardReplies.delete(msg.id); pending.receive(msg); return;
+    }
+    observeServerMessage(msg);
+  });
+  function observeServerMessage(msg) {
+    if (msg.method === undefined && clipboardResets.delete(msg.id) && !msg.error && !msg.result?.isError) {
+      clipboard.reset().then(() => observeServerMessage(msg), error => {
+        msg.result = { ...(msg.result ?? {}), isError: true };
+        clipboardNotices(msg, ['Clipboard: reset cleanup failed: ' + error.message]);
+        observeServerMessage(msg);
+      });
+      return;
+    }
+    if (msg.method === undefined && nativeCopies.delete(msg.id) && !msg.error && !msg.result?.isError) {
+      clipboardNotices(msg, ['Copy/Cut used the native clipboard. Its contents were not restored by sleight; a successful copy remains available to menu Paste, pbpaste and browser pastes.']);
     }
     if (msg.method === undefined && msg.id !== undefined && internalRequests.has(msg.id)) {
       internalRequests.get(msg.id)(msg);
@@ -880,7 +939,7 @@ export function createRelay({
         .concat(documentMode ? [DOCUMENT_TOOL] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : []);
     }
     toClient(msg);
-  });
+  }
 
   // Ends the open turn, if any call used it. Resolves once the server answers
   // or after a short grace period.
@@ -916,13 +975,16 @@ export function createRelay({
   }
   function close() {
     closing = true;
+    for (const pending of clipboardReplies.values()) pending.reject(new Error('Clipboard guard: engine connection closed.'));
+    clipboardReplies.clear();
     clearTimeout(idleTimer);
     try { dispose(); } finally { releaseLeases(); }
+    return clipboard?.close() ?? Promise.resolve();
   }
   async function shutdown() {
     closing = true;
     await endOpenTurn();
-    close();
+    await close();
   }
   return { endOpenTurn, shutdown, close, dispose: close, get snapshotDirectory() { return changes.directory; }, get sessionId() { return sessionId; }, get turnId() { return turnId; } };
 }

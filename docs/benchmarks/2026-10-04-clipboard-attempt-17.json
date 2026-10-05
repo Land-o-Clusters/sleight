@@ -1,0 +1,9 @@
+{
+  "kind": "terminal receipt",
+  "command": "sh bench/clipboard-live.sh /private/tmp/sleight-clipboard-nSQqBy --fixed",
+  "exitCode": 1,
+  "cancelled": true,
+  "session": 93724,
+  "partialResults": "Text and image Copy and Cut/Paste reported restoredBytes:true. Ctrl-C raced lock acquisition and stopped the run before file diagnostics.",
+  "cleanup": "The shell released the live lock. The prior results.json was unchanged; original clipboard restoration was not proven. The private original snapshot was retained for conditional recovery."
+}
