@@ -1,0 +1,9 @@
+{
+  "app": "Chess",
+  "windowId": 240864,
+  "from": [680, 699],
+  "to": [677, 548],
+  "source": "2026-10-04-background-drag-product-chess-image.json",
+  "screenshotSize": [1269, 984],
+  "note": "White e2 pawn and e4 square measured from the owned game's screenshot. The AX y coordinates pointed at the opposite side of the board."
+}
