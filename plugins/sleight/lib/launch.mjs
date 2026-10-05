@@ -14,6 +14,7 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { discoverExtensions } from './browser-discovery.mjs';
 import { createRelay } from './relay.mjs';
 import { loadFlowRules } from './flow-rules.mjs';
 import { InputLease } from './input-lease.mjs';
@@ -62,16 +63,27 @@ export function resolveServer(env = process.env) {
   if (!server?.command) return { error: `${configPath} has no "${SERVER_KEY}" server` };
 
   const serverEnv = { ...server.env };
-  // Codex's in-app browser only exists inside the ChatGPT app, so default to
-  // native apps only. SLEIGHT_SURFACES=browser,computer opts back in.
+  // run() probes connected extensions before spawning the engine.
   serverEnv.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES || 'computer';
 
   return { version, configPath, command: server.command, args: server.args || [], env: serverEnv };
 }
 
-function doctor() {
+export async function selectSurfaces(server, env = process.env, options) {
+  if (env.SLEIGHT_SURFACES) {
+    server.env.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES;
+    return;
+  }
+  const browsers = await discoverExtensions(server, options);
+  server.env.CUA_REPL_ENABLED_SURFACES = browsers.length ? 'browser,computer' : 'computer';
+  // The in-app browser needs ChatGPT host context. Auto mode uses extensions only.
+  server.env.BROWSER_USE_AVAILABLE_BACKENDS = 'chrome';
+}
+
+async function doctor() {
   const s = resolveServer();
   if (s.error) fail(s.error);
+  await selectSurfaces(s);
   const checks = [
     ['node', s.command],
     ['server script', s.args[0]],
@@ -359,7 +371,7 @@ function approvalPrompt(env = process.env) {
   return setting === 'dialog' ? askWithDialog : undefined;
 }
 
-export function run({ leaseDirectory } = {}) {
+export async function run({ leaseDirectory } = {}) {
   let flowRules, preapproved;
   try { flowRules = loadFlowRules(); preapproved = loadPreapproved(); } catch (err) { fail(err.message); }
   const { trace, grantAudit } = approvalLogging(preapproved);
@@ -367,6 +379,7 @@ export function run({ leaseDirectory } = {}) {
   const s = resolveServer();
   if (s.error) fail(s.error);
   if (!existsSync(s.command)) fail(`server runtime missing: ${s.command}`);
+  await selectSurfaces(s);
 
   const child = spawn(s.command, s.args, {
     stdio: ['pipe', 'pipe', 'inherit'],
