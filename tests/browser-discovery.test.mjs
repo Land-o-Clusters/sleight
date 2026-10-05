@@ -34,14 +34,19 @@ test('explicit override skips detection and preserves backend configuration', as
   assert.equal(s.env.BROWSER_USE_AVAILABLE_BACKENDS, 'iab');
   assert.throws(() => requests(s), { code: 'ENOENT' });
 });
-test('hung discovery is bounded, collected and never approves a prompt', async t => {
-  for (const extra of [{ SLEIGHT_TEST_HUNG: '1' }, { SLEIGHT_TEST_ASK: '1' }]) {
-    const s = server(t, [], extra); const start = Date.now();
-    await selectSurfaces(s, {}, { timeoutMs: 100 });
-    assert.equal(s.env.CUA_REPL_ENABLED_SURFACES, 'computer');
-    assert.ok(Date.now() - start < 3500);
-    if (extra.SLEIGHT_TEST_ASK) assert.equal(requests(s).find(r => r.id === 'ask')?.result.action, 'decline');
-  }
+test('hung discovery is bounded and collected', async t => {
+  const s = server(t, [], { SLEIGHT_TEST_HUNG: '1' }); const start = Date.now();
+  await selectSurfaces(s, {}, { timeoutMs: 100 });
+  assert.equal(s.env.CUA_REPL_ENABLED_SURFACES, 'computer');
+  assert.ok(Date.now() - start < 3500);
+});
+test('discovery never approves a prompt after slow engine startup', async t => {
+  // Startup deliberately exceeds the hung-case deadline. The fixture completes
+  // only after receiving the reply; this larger timeout is a failure bound.
+  const s = server(t, [], { SLEIGHT_TEST_ASK: '1', SLEIGHT_TEST_STARTUP_DELAY_MS: '250' });
+  await selectSurfaces(s, {}, { timeoutMs: 10000 });
+  assert.equal(s.env.CUA_REPL_ENABLED_SURFACES, 'computer');
+  assert.equal(requests(s).find(r => r.id === 'ask')?.result.action, 'decline');
 });
 
 test('a failed discovery call cannot enable browser control even if it emitted an inventory', async t => {
