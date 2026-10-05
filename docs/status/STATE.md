@@ -3,11 +3,12 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-05, 0.9.0 released)
+## Banner (2026-10-05, 0.9.1 released)
 
-Public: `Land-o-Clusters/sleight`. Latest release `v0.9.0` (`228251a`, CI green). Installed on this
-Mac at user scope: 0.9.0. 0.9.0 sends the guard's after-action read as changed lines (12/12
-benchmark, result text down 1 to 23% on TextEdit and Chess, browser pages unmeasured). Promotion starts next (owner, 2026-10-05).
+Public: `Land-o-Clusters/sleight`. Latest release `v0.9.1` (`2b9f952`, CI green). Installed on this
+Mac at user scope: 0.9.1. Since 0.9.0 the guard's after-action read reaches Claude as changed lines
+(benchmark 12/12). In Helium a click on a static page with a 120-item sidebar sent 428 characters
+instead of 35,532; CNN scrolls still go whole, because lazy loading renumbers elements. Promotion starts next (owner, 2026-10-05).
 
 0.8.0 adds the opt-in engine path for terminals and OpenAI's apps: the user sets the helper's own
 `ComputerUseAllowForbiddenTargets` default, and sleight warns in the prompt and refuses settings
@@ -22,8 +23,8 @@ arms moved out of the repo (release check 16/18). 0.8.0 runs: TextEdit hung 2/2 
 
 Next, in order:
 
-- Measure 0.9.0's savings on a busy browser page. That needs a browser the owner approves live,
-  since none is on the benchmark's allowlist.
+- Pages that renumber (lazy loading) still go whole. A renumber-aware diff could help, but Claude
+  must never act on a stale element number.
 - The relay reads an app hang (TextEdit's Duplicate deadlock) as a stuck helper and tells Claude to
   ask for a ChatGPT restart. It could check whether the app answers before saying so.
 - Chess square estimates (chess-drag 1/3 in the 0.7.0 check).
@@ -45,7 +46,10 @@ Publishing it is the owner's call.
 - Weekly launchd job `com.landoclusters.sleight-watch` (Mondays 9:00, `scripts/watch.sh`). It saves
   the engine's API docs (`~/Library/Logs/sleight/engine-api-26.930.31730.md` is the baseline) and
   diffs them on an engine update. Remove with `npm run watch:remove`.
-- `~/Library/Application Support/sleight/preapproved.json` lists Calculator at `high`, written by the
+- `~/Library/Application Support/sleight/preapproved.json` lists Helium (`net.imput.helium` and
+  `Helium`, `high`), added by sleight-arch on the owner's explicit order on 2026-10-05 for testing
+  while away, to stay until the owner is back on Wednesday 2026-10-07. Backup of the earlier list
+  in this session's scratchpad. It also lists Calculator at `high`, written by the
   owner for Codex 9's live check on 2026-10-04. The installed 0.9.0 reads it, so Calculator is
   approved without a prompt in every session until the owner edits the file.
 - LCU 0.8.8 runtime-only at `~/.local/share/lcu`, registered only in `.dev/lcu-arm` (untracked),
