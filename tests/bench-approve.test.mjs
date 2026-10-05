@@ -12,3 +12,11 @@ test('focused menu benchmarks approve only the three benchmark apps', () => {
   for (const app of ['System Settings', 'ChatGPT', 'TextEdit copy']) assert.equal(approve(`Allow Claude to use ${app}'s menu bar item?`), null);
   assert.equal(approve('Allow Claude to read and use your notifications?'), null);
 });
+test('benchmark drags approve the three apps by bundle ID too, exact case only', () => {
+  for (const app of ['com.apple.Chess', 'com.apple.TextEdit', 'com.apple.calculator', 'Chess']) {
+    assert.equal(approve(`Allow Claude to drag in ${app}? It moves the pointer.`), 'accept');
+  }
+  for (const app of ['com.apple.chess', 'com.apple.Safari', 'com.apple.Chess.evil']) {
+    assert.equal(approve(`Allow Claude to drag in ${app}? It moves the pointer.`), null);
+  }
+});

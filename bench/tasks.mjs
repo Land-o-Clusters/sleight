@@ -10,8 +10,10 @@ import { join } from 'node:path';
 // Calculator shows digit grouping ("1,024"), and Claude reports what it shows.
 const hasNumber = (answer, n) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(answer.replace(/(?<=\d)[,\u202f\u00a0 ](?=\d{3})/g, ''));
 
-// The only apps a benchmark run may approve (see approve.mjs).
-export const BENCH_APPS = ['Calculator', 'TextEdit', 'Chess'];
+// The only apps a benchmark run may approve (see approve.mjs), by name and by
+// bundle ID: input leases have Claude acquire apps by bundle ID, and local tools
+// ask with the identifier Claude passed (a Chess drag was declined, 2026-10-05).
+export const BENCH_APPS = ['Calculator', 'TextEdit', 'Chess', 'com.apple.calculator', 'com.apple.TextEdit', 'com.apple.Chess'];
 
 export const tasks = [
   {
