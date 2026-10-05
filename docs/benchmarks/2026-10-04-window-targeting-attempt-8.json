@@ -1,0 +1,123 @@
+{
+  "date": "2026-10-04T14:08:34.336Z",
+  "bank": "/private/tmp/sleight-window-target-WX8AtJ",
+  "trials": [
+    {
+      "phase": "runtime",
+      "version": "26.930.31730",
+      "node": "v26.4.0"
+    },
+    {
+      "phase": "edit",
+      "trial": 1,
+      "target": "/private/tmp/sleight-window-target-WX8AtJ/sleight-window-left.txt",
+      "kind": "url",
+      "before": {
+        "after": {
+          "active": false,
+          "frontmostPID": 83422,
+          "mainMatchesTarget": false
+        },
+        "before": {
+          "active": false,
+          "frontmostPID": 83422,
+          "mainMatchesTarget": false
+        },
+        "document": "file:///private/tmp/sleight-window-target-WX8AtJ/sleight-window-left.txt",
+        "matches": 1,
+        "ok": true,
+        "selector": "url",
+        "title": "sleight-window-left.txt",
+        "wanted": "file:///private/tmp/sleight-window-target-WX8AtJ/sleight-window-left.txt"
+      },
+      "raise": {
+        "ok": false,
+        "error": "Ref has incompatible type"
+      },
+      "error": "AX could not find exactly one fixture window",
+      "passed": false,
+      "buffers": [
+        "seed|",
+        "seed|"
+      ],
+      "files": [
+        "seed|",
+        "seed|"
+      ]
+    },
+    {
+      "phase": "engine-cleanup",
+      "code": 0,
+      "signal": null,
+      "collected": true,
+      "signals": []
+    },
+    {
+      "phase": "fixture-cleanup",
+      "path": "/private/tmp/sleight-window-target-WX8AtJ/sleight-window-left.txt",
+      "closed": true
+    },
+    {
+      "phase": "fixture-cleanup",
+      "path": "/private/tmp/sleight-window-target-WX8AtJ/sleight-window-right.txt",
+      "closed": true
+    }
+  ],
+  "records": [
+    {
+      "direction": "to-server",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-06-18",
+          "capabilities": {
+            "elicitation": {
+              "form": {}
+            }
+          },
+          "clientInfo": {
+            "name": "sleight-window-targeting-bench",
+            "version": "1"
+          }
+        }
+      }
+    },
+    {
+      "direction": "to-client",
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "protocolVersion": "2025-06-18",
+          "capabilities": {
+            "experimental": {
+              "codex/sandbox-state-meta": {}
+            },
+            "tools": {
+              "listChanged": true
+            }
+          },
+          "serverInfo": {
+            "name": "rmcp",
+            "version": "1.5.0"
+          },
+          "instructions": "UI automation through cua_repl using the initialized cua API."
+        }
+      }
+    },
+    {
+      "direction": "to-server",
+      "msg": {
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized"
+      }
+    },
+    {
+      "direction": "change-snapshots-deleted",
+      "msg": {}
+    }
+  ],
+  "exitCode": 1
+}

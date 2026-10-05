@@ -16,7 +16,8 @@ if (process.env.BENCH_HOOK_LOG) {
 // 'Allow Claude to drag/hover in App? …'.
 const app = /^Allow Computer Use to use "(.+)"\?$/.exec(e.message ?? '')?.[1] ??
   /^Allow Claude to (?:drag|hover) in (.+?)\? /.exec(e.message ?? '')?.[1] ??
-  /^Allow Claude to use (.+)'s menu bar item\?$/.exec(e.message ?? '')?.[1];
+  /^Allow Claude to use (.+)'s menu bar item\?$/.exec(e.message ?? '')?.[1] ??
+  /^Allow Claude to select a window in (.+?)\? /.exec(e.message ?? '')?.[1];
 // The computer-use server of each benchmark arm (see run.mjs).
 const SERVERS = ['plugin:sleight:computer', 'lcu'];
 if (SERVERS.includes(e.mcp_server_name) && BENCH_APPS.includes(app)) {

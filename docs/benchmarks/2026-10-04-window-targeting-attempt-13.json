@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-05T02:20:36.724Z",
+  "bank": "/private/tmp/sleight-window-target-SIwKxa",
+  "trials": [
+    {
+      "phase": "failure",
+      "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/window-targeting/bench/input-lease-fixture.js open /private/tmp/sleight-window-target-SIwKxa/sleight-window-left.txt\n~/Projects/sleight-wt/window-targeting/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+    },
+    {
+      "phase": "fixture-cleanup",
+      "path": "/private/tmp/sleight-window-target-SIwKxa/sleight-window-left.txt",
+      "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/window-targeting/bench/input-lease-fixture.js close /private/tmp/sleight-window-target-SIwKxa/sleight-window-left.txt\n~/Projects/sleight-wt/window-targeting/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+    }
+  ],
+  "records": [],
+  "exitCode": 1
+}
