@@ -22,6 +22,14 @@ func closeSequence(_ actions: [() throws -> Void], remainsOpen: () -> Bool) thro
     }
     return false
 }
+func absentAppResult(_ op: String) throws -> [String: Any] {
+    if op == "snapshot" { return ["ok": true, "running": false, "windows": []] }
+    if op == "close" { return ["ok": false, "error": "Chess exited; document cleanup unconfirmed; restored games may reopen"] }
+    throw failure("Chess is not running")
+}
+func publishedTitle(_ title: String) -> String {
+    title.isEmpty || title.hasPrefix("sleight-stacked-") ? title : "[unowned Chess window]"
+}
 func attr(_ el: AXUIElement, _ name: String) -> CFTypeRef? {
     var value: CFTypeRef?
     guard AXUIElementCopyAttributeValue(el, name as CFString, &value) == .success else { return nil }
@@ -70,7 +78,10 @@ do {
     if op == "close-check" {
         var actions = 0
         let closed = try closeSequence([{ actions += 1 }, { throw failure("stale close button accessed") }], remainsOpen: { false })
-        print(String(data: try JSONSerialization.data(withJSONObject: ["ok": closed, "actions": actions]), encoding: .utf8)!)
+        let titles: [String] = [publishedTitle("sleight-stacked-1-target.game"), publishedTitle(""), publishedTitle("Game 1 | Owner - Computer")]
+        let checked: [String: Any] = ["ok": closed, "actions": actions, "absentAppClose": try absentAppResult("close"), "publishedTitles": titles]
+        let data = try JSONSerialization.data(withJSONObject: checked)
+        print(String(data: data, encoding: .utf8)!)
         exit(0) // Pure close sequencing test, without AX or app access.
     }
     if op == "path-check" {
@@ -82,21 +93,35 @@ do {
         exit(0) // Pure validation: no AX query, app lookup or launch.
     }
     guard AXIsProcessTrusted() else { throw failure("Accessibility unavailable; fixture stopped before opening a game") }
+    if op == "close" {
+        guard let path = request["path"] as? String else { throw failure("exact owned document path required for close") }
+        _ = try ownedGameURL(path)
+    }
     let apps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Chess")
-    if op == "snapshot" && apps.isEmpty { output = ["ok": true, "running": false, "windows": []] }
+    if apps.isEmpty { output = try absentAppResult(op) }
     else {
         guard apps.count == 1 else { throw failure("exactly one Chess process is required") }
         let app = apps[0], info = list(apps[0].processIdentifier)
         guard let windows = attr(AXUIElementCreateApplication(app.processIdentifier), "AXWindows") as? [AXUIElement] else { throw failure("Chess AX windows unavailable; cleanup unconfirmed") }
         if op == "snapshot" {
-            output = ["ok": true, "running": true, "windows": info.map { entry -> [String: Any] in
-                var record: [String: Any] = ["id": entry[kCGWindowNumber as String] ?? 0, "title": entry[kCGWindowName as String] ?? ""]
+            let ownedAXWindows: [[String: Any]] = windows.compactMap { window -> [String: Any]? in
+                let title = attr(window, "AXTitle") as? String ?? ""
+                guard title.hasPrefix("sleight-stacked-") else { return nil }
+                var record: [String: Any] = ["title": title]
+                if let document = attr(window, "AXDocument") as? String, let url = URL(string: document) {
+                    record["path"] = reportedPath(url)
+                }
+                return record
+            }
+            let records: [[String: Any]] = info.map { entry -> [String: Any] in
+                var record: [String: Any] = ["id": entry[kCGWindowNumber as String] ?? 0, "title": publishedTitle(entry[kCGWindowName as String] as? String ?? "")]
                 let matches = windows.filter { match($0, entry) }
                 if matches.count == 1, let document = attr(matches[0], "AXDocument") as? String, let url = URL(string: document) {
                     record["path"] = reportedPath(url)
                 }
                 return record
-            }]
+            }
+            output = ["ok": true, "running": true, "ownedAXWindows": ownedAXWindows, "windows": records]
         } else {
             let wanted: [AXUIElement]
             if let path = request["path"] as? String {

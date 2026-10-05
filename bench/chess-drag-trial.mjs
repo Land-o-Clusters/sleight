@@ -1,4 +1,10 @@
 // The caller owns the live lock. Every new Chess window is closed before return.
+export function screenshotCoordinates(measured, source) {
+  if (JSON.stringify(measured.bounds) !== JSON.stringify(source.bounds) ||
+      ![measured.from, measured.to].every(p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite) &&
+        p[0] >= 0 && p[1] >= 0 && p[0] < source.bounds[2] && p[1] < source.bounds[3])) throw new Error('Screenshot geometry does not match this owned game');
+  return { from: measured.from, to: measured.to };
+}
 export async function stackedChessTrial(paths, api) {
   const baseline = new Set((await api.snapshot()).map(w => w.id));
   const run = { paths, placements: [], cleanup: [] };
@@ -22,7 +28,9 @@ export async function stackedChessTrial(paths, api) {
     const from = square(source, 'e2'), to = square(source, 'e4');
     if (!/white pawn/i.test(from.title) || /pawn/i.test(to.title)) throw new Error('Owned game must start with e2 occupied and e4 empty');
     const relative = s => [s.center[0] - source.bounds[0], s.center[1] - source.bounds[1]];
-    run.request = { app: 'Chess', windowId: source.windowId, from: relative(from), to: relative(to) };
+    const coordinates = api.coordinates ? await api.coordinates(source, paths[0]) : { from: relative(from), to: relative(to) };
+    if (api.cancelled()) throw new Error('Run interrupted');
+    run.request = { app: 'Chess', windowId: source.windowId, ...coordinates };
     run.reply = await api.drag(run.request);
     await api.wait(1000);
     run.sourceAfter = await api.read(paths[0]); run.otherAfter = await api.read(paths[1]);

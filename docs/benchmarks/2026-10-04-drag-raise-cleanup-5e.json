@@ -1,0 +1,50 @@
+{
+  "method": "cua_repl native Chess close buttons",
+  "liveLockHeld": true,
+  "actions": [
+    {
+      "observation": {
+        "document": "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-target.game",
+        "e2": "empty",
+        "e4": "white pawn"
+      },
+      "closeButton": 66,
+      "after": {
+        "document": "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-cover.game"
+      }
+    },
+    {
+      "observation": {
+        "document": "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-cover.game"
+      },
+      "closeButton": 146,
+      "after": {
+        "title": "[replacement Game 1]",
+        "document": null
+      }
+    },
+    {
+      "observation": {
+        "title": "[replacement Game 1]"
+      },
+      "closeButton": 66,
+      "after": {
+        "title": "[replacement Game 1]",
+        "document": null
+      }
+    },
+    {
+      "observation": {
+        "title": "[replacement Game 1]"
+      },
+      "closeButton": 145,
+      "after": "No engine AX read, to avoid reopening Chess. Native cleanup-6c verifies no owned AX windows."
+    }
+  ],
+  "verificationReceipts": [
+    "2026-10-04-drag-raise-cleanup-5d.json",
+    "2026-10-04-drag-raise-cleanup-6c.json"
+  ],
+  "exitCode": null,
+  "lockRemovalExitCode": 0
+}

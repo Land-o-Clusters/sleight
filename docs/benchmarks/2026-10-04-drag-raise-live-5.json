@@ -1,0 +1,287 @@
+{
+  "started": "2026-10-05T03:49:06.717Z",
+  "runs": [
+    {
+      "n": 1,
+      "paths": [
+        "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-target.game",
+        "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-cover.game"
+      ],
+      "placements": [
+        {
+          "bounds": [
+            100,
+            100,
+            1269,
+            984
+          ],
+          "ok": true,
+          "squares": [
+            {
+              "center": [
+                777.66162109375,
+                418.4407043457031
+              ],
+              "title": "white pawn, e2"
+            },
+            {
+              "center": [
+                775.3224182128906,
+                571.8534088134766
+              ],
+              "title": "e4"
+            }
+          ],
+          "title": "sleight-stacked-1-target.game | Sleight White - Sleight Black   (White to Move)",
+          "windowId": 242653
+        },
+        {
+          "bounds": [
+            100,
+            100,
+            1269,
+            984
+          ],
+          "ok": true,
+          "squares": [
+            {
+              "center": [
+                777.66162109375,
+                418.4407043457031
+              ],
+              "title": "white pawn, e2"
+            },
+            {
+              "center": [
+                775.3224182128906,
+                571.8534088134766
+              ],
+              "title": "e4"
+            }
+          ],
+          "title": "sleight-stacked-1-cover.game | Sleight White - Sleight Black   (White to Move)",
+          "windowId": 242656
+        }
+      ],
+      "cleanup": [
+        {
+          "path": "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-target.game",
+          "error": "Error Domain=AX frame unavailable Code=1 \"(null)\""
+        },
+        {
+          "path": "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-cover.game",
+          "error": "Error Domain=exactly one Chess process is required Code=1 \"(null)\""
+        },
+        {
+          "path": "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-target.game",
+          "error": "Error Domain=exactly one Chess process is required Code=1 \"(null)\""
+        },
+        {
+          "path": "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-cover.game",
+          "error": "Error Domain=exactly one Chess process is required Code=1 \"(null)\""
+        },
+        {
+          "path": "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-target.game",
+          "error": "Error Domain=exactly one Chess process is required Code=1 \"(null)\""
+        },
+        {
+          "path": "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-cover.game",
+          "error": "Error Domain=exactly one Chess process is required Code=1 \"(null)\""
+        }
+      ],
+      "request": {
+        "app": "Chess",
+        "windowId": 242653,
+        "from": [
+          680,
+          699
+        ],
+        "to": [
+          677,
+          548
+        ]
+      },
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"Chess\",\n \"windowId\": 242653,\n \"from\": [\n  680,\n  699\n ],\n \"to\": [\n  677,\n  548\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"path\": \"background\",\n \"textChanged\": null,\n \"deliveryVerified\": false,\n \"spaceInserted\": false\n}"
+            }
+          ]
+        }
+      },
+      "sourceAfter": {
+        "bounds": [
+          100,
+          100,
+          1269,
+          984
+        ],
+        "ok": true,
+        "squares": [
+          {
+            "center": [
+              895.1934509277344,
+              710.0251770019531
+            ],
+            "title": "e2"
+          },
+          {
+            "center": [
+              753.6491088867188,
+              653.9235992431641
+            ],
+            "title": "white pawn, e4"
+          }
+        ],
+        "title": "sleight-stacked-1-target.game | Sleight White - Sleight Black   (Black to Move)",
+        "windowId": 242653
+      },
+      "otherAfter": {
+        "bounds": [
+          100,
+          100,
+          1269,
+          984
+        ],
+        "ok": true,
+        "squares": [
+          {
+            "center": [
+              777.66162109375,
+              418.4407043457031
+            ],
+            "title": "white pawn, e2"
+          },
+          {
+            "center": [
+              775.3224182128906,
+              571.8534088134766
+            ],
+            "title": "e4"
+          }
+        ],
+        "title": "sleight-stacked-1-cover.game | Sleight White - Sleight Black   (White to Move)",
+        "windowId": 242656
+      },
+      "passed": true,
+      "remainingWindows": [],
+      "remainingPaths": [
+        "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-target.game",
+        "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-cover.game"
+      ],
+      "closedAllOpenedWindows": false
+    }
+  ],
+  "approvals": [
+    {
+      "message": "Allow Claude to drag in Chess? It moves your pointer for a few seconds.",
+      "action": "accept"
+    },
+    {
+      "message": "Allow Claude to drag in Chess? Background comes first; foreground fallback can move your pointer for a few seconds.",
+      "action": "accept"
+    }
+  ],
+  "trace": [
+    {
+      "t": "2026-10-05T03:49:34.336Z",
+      "direction": "from-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+          "name": "drag",
+          "arguments": {
+            "app": "Chess",
+            "windowId": 242653,
+            "from": [
+              680,
+              699
+            ],
+            "to": [
+              677,
+              548
+            ]
+          }
+        }
+      }
+    },
+    {
+      "t": "2026-10-05T03:49:34.470Z",
+      "direction": "local-approval",
+      "message": {
+        "key": "[\"sleight\",\"drag\",\"Chess\"]",
+        "action": "accept"
+      }
+    },
+    {
+      "t": "2026-10-05T03:49:48.390Z",
+      "direction": "to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"Chess\",\n \"windowId\": 242653,\n \"from\": [\n  680,\n  699\n ],\n \"to\": [\n  677,\n  548\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"path\": \"background\",\n \"textChanged\": null,\n \"deliveryVerified\": false,\n \"spaceInserted\": false\n}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "t": "2026-10-05T03:49:54.150Z",
+      "direction": "change-snapshots-deleted",
+      "message": {}
+    }
+  ],
+  "coordinateMeasurement": {
+    "windowId": 242653,
+    "bounds": [
+      100,
+      100,
+      1269,
+      984
+    ],
+    "image": "/private/tmp/sleight-chess-stacked-p2i9xL/owned-board.png",
+    "plan": "/private/tmp/sleight-chess-stacked-p2i9xL/points.json",
+    "screenshotSha256": "25cf55a68577e03dcc43d039b781cf70449fdc959e3fcb6f9fed3075532dcc73",
+    "measured": {
+      "bounds": [
+        100,
+        100,
+        1269,
+        984
+      ],
+      "from": [
+        680,
+        699
+      ],
+      "to": [
+        677,
+        548
+      ],
+      "source": "owned-board.png, window 242653",
+      "imageFrameOffset": [
+        23,
+        16
+      ],
+      "imageFrom": [
+        703,
+        715
+      ],
+      "imageTo": [
+        700,
+        564
+      ]
+    }
+  },
+  "finished": "2026-10-05T03:49:54.151Z",
+  "exitCode": 73
+}
