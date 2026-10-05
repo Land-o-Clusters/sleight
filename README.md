@@ -235,7 +235,11 @@ engine instances despite the installed extension. The final run detected both af
   The intended TextEdit document was edited and sampled foreground state was unchanged. This depends on the app supporting those Accessibility operations and
   exposing a unique title or AXDocument URL. Other apps remain untested. During an active selection, the relay marks changed or missing action
   window headers as "outcome unconfirmed". [Attempt results](docs/benchmarks/2026-10-04-window-targeting.md) include the failures.
-- Browser tabs do not take native input leases. Flow rules use one `browser` source and destination
+- Browser call text never turns off native guards. The engine must confirm `browserUse` on its reply
+  before sleight learns browser handles. Candidates attempt the known native window lease and
+  saved-file checks; when native access is unavailable, their runtime guard denies native access
+  while browser operations remain usable. These guards remain cooperative, not JavaScript isolation.
+  Flow rules use one `browser` source and destination
   for all tabs, with literal fills, typing and navigation URLs checked. They do not distinguish
   sites or tabs. Clipboard transfers and runtime strings remain outside those checks. Native
   document scope and saved-file change review do not cover browser tabs. Browser discovery runs

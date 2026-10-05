@@ -62,7 +62,7 @@ import { randomUUID } from 'node:crypto';
 import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRead, readCode, guardedCode } from './document-scope.mjs';
 import { ChangeReview, REVIEW_TOOL, isChangeCancel } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
-import { browserCall } from './browser-call.mjs';
+import { browserCall, browserReply } from './browser-call.mjs';
 import { isLeaseRead } from './input-lease.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
 import { refusedApp } from './blocked-apps.mjs';
@@ -445,7 +445,7 @@ export function createRelay({
     renewalFailures = 0;
   }
 
-  function prepareLease(msg) {
+  function prepareLease(msg, browser) {
     if (!inputLease || msg.method !== 'tools/call') return true;
     const name = msg.params?.name;
     if (name === TURN_END_TOOL) {
@@ -458,9 +458,20 @@ export function createRelay({
     const args = msg.params.arguments ?? {};
     const code = args.code;
     if (name === 'js' && typeof code !== 'string') { leaseStop(msg, 'js needs code.'); return false; }
-    if (name === 'js' && browserCall(code, browserHandles)) {
+    if (name === 'js' && browser && !documentMode) {
       if (running.size) { leaseStop(msg, 'another call in this session is pending.'); return false; }
-      return true; // Native window leases do not apply to tabs.
+      // A candidate can browse without a native target, but cannot inherit an
+      // earlier native grant. The injected guard denies native access in that case.
+      let key, nativeDenied;
+      if (leaseFault || !leaseWindow?.appId || (selectedWindow &&
+          (!selectionVerified || !sameWindow(leaseWindow, selectedWindow) || leaseWindow.appId !== selectedWindow.appId))) {
+        nativeDenied = 'Native access stopped: send a standalone native app read before acting. ' + (leaseFault ?? 'No confirmed native window.');
+      } else {
+        try { key = inputLease.acquire(leaseWindow); }
+        catch (err) { nativeDenied = 'Native access stopped: send a standalone native app read before acting. ' + err.message; }
+      }
+      leaseCalls.set(msg.id, { key, nativeDenied, observe: true });
+      return true;
     }
     const read = name === 'js' ? typeof code === 'string' && isLeaseRead(code)
       : (name === 'menu_bar' && args.op === 'apps') || (name === 'notifications' && args.op === 'list') ||
@@ -788,6 +799,12 @@ export function createRelay({
       if (native) browserHandles.delete(native[1]);
     }
     const browser = msg.method === 'tools/call' && msg.params?.name === 'js' && browserCall(originalCode ?? '', browserHandles);
+    if (msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name) && browserCalls.size) {
+      leaseStop(msg, 'a browser candidate is pending; wait for its guarded result.'); return;
+    }
+    if (browser && (msg.id === undefined || running.size)) {
+      leaseStop(msg, 'browser candidates need a request id and no pending call.'); return;
+    }
     const healthPlan = msg.method === 'tools/call' && msg.params?.name === 'js' && !browser ? helperPlan(originalCode) : undefined;
     const blockedApp = (healthPlan?.read ? [healthPlan.key] : healthPlan?.keys ?? []).find(key => {
       const state = helperStates.get(key);
@@ -846,7 +863,7 @@ export function createRelay({
         documentCalls.set(msg.id, { read, expected: read ? undefined : documentKey(observedDocument),
           observe: !isLeaseRead(code) || !/getScreenshot|rewriteDocumentation/.test(code), engines: new Set(), risks: new Set() });
       } else if (name !== 'select_window' && !prepareLease(msg)) return;
-    } else if (!prepareLease(msg)) return;
+    } else if (!prepareLease(msg, browser)) return;
     refreshHeartbeat();
     if (msg.method === 'tools/call' && localNames.has(msg.params?.name)) {
       trace('from-client', msg);
@@ -877,19 +894,22 @@ export function createRelay({
         rotateTurn();
         return;
       }
-      if (browser) browserCalls.set(msg.id, browser);
-      if (name === 'js' && !browser) {
+      if (name === 'js') {
         if (!clipboard && typeof originalCode === 'string' && clipboardActions(originalCode).some(action => ['c', 'x'].includes(action))) nativeCopies.add(msg.id);
         const read = typeof originalCode === 'string' && isLeaseRead(originalCode);
         const safe = read || (typeof originalCode === 'string' && isChangeCancel(originalCode, lastWindowText));
-        let entry;
+        let entry, nativeDenied = leaseCalls.get(msg.id)?.nativeDenied;
         try {
           if (changeReview && !safe && lastWindow && changeCalls.size) throw new Error('another engine call is pending, wait for its result');
           if (changeReview && !safe && lastWindow?.url?.startsWith('file://')) {
             entry = changes.before(lastWindow);
             trace('snapshot-before-call', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });
           }
-        } catch (err) { documentCalls.delete(msg.id); finishedCall(msg.id); changeStop(msg, `cannot snapshot before acting: ${err.message}`); return; }
+        } catch (err) {
+          if (browser && !documentMode) {
+            nativeDenied = `Native access stopped: send a standalone native app read before acting. Cannot snapshot before acting: ${err.message}`;
+          } else { documentCalls.delete(msg.id); finishedCall(msg.id); changeStop(msg, `cannot snapshot before acting: ${err.message}`); return; }
+        }
         if (healthPlan?.read && msg.id !== undefined) {
           helperReads.set(msg.id, healthPlan);
           let state = helperStates.get(healthPlan.key);
@@ -907,7 +927,14 @@ export function createRelay({
           const reason = documentMode ? undefined : selectedWindow ? `Selected window changed. ${selectionRecovery()}` : inputLease
             ? 'Input lease stopped this action: window or URL changed. Read the intended window again before acting.'
             : 'Change review stopped this action: window or URL changed. Read the intended window with one standalone cua.getApp call before editing.';
-          if (read) {
+          if (browser && !documentMode) {
+            msg.params.arguments.code = guardedCode(originalCode, target, reason,
+              inputLease && leaseCalls.get(msg.id)?.key ? inputLease.grant(leaseCalls.get(msg.id).key) : undefined,
+              { fileOnly: changeReview, browserCandidate: true,
+                skipAppWrap: browserHandles.has('app') || browser.handles.includes('app'),
+                nativeDenied: nativeDenied ?? (!target
+                  ? 'Native access stopped: send a standalone native app read before acting. No confirmed native window.' : undefined) });
+          } else if (read) {
             let code = originalCode;
             if (healthPlan && !helperProbes.has(msg.id) && helperFullReads.has(healthPlan.key)) {
               if (/\.(?:getAXState|getAXStateAndScreenshot)\(/.test(code)) {
@@ -922,10 +949,12 @@ export function createRelay({
           }
           else if (documentMode || inputLease || (changeReview && target)) msg.params.arguments.code = guardedCode(originalCode, target, reason,
             inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
-            { fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe });
+            { fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
+              skipAppWrap: browserHandles.has('app') });
           if (clipboard) msg.params.arguments.code = clipboardCode(msg.params.arguments.code, clipboardAction);
         }
       }
+      if (browser) browserCalls.set(msg.id, browser);
       msg.params._meta = { ...msg.params._meta, [META_KEY]: turnMeta() };
       turnUsed = true;
       clearTimeout(idleTimer);
@@ -966,6 +995,7 @@ export function createRelay({
   });
   function observeServerMessage(msg) {
     let windowNote;
+    const confirmedBrowser = msg.method === undefined && browserCalls.has(msg.id) && browserReply(msg);
     if (msg.method === undefined && clipboardResets.delete(msg.id) && !msg.error && !msg.result?.isError) {
       clipboard.reset().then(() => observeServerMessage(msg), error => {
         msg.result = { ...(msg.result ?? {}), isError: true };
@@ -984,7 +1014,10 @@ export function createRelay({
     }
     if (msg.method === undefined && browserCalls.has(msg.id)) {
       const browser = browserCalls.get(msg.id); browserCalls.delete(msg.id);
-      if (!msg.error && !msg.result?.isError) for (const handle of browser.handles) browserHandles.add(handle);
+      for (const handle of browser.handles) {
+        if (confirmedBrowser) browserHandles.add(handle);
+        else browserHandles.delete(handle);
+      }
     }
     if (msg.method === undefined && lateHelperReplies.delete(msg.id)) return;
     const healthPlan = msg.method === undefined ? helperReads.get(msg.id) : undefined;
@@ -1000,23 +1033,23 @@ export function createRelay({
       const call = changeCalls.get(msg.id);
       changeCalls.delete(msg.id);
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
-      if (call.observe && !automatic) { lastWindowText = text; lastWindow = windowFromText(text); }
-      if (selectedWindow && !call.read && call.target && msg.result &&
+      if (call.observe && !automatic && !confirmedBrowser) { lastWindowText = text; lastWindow = windowFromText(text); }
+      if (!confirmedBrowser && selectedWindow && !call.read && call.target && msg.result &&
           (!lastWindow || ['title', 'app', 'url'].some(key => lastWindow[key] !== call.target[key]))) {
         windowNote = `Sleight: outcome unconfirmed. Intended ${documentLabel(call.target)}. ` +
           (lastWindow ? `Observed ${documentLabel(lastWindow)}.` : 'Result missing full window header.');
       }
       // Keep the initial acquisition check, but release a verified selection
       // when a successful full observation confirms a different window.
-      if (selectedWindow && selectionVerified && !automatic && call.observe && !msg.error && !msg.result?.isError &&
+      if (!confirmedBrowser && selectedWindow && selectionVerified && !automatic && call.observe && !msg.error && !msg.result?.isError &&
           lastWindow && !sameWindow(lastWindow, selectedWindow)) clearSelection();
       // The Open click and its standalone reread can overlap. Judge safety at
       // the read's completion, after earlier action results have been recorded.
       const actionPending = [...changeCalls.values()].some(pending => !pending.safe);
-      if (changeReview && !automatic && call.read && call.observe && actionPending && !msg.error && !msg.result?.isError) {
+      if (!confirmedBrowser && changeReview && !automatic && call.read && call.observe && actionPending && !msg.error && !msg.result?.isError) {
         msg.result.content.push({ type: 'text', text: 'Change review: an action is still pending, so this read cannot take a later copy. Wait for its result, then take another standalone cua.getApp read before editing.' });
       }
-      if (changeReview && !automatic && call.read && call.observe && !actionPending && !msg.error && !msg.result?.isError) {
+      if (!confirmedBrowser && changeReview && !automatic && call.read && call.observe && !actionPending && !msg.error && !msg.result?.isError) {
         try {
           const entry = changes.read(lastWindow);
           if (entry) trace('snapshot-after-read', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });
@@ -1025,7 +1058,7 @@ export function createRelay({
           msg.result.content.push({ type: 'text', text: `Change review could not take a later copy: ${err.message}. Reads remain available.` });
         }
       }
-      if (changeReview && !call.safe) {
+      if (!confirmedBrowser && changeReview && !call.safe) {
         const dialog = lastWindow?.app === call.window?.app && !lastWindow?.url?.startsWith('file://');
         changes.after(call.entry, !msg.error && !msg.result?.isError && (documentKey(lastWindow) === call.expected || dialog));
         // A window first identified after an action has no trustworthy before copy.
@@ -1053,7 +1086,7 @@ export function createRelay({
         }
       }
     }
-    if (inputLease && !automatic && msg.method === undefined && leaseCalls.get(msg.id)?.observe) {
+    if (inputLease && !automatic && !confirmedBrowser && msg.method === undefined && leaseCalls.get(msg.id)?.observe) {
       const call = leaseCalls.get(msg.id);
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
       const window = !msg.error && !msg.result?.isError && windowFromText(text);

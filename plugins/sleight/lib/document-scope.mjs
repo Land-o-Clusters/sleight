@@ -44,7 +44,8 @@ export function readCode(code) {
 
 // Advisory only: all of this runs in the same mutable JS realm as Claude's code.
 export function guardedCode(code, window, reason = 'Document scope stopped this action: window or URL changed. Read the window and ask the user with document_scope.', lease, options = {}) {
-  return guardSetup({ window, reason, lease, ...options }) + `\n${code}
+  return guardSetup({ window, reason, lease, ...options }) +
+    (options.browserCandidate ? '\nglobalThis.__sleightDocumentGuard.activeApp = undefined;' : '') + `\n${code}
 if (globalThis.__sleightDocumentGuard.activeApp) {
   nodeRepl.write(await globalThis.__sleightDocumentGuard.activeApp.getAXState({ disableDiffing: true, emit: false }));
 }`;
@@ -60,6 +61,8 @@ function guardSetup(update) {
     ${update ? `state.expected = ${JSON.stringify(update.window)}; state.reason = ${JSON.stringify(update.reason)};
     state.lease = ${JSON.stringify(update.lease) ?? 'undefined'};
     state.fileOnly = ${!!update.fileOnly}; state.cancelOnly = ${!!update.cancelOnly};` : ''}
+    state.nativeDenied = ${JSON.stringify(update?.nativeDenied) ?? 'undefined'};
+    const checkNative = () => { if (state.nativeDenied) throw new Error(state.nativeDenied); };
     const checkLease = async () => {
       if (!state.lease) return;
       const fs = await import('node:fs/promises');
@@ -77,13 +80,15 @@ function guardSetup(update) {
         const value = Reflect.get(raw, name);
         if (typeof value !== 'function') return value;
         if (['getAXState', 'getAXStateAndScreenshot', 'getScreenshot'].includes(name)) return async (...args) => {
+          checkNative();
           const result = await value.apply(raw, args);
           state.activeApp = proxy;
           return result;
         };
         if (!['click', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction',
-          'paste', 'pressKey', 'typeText'].includes(name)) return value.bind(raw);
+          'paste', 'pressKey', 'typeText'].includes(name)) return (...args) => { checkNative(); return value.apply(raw, args); };
         return async (...args) => {
+          checkNative();
           await checkLease();
           if (state.fileOnly && name === 'pressKey' && isCancel(name, args)) {
             state.activeApp = proxy;
@@ -105,8 +110,8 @@ function guardSetup(update) {
       state.proxies.add(proxy); state.wrapped.set(target, proxy);
       return proxy;
     };
-    cua.getApp = async (...args) => state.activeApp = wrap(await state.getApp(...args));
-    ${update ? "if (typeof app !== 'undefined' && app && typeof app.getAXState === 'function' && !state.proxies.has(app)) { app = wrap(app); state.activeApp ||= app; }" : ''}
+    cua.getApp = async (...args) => { checkNative(); return state.activeApp = wrap(await state.getApp(...args)); };
+    ${update && !update.skipAppWrap ? "if (typeof app !== 'undefined' && app && typeof app.getAXState === 'function' && !state.proxies.has(app)) { app = wrap(app); state.activeApp ||= app; }" : ''}
   })();`;
 }
 

@@ -18,17 +18,18 @@ function harness(t, options = {}) {
   t.after(() => { relay.close(); rmSync(directory, { recursive: true, force: true }); });
   return { relay, sent, received, lease,
     call: (id, code, name = 'js') => clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: { code } } }) + '\n'),
-    reply: (id, result = { content: [] }) => serverOut.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n'),
+    reply: (id, result = { content: [], _meta: { 'codex/toolSurface': { kind: 'browserUse' } } }) => serverOut.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n'),
     engine: msg => serverOut.write(JSON.stringify(msg) + '\n') };
 }
 
-test('browser inventory, acquisition and DOM actions pass without a native window lease', t => {
+test('browser inventory, acquisition and DOM actions carry native guards without a native target', t => {
   const h = harness(t);
   for (const [id, code] of [[1, 'await cua.listBrowsers()'], [2, 'let tab = await cua.createBrowserTab("instance-1", "https://example.com")'],
     [3, 'await tab.playwright.getByRole("link", { name: "Learn more" }).click()'], [4, 'await tab.getAXState()'], [5, 'await tab.close()']]) {
     h.call(id, code);
     assert.equal(h.sent.at(-1)?.id, id, JSON.stringify(h.received));
-    assert.equal(h.sent.at(-1).params.arguments.code, code, 'browser code does not acquire or append a native guard');
+    assert.ok(h.sent.at(-1).params.arguments.code.includes(code));
+    assert.match(h.sent.at(-1).params.arguments.code, /Native access stopped/);
     h.reply(id);
   }
   assert.equal(h.lease.owned.size, 0);

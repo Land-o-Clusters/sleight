@@ -289,7 +289,7 @@ test('a native helper fault and hidden recovery do not block browser calls or th
   helperRead(h, 2); helperReply(h, 2);
   helperRead(h, 3, 'let tab = await cua.getTab("1")');
   assert.equal(h.toServer.at(-1).id, 3);
-  helperReply(h, 3, 'Browser tab: 1', false);
+  h.fromServer({ jsonrpc: '2.0', id: 3, result: { content: [{ type: 'text', text: 'Browser tab: 1' }], _meta: { 'codex/toolSurface': { kind: 'browserUse' } } } });
   helperRead(h, 4, 'await tab.playwright.getByRole("link").click()');
   assert.equal(h.toServer.at(-1).id, 4);
   helperReply(h, 4, 'Browser tab: 1', false);
@@ -297,7 +297,8 @@ test('a native helper fault and hidden recovery do not block browser calls or th
   helperReply(h, h.toServer.at(-1).id, 'Window: "Calculator", App: Calculator', false);
   helperRead(h, 5, 'await tab.getAXState()');
   assert.equal(h.toServer.at(-1).id, 5);
-  assert.equal(h.toServer.at(-1).params.arguments.code, 'await tab.getAXState()');
+  assert.ok(h.toServer.at(-1).params.arguments.code.includes('await tab.getAXState()'));
+  assert.match(h.toServer.at(-1).params.arguments.code, /Native access stopped/);
   helperReply(h, 5, 'Browser tab: 1', false);
   helperRead(h, 6, 'await app.click(1)');
   assert.equal(h.toServer.some(m => m.id === 6), false);

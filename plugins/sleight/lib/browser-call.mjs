@@ -1,4 +1,9 @@
-// Cooperative classification, not a boundary against arbitrary JavaScript.
+// First filter only. Candidates keep native guards until the engine replies.
+export function browserReply(reply) {
+  return !reply.error && !reply.result?.isError &&
+    reply.result?._meta?.['codex/toolSurface']?.kind === 'browserUse';
+}
+
 export function browserCall(code, handles = new Set()) {
   // Template expressions and prototype chains would hide native access from the checks below.
   if (/`(?:[^`\\]|\\.)*\$\{/.test(code) || /\b(?:constructor|__proto__|prototype)\b/.test(code)) return undefined;
