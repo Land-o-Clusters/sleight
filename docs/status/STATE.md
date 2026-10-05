@@ -3,12 +3,13 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-05, 0.9.1 released)
+## Banner (2026-10-05, 0.10.0 released)
 
-Public: `Land-o-Clusters/sleight`. Latest release `v0.9.1` (`2b9f952`, CI green). Installed on this
-Mac at user scope: 0.9.1. Since 0.9.0 the guard's after-action read reaches Claude as changed lines
-(benchmark 12/12). In Helium a click on a static page with a 120-item sidebar sent 428 characters
-instead of 35,532; CNN scrolls still go whole, because lazy loading renumbers elements. Promotion starts next (owner, 2026-10-05).
+Public: `Land-o-Clusters/sleight`. Latest release `v0.10.0` (`9c30f0c`, CI green). Installed on this
+Mac at user scope: 0.10.0. The guard's after-action read reaches Claude as changed lines, matched by
+text so renumbering pages compact too, and the relay refuses actions on numbers that changed. CNN in
+Helium: five scrolls sent 39,655 characters instead of 203,160; click trials 8 correct refusals, 6
+correct passes, none wrong. Benchmark 12/12, where two refusals stopped off-by-one menu clicks. Promotion starts next (owner, 2026-10-05).
 
 0.8.0 adds the opt-in engine path for terminals and OpenAI's apps: the user sets the helper's own
 `ComputerUseAllowForbiddenTargets` default, and sleight warns in the prompt and refuses settings
@@ -23,8 +24,9 @@ arms moved out of the repo (release check 16/18). 0.8.0 runs: TextEdit hung 2/2 
 
 Next, in order:
 
-- Pages that renumber (lazy loading) still go whole. A renumber-aware diff could help, but Claude
-  must never act on a stale element number.
+- Another session got "native pipe startup failed" three times in a row on 2026-10-05 while doctor
+  passed. The helper quits after about 20 s idle, and 0.10.0 tells Claude to retry, then `js_reset`.
+  Why it repeated is unknown.
 - The relay reads an app hang (TextEdit's Duplicate deadlock) as a stuck helper and tells Claude to
   ask for a ChatGPT restart. It could check whether the app answers before saying so.
 - Chess square estimates (chess-drag 1/3 in the 0.7.0 check).
