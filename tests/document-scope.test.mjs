@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
-import { GUARD_MARK, guardedCode, readCode, windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
+import { GUARD_END, GUARD_MARK, guardedCode, readCode, windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 
 test('headers require one exact identity, including a document URL', () => {
   assert.deepEqual(windowFromText('Window: "", App: Chess.\n0 standard window'), { title: '', app: 'Chess', url: null });
@@ -97,5 +97,27 @@ test('a bare read works after const app, and post-action state follows the acted
     readCode('await te.getAXState({disableDiffing:true});') + '\n' +
     guardedCode('await te.typeText("x")', { title: 'second', app: 'TextEdit', url: null });
   await runInNewContext(`(async () => { ${code} })()`, context);
-  assert.equal(outputs.at(-1), GUARD_MARK + 'Window: "second", App: TextEdit');
+  assert.equal(outputs.at(-1), GUARD_MARK + 'Window: "second", App: TextEdit' + GUARD_END);
+});
+
+test("Claude's read doubles as the guard's: one engine read per read, none extra after the call", async () => {
+  const outputs = [], calls = [];
+  const raw = { getAXState: async options => { calls.push(options); return 'Window: "a.txt", App: TextEdit'; }, click: async () => calls.push('click') };
+  const context = { cua: { getApp: async () => raw }, nodeRepl: { write: text => outputs.push(text) } };
+  const window = { title: 'a.txt', app: 'TextEdit', url: null };
+  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  await run(readCode('await cua.getApp("TextEdit");'));
+  calls.length = 0;
+  await run(guardedCode('await app.getAXState(); await app.click(3); await app.getAXState();', window));
+  assert.deepEqual(calls.map(c => (c === 'click' ? c : `read diff=${!c.disableDiffing} emit=${c.emit}`)),
+    ['read diff=false emit=false', 'click', 'read diff=false emit=false'], 'the pre-action check reused the first read and the guard skipped its own');
+  assert.equal(outputs.filter(o => o.startsWith(GUARD_MARK)).length, 2);
+  calls.length = 0; outputs.length = 0;
+  await run(guardedCode('await app.click(3);', window));
+  assert.deepEqual(calls.map(c => (c === 'click' ? c : 'read')), ['read', 'click', 'read'], 'a new call reads before and after');
+  assert.equal(outputs.length, 1);
+  calls.length = 0; outputs.length = 0;
+  await run(guardedCode('const s = await app.getAXState({ emit: false }); nodeRepl.write(String(s.length));', window));
+  assert.equal(calls.length, 1, 'an unemitted read is reused for the header');
+  assert.deepEqual(outputs, ['30', GUARD_MARK + 'Window: "a.txt", App: TextEdit' + GUARD_END]);
 });

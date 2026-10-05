@@ -15,9 +15,9 @@
 // stale, so the relay tracks which numbers Claude has seen since its last full
 // read and refuses actions on any other (staleIndex).
 
-import { GUARD_MARK, documentKey, windowFromText } from './document-scope.mjs';
+import { GUARD_END, GUARD_MARK, documentKey, windowFromText } from './document-scope.mjs';
 
-export { GUARD_MARK };
+export { GUARD_END, GUARD_MARK };
 const MAX_LINES = 3000; // above this, the line diff costs more than it saves
 const MAX_SHARE = 0.6; // a diff longer than this share of the tree is sent whole
 const ELEMENT = /^(\t*)(\d+) (.*)$/;
@@ -123,18 +123,30 @@ export function createReadCompactor() {
 
   return {
     // Rewrites a result's text items. Everything one js call writes arrives
-    // as one item, so the guard's read (always written last) can follow
-    // Claude's own output in the same item.
+    // as one item, so marked trees (Claude's reads and the guard's) sit among
+    // Claude's other output. Each is compacted against what Claude saw before it.
     process(content) {
       if (!Array.isArray(content)) return content;
       return content.map(item => {
-        if (item?.type !== 'text' || typeof item.text !== 'string') return item;
-        const at = item.text.lastIndexOf(GUARD_MARK);
-        if (at < 0) { remember(item.text); return item; }
-        const before = item.text.slice(0, at).replaceAll(GUARD_MARK, '');
-        remember(before);
-        const gap = before && !before.endsWith('\n') ? '\n' : '';
-        return { ...item, text: before + gap + compact(item.text.slice(at + GUARD_MARK.length), before) };
+        if (item?.type !== 'text' || typeof item.text !== 'string' || !item.text.includes(GUARD_MARK)) {
+          if (item?.type === 'text' && typeof item.text === 'string') remember(item.text);
+          return item;
+        }
+        let out = '', seenText = '', pos = 0;
+        const add = text => { if (out && text && !out.endsWith('\n')) out += '\n'; out += text; };
+        for (;;) {
+          const at = item.text.indexOf(GUARD_MARK, pos);
+          const plain = item.text.slice(pos, at < 0 ? undefined : at);
+          remember(plain); seenText += plain; add(plain);
+          if (at < 0) break;
+          const start = at + GUARD_MARK.length, end = item.text.indexOf(GUARD_END, start);
+          const tree = item.text.slice(start, end < 0 ? undefined : end);
+          const sent = compact(tree, seenText);
+          add(sent); seenText += '\n' + sent;
+          if (end < 0) break;
+          pos = end + GUARD_END.length;
+        }
+        return { ...item, text: out };
       });
     },
     // The first element number in `code` that Claude can't know is current

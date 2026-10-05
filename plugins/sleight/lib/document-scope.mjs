@@ -1,6 +1,7 @@
 // Header identity is a cooperative runtime observation, not an OS capability.
-// Marks the guard's after-action read, which the relay compacts (compact-reads.mjs).
+// Mark full trees the guard writes, which the relay compacts (compact-reads.mjs).
 export const GUARD_MARK = '[sleight:guard-read]\n';
+export const GUARD_END = '\n[/sleight:guard-read]\n';
 
 export function windowFromText(text) {
   const headers = [...text.matchAll(/^Window: ("(?:[^"\\]|\\.)*"), App: (.+)\r?$/gm)];
@@ -47,10 +48,16 @@ export function readCode(code) {
 
 // Advisory only: all of this runs in the same mutable JS realm as Claude's code.
 export function guardedCode(code, window, reason = 'Document scope stopped this action: window or URL changed. Read the window and ask the user with document_scope.', lease, options = {}) {
+  // The lease needs a full header after the call. A read Claude made after its
+  // last action already wrote one, so the guard reads again only without it.
   return guardSetup({ window, reason, lease, ...options }) +
     (options.browserCandidate ? '\nglobalThis.__sleightDocumentGuard.activeApp = undefined;' : '') + `\n${code}
-if (globalThis.__sleightDocumentGuard.activeApp) {
-  nodeRepl.write(${JSON.stringify(GUARD_MARK)} + await globalThis.__sleightDocumentGuard.activeApp.getAXState({ disableDiffing: true, emit: false }));
+{
+  const guard = globalThis.__sleightDocumentGuard, last = guard.activeApp && guard.reads.get(guard.activeApp);
+  if (guard.activeApp && !last?.emitted) {
+    const text = last?.text ?? await guard.activeApp.getAXState({ disableDiffing: true, emit: false });
+    nodeRepl.write(${JSON.stringify(GUARD_MARK)} + text + ${JSON.stringify(GUARD_END)});
+  }
 }`;
 }
 
@@ -65,6 +72,9 @@ function guardSetup(update) {
     state.lease = ${JSON.stringify(update.lease) ?? 'undefined'};
     state.fileOnly = ${!!update.fileOnly}; state.cancelOnly = ${!!update.cancelOnly};` : ''}
     state.nativeDenied = ${JSON.stringify(update?.nativeDenied) ?? 'undefined'};
+    // Full reads taken in this call since the handle's last action. A new call
+    // always reads again, because the user may have changed the window between.
+    state.reads = new WeakMap();
     const checkNative = () => { if (state.nativeDenied) throw new Error(state.nativeDenied); };
     const checkLease = async () => {
       if (!state.lease) return;
@@ -82,9 +92,21 @@ function guardSetup(update) {
       const proxy = new Proxy(target, { get(raw, name) {
         const value = Reflect.get(raw, name);
         if (typeof value !== 'function') return value;
-        if (['getAXState', 'getAXStateAndScreenshot', 'getScreenshot'].includes(name)) return async (...args) => {
+        // Claude's tree reads are full reads the relay turns into changed lines,
+        // and they double as the guard's own read until the next action.
+        if (name === 'getAXState') return async (options = {}) => {
+          checkNative();
+          const text = await raw.getAXState({ ...options, disableDiffing: true, emit: false });
+          const emitted = options?.emit !== false;
+          if (emitted) nodeRepl.write(${JSON.stringify(GUARD_MARK)} + text + ${JSON.stringify(GUARD_END)});
+          state.reads.set(proxy, { text, emitted });
+          state.activeApp = proxy;
+          return text;
+        };
+        if (['getAXStateAndScreenshot', 'getScreenshot'].includes(name)) return async (...args) => {
           checkNative();
           const result = await value.apply(raw, args);
+          if (name === 'getAXStateAndScreenshot') state.reads.delete(proxy);
           state.activeApp = proxy;
           return result;
         };
@@ -95,9 +117,10 @@ function guardSetup(update) {
           await checkLease();
           if (state.fileOnly && name === 'pressKey' && isCancel(name, args)) {
             state.activeApp = proxy;
+            state.reads.delete(proxy);
             return value.apply(raw, args);
           }
-          const text = await raw.getAXState({ disableDiffing: true, emit: false });
+          const text = state.reads.get(proxy)?.text ?? await raw.getAXState({ disableDiffing: true, emit: false });
           const observed = parse(text);
           const cancel = state.fileOnly && isCancel(name, args, text);
           if (state.cancelOnly && !cancel) throw new Error('Change review: Cancel target changed. Read the current window before retrying.');
@@ -107,6 +130,7 @@ function guardSetup(update) {
           }
           await checkLease();
           state.activeApp = proxy;
+          state.reads.delete(proxy);
           return value.apply(raw, args);
         };
       } });
