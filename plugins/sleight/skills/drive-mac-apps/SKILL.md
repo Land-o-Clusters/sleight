@@ -218,8 +218,11 @@ Return, then set the file name. A full path set into the name field with `app.se
 the dialog anywhere. The slashes end up in the file name.
 
 In TextEdit and other apps with autosave, `super+shift+s` is Duplicate, not Save As. Use
-`super+s` for an untitled document, or File > Save As from the menu. Sending Duplicate right after
-setting text hung TextEdit twice (2026-10-05).
+`super+s` for an untitled document, or File > Save As from the menu.
+
+Don't set a TextEdit document's text with `setValue`. Select and type instead. Saving or
+duplicating right after `setValue` hung TextEdit 3/3 times (2026-10-05), and only quitting it
+recovered.
 
 ## What it can't do
 

@@ -121,3 +121,24 @@ test("Claude's read doubles as the guard's: one engine read per read, none extra
   assert.equal(calls.length, 1, 'an unemitted read is reused for the header');
   assert.deepEqual(outputs, ['30', GUARD_MARK + 'Window: "a.txt", App: TextEdit' + GUARD_END]);
 });
+
+test('a window that only gains a URL mid-call stays the same window, unless document scope or change review is on', async () => {
+  let url = null;
+  const raw = { getAXState: async () => `Window: "Untitled 6", App: TextEdit.\n0 standard window Untitled 6${url ? `, URL: ${url}` : ''}`,
+    setValue: async () => { url = 'file:///tmp/Untitled%206.txt'; }, pressKey: async () => {} };
+  const window = { title: 'Untitled 6', app: 'TextEdit', url: null };
+  for (const [options, ok] of [[{ adoptUrl: true }, true], [{ adoptUrl: false }, false]]) {
+    url = null;
+    const context = { cua: { getApp: async () => raw }, nodeRepl: { write: () => {} } };
+    const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+    await run(readCode('await cua.getApp("TextEdit");'));
+    const done = run(guardedCode('await app.setValue(2, "x"); await app.pressKey("super+s");', window, 'stopped', undefined, options));
+    if (ok) await done; else await assert.rejects(done, /stopped/);
+  }
+  const other = { getAXState: async () => 'Window: "Other", App: TextEdit.\n0 standard window Other, URL: file:///tmp/o.txt', pressKey: async () => {} };
+  const context = { cua: { getApp: async () => other }, nodeRepl: { write: () => {} } };
+  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  await run(readCode('await cua.getApp("TextEdit");'));
+  await assert.rejects(run(guardedCode('await app.pressKey("a");', window, 'stopped', undefined, { adoptUrl: true })), /stopped/,
+    'a different title is still a different window');
+});

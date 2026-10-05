@@ -147,10 +147,12 @@ our own runs. Dates and engine versions are given where they matter.
   Claude reads them again (8 refusals, 6 correct passes and none wrong in CNN trials). Literal
   numbers only: a call that computes an element number is refused in that state. If Claude Code summarizes the conversation, Claude can lose the tree a diff refers
   to, as with the engine's own diffs. A read with `disableDiffing: true` comes through whole.
-- TextEdit hung 2/2 when Claude pressed Cmd+Shift+S (Duplicate, in apps with autosave) right after
-  setting a document's text. Its main thread waits forever on the document's save lock, so every
-  read times out and the relay reports a stuck helper and suggests restarting ChatGPT, when only
-  TextEdit needs quitting. The skill now steers Claude to Cmd+S or File > Save As.
+- TextEdit hung 3 times on 2026-10-05, each time after Claude set a document's text with `setValue`
+  and then pressed a save shortcut (Cmd+Shift+S, which is Duplicate, twice and Cmd+S once). Its main
+  thread waits forever on the document's save lock. Every read then times out, and the relay's
+  message names a stuck helper. It now adds that the app itself may be hung if other apps still
+  answer. Quitting TextEdit recovered it every time. The skill tells Claude to select and type in TextEdit
+  instead of using `setValue`, and to use Cmd+S or File > Save As.
 - The engine's helper can stop answering. On 2026-10-04 every `cua.getApp` timed out
   (`-10005 timeoutReached`) for about 25 minutes, with the Mac unlocked and in use, until ChatGPT was
   restarted. We don't know the cause. It started right after a test that kills engine processes.

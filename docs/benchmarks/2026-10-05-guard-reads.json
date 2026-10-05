@@ -1,0 +1,13 @@
+{
+ "note": "Time per js call through sleight's launcher, 2026-10-05, owner away. Each action call ran the action, a default read and a read with diffing off, timed inside the call ('inner') and end to end ('call'), five calls per row. Before: 0.10.0 guard, which read the whole tree again after the call. After: the guard reuses a read Claude made since its last action. Calculator via the user's pre-approved list; CNN front page in Helium, listed by the owner.",
+ "calculator": {
+  "before": { "call": [633, 672, 657, 638, 654], "inner": [587, 584, 608, 564, 604] },
+  "after": { "call": [584, 622, 517, 633, 504], "inner": [578, 611, 507, 625, 495] }
+ },
+ "cnn": {
+  "action": "scroll down one page",
+  "before": { "call": [1778, 1387, 1481, 1587, 1689], "inner": [1536, 1122, 1201, 1269, 1353] },
+  "after": { "call": [1415, 1423, 1485, 1503, 1538], "inner": [1401, 1410, 1473, 1493, 1528] },
+  "treeChars": { "before": [31494, 32274, 36499, 39880, 45587], "after": [48123, 51591, 54951, 56096, 56096] }
+ }
+}

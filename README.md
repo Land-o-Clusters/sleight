@@ -83,7 +83,8 @@ then start a new session. A running session keeps the version it started with.
   OpenAI's apps stay off until you opt in, and sleight shows you each terminal command first unless
   you turn that off too.
 - The benchmark results are published with their failures. It passed 16/18 in the 0.7.0 release
-  check and 12/12 in each of the three passes since.
+  check and 12/12 in each of the five full passes since. Smaller passes in between lost runs
+  to TextEdit hangs, and those are published too.
 
 sleight also does what the engine can't. It drags text, which the engine's own drag fails to move,
 and reaches menu bar icons and notification banners. Each of these needs its own approval.

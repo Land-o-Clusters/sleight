@@ -70,7 +70,8 @@ function guardSetup(update) {
     };
     ${update ? `state.expected = ${JSON.stringify(update.window)}; state.reason = ${JSON.stringify(update.reason)};
     state.lease = ${JSON.stringify(update.lease) ?? 'undefined'};
-    state.fileOnly = ${!!update.fileOnly}; state.cancelOnly = ${!!update.cancelOnly};` : ''}
+    state.fileOnly = ${!!update.fileOnly}; state.cancelOnly = ${!!update.cancelOnly};
+    state.adoptUrl = ${!!update.adoptUrl};` : ''}
     state.nativeDenied = ${JSON.stringify(update?.nativeDenied) ?? 'undefined'};
     // Full reads taken in this call since the handle's last action. A new call
     // always reads again, because the user may have changed the window between.
@@ -125,6 +126,10 @@ function guardSetup(update) {
           const cancel = state.fileOnly && isCancel(name, args, text);
           if (state.cancelOnly && !cancel) throw new Error('Change review: Cancel target changed. Read the current window before retrying.');
           const dialog = state.fileOnly && observed?.app === state.expected?.app && !observed.url?.startsWith('file://');
+          // An untitled document that autosave gives a URL mid-call is the same
+          // window. Document scope and change review stay strict about URLs.
+          if (state.adoptUrl && observed && state.expected && state.expected.url == null && observed.url &&
+            observed.app === state.expected.app && observed.title === state.expected.title) state.expected = observed;
           if (!cancel && !dialog && (!observed || ['title', 'app', 'url'].some(key => observed[key] !== state.expected[key]))) {
             throw new Error(state.reason + ' Observed ' + JSON.stringify(observed));
           }

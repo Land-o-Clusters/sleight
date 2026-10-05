@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.11.0 (2026-10-05)
+
+- Fewer reads per call. A read Claude makes is now a full read the relay turns into changed lines,
+  and the window guard reuses it instead of reading the whole tree again after the call. Time added
+  per call fell from 242 to 332 ms to 10 to 14 ms on the CNN front page, and from 46 to 88 ms to
+  6 to 11 ms in Calculator (`docs/benchmarks/2026-10-05-guard-reads.md`).
+- An untitled document that autosave gives a URL mid-call counts as the same window, outside
+  document scope and change review. No change in turns was measurable.
+- When an app stops answering, the message adds that the app itself may be hung if other apps still
+  answer, before suggesting a ChatGPT restart. The skill tells Claude not to set TextEdit text with
+  `setValue`, after three TextEdit hangs that followed it.
+- README rewritten for first-time readers. The in-session install command it gave wasn't valid; it
+  now gives `/plugin marketplace add` and `/plugin install`, checked on a fresh Claude config.
+  Known problems, settings, how it works and the benchmark moved to `docs/`.
+- Benchmark: 12/12 in two full passes. Two TextEdit-only reruns in between went 0/9 and 7/9, one
+  TextEdit hang and its aftermath (`docs/benchmarks/2026-10-05-release-0.11.0.json`).
+
 ## 0.10.0 (2026-10-05)
 
 - Compaction handles pages that renumber. Lines are matched by their text without the element

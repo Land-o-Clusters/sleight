@@ -198,7 +198,7 @@ export function createRelay({
   const helperFullReads = new Set();
   const lateHelperReplies = new Set();
   let helperActive;
-  const helperAdvice = key => `The SkyComputerUseService helper appears stuck when reading ${key}. Stop retrying. Tell the user they need to restart ChatGPT to recover computer use. sleight will retry by itself with one standalone read every 20 s and resume this app after a successful read. Restarting ends their Codex sessions; never restart or quit ChatGPT yourself.`;
+  const helperAdvice = key => `The SkyComputerUseService helper appears stuck when reading ${key}. Stop retrying. Tell the user they need to restart ChatGPT to recover computer use. sleight will retry by itself with one standalone read every 20 s and resume this app after a successful read. Restarting ends their Codex sessions; never restart or quit ChatGPT yourself. If other apps still answer, ${key} itself may be hung instead (TextEdit hung this way 3 times on 2026-10-05): tell the user, since quitting that app is the first fix to try.`;
 
   function helperSelector(selector) {
     let key;
@@ -964,7 +964,7 @@ export function createRelay({
           else if (documentMode || inputLease || (changeReview && target)) msg.params.arguments.code = guardedCode(originalCode, target, reason,
             inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
             { fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
-              skipAppWrap: browserHandles.has('app') });
+              adoptUrl: !documentMode && !changeReview, skipAppWrap: browserHandles.has('app') });
           if (clipboard) msg.params.arguments.code = clipboardCode(msg.params.arguments.code, clipboardAction);
         }
       }
