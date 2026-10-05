@@ -13,6 +13,8 @@ export function browserCall(code, handles = new Set()) {
   // Computed member access can build any property name at runtime; only numeric indexes stay browser.
   // A bracket after a name, call, index, string, `.` (optional chaining) or `}` is member access.
   if (/[\w$)\]"'`.}]\s*\[(?!\s*\d+\s*\])/.test(source)) return undefined;
+  // Computed keys in object literals and destructuring ({ [k]: v }) do the same.
+  if (/[{,]\s*\[/.test(source)) return undefined;
   const acquisition = source.match(/(?:(?:let|const|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.(?:getBrowser|getTab|createBrowserTab)\(/);
   const bindings = new Set(acquisition?.[1] ? [acquisition[1]] : []);
   const factories = /\.(?:getByRole|getByText|getByLabel|getByPlaceholder|getByTestId|locator|frameLocator|filter|first|last|nth|and|or|new|get)\(/;

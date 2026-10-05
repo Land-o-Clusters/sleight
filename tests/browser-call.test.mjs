@@ -29,5 +29,8 @@ test('native access in any form keeps the call on the native path', () => {
     'const k = "con" + "structor"; await tab/**/[k]; await tab.reload()',
     'const k = "con" + "structor"; await tab?.[k]; await tab.reload()',
     'const k = "x"; await tab /* a */ [k]; await tab.reload()',
+    'const k = "con" + "structor"; const { [k]: c } = tab; await tab.reload()',
+    'const { a, [k]: c } = tab; await tab.reload()',
+    'await Object.getPrototypeOf(tab).reload.call(tab)',
   ]) assert.equal(browserCall(code, tab), undefined, code);
 });
