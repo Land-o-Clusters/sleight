@@ -22,9 +22,9 @@ key presses and navigation URLs, and remember emitted browser values for source 
 and browser instances share that label. Runtime strings, clipboard operations and other DOM actions
 remain outside literal inspection.
 
-The existing turn metadata and `turn_ended` path also serve browser calls. The locked live trial
-opened and read Example Domain, clicked its link and observed the new IANA URL. Turn end removed its
-ordinary tab, confirmed by "No tab with id" and an empty tab list in a later session. There was one
-connected extension, reported as Chrome. Owner identification and a second browser trial are pending.
-An owner-connected retry found zero engine instances with both automatic detection and the override.
+The existing turn metadata and `turn_ended` path also serve browser calls. The final locked run on
+merged code opened and read Example Domain and clicked its link in 2/2 trials, Chrome and Helium.
+The owner identified both labeled tabs. Both reached the IANA URL. Turn end removed both ordinary tabs,
+confirmed by empty tab lists and "No tab with id" on each close. Earlier inventories were empty
+despite an installed extension. The final run detected both after a connection refresh.
 The [published calls and trace](../benchmarks/2026-10-04-browser-surface.json) include all failed attempts.

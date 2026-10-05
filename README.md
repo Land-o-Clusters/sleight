@@ -196,10 +196,10 @@ Use `cua.listBrowsers()`, select by `metadata.extensionInstanceId`, then open th
 `cua.createBrowserTab(browser.browserId, url)`. Helium and Chrome can both report as Chrome.
 Browser requests go through sleight's approval prompts. The relay never preapproves them.
 
-On 2026-10-04, engine 26.930.31730 opened Example Domain, read it and clicked its Learn more link in
-1/1 connected extension trial. `turn_ended` removed the tab. A later close returned "No tab with id".
-The owner has not identified that extension as Helium or Chrome, and the second browser is unmeasured.
-After the owner reported both connected, a retry found zero engine instances, including with the override.
+In the final run on 2026-10-04, engine 26.930.31730 opened Example Domain, read it and clicked Learn more
+in 2/2 trials, one in Chrome and one in Helium, both identified by the owner. `turn_ended` removed both
+tabs. Both tab lists were empty, and later closes returned "No tab with id". Earlier retries found zero
+engine instances despite the installed extension. The final run detected both after a connection refresh.
 [Every attempt](docs/benchmarks/2026-10-04-browser-surface.json) includes detection and routing failures.
 
 ## Known problems
@@ -209,8 +209,7 @@ After the owner reported both connected, a retry found zero engine instances, in
   sites or tabs. Clipboard transfers and runtime strings remain outside those checks. Native
   document scope and saved-file change review do not cover browser tabs. Browser discovery runs
   once at startup; connecting an extension later requires a new sleight session or an explicit
-  `SLEIGHT_SURFACES` override. Helium and Chrome identification and the second browser trial remain
-  pending the owner's response.
+  `SLEIGHT_SURFACES` override. An installed extension can be absent from the engine's live inventory.
 
 - [Input leases](docs/design/input-lease.md) let one sleight session act on a window at a time.
   Another session gets the holder's name and time left, while reads remain available. Leases expire
