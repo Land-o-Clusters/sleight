@@ -10,6 +10,18 @@ import { join } from 'node:path';
 // Calculator shows digit grouping ("1,024"), and Claude reports what it shows.
 const hasNumber = (answer, n) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(answer.replace(/(?<=\d)[,\u202f\u00a0 ](?=\d{3})/g, ''));
 
+// TextEdit opens a document next to its other windows, which can sit on another
+// desktop, and drag then refuses (textedit-drag 2/3 runs, 2026-10-05). Quitting
+// it first puts its windows on the current desktop. It only quits a TextEdit
+// with no open documents, so it never closes one.
+function freshTextEdit() {
+  execFileSync('osascript', ['-e', 'if application "TextEdit" is running then tell application "TextEdit" to if (count documents) is 0 then quit']);
+  for (let i = 0; i < 20; i++) {
+    try { execFileSync('pgrep', ['-x', 'TextEdit']); } catch { return; } // pgrep exits 1 once it's gone
+    execFileSync('sleep', ['0.25']);
+  }
+}
+
 // The only apps a benchmark run may approve (see approve.mjs), by name and by
 // bundle ID: input leases have Claude acquire apps by bundle ID, and local tools
 // ask with the identifier Claude passed (a Chess drag was declined, 2026-10-05).
@@ -31,6 +43,7 @@ export const tasks = [
   {
     id: 'textedit-save',
     app: 'TextEdit',
+    setup: freshTextEdit,
     prompt: ({ dir, nonce }) =>
       `Using computer use in the background, create a new TextEdit document, make it plain text (Format menu, Make Plain Text), type exactly "sleight bench ${nonce}", and save it as ${join(dir, `${nonce}.txt`)}. Then close the document.`,
     check: ({ dir, nonce }) => {
@@ -43,7 +56,7 @@ export const tasks = [
   {
     id: 'textedit-edit',
     app: 'TextEdit',
-    setup: ({ dir, nonce }) => writeFileSync(join(dir, `${nonce}-edit.txt`), 'alpha beta gamma\n'),
+    setup: ({ dir, nonce }) => { freshTextEdit(); writeFileSync(join(dir, `${nonce}-edit.txt`), 'alpha beta gamma\n'); },
     prompt: ({ dir, nonce }) =>
       `Using computer use in the background, open ${join(dir, `${nonce}-edit.txt`)} in TextEdit, replace the word "beta" with "delta", save, and close the document.`,
     check: ({ dir, nonce }) => {
@@ -54,7 +67,7 @@ export const tasks = [
   {
     id: 'textedit-drag',
     app: 'TextEdit',
-    setup: ({ dir, nonce }) => writeFileSync(join(dir, `${nonce}-drag.txt`), 'alpha beta gamma\n'),
+    setup: ({ dir, nonce }) => { freshTextEdit(); writeFileSync(join(dir, `${nonce}-drag.txt`), 'alpha beta gamma\n'); },
     prompt: ({ dir, nonce }) =>
       `Using computer use in the background, open ${join(dir, `${nonce}-drag.txt`)} in TextEdit. Select the ` +
       'word "alpha", then drag the selection with the mouse to the end of the line so the words read ' +

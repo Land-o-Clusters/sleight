@@ -40,7 +40,7 @@ test('the typing probe uses only the benchmark app allowlist', async () => {
       { action: 'accept', content: {} });
   }
   for (const message of ['Allow Computer Use to use "Mail"?',
-    'Allow Computer Use to use "com.apple.TextEdit"?', 'Allow one flow-rule exception?']) {
+    'Allow Computer Use to use "com.apple.textedit"?', 'Allow one flow-rule exception?']) {
     assert.deepEqual(await benchmarkApproval({ message }), { action: 'decline' });
   }
 });
