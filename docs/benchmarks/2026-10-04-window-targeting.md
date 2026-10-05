@@ -1,6 +1,6 @@
 # Exact window selection, October 4
 
-Branch: `codex/window-targeting`, rebased onto `27b0528`. Worktree:
+Branch: `codex/window-targeting`, rebased onto `562f423` (includes `7540224`). Worktree:
 `~/Projects/sleight-wt/window-targeting`.
 
 The revised branch removes unsupported `windowId` guidance and routine window
@@ -31,7 +31,7 @@ live lock. The probe needs Swift and stops at the first ignored selection.
 
 Runs that opened fixtures held `/tmp/sleight-live.lock` only while opening, checking
 and closing their own two temporary TextEdit documents. Host runs used `bench/approve.mjs`,
-the existing benchmark allowlist, for approvals. Owned engine exit codes were 0 in eight runs through turn cleanup and stdin EOF,
+the existing benchmark allowlist, for approvals. Owned engine exit codes were 0 in nine runs through turn cleanup and stdin EOF,
 without signaling the shared helper.
 ChatGPT stayed running. The general benchmark was not run.
 
@@ -50,13 +50,25 @@ ChatGPT stayed running. The general benchmark was not run.
 | [11](2026-10-04-window-targeting-attempt-11.json) | 1 | Round-2 sandbox automation could not resolve TextEdit. No document opened. Cleanup hit the same error. |
 | [12](2026-10-04-window-targeting-attempt-12.json) | 0 | Revised tool, 3/3 intended edits and recovery after closing the selected document. Both documents closed, TextEdit inactive at each sample. |
 
+| [13](2026-10-04-window-targeting-attempt-13.json) | 1 | Merged-code sandbox smoke could not resolve TextEdit. No document opened. Cleanup hit the same error. |
+| [14](2026-10-04-window-targeting-attempt-14.json) | 0 | Merged local dispatcher, 3/3 intended edits and recovery after closing the selected document. Both documents closed, TextEdit inactive at each sample. |
+
 Raw relay requests, replies and failures are retained. Inventory responses are
 redacted because they include other sessions' apps and document titles. Fixture
 inventory and all relevant replies are retained. Home paths are shown as `~`.
 
 ## Checks
 
-After rebasing onto `27b0528`, `npm run check` exited 0: 196 unit tests, plugin
-validation and eight mod tests passed. `npm run lint:prose` exited 0 with zero
-flags across 17 files. Round-2 live attempt 12 exited 0, including three targeted
-edits and a successful edit after closing the selected document.
+Rebased onto `562f423`, which includes `7540224`. The merged code retains main's
+preapproved list and grant audit, terminal prompts for every send, change-review
+later snapshots and dialog handling, hover, and drag focus capture with background
+posting and foreground fallback. Every prose lint file from both branches is retained.
+
+`npm run check` exited 0: 356 unit tests, both manifest validations and eight mod
+tests passed. The focused window and cleanup suite passed 62 tests, exit 0.
+`npm run lint:prose` exited 0 with zero flags across 28 files. Merged-code live
+attempt 14 exited 0, including three intended edits and recovery after closing
+the selected document. The inherited process cleanup probe now retries a temporary
+post-exit denial within a bounded time. Persistent denial still fails. Both cases
+have regression tests. The [verification receipt](2026-10-04-window-targeting-verification.json)
+retains failed attempts and final exit codes.

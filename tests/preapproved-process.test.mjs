@@ -39,3 +39,26 @@ test('parent exit does not release an active descendant with redirected output',
   assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
   assert.equal(result.groupClean, true);
 });
+
+test('a transient post-close group probe denial waits for confirmed collection', async t => {
+  const nativeKill = process.kill;
+  let probes = 0;
+  t.mock.method(process, 'kill', (pid, signal) => {
+    if (signal === 0 && probes++ === 0) throw Object.assign(new Error('probe denied'), { code: 'EPERM' });
+    return nativeKill(pid, signal);
+  });
+  const result = await runOwned(process.execPath, ['-e', 'process.exit(0)'], { graceMs: 100 });
+  assert.equal(result.groupClean, true);
+  assert.deepEqual(result.exit, { code: 0, signal: null });
+  assert.ok(probes >= 2);
+});
+test('a persistent post-close group probe denial cannot confirm cleanup', async t => {
+  const nativeKill = process.kill;
+  t.mock.method(process, 'kill', (pid, signal) => {
+    if (signal === 0) throw Object.assign(new Error('probe denied'), { code: 'EPERM' });
+    return nativeKill(pid, signal);
+  });
+  const start = Date.now();
+  await assert.rejects(runOwned(process.execPath, ['-e', 'process.exit(0)'], { graceMs: 40 }), { code: 'EPERM' });
+  assert.ok(Date.now() - start < 1000);
+});

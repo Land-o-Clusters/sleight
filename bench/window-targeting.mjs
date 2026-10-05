@@ -10,10 +10,10 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
-import { resolveServer } from '../plugins/sleight/lib/launch.mjs';
+import { callLocalTool, resolveServer } from '../plugins/sleight/lib/launch.mjs';
 import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 import { collectEngine } from './window-targeting-cleanup.mjs';
-import { SELECT_WINDOW_TOOL, selectWindow } from '../plugins/sleight/lib/select-window.mjs';
+import { SELECT_WINDOW_TOOL } from '../plugins/sleight/lib/select-window.mjs';
 
 const output = process.argv[2];
 const probe = process.argv[3];
@@ -73,7 +73,7 @@ try {
   child.once('error', error => { for (const p of pending.values()) p.reject(error); });
   relay = createRelay({ clientIn, clientOut, serverIn: child.stdin, serverOut: child.stdout,
     sessionId: 'window-targeting-bench', inputLease: new InputLease({ directory: join(bank, 'leases') }),
-    localTools: { tools: [SELECT_WINDOW_TOOL], call: (_, args, approve) => selectWindow(args, { approve, runScript }),
+    localTools: { tools: [SELECT_WINDOW_TOOL], call: (name, args, approve, _, target) => callLocalTool(name, args, approve, runScript, target),
       target: async args => { const result = await runScript('lease-target.js', args);
         assert.ok(result.ok, result.error); return result.target; } },
     ask: async message => {

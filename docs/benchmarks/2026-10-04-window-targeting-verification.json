@@ -1,0 +1,110 @@
+{
+  "branch": "codex/window-targeting",
+  "worktree": "~/Projects/sleight-wt/window-targeting",
+  "base": "562f423",
+  "requestedBaseIncluded": "7540224",
+  "checks": [
+    {
+      "command": "npm run check",
+      "access": "sandbox",
+      "exitCode": 1,
+      "tests": 354,
+      "passed": 353,
+      "failure": "tests/preapproved-process.test.mjs cancellation: post-close process-group probe kill EPERM"
+    },
+    {
+      "command": "npm run check",
+      "access": "host",
+      "exitCode": 1,
+      "tests": 354,
+      "passed": 353,
+      "failure": "Same post-close process-group probe kill EPERM"
+    },
+    {
+      "command": "node --test tests/preapproved-process.test.mjs",
+      "access": "host",
+      "exitCode": 0,
+      "tests": 4
+    },
+    {
+      "command": "npm run check",
+      "access": "host",
+      "exitCode": 1,
+      "tests": 354,
+      "passed": 353,
+      "failure": "Same post-close process-group probe kill EPERM"
+    },
+    {
+      "command": "node --test tests/preapproved-process.test.mjs",
+      "access": "sandbox",
+      "exitCode": 1,
+      "tests": 6,
+      "passed": 5,
+      "failure": "New transient-probe regression fails before fix"
+    },
+    {
+      "command": "node --test tests/preapproved-process.test.mjs",
+      "access": "sandbox",
+      "exitCode": 0,
+      "tests": 6,
+      "fix": "Bounded EPERM probe retry after child close; persistent denial still fails"
+    },
+    {
+      "command": "node --test tests/select-window.test.mjs tests/relay-input-lease.test.mjs tests/window-targeting-cleanup.test.mjs",
+      "access": "sandbox",
+      "exitCode": 0,
+      "tests": 56,
+      "runs": 2
+    },
+    {
+      "command": "npm run lint:prose",
+      "access": "sandbox",
+      "exitCode": 0,
+      "files": 28,
+      "runs": 2
+    },
+    {
+      "command": "node --test tests/select-window.test.mjs tests/relay-input-lease.test.mjs tests/window-targeting-cleanup.test.mjs tests/preapproved-process.test.mjs",
+      "access": "sandbox",
+      "exitCode": 0,
+      "tests": 62
+    },
+    {
+      "command": "npm run check",
+      "access": "sandbox",
+      "exitCode": 0,
+      "tests": 356,
+      "modTests": 8,
+      "manifestValidations": 2
+    },
+    {
+      "command": "npm run lint:prose",
+      "access": "sandbox",
+      "exitCode": 1,
+      "failure": "Final report semicolon flagged by ai-tells.SemicolonUsage; replaced with a period"
+    },
+    {
+      "command": "npm run lint:prose",
+      "access": "sandbox",
+      "exitCode": 0,
+      "files": 28,
+      "errors": 0,
+      "warnings": 0,
+      "suggestions": 0
+    }
+  ],
+  "smoke": [
+    {
+      "file": "2026-10-04-window-targeting-attempt-13.json",
+      "exitCode": 1,
+      "result": "Sandbox could not resolve TextEdit, no fixture opened"
+    },
+    {
+      "file": "2026-10-04-window-targeting-attempt-14.json",
+      "exitCode": 0,
+      "result": "Merged relay and local dispatcher: 3/3 exact-window edits, close recovery, TextEdit inactive at samples, engine exit0 with no signals, both fixtures closed"
+    }
+  ],
+  "review": "No actionable merge findings; all main features and prose lint paths retained. Post-close group probe retry review found no blocking hazards; persistent denial still fails.",
+  "generalBenchmarkRun": false
+}
