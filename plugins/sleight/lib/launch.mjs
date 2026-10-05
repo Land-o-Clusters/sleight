@@ -304,6 +304,15 @@ export async function callLocalTool(name, args, approve, runLocal = runScript, t
     });
   }
   if (name === 'hover') {
+    if (!await approve(['hover', args.app], `Allow Claude to hover in ${args.app}? It moves your pointer briefly.`)) {
+      return text(`The user didn't allow hovering in ${args.app}. Stop and tell them; don't work around it.`, true);
+    }
+    const { ok, image, ...rest } = await runLocal('hover.js', args);
+    const result = text(rest, !ok);
+    if (ok && image) result.content.push({ type: 'image', data: image, mimeType: 'image/png' });
+    return result;
+  }
+  if (name === 'drag') {
     if (!await approve(['drag', args.app], `Allow Claude to drag in ${args.app}? It moves your pointer for a few seconds.`)) {
       return text(`The user didn't allow dragging in ${args.app}. Stop and tell them; don't work around it.`, true);
     }
@@ -349,8 +358,7 @@ export function run({ leaseDirectory } = {}) {
   let flowRules, preapproved;
   try { flowRules = loadFlowRules(); preapproved = loadPreapproved(); } catch (err) { fail(err.message); }
   const { trace, grantAudit } = approvalLogging(preapproved);
-  const traceSetting = process.env.SLEIGHT_TRACE;
-  relayTrace = traceSetting ? traceTo(traceSetting) : trace;
+  relayTrace = trace;
   const s = resolveServer();
   if (s.error) fail(s.error);
   if (!existsSync(s.command)) fail(`server runtime missing: ${s.command}`);
@@ -385,7 +393,7 @@ export function run({ leaseDirectory } = {}) {
     preapproved,
     grantAudit,
     flowRules,
-    changeReview: process.env.SLEIGHT_CHANGE_REVIEW !== '0',
+    changeReview: process.env.SLEIGHT_CHANGE_REVIEW === '1',
     // End the engine's turn after 30 s without a running call, so the app it
     // holds is released even where the mod doesn't run. 0 turns this off.
     idleTurnEndMs: Number(process.env.SLEIGHT_IDLE_TURN_END_MS ?? 30000),
