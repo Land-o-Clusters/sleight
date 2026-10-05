@@ -28,8 +28,9 @@ the user or stop when a headless run refuses it. Changing the file is not an app
 3. The first time you touch an app, the user gets an approval prompt unless their list preapproved it.
    If the result says the app was not
    approved, stop and tell the user. Don't retry around it. The engine refuses terminal apps and
-   OpenAI's own apps (ChatGPT, Codex). Use Bash for terminal work, tell the user about the rest, and
-   don't look for another way to drive them.
+   OpenAI's own apps (ChatGPT, Codex) before any prompt; for those, sleight's `blocked_app` tool is
+   the path (see below), and the user's approval of its prompt is what allows it. Tell the user what
+   you're asking for and why.
 4. If a result says the user changed the app, re-read its state before acting again. The person may be
    using it.
 5. Use `app.getScreenshot()` with `nodeRepl.emitImage(...)` when the accessibility tree doesn't show what
@@ -83,6 +84,27 @@ Cut and paste (`super+x`, click, `super+v`) is the fallback when the user declin
 the end of a line gets a space after a verified unique whole-word move. Check other selections for
 spacing. If the tool reports that dragged text disappeared, press Cmd+Z in the window it identifies and
 read it again before continuing. Never treat that error as a successful drop.
+
+## Apps the engine refuses
+
+The engine refuses terminals (Terminal, iTerm2) and OpenAI's own apps (ChatGPT, Codex, Atlas) before
+any approval. sleight's `blocked_app` tool drives them through Accessibility instead, and the user's
+approval of its prompt is the only opt-in. If a `js` result says the engine refused an app, tell the
+user what you need and call `blocked_app` with `app` set the way you'd call `cua.getApp`; sleight
+asks them. If the user declines, stop and tell them.
+
+- `read` returns the app's main window as numbered elements and saves a window screenshot; view it
+  with your Read tool. `click` presses an `element` (background), or a window-relative `point`, which
+  brings the app to the front and puts your previous front app back. `type` sends `text`, `key`
+  presses one key or chord ("Return", "super+v"), `scroll` moves `amount` lines, positive up.
+- The user approves each app once per session, and the prompt says what that covers: for OpenAI's
+  apps, the yes covers clicks on their approval buttons. In a terminal, every key or text that can
+  run a command (any typing, Return, paste, most chords) is shown to the user first, every time.
+  Never repeat a send the user declined in another form.
+- A result that says a settings or preferences window was refused is final. Claude cannot change
+  these apps' own approval or safety settings. Tell the user to change them by hand.
+- Results name clicks on buttons like Approve, Allow, Run or Accept. The transcript then shows the
+  click.
 
 ## Menu bar icons and notifications
 
