@@ -34,9 +34,9 @@ and you keep working.
 
 sleight gives that engine to Claude Code. Claude writes a few lines of JavaScript against the engine's
 API (`cua.getApp("Calculator")`, `app.click(...)`, `app.getScreenshot()`) and the engine handles the rest.
-sleight adds its own tools for what the engine can't do. Three of them move your pointer for a moment,
-and each asks first: `drag` keeps the mouse down long enough for text views to start a drag, and
-`menu_bar` clicks some menu bar icons for real, and `hover` captures UI that needs a real pointer.
+sleight adds its own tools for what the engine can't do. `drag` holds long enough for text views to
+start a drag and tries background events first. Its foreground fallback, `menu_bar` clicks and
+`hover` can move your pointer briefly. Each asks first.
 
 <p align="center"><img src="docs/assets/demo.gif" width="900" alt="Claude playing macOS Chess against the computer through sleight, with the sleight pane logging each move"></p>
 <p align="center"><sub>Claude plays macOS Chess against the computer through sleight, at 6× speed. Every move is a drag. The sleight pane on the right logs each one.</sub></p>
@@ -52,8 +52,8 @@ Claude sees the screen through screenshots.
 sleight sends events to the app itself, which can be behind your other windows. Your other apps stay
 visible, and you keep using the Mac while Claude works. Several sessions can use sleight at once:
 we've run two sleight sessions together, and sleight next to Codex. Claude reads each app's
-accessibility tree as well as screenshots. The `drag`, `hover` and `menu_bar` tools are the exceptions that briefly take the
-pointer.
+accessibility tree as well as screenshots. Foreground `drag` fallback, `hover` and some `menu_bar`
+actions briefly take the pointer.
 
 Claude's own computer use is supported by Anthropic and also runs on Windows in the desktop app.
 sleight is unofficial and depends on the ChatGPT app's engine.
@@ -174,7 +174,10 @@ Claude Code ──MCP──▶ bin/sleight-mcp ──▶ ChatGPT.app's cua-repl 
    Each app's icon needs your approval once per session, as do notifications. `SLEIGHT_MENU_BAR=0`
    leaves both tools out.
 8. The `drag` tool (`lib/drag.js`) holds the mouse down and moves in steps, for drags `app.drag` can't
-   do. It posts real mouse events, so it brings the app forward and puts your pointer back afterwards.
+   do. It posts to the target PID first, with a 500 ms hold and window-local coordinates.
+   TextEdit falls back to foreground only if its text is unchanged. If the private window-local
+   API is unavailable, foreground runs directly. The result reports the path and fallback reason.
+   Foreground brings the app forward, then restores the pointer and front app.
    It asks once per app per session, and `SLEIGHT_DRAG=0` leaves it out.
 9. The `hover` tool (`lib/hover.js`) moves the real pointer after the skill's background options fail.
    It refuses covered points. The app comes forward for a 1500 ms default wait and a screenshot,
@@ -207,10 +210,24 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
   Lost-text errors require Cmd+Z; whitespace-only selections refuse.
   [Spacing repair](docs/benchmarks/2026-10-04-drag-polish.md) covers unique whole words at line ends.
   Other selections need a spacing check, and concurrent edits can confuse snapshot comparisons.
-  The old-helper live reproduction was blocked by another session's larger window. Chess and
-  Calculator content guards remain unmeasured with this revision.
+  The old-helper live reproduction was blocked by another session's larger window.
   The [background prototype](docs/benchmarks/2026-10-04-background-text-drag.md) moved TextEdit text
-  4/4 after correcting its drop geometry, but joined `gammaalpha`. It remains outside the plugin.
+  4/4 after correcting its drop geometry, but joined `gammaalpha`. The product now uses that path
+  first and repairs the verified space. [Product trials](docs/benchmarks/2026-10-04-background-drag-product.md)
+  passed 3/3 TextEdit moves, with TextEdit inactive and the front app unchanged. The owner moved the
+  pointer during one trial; it was unchanged throughout the other two.
+  `CGEventSetWindowLocation` is a private macOS API. Missing symbols, invalid events or coordinates that fail the
+  round trip skip background posting and select foreground. Future macOS updates may
+  break this path. A changed, unreadable or lost text snapshot never permits a second drag.
+  Apps without a text snapshot report unverified background delivery and need a read to verify the
+  move. They do not repeat the drag automatically. Calculator content guards remain unmeasured.
+  Chess AX square coordinates were vertically reversed: two local posts and an engine control
+  at those points left e2 unchanged. Screenshot coordinates moved e2 to e4 through the product's
+  background path. Pointer and front app varied during that trial, so quiet Chess delivery remains
+  unmeasured. Use the engine's `app.drag` first for Chess, and read the board after any local post.
+  Chess save/close recovery selected another session's game even after the owned window's
+  `AXMain` and `AXRaise`. It refused further engine input. The last native read still found the
+  product fixture (window 240864) open on e4. Its save and close remain unverified.
 - There's no background hover, since engine events go to the app and the real pointer never moves. The skill covers
   most cases: tooltips are readable as `Help:` text in the UI state, and hover menus usually open through
   an element's secondary actions, a right-click or a key. Mouse-moved events posted to a background app
@@ -401,9 +418,10 @@ Source rules remember text fields and emitted values, then match exact substring
   `mcp__plugin_sleight_computer__js`, and allowing it means Claude can send any code without asking.
 - Per-app approvals apply however you've set up the `js` tool. An accepted approval lasts for the
   session ([Approval scope](#approval-scope)).
-- `drag`, `hover` and the `menu_bar` fallback for SwiftUI icons post real mouse events and move your pointer for
-  a moment. `drag` refuses to press when another window covers either endpoint or an endpoint falls
-  outside the chosen window's visible content. `hover` refuses points another window covers, including
+- Foreground `drag` fallback, `hover` and the `menu_bar` fallback for SwiftUI icons move your pointer
+  briefly. `drag` refuses points outside the chosen window's visible content; foreground also refuses
+  covered endpoints. Background PID events can reach covered content in the exact target window.
+  `hover` refuses points another window covers, including
   another window of the same app, and takes about two seconds with the default dwell.
 - The repo is small enough to read before you install it. It holds a launcher, a relay, a mod, a skill,
   two manifests and the macOS scripts for the approval panel, menu bar tools, drag and hover.
@@ -514,7 +532,7 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 - [x] Menu bar icons and notification banners, which the engine leaves out
 - [x] A fair benchmark against LCU, with each arm checked to load only its own tool
 - [x] Text drags: a drag of sleight's own that holds the mouse down and moves in steps
-- [ ] The same drag in the background, without moving the pointer
+- [x] TextEdit drags in the background, with verified text readback and foreground fallback
 - [ ] The pane, status line and `/sleight stop` in the desktop app, once its Claude Code reaches 2.1.287
 - [ ] Windows, if the ChatGPT app there includes the computer-use helper (unchecked)
 - [x] Approve one document instead of a whole app (`SLEIGHT_APPROVAL_SCOPE=document`, a guard against

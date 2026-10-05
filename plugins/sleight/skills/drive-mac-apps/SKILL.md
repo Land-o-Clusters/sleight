@@ -76,9 +76,15 @@ When the mouse has to stay down first, use sleight's `drag` tool: select the tex
 `drag` with the app, `windowId` from the window read, and window-relative `from` and `to` coordinates.
 Without `windowId`, multiple possible windows refuse and return their IDs, titles and bounds.
 Both endpoints must be in that window's visible content. TextEdit requires both inside the same
-text area and a non-whitespace text selection. It brings the app
-to the front and moves the user's pointer for about 4.5 seconds in the measured TextEdit calls,
-so prefer `app.drag` when that works. An AX tree above 300 elements or 12 levels refuses.
+text area and a non-whitespace text selection. For a line-end drop, use the final visible glyph's
+bounds plus a small right offset. Never use a zero-length end-of-line range, whose bounds may sit
+above the text. It tries PID posting with a 500 ms hold, without activating the app or warping the
+pointer. Product TextEdit trials passed 3/3 with the target inactive and the front app unchanged.
+It falls back to foreground only when TextEdit text is unchanged, or the private window-local API
+is unavailable before posting. Foreground takes the pointer briefly and restores it and the front
+app. The result names `path` and `fallbackReason`. Changed or unreadable text never permits a second
+drag. Other apps report unverified delivery: read the window to verify the move before continuing.
+Prefer `app.drag` when that works. An AX tree above 300 elements or 12 levels refuses.
 Cut and paste (`super+x`, click, `super+v`) is the fallback when the user declines. A word dropped at
 the end of a line gets a space after a verified unique whole-word move. Check other selections for
 spacing. If the tool reports that dragged text disappeared, press Cmd+Z in the window it identifies and

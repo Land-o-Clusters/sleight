@@ -4,6 +4,18 @@ import { callLocalTool, stopHelpers } from '../plugins/sleight/lib/launch.mjs';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
+test('background results never restore focus, including a changed-text failure', async () => {
+  for (const outcome of [{ ok: true, path: 'background' }, { ok: false, path: 'background', lostText: true, error: 'Cmd+Z' }, { ok: false, path: 'none', error: 'ambiguous' }]) {
+    const calls = [];
+    const result = await callLocalTool('drag', { app: 'TextEdit' }, async () => true, async (_script, args) => {
+      calls.push(args.op ?? 'drag');
+      return args.op === 'capture' ? { ok: true, previousPid: 99, targetPid: 7 } : outcome;
+    });
+    assert.deepEqual(calls, ['capture', 'drag']);
+    assert.match(result.content[0].text, new RegExp(outcome.path));
+  }
+});
+
 test('the launcher restores focus after a timed-out drag child', async () => {
   const calls = [];
   const result = await callLocalTool('drag', { app: 'Chess', from: [20, 40], to: [20, 80] }, async () => true, async (script, args) => {

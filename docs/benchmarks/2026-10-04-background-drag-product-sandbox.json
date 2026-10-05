@@ -1,0 +1,41 @@
+{
+  "mode": "text",
+  "started": "2026-10-04T23:15:46.269Z",
+  "runs": [
+    {
+      "n": 1,
+      "path": "/private/tmp/sleight-product-text-mskrP2/product-drag-1.txt",
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-product-text-mskrP2/product-drag-1.txt\nUnable to find application named 'TextEdit'\n",
+      "stdout": "",
+      "cleanupError": "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-product-text-mskrP2/product-drag-1.txt\n2026-10-04 19:15:46.575 osascript[25617:89313323] Connection Invalid error for service com.apple.hiservices-xpcservice.\n2026-10-04 19:15:46.575 osascript[25617:89313322] Error received in message reply handler: Connection invalid\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n"
+    },
+    {
+      "n": 2,
+      "path": "/private/tmp/sleight-product-text-mskrP2/product-drag-2.txt",
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-product-text-mskrP2/product-drag-2.txt\nUnable to find application named 'TextEdit'\n",
+      "stdout": "",
+      "cleanupError": "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-product-text-mskrP2/product-drag-2.txt\n2026-10-04 19:15:46.810 osascript[25655:89313385] Error received in message reply handler: Connection invalid\n2026-10-04 19:15:46.810 osascript[25655:89313387] Connection Invalid error for service com.apple.hiservices-xpcservice.\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n"
+    },
+    {
+      "n": 3,
+      "path": "/private/tmp/sleight-product-text-mskrP2/product-drag-3.txt",
+      "error": "Command failed: /usr/bin/open -g -a TextEdit /private/tmp/sleight-product-text-mskrP2/product-drag-3.txt\nUnable to find application named 'TextEdit'\n",
+      "stdout": "",
+      "cleanupError": "Command failed: /usr/bin/osascript bench/close-textedit-fixture.applescript /private/tmp/sleight-product-text-mskrP2/product-drag-3.txt\n2026-10-04 19:15:47.031 osascript[25660:89313403] Connection Invalid error for service com.apple.hiservices-xpcservice.\n2026-10-04 19:15:47.031 osascript[25660:89313401] Error received in message reply handler: Connection invalid\nbench/close-textedit-fixture.applescript:111:376: execution error: Can’t get application \"TextEdit\". (-1728)\n"
+    }
+  ],
+  "approvals": [
+    {
+      "message": "Allow Claude to drag in TextEdit? Background product fixtures.",
+      "decision": {
+        "hookEventName": "Elicitation",
+        "action": "accept",
+        "content": {}
+      }
+    }
+  ],
+  "transcript": [],
+  "exitCode": 1,
+  "lockReleased": true,
+  "finished": "2026-10-04T23:15:47.038Z"
+}
