@@ -15,7 +15,9 @@ const hasNumber = (answer, n) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(answer.re
 // it first puts its windows on the current desktop. It only quits a TextEdit
 // with no open documents, so it never closes one.
 function freshTextEdit() {
-  execFileSync('osascript', ['-e', 'if application "TextEdit" is running then tell application "TextEdit" to if (count documents) is 0 then quit']);
+  // A hung TextEdit times out here (2026-10-05); the run then goes ahead and its check records it.
+  try { execFileSync('osascript', ['-e', 'if application "TextEdit" is running then tell application "TextEdit" to if (count documents) is 0 then quit'], { timeout: 15000, stdio: 'ignore' }); }
+  catch { return; }
   for (let i = 0; i < 20; i++) {
     try { execFileSync('pgrep', ['-x', 'TextEdit']); } catch { return; } // pgrep exits 1 once it's gone
     execFileSync('sleep', ['0.25']);
