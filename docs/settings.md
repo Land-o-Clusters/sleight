@@ -1,0 +1,171 @@
+# Settings
+
+You don't need any of these. Each one changes how approvals or guards behave.
+
+## Approval scope
+
+Saying yes to an app approval allows that app for the rest of the Claude Code session. Claude Code's
+prompt doesn't mention that, but sleight's own panel does.
+
+The engine asks before every action on an app and doesn't remember your answers. In Codex, the app
+around the engine remembers "Allow for this session" and answers the repeats. Claude Code's prompt only
+has accept and decline, so without help you'd get asked on every click. The relay does the remembering:
+
+- After you accept an app, the relay answers later requests for the same app at the same risk level for
+  the rest of the session.
+- A different app, a riskier request for the same app, or a new Claude Code session asks you again.
+- It never remembers a decline or a cancel.
+- Approval memory stays in the relay and ends with the session.
+
+To get asked on every action instead, set `SLEIGHT_APPROVAL_SCOPE=once` in Claude Code's environment.
+The `env` block of `~/.claude/settings.json` works.
+
+Set `SLEIGHT_APPROVAL_SCOPE=document` to approve a document or window for the session instead.
+First call `js` with only `let app = await cua.getApp("TextEdit")`, then call `document_scope`:
+the prompt specifies the observed window
+and document URL. A different window stops further actions until you read it and ask the user again;
+`drag`, `hover`, `menu_bar`, `notifications` and resets are unavailable in this mode.
+`cua.getApp({ windowId: 123 })` does not work on macOS, so it cannot select a document here.
+For several windows, call `select_window` with `app` and an exact file `url` or `title`,
+then acquire the app and check its full Window and URL before `document_scope`.
+`SLEIGHT_SELECT_WINDOW=0` leaves the selection tool out.
+This guards mistakes in cooperative code. [The design](design/document-scope.md) lists what
+the relay enforces and how arbitrary JavaScript can bypass the checks.
+
+In the desktop app's Code tab, sleight asks with its own prompt instead: a small panel with
+sleight's icon, Allow and Don't Allow. It plays a sound and opens on the display under the pointer,
+over full-screen apps too. The Code tab (Claude 2.19675.0) declines MCP prompts without
+showing them, so a forwarded prompt would always come back as no. Return does nothing in sleight's
+panel, Escape means no, and it gives up after five minutes. Session memory works the same way.
+`SLEIGHT_APPROVAL_PROMPT=dialog` or `client` overrides the choice.
+
+## Preapproved apps
+
+Write `~/Library/Application Support/sleight/preapproved.json` yourself to allow selected apps without
+an approval prompt. This applies to interactive sessions too, including the desktop app's Code tab.
+Sample file:
+
+```json
+{
+  "version": 1,
+  "apps": [
+    { "app": "com.apple.calculator", "riskLevel": "low" },
+    { "app": "Calculator", "riskLevel": "low" }
+  ]
+}
+```
+
+Create the parent folder first and set the file's permissions to `600`. sleight refuses symlinks,
+files owned by someone else, and group- or world-writable files. Invalid files stop startup.
+It reads this fixed path once at startup. Edits take effect in a new session. No environment variable,
+project `settings.json` or plugin setting can select another file or add apps.
+
+App identifiers match exactly, including case. List the bundle ID in the engine's prompt and the name
+or path you use with local tools separately. There are no wildcards or inferred aliases.
+`riskLevel` is a ceiling: `low`, `medium`, then `high`. Higher, missing or unknown request levels still
+ask. `high` accepts every engine approval request for that app at a known risk level.
+Local `drag` and `menu_bar` approvals require `high`, since they can move the real
+pointer. This list does not approve notifications, document scope, change reviews or flow exceptions,
+and it cannot override the engine's app blocks.
+
+The list also applies with `SLEIGHT_APPROVAL_SCOPE=once`. Each grant goes to stderr and a grant audit,
+and the tool result tells Claude that the app was pre-approved by the user's list, even if the action
+fails. Each relay's audit at `~/Library/Logs/sleight/preapproved-<pid>.jsonl` contains grant fields only.
+It rotates at 64 KiB and keeps one prior file per process. Full relay tracing requires explicit `SLEIGHT_TRACE`.
+An audit write failure falls back to asking. List grants never send an engine persistence setting.
+
+## Review changes
+
+Set `SLEIGHT_CHANGE_REVIEW=1` to turn this on. It's off by default: with it on, both benchmark tasks that open a
+TextEdit file through the Open dialog were refused before editing (0/2 on 2026-10-03 and again on 2026-10-04).
+Read the intended window with a standalone `let app = await cua.getApp("TextEdit")` before editing.
+For a document with a `file://` URL, sleight saves a private copy before the first possible edit.
+Open dialogs and same-app sheets can proceed without a copy. If a file was first seen after an
+action, a fresh standalone read takes a later copy, and review shows where undo starts.
+Call `review_changes` with `op: "list"` to see text diffs or size/date summaries, or `op: "review"`
+to choose Keep, Undo or Later for each document in sleight's prompt. Only your prompt response can
+decide. Undo restores the saved copy if the file still matches the last agent action, then you
+must reopen it in the app. Snapshots last until the session ends.
+
+## Flow rules
+
+Write `~/Library/Application Support/sleight/flow-rules.json` yourself, outside the project, then set
+`SLEIGHT_FLOW_RULES=1` in Claude Code's environment. An absolute path selects another user-owned file.
+The relay reads it once before starting. Edits take effect in the next session. A sample file:
+
+```json
+{
+  "version": 1,
+  "rules": [
+    { "id": "contacts-mail", "kind": "source", "sources": ["Contacts"], "destinations": ["Mail"] },
+    { "id": "ssns", "kind": "pattern", "pattern": "\\b\\d{3}-\\d{2}-\\d{4}\\b", "destinations": ["*"], "except": ["1Password"] },
+    { "id": "cards", "kind": "pattern", "pattern": "\\b(?:\\d[ -]?){13,19}\\b", "destinations": ["*"], "except": ["1Password"] }
+  ]
+}
+```
+
+Rules stop matching literal transfers before forwarding and tell Claude which rule matched.
+`flow_exception` shows the exact stopped call for your decision. Allow Once permits one identical
+retry. Another call cancels it. Claude cannot grant an exception through tool arguments. Pattern
+rules accept optional regex `flags` (i/m/s/u). App names and observed bundle IDs ignore case.
+Source rules remember text fields and emitted values, then match exact substrings sent later.
+[The design](design/flow-rules.md) explains the gaps in literal checks and source attribution.
+
+## Driving apps the engine refuses
+
+The engine's helper refuses terminals (Terminal, iTerm2) and OpenAI's own apps (ChatGPT, Codex,
+Atlas, and their beta builds) before any approval prompt. That refusal is OpenAI's code, and sleight
+never modifies or wraps it. The `blocked_app` tool is sleight's own. It drives those apps through
+macOS Accessibility, the same path as `menu_bar` and `drag`, and its prompt is the whole opt-in.
+When Claude reaches a refused app, the relay says so in the result and offers `blocked_app`;
+nothing happens until you approve the app, and Allow puts it on the session allowlist like any other
+app.
+
+Once you approve, Claude can read the app's window (numbered elements plus a screenshot), click,
+type, press keys and scroll in it for the rest of the session. The prompt says what a yes means. For
+OpenAI's apps, it says the yes covers clicks in ChatGPT, approval buttons included. A yes for the
+session lets Claude answer Codex's approval dialogs by itself. Declines are never remembered.
+
+In a terminal, every key or text that can run a command (any typing, Return, paste, most chords) is
+shown to you first, exactly as it will be sent. The prompt offers Allow Once and Don't Allow, like
+Claude Code's Bash prompt. Those asks are never remembered and can't be pre-approved. Settings and
+preferences windows of these apps are refused, so Claude can't change their own approval or safety
+settings. Every action goes through the input leases and flow rules like sleight's other tools, and
+is logged to stderr and the trace. Actions that need the app in front (typing, keys, point clicks)
+bring it forward, check that the switch worked, and put your front app and pointer back, as `drag`
+does.
+
+One limit to keep in mind: the gate is your consent. It does not isolate the app. The engine still
+refuses these apps, and its own approvals, badges and background typing don't apply here. sleight's
+own code does the driving, with the limits above (Accessibility and Screen Recording permissions
+for the app that runs Claude Code, settings refusal by window title, toolbar and foreground typing).
+[The design](design/blocked-apps.md) has the details.
+
+### Fewer prompts: let the engine drive them
+
+If a prompt for every terminal command is too much, you can turn off the helper's refusal yourself.
+The setting belongs to OpenAI's helper, so Codex loses the refusal too. sleight never sets it.
+
+```bash
+defaults write -g ComputerUseAllowForbiddenTargets -bool YES
+```
+
+The helper reads it when it starts, and `--doctor` shows whether it's on. Then these apps go
+through the engine like any other app, with one approval per app for the session, and Claude types
+in the background without bringing the app forward. sleight's prompt tells you that a yes lets
+Claude run commands in a terminal for the rest of the session without asking again.
+
+sleight still refuses actions in these apps' settings windows. The relay checks the title of the
+window Claude last read against Terminal's pane names (General, Profiles and others) and the words
+Settings and Preferences. Like the other window guards, this check runs in cooperative code
+and is not a security boundary. To turn the setting back off:
+
+```bash
+defaults delete -g ComputerUseAllowForbiddenTargets
+```
+
+We tested it live on 2026-10-05 with engine 26.930.31730. Terminal ran an `echo` in the background
+2/2 and never came to the front. The prompt included the warning above. An action in Terminal's
+settings window was refused 1/1. OpenAI's apps reached the engine's approval prompt instead of its
+refusal, but driving them this way is untested. The setting is undocumented, so an engine update
+can remove it.

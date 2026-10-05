@@ -77,5 +77,5 @@ belong in [STATE.md](STATE.md).
 - Published results and logs show home paths as `~`. Check raw logs for personal data before publishing.
 - A guard that runs inside the engine's JavaScript can't be a security boundary, because Claude writes
   that code. Features built on one say so plainly; only the user decides approvals, keeps and undos.
-- Docs pass `npm run lint:prose` with zero flags. Limitations go in the README's "Known problems" when we
-  find them.
+- Docs pass `npm run lint:prose` with zero flags. Limitations go in `docs/known-problems.md` when we find
+  them.

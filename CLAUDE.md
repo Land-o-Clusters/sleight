@@ -16,7 +16,7 @@ Docs, skills, commit messages and anything else people read go through the same 
   rather than suppressing it. Add files to the script as the docs grow.
 - For a larger rewrite, use the humanizer skill in `.claude/skills/humanizer/`.
 - State facts we measured, with the number. Write "12/12 on four tasks", not "works reliably".
-- Put limitations in "Known problems" as soon as we find them, and say plainly what we don't know.
+- Put limitations in `docs/known-problems.md` as soon as we find them, and say plainly what we don't know.
 - Use commas, periods and parentheses where an em dash would go. Start list items with the point
   itself, without a bold label. State a claim directly, without first denying something nobody said.
 - Write less. The repo has a few hundred lines of code, and the docs shouldn't outweigh it.

@@ -74,7 +74,8 @@ Publishing it is the owner's call.
 
 ## Reading list
 
-- `README.md`: how it works, known problems, benchmark, update watch.
+- `README.md` for install and the pitch; `docs/how-it-works.md`, `docs/known-problems.md`,
+  `docs/settings.md` and `docs/benchmark.md` for the rest.
 - `CLAUDE.md`: checks and writing rules.
 - `plugins/sleight/lib/relay.mjs`: the relay, with the reasons for each thing it adds.
 - `plugins/sleight/lib/drag.js`: background and foreground drag paths and their guards.
