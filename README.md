@@ -581,7 +581,8 @@ don't mention a tool by name.
 
 Comparison with [LCU](https://github.com/amontlabs/lcu) 0.8.8, which drives the same engine, on
 2026-10-03. Each task ran 3 times per arm on Claude Code 2.1.288 and its default model (Opus 5.5).
-Each arm ran from an empty folder, with only its own tool loaded:
+Each arm ran from an empty folder with only its own tool loaded. Both folders were inside this repo,
+though, so both arms also loaded its CLAUDE.md and project memory (found 2026-10-05):
 
 | Task | sleight | LCU | sleight median | LCU median |
 |---|---|---|---|---|
@@ -605,8 +606,16 @@ ran inside this repo and read the project's memory. The Chess runs
 ([`2026-10-03-chess-drag.json`](docs/benchmarks/2026-10-03-chess-drag.json)) piled up Chess windows
 until it hung. Then a user-level sleight install leaked into the LCU arm and failed four of its runs
 ([`2026-10-03-fair-rerun.json`](docs/benchmarks/2026-10-03-fair-rerun.json) has those and the
-rerun). The benchmark now checks before every run that each arm loads only its own tool.
+rerun). The benchmark now checks before every run that each arm loads only its own tool and runs
+from a folder outside any git repo.
 LCU warned that this engine version is one it hasn't tested, and so is ours.
+
+The release check for 0.7.0 on 2026-10-05 (Sonnet 5.5, medium) passed 16 of 18 from a clean arm
+folder: 3/3 on every task except chess-drag, 1/3. Both Chess failures dragged the pawn to e5
+instead of e4, an illegal move, so the board didn't change. textedit-drag passed 3/3 in that pass
+and 3/3 in a rerun. Getting there took three earlier passes, which found a helper that wouldn't
+launch, two harness problems and the leaking arm folder.
+[The write-up](docs/benchmarks/2026-10-05-release-0.7.0.md) has every run.
 
 From 2026-10-04 on, runs default to Sonnet 5.5 at medium effort (`--model`, `--effort`).
 

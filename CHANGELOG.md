@@ -1,7 +1,51 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 (2026-10-05)
 
+Benchmark: 16/18 from a clean arm folder (Sonnet 5.5, medium). Every task passed 3/3 except
+chess-drag, 1/3; both failures dragged the pawn to e5, an illegal move
+(`docs/benchmarks/2026-10-05-release-0.7.0.md`, every run included).
+
+- `drag` tries a background drag first. It posts the drag to the app's process, with no activation
+  and no pointer move, and falls back to the foreground drag only when the text didn't change
+  (`docs/design/background-drag.md`). When another app's window covers either drag point, it goes
+  straight to the foreground drag and names that app, because macOS picks the drop target from
+  what's on screen: 0/3 background moves covered, 3/3 uncovered, on TextEdit. Both paths raise the
+  window chosen by `windowId` and refuse before pressing if it isn't on top at both points. Drags
+  that land outside the window's content, or in an ambiguous window, are refused. Lost text is
+  reported with a Cmd+Z hint, and TextEdit gets back the space after a verified one-word move to a
+  line end. Built by Codex. Locked window checks passed 8/8 (four refusals, four exact moves).
+  Stacked Chess games moved the chosen game 1/3, with the covering game unchanged in all three.
+- `hover`: a short real-pointer hover with a screenshot, for UI that only reacts to a real pointer,
+  after the skill's background options fail (`docs/design/hover.md`). It asks once per app and holds
+  the pointer for about 1.8 s. A point another window covers is refused. Built by Codex. A tooltip was absent at
+  1000 ms and readable at 1500 ms in one trial each, so 1500 ms is the default.
+- Pre-approved apps: a list you write at `~/Library/Application Support/sleight/preapproved.json`
+  approves apps up to a risk level without a prompt, in every session (`docs/design/preapproved-apps.md`).
+  No setting can point at another file. Grants go to a small audit log. Built by Codex. Live: listed
+  Calculator worked out 12 × 12 with audited grants, and was refused once taken off the list.
+- `select_window` raises one window of an app through Accessibility, since the engine rejects
+  `cua.getApp({ windowId })` on macOS. Built by Codex. 3/3 with the tool on TextEdit.
+- Browser surface: sleight turns on the engine's browser control when a ChatGPT browser extension is
+  connected at startup (`docs/design/browser-surface.md`). Native guards stay on for every call
+  until the engine's reply confirms a browser call. Built by Codex. In the live check Chrome and
+  Helium each opened a tab and clicked a link in it, and turn end closed both tabs.
+- Engine stall: after two read timeouts for an app, the relay stops sending its calls and tells
+  Claude to ask the user to restart ChatGPT, retrying one read itself at most every 20 s
+  (`docs/design/helper-health.md`). Built by Codex. 3/3 recovery trials.
+- Doctor runs a bounded live read. It now fails when the helper can't start, which it used to report
+  as "ok", and prints the `launchctl remove` command for the stale launchd job that caused that on
+  2026-10-05.
+- Clipboard preservation, opt-in with `SLEIGHT_CLIPBOARD=preserve`. Copy and Cut go to a private
+  session clipboard and the user's is put back (`docs/design/clipboard.md`). Off by default, since a
+  copy meant for the user wouldn't reach menu Paste or `pbpaste`. Built by Codex. 19/19 live, then
+  2/2 on the merged code. Each call takes about 230 ms longer.
+- Change review (still opt-in) takes its snapshot on a standalone re-read, so a file opened through
+  the Open dialog can be edited. Live: 4/4.
+- Benchmark harness: arm folders live outside any git repo, and `bench/run.mjs` refuses one inside.
+  Until now both arms ran from inside this repo and loaded its CLAUDE.md and project memory. The
+  approval hook also takes the three apps' bundle IDs, and TextEdit tasks quit an empty TextEdit
+  first so its windows open on the current desktop.
 - `blocked_app`: drives the apps the engine's helper refuses (Terminal, iTerm2, ChatGPT, Codex, Atlas
   and beta builds) through sleight's own macOS Accessibility path, the one `menu_bar` and `drag` use
   (`docs/design/blocked-apps.md`). The engine's refusal is OpenAI's code and is untouched, and
@@ -20,6 +64,7 @@
   stopped on a declined or timed-out consent. The Codex window read passed 1/1; its harmless click
   had no target, because the window exposed only window-control buttons to the walk.
   `docs/benchmarks/` has all the attempts, timeouts included, with personal paths scrubbed.
+- The CHANGELOG entries for 0.6.0 and earlier, lost in a merge, are back.
 
 ## 0.6.0 (2026-10-04)
 
