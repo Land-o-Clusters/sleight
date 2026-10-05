@@ -171,3 +171,12 @@ All named-window, off-Space, screenshot, cleanup and cancellation regressions
 ran against the merged code. Live attempts and failures above remain published.
 
 The next prose run flagged the table dash, exit 1. It was replaced with `n/a`.
+
+
+The separate focused rerun passed 63/63, exit 0. Prose lint passed across
+35 files, exit 0. Main then advanced to `b234f55`. Rebasing onto it exited 0.
+The full check on that base passed 531/531 unit tests, both manifest validations
+and 8 mod tests, exit 0. Prose lint again passed, exit 0. Main's relay and launch
+files match exactly, and the prose list retains every file from both branches.
+
+The verification addition had one prose flag, exit 1. It was corrected.
