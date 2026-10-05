@@ -20,6 +20,11 @@ export function windowFromText(text) {
   return windows[0];
 }
 
+// Element number -> line text without the number, for one tree.
+export function elementLines(text) {
+  return new Map(text.split('\n').map(line => /^(\t*)(\d+) (.*)$/.exec(line)).filter(Boolean).map(m => [Number(m[2]), m[3]]));
+}
+
 export const documentKey = window => window && JSON.stringify(window);
 export const documentLabel = window => `${JSON.stringify(window.title)} in ${window.app}${window.url ? ` (${window.url})` : ''}`;
 
@@ -76,6 +81,9 @@ function guardSetup(update) {
     // Full reads taken in this call since the handle's last action. A new call
     // always reads again, because the user may have changed the window between.
     state.reads = new WeakMap();
+    // Element lines at this call's first action, which Claude's numbers refer to.
+    state.callElements = new WeakMap();
+    const elements = ${elementLines.toString()};
     const checkNative = () => { if (state.nativeDenied) throw new Error(state.nativeDenied); };
     const checkLease = async () => {
       if (!state.lease) return;
@@ -123,6 +131,13 @@ function guardSetup(update) {
           }
           const text = state.reads.get(proxy)?.text ?? await raw.getAXState({ disableDiffing: true, emit: false });
           const observed = parse(text);
+          // An earlier action in this call can renumber the window (Calculator closes
+          // its history and every button shifts), so a batch of numbers goes stale.
+          if (!state.callElements.has(proxy)) state.callElements.set(proxy, elements(text));
+          else if (typeof args[0] === 'number') {
+            const was = state.callElements.get(proxy).get(args[0]), now = elements(text).get(args[0]);
+            if (was !== now) throw new Error('sleight stopped before ' + name + '(' + args[0] + '): an earlier action in this call changed what element ' + args[0] + ' is (was ' + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + '). Read the window again and use its current numbers.');
+          }
           const cancel = state.fileOnly && isCancel(name, args, text);
           if (state.cancelOnly && !cancel) throw new Error('Change review: Cancel target changed. Read the current window before retrying.');
           const dialog = state.fileOnly && observed?.app === state.expected?.app && !observed.url?.startsWith('file://');

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.0 (2026-10-05)
+
+- A batch of clicks stops when an earlier action in the same call renumbers its target. Before each
+  action the guard compares the element at that number with the one at the call's first action.
+  Recording the demo, two takes garbled Calculator: the first click closed its history sidebar,
+  every button shifted, and the rest of an 11-click batch hit the wrong keys. In the next take
+  sleight stopped the batch at the second click, and Claude read again and got 1234 × 5678 right.
+  Benchmark 12/12 (`docs/benchmarks/2026-10-05-release-0.12.0.json`), though no run there batched clicks.
+
 ## 0.11.0 (2026-10-05)
 
 - Fewer reads per call. A read Claude makes is now a full read the relay turns into changed lines,

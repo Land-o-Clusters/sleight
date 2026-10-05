@@ -142,3 +142,20 @@ test('a window that only gains a URL mid-call stays the same window, unless docu
   await assert.rejects(run(guardedCode('await app.pressKey("a");', window, 'stopped', undefined, { adoptUrl: true })), /stopped/,
     'a different title is still a different window');
 });
+
+test('a batch stops when an earlier action in the call renumbers its target', async () => {
+  let shifted = false; const clicked = [];
+  const tree = () => ['Window: "Calculator", App: Calculator.', '0 standard window Calculator',
+    ...(shifted ? [] : ['\t1 list HistoryView']), ...['7', '8', '9'].map((k, i) => `\t${i + (shifted ? 1 : 2)} button ${k}`)].join('\n');
+  const raw = { getAXState: async () => tree(), click: async n => { clicked.push(n); shifted = true; } };
+  const context = { cua: { getApp: async () => raw }, nodeRepl: { write: () => {} } };
+  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  await run(readCode('await cua.getApp("Calculator");'));
+  const window = { title: 'Calculator', app: 'Calculator', url: null };
+  await assert.rejects(run(guardedCode('for (const i of [2, 3, 4]) await app.click(i);', window)),
+    /stopped before click\(3\).*was "button 8", now "button 9"/);
+  assert.deepEqual(clicked, [2], 'only the first click ran');
+  clicked.length = 0;
+  await run(guardedCode('await app.click(1); await app.click(1);', window));
+  assert.deepEqual(clicked, [1, 1], 'an unchanged target goes through');
+});

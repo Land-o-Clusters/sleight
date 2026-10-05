@@ -75,8 +75,9 @@ then start a new session. A running session keeps the version it started with.
   others who holds it. With two sessions typing into one document, text doubled in 5/5 trials
   without leases and appeared once in 5/5 with them.
 - It refuses to click a stale element. When a window's element numbers shift, sleight stops actions
-  on numbers Claude hasn't seen since. In the benchmark this caught two clicks that would have hit
-  the menu item next to the intended one.
+  on numbers Claude hasn't seen since, including later clicks in a batch that an earlier click
+  renumbered. In the benchmark this caught two clicks that would have hit the menu item next to the
+  intended one.
 - It's light on context. After each action Claude gets only what changed. On the CNN front page,
   scrolling down five times sent 39,655 characters instead of 203,160.
 - It asks once per app per session. A list you write yourself can pre-approve apps. Terminals and
