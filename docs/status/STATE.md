@@ -3,10 +3,11 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-05, 0.8.0 released)
+## Banner (2026-10-05, 0.9.0 released)
 
-Public: `Land-o-Clusters/sleight`. Latest release `v0.8.0` (`3343e22`, CI green). Installed on this
-Mac at user scope: 0.8.0 (doctor ok). Promotion starts next (owner, 2026-10-05).
+Public: `Land-o-Clusters/sleight`. Latest release `v0.9.0` (`228251a`, CI green). Installed on this
+Mac at user scope: 0.9.0. 0.9.0 sends the guard's after-action read as changed lines (12/12
+benchmark, result text down 1 to 23% on TextEdit and Chess, browser pages unmeasured). Promotion starts next (owner, 2026-10-05).
 
 0.8.0 adds the opt-in engine path for terminals and OpenAI's apps: the user sets the helper's own
 `ComputerUseAllowForbiddenTargets` default, and sleight warns in the prompt and refuses settings
@@ -21,9 +22,8 @@ arms moved out of the repo (release check 16/18). 0.8.0 runs: TextEdit hung 2/2 
 
 Next, in order:
 
-- Token cost: the window guard appends a full, non-diffed tree after every `js` action
-  (`document-scope.mjs` `guardedCode`). Another session complained about it. A fix has to keep the
-  engine's diff baseline in sync with what Claude saw (LAWS, "The engine").
+- Measure 0.9.0's savings on a busy browser page. That needs a browser the owner approves live,
+  since none is on the benchmark's allowlist.
 - The relay reads an app hang (TextEdit's Duplicate deadlock) as a stuck helper and tells Claude to
   ask for a ChatGPT restart. It could check whether the app answers before saying so.
 - Chess square estimates (chess-drag 1/3 in the 0.7.0 check).
@@ -46,7 +46,7 @@ Publishing it is the owner's call.
   the engine's API docs (`~/Library/Logs/sleight/engine-api-26.930.31730.md` is the baseline) and
   diffs them on an engine update. Remove with `npm run watch:remove`.
 - `~/Library/Application Support/sleight/preapproved.json` lists Calculator at `high`, written by the
-  owner for Codex 9's live check on 2026-10-04. The installed 0.8.0 reads it, so Calculator is
+  owner for Codex 9's live check on 2026-10-04. The installed 0.9.0 reads it, so Calculator is
   approved without a prompt in every session until the owner edits the file.
 - LCU 0.8.8 runtime-only at `~/.local/share/lcu`, registered only in `.dev/lcu-arm` (untracked),
   which the benchmark now refuses because it's inside the repo.
