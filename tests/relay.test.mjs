@@ -254,6 +254,34 @@ test('hidden recovery forces a visible full AX read before actions can resume', 
   h.relay.dispose();
 });
 
+test('hidden helper recovery cannot create a later copy or erase another app dialog state', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const path = join(fixtureRoot, 'helper-late-copy.txt');
+  writeFileSync(path, 'before\n');
+  const header = `Window: "helper-late-copy.txt", App: TextEdit\nURL: ${pathToFileURL(path).href}\n63 button Cancel, ID: CancelButton`;
+  const h = harness();
+  helperRead(h, 1, 'let app = await cua.getApp("TextEdit")');
+  helperReply(h, 1, 'Window: "Untitled", App: TextEdit', false);
+  helperRead(h, 2, 'let calc = await cua.getApp("Calculator")'); helperReply(h, 2);
+  helperRead(h, 3, 'await calc.getAXState()'); helperReply(h, 3);
+  helperRead(h, 4, 'await app.click(64)'); helperReply(h, 4, header, false);
+  assert.equal(h.relay.snapshotDirectory, undefined, 'late document is still uncaptured');
+  t.mock.timers.tick(20000);
+  helperReply(h, h.toServer.at(-1).id, 'Window: "Calculator", App: Calculator', false);
+  assert.equal(h.relay.snapshotDirectory, undefined, 'a hidden Calculator read cannot capture TextEdit');
+  helperRead(h, 5, 'await app.typeText("edit")');
+  assert.equal(h.toServer.some(m => m.id === 5), false, 'editing still needs a visible late-document read');
+  helperRead(h, 6, 'await app.click(63)');
+  assert.equal(h.toServer.at(-1).id, 6, 'the cached Cancel button remains usable');
+  helperReply(h, 6, header, false);
+  helperRead(h, 7, 'await app.getAXState({disableDiffing:true})'); helperReply(h, 7, header, false);
+  assert.ok(h.relay.snapshotDirectory, 'the visible TextEdit read takes its later copy');
+  helperRead(h, 8, 'await app.typeText("edit")');
+  assert.equal(h.toServer.at(-1).id, 8);
+  helperReply(h, 8, header, false);
+  h.relay.dispose();
+});
+
 test('a successful helper read resets consecutive timeouts, but documentation does not', () => {
   const h = harness();
   helperRead(h, 1); helperReply(h, 1);

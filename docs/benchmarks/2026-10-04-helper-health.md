@@ -89,3 +89,39 @@ reported one flag (exit 1), which was corrected.
 Final checks passed 204 unit tests, both plugin validations and 8 mod tests (`npm run check`, exit 0).
 Prose lint passed with no flags (`npm run lint:prose`, exit 0). The initial rebase stopped at the
 package conflict (exit 1), and continuation succeeded after preserving both file lists (exit 0).
+
+## Rebase after the background drag merge
+
+The new base is `origin/main` at `562f423`, the status update after `7540224`. Both commits are
+ancestors of this branch. Conflict resolution retains the pre-approved list and grant audit,
+the `options.once` prompts, change review's later copies and dialog handling, launcher tools
+and drag focus capture. `drag.js` matches main, including background drag and foreground fallback.
+The prose-lint command contains all 29 files from both sides, and the hover build script remains.
+The first replay and its continuation each stopped at a conflict (exit 1); the final continuation
+completed (exit 0).
+
+A new test checks the overlap between hidden helper reads and change review. A hidden Calculator
+recovery must not capture an uncaptured TextEdit file or replace its cached Cancel button. A visible
+TextEdit read still takes the later copy. Removing the automatic-read exclusion made that test fail
+at the snapshot assertion (exit 1). Its first fixture also used an alternate handle where the
+existing Cancel grammar requires `app`; the focused run and first full check each failed that
+assertion (exit 1). After correcting the fixture, the regression test and all 107 focused helper tests
+passed (exit 0).
+
+The next full check passed 361/362 tests but failed main's process-cleanup readiness assertion
+(exit 1). Its 300 ms timeout elapsed before the child printed `ready`. All four tests in that file
+passed in isolation (exit 0). The full check was then repeated without another test or live run
+in parallel. The process-cleanup code remains as merged from main.
+
+| Attempt | Result | Exit |
+|---|---|---|
+| [Merged sandbox smoke](2026-10-04-helper-smoke-sleight-helper-health-9FTZ7q.json) | Engine startup failed with `sandbox_apply: Operation not permitted`. The owned engine exited 0 and the lock was released | 1 |
+| [Merged host smoke](2026-10-04-helper-smoke-sleight-helper-health-ExDq7Z.json) | 3/3 Calculator reads and 3/3 doctor probes passed. All owned engines exited 0 and the lock was released | 0 |
+
+The host smoke used the same locked runner after the sandbox denial. No helper signals or ChatGPT
+restarts occurred. Both receipts use `~` for home paths.
+
+Final `npm run check` passed all 362 unit tests, both plugin validations and 8 mod tests (exit 0).
+The first prose pass on this rebase report found two flags (exit 1). The next pass found one
+punctuation flag (exit 1). Those sentences were revised. Final prose lint passed all 29 files
+with no flags (`npm run lint:prose`, exit 0).
