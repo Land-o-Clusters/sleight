@@ -1,0 +1,7 @@
+{
+  "input": "docs/benchmarks/2026-10-04-drag-raise-live-5.json",
+  "verification": {"ok": true, "running": false, "windows": []},
+  "closedAllOpenedWindows": true,
+  "verificationExitCode": 0,
+  "note": "A fresh native snapshot under the retained lock found Chess no longer running. Its fixture windows are gone. The cause of the Chess exit is unknown."
+}

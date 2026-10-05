@@ -1,0 +1,75 @@
+{
+  "input": "docs/benchmarks/2026-10-04-drag-raise-live-5.json",
+  "paths": [
+    "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-target.game",
+    "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-cover.game"
+  ],
+  "cleanup": [
+    {
+      "path": "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-target.game",
+      "result": {
+        "alreadyClosed": true,
+        "ok": true
+      }
+    },
+    {
+      "path": "/private/tmp/sleight-chess-stacked-p2i9xL/sleight-stacked-1-cover.game",
+      "result": {
+        "alreadyClosed": true,
+        "ok": true
+      }
+    }
+  ],
+  "finalChess": {
+    "ok": true,
+    "running": true,
+    "windows": [
+      {
+        "id": 242718,
+        "title": ""
+      },
+      {
+        "id": 242717,
+        "title": ""
+      },
+      {
+        "id": 242716,
+        "title": ""
+      },
+      {
+        "id": 242715,
+        "title": ""
+      },
+      {
+        "id": 242714,
+        "title": ""
+      },
+      {
+        "id": 242713,
+        "title": ""
+      },
+      {
+        "id": 242712,
+        "title": ""
+      },
+      {
+        "id": 242796,
+        "title": "[unowned Chess window]"
+      },
+      {
+        "id": 242726,
+        "title": ""
+      },
+      {
+        "id": 242710,
+        "title": "sleight-stacked-1-target.game | Sleight White - Sleight Black   (White to Move)"
+      },
+      {
+        "id": 242711,
+        "title": ""
+      }
+    ]
+  },
+  "closedAllOpenedWindows": true,
+  "exitCode": 0
+}

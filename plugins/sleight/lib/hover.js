@@ -51,8 +51,9 @@ function performHover(request, native) {
   return result;
 }
 
-function windowList() {
-  const list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly | $.kCGWindowListExcludeDesktopElements, 0));
+function windowList(onScreenOnly = true) {
+  const options = onScreenOnly ? $.kCGWindowListOptionOnScreenOnly : $.kCGWindowListOptionAll;
+  const list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo(options | $.kCGWindowListExcludeDesktopElements, 0));
   const out = [];
   for (let i = 0; i < list.count; i++) {
     const w = list.objectAtIndex(i);
@@ -81,7 +82,11 @@ function nativeHover() {
     },
     point(target, at, windowTitle) {
       const own = windowList().filter(w => w.pid === target.pid && w.layer === 0);
-      if (!own.length) throw new Error('the app has no window on screen');
+      if (!own.length || (windowTitle !== undefined && !own.some(w => w.title === windowTitle))) {
+        const offScreen = windowList(false).filter(w => w.pid === target.pid && w.layer === 0 && (windowTitle === undefined || w.title === windowTitle));
+        if (offScreen.length) throw new Error('the window is off screen, on another desktop or Space (or hidden/minimized). Hover needs that window on screen; bring it to the current desktop first');
+        if (!own.length) throw new Error('the app has no window; open one on the current desktop before hovering');
+      }
       if (windowTitle === undefined && own.length !== 1) throw new Error('more than one window is on screen; supply an exact window title');
       const matches = windowTitle === undefined ? own : own.filter(w => w.title === windowTitle);
       if (!matches.length) throw new Error('no on-screen window matches that title');

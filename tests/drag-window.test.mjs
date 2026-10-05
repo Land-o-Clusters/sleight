@@ -5,11 +5,13 @@ import vm from 'node:vm';
 
 // Only the native AX/CG boundary is replaced. run() does the real selection,
 // validation, coordinate conversion, mouse sequence and post-drop check.
-function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', setterFails = false, readFails = false, postFails = false, releaseFails = false, changeOnActivate = false, second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection = 'alpha', repairDeletesText = false, movedOnActivate = false, coveredEnd = false, splitAreas = false, missingContent = false, extraElements = 0, appId = 'com.apple.TextEdit' } = {}) {
-  const events = [], restored = [], activations = [], pidEvents = [];
+function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', setterFails = false, readFails = false, postFails = false, releaseFails = false, changeOnActivate = false, second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection = 'alpha', repairDeletesText = false, movedOnActivate = false, coveredEnd = false, coveredPid = 7, splitAreas = false, missingContent = false, extraElements = 0, stacked = false, raiseWorks = true, raiseActivates = false, offSpace = false, noWindows = false, appId = 'com.apple.TextEdit' } = {}) {
+  const events = [], restored = [], activations = [], pidEvents = [], mainWrites = [];
   let visited = 0;
+  let mainId = 22;
   let order = [22, 11];
   const frames = new Map([[11, { X: 100, Y: 100, Width: 600, Height: 400 }], [22, { X: 900, Y: 200, Width: 800, Height: 500 }]]);
+  if (stacked) frames.set(22, { ...frames.get(11) });
   const values = new Map([[11, before], [22, before]]);
   const selected = new Map([[11, selection], [22, selection]]);
   const proc = { windows: () => (second ? [11, 22] : [11]).map(id => {
@@ -29,11 +31,14 @@ function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', se
     const toolbar = { role: () => 'AXToolbar', position: () => [b.X, b.Y + 20], size: () => [b.Width, 10], uiElements: () => [] };
     return {
       role: () => 'AXWindow', position: () => [b.X, b.Y], size: () => [b.Width, b.Height], name: () => `${id}.txt`,
-      attributes: { byName: name => ({ value: () => name === 'AXWindowNumber' ? id : null }) },
+      attributes: { byName: name => ({
+        get value() { return () => name === 'AXWindowNumber' ? id : name === 'AXMain' ? mainId === id : null; },
+        set value(value) { assert.equal(name, 'AXMain'); assert.equal(value, true); mainWrites.push(id); mainId = id; },
+      }) },
       uiElements: () => missingContent ? [toolbar] : [toolbar, area, ...Array.from({ length: extraElements }, () => ({
         role: () => { visited++; return 'AXButton'; }, subrole: () => '',
         position: () => [b.X + 10, b.Y + 32], size: () => [10, 10], uiElements: () => [],
-      })), ...(splitAreas ? [{ ...area, position: () => [b.X + 5, b.Y + 180] }] : [])], actions: { byName: () => ({ perform: () => { order = [id, ...order.filter(n => n !== id)]; } }) },
+      })), ...(splitAreas ? [{ ...area, position: () => [b.X + 5, b.Y + 180] }] : [])], actions: { byName: () => ({ perform: () => { if (raiseWorks) order = [id, ...order.filter(n => n !== id)]; if (raiseActivates) $.NSWorkspace.sharedWorkspace.frontmostApplication = target; } }) },
     };
   }) };
   const previous = { isNil: () => false, processIdentifier: 99, activateWithOptions: () => restored.push('app') };
@@ -72,12 +77,12 @@ function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', se
     Application: () => ({ processes: { whose: () => [proc] } }) });
   vm.runInContext(readFileSync(new URL('../plugins/sleight/lib/drag.js', import.meta.url), 'utf8'), context);
   context.findApp = () => target;
-  context.windows = () => [
-    ...(coveredEnd ? [{ id: 33, pid: 7, owner: 'TextEdit', title: 'cover.txt', layer: 0, bounds: { X: 210, Y: 130, Width: 40, Height: 40 } }] : []),
+  context.windows = onScreenOnly => noWindows || (onScreenOnly && offSpace) ? [] : [
+    ...(coveredEnd ? [{ id: 33, pid: coveredPid, owner: coveredPid === 7 ? 'TextEdit' : 'Other app', title: 'cover.txt', layer: 0, bounds: { X: 210, Y: 130, Width: 40, Height: 40 } }] : []),
     ...order.filter(id => second || id === 11).map(id => ({ id, pid: 7, owner: 'TextEdit', title: `${id}.txt`, layer: 0, bounds: { ...frames.get(id) } })),
   ];
   const run = changes => JSON.parse(context.run([JSON.stringify({ app: 'TextEdit', from: [26.6, 38.5], to: [119, 38.5], ...changes })]));
-  return { run, events, restored, activations, pidEvents, values, visits: () => visited };
+  return { run, events, restored, activations, pidEvents, values, mainWrites, visits: () => visited };
 }
 test('background text move uses PID posting, repairs spacing and never activates or warps', () => {
   const h = harness({ background: true }); const r = h.run({ windowId: 11 });
@@ -229,4 +234,65 @@ test('large AX trees refuse before pressing after at most 300 elements and resto
 test('a refusal states nothing was pressed exactly once', () => {
   const h = harness(); const result = h.run({ windowId: 11, to: [119, 10] });
   assert.equal(result.error.match(/nothing was pressed/g)?.length, 1);
+});
+test('stacked Chess and TextEdit windows make the named window main before dragging', () => {
+  for (const appId of ['com.apple.Chess', 'com.apple.TextEdit']) {
+    const h = harness({ stacked: true, appId });
+    const result = h.run({ windowId: 11 });
+    assert.equal(result.ok, true, result.error);
+    assert.deepEqual(h.mainWrites, [11]);
+    assert.equal(h.values.get(11), 'beta gamma alpha\n');
+    assert.equal(h.values.get(22), 'alpha beta gamma\n');
+  }
+});
+test('a raise that leaves another stacked same-app window in front refuses before pressing', () => {
+  for (const appId of ['com.apple.Chess', 'com.apple.TextEdit']) {
+    const h = harness({ stacked: true, raiseWorks: false, appId });
+    const result = h.run({ windowId: 11 });
+    assert.equal(result.ok, false); assert.match(result.error, /covered|topmost/i);
+    assert.equal(h.events.length, 0); assert.ok(h.restored.includes('app'));
+  }
+});
+test('an off-Space window is distinguished from an app with no window before any activation', () => {
+  const hidden = harness({ offSpace: true });
+  const result = hidden.run({ windowId: 11 });
+  assert.equal(result.ok, false); assert.match(result.error, /another desktop or Space/i);
+  assert.match(result.error, /on screen/i); assert.equal(hidden.events.length, 0); assert.equal(hidden.restored.length, 0);
+  const empty = harness({ noWindows: true });
+  assert.match(empty.run({}).error, /has no window/);
+  assert.doesNotMatch(empty.run({}).error, /another desktop or Space/);
+});
+test('background posting raises the named stacked Chess and TextEdit window without HID input', () => {
+  for (const appId of ['com.apple.Chess', 'com.apple.TextEdit']) {
+    const h = harness({ background: true, stacked: true, backgroundAfter: 'beta gamma alpha\n', appId });
+    const result = h.run({ windowId: 11 });
+    assert.equal(result.ok, true, result.error); assert.equal(result.path, 'background');
+    assert.deepEqual(h.mainWrites, [11]);
+    assert.equal(h.values.get(11), 'beta gamma alpha\n'); assert.equal(h.values.get(22), 'alpha beta gamma\n');
+    assert.equal(h.events.length, 0); assert.equal(h.activations.length, 0);
+  }
+});
+test('a failed background raise refuses at both same-app endpoints before PID or HID pressing', () => {
+  for (const options of [{ stacked: true, raiseWorks: false }, { coveredEnd: true }]) {
+    const h = harness({ background: true, ...options }); const result = h.run({ windowId: 11 });
+    assert.equal(result.ok, false); assert.match(result.error, /covered|topmost/i);
+    assert.equal(h.pidEvents.length, 0); assert.equal(h.events.length, 0);
+  }
+});
+test('background still posts to the named window when only another app covers the destination', () => {
+  const h = harness({ background: true, coveredEnd: true, coveredPid: 99 }); const result = h.run({ windowId: 11 });
+  assert.equal(result.ok, true, result.error); assert.equal(result.path, 'background'); assert.equal(h.events.length, 0);
+});
+test('the prior front app is restored if AXRaise brings a background target forward, even on refusal', () => {
+  for (const coveredEnd of [false, true]) {
+    const h = harness({ background: true, raiseActivates: true, coveredEnd }); h.run({ windowId: 11 });
+    assert.ok(h.restored.includes('app')); assert.equal(h.events.length, 0);
+  }
+});
+test('off-Space diagnosis precedes both background and foreground event construction', () => {
+  for (const background of [false, true]) {
+    const h = harness({ background, offSpace: true }); const result = h.run({ windowId: 11 });
+    assert.match(result.error, /another desktop or Space/); assert.equal(h.pidEvents.length, 0);
+    assert.equal(h.events.length, 0); assert.equal(h.mainWrites.length, 0);
+  }
 });

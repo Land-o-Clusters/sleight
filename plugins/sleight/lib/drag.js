@@ -208,6 +208,19 @@ function checkWindow(main, pid, win) {
   return list;
 }
 
+function raiseWindow(win) {
+  attempt(() => { win.attributes.byName('AXMain').value = true; });
+  win.actions.byName('AXRaise').perform();
+}
+
+function exposedEndpoints(list, main, points, sameAppOnly) {
+  for (const [name, point] of [['from', points.start], ['to', points.end]]) {
+    const top = list.find(w => inside(w.bounds, point) && !/Computer Use$/.test(w.owner) &&
+      (!sameAppOnly || w.pid === main.pid));
+    if (!top || top.id !== main.id || top.pid !== main.pid) throw new Error(`${name} is covered by another window; nothing was pressed`);
+  }
+}
+
 function run(argv) {
   let previous = null, saved = null, pid = null, pressed = false, didPress = false, post = null, current = null;
   let path = 'none', fallbackReason = null;
@@ -229,19 +242,25 @@ function run(argv) {
     if (!target) throw new Error(`${app} isn't running`);
     pid = target.processIdentifier;
     const own = windows(true).filter(w => w.pid === pid && w.layer === 0);
-    if (!own.length) throw new Error(`${app} has no window on screen`);
+    if (!own.length || (request.windowId !== undefined && !own.some(w => w.id === request.windowId))) {
+      const offScreen = windows(false).filter(w => w.pid === pid && w.layer === 0 && (request.windowId === undefined || w.id === request.windowId));
+      if (offScreen.length) throw new Error(`${app}'s window is off screen, on another desktop or Space (or hidden/minimized). Drag needs that window on screen; bring it to the current desktop first`);
+      if (!own.length) throw new Error(`${app} has no window; open one on the current desktop before dragging`);
+    }
     let main = resolveWindow(own, request);
     const win = axWindow(pid, main);
     let build;
     try { build = backgroundBuilder(); }
     catch (e) { fallbackReason = `background unavailable: ${e.message || e}`; }
     if (build) {
+      previous = $.NSWorkspace.sharedWorkspace.frontmostApplication;
+      raiseWindow(win);
       delay(settleMs / 1000);
       checkWindow(main, pid, win);
       const points = validatePoints(content(win, main.bounds), main.bounds, from, to, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit');
-      // Content checks apply to both paths. PID events target this exact window
-      // even when another app covers it; HID events require exposed endpoints.
-      checkWindow(main, pid, win);
+      // Other apps may cover PID delivery, but another document of this app
+      // must not receive the press. Check fresh own-app order at both ends.
+      exposedEndpoints(checkWindow(main, pid, win), main, points, true);
       let sequence;
       try {
         const moves = Array.from({ length: steps }, (_, i) => ({
@@ -300,10 +319,13 @@ function run(argv) {
     unchangedText();
     path = 'foreground';
     const ws = $.NSWorkspace.sharedWorkspace;
-    previous = ws.frontmostApplication;
+    previous = previous || ws.frontmostApplication;
     saved = $.CGEventGetLocation($.CGEventCreate(null));
     target.activateWithOptions(0);
-    win.actions.byName('AXRaise').perform();
+    // AXRaise alone can leave another stacked document as the app's main window.
+    // Some apps expose AXMain as read-only, so coverage still decides whether
+    // the raise succeeded. Never ignore a covering window of the same app.
+    raiseWindow(win);
     // Right after the engine acts (say, selecting the text), a press that comes
     // at once doesn't take; 2 s later it does (2026-10-04). Wait for things to settle.
     delay(settleMs / 1000);
@@ -315,10 +337,7 @@ function run(argv) {
     const currentWindows = windows(true);
     const unchanged = currentWindows.find(w => w.id === main.id && w.pid === pid);
     if (!unchanged || !sameBounds(unchanged.bounds, main.bounds)) throw new Error('the chosen window moved during validation; read it again');
-    for (const [name, point] of [['from', start], ['to', end]]) {
-      const top = currentWindows.find(w => inside(w.bounds, point) && !/Computer Use$/.test(w.owner));
-      if (!top || top.id !== main.id || top.pid !== pid) throw new Error(`${name} is covered by another window; nothing was pressed`);
-    }
+    exposedEndpoints(currentWindows, main, { start, end }, false);
     post = (type, p) => {
       const e = $.CGEventCreateMouseEvent(null, type, $.CGPointMake(p.x, p.y), $.kCGMouseButtonLeft);
       $.CGEventSetIntegerValueField(e, 1, 1); // click state
@@ -347,6 +366,9 @@ function run(argv) {
   } finally {
     if (pressed && post) attempt(() => post($.kCGEventLeftMouseUp, current));
     if (saved) attempt(() => $.CGWarpMouseCursorPosition(saved));
-    if (previous && !previous.isNil() && previous.processIdentifier !== pid) attempt(() => previous.activateWithOptions(0));
+    if (previous && !previous.isNil() && previous.processIdentifier !== pid &&
+        (path === 'foreground' || attempt(() => $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier, null) === pid)) {
+      attempt(() => previous.activateWithOptions(0));
+    }
   }
 }

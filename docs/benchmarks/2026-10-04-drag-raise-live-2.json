@@ -1,0 +1,20 @@
+{
+  "started": "2026-10-04T23:50:31.329Z",
+  "runs": [],
+  "approvals": [
+    {
+      "message": "Allow Claude to drag in Chess? It moves your pointer for a few seconds.",
+      "action": "accept"
+    }
+  ],
+  "trace": [
+    {
+      "t": "2026-10-04T23:50:31.441Z",
+      "direction": "change-snapshots-deleted",
+      "message": {}
+    }
+  ],
+  "error": "Error Domain=Accessibility unavailable; fixture stopped before opening a game Code=1 \"(null)\"",
+  "finished": "2026-10-04T23:50:31.441Z",
+  "exitCode": 1
+}

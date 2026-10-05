@@ -1,0 +1,537 @@
+{
+  "started": "2026-10-05T03:54:02.048Z",
+  "runs": [
+    {
+      "n": 1,
+      "paths": [
+        "/private/tmp/sleight-chess-stacked-cGmjqM/sleight-stacked-1-target.game",
+        "/private/tmp/sleight-chess-stacked-cGmjqM/sleight-stacked-1-cover.game"
+      ],
+      "placements": [
+        {
+          "bounds": [
+            100,
+            100,
+            1269,
+            984
+          ],
+          "ok": true,
+          "squares": [
+            {
+              "center": [
+                777.66162109375,
+                418.4407043457031
+              ],
+              "title": "white pawn, e2"
+            },
+            {
+              "center": [
+                775.3224182128906,
+                571.8534088134766
+              ],
+              "title": "e4"
+            }
+          ],
+          "title": "sleight-stacked-1-target.game | Sleight White - Sleight Black   (White to Move)",
+          "windowId": 242710
+        }
+      ],
+      "cleanup": [
+        {
+          "path": "/private/tmp/sleight-chess-stacked-cGmjqM/sleight-stacked-1-target.game",
+          "result": {
+            "closed": true,
+            "ok": true
+          }
+        },
+        {
+          "path": "/private/tmp/sleight-chess-stacked-cGmjqM/sleight-stacked-1-cover.game",
+          "result": {
+            "closed": true,
+            "ok": true
+          }
+        }
+      ],
+      "error": "Error Domain=owned CG window absent or ambiguous Code=1 \"(null)\"",
+      "passed": false,
+      "remainingWindows": [],
+      "remainingPaths": [],
+      "closedAllOpenedWindows": true
+    },
+    {
+      "n": 2,
+      "paths": [
+        "/private/tmp/sleight-chess-stacked-cGmjqM/sleight-stacked-2-target.game",
+        "/private/tmp/sleight-chess-stacked-cGmjqM/sleight-stacked-2-cover.game"
+      ],
+      "placements": [
+        {
+          "bounds": [
+            100,
+            100,
+            1269,
+            984
+          ],
+          "ok": true,
+          "squares": [
+            {
+              "center": [
+                777.66162109375,
+                418.4407043457031
+              ],
+              "title": "white pawn, e2"
+            },
+            {
+              "center": [
+                775.3224182128906,
+                571.8534088134766
+              ],
+              "title": "e4"
+            }
+          ],
+          "title": "sleight-stacked-2-target.game | Sleight White - Sleight Black   (White to Move)",
+          "windowId": 242728
+        },
+        {
+          "bounds": [
+            100,
+            100,
+            1269,
+            984
+          ],
+          "ok": true,
+          "squares": [
+            {
+              "center": [
+                777.66162109375,
+                418.4407043457031
+              ],
+              "title": "white pawn, e2"
+            },
+            {
+              "center": [
+                775.3224182128906,
+                571.8534088134766
+              ],
+              "title": "e4"
+            }
+          ],
+          "title": "sleight-stacked-2-cover.game | Sleight White - Sleight Black   (White to Move)",
+          "windowId": 242732
+        }
+      ],
+      "cleanup": [
+        {
+          "path": "/private/tmp/sleight-chess-stacked-cGmjqM/sleight-stacked-2-target.game",
+          "result": {
+            "closed": true,
+            "ok": true
+          }
+        },
+        {
+          "path": "/private/tmp/sleight-chess-stacked-cGmjqM/sleight-stacked-2-cover.game",
+          "result": {
+            "closed": true,
+            "ok": true
+          }
+        }
+      ],
+      "request": {
+        "app": "Chess",
+        "windowId": 242728,
+        "from": [
+          680,
+          699
+        ],
+        "to": [
+          677,
+          548
+        ]
+      },
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"Chess\",\n \"windowId\": 242728,\n \"from\": [\n  680,\n  699\n ],\n \"to\": [\n  677,\n  548\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"path\": \"background\",\n \"textChanged\": null,\n \"deliveryVerified\": false,\n \"spaceInserted\": false\n}"
+            }
+          ]
+        }
+      },
+      "sourceAfter": {
+        "bounds": [
+          100,
+          100,
+          1269,
+          984
+        ],
+        "ok": true,
+        "squares": [
+          {
+            "center": [
+              777.66162109375,
+              418.4407043457031
+            ],
+            "title": "white pawn, e2"
+          },
+          {
+            "center": [
+              775.3224182128906,
+              571.8534088134766
+            ],
+            "title": "e4"
+          }
+        ],
+        "title": "sleight-stacked-2-target.game | Sleight White - Sleight Black   (White to Move)",
+        "windowId": 242728
+      },
+      "otherAfter": {
+        "bounds": [
+          100,
+          100,
+          1269,
+          984
+        ],
+        "ok": true,
+        "squares": [
+          {
+            "center": [
+              777.66162109375,
+              418.4407043457031
+            ],
+            "title": "white pawn, e2"
+          },
+          {
+            "center": [
+              775.3224182128906,
+              571.8534088134766
+            ],
+            "title": "e4"
+          }
+        ],
+        "title": "sleight-stacked-2-cover.game | Sleight White - Sleight Black   (White to Move)",
+        "windowId": 242732
+      },
+      "passed": false,
+      "remainingWindows": [],
+      "remainingPaths": [],
+      "closedAllOpenedWindows": true
+    },
+    {
+      "n": 3,
+      "paths": [
+        "/private/tmp/sleight-chess-stacked-cGmjqM/sleight-stacked-3-target.game",
+        "/private/tmp/sleight-chess-stacked-cGmjqM/sleight-stacked-3-cover.game"
+      ],
+      "placements": [
+        {
+          "bounds": [
+            100,
+            100,
+            1269,
+            984
+          ],
+          "ok": true,
+          "squares": [
+            {
+              "center": [
+                777.66162109375,
+                418.4407043457031
+              ],
+              "title": "white pawn, e2"
+            },
+            {
+              "center": [
+                775.3224182128906,
+                571.8534088134766
+              ],
+              "title": "e4"
+            }
+          ],
+          "title": "sleight-stacked-3-target.game | Sleight White - Sleight Black   (White to Move)",
+          "windowId": 242747
+        },
+        {
+          "bounds": [
+            100,
+            100,
+            1269,
+            984
+          ],
+          "ok": true,
+          "squares": [
+            {
+              "center": [
+                777.66162109375,
+                418.4407043457031
+              ],
+              "title": "white pawn, e2"
+            },
+            {
+              "center": [
+                775.3224182128906,
+                571.8534088134766
+              ],
+              "title": "e4"
+            }
+          ],
+          "title": "sleight-stacked-3-cover.game | Sleight White - Sleight Black   (White to Move)",
+          "windowId": 242750
+        }
+      ],
+      "cleanup": [
+        {
+          "path": "/private/tmp/sleight-chess-stacked-cGmjqM/sleight-stacked-3-target.game",
+          "result": {
+            "closed": true,
+            "ok": true
+          }
+        },
+        {
+          "path": "/private/tmp/sleight-chess-stacked-cGmjqM/sleight-stacked-3-cover.game",
+          "result": {
+            "closed": true,
+            "ok": true
+          }
+        }
+      ],
+      "request": {
+        "app": "Chess",
+        "windowId": 242747,
+        "from": [
+          680,
+          699
+        ],
+        "to": [
+          677,
+          548
+        ]
+      },
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"Chess\",\n \"windowId\": 242747,\n \"from\": [\n  680,\n  699\n ],\n \"to\": [\n  677,\n  548\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"path\": \"background\",\n \"textChanged\": null,\n \"deliveryVerified\": false,\n \"spaceInserted\": false\n}"
+            }
+          ]
+        }
+      },
+      "sourceAfter": {
+        "bounds": [
+          100,
+          100,
+          1269,
+          984
+        ],
+        "ok": true,
+        "squares": [
+          {
+            "center": [
+              777.66162109375,
+              418.4407043457031
+            ],
+            "title": "white pawn, e2"
+          },
+          {
+            "center": [
+              775.3224182128906,
+              571.8534088134766
+            ],
+            "title": "e4"
+          }
+        ],
+        "title": "sleight-stacked-3-target.game | Sleight White - Sleight Black   (White to Move)",
+        "windowId": 242747
+      },
+      "otherAfter": {
+        "bounds": [
+          100,
+          100,
+          1269,
+          984
+        ],
+        "ok": true,
+        "squares": [
+          {
+            "center": [
+              777.66162109375,
+              418.4407043457031
+            ],
+            "title": "white pawn, e2"
+          },
+          {
+            "center": [
+              775.3224182128906,
+              571.8534088134766
+            ],
+            "title": "e4"
+          }
+        ],
+        "title": "sleight-stacked-3-cover.game | Sleight White - Sleight Black   (White to Move)",
+        "windowId": 242750
+      },
+      "passed": false,
+      "remainingWindows": [],
+      "remainingPaths": [],
+      "closedAllOpenedWindows": true
+    }
+  ],
+  "approvals": [
+    {
+      "message": "Allow Claude to drag in Chess? It moves your pointer for a few seconds.",
+      "action": "accept"
+    },
+    {
+      "message": "Allow Claude to drag in Chess? Background comes first; foreground fallback can move your pointer for a few seconds.",
+      "action": "accept"
+    }
+  ],
+  "trace": [
+    {
+      "t": "2026-10-05T03:54:27.016Z",
+      "direction": "from-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+          "name": "drag",
+          "arguments": {
+            "app": "Chess",
+            "windowId": 242728,
+            "from": [
+              680,
+              699
+            ],
+            "to": [
+              677,
+              548
+            ]
+          }
+        }
+      }
+    },
+    {
+      "t": "2026-10-05T03:54:27.247Z",
+      "direction": "local-approval",
+      "message": {
+        "key": "[\"sleight\",\"drag\",\"Chess\"]",
+        "action": "accept"
+      }
+    },
+    {
+      "t": "2026-10-05T03:54:43.661Z",
+      "direction": "to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"Chess\",\n \"windowId\": 242728,\n \"from\": [\n  680,\n  699\n ],\n \"to\": [\n  677,\n  548\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"path\": \"background\",\n \"textChanged\": null,\n \"deliveryVerified\": false,\n \"spaceInserted\": false\n}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "t": "2026-10-05T03:54:52.402Z",
+      "direction": "from-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+          "name": "drag",
+          "arguments": {
+            "app": "Chess",
+            "windowId": 242747,
+            "from": [
+              680,
+              699
+            ],
+            "to": [
+              677,
+              548
+            ]
+          }
+        }
+      }
+    },
+    {
+      "t": "2026-10-05T03:55:09.969Z",
+      "direction": "to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n \"app\": \"Chess\",\n \"windowId\": 242747,\n \"from\": [\n  680,\n  699\n ],\n \"to\": [\n  677,\n  548\n ],\n \"holdMs\": 500,\n \"steps\": 25,\n \"path\": \"background\",\n \"textChanged\": null,\n \"deliveryVerified\": false,\n \"spaceInserted\": false\n}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "t": "2026-10-05T03:55:14.330Z",
+      "direction": "change-snapshots-deleted",
+      "message": {}
+    }
+  ],
+  "initialChess": {
+    "ok": true,
+    "running": false,
+    "windows": []
+  },
+  "coordinateMeasurement": {
+    "windowId": 242728,
+    "bounds": [
+      100,
+      100,
+      1269,
+      984
+    ],
+    "image": "/private/tmp/sleight-chess-stacked-cGmjqM/owned-board.png",
+    "plan": "/private/tmp/sleight-chess-stacked-cGmjqM/points.json",
+    "screenshotSha256": "190bf0c04706ed51e5b2cbe91ec9faf8ef2485b5284ec4a385ec5f8a9ec26b54",
+    "measured": {
+      "bounds": [
+        100,
+        100,
+        1269,
+        984
+      ],
+      "from": [
+        680,
+        699
+      ],
+      "to": [
+        677,
+        548
+      ],
+      "source": "owned-board.png, window 242728",
+      "imageFrameOffset": [
+        23,
+        16
+      ],
+      "imageFrom": [
+        703,
+        715
+      ],
+      "imageTo": [
+        700,
+        564
+      ]
+    }
+  },
+  "finished": "2026-10-05T03:55:14.331Z",
+  "exitCode": 1
+}
