@@ -1,0 +1,27 @@
+{
+  "attempt": 5,
+  "recordedAt": "2026-10-04T13:54:54Z",
+  "command": "sh bench/window-targeting.sh docs/benchmarks/2026-10-04-window-targeting-attempt-5.json",
+  "worktree": "~/Projects/sleight-wt/window-targeting",
+  "result": "Canceled while waiting for the shared live-check lock. The Node harness had not started.",
+  "nodeHarnessStarted": false,
+  "fixtureActionsStarted": false,
+  "records": [
+    {
+      "command": "/usr/bin/pgrep -f window-targeting-attempt-5.json",
+      "output": "76302",
+      "exitCode": 0
+    },
+    {
+      "command": "~/.codex/bin/codex-macos-inspect process-status 76302",
+      "result": [{ "elapsed": "02:53", "executable": "sh", "pid": 76302, "state": "Ss+" }],
+      "exitCode": 0
+    },
+    {
+      "action": "One Ctrl-C through retained terminal session 61473",
+      "output": "^C",
+      "exitCode": 1
+    }
+  ],
+  "exitCode": 1
+}

@@ -190,6 +190,14 @@ extension, set `SLEIGHT_SURFACES=browser,computer` in the plugin's environment.
 
 ## Known problems
 
+- Exact window selection is unavailable on macOS engine 26.930.31730. Its API lists
+  `cua.getApp({ windowId })`, but it rejects that selector with "macOS getApp requires an app name,
+  path, or bundle ID." `cua.getState()` also omits window IDs. With two temporary TextEdit documents,
+  3/3 exact selections were rejected before editing. `select_window` uses AXRaise/AXMain instead:
+  3/3 with the plugin tool, plus 6/6 with the same approach in prototypes.
+  The intended TextEdit document was edited and sampled foreground state was unchanged. This depends on the app supporting those Accessibility operations and
+  exposing a unique title or AXDocument URL. Other apps remain untested. During an active selection, the relay marks changed or missing action
+  window headers as "outcome unconfirmed". [Attempt results](docs/benchmarks/2026-10-04-window-targeting.md) include the failures.
 - [Input leases](docs/design/input-lease.md) let one sleight session act on a window at a time.
   Another session gets the holder's name and time left, while reads remain available. Leases expire
   after 30 seconds without renewal and end with the turn or session. Local drag and hover reserve the app,
@@ -340,10 +348,14 @@ To get asked on every action instead, set `SLEIGHT_APPROVAL_SCOPE=once` in Claud
 The `env` block of `~/.claude/settings.json` works.
 
 Set `SLEIGHT_APPROVAL_SCOPE=document` to approve a document or window for the session instead.
-First call `js` with only `let app = await cua.getApp("TextEdit")` (or select a window with
-`cua.getApp({ windowId: 123 })`), then call `document_scope`: the prompt specifies the observed window
+First call `js` with only `let app = await cua.getApp("TextEdit")`, then call `document_scope`:
+the prompt specifies the observed window
 and document URL. A different window stops further actions until you read it and ask the user again;
 `drag`, `hover`, `menu_bar`, `notifications` and resets are unavailable in this mode.
+`cua.getApp({ windowId: 123 })` does not work on macOS, so it cannot select a document here.
+For several windows, call `select_window` with `app` and an exact file `url` or `title`,
+then acquire the app and check its full Window and URL before `document_scope`.
+`SLEIGHT_SELECT_WINDOW=0` leaves the selection tool out.
 This guards mistakes in cooperative code. [The design](docs/design/document-scope.md) lists what
 the relay enforces and how arbitrary JavaScript can bypass the checks.
 

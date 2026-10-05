@@ -259,6 +259,14 @@ export function createRelay({
   }
   let leaseWindow;
   let recoveryTarget;
+  let selectedWindow;
+  let selectionVerified = false;
+  function clearSelection() { selectedWindow = undefined; selectionVerified = false; }
+  const sameWindow = (a, b) => a && b && ['title', 'app', 'url'].every(key => a[key] === b[key]);
+  function selectionRecovery() {
+    const args = { app: selectedWindow.appId, ...(selectedWindow.url ? { url: selectedWindow.url } : { title: selectedWindow.title }) };
+    return `Call select_window with ${JSON.stringify(args)}, then send exactly \u0060${constApp ? '' : 'app = '}await cua.getApp(${JSON.stringify(selectedWindow.appId)})\u0060 in js and check its Window and URL.`;
+  }
   let constApp = false;
   const handleBundles = new Map();
   const handleSelectors = new Map();
@@ -329,7 +337,7 @@ export function createRelay({
       return true;
     }
     if (name === DOCUMENT_TOOL.name) return true;
-    if (name === 'js_reset') { leaseWindow = undefined; handleBundles.clear(); handleSelectors.clear(); constApp = false; return true; }
+    if (name === 'js_reset') { clearSelection(); leaseWindow = undefined; handleBundles.clear(); handleSelectors.clear(); constApp = false; return true; }
     if (name !== 'js' && !localNames.has(name)) return true;
     const args = msg.params.arguments ?? {};
     const code = args.code;
@@ -351,6 +359,9 @@ export function createRelay({
       if (leaseFault) { leaseStop(msg, leaseFault); return false; }
       if (name !== 'js') {
         leaseCalls.set(msg.id, { localAction: true }); return true;
+      }
+      if (selectedWindow && (!selectionVerified || leaseWindow?.appId !== selectedWindow.appId || !sameWindow(leaseWindow, selectedWindow))) {
+        leaseStop(msg, `selected window is not confirmed. ${selectionRecovery()}`); return false;
       }
       if (!leaseWindow?.appId) {
         const recovery = recoveryTarget ? `${constApp ? '' : 'app = '}await ${recoveryTarget}` : 'await cua.getState()';
@@ -565,10 +576,11 @@ export function createRelay({
     const name = msg.params.name;
     const args = msg.params.arguments ?? {};
     let resolved;
+    if (name === 'select_window') clearSelection();
     try {
       // blocked_app reserves the whole app for its actions, like drag and
       // hover, and its consent names the resolved app even on reads.
-      const appTool = ['drag', 'hover', 'blocked_app'].includes(name);
+      const appTool = ['drag', 'hover', 'blocked_app', 'select_window'].includes(name);
       if (appTool) {
         if (closing) throw new Error('Input lease: this session is closing.');
         resolved = await (localTools.target?.(args) ?? Promise.resolve(
@@ -579,7 +591,9 @@ export function createRelay({
         const key = inputLease.acquire(target, appTool ? 'app' : 'desktop');
         leaseCalls.set(msg.id, { key }); refreshHeartbeat();
       }
-      result = await localTools.call(name, args, async (parts, message, options) => {
+      const callArgs = name === 'select_window' && resolved
+        ? { ...args, expectedAppId: resolved.appId } : args;
+      result = await localTools.call(name, callArgs, async (parts, message, options) => {
         const allowed = await approve(parts, message, msg.id, options);
         if (closing || disposed) throw new Error('Input lease: this session is closing.');
         if (allowed) {
@@ -590,6 +604,13 @@ export function createRelay({
       // The fourth argument stays runLocal for callLocalTool; the resolved
       // lease target rides fifth, where blocked_app reads it.
       }, undefined, resolved);
+      if (msg.params.name === 'select_window' && !result.isError) {
+        const value = JSON.parse(result.content.find(c => c.type === 'text')?.text ?? '{}');
+        if (!value.ok || !value.target?.appId || typeof value.target?.title !== 'string' ||
+            (resolved && value.target.appId !== resolved.appId)) throw new Error('Window selection returned no matching target');
+        selectedWindow = value.target;
+        leaseWindow = undefined;
+      }
     } catch (err) {
       result = { content: [{ type: 'text', text: String(err?.message ?? err) }], isError: true };
     }
@@ -654,7 +675,10 @@ export function createRelay({
     if (documentMode && msg.method === 'tools/call') {
       const name = msg.params?.name;
       if (name === DOCUMENT_TOOL.name) { approveDocument(msg); return; }
-      if (name !== 'js' && name !== TURN_END_TOOL) {
+      if (name === 'select_window') {
+        if (running.size || documentAsking) { documentStop(msg, 'another call or approval is pending'); return; }
+        if (!prepareLease(msg)) return;
+      } else if (name !== 'js' && name !== TURN_END_TOOL) {
         documentStop(msg, `${name} is unavailable in document mode`);
         return;
       }
@@ -667,7 +691,7 @@ export function createRelay({
         if (!prepareLease(msg)) return;
         documentCalls.set(msg.id, { read, expected: read ? undefined : documentKey(observedDocument),
           observe: !isLeaseRead(code) || !/getScreenshot|rewriteDocumentation/.test(code), engines: new Set(), risks: new Set() });
-      } else if (!prepareLease(msg)) return;
+      } else if (name !== 'select_window' && !prepareLease(msg)) return;
     } else if (!prepareLease(msg)) return;
     refreshHeartbeat();
     if (msg.method === 'tools/call' && localNames.has(msg.params?.name)) {
@@ -709,11 +733,11 @@ export function createRelay({
             trace('snapshot-before-call', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });
           }
         } catch (err) { documentCalls.delete(msg.id); finishedCall(msg.id); changeStop(msg, `cannot snapshot before acting: ${err.message}`); return; }
-        changeCalls.set(msg.id, { read, safe, entry, window: lastWindow, expected: documentKey(lastWindow), concurrent: changeCalls.size > 0,
+        changeCalls.set(msg.id, { read, safe, entry, window: lastWindow, expected: documentKey(lastWindow), concurrent: changeCalls.size > 0, target: leaseWindow ?? lastWindow,
           observe: !read || (!isInventoryRead(originalCode) && /cua\.getApp\(|\.(?:getAXState|getAXStateAndScreenshot)\(/.test(originalCode)) });
         if (typeof originalCode === 'string') {
           const target = documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow;
-          const reason = documentMode ? undefined : inputLease
+          const reason = documentMode ? undefined : selectedWindow ? `Selected window changed. ${selectionRecovery()}` : inputLease
             ? 'Input lease stopped this action: window or URL changed. Read the intended window again before acting.'
             : 'Change review stopped this action: window or URL changed. Read the intended window with one standalone cua.getApp call before editing.';
           if (read) msg.params.arguments.code = readCode(originalCode);
@@ -733,6 +757,7 @@ export function createRelay({
 
   lines(serverOut, line => {
     let msg;
+    let windowNote;
     try {
       msg = JSON.parse(line);
     } catch {
@@ -754,6 +779,15 @@ export function createRelay({
       changeCalls.delete(msg.id);
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
       if (call.observe) { lastWindowText = text; lastWindow = windowFromText(text); }
+      if (selectedWindow && !call.read && call.target && msg.result &&
+          (!lastWindow || ['title', 'app', 'url'].some(key => lastWindow[key] !== call.target[key]))) {
+        windowNote = `Sleight: outcome unconfirmed. Intended ${documentLabel(call.target)}. ` +
+          (lastWindow ? `Observed ${documentLabel(lastWindow)}.` : 'Result missing full window header.');
+      }
+      // Keep the initial acquisition check, but release a verified selection
+      // when a successful full observation confirms a different window.
+      if (selectedWindow && selectionVerified && call.observe && !msg.error && !msg.result?.isError &&
+          lastWindow && !sameWindow(lastWindow, selectedWindow)) clearSelection();
       if (changeReview && call.read && call.observe && !call.concurrent && !msg.error && !msg.result?.isError) {
         try {
           const entry = changes.read(lastWindow);
@@ -815,7 +849,17 @@ export function createRelay({
         if (selector) recoveryTarget = `cua.getApp(${selector})`;
         else if (window) recoveryTarget = `cua.getApp(${JSON.stringify(window.app)})`;
       }
+      if (selectedWindow && call.acquisition) {
+        if (known && known !== selectedWindow.appId) {
+          // A deliberate acquisition of another app ends this selection.
+          selectedWindow = undefined; selectionVerified = false;
+        } else {
+          selectionVerified = !msg.result?.isError && sameWindow(window, selectedWindow) && known === selectedWindow.appId;
+          if (!selectionVerified) windowNote = `Sleight: selected window not observed. ${selectionRecovery()}`;
+        }
+      }
     }
+    if (windowNote && msg.result) msg.result.content = [...(msg.result.content ?? []), { type: 'text', text: windowNote }];
     // The engine refuses Terminal, iTerm2 and OpenAI's own apps before any
     // approval, so a user consent can never enable the engine on them. Say so,
     // and offer sleight's own Accessibility path: the prompt is the opt-in.
@@ -871,7 +915,7 @@ export function createRelay({
         .filter(t => !HIDDEN_TOOLS.has(t.name))
         .filter(t => !documentMode || t.name === 'js' || t.name === TURN_END_TOOL)
         .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t))
-        .concat(documentMode ? [DOCUMENT_TOOL] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : []);
+        .concat(documentMode ? [DOCUMENT_TOOL, ...(localTools?.tools ?? []).filter(t => t.name === 'select_window')] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : []);
     }
     toClient(msg);
   });

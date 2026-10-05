@@ -20,6 +20,7 @@ import { InputLease } from './input-lease.mjs';
 import { loadPreapproved } from './preapproved.mjs';
 import { createGrantAudit } from './preapproved-audit.mjs';
 import { BLOCKED_APP_TOOL, callBlockedApp } from './blocked-apps.mjs';
+import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
 const SERVER_KEY = 'cua_repl';
@@ -228,6 +229,16 @@ const DRAG_TOOL = {
   },
 };
 
+export function localToolDefinitions(env = process.env) {
+  return [
+    ...(env.SLEIGHT_SELECT_WINDOW === '0' ? [] : [SELECT_WINDOW_TOOL]),
+    ...(env.SLEIGHT_MENU_BAR === '0' ? [] : MENU_BAR_TOOLS),
+    ...(env.SLEIGHT_HOVER === '0' ? [] : [HOVER_TOOL]),
+    BLOCKED_APP_TOOL,
+    ...(env.SLEIGHT_DRAG === '0' ? [] : [DRAG_TOOL]),
+  ];
+}
+
 export const HOVER_TOOL = {
   name: 'hover',
   description: 'Hover with the real pointer only after Help text, secondary actions, right-click and keys fail. ' +
@@ -317,6 +328,7 @@ export async function callLocalTool(name, args, approve, runLocal = runScript, t
     if (ok && image) result.content.push({ type: 'image', data: image, mimeType: 'image/png' });
     return result;
   }
+  if (name === 'select_window') return selectWindow(args, { approve, runScript: runLocal });
   if (name === 'drag') {
     if (!await approve(['drag', args.app], `Allow Claude to drag in ${args.app}? Background comes first; foreground fallback can move your pointer for a few seconds.`)) {
       return text(`The user didn't allow dragging in ${args.app}. Stop and tell them; don't work around it.`, true);
@@ -405,16 +417,12 @@ export function run({ leaseDirectory } = {}) {
     inputLease: new InputLease({ directory: leaseDirectory, holder: `session ${sessionId} (pid ${process.pid})` }),
     onLeaseFault: err => { process.stderr.write(`sleight: ${err.message}; stopping the owned engine.\n`); terminateEngine(); },
     // SLEIGHT_MENU_BAR=0 leaves out the menu bar and notification tools,
-    // SLEIGHT_DRAG=0 the drag tool, SLEIGHT_HOVER=0 the hover tool.
+    // SLEIGHT_DRAG=0 the drag tool, SLEIGHT_HOVER=0 the hover tool,
+    // SLEIGHT_SELECT_WINDOW=0 window selection.
     // blocked_app is always listed; the user's approval of its prompt is the
     // whole opt-in.
     localTools: {
-      tools: [
-        ...(process.env.SLEIGHT_MENU_BAR === '0' ? [] : MENU_BAR_TOOLS),
-        ...(process.env.SLEIGHT_DRAG === '0' ? [] : [DRAG_TOOL]),
-        ...(process.env.SLEIGHT_HOVER === '0' ? [] : [HOVER_TOOL]),
-        BLOCKED_APP_TOOL,
-      ],
+      tools: localToolDefinitions(),
       call: callLocalTool,
       target: async args => {
         const result = await runScript('lease-target.js', args);
