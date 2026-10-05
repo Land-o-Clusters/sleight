@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runOwned } from '../bench/preapproved-process.mjs';
+import childProcess from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { syncBuiltinESMExports } from 'node:module';
 
 const hangs = `
   const {spawn} = require('node:child_process');
@@ -12,6 +16,7 @@ test('a timeout collects a process group even when the child and descendant igno
   const start = Date.now();
   const result = await runOwned(process.execPath, ['-e', hangs], { timeoutMs: 300, graceMs: 100 });
   assert.equal(result.exit.signal, 'SIGKILL'); assert.equal(result.timedOut, true);
+  assert.equal(result.groupClean, true);
   assert.match(result.stdout, /ready/); assert.ok(Date.now() - start < 3000);
 });
 test('cancellation collects the same owned group before returning its evidence', async () => {
@@ -20,6 +25,7 @@ test('cancellation collects the same owned group before returning its evidence',
     signal: controller.signal, onStdout: data => { if (String(data).includes('ready')) controller.abort(); } });
   assert.equal(result.exit.signal, 'SIGKILL'); assert.equal(result.cancelled, true);
   assert.equal(result.timedOut, false); assert.match(result.stdout, /ready/);
+  assert.equal(result.groupClean, true);
 });
 test('normal exit and spawn failure keep their actual exit evidence', async () => {
   const normal = await runOwned(process.execPath, ['-e', 'console.log("done");process.exit(7)']);
@@ -40,25 +46,66 @@ test('parent exit does not release an active descendant with redirected output',
   assert.equal(result.groupClean, true);
 });
 
-test('a transient post-close group probe denial waits for confirmed collection', async t => {
-  const nativeKill = process.kill;
-  let probes = 0;
-  t.mock.method(process, 'kill', (pid, signal) => {
-    if (signal === 0 && probes++ === 0) throw Object.assign(new Error('probe denied'), { code: 'EPERM' });
-    return nativeKill(pid, signal);
+for (const code of ['ESRCH', 'EPERM']) {
+  test(`post-exit ${code} probe collects the owned group without retrying`, async t => {
+    const nativeKill = process.kill;
+    let probes = 0;
+    t.mock.method(process, 'kill', (pid, signal) => {
+      if (signal === 0) { probes++; throw Object.assign(new Error('group gone'), { code }); }
+      return nativeKill(pid, signal);
+    });
+    const result = await runOwned(process.execPath, ['-e', 'process.exit(7)'], { graceMs: 40 });
+    assert.equal(result.groupClean, true);
+    assert.deepEqual(result.exit, { code: 7, signal: null });
+    assert.equal(probes, 1);
   });
-  const result = await runOwned(process.execPath, ['-e', 'process.exit(0)'], { graceMs: 100 });
-  assert.equal(result.groupClean, true);
-  assert.deepEqual(result.exit, { code: 0, signal: null });
-  assert.ok(probes >= 2);
+  for (const action of ['SIGTERM', 'SIGKILL']) {
+    test(`post-exit ${action} ${code} collects a group that disappeared after its probe`, async t => {
+      const sent = [];
+      t.mock.method(process, 'kill', (_pid, signal) => {
+        if (signal === 0) return true;
+        sent.push(signal);
+        if (signal === action) throw Object.assign(new Error('group gone'), { code });
+        return true;
+      });
+      const result = await runOwned(process.execPath, ['-e', 'process.exit(0)'], { graceMs: 10 });
+      assert.equal(result.groupClean, true);
+      assert.deepEqual(result.exit, { code: 0, signal: null });
+      assert.deepEqual(sent, action === 'SIGTERM' ? ['SIGTERM'] : ['SIGTERM', 'SIGKILL']);
+    });
+  }
+}
+test('EPERM still fails cancellation before the leader exits', async t => {
+  const child = Object.assign(new EventEmitter(), { pid: 123456, stdout: new PassThrough(), stderr: new PassThrough() });
+  t.mock.method(childProcess, 'spawn', () => child);
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  t.mock.method(process, 'kill', (pid, signal) => {
+    assert.equal(pid, -child.pid); assert.equal(signal, 'SIGTERM');
+    throw Object.assign(new Error('live group denied'), { code: 'EPERM' });
+  });
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(runOwned('fixture', [], { signal: controller.signal }), { code: 'EPERM' });
 });
-test('a persistent post-close group probe denial cannot confirm cleanup', async t => {
-  const nativeKill = process.kill;
+test('EPERM cancellation after leader exit but before pipe close collects the group', async t => {
+  const child = Object.assign(new EventEmitter(), { pid: 123456, stdout: new PassThrough(), stderr: new PassThrough() });
+  t.mock.method(childProcess, 'spawn', () => child);
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
   t.mock.method(process, 'kill', (pid, signal) => {
-    if (signal === 0) throw Object.assign(new Error('probe denied'), { code: 'EPERM' });
-    return nativeKill(pid, signal);
+    assert.equal(pid, -child.pid); assert.equal(signal, 'SIGTERM');
+    throw Object.assign(new Error('exited group denied'), { code: 'EPERM' });
   });
-  const start = Date.now();
-  await assert.rejects(runOwned(process.execPath, ['-e', 'process.exit(0)'], { graceMs: 40 }), { code: 'EPERM' });
-  assert.ok(Date.now() - start < 1000);
+  const controller = new AbortController();
+  const pending = runOwned('fixture', [], { signal: controller.signal });
+  child.emit('exit', 7, null);
+  controller.abort();
+  child.emit('close', 7, null);
+  const result = await pending;
+  assert.deepEqual(result.exit, { code: 7, signal: null });
+  assert.equal(result.cancelled, true); assert.equal(result.groupClean, true);
+});
+test('other post-exit signaling errors still fail cleanup', async t => {
+  t.mock.method(process, 'kill', () => { throw Object.assign(new Error('unexpected failure'), { code: 'EIO' }); });
+  await assert.rejects(runOwned(process.execPath, ['-e', 'process.exit(0)']), { code: 'EIO' });
 });

@@ -71,3 +71,21 @@ dialog prompts and the `once` setting. Per-process log files avoid the rotation 
 
 Round 2 `npm run check` exited 0 (223 unit tests and 8 plugin tests). `npm run lint:prose` exited 0
 across 18 files. `bench/run.mjs` was not run.
+
+## Process cleanup follow-up
+
+The user reported that cancellation failed with `kill EPERM` in two of nine full checks,
+while the test passed alone. The fix started from `origin/main` at `f35565c` in
+`~/Projects/sleight-wt/preapproved-group-exit`, on `codex/preapproved-group-exit`.
+After the owned leader exits, an `ESRCH` or `EPERM` response now marks its group as collected.
+Later cleanup skips that group. Permission errors before leader exit and other errors still fail.
+
+The probe, termination and forced termination regression cases failed before the fix for both
+error codes (six failures). The final focused run passed all 13 cases, exit 0. These include
+real Node descendant cleanup and cancellation after leader exit but before output pipes close.
+Two full `npm run check` runs exited 0. The final run passed 434 unit tests and 8 plugin tests.
+
+The first prose lint exited 2 because the new worktree lacked its ignored Vale styles.
+The first `vale sync` exited 2 after a sandbox DNS failure. The host retry exited 0.
+`npm run lint:prose` then exited 0. Adding this record produced two prose errors, exit 1.
+The wording was corrected before the final lint run. No app was driven, and `bench/run.mjs` was not run.

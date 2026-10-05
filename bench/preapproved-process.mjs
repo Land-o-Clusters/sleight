@@ -4,12 +4,21 @@ import { spawn } from 'node:child_process';
 // Return after close, which also collects inherited output pipes.
 export async function runOwned(command, args, { cwd, timeoutMs = 180000, graceMs = 7000, signal, onStdout } = {}) {
   const child = spawn(command, args, { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  let leaderExited = false, groupCollected = false;
+  child.once('exit', () => { leaderExited = true; });
   let stdout = '', stderr = '', spawnError, timedOut = false, cancelled = false, stopping = false, force;
   child.stdout.on('data', data => { stdout += data; onStdout?.(data); });
   child.stderr.on('data', data => { stderr += data; });
+  function collected(error) {
+    if (error.code !== 'ESRCH' && !(leaderExited && error.code === 'EPERM')) return false;
+    // After the owned leader exits, macOS can report a dying or reused group
+    // as EPERM. Stop probing or signaling that group once collection is known.
+    if (leaderExited) groupCollected = true;
+    return true;
+  }
   function signalGroup(name) {
-    if (!child.pid) return;
-    try { process.kill(-child.pid, name); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+    if (!child.pid || groupCollected) return;
+    try { process.kill(-child.pid, name); } catch (error) { if (!collected(error)) throw error; }
   }
   function stop() {
     if (stopping) return;
@@ -24,18 +33,11 @@ export async function runOwned(command, args, { cwd, timeoutMs = 180000, graceMs
   child.on('error', error => { spawnError = error.message; });
   const exit = await new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
   clearTimeout(timer); clearTimeout(force); signal?.removeEventListener('abort', abort);
-  const alive = async () => {
-    if (!child.pid) return false;
-    const deadline = Date.now() + graceMs;
-    for (;;) {
-      try { process.kill(-child.pid, 0); return true; } catch (error) {
-        if (error.code === 'ESRCH') return false;
-        // After close, macOS can briefly deny a probe of the dying group.
-        // A denial never proves collection: retry within the cleanup budget,
-        // then fail unless the OS confirms absence or a signalable group.
-        if (error.code !== 'EPERM' || Date.now() >= deadline) throw error;
-        await new Promise(resolve => setTimeout(resolve, 20));
-      }
+  const alive = () => {
+    if (!child.pid || groupCollected) return false;
+    try { process.kill(-child.pid, 0); return true; } catch (error) {
+      if (collected(error)) return false;
+      throw error;
     }
   };
   // Redirected descendant stdio can close before the group exits. Finish that
