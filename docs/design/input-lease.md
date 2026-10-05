@@ -14,6 +14,12 @@ After a guard stop, a full read restores the target. Reset clears handles and th
 current target; an acquisition can reuse a bundle ID only for a known selector
 and matching full window identity. Display names alone never supply a bundle ID.
 Ambiguous or missing identity stops actions with exact recovery code.
+`select_window` raises one exact title or AXDocument file URL through Accessibility,
+without activating the app. Selection holds an app lease and requires a matching
+standalone `getApp` read before acting. Recovery hints repeat that selection.
+An active selection adds an "outcome unconfirmed" note for changed or missing
+action headers. Reset, failed reselection or a confirmed window change
+clears it. Document mode keeps its document_scope guard.
 Unknown JavaScript counts as an action. Standalone acquisition, inventory,
 AX-state and screenshot reads take no lease and can read a held window.
 Inventory expressions can inspect data with JSON output, filters, comparisons

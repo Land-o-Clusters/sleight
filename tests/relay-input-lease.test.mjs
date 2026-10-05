@@ -8,10 +8,41 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
+import { SELECT_WINDOW_TOOL } from '../plugins/sleight/lib/select-window.mjs';
 const header = 'Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt';
 const rpc = (id, name, args = {}) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
 const result = (id, text = header) => ({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }],
   _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit' } } } } });
+test('normal action results and app acquisitions have no window note', t => {
+  const { a } = setup(t);
+  a.send(rpc(1, 'js', { code: 'app = await cua.getApp("TextEdit")' })); a.reply(result(1));
+  assert.equal(a.received.at(-1).result.content.length, 1);
+  a.send(rpc(2, 'js', { code: 'await app.typeText("x")' })); a.reply(result(2));
+  assert.equal(a.received.at(-1).result.content.length, 1);
+  a.send(rpc(3, 'js', { code: 'await app.typeText("x")' }));
+  const failure = result(3); failure.result.isError = true; a.reply(failure);
+  assert.equal(a.received.at(-1).result.content.length, 1);
+});
+test('action window mismatch names the intended and observed document only with a selection', async t => {
+  const { h: a } = await selectedHarness(t);
+  a.send(rpc(1, 'js', { code: 'await app.typeText("x")' }));
+  a.reply(result(1, 'Window: "b.txt", App: TextEdit'));
+  assert.match(a.received.at(-1).result.content.at(-1).text, /outcome unconfirmed.*a.txt.*b.txt/);
+});
+test('missing or ambiguous action headers leave a selected outcome unconfirmed', async t => {
+  for (const response of ['done', header + '\nWindow: "b.txt", App: TextEdit']) {
+    const { h: a } = await selectedHarness(t);
+    a.send(rpc(1, 'js', { code: 'await app.typeText("x")' })); a.reply(result(1, response));
+    assert.match(a.received.at(-1).result.content.at(-1).text, /outcome unconfirmed.*a.txt.*missing full window header/);
+  }
+});
+test('ordinary window changes and missing headers have no selection note', t => {
+  for (const response of ['Window: "b.txt", App: TextEdit', 'done']) {
+    const { a } = setup(t);
+    a.send(rpc(1, 'js', { code: 'await app.pressKey("super+n")' })); a.reply(result(1, response));
+    assert.equal(a.received.at(-1).result.content.length, 1);
+  }
+});
 function setup(t) {
   const directory = mkdtempSync(join(tmpdir(), 'sleight-relay-lease-'));
   const path = join(directory, 'a.txt');
@@ -35,6 +66,53 @@ function setup(t) {
   };
   return { a: harness('A'), b: harness('B'), directory, path, harness };
 }
+async function selectedHarness(t, options = {}) {
+  const { harness, path } = setup(t);
+  const target = { appId: 'com.apple.TextEdit', app: 'TextEdit', title: 'a.txt', url: pathToFileURL(path).href };
+  let failSelection = false;
+  const h = harness('selection lifecycle', { changeReview: false, localTools: {
+    tools: [SELECT_WINDOW_TOOL], target: async () => target,
+    call: async () => failSelection ? { isError: true, content: [{ type: 'text', text: 'Selection failed' }] }
+      : { content: [{ type: 'text', text: JSON.stringify({ ok: true, target }) }] },
+  }, ...options });
+  h.send(rpc('select', 'select_window', { app: 'TextEdit', url: target.url })); await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('verify', 'js', { code: 'app = await cua.getApp("TextEdit")' })); h.reply(result('verify'));
+  h.forwarded.length = h.received.length = 0;
+  return { h, target, failSelection: () => { failSelection = true; } };
+}
+test('reset releases a selection and a new document read permits later actions', async t => {
+  const { h } = await selectedHarness(t);
+  h.send(rpc(1, 'js_reset')); h.reply(result(1, 'reset'));
+  h.send(rpc(2, 'js', { code: 'app = await cua.getApp("TextEdit")' })); h.reply(result(2, 'Window: "b.txt", App: TextEdit'));
+  h.send(rpc(3, 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(h.forwarded.at(-1).id, 3); h.reply(result(3, 'Window: "b.txt", App: TextEdit'));
+});
+test('Save As and closing a selected window release selection after a confirmed change', async t => {
+  for (const firstResponse of ['Window: "b.txt", App: TextEdit\nURL: file:///tmp/b.txt', 'closed']) {
+    const { h } = await selectedHarness(t);
+    h.send(rpc(1, 'js', { code: 'await app.pressKey("super+w")' })); h.reply(result(1, firstResponse));
+    h.send(rpc(2, 'js', { code: 'app = await cua.getApp("TextEdit")' })); h.reply(result(2, 'Window: "b.txt", App: TextEdit'));
+    h.send(rpc(3, 'js', { code: 'await app.typeText("x")' }));
+    assert.equal(h.forwarded.at(-1).id, 3); h.reply(result(3, 'Window: "b.txt", App: TextEdit'));
+    assert.equal(h.received.at(-1).result.content.length, 1);
+  }
+});
+test('failed reselection releases the previous selected window', async t => {
+  const { h, failSelection } = await selectedHarness(t); failSelection();
+  h.send(rpc(1, 'select_window', { app: 'TextEdit', title: 'missing' })); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.received.at(-1).result.isError, true);
+  h.send(rpc(2, 'js', { code: 'app = await cua.getApp("TextEdit")' })); h.reply(result(2, 'Window: "b.txt", App: TextEdit'));
+  h.send(rpc(3, 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(h.forwarded.at(-1).id, 3); h.reply(result(3, 'Window: "b.txt", App: TextEdit'));
+});
+test('document mode retains its document_scope guard after window selection', async t => {
+  const { h } = await selectedHarness(t, { approvalScope: 'document', ask: async () => 'accept' });
+  h.send(rpc(1, 'document_scope')); await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc(2, 'js', { code: 'await app.typeText("x")' }));
+  const code = h.forwarded.at(-1).params.arguments.code;
+  assert.match(code, /Document scope stopped.*document_scope/);
+  assert.doesNotMatch(code, /Selected window changed/); h.reply(result(2));
+});
 test('lease refusal occurs before forwarding; standalone reads still pass', t => {
   const { a, b } = setup(t);
   a.send(rpc(1, 'js', { code: 'await app.typeText("x")' }));
@@ -107,6 +185,72 @@ test('ordinary leased actions leave change review off', t => {
   assert.equal(h.relay.snapshotDirectory, undefined);
   assert.match(h.forwarded[0].params.arguments.code, /record.token !== state.lease.token/);
   h.reply(result(1));
+});
+
+test('window selection holds the app lease and needs a matching standalone acquisition', async t => {
+  const { harness, path, b } = setup(t);
+  const target = { appId: 'com.apple.TextEdit', app: 'TextEdit', title: 'a.txt', url: pathToFileURL(path).href };
+  let selections = 0;
+  const h = harness('selector', { localTools: { tools: [SELECT_WINDOW_TOOL], target: async () => target,
+    call: async (_, args) => { assert.equal(args.expectedAppId, target.appId); selections++;
+      return { content: [{ type: 'text', text: JSON.stringify({ ok: true, target }) }] }; } } });
+  h.send(rpc(1, 'select_window', { app: 'TextEdit', url: target.url })); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(selections, 1);
+  b.send(rpc(9, 'js', { code: 'await app.typeText("x")' })); assert.equal(b.forwarded.length, 0);
+  h.send(rpc(2, 'js', { code: 'await app.typeText("x")' })); assert.equal(h.forwarded.length, 0);
+  assert.match(h.received.at(-1).result.content[0].text, /selected window is not confirmed.*select_window/);
+  h.send(rpc(3, 'js', { code: 'app = await cua.getApp("TextEdit")' })); h.reply(result(3, 'Window: "b.txt", App: TextEdit'));
+  assert.match(h.received.at(-1).result.content.at(-1).text, /selected window not observed/);
+  h.send(rpc(4, 'js', { code: 'await app.typeText("x")' })); assert.equal(h.forwarded.length, 1);
+  h.send(rpc(5, 'js', { code: 'app = await cua.getApp("TextEdit")' })); h.reply(result(5));
+  assert.equal(h.received.at(-1).result.content.length, 1);
+  h.send(rpc(6, 'js', { code: 'await app.typeText("x")' })); assert.equal(h.forwarded.length, 3);
+  assert.match(h.forwarded.at(-1).params.arguments.code, /Selected window changed.*select_window/);
+  h.reply(result(6));
+  h.send(rpc(7, 'js_reset')); h.reply(result(7, 'reset'));
+  h.send(rpc(8, 'js', { code: 'await app.typeText("x")' }));
+  assert.doesNotMatch(h.received.at(-1).result.content[0].text, /select_window/);
+  h.send(rpc(10, 'js', { code: 'app = await cua.getApp("Calculator")' }));
+  const other = result(10, 'Window: "Calculator", App: Calculator');
+  other.result._meta['codex/toolSurface'].app.appId = 'com.apple.calculator'; h.reply(other);
+  h.send(rpc(11, 'js', { code: 'await app.pressKey("1")' }));
+  assert.equal(h.forwarded.at(-1).id, 11); h.reply(other);
+});
+
+test('window selection cannot raise an app while another session holds one of its documents', async t => {
+  const { a, harness } = setup(t);
+  let selections = 0;
+  const h = harness('selector', { localTools: { tools: [SELECT_WINDOW_TOOL], target: async () => ({ appId: 'com.apple.TextEdit' }),
+    call: async () => { selections++; return { content: [] }; } } });
+  a.send(rpc(1, 'js', { code: 'await app.typeText("x")' })); a.reply(result(1));
+  h.send(rpc(2, 'select_window', { app: 'TextEdit', title: 'b.txt' })); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(selections, 0); assert.match(h.received.at(-1).result.content[0].text, /Input lease.*A/);
+});
+test('a retained same-name handle cannot replace the selected bundle through an AX read', async t => {
+  const { harness, path } = setup(t);
+  const target = { appId: 'com.apple.TextEdit', app: 'TextEdit', title: 'a.txt', url: pathToFileURL(path).href };
+  const h = harness('bundle selector', { localTools: { tools: [SELECT_WINDOW_TOOL], target: async () => target,
+    call: async () => ({ content: [{ type: 'text', text: JSON.stringify({ ok: true, target }) }] }) } });
+  h.send(rpc(1, 'select_window', { app: 'TextEdit', url: target.url })); await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc(2, 'js', { code: 'app = await cua.getApp("TextEdit")' })); h.reply(result(2));
+  h.send(rpc(3, 'js', { code: 'await other.getAXState({ disableDiffing: true })' }));
+  const other = result(3); other.result._meta['codex/toolSurface'].app.appId = 'another.bundle'; h.reply(other);
+  h.send(rpc(4, 'js', { code: 'await other.typeText("x")' }));
+  assert.equal(h.forwarded.length, 2); assert.match(h.received.at(-1).result.content[0].text, /selected window is not confirmed/);
+});
+test('document mode permits selection but still requires document approval after its matching read', async t => {
+  const { harness, path } = setup(t);
+  const target = { appId: 'com.apple.TextEdit', app: 'TextEdit', title: 'a.txt', url: pathToFileURL(path).href };
+  const h = harness('document selector', { approvalScope: 'document', ask: async () => 'accept',
+    localTools: { tools: [SELECT_WINDOW_TOOL], target: async () => target,
+      call: async () => ({ content: [{ type: 'text', text: JSON.stringify({ ok: true, target }) }] }) } });
+  h.send(rpc(1, 'select_window', { app: 'TextEdit', url: target.url })); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.received.at(-1).result.isError, undefined);
+  h.send(rpc(2, 'js', { code: 'app = await cua.getApp("TextEdit")' })); h.reply(result(2));
+  h.send(rpc(3, 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(h.forwarded.length, 1); assert.match(h.received.at(-1).result.content[0].text, /not approved/);
+  h.send(rpc(4, 'document_scope')); await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc(5, 'js', { code: 'await app.typeText("x")' })); assert.equal(h.forwarded.length, 2); h.reply(result(5));
 });
 
 test('AX re-read after a guard stop restores the known bundle identity', t => {
