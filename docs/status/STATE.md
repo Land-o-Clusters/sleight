@@ -3,13 +3,14 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-05, 0.10.0 released)
+## Banner (2026-10-05, 0.11.0 released)
 
-Public: `Land-o-Clusters/sleight`. Latest release `v0.10.0` (`9c30f0c`, CI green). Installed on this
-Mac at user scope: 0.10.0. The guard's after-action read reaches Claude as changed lines, matched by
-text so renumbering pages compact too, and the relay refuses actions on numbers that changed. CNN in
-Helium: five scrolls sent 39,655 characters instead of 203,160; click trials 8 correct refusals, 6
-correct passes, none wrong. Benchmark 12/12, where two refusals stopped off-by-one menu clicks. Promotion starts next (owner, 2026-10-05).
+Public: `Land-o-Clusters/sleight`. Latest release `v0.11.0` (CI green). Installed on this Mac at user
+scope: 0.11.0. Since 0.9.0 the relay sends Claude the guard's read as changed lines, matched by text, with
+stale-number refusals. 0.11.0 reuses Claude's reads for the guard (CNN 242 to 332 ms per call down
+to 10 to 14 ms) and has the launch README. A fresh-config install from GitHub worked. Launch drafts
+are in `.dev/launch/` (untracked): `demo-script.md` for the owner to record, `thread.md` to post.
+Promotion starts next (owner, 2026-10-05).
 
 0.8.0 adds the opt-in engine path for terminals and OpenAI's apps: the user sets the helper's own
 `ComputerUseAllowForbiddenTargets` default, and sleight warns in the prompt and refuses settings
