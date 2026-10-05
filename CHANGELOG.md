@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.0 (2026-10-05)
+
+- Compaction handles pages that renumber. Lines are matched by their text without the element
+  number, and elements whose only change is a new number are counted instead of listed. The relay
+  refuses actions on numbers that changed until Claude reads them again, and on computed numbers in
+  that state. On the CNN front page, five scrolls sent 39,655 characters instead of 203,160; in
+  click trials the relay refused 8 stale numbers and let 6 current ones through, none wrong
+  (`docs/benchmarks/2026-10-05-compact-reads.md`). Benchmark 12/12. Two of its three refusals stopped a
+  click that would have hit the next menu item, because an open menu had shifted the numbers by one.
+- When the engine's helper fails to start ("native pipe startup failed"), the result says no app got
+  the call and tells Claude to retry once, then `js_reset` and retry.
+
 ## 0.9.1 (2026-10-05)
 
 - Guard-read compaction works when a `js` call writes its own output before the guard's read. In

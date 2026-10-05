@@ -1,0 +1,54 @@
+{
+ "note": "Renumber-aware guard-read compaction (0.10.0 code) on the CNN front page in Helium 0.18.3.1, 2026-10-05, owner away. Deterministic script through sleight's launcher, Helium on the owner's pre-approved list. Sizes are characters. 'full' is a read with diffing off just before the guard's read; the page keeps loading, so the two can differ.",
+ "scrolls": [
+  {
+   "full": 32512,
+   "sent": 2523,
+   "diffLines": 31,
+   "renumbered": 363
+  },
+  {
+   "full": 36738,
+   "sent": 9187,
+   "diffLines": 122,
+   "renumbered": 337
+  },
+  {
+   "full": 39962,
+   "sent": 8525,
+   "diffLines": 94,
+   "renumbered": 330
+  },
+  {
+   "full": 45706,
+   "sent": 16245,
+   "diffLines": 161,
+   "renumbered": 310
+  },
+  {
+   "full": 48242,
+   "sent": 3175,
+   "diffLines": 37,
+   "renumbered": 345
+  }
+ ],
+ "staleTrials": {
+  "description": "After a scroll with no other read, the script clicked old numbers of plain text elements, from the bottom of the page up, stopping at the first click that went through, then read the page to see what each number pointed at now.",
+  "firstRun": {
+   "result": "10 refusals of numbers that pointed elsewhere, 1 pass, 3 flagged wrong by a checker that looked elements up by text; CNN repeats identical lines, so that checker could find another copy",
+   "counts": {
+    "correctRefusal": 10,
+    "correctPass": 1,
+    "flaggedByTextChecker": 3
+   }
+  },
+  "secondRun": {
+   "checker": "the element now at that number has the text Claude was shown there, or a + line showed that number",
+   "counts": {
+    "correctRefusal": 8,
+    "correctPass": 6,
+    "wrong": 0
+   }
+  }
+ }
+}

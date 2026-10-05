@@ -343,8 +343,11 @@ engine instances despite the installed extension. The final run detected both af
   tree it saw for that window ([measurements](docs/benchmarks/2026-10-05-compact-reads.md)). A first
   read, a new window or dialog, or a page that re-renders and renumbers its elements still comes
   through whole. On TextEdit and Chess the result text per run fell 1 to 23%. In Helium, a click on
-  a local page with a 120-item sidebar sent 428 characters instead of 35,532, but 5/5 scrolls on
-  the CNN front page went whole, because lazy loading renumbers the elements. If Claude Code summarizes the conversation, Claude can lose the tree a diff refers
+  a local page with a 120-item sidebar sent 428 characters instead of 35,532, and five scrolls on
+  the CNN front page sent 39,655 instead of 203,160. When loaded content renumbers elements, Claude
+  gets the count instead of the lines, and the relay refuses actions on numbers that changed until
+  Claude reads them again (8 refusals, 6 correct passes and none wrong in CNN trials). Literal
+  numbers only: a call that computes an element number is refused in that state. If Claude Code summarizes the conversation, Claude can lose the tree a diff refers
   to, as with the engine's own diffs. A read with `disableDiffing: true` comes through whole.
 - TextEdit hung 2/2 when Claude pressed Cmd+Shift+S (Duplicate, in apps with autosave) right after
   setting a document's text. Its main thread waits forever on the document's save lock, so every
@@ -367,6 +370,10 @@ engine instances despite the installed extension. The final run detected both af
   Doctor probes inventory, which does not prove that every app's accessibility read works. Before
   0.7.0 it also reported "ok" when the helper couldn't start at all.
   [The investigation](docs/benchmarks/2026-10-04-helper-health.md) records each live attempt.
+- The helper quits about 20 seconds after it goes idle and relaunches on the next call. A call
+  during that restart can fail with "native pipe startup failed" before it reaches any app; another
+  session hit it three times in a row on 2026-10-05 while doctor passed, and we don't know why it
+  repeated. sleight now tells Claude to retry once, then `js_reset` and retry.
 - The helper can also fail to start. On 2026-10-05 it quit normally when doctor's session ended, and
   every later launch failed with "Sky Computer Use service startup request failed" for at least five
   minutes: launchd still held the old job and answered "Operation already in progress". Removing that

@@ -1,6 +1,6 @@
 {
   "name": "sleight",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "Unofficial: lets Claude drive macOS apps in the background through the computer-use engine bundled with the ChatGPT desktop app, without taking over your cursor.",
   "author": {
     "name": "Land o' Clusters",

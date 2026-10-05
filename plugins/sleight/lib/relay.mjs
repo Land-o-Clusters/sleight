@@ -502,6 +502,13 @@ export function createRelay({
         leaseStop(msg, `a bundle ID and full window header are required. Send exactly \u0060${recovery}\u0060 in js, then read the intended window before acting.`);
         return false;
       }
+      const stale = name === 'js' ? compactor.staleIndex(leaseWindow, code) : undefined;
+      if (stale) {
+        leaseStop(msg, stale.number !== undefined
+          ? `element ${stale.number} may be stale. Numbers in this window changed since your last full read, and ${stale.number} isn't one you've seen since. Use a number from a + line in the latest result, or read the window again with getAXState({ disableDiffing: true }) first.`
+          : `this call computes an element number (${stale.computed}), and numbers in this window changed since your last full read. Use a literal number from a + line in the latest result, or read the window again with getAXState({ disableDiffing: true }) first.`);
+        return false;
+      }
       if (engineForbiddenTargets && isForbiddenSettingsWindow(leaseWindow)) {
         leaseStop(msg, `${leaseWindow.app}'s settings window is refused, so Claude can't change its approval or safety settings. Close it or read another window.`);
         return false;
@@ -1131,6 +1138,12 @@ export function createRelay({
     // The engine refuses Terminal, iTerm2 and OpenAI's own apps before any
     // approval, so a user consent can never enable the engine on them. Say so,
     // and offer sleight's own Accessibility path: the prompt is the opt-in.
+    // The helper quits after about 20 s idle and relaunches on the next call;
+    // a call during that restart can fail before reaching any app (2026-10-05).
+    if (msg.method === undefined && msg.result?.isError && Array.isArray(msg.result.content) &&
+      msg.result.content.some(c => c.type === 'text' && /Sky Computer Use (?:native pipe|service) startup (?:request )?failed/.test(c.text ?? ''))) {
+      msg.result.content.push({ type: 'text', text: "sleight: the engine couldn't reach its helper (SkyComputerUseService), so this call never reached an app. The helper quits after about 20 seconds idle and restarts on the next call, which can race. Retry the same call once. If it fails again, call js_reset and retry. If that fails too, tell the user; `sleight-mcp --doctor` prints a fix when macOS won't relaunch the helper." });
+    }
     if (localNames.has('blocked_app') && msg.method === undefined && msg.result) {
       const text = (msg.result.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
       const refused = refusedApp(text);

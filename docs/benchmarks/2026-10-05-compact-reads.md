@@ -40,3 +40,28 @@ sent 428 characters instead of 35,532, and the counter read back correctly 5/5. 
 page, all 5 scrolls went whole, from 32,671 to 48,089 characters. Lazy loading inserts elements and
 renumbers every element after them, so most lines change. The engine's own diff has the same
 limit. Pages that hold still get the savings, and pages that keep loading don't.
+
+## Pages that renumber, in 0.10.0
+
+0.10.0 matches lines by their text without the element number. Elements whose only change is a new
+number are left out, and one line says how many there were. Those old numbers are stale, so the
+relay remembers which numbers Claude has seen since its last full read of the window. Those are the
+unchanged ones and the numbers on + lines, plus any number on a line in the same result that
+matches the current tree exactly. An action on any other number, or on a computed one, is refused before it reaches the
+engine, with a pointer to the latest + lines or a full read.
+
+On the CNN front page in Helium ([sizes and trials](2026-10-05-compact-reads-cnn.json)), five
+scrolls sent 39,655 characters instead of 203,160 (2,523 to 16,245 each, with 310 to 363 elements
+renumbered per scroll). Every + line also appeared in a full read. Clicking old numbers of text
+elements after a scroll, the relay refused 8 numbers that now pointed at a different element and
+let 6 through that pointed where Claude had been shown, with none wrong. A first run used a checker
+that looked elements up by text; CNN repeats identical lines, and that checker flagged 3 of 14 as
+wrong, so the second run checked what each number pointed at. Those three weren't rechecked one by
+one.
+
+The benchmark passed 12/12 on 0.10.0 ([results](2026-10-05-compact-reads-0.10.0.json)). The relay
+refused three clicks as stale, all in textedit-save while TextEdit's menus were open. In two of
+them an open menu had shifted every number by one between Claude's read and its click: 21 was now
+20 and 65 was now 64, so the click would have hit the next item. Claude read again and clicked the
+right one. After the third, Claude judged the task done and stopped, so there is no later read to
+check it against.

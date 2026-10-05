@@ -1,0 +1,180 @@
+{
+ "stamp": "2026-10-05T16-52-27-444Z",
+ "arms": [
+  "sleight"
+ ],
+ "model": "claude-sonnet-5-5",
+ "effort": "medium",
+ "claude": "claude",
+ "results": [
+  {
+   "arm": "sleight",
+   "task": "calculator-click",
+   "run": 1,
+   "passed": true,
+   "seconds": 82.2,
+   "turns": 10,
+   "costUsd": 0.32102139999999996,
+   "exitCode": 0,
+   "answer": "391",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  },
+  {
+   "arm": "sleight",
+   "task": "calculator-menu",
+   "run": 1,
+   "passed": true,
+   "seconds": 105.9,
+   "turns": 14,
+   "costUsd": 0.4025446,
+   "exitCode": 0,
+   "answer": "1,024",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  },
+  {
+   "arm": "sleight",
+   "task": "textedit-save",
+   "run": 1,
+   "passed": true,
+   "seconds": 64.1,
+   "turns": 26,
+   "costUsd": 0.6055320000000002,
+   "exitCode": 0,
+   "answer": "I created the TextEdit document, made it plain text, and saved it to `$TMPDIR/sleight-bench/2026-10-05T16-52-27-444Z/sleight-textedit-save-1/6e3c9b27.txt`. I then closed it.\n\nThe file holds exactly `sleight bench 6e3c9b27` (22 bytes, no trailing newline, chec",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  },
+  {
+   "arm": "sleight",
+   "task": "textedit-edit",
+   "run": 1,
+   "passed": true,
+   "seconds": 27.4,
+   "turns": 12,
+   "costUsd": 0.2639948,
+   "exitCode": 0,
+   "answer": "I replaced \"beta\" with \"delta\" in `7fc46f8f-edit.txt`, saved it and closed the document. The file now reads `alpha delta gamma` with a trailing newline, which I checked on disk.\n\nClosing the document made TextEdit open an Open dialog. I dismissed it with Escape, and TextEdit now has no windows. I di",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  },
+  {
+   "arm": "sleight",
+   "task": "textedit-drag",
+   "run": 1,
+   "passed": true,
+   "seconds": 27.3,
+   "turns": 11,
+   "costUsd": 0.26110619999999995,
+   "exitCode": 0,
+   "answer": "I moved \"alpha\" to the end by drag and drop, and the file now reads `beta gamma alpha`. I saved it with Cmd+S and then closed the document. I checked the file on disk afterwards and it contains that text.\n\nTextEdit now shows its Open dialog, which it does whenever no documents are open. Cancel just ",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  },
+  {
+   "arm": "sleight",
+   "task": "chess-drag",
+   "run": 1,
+   "passed": true,
+   "seconds": 48.8,
+   "turns": 16,
+   "costUsd": 0.384123,
+   "exitCode": 0,
+   "answer": "I started a new game in Chess, dragged the e2 pawn to e4 as White, saved it, and closed that window. The game is at `$TMPDIR/sleight-bench/2026-10-05T16-52-27-444Z/sleight-chess-drag-1/8ef71e5d.game`. I confirmed the file exists (1364 bytes) but didn't open i",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  },
+  {
+   "arm": "sleight",
+   "task": "calculator-click",
+   "run": 2,
+   "passed": true,
+   "seconds": 38.9,
+   "turns": 7,
+   "costUsd": 0.22550180000000003,
+   "exitCode": 0,
+   "answer": "391",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  },
+  {
+   "arm": "sleight",
+   "task": "calculator-menu",
+   "run": 2,
+   "passed": true,
+   "seconds": 47.3,
+   "turns": 16,
+   "costUsd": 0.40555440000000004,
+   "exitCode": 0,
+   "answer": "1,024",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  },
+  {
+   "arm": "sleight",
+   "task": "textedit-save",
+   "run": 2,
+   "passed": true,
+   "seconds": 51.3,
+   "turns": 19,
+   "costUsd": 0.4937084000000001,
+   "exitCode": 0,
+   "answer": "The document is closed. The Open panel that TextEdit shows when no windows remain is harmless, so I'll leave it.\n\nThe file is saved at `$TMPDIR/sleight-bench/2026-10-05T16-52-27-444Z/sleight-textedit-save-2/cdfe4159.txt`.\n\n- **Content:** `sleight bench cdfe41",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  },
+  {
+   "arm": "sleight",
+   "task": "textedit-edit",
+   "run": 2,
+   "passed": true,
+   "seconds": 26,
+   "turns": 11,
+   "costUsd": 0.28935599999999995,
+   "exitCode": 0,
+   "answer": "In `fb001cce-edit.txt`, \"beta\" is now \"delta\". The file reads `alpha delta gamma` on disk, and the document is saved and closed.\n\nI set the text through the accessibility API, and that added a trailing newline (18 bytes, up from 17). TextEdit's Open panel was already on screen when I started, so I l",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  },
+  {
+   "arm": "sleight",
+   "task": "textedit-drag",
+   "run": 2,
+   "passed": true,
+   "seconds": 30.3,
+   "turns": 12,
+   "costUsd": 0.2773544,
+   "exitCode": 0,
+   "answer": "The file now reads \"beta gamma alpha\". I saved and closed it.\n\nI selected \"alpha\" and moved it to the end of the line with the `drag` tool, using real drag and drop. Before saving, TextEdit showed \"beta gamma alpha\". After closing, I read the file from disk and it contains the same text.\n\nOnce the d",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  },
+  {
+   "arm": "sleight",
+   "task": "chess-drag",
+   "run": 2,
+   "passed": true,
+   "seconds": 52.4,
+   "turns": 15,
+   "costUsd": 0.3597808,
+   "exitCode": 0,
+   "answer": "I started a new Chess game, dragged White's pawn from e2 to e4, saved it to `$TMPDIR/sleight-bench/2026-10-05T16-52-27-444Z/sleight-chess-drag-2/c435c48b.game`, and closed the game window. `ls` confirms the file exists, but I didn't open it to check its conte",
+   "models": [
+    "claude-sonnet-5-5"
+   ]
+  }
+ ],
+ "note": "Benchmark on the 0.10.0 renumber-aware compaction, 2026-10-05, owner away. sleight arm only, folder outside any repo, Sonnet 5.5 medium. See 2026-10-05-compact-reads.md."
+}
