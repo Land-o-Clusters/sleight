@@ -1,0 +1,10 @@
+{
+  "branch": "codex/drag-raise",
+  "command": "sh bench/drag-polish-live.sh --chess docs/benchmarks/2026-10-04-drag-raise-live-1.json",
+  "runs": [],
+  "lockAcquired": false,
+  "appActions": false,
+  "error": "Interrupted through the owned terminal while waiting for another run's live lock, to correct cleanup ownership before any app action",
+  "stdout": "^C",
+  "exitCode": 1
+}

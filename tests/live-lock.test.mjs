@@ -33,3 +33,15 @@ while :; do sleep 0.1; done
     rmSync(dir, { recursive: true, force: true });
   }
 });
+test('a Chess cleanup failure keeps its lock and returns the remaining-window failure code', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sleight-lock-test-'));
+  const lock = join(dir, 'live.lock');
+  const source = readFileSync(new URL('../bench/drag-polish-live.sh', import.meta.url), 'utf8');
+  writeFileSync(join(dir, 'run.sh'), source.replaceAll('/tmp/sleight-live.lock', lock));
+  writeFileSync(join(dir, 'node'), '#!/bin/sh\nexit 73\n', { mode: 0o755 });
+  const child = spawn('/bin/sh', [join(dir, 'run.sh'), '--chess'], { env: { ...process.env, PATH: `${dir}:${process.env.PATH}` }, stdio: 'ignore' });
+  try {
+    const code = await new Promise(resolve => child.once('close', resolve));
+    assert.equal(code, 73); assert.equal(existsSync(lock), true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

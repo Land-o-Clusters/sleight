@@ -1,0 +1,57 @@
+{
+  "input": "docs/benchmarks/2026-10-04-drag-raise-live-3.json",
+  "paths": [
+    "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-1-target.game",
+    "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-1-cover.game",
+    "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-2-target.game",
+    "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-2-cover.game",
+    "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-3-target.game",
+    "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-3-cover.game"
+  ],
+  "cleanup": [
+    {
+      "path": "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-1-target.game",
+      "result": {
+        "alreadyClosed": true,
+        "ok": true
+      }
+    },
+    {
+      "path": "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-1-cover.game",
+      "result": {
+        "alreadyClosed": true,
+        "ok": true
+      }
+    },
+    {
+      "path": "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-2-target.game",
+      "result": {
+        "alreadyClosed": true,
+        "ok": true
+      }
+    },
+    {
+      "path": "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-2-cover.game",
+      "result": {
+        "alreadyClosed": true,
+        "ok": true
+      }
+    },
+    {
+      "path": "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-3-target.game",
+      "result": {
+        "alreadyClosed": true,
+        "ok": true
+      }
+    },
+    {
+      "path": "/private/tmp/sleight-chess-stacked-rBnGIx/sleight-stacked-3-cover.game",
+      "result": {
+        "alreadyClosed": true,
+        "ok": true
+      }
+    }
+  ],
+  "closedAllOpenedWindows": true,
+  "exitCode": 0
+}

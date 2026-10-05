@@ -266,6 +266,10 @@ engine instances despite the installed extension. The final run detected both af
   [Spacing repair](docs/benchmarks/2026-10-04-drag-polish.md) covers unique whole words at line ends.
   Other selections need a spacing check, and concurrent edits can confuse snapshot comparisons.
   The old-helper live reproduction was blocked by another session's larger window.
+  Named drags set AXMain and raise the window, then require it above other windows at both endpoints.
+  Off-screen windows must be brought to the current desktop for drag or hover.
+  [Stacked Chess checks](docs/benchmarks/2026-10-04-drag-raise.md) have no measured moves yet;
+  three fixture placement failures required owner-assisted cleanup. Calculator content guards remain unmeasured.
   The [background prototype](docs/benchmarks/2026-10-04-background-text-drag.md) moved TextEdit text
   4/4 after correcting its drop geometry, but joined `gammaalpha`. The product now uses that path
   first and repairs the verified space. [Product trials](docs/benchmarks/2026-10-04-background-drag-product.md)
