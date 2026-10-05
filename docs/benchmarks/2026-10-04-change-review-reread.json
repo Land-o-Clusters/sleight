@@ -1,0 +1,6 @@
+{
+  "branch": "codex/change-review-reread",
+  "base": "2598a1b",
+  "changeReview": "SLEIGHT_CHANGE_REVIEW=1",
+  "attempts": []
+}
