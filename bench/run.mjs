@@ -11,7 +11,7 @@
 // Arms: `sleight` loads this repo's plugin. `lcu` runs from a folder where LCU
 // (github.com/amontlabs/lcu) was registered for Claude Code at project scope:
 //   lcu setup --agent claude-code --scope project --project <dir> --no-chrome --no-audio --yes
-// The folder is LCU_ARM_DIR (default .dev/lcu-arm), and LCU needs Python 3.12+
+// The folder is LCU_ARM_DIR (default ~/Library/Caches/sleight-bench/lcu-arm), and LCU needs Python 3.12+
 // first on PATH (LCU_PATH_PREFIX, default .dev/py). BENCH_ROOT tells the
 // approval hook where this repo is, since an arm may run from another folder.
 //
@@ -24,7 +24,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tasks } from './tasks.mjs';
@@ -36,14 +36,23 @@ function option(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? process.argv[i + 1] : fallback;
 }
+// The git repo a folder belongs to, if any.
+function gitRoot(dir) {
+  try { return execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+  catch { return undefined; }
+}
 const isDryRun = process.argv.includes('--dry-run');
 const armOption = option('arm', 'sleight');
+const ARM_HOME = join(homedir(), 'Library', 'Caches', 'sleight-bench');
 const ARMS = {
-  // Each arm runs from its own empty folder, so neither gets this repo's
-  // CLAUDE.md or project memory (until 2026-10-03 the sleight arm ran here).
+  // Each arm runs from its own empty folder outside any git repo, so neither
+  // gets this repo's CLAUDE.md or project memory. Until 2026-10-03 the sleight
+  // arm ran here, and until 2026-10-05 in .dev/, which is still inside the repo:
+  // Claude Code loads CLAUDE.md from parent folders and keys project memory by
+  // the git root, so both arms got them.
   sleight: {
     cwd: (() => {
-      const dir = process.env.SLEIGHT_ARM_DIR || join(ROOT, '.dev', 'sleight-arm');
+      const dir = process.env.SLEIGHT_ARM_DIR || join(ARM_HOME, 'sleight-arm');
       mkdirSync(dir, { recursive: true });
       return dir;
     })(),
@@ -52,7 +61,7 @@ const ARMS = {
     server: 'plugin:sleight:computer',
   },
   lcu: (() => {
-    const dir = process.env.LCU_ARM_DIR || join(ROOT, '.dev', 'lcu-arm');
+    const dir = process.env.LCU_ARM_DIR || join(ARM_HOME, 'lcu-arm');
     const prefix = process.env.LCU_PATH_PREFIX || join(ROOT, '.dev', 'py');
     return {
       cwd: dir,
@@ -68,6 +77,8 @@ for (const name of armNames) {
   if (!ARMS[name]) throw new Error(`unknown arm ${name}`);
   const ok = ARMS[name].check?.() ?? true;
   if (ok !== true) throw new Error(ok);
+  const repo = gitRoot(ARMS[name].cwd);
+  if (repo) throw new Error(`${name} arm folder ${ARMS[name].cwd} is inside the git repo ${repo}, so its runs would load that repo's CLAUDE.md and project memory. Use a folder outside any repo.`);
 }
 const runs = Number(option('runs', '1'));
 const model = option('model', 'claude-sonnet-5-5');
