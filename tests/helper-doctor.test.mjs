@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { doctor } from '../plugins/sleight/lib/launch.mjs';
-import { probeHelper } from '../plugins/sleight/lib/helper-health.mjs';
+import { probeHelper, staleHelperJobs } from '../plugins/sleight/lib/helper-health.mjs';
+
+const STALE_LISTING = 'PID\tStatus\tLabel\n-\t0\tapplication.com.openai.sky.CUAService.1.2\n83422\t0\tapplication.com.openai.codex.3.4\n';
 
 for (const [mode, code, message] of [
   ['ok', 0, /live read.*ok/i],
@@ -15,6 +17,7 @@ for (const [mode, code, message] of [
   ['startup-hang', 1, /server.*startup.*timed out/i],
   ['rpc-error', 1, /helper unavailable/],
   ['approval', 1, /approval declined/],
+  ['launch-failed', 1, /live read FAILED: Native apps: Error: Sky Computer Use service startup request failed\n.*\n  launchctl remove application\.com\.openai\.sky\.CUAService\.1\.2$/],
 ]) {
   test(`doctor performs a bounded live read: ${mode}`, async t => {
     const bank = await mkdtemp(join(tmpdir(), 'sleight-doctor-test-'));
@@ -26,7 +29,8 @@ for (const [mode, code, message] of [
       command: process.execPath, args: [script, mode], env: { CUA_REPL_NODE_REPL_PATH: script, SKY_CUA_SERVICE_PATH: script },
     } } }));
     const lines = [];
-    assert.equal(await doctor({ env: { CODEX_HOME: bank, SLEIGHT_SURFACES: 'computer' }, log: line => lines.push(line), timeoutMs: 100, startupTimeoutMs: 200 }), code);
+    assert.equal(await doctor({ env: { CODEX_HOME: bank, SLEIGHT_SURFACES: 'computer' }, log: line => lines.push(line), timeoutMs: 100, startupTimeoutMs: 200,
+      launchctlList: async () => STALE_LISTING }), code);
     assert.match(lines.join('\n'), message);
   });
 }
@@ -45,4 +49,10 @@ test('doctor collects a descendant that retains pipes after its parent exits', a
   assert.equal(result.ok, false);
   assert.equal(result.stuck, true);
   assert.ok(Date.now() - started < 1500, 'descendant survived the cleanup deadline');
+});
+
+test('only helper jobs without a process count as stale', () => {
+  assert.deepEqual(staleHelperJobs(STALE_LISTING), ['application.com.openai.sky.CUAService.1.2']);
+  assert.deepEqual(staleHelperJobs('15463\t0\tapplication.com.openai.sky.CUAService.1.2\n-\t0\tapplication.com.example.CUAService.1\n'), []);
+  assert.deepEqual(staleHelperJobs('-\t0\tapplication.com.openai.sky.CUAService.1;rm -rf ~\n'), []);
 });

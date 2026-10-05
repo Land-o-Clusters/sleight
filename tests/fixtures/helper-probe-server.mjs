@@ -21,6 +21,8 @@ input.on('line', line => {
     if (mode === 'js-timeout') return send({ id: read, result: { isError: true, content: [{ type: 'text', text: 'js execution timed out; kernel reset' }] } });
     if (mode === 'rpc-error') return send({ id: read, error: { code: -32000, message: 'helper unavailable' } });
     if (mode === 'approval') return send({ id: 'approval', method: 'elicitation/create', params: { message: 'Allow?' } });
+    if (mode === 'launch-failed') return send({ id: read, result: { content: [{ type: 'text', text: '## Computer Use' },
+      { type: 'text', text: '{"apps":[],"browsers":[],"errors":["Native apps: Error: Sky Computer Use service startup request failed"]}' }] } });
     send({ id: read, result: { content: [{ type: 'text', text: 'Apps: Calculator' }] } });
   } else if (msg.id === 'approval') {
     assert.deepEqual(msg.result, { action: 'decline' });

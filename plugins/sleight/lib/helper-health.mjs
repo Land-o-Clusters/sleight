@@ -3,6 +3,27 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
+// Labels of the helper's launchd jobs with no running process, from
+// `launchctl list`. On 2026-10-05 such a job made every launch fail with
+// "Operation already in progress" until `launchctl remove` cleared it.
+export function staleHelperJobs(listing) {
+  return listing.split('\n').map(line => line.trim().split(/\s+/))
+    .filter(([pid, , label]) => pid === '-' && /^application\.com\.openai\.sky\.CUAService\.[\w.]+$/.test(label ?? ''))
+    .map(([, , label]) => label);
+}
+
+// The errors a getState result lists, from any text item that is its JSON.
+export function stateErrors(result) {
+  const errors = [];
+  for (const item of result?.content ?? []) {
+    if (item.type !== 'text' || !item.text.trimStart().startsWith('{')) continue;
+    let state;
+    try { state = JSON.parse(item.text); } catch { continue; }
+    if (Array.isArray(state?.errors)) errors.push(...state.errors.map(String));
+  }
+  return errors;
+}
+
 export async function probeHelper(server, { timeoutMs = 5000, startupTimeoutMs = 10000, cleanupGraceMs = 2000, cleanupForceMs = 5000 } = {}) {
   const child = spawn(server.command, server.args, {
     detached: true, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...server.env },
@@ -46,6 +67,11 @@ export async function probeHelper(server, { timeoutMs = 5000, startupTimeoutMs =
     const text = (result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
     if (result?.isError) throw new Error(text || 'helper live read failed');
     if (!text.trim()) throw new Error('helper live read returned no state');
+    // getState reports a helper that can't start inside its result, not as an
+    // error: {"apps":[],"errors":["Native apps: Error: Sky Computer Use service
+    // startup request failed"]} (2026-10-05).
+    const errors = stateErrors(result);
+    if (errors.length) throw new Error(errors.join('; '));
     return { ok: true };
   } catch (err) {
     const stuck = reading && /timeoutReached|timed out|timeout/i.test(err.message);

@@ -22,7 +22,7 @@ import { loadPreapproved } from './preapproved.mjs';
 import { createGrantAudit } from './preapproved-audit.mjs';
 import { BLOCKED_APP_TOOL, callBlockedApp } from './blocked-apps.mjs';
 import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
-import { probeHelper } from './helper-health.mjs';
+import { probeHelper, staleHelperJobs } from './helper-health.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
 const SERVER_KEY = 'cua_repl';
@@ -82,7 +82,10 @@ export async function selectSurfaces(server, env = process.env, options) {
   server.env.BROWSER_USE_AVAILABLE_BACKENDS = 'chrome';
 }
 
-export async function doctor({ env = process.env, log = console.log, timeoutMs = 5000, startupTimeoutMs = 10000 } = {}) {
+const listLaunchdJobs = () => new Promise((resolve, reject) =>
+  execFile('/bin/launchctl', ['list'], { timeout: 5000 }, (err, stdout) => (err ? reject(err) : resolve(stdout))));
+
+export async function doctor({ env = process.env, log = console.log, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs } = {}) {
   const s = resolveServer(env);
   if (s.error) { log(`sleight: ${s.error}`); return 1; }
   await selectSurfaces(s, env);
@@ -107,6 +110,12 @@ export async function doctor({ env = process.env, log = console.log, timeoutMs =
   catch (err) { log(`live read cleanup FAILED: ${err.message}`); return 1; }
   if (probe.ok) { log('live read ok (helper inventory)'); return 0; }
   log(`live read FAILED: ${probe.error}`);
+  if (/startup request failed/i.test(probe.error)) {
+    const jobs = staleHelperJobs(await launchctlList().catch(() => ''));
+    log(jobs.length
+      ? `macOS won't relaunch the helper while launchd keeps its old job. This clears it without restarting ChatGPT:\n${jobs.map(j => `  launchctl remove ${j}`).join('\n')}`
+      : 'macOS refused to launch the helper. Check that the ChatGPT app is installed and Computer Use is on in Codex.');
+  }
   if (probe.stuck) log('SkyComputerUseService helper appears stuck. Stop retrying. The user needs to restart ChatGPT; this ends their Codex sessions. Never quit or restart ChatGPT automatically.');
   return 1;
 }

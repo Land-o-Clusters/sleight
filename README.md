@@ -354,8 +354,15 @@ engine instances despite the installed extension. The final run detected both af
   App identity comes from literal acquisitions, known handles and learned bundle aliases. Arbitrary
   JavaScript can bypass this advisory check. An app hang can produce the same symptom, so the helper
   diagnosis is provisional.
-  Doctor probes inventory, which does not prove that every app's accessibility read
-  works. [The investigation](docs/benchmarks/2026-10-04-helper-health.md) records each live attempt.
+  Doctor probes inventory, which does not prove that every app's accessibility read works. Before
+  0.7.0 it also reported "ok" when the helper couldn't start at all.
+  [The investigation](docs/benchmarks/2026-10-04-helper-health.md) records each live attempt.
+- The helper can also fail to start. On 2026-10-05 it quit normally when doctor's session ended, and
+  every later launch failed with "Sky Computer Use service startup request failed" for at least five
+  minutes: launchd still held the old job and answered "Operation already in progress". Removing that
+  job with `launchctl remove` fixed it at once, without restarting ChatGPT, and the next four helper
+  launches worked. We don't know what left the job behind. Doctor now detects this and prints the
+  command.
 - ChatGPT updates can break it. The version lookup handles the folder moving around, but not the API
   changing. Run `--doctor` first when something stops working.
 - The engine has no access to an app's icon in the menu bar or to notification banners: its inventory has
@@ -379,7 +386,6 @@ engine instances despite the installed extension. The final run detected both af
   name can pass it. Background scroll reaches the app's focused view. System Events' keystroke
   doesn't act on
   an embedded newline in Terminal, so blocked_app sends one Return key press per newline instead.
-  The window screenshot needs Screen Recording for the app that runs Claude Code, on top of the
   The window screenshot needs Screen Recording for the app that runs Claude Code, on top of the
   Accessibility permission `menu_bar` and `drag` already need, and it captures only a window that is
   on screen. In the live check the Codex app's window exposed only its window-control buttons to the
@@ -564,6 +570,7 @@ for the app that runs Claude Code, settings refusal by window title, toolbar and
 | Approval prompt never appears | Claude Code too old for form elicitation | Update Claude Code |
 | "Not approved" right away in the desktop app, with no panel | The session started before sleight 0.1.1 | Start a new session |
 | A desktop session still shows as busy after Claude has finished | Before 0.3.1, nothing ended the engine's turn in the desktop app | Update sleight and start a new session |
+| "Sky Computer Use service startup request failed" | macOS kept the helper's old launchd job and won't start a new one | Run `--doctor`; it prints the `launchctl remove` command that clears the job without restarting ChatGPT |
 | Tool calls fail after a ChatGPT update | Runtime API changed | Open an issue with the `--doctor` output |
 
 ## Benchmark
