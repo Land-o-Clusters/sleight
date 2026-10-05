@@ -13,7 +13,7 @@ Mac at user scope: 0.8.0 (doctor ok). Promotion starts next (owner, 2026-10-05).
 windows. The owner approved setting it on this Mac for the test, and it is still on
 (`defaults delete -g ComputerUseAllowForbiddenTargets` turns it off; Codex loses the refusal too
 while it's on). In the live check Terminal ran an echo in the background 2/2 and its settings window
-was refused 1/1. For OpenAI's apps the engine asks for approval instead of refusing, but driving them is untested.
+was refused 1/1. For OpenAI's apps the engine shows its approval prompt instead of a refusal, but driving them is untested.
 
 0.7.0 was released earlier today with the CI and doctor fixes, the restored CHANGELOG and the benchmark
 arms moved out of the repo (release check 16/18). 0.8.0 runs: TextEdit hung 2/2 on Cmd+Shift+S (Duplicate) after
