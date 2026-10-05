@@ -3,13 +3,14 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-05, 0.11.0 released)
+## Banner (2026-10-05, 0.12.0 released)
 
-Public: `Land-o-Clusters/sleight`. Latest release `v0.11.0` (CI green). Installed on this Mac at user
-scope: 0.11.0. Since 0.9.0 the relay sends Claude the guard's read as changed lines, matched by text, with
+Public: `Land-o-Clusters/sleight`. Latest release `v0.12.0` (CI green). Installed on this Mac at user
+scope: 0.12.0, which also stops a batch of clicks once an earlier click renumbered its target. Since 0.9.0 the relay sends Claude the guard's read as changed lines, matched by text, with
 stale-number refusals. 0.11.0 reuses Claude's reads for the guard (CNN 242 to 332 ms per call down
-to 10 to 14 ms) and has the launch README. A fresh-config install from GitHub worked. Launch drafts
-are in `.dev/launch/` (untracked): `demo-script.md` for the owner to record, `thread.md` to post.
+to 10 to 14 ms) and has the launch README. A fresh-config install from GitHub worked. Launch files
+are in `.dev/launch/` (untracked): `demo.mp4` and `demo.gif` (recorded by sleight-arch from window
+captures only, no desktop), `thread.md`. Posting waits on the owner's yes to that exact content.
 Promotion starts next (owner, 2026-10-05).
 
 0.8.0 adds the opt-in engine path for terminals and OpenAI's apps: the user sets the helper's own
