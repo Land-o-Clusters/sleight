@@ -19,12 +19,12 @@ The result must confirm the document or a same-app window without a file URL.
 Missing or other document headers leave undo unavailable. A document first discovered
 after an action has no before copy. A fresh standalone read takes a later copy so edits
 can resume. Review labels that copy: undo starts there, leaving earlier edits in place.
+An overlapping read captures after the action returns. If it finishes first, read again.
 
 An injected wrapper checks file targets before common app actions and requests
 a full header afterward. It permits same-app non-file windows and checks Cancel IDs again. Cached
-handles use the latest guard state. Arbitrary JavaScript can
-bypass it or forge headers. File snapshots and conflict checks run in the relay,
-but attribution to an app action still depends on those cooperative observations.
+handles use the latest guard state. Arbitrary JavaScript can bypass it or forge headers.
+File snapshots and conflict checks run in the relay. App attribution depends on those observations.
 
 ## Decisions
 
