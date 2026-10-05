@@ -709,7 +709,7 @@ export function createRelay({
             trace('snapshot-before-call', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });
           }
         } catch (err) { documentCalls.delete(msg.id); finishedCall(msg.id); changeStop(msg, `cannot snapshot before acting: ${err.message}`); return; }
-        changeCalls.set(msg.id, { read, safe, entry, window: lastWindow, expected: documentKey(lastWindow), concurrent: changeCalls.size > 0,
+        changeCalls.set(msg.id, { read, safe, entry, window: lastWindow, expected: documentKey(lastWindow),
           observe: !read || (!isInventoryRead(originalCode) && /cua\.getApp\(|\.(?:getAXState|getAXStateAndScreenshot)\(/.test(originalCode)) });
         if (typeof originalCode === 'string') {
           const target = documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow;
@@ -754,7 +754,13 @@ export function createRelay({
       changeCalls.delete(msg.id);
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
       if (call.observe) { lastWindowText = text; lastWindow = windowFromText(text); }
-      if (changeReview && call.read && call.observe && !call.concurrent && !msg.error && !msg.result?.isError) {
+      // The Open click and its standalone reread can overlap. Judge safety at
+      // the read's completion, after earlier action results have been recorded.
+      const actionPending = [...changeCalls.values()].some(pending => !pending.safe);
+      if (changeReview && call.read && call.observe && actionPending && !msg.error && !msg.result?.isError) {
+        msg.result.content.push({ type: 'text', text: 'Change review: an action is still pending, so this read cannot take a later copy. Wait for its result, then take another standalone cua.getApp read before editing.' });
+      }
+      if (changeReview && call.read && call.observe && !actionPending && !msg.error && !msg.result?.isError) {
         try {
           const entry = changes.read(lastWindow);
           if (entry) trace('snapshot-after-read', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
-import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -66,6 +66,64 @@ test('actions carry both guards and retain the original saved snapshot across tu
   assert.match(a.received.at(-1).result.content[0].text, /-before\n\+second/);
   a.relay.close(); assert.equal(existsSync(bank), false);
   assert.equal(a.inputLease.owned.size, 0);
+});
+
+for (const [binding, reread, handle] of [
+  ['reassignment', 'app = await cua.getApp("TextEdit")', 'app'],
+  ['let', 'let app = await cua.getApp("TextEdit")', 'app'],
+  ['const', 'const x = await cua.getApp("TextEdit")', 'x'],
+  ['bare', 'await cua.getApp("TextEdit")', 'app'],
+]) {
+  test(`TextEdit transcript reread captures a later copy with ${binding}, despite overlapping Open`, t => {
+    const events = [];
+    const { directory, harness } = setup(t);
+    const a = harness('transcript', { trace: (direction, msg) => events.push({ direction, msg }) });
+    const path = join(realpathSync(directory), `${binding}.txt`);
+    writeFileSync(path, 'alpha beta gamma\n');
+    const document = `Window: "${binding}.txt", App: TextEdit.\n0 standard window ${binding}.txt, Secondary Actions: Raise, URL: ${pathToFileURL(path).href}\n2 text entry area Value: alpha beta gamma`;
+    const dialog = 'Window: "Open", App: TextEdit.\n0 standard window Open\n64 button Open';
+    a.send(rpc(1, 'js', { code: 'await app.pressKey("super+o"); await app.getAXState()' }));
+    a.reply(result(1, dialog));
+    a.send(rpc(2, 'js', { code: `await app.pressKey("super+shift+g"); await app.typeText(${JSON.stringify(path)}); await app.pressKey("Return"); await app.getAXState()` }));
+    a.reply(result(2, dialog));
+    a.send(rpc(3, 'js', { code: 'await app.click(64)' }));
+    a.send(rpc(4, 'js', { code: reread })); // Both benchmark transcripts sent this before click returned.
+    a.reply(result(3, document));
+    assert.equal(events.some(e => e.direction === 'snapshot-after-read' && e.msg.path === path), false);
+    a.reply(result(4, document));
+    const snapshot = events.find(e => e.direction === 'snapshot-after-read' && e.msg.path === path);
+    assert.ok(snapshot, 'the completed standalone read captures the newly discovered document');
+    assert.equal(readFileSync(snapshot.msg.snapshot, 'utf8'), 'alpha beta gamma\n');
+    a.send(rpc(5, 'js', { code: `await ${handle}.selectText(2, "beta"); await ${handle}.typeText("delta"); await ${handle}.pressKey("super+s"); await ${handle}.getAXState()` }));
+    assert.ok(a.forwarded.some(m => m.id === 5), 'the edit reaches the engine with leases and change review enabled');
+    writeFileSync(path, 'alpha delta gamma\n'); a.reply(result(5, document));
+    a.send(rpc(6, 'review_changes', { op: 'list' }));
+    assert.match(a.received.at(-1).result.content[0].text, /Undo starts at the later copy[\s\S]*-alpha beta gamma\n\+alpha delta gamma/);
+  });
+}
+
+test('an early reread waits for the pending action, then a fresh read captures the later copy', t => {
+  const events = [];
+  const { directory, harness } = setup(t);
+  const a = harness('early read', { trace: (direction, msg) => events.push({ direction, msg }) });
+  const path = join(realpathSync(directory), 'early.txt');
+  writeFileSync(path, 'before\n');
+  const document = `Window: "early.txt", App: TextEdit\nURL: ${pathToFileURL(path).href}`;
+  a.send(rpc(1, 'js', { code: 'await app.pressKey("super+o")' }));
+  a.reply(result(1, 'Window: "Open", App: TextEdit\n0 standard window Open\n64 button Open'));
+  a.send(rpc(2, 'js', { code: 'await app.click(64)' }));
+  a.send(rpc(3, 'js', { code: 'const x = await cua.getApp("TextEdit")' }));
+  a.reply(result(3, document));
+  assert.equal(a.received.at(-1).result.isError, undefined, 'the read remains available');
+  assert.match(a.received.at(-1).result.content.at(-1).text, /action is still pending.*another standalone cua.getApp read/);
+  assert.equal(events.some(e => e.direction === 'snapshot-after-read'), false);
+  a.reply(result(2, document));
+  a.send(rpc(4, 'js', { code: 'await cua.getApp("TextEdit")' }));
+  a.reply(result(4, document));
+  assert.ok(events.some(e => e.direction === 'snapshot-after-read' && e.msg.path === path));
+  a.send(rpc(5, 'js', { code: 'await app.typeText("after")' }));
+  assert.ok(a.forwarded.some(m => m.id === 5));
+  a.reply(result(5, document));
 });
 
 test('leases and change review allow Cmd+O followed by typing a path into its sheet', async t => {

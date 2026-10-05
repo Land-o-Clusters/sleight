@@ -14,6 +14,7 @@ function run(argv) {
     for (const path of [first, second]) {
       const doc = app.documents.byName(name(path));
       if (doc.exists()) doc.close({ saving: 'no' });
+      if (doc.exists()) throw new Error('fixture document is still open: ' + name(path));
     }
   } else throw new Error('unknown fixture operation');
 }
