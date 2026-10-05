@@ -3,30 +3,31 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-05, 0.7.0 released)
+## Banner (2026-10-05, 0.8.0 released)
 
-Public: `Land-o-Clusters/sleight`. Latest release `v0.7.0` (`2bd3a00`, CI green), with GitHub release
-notes from the CHANGELOG. The marketplace installs from the default branch, so users get `main`.
-Installed on this Mac at user scope: 0.7.0 from the local directory marketplace (doctor ok).
+Public: `Land-o-Clusters/sleight`. Latest release `v0.8.0` (`3343e22`, CI green). Installed on this
+Mac at user scope: 0.8.0 (doctor ok). Promotion starts next (owner, 2026-10-05).
 
-Done this session, owner asleep:
+0.8.0 adds the opt-in engine path for terminals and OpenAI's apps: the user sets the helper's own
+`ComputerUseAllowForbiddenTargets` default, and sleight warns in the prompt and refuses settings
+windows. The owner approved setting it on this Mac for the test, and it is still on
+(`defaults delete -g ComputerUseAllowForbiddenTargets` turns it off; Codex loses the refusal too
+while it's on). In the live check Terminal ran an echo in the background 2/2 and its settings window
+was refused 1/1. For OpenAI's apps the engine asks for approval instead of refusing, but driving them is untested.
 
-- CI was red on `main` since `b5f109c` (Linux has no `/private/tmp` or `swiftc`). Fixed, green.
-- The `blocked_app` squash merge had cut CHANGELOG to 24 lines. 0.6.0 and earlier restored.
-- The helper wouldn't launch (launchd kept a quit helper's job, "Operation already in progress")
-  while doctor said ok. `launchctl remove` fixed it without restarting ChatGPT. Doctor now fails on
-  it and prints the command.
-- Benchmark arm folders were inside this repo since 2026-10-03, so both arms loaded the repo's
-  CLAUDE.md and project memory. They now live in `~/Library/Caches/sleight-bench/<arm>`, and
-  `bench/run.mjs` refuses a folder inside a repo. The README says so for the LCU comparison.
-- Release check 16/18 from the clean folder, every run published in
-  `docs/benchmarks/2026-10-05-release-0.7.0.*`. chess-drag passed 1/3. In both failures Claude
-  aimed at e5 (y ≈ 475) instead of e4 (y ≈ 545), an illegal move. All three clean text drags went foreground
-  because this Claude window covers TextEdit on the second display.
+0.7.0 was released earlier today with the CI and doctor fixes, the restored CHANGELOG and the benchmark
+arms moved out of the repo (release check 16/18). 0.8.0 runs: TextEdit hung 2/2 on Cmd+Shift+S (Duplicate) after
+`setValue`. After a skill hint, TextEdit went 6/6.
 
-Next, Chess square estimates are the weakest task. A skill hint or reading square positions would
-help, though AX square coordinates are vertically reversed. The LCU arm needs re-registering in
-`~/Library/Caches/sleight-bench/lcu-arm` before any new comparison.
+Next, in order:
+
+- Token cost: the window guard appends a full, non-diffed tree after every `js` action
+  (`document-scope.mjs` `guardedCode`). Another session complained about it. A fix has to keep the
+  engine's diff baseline in sync with what Claude saw (LAWS, "The engine").
+- The relay reads an app hang (TextEdit's Duplicate deadlock) as a stuck helper and tells Claude to
+  ask for a ChatGPT restart. It could check whether the app answers before saying so.
+- Chess square estimates (chess-drag 1/3 in the 0.7.0 check).
+- Re-register LCU in `~/Library/Caches/sleight-bench/lcu-arm` before any new comparison.
 
 Codex threads (the owner runs them in worktrees under `~/Projects/sleight-wt/`; prompts in
 `.dev/prompts/`, untracked, latest `round-4.md` and `backlog.md`): all reported work is merged. No
@@ -45,7 +46,7 @@ Publishing it is the owner's call.
   the engine's API docs (`~/Library/Logs/sleight/engine-api-26.930.31730.md` is the baseline) and
   diffs them on an engine update. Remove with `npm run watch:remove`.
 - `~/Library/Application Support/sleight/preapproved.json` lists Calculator at `high`, written by the
-  owner for Codex 9's live check on 2026-10-04. The installed 0.7.0 reads it, so Calculator is
+  owner for Codex 9's live check on 2026-10-04. The installed 0.8.0 reads it, so Calculator is
   approved without a prompt in every session until the owner edits the file.
 - LCU 0.8.8 runtime-only at `~/.local/share/lcu`, registered only in `.dev/lcu-arm` (untracked),
   which the benchmark now refuses because it's inside the repo.
