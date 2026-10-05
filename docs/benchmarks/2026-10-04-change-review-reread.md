@@ -32,8 +32,11 @@ Attempt 4 passed the owner's Undo, then Keep choices. The files contained
 Both checks exited 0. Fixture windows were closed before the lock was released.
 The session backups were deleted. ChatGPT wasn't restarted.
 
-`npm run check` exited 0, with 298 unit tests and 8 mod tests passing.
-`npm run lint:prose` exited 0 across 25 files. Its earlier exits were 2 for
+The branch was rebased onto `7540224` after the live checks. The prose command
+keeps the files from both sides. `npm run check` then exited 0, with 338 unit
+tests and 8 mod tests passing. `npm run lint:prose` exited 0 across 28 files.
+Before the rebase, 298 unit tests and 8 mod tests passed.
+Prose lint's earlier exits were 2 for
 missing Vale styles and 1 for prose flags. Those were corrected before committing.
 Open panel inventory and vendor API docs stay in local
 traces. Published results retain the dialog header and Open/Cancel buttons.
