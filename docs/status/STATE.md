@@ -3,83 +3,79 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-04, 0.6.0 released)
+## Banner (2026-10-05, flushed before the owner's clear)
 
-Public: `Land-o-Clusters/sleight`. Latest release `v0.6.0`: input leases, on by default (Codex A,
-`112c878`, fast-forward). Benchmark with leases: 11/11 over two passes (Sonnet 5.5, medium);
-textedit-save took 27 and 30 turns against 13, because a Save sheet stops the next action. 0.5.0
-added change review and flow rules, both opt-in. Installed on this Mac at user scope from the local
-directory marketplace. Running sessions keep the version they started with until restarted.
+Public: `Land-o-Clusters/sleight`. `main` is at `7775ed7`, CI green, 531 unit tests. Latest release
+`v0.6.0` (input leases). The marketplace installs from the default branch, so users installing now get
+`main`, not the tag. Installed on this Mac at user scope: 0.6.0 from the local directory marketplace.
 
-The change review was on by default on `main` from `844fa60` to `570a1ab` and was never released.
-Its window guard failed both TextEdit tasks that open a file, so `570a1ab` made it opt-in.
+Merged to `main` since 0.6.0, unreleased (all squashed from Codex branches):
 
-The engine's helper wedged on 2026-10-03 at about 23:40 EDT: every `cua.getApp` timed out
-(`-10005 timeoutReached`) until the owner restarted ChatGPT at 00:04. Cause unknown; it followed a
-lease bench run that kills engine processes. Recorded in the README's known problems.
+- Drag: it tries a background drag posted to the app's process before the foreground fallback. It
+  also raises the chosen window and refuses unsafe drops. Lost text is reported, and TextEdit
+  spacing repaired. `7775ed7` skips the background attempt when
+  another app covers the drag points. Measured by sleight-arch on 2026-10-05, calling the drag tool
+  directly on TextEdit: covered by the Claude window 0/3 background (all foreground, text right),
+  uncovered 3/3 background. After the fix, covered drags went straight to foreground, 2/2 correct.
+- Hover tool, pre-approved apps (`preapproved.json`), blocked_app (prompt is the opt-in; terminal
+  commands shown every time), select_window, browser surface (on when the ChatGPT extension is
+  connected; native guards stay on until the engine's `browserUse` reply confirms a browser call),
+  engine-stall recovery, change review re-read fix (opt-in), clipboard preservation (opt-in),
+  doubled-keys probe, flaky-test fixes.
+- Not merged: `codex/action-result-note` (#3). Turns with and without its note were equal.
 
-Codex time goes to known problems and enhancements, not benchmark runs (owner, 2026-10-04).
-sleight-arch runs one `--runs 1` pass per merge that changes default behavior.
+Next, as the owner asked: run the full benchmark right after this clear. Blocker: the headless
+`claude` CLI the benchmark uses has an expired login ("OAuth session expired"). The owner logs in with
+`~/.local/bin/claude` then `/login`. Then: `node bench/run.mjs --arm sleight --runs 3`, under the live
+lock, checking every result against the transcripts. Chess drag is unverified by sleight-arch (Codex 6
+reported 1/3 on stacked games, AX square coordinates reversed). Before the run, close leftover Chess
+games and put TextEdit's window on the current desktop. If it holds up, write the 0.7.0 CHANGELOG (the
+`Unreleased` section has only blocked_app's entry), bump, tag, GitHub release, update the installed
+plugin with `claude plugin marketplace update sleight` and `claude plugin update sleight@sleight`.
 
-In flight, from the owner's Codex sessions in worktrees under `~/Projects/sleight-wt/` (prompts in
-`.dev/prompts/`, untracked, run by the owner):
+Codex threads (the owner runs them in worktrees under `~/Projects/sleight-wt/`; prompts in
+`.dev/prompts/`, untracked, latest `round-4.md` and `backlog.md`): all reported work is merged. No
+thread has open work. Every remote `codex/*` and `claude/blocked-apps` branch is squash-merged into
+`main` except `codex/action-result-note`. Git counts them as ahead because squash merges leave no
+  shared commits. The 24
+worktrees can be deleted with their branches once the owner closes those Codex threads.
 
-- `codex/change-review-guard` at `ea159cc` (Codex B): guard fixes, change review on by default. It
-  conflicts with the lease in the shared window guard. Next: `codex-b-rebase.md` (rebase, one test
-  with both on, then the live check where the owner clicks Undo and Keep).
-
-Review recipe for each Codex branch: read its design note and safety paths (user-only decisions, no
-auto-approval outside the benchmark allowlist), cherry-pick onto `main`, replace home paths in
-published results with `~`, run `npm run check` and `npm run lint:prose`, push, release.
-
-Branches already cherry-picked and safe to delete with their worktrees once their Codex sessions are
-done: `codex/watch-api-diff` (`c058475` as `2d48e5d`), `codex/background-drag` (`32fd681` as
-`ee49fd9`, prototype moved to `bench/background-drag/`), `codex/document-scope` (`9f3827a` as
-`ceebdca`), `codex/change-review` (`e4e4121` as `844fa60`), `codex/flow-rules` (`fdd29c7`, fast-forward), `codex/input-lease` (`112c878`, fast-forward), `codex/background-drag-2` (`91cdda0` as `f4fb71a`, research in `bench/`).
-
-What sleight is now: the engine through a relay, plus its own tools where the engine stops short:
-`menu_bar` and `notifications` (System Events), `drag` (held, stepped, foreground; text drag 3/3
-against 0/9 for `app.drag`), `document_scope` (opt-in, `SLEIGHT_APPROVAL_SCOPE=document`), `flow_exception` (opt-in) and
-`review_changes`. The relay ends the engine's turn after 30 idle seconds (0.3.1). Background hover
-and background drag were measured and don't work reliably, as the README records. The
-fair benchmark tied LCU at 15/18 on Opus 5.5.
+Background jobs: none. An orphaned `node --test` runner from a timed-out check was stopped on
+2026-10-05.
 
 Market research (Codex, gpt-6.1-sol) is in `.dev/research/2026-10-04-competitors.md`, untracked.
-Publishing it is the owner's call. Flow rules finished the three new-ground items on the roadmap.
-Prompts are in `.dev/prompts/` (untracked), and the latest round is `round-4.md`. Merged to main
-since 0.6.0, unreleased: #7 background drag (research, then background-first in the drag tool), #4
-doubled-keys probe, #6 drag window guards, #8 hover, #9 pre-approved apps, #10 blocked_app, B change
-review with the re-read fix (opt-in), #2 clipboard preservation (opt-in), #5 select_window, #11 browser
-surface (on when the extension is connected), #1 engine-stall recovery, and fixes for two flaky tests.
-The browser-call check was tightened over four security-review rounds; #12 (`round-4.md`) replaces it
-with runtime isolation. Not merged: #3 action notes. Waiting: #6 drag raise (stacked-Chess trials need
-the owner away), #12. 0.7.0 waits for a clean pass of the two drag tasks.
-The marketplace installs from the default branch, so users installing now get main, not the 0.6.0 tag.
+Publishing it is the owner's call.
 
 ## Machine state outside the repo
 
-- Weekly launchd job `com.landoclusters.sleight-watch` (Mondays 9:00, `scripts/watch.sh`). It now
-  saves the engine's API docs (`~/Library/Logs/sleight/engine-api-26.930.31730.md` is the baseline)
-  and diffs them on an engine update. Remove with `npm run watch:remove`.
+- Weekly launchd job `com.landoclusters.sleight-watch` (Mondays 9:00, `scripts/watch.sh`). It saves
+  the engine's API docs (`~/Library/Logs/sleight/engine-api-26.930.31730.md` is the baseline) and
+  diffs them on an engine update. Remove with `npm run watch:remove`.
+- `~/Library/Application Support/sleight/preapproved.json` lists Calculator at `high`, written by the
+  owner for Codex 9's live check on 2026-10-04. Only builds from `main` read it. The installed 0.6.0
+  ignores it.
 - LCU 0.8.8 runtime-only at `~/.local/share/lcu`, registered only in `.dev/lcu-arm` (untracked).
   `.dev/py/python3` links Homebrew Python 3.14 for it.
-- Homebrew: `vale`, `ffmpeg`, and the `codex` cask, upgraded to 0.160 on 2026-10-04 (0.153 rejected
-  gpt-6.1-sol). `~/.local/bin/claude` updated to 2.1.289 on 2026-10-04.
-- `.dev/` (untracked): the 2.1.288 test CLI, `sleight-arm` and `lcu-arm` bench folders,
-  `DragProbe.app` (built by `bench/drag-probe/build.sh`), pseudo-terminal harnesses, research.
-- No background jobs of this session are running. The `codex exec-server` process belongs to the
-  owner's ChatGPT app.
+- Homebrew: `vale`, `ffmpeg`, and the `codex` cask 0.160 (0.153 rejected gpt-6.1-sol).
+  `~/.local/bin/claude` 2.1.289. The desktop app's Code tab bundles Claude Code 2.1.286 (checked
+  2026-10-04), too old for the mod.
+- `.dev/` (untracked): test CLI, `sleight-arm` and `lcu-arm` bench folders, `DragProbe.app`, the
+  compiled `textedit-drag-fixture`, pseudo-terminal harnesses, research, prompts.
+- Direct drag test scripts from 2026-10-05 live only in this session's scratchpad. To repeat: open a
+  temp file with `open -g -a TextEdit`, run `.dev/textedit-drag-fixture <path> select-drag`, call
+  `callLocalTool('drag', {app, from, to, windowId}, async () => true)` from `plugins/sleight/lib/launch.mjs`,
+  then `<fixture> <path> read`. Use `select-drag`, never `select`: plain `select` drops in the title bar.
 
 ## Waiting on the owner
 
-- Paste `.dev/prompts/codex-b-rebase.md` to Codex B, then click Undo and Keep in its live check.
-- Restart desktop sessions that started before 0.3.1 (21:17 EDT, 2026-10-03), so they stop hanging.
+- Log the headless CLI back in (`~/.local/bin/claude`, then `/login`), so the benchmark can run.
+- Close leftover Chess games before the benchmark.
+- Close the finished Codex threads, so their worktrees and branches can be deleted.
 
 ## Reading list
 
 - `README.md`: how it works, known problems, benchmark, update watch.
 - `CLAUDE.md`: checks and writing rules.
 - `plugins/sleight/lib/relay.mjs`: the relay, with the reasons for each thing it adds.
+- `plugins/sleight/lib/drag.js`: background and foreground drag paths and their guards.
 - `bench/`: tasks, the arm setup in `run.mjs`, and the approval hook only benchmark runs load.
-- `.dev/stop_test2.py` (untracked): driving an interactive session in a pseudo-terminal. Judge results
-  from the relay trace and the session transcript, because the screen redraws too much to match on.

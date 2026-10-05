@@ -21,6 +21,8 @@ belong in [STATE.md](STATE.md).
   exists. The README compares the two from Anthropic's documentation.
 - A release means a git tag plus a GitHub release with notes from the changelog (owner, 2026-10-04).
 - Codex runs on gpt-6.1-sol, never gpt-6-astra (owner, 2026-10-04).
+- Codex time goes to known problems and enhancements, not benchmark runs (owner, 2026-10-04).
+  sleight-arch runs one benchmark pass per merge that changes default behavior.
 
 ## Approvals and safety
 
@@ -44,6 +46,10 @@ belong in [STATE.md](STATE.md).
 - The engine diffs UI state against the latest read of an app, whoever made it. So the pane snapshots
   only between turns, and the next prompt tells Claude to do a full read.
 - The engine refuses terminal apps. Real pointer activity in an app counts as a person taking over.
+- The engine's helper serves every Codex and sleight session on the Mac, and Codex runs inside the
+  ChatGPT app. Restarting ChatGPT ends every Codex thread, so it's the owner's call, never a test step.
+- macOS picks a drag's drop target from what's on screen at the drop point. A drag posted to an app in
+  the background never drops into a window another app covers there.
 - The engine doesn't remember approvals. In Codex the host does, so here the relay does.
 
 ## Method
@@ -54,7 +60,15 @@ belong in [STATE.md](STATE.md).
   in `docs/benchmarks/` and the caveats stated (owner, 2026-10-03). We never pick runs after seeing
   them.
 - Codex agents build on `codex/*` branches in their own worktrees and never push to `main`. sleight-arch
-  reviews each branch (design note, safety paths), cherry-picks it onto `main`, and releases.
+  reviews each branch (design note, safety paths, evidence for personal data), squash-merges it onto
+  `main` so scrubbed history stays off it, and releases. Conflicts in the relay's core go back to
+  the branch's author to rebase. Hand merges there broke the relay twice.
+- A Codex report is a claim until sleight-arch reproduces it under normal use: the owner at the Mac,
+  other apps open. Results measured while the owner was away say so.
+- Live checks that drive apps hold `/tmp/sleight-live.lock`, taken with `mkdir`, released on exit.
+- The marketplace installs from the default branch, so `main` is what new users get. Keep it releasable:
+  a default that fails the benchmark goes back to opt-in at once.
+- Window titles can include the owner's name (Chess games do). Scrub evidence and screenshots of them.
 - The plugin folder contains only code the plugin runs. Research prototypes go in `bench/`.
 - Published results and logs show home paths as `~`. Check raw logs for personal data before publishing.
 - A guard that runs inside the engine's JavaScript can't be a security boundary, because Claude writes
