@@ -80,18 +80,33 @@ export function tokens(code) {
 function calls(code, handles, fallback) {
   const ts = tokens(code); const inputs = []; let readApp = fallback;
   for (let i = 0; i < ts.length; i++) {
-    if (ts[i].v === 'getApp' && ts[i + 1]?.v === '(' && ts[i + 2]?.string) {
-      const target = ts[i + 2].v; readApp = target;
+    if (ts[i].v === '=' && !ts[i - 1]?.string) {
+      const source = i + (ts[i + 1]?.v === 'await' ? 2 : 1);
+      const end = ts.findIndex((t, index) => index > source && t.v === ';');
+      const expression = ts.slice(source, end < 0 ? ts.length : end);
+      const factories = ['getByRole', 'getByText', 'getByLabel', 'getByPlaceholder', 'getByTestId', 'locator', 'frameLocator', 'filter', 'first', 'last', 'nth', 'and', 'or', 'new', 'get'];
+      if (handles.get(ts[source]?.v) === 'browser' && ts[source + 1]?.v === '.' &&
+          expression.some((t, index) => !t.string && factories.includes(t.v) && expression[index + 1]?.v === '(')) {
+        handles.set(ts[i - 1].v, 'browser');
+      }
+    }
+    if (!ts[i].string && handles.get(ts[i].v) === 'browser' && ts[i + 1]?.v === '.') readApp = 'browser';
+    if (['getApp', 'getBrowser', 'getTab', 'createBrowserTab'].includes(ts[i].v) && ts[i + 1]?.v === '(' && (ts[i].v !== 'getApp' || ts[i + 2]?.string)) {
+      const target = ts[i].v === 'getApp' ? ts[i + 2].v : 'browser'; readApp = target;
       // Find the receiver assigned to this acquisition, without executing it.
       const start = Math.max(ts.slice(0, i).findLastIndex(t => t.v === ';') + 1, 0);
       const eq = ts.slice(start, i).findIndex(t => t.v === '=');
       if (eq > 0) handles.set(ts[start + eq - 1].v, target);
     }
     const method = ts[i].v;
-    if (!['typeText', 'paste', 'setValue', 'pressKey'].includes(method)) continue;
+    if (!['typeText', 'paste', 'setValue', 'pressKey', 'fill', 'type', 'pressSequentially', 'press', 'goto', 'createBrowserTab'].includes(method)) continue;
     const bracket = ts[i].string && ts[i - 1]?.v === '[' && ts[i + 1]?.v === ']';
     if (!bracket && ts[i - 1]?.v !== '.') continue;
     const receiver = ts[i - 2]?.v;
+    const start = Math.max(ts.slice(0, i).findLastIndex(t => t.v === ';') + 1, 0);
+    const root = ts.slice(start, i).find(t => handles.has(t.v) && handles.get(t.v) === 'browser')?.v;
+    const destination = method === 'createBrowserTab' ? 'browser' : handles.get(root ?? receiver) ?? fallback;
+    if (destination === 'browser') readApp = 'browser';
     const open = i + (bracket ? 2 : 1);
     if (ts[open]?.v !== '(') continue;
     const args = [[]]; let depth = 0; let j = open + 1;
@@ -103,9 +118,9 @@ function calls(code, handles, fallback) {
       if (!t.string && [')', ']', '}'].includes(t.v)) depth--;
       args.at(-1).push(t);
     }
-    const arg = method === 'setValue' ? args[1] : (args[0]?.[0]?.string ? args[0] : args[1] ?? args[0]);
+    const arg = method === 'createBrowserTab' ? args[1] : method === 'setValue' ? args[1] : (args[0]?.[0]?.string ? args[0] : args[1] ?? args[0]);
     const literals = (arg ?? []).filter(t => t.string).map(t => t.v);
-    if (literals.length) inputs.push({ method, app: handles.get(receiver) ?? fallback, value: literals.join('') });
+    if (literals.length) inputs.push({ method, app: destination, value: literals.join('') });
     i = j;
   }
   return { inputs, readApp };
@@ -172,7 +187,7 @@ export class FlowRules {
     for (const input of parsed.inputs) {
       const app = this.canonical(input.app);
       let value = input.value;
-      if (input.method === 'pressKey') {
+      if (['pressKey', 'press'].includes(input.method)) {
         value = keyText(value);
         if (value === undefined) { tails.delete(app); continue; }
       }
@@ -211,16 +226,21 @@ export class FlowRules {
         const target = windowFromText(section)?.app ?? plan.readApp;
         if (!target || !this.rules.some(r => r.kind === 'source' && this.matches(target, r.sources))) continue;
         const values = []; const add = v => { if (v?.trim()) values.push(v.trim(), ...v.split('\n').map(s => s.trim()).filter(Boolean)); };
-        if (/^Window: /m.test(section)) {
+        if (/^(?:Window: |Browser tab: )/m.test(section)) {
           let field = [];
           for (const line of section.split('\n')) {
             const match = /^\s*\d+ .*?\bValue: (.*)$/.exec(line) ?? /^\s*\d+ (?:static text|text) (.+)$/.exec(line);
             if (match) { if (field.length) add(field.join('\n')); field = [match[1]]; }
-            else if (/^(?:\s*\d+ (?:standard window|text entry|menu|button|scroll|group|toolbar|File\b)|Window: |URL:)/.test(line)) { if (field.length) add(field.join('\n')); field = []; }
+            else if (/^(?:\s*\d+ (?:standard window|text entry|menu|button|scroll|group|toolbar|File\b)|Window: |Browser tab: |URL:)/.test(line)) { if (field.length) add(field.join('\n')); field = []; }
             else if (field.length) field.push(line);
           }
           if (field.length) add(field.join('\n'));
         } else {
+          if (target === 'browser') for (const line of section.split('\n')) {
+            const field = /^\s*-\s+[\w-]+(?:\s+("(?:[^"\\]|\\.)*"))?(?:\s+\[[^\]]*\])*\s*(?::\s*(.*))?$/.exec(line);
+            if (field?.[1]) { try { add(JSON.parse(field[1])); } catch { /* Keep malformed labels as raw text below. */ } }
+            if (field?.[2]) add(field[2]);
+          }
           try { for (const v of strings(JSON.parse(section))) add(v); } catch { add(section); }
         }
         const app = this.canonical(target); const known = this.values.get(app) ?? new Set();
