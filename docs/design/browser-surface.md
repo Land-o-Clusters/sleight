@@ -26,4 +26,5 @@ The existing turn metadata and `turn_ended` path also serve browser calls. The l
 opened and read Example Domain, clicked its link and observed the new IANA URL. Turn end removed its
 ordinary tab, confirmed by "No tab with id" and an empty tab list in a later session. There was one
 connected extension, reported as Chrome. Owner identification and a second browser trial are pending.
+An owner-connected retry found zero engine instances with both automatic detection and the override.
 The [published calls and trace](../benchmarks/2026-10-04-browser-surface.json) include all failed attempts.

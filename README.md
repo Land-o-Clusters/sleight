@@ -199,6 +199,7 @@ Browser requests go through sleight's approval prompts. The relay never preappro
 On 2026-10-04, engine 26.930.31730 opened Example Domain, read it and clicked its Learn more link in
 1/1 connected extension trial. `turn_ended` removed the tab. A later close returned "No tab with id".
 The owner has not identified that extension as Helium or Chrome, and the second browser is unmeasured.
+After the owner reported both connected, a retry found zero engine instances, including with the override.
 [Every attempt](docs/benchmarks/2026-10-04-browser-surface.json) includes detection and routing failures.
 
 ## Known problems

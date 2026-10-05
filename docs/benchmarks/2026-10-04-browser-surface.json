@@ -1,7 +1,7 @@
 {
   "date": "2026-10-04",
   "engine": "26.930.31730",
-  "ownerBrowserIdentification": "Pending owner response; one connected extension reported as Chrome.",
+  "ownerBrowserIdentification": "Pending owner identification. Earlier run saw one extension; owner-connected retry saw zero engine instances.",
   "publication": "All calls and errors retained. Installed engine documentation and screenshots omitted explicitly; home paths rendered as ~.",
   "attempts": [
     {
@@ -1805,6 +1805,697 @@
           "msg": {}
         }
       ]
+    },
+    {
+      "attempt": 4,
+      "mode": "Owner-connected retry, automatic detection",
+      "outcome": "Discovery kept browser control off; listBrowsers unavailable; no tabs opened.",
+      "launcherExitCode": 0,
+      "shellExitCode": 0,
+      "lockReleased": true,
+      "calls": [
+        {
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {
+              "elicitation": {
+                "form": {}
+              }
+            },
+            "clientInfo": {
+              "name": "sleight-browser-live",
+              "version": "1"
+            }
+          },
+          "response": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+              "protocolVersion": "2025-06-18",
+              "capabilities": {
+                "experimental": {
+                  "codex/sandbox-state-meta": {}
+                },
+                "tools": {
+                  "listChanged": true
+                }
+              },
+              "serverInfo": {
+                "name": "rmcp",
+                "version": "1.5.0"
+              },
+              "instructions": "UI automation through cua_repl using the initialized cua API."
+            }
+          }
+        },
+        {
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "arguments": {
+              "code": "await cua.listBrowsers()"
+            }
+          },
+          "response": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "cua.listBrowsers is not a function"
+                },
+                {
+                  "type": "text",
+                  "text": "[Installed engine documentation omitted; not redistributed.]"
+                }
+              ],
+              "isError": true,
+              "_meta": {
+                "codex/nodeReplExecutionDurationMs": 119
+              }
+            }
+          }
+        },
+        {
+          "method": "tools/call",
+          "params": {
+            "name": "turn_ended",
+            "arguments": {}
+          },
+          "response": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "{}"
+                }
+              ],
+              "isError": false
+            }
+          }
+        }
+      ],
+      "trace": [
+        {
+          "t": "2026-10-05T02:16:19.995Z",
+          "direction": "to-server",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+              "protocolVersion": "2025-06-18",
+              "capabilities": {
+                "elicitation": {
+                  "form": {}
+                }
+              },
+              "clientInfo": {
+                "name": "sleight-browser-live",
+                "version": "1"
+              }
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:16:20.117Z",
+          "direction": "to-client",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+              "protocolVersion": "2025-06-18",
+              "capabilities": {
+                "experimental": {
+                  "codex/sandbox-state-meta": {}
+                },
+                "tools": {
+                  "listChanged": true
+                }
+              },
+              "serverInfo": {
+                "name": "rmcp",
+                "version": "1.5.0"
+              },
+              "instructions": "UI automation through cua_repl using the initialized cua API."
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:16:20.119Z",
+          "direction": "to-server",
+          "msg": {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized"
+          }
+        },
+        {
+          "t": "2026-10-05T02:16:20.119Z",
+          "direction": "to-server",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+              "name": "js",
+              "arguments": {
+                "code": "await cua.listBrowsers()"
+              },
+              "_meta": {
+                "x-codex-turn-metadata": "{\"session_id\":\"9e5cbc48-e168-4b9e-8a53-6297c8bf594a\",\"turn_id\":\"bafe556c-4e45-40b3-83c6-cc0440cdc604\"}"
+              }
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:16:20.308Z",
+          "direction": "to-client",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "cua.listBrowsers is not a function"
+                },
+                {
+                  "type": "text",
+                  "text": "[Installed engine documentation omitted; not redistributed.]"
+                }
+              ],
+              "isError": true,
+              "_meta": {
+                "codex/nodeReplExecutionDurationMs": 119
+              }
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:16:39.240Z",
+          "direction": "to-server",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+              "name": "turn_ended",
+              "arguments": {
+                "hook_event_name": "Stop",
+                "session_id": "9e5cbc48-e168-4b9e-8a53-6297c8bf594a",
+                "turn_id": "bafe556c-4e45-40b3-83c6-cc0440cdc604"
+              }
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:16:39.241Z",
+          "direction": "to-client",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "{}"
+                }
+              ],
+              "isError": false
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:16:39.242Z",
+          "direction": "change-snapshots-deleted",
+          "msg": {}
+        }
+      ]
+    },
+    {
+      "attempt": 5,
+      "mode": "Owner-connected retry, explicit browser override",
+      "outcome": "Engine browser inventory empty; no tabs opened.",
+      "launcherExitCode": 0,
+      "shellExitCode": 0,
+      "lockReleased": true,
+      "calls": [
+        {
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {
+              "elicitation": {
+                "form": {}
+              }
+            },
+            "clientInfo": {
+              "name": "sleight-browser-live",
+              "version": "1"
+            }
+          },
+          "response": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+              "protocolVersion": "2025-06-18",
+              "capabilities": {
+                "experimental": {
+                  "codex/sandbox-state-meta": {}
+                },
+                "tools": {
+                  "listChanged": true
+                }
+              },
+              "serverInfo": {
+                "name": "rmcp",
+                "version": "1.5.0"
+              },
+              "instructions": "UI automation through cua_repl using the initialized cua API."
+            }
+          }
+        },
+        {
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "arguments": {
+              "code": "await cua.listBrowsers()"
+            }
+          },
+          "response": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "[Installed engine documentation omitted; not redistributed.]"
+                },
+                {
+                  "type": "text",
+                  "text": "[]"
+                }
+              ],
+              "isError": false,
+              "_meta": {
+                "codex/nodeReplExecutionDurationMs": 849
+              }
+            }
+          }
+        },
+        {
+          "method": "tools/call",
+          "params": {
+            "name": "turn_ended",
+            "arguments": {}
+          },
+          "response": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "{}"
+                }
+              ],
+              "isError": false
+            }
+          }
+        }
+      ],
+      "trace": [
+        {
+          "t": "2026-10-05T02:16:44.672Z",
+          "direction": "to-server",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+              "protocolVersion": "2025-06-18",
+              "capabilities": {
+                "elicitation": {
+                  "form": {}
+                }
+              },
+              "clientInfo": {
+                "name": "sleight-browser-live",
+                "version": "1"
+              }
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:16:44.835Z",
+          "direction": "to-client",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+              "protocolVersion": "2025-06-18",
+              "capabilities": {
+                "experimental": {
+                  "codex/sandbox-state-meta": {}
+                },
+                "tools": {
+                  "listChanged": true
+                }
+              },
+              "serverInfo": {
+                "name": "rmcp",
+                "version": "1.5.0"
+              },
+              "instructions": "UI automation through cua_repl using the initialized cua API."
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:16:44.836Z",
+          "direction": "to-server",
+          "msg": {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized"
+          }
+        },
+        {
+          "t": "2026-10-05T02:16:44.837Z",
+          "direction": "to-server",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+              "name": "js",
+              "arguments": {
+                "code": "await cua.listBrowsers()"
+              },
+              "_meta": {
+                "x-codex-turn-metadata": "{\"session_id\":\"0d65feb3-7bd1-43c6-8dc4-823b49cfe2b4\",\"turn_id\":\"6e62d078-80f1-42a8-a92c-bc36ba03b296\"}"
+              }
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:16:45.778Z",
+          "direction": "to-client",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "[Installed engine documentation omitted; not redistributed.]"
+                },
+                {
+                  "type": "text",
+                  "text": "[]"
+                }
+              ],
+              "isError": false,
+              "_meta": {
+                "codex/nodeReplExecutionDurationMs": 849
+              }
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:17:06.941Z",
+          "direction": "to-server",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+              "name": "turn_ended",
+              "arguments": {
+                "hook_event_name": "Stop",
+                "session_id": "0d65feb3-7bd1-43c6-8dc4-823b49cfe2b4",
+                "turn_id": "6e62d078-80f1-42a8-a92c-bc36ba03b296"
+              }
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:17:06.941Z",
+          "direction": "to-client",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "{}"
+                }
+              ],
+              "isError": false
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:17:06.943Z",
+          "direction": "change-snapshots-deleted",
+          "msg": {}
+        }
+      ]
+    },
+    {
+      "attempt": 6,
+      "mode": "Merged-code automatic fallback smoke",
+      "base": "562f423 (includes 7540224)",
+      "outcome": "No extensions discovered; browser control remained disabled; no tabs opened. Browser-specific trial remains incomplete.",
+      "launcherExitCode": 0,
+      "shellExitCode": 0,
+      "lockReleased": true,
+      "calls": [
+        {
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {
+              "elicitation": {
+                "form": {}
+              }
+            },
+            "clientInfo": {
+              "name": "sleight-browser-live",
+              "version": "1"
+            }
+          },
+          "response": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+              "protocolVersion": "2025-06-18",
+              "capabilities": {
+                "experimental": {
+                  "codex/sandbox-state-meta": {}
+                },
+                "tools": {
+                  "listChanged": true
+                }
+              },
+              "serverInfo": {
+                "name": "rmcp",
+                "version": "1.5.0"
+              },
+              "instructions": "UI automation through cua_repl using the initialized cua API."
+            }
+          }
+        },
+        {
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "arguments": {
+              "code": "await cua.listBrowsers()"
+            }
+          },
+          "response": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "cua.listBrowsers is not a function"
+                },
+                {
+                  "type": "text",
+                  "text": "[Installed engine documentation omitted; not redistributed.]"
+                }
+              ],
+              "isError": true,
+              "_meta": {
+                "codex/nodeReplExecutionDurationMs": 132
+              }
+            }
+          }
+        },
+        {
+          "method": "tools/call",
+          "params": {
+            "name": "turn_ended",
+            "arguments": {}
+          },
+          "response": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "{}"
+                }
+              ],
+              "isError": false
+            }
+          }
+        }
+      ],
+      "trace": [
+        {
+          "t": "2026-10-05T02:18:48.703Z",
+          "direction": "to-server",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+              "protocolVersion": "2025-06-18",
+              "capabilities": {
+                "elicitation": {
+                  "form": {}
+                }
+              },
+              "clientInfo": {
+                "name": "sleight-browser-live",
+                "version": "1"
+              }
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:18:48.843Z",
+          "direction": "to-client",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+              "protocolVersion": "2025-06-18",
+              "capabilities": {
+                "experimental": {
+                  "codex/sandbox-state-meta": {}
+                },
+                "tools": {
+                  "listChanged": true
+                }
+              },
+              "serverInfo": {
+                "name": "rmcp",
+                "version": "1.5.0"
+              },
+              "instructions": "UI automation through cua_repl using the initialized cua API."
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:18:48.844Z",
+          "direction": "to-server",
+          "msg": {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized"
+          }
+        },
+        {
+          "t": "2026-10-05T02:18:48.844Z",
+          "direction": "to-server",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+              "name": "js",
+              "arguments": {
+                "code": "await cua.listBrowsers()"
+              },
+              "_meta": {
+                "x-codex-turn-metadata": "{\"session_id\":\"d9fe75ad-4540-4873-af05-b0308e61e44e\",\"turn_id\":\"f14bf558-7730-4382-bba6-7c9af68bc300\"}"
+              }
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:18:49.054Z",
+          "direction": "to-client",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "cua.listBrowsers is not a function"
+                },
+                {
+                  "type": "text",
+                  "text": "[Installed engine documentation omitted; not redistributed.]"
+                }
+              ],
+              "isError": true,
+              "_meta": {
+                "codex/nodeReplExecutionDurationMs": 132
+              }
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:19:16.109Z",
+          "direction": "to-server",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+              "name": "turn_ended",
+              "arguments": {
+                "hook_event_name": "Stop",
+                "session_id": "d9fe75ad-4540-4873-af05-b0308e61e44e",
+                "turn_id": "f14bf558-7730-4382-bba6-7c9af68bc300"
+              }
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:19:16.110Z",
+          "direction": "to-client",
+          "msg": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "{}"
+                }
+              ],
+              "isError": false
+            }
+          }
+        },
+        {
+          "t": "2026-10-05T02:19:16.111Z",
+          "direction": "change-snapshots-deleted",
+          "msg": {}
+        }
+      ]
     }
   ],
   "verification": {
@@ -1871,6 +2562,29 @@
         "flags": 0
       }
     ],
-    "gitDiffCheckExitCode": 0
+    "gitDiffCheckExitCode": 0,
+    "mergedCode": {
+      "base": "562f423",
+      "includesRequestedBase": "7540224",
+      "rebaseInitialExitCode": 1,
+      "rebaseContinueExitCode": 0,
+      "conflict": "package.json lint:prose resolved with the union of both file lists",
+      "ownBrowserTests": {
+        "exitCode": 0,
+        "passed": 18
+      },
+      "npmRunCheck": {
+        "exitCode": 0,
+        "unitTestsPassed": 349,
+        "modTestsPassed": 8
+      },
+      "npmRunLintProse": {
+        "exitCode": 0,
+        "files": 28,
+        "flags": 0
+      },
+      "smokeShellExitCode": 0,
+      "browserLiveCompletion": "Pending: engine reports no connected instances; owner connection status requested."
+    }
   }
 }
