@@ -209,8 +209,10 @@ const DRAG_TOOL = {
     'moving selected text (select it with js first). `from` and `to` are in the same frame as the app\'s engine ' +
     'screenshot, from that window\'s top-left corner. Pass `windowId` when several windows fit; an ambiguous target refuses. ' +
     'Both points must be in window content; TextEdit requires the same text area. A lost-text error tells you to press Cmd+Z in the named window. ' +
-    'It brings the app to the front and moves the real pointer ' +
-    'for a few seconds, then puts both back, so use it only when app.drag fails. The user approves each app once per session.',
+    'It tries background PID posting first, with a 500 ms hold. TextEdit falls back to foreground only if text is unchanged; ' +
+    'an unavailable private window-local API also selects foreground before posting. The result names the path. ' +
+    'Foreground fallback moves the pointer and restores it and the front app. Other apps require readback to verify the move. ' +
+    'For a line-end text drop, use the final glyph bounds, never a zero-length end-of-line range. The user approves each app once per session.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -277,16 +279,19 @@ async function performDrag(args, runLocal) {
   try { result = await runLocal('drag.js', args); }
   catch (e) { result = { ok: false, error: String(e.message || e) }; }
   finally {
-    try {
-      const restored = await runLocal('drag-focus.js', { ...focus, op: 'restore' }, { cleanup: true });
-      if (!restored.ok) throw new Error(restored.error);
-    } catch (e) {
-      result = { ...result, ok: false, error: [result?.error, `Focus restoration failed: ${e.message || e}`].filter(Boolean).join('; ') };
+    // A completed background attempt never owned focus, including lost text.
+    // Unknown child termination retains the existing guarded timeout cleanup.
+    if (!['background', 'none'].includes(result?.path)) {
+      try {
+        const restored = await runLocal('drag-focus.js', { ...focus, op: 'restore' }, { cleanup: true });
+        if (!restored.ok) throw new Error(restored.error);
+      } catch (e) {
+        result = { ...result, ok: false, error: [result?.error, `Focus restoration failed: ${e.message || e}`].filter(Boolean).join('; ') };
+      }
     }
   }
-  if (!result.ok) return text(result.error, true);
   const { ok, ...rest } = result;
-  return text(rest);
+  return text(rest, !ok);
 }
 
 // target is the resolved lease target the relay passes (bundle ID and pid),
@@ -313,7 +318,7 @@ export async function callLocalTool(name, args, approve, runLocal = runScript, t
     return result;
   }
   if (name === 'drag') {
-    if (!await approve(['drag', args.app], `Allow Claude to drag in ${args.app}? It moves your pointer for a few seconds.`)) {
+    if (!await approve(['drag', args.app], `Allow Claude to drag in ${args.app}? Background comes first; foreground fallback can move your pointer for a few seconds.`)) {
       return text(`The user didn't allow dragging in ${args.app}. Stop and tell them; don't work around it.`, true);
     }
     const operation = performDrag(args, runLocal);

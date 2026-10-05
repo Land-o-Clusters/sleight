@@ -5,8 +5,8 @@ import vm from 'node:vm';
 
 // Only the native AX/CG boundary is replaced. run() does the real selection,
 // validation, coordinate conversion, mouse sequence and post-drop check.
-function harness({ second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection = 'alpha', repairDeletesText = false, movedOnActivate = false, coveredEnd = false, splitAreas = false, missingContent = false, extraElements = 0, appId = 'com.apple.TextEdit' } = {}) {
-  const events = [], restored = [];
+function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', setterFails = false, readFails = false, postFails = false, releaseFails = false, changeOnActivate = false, second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection = 'alpha', repairDeletesText = false, movedOnActivate = false, coveredEnd = false, splitAreas = false, missingContent = false, extraElements = 0, appId = 'com.apple.TextEdit' } = {}) {
+  const events = [], restored = [], activations = [], pidEvents = [];
   let visited = 0;
   let order = [22, 11];
   const frames = new Map([[11, { X: 100, Y: 100, Width: 600, Height: 400 }], [22, { X: 900, Y: 200, Width: 800, Height: 500 }]]);
@@ -16,7 +16,7 @@ function harness({ second = true, before = 'alpha beta gamma\n', after = 'beta g
     const b = frames.get(id);
     const area = {
       role: () => 'AXTextArea', position: () => [b.X + 5, b.Y + 30], size: () => [b.Width - 10, splitAreas ? 100 : b.Height - 35],
-      value: () => values.get(id), uiElements: () => [],
+      value: () => { if (readFails && pidEvents.length) throw new Error('read unavailable'); return values.get(id); }, uiElements: () => [],
       attributes: { byName: name => ({
         get value() { return () => name === 'AXSelectedText' ? selected.get(id) : null; },
         set value(replacement) {
@@ -38,6 +38,8 @@ function harness({ second = true, before = 'alpha beta gamma\n', after = 'beta g
   }) };
   const previous = { isNil: () => false, processIdentifier: 99, activateWithOptions: () => restored.push('app') };
   const target = { processIdentifier: 7, bundleIdentifier: appId, activateWithOptions() {
+    activations.push(7);
+    if (changeOnActivate) values.set(11, 'owner edited alpha beta gamma\n');
     if (movedOnActivate) { frames.get(11).X = 300; frames.get(11).Y = 400; }
   } };
   const $ = {
@@ -53,8 +55,20 @@ function harness({ second = true, before = 'alpha beta gamma\n', after = 'beta g
         const id = order[0]; values.set(id, after); selected.set(id, after.includes(selection) ? selection : '');
       }
     },
+    NSProcessInfo: { processInfo: { systemUptime: 1 } },
+    NSEvent: { mouseEventWithTypeLocationModifierFlagsTimestampWindowNumberContextEventNumberClickCountPressure: (type, point, flags) => ({ type, point, flags }) },
+    objc_msgSend: e => e,
+    CGEventSetWindowLocation: (e, p) => { if (setterFails) throw new Error('setter failed'); e.local = p; },
+    CGEventGetWindowLocation: e => e.local,
+    CGEventGetType: e => e.type, CGEventSetLocation: (e, p) => { e.point = p; }, CGEventSetTimestamp() {},
+    CGEventPostToPid: (pid, e) => {
+      assert.equal(pid, 7); pidEvents.push(e);
+      if (releaseFails && e.type === 2) throw new Error('release failed');
+      if (e.type === 2 || postFails) values.set(11, backgroundAfter);
+      if (postFails && e.type === 6) throw new Error('posting interrupted');
+    },
   };
-  const context = vm.createContext({ $, ObjC: { import() {}, unwrap: v => v }, delay() {},
+  const context = vm.createContext({ $, ObjC: { import() {}, unwrap: v => v, bindFunction() { if (!background) throw new Error('private API missing'); } }, delay() {},
     Application: () => ({ processes: { whose: () => [proc] } }) });
   vm.runInContext(readFileSync(new URL('../plugins/sleight/lib/drag.js', import.meta.url), 'utf8'), context);
   context.findApp = () => target;
@@ -63,8 +77,61 @@ function harness({ second = true, before = 'alpha beta gamma\n', after = 'beta g
     ...order.filter(id => second || id === 11).map(id => ({ id, pid: 7, owner: 'TextEdit', title: `${id}.txt`, layer: 0, bounds: { ...frames.get(id) } })),
   ];
   const run = changes => JSON.parse(context.run([JSON.stringify({ app: 'TextEdit', from: [26.6, 38.5], to: [119, 38.5], ...changes })]));
-  return { run, events, restored, values, visits: () => visited };
+  return { run, events, restored, activations, pidEvents, values, visits: () => visited };
 }
+test('background text move uses PID posting, repairs spacing and never activates or warps', () => {
+  const h = harness({ background: true }); const r = h.run({ windowId: 11 });
+  assert.equal(r.ok, true); assert.equal(r.path, 'background'); assert.equal(r.spaceInserted, true);
+  assert.equal(r.textChanged, true); assert.equal(h.values.get(11), 'beta gamma alpha\n');
+  assert.equal(h.pidEvents.length, 28); assert.equal(h.events.length, 0);
+  assert.ok(h.pidEvents.every(e => e.flags === 1 << 20));
+  assert.equal(h.activations.length, 0); assert.equal(h.restored.length, 0);
+});
+test('unchanged background text alone permits the foreground fallback', () => {
+  const h = harness({ background: true, backgroundAfter: 'alpha beta gamma\n' }); const r = h.run({ windowId: 11 });
+  assert.equal(r.ok, true); assert.equal(r.path, 'foreground'); assert.equal(r.fallbackReason, 'background text unchanged');
+  assert.equal(h.pidEvents.length, 28); assert.equal(h.activations.length, 1); assert.equal(h.events.length, 28);
+});
+test('missing or failing private setter skips posting and names the foreground path', () => {
+  for (const options of [{ background: false }, { background: true, setterFails: true }]) {
+    const h = harness(options); const r = h.run({ windowId: 11 });
+    assert.equal(r.path, 'foreground'); assert.match(r.fallbackReason, /background unavailable/);
+    assert.equal(h.pidEvents.length, 0); assert.equal(h.activations.length, 1);
+  }
+});
+test('lost text, changed partial text and unreadable text never permit a second drag', () => {
+  for (const options of [{ backgroundAfter: '\n beta gamma\n' }, { backgroundAfter: 'beta alpha gamma\n', postFails: true }, { readFails: true }]) {
+    const h = harness({ background: true, ...options }); const r = h.run({ windowId: 11 });
+    assert.equal(r.ok, false); assert.equal(r.path, 'background');
+    if (options.backgroundAfter === '\n beta gamma\n') { assert.equal(r.lostText, true); assert.match(r.error, /Cmd\+Z/); }
+    assert.equal(h.activations.length, 0); assert.equal(h.events.length, 0); assert.equal(h.restored.length, 0);
+  }
+});
+test('non-text background posting reports unverified delivery without foreground repetition', () => {
+  const h = harness({ background: true, appId: 'com.apple.Chess' }); const r = h.run({ windowId: 11 });
+  assert.equal(r.path, 'background'); assert.equal(r.deliveryVerified, false);
+  assert.equal(h.activations.length, 0); assert.equal(h.events.length, 0);
+  assert.ok(h.pidEvents.every(e => e.flags === 0), 'Chess piece moves must not become Command drags');
+});
+test('an owner edit after unchanged readback prevents foreground mouse-down', () => {
+  const h = harness({ background: true, backgroundAfter: 'alpha beta gamma\n', changeOnActivate: true });
+  const r = h.run({ windowId: 11 });
+  assert.equal(r.ok, false); assert.match(r.error, /changed.*foreground/);
+  assert.equal(h.events.some(e => e.type === 1), false);
+});
+test('an unconfirmed background release cannot trigger foreground fallback', () => {
+  const h = harness({ background: true, backgroundAfter: 'alpha beta gamma\n', releaseFails: true });
+  const r = h.run({ windowId: 11 });
+  assert.equal(r.ok, false); assert.equal(r.path, 'background'); assert.match(r.error, /release/);
+  assert.equal(h.activations.length, 0); assert.equal(h.events.length, 0);
+});
+test('unchanged text after both paths reports failure and never tries a third drag', () => {
+  const h = harness({ background: true, backgroundAfter: 'alpha beta gamma\n', after: 'alpha beta gamma\n' });
+  const r = h.run({ windowId: 11 });
+  assert.equal(r.ok, false); assert.equal(r.path, 'foreground'); assert.equal(r.textChanged, false);
+  assert.match(r.error, /unchanged/); assert.equal(h.pidEvents.filter(e => e.type === 1).length, 1);
+  assert.equal(h.events.filter(e => e.type === 1).length, 1);
+});
 test('two TextEdit windows refuse ambiguous relative points before mouse-down and list IDs', () => {
   const h = harness(); const result = h.run({});
   assert.equal(result.ok, false);

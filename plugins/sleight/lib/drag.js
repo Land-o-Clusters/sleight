@@ -1,8 +1,7 @@
 // A drag that holds the mouse down and moves in steps, for what the engine's
-// instant drag can't do (moving selected text). It works in the foreground:
-// the app comes to the front, the real pointer does the drag, then the
-// pointer and the previously frontmost app go back. The relay asks the user
-// first (see launch.mjs).
+// instant drag can't do (moving selected text). Try window-targeted PID
+// posting first. Only unchanged text, or an unavailable native bridge before
+// posting, permits the foreground path. The relay asks first (launch.mjs).
 //
 //   osascript -l JavaScript drag.js '<json request>'
 //   { app, from: [x, y], to: [x, y], windowId?, holdMs?, steps?, settleMs? }
@@ -134,6 +133,10 @@ function repairTextDrop(snapshot) {
 function finishTextDrop(snapshot, window) {
   if (!snapshot) return { spaceInserted: false };
   const name = `TextEdit window ${window.id} (${window.title})`;
+  if (snapshot.el.value() === snapshot.text) return {
+    spaceInserted: false, textChanged: false,
+    error: `Text in ${name} is unchanged after dragging; read it before continuing.`,
+  };
   const lost = () => ({ lostText: true, error: `Dragged text disappeared from ${name} and was not inserted in its text area. Press Cmd+Z in that window now, then read it again before continuing.` });
   // A deletion can join surrounding fragments into the selected word. Check
   // its characters as well as presence. Smart deletion may change spaces.
@@ -168,8 +171,53 @@ function findApp(name) {
   return null;
 }
 
+function backgroundBuilder() {
+  // JXA exposes NSEvent.CGEvent as an opaque Ref that its CF function bridge
+  // cannot consume. A typed message send returns the same pointer as a CF id.
+  ObjC.bindFunction('objc_msgSend', ['id', ['id', 'selector']]);
+  // Named CGPoint aliases silently bind as scalars in JXA. Encode both fields.
+  const pointType = '{CGPoint="x"d"y"d}';
+  ObjC.bindFunction('CGEventSetWindowLocation', ['void', ['id', pointType]]);
+  ObjC.bindFunction('CGEventGetWindowLocation', [pointType, ['id']]);
+  return (type, point, main, command) => {
+    const b = main.bounds, local = $.CGPointMake(point.x - b.X, point.y - b.Y);
+    const native = $.NSEvent.mouseEventWithTypeLocationModifierFlagsTimestampWindowNumberContextEventNumberClickCountPressure(
+      type, $.CGPointMake(local.x, b.Height - local.y), command ? 1 << 20 : 0,
+      $.NSProcessInfo.processInfo.systemUptime, main.id, null, 1, 1, type === 2 ? 0 : 1);
+    const event = $.objc_msgSend(native, 'CGEvent');
+    if ($.CGEventGetType(event) !== type) throw new Error('NSEvent CGEvent bridge failed');
+    $.CGEventSetLocation(event, $.CGPointMake(point.x, point.y));
+    $.CGEventSetWindowLocation(event, local);
+    const read = $.CGEventGetWindowLocation(event);
+    if (!read || Math.abs(read.x - local.x) > 0.5 || Math.abs(read.y - local.y) > 0.5 ||
+        ![read.x, read.y].every(Number.isFinite)) throw new Error('CGEventSetWindowLocation did not retain the window coordinates');
+    $.CGEventSetIntegerValueField(event, 7, 3); // window-local mouse subtype
+    $.CGEventSetIntegerValueField(event, 1, 1); // click state
+    $.CGEventSetIntegerValueField(event, 91, main.id);
+    $.CGEventSetIntegerValueField(event, 92, main.id);
+    return { native, event }; // retain the NSEvent until its CGEvent has posted
+  };
+}
+
+function checkWindow(main, pid, win) {
+  const list = windows(true);
+  const current = list.find(w => w.id === main.id && w.pid === pid && w.layer === 0);
+  if (!current || !sameBounds(current.bounds, main.bounds) || !sameBounds(frame(win), main.bounds)) {
+    throw new Error('the chosen window moved or disappeared; read it again');
+  }
+  return list;
+}
+
 function run(argv) {
   let previous = null, saved = null, pid = null, pressed = false, didPress = false, post = null, current = null;
+  let path = 'none', fallbackReason = null;
+  let backgroundSnapshot = null;
+  const unchangedText = () => {
+    if (backgroundSnapshot && (backgroundSnapshot.el.value() !== backgroundSnapshot.text ||
+        backgroundSnapshot.el.attributes.byName('AXSelectedText').value() !== backgroundSnapshot.selected)) {
+      throw new Error('text or selection changed before foreground fallback; foreground mouse-down was skipped, read the window again');
+    }
+  };
   try {
     const request = JSON.parse(argv[0]);
     const { app, from, to, holdMs = 500, steps = 25, settleMs = 1500 } = request;
@@ -184,6 +232,73 @@ function run(argv) {
     if (!own.length) throw new Error(`${app} has no window on screen`);
     let main = resolveWindow(own, request);
     const win = axWindow(pid, main);
+    let build;
+    try { build = backgroundBuilder(); }
+    catch (e) { fallbackReason = `background unavailable: ${e.message || e}`; }
+    if (build) {
+      delay(settleMs / 1000);
+      checkWindow(main, pid, win);
+      const points = validatePoints(content(win, main.bounds), main.bounds, from, to, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit');
+      // Content checks apply to both paths. PID events target this exact window
+      // even when another app covers it; HID events require exposed endpoints.
+      checkWindow(main, pid, win);
+      let sequence;
+      try {
+        const moves = Array.from({ length: steps }, (_, i) => ({
+          x: points.start.x + (points.end.x - points.start.x) * (i + 1) / steps,
+          y: points.start.y + (points.end.y - points.start.y) * (i + 1) / steps,
+        }));
+        // Prepare and validate every event, including the release, before down.
+        // Keep the measured TextEdit modifier. Other apps, including Chess,
+        // need an ordinary drag: Command can change the action's meaning.
+        const event = (type, p) => build(type, p, main, !!points.text);
+        sequence = [event(5, points.start), event(1, points.start),
+          ...moves.map(p => event(6, p)), event(2, points.end)];
+      } catch (e) { fallbackReason = `background unavailable: ${e.message || e}`; }
+      if (sequence) {
+        path = 'background';
+        post = item => {
+          $.CGEventSetTimestamp(item.event, $.NSProcessInfo.processInfo.systemUptime * 1e9);
+          $.CGEventPostToPid(pid, item.event);
+        };
+        let postingError, releaseError;
+        try {
+          post(sequence[0]); delay(0.05);
+          // Mark down before posting, so a posting exception still releases.
+          pressed = true; didPress = true; current = sequence[sequence.length - 1];
+          post(sequence[1]); delay(holdMs / 1000);
+          for (const item of sequence.slice(2, -1)) { post(item); delay(0.02); }
+          post(current); pressed = false;
+        } catch (e) { postingError = String(e.message || e); }
+        finally {
+          if (pressed) {
+            try { post(current); }
+            catch (e) { releaseError = `background release failed: ${e.message || e}; read the window before continuing`; }
+            pressed = false;
+          }
+        }
+        delay(0.2);
+        // An unreadable snapshot is not unchanged. Never repeat an uncertain or
+        // changed edit, even if posting or the spacing repair failed.
+        const after = points.text ? points.text.el.value() : null;
+        if (points.text && typeof after !== 'string') throw new Error('cannot verify background text; read the window before continuing');
+        if (releaseError) {
+          const outcome = finishTextDrop(points.text, main);
+          return JSON.stringify({ ok: false, path, app, windowId: main.id, ...outcome,
+            error: [outcome.error, releaseError].filter(Boolean).join('; ') });
+        }
+        if (!points.text || after !== points.text.text) {
+          const outcome = finishTextDrop(points.text, main);
+          if (postingError && !outcome.error) outcome.error = postingError;
+          return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, holdMs, steps, path,
+            textChanged: points.text ? true : null, deliveryVerified: !!points.text && !outcome.error, ...outcome });
+        }
+        fallbackReason = 'background text unchanged';
+        backgroundSnapshot = points.text;
+      }
+    }
+    unchangedText();
+    path = 'foreground';
     const ws = $.NSWorkspace.sharedWorkspace;
     previous = ws.frontmostApplication;
     saved = $.CGEventGetLocation($.CGEventCreate(null));
@@ -212,6 +327,7 @@ function run(argv) {
     post($.kCGEventMouseMoved, start);
     current = start;
     delay(0.05);
+    unchangedText();
     post($.kCGEventLeftMouseDown, start);
     pressed = true; didPress = true;
     delay(holdMs / 1000);
@@ -224,10 +340,10 @@ function run(argv) {
     pressed = false;
     delay(0.2);
     const outcome = finishTextDrop(text, main);
-    return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, holdMs, steps, ...outcome });
+    return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, holdMs, steps, path, fallbackReason, ...outcome });
   } catch (e) {
     const message = String(e.message || e);
-    return JSON.stringify({ ok: false, error: message + (!didPress && !message.includes('nothing was pressed') ? '; nothing was pressed' : '') });
+    return JSON.stringify({ ok: false, path, fallbackReason, error: message + (!didPress && !message.includes('nothing was pressed') ? '; nothing was pressed' : '') });
   } finally {
     if (pressed && post) attempt(() => post($.kCGEventLeftMouseUp, current));
     if (saved) attempt(() => $.CGWarpMouseCursorPosition(saved));

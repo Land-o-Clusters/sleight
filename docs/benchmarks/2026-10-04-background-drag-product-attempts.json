@@ -1,0 +1,614 @@
+{
+  "branch": "codex/background-drag-product",
+  "worktree": "~/Projects/sleight-wt/background-drag-product",
+  "base": "5782453",
+  "date": "2026-10-04",
+  "attempts": [
+    {
+      "command": "git fetch origin",
+      "exitCode": 0
+    },
+    {
+      "command": "git merge-base --is-ancestor 2e0e607 origin/main",
+      "exitCode": 0
+    },
+    {
+      "command": "git worktree add -b codex/background-drag-product ~/Projects/sleight-wt/background-drag-product origin/main",
+      "exitCode": 0
+    },
+    {
+      "command": "npm test (baseline)",
+      "exitCode": 0,
+      "passed": 291
+    },
+    {
+      "probe": "raw NSEvent.CGEvent Ref, named CGPoint binding",
+      "exitCode": 0,
+      "result": {
+        "ok": true,
+        "screen": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "interpretation": "Initial success flag did not validate the event; unusable output"
+    },
+    {
+      "probe": "same no-posting probe with host access",
+      "exitCode": 0,
+      "screen": [
+        0,
+        0
+      ]
+    },
+    {
+      "probe": "inspect native and Ref type",
+      "exitCode": 0,
+      "native": "NSEvent",
+      "event": "Ref",
+      "type": 0,
+      "screen": [
+        0,
+        0
+      ]
+    },
+    {
+      "probe": "numeric NSEvent type and modifier",
+      "exitCode": 0,
+      "type": 0,
+      "screen": [
+        0,
+        0
+      ]
+    },
+    {
+      "probe": "lowercase cgEvent accessor",
+      "exitCode": 0,
+      "event": "undefined",
+      "type": 0
+    },
+    {
+      "probe": "compare public CGEventCreateMouseEvent",
+      "exitCode": 0,
+      "ok": false,
+      "nativeType": 1,
+      "refType": 0,
+      "plainType": 1,
+      "plainScreen": [
+        120,
+        130
+      ]
+    },
+    {
+      "probe": "compare public creation with host access",
+      "exitCode": 0,
+      "ok": false,
+      "refType": 0,
+      "plainType": 1
+    },
+    {
+      "probe": "dereference Ref[0]",
+      "exitCode": 0,
+      "event": "Object",
+      "type": 0
+    },
+    {
+      "probe": "castRefToObject(native.CGEvent)",
+      "exitCode": 139,
+      "stdout": ""
+    },
+    {
+      "probe": "rebind public getters to void pointer and named CGPoint",
+      "exitCode": 0,
+      "ok": false,
+      "type": 0,
+      "initialScalar": 168,
+      "screenScalar": 152,
+      "plainScalar": 224
+    },
+    {
+      "probe": "typed objc_msgSend returns CF id, named NSPoint setter",
+      "exitCode": 0,
+      "ok": true,
+      "type": 1,
+      "screen": [
+        120,
+        130
+      ],
+      "caveat": "Local coordinates not yet checked"
+    },
+    {
+      "probe": "named NSPoint getter round trip",
+      "exitCode": 0,
+      "ok": false,
+      "localScalar": 36032
+    },
+    {
+      "probe": "encoded CGPoint without field names",
+      "exitCode": 0,
+      "ok": false,
+      "local": {
+        "": null
+      }
+    },
+    {
+      "probe": "field-encoded CGPoint and typed message send",
+      "exitCode": 0,
+      "ok": true,
+      "type": 1,
+      "screen": [
+        120,
+        130
+      ],
+      "local": [
+        20,
+        30
+      ]
+    },
+    {
+      "command": "node --test tests/drag-window.test.mjs (new path tests before code)",
+      "exitCode": 1,
+      "passed": 18,
+      "failed": 5
+    },
+    {
+      "command": "node --test tests/drag-window.test.mjs tests/drag-polish.test.mjs",
+      "exitCode": 0,
+      "passed": 30
+    },
+    {
+      "command": "node --test tests/drag-focus.test.mjs (new background cleanup test before code)",
+      "exitCode": 1,
+      "passed": 5,
+      "failed": 1
+    },
+    {
+      "command": "node --test tests/drag-focus.test.mjs (after guard)",
+      "exitCode": 0,
+      "passed": 6
+    },
+    {
+      "command": "node --test tests/drag-window.test.mjs tests/drag-focus.test.mjs",
+      "exitCode": 0,
+      "passed": 29
+    },
+    {
+      "command": "node bench/background-drag-product.mjs prepare",
+      "exitCode": 0
+    },
+    {
+      "command": "TextEdit live sandbox attempt",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-sandbox.json"
+    },
+    {
+      "command": "TextEdit live host attempt",
+      "exitCode": 0,
+      "passed": 3,
+      "receipt": "2026-10-04-background-drag-product-text.json"
+    },
+    {
+      "command": "Chess read sandbox attempt",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-sandbox.json"
+    },
+    {
+      "command": "Chess read host attempt",
+      "exitCode": 0,
+      "receipt": "2026-10-04-background-drag-product-chess-read.json"
+    },
+    {
+      "command": "Chess fixture attempt 1",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-1.json",
+      "dragRan": false
+    },
+    {
+      "command": "Chess fixture attempt 2",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-2.json",
+      "dragRan": false
+    },
+    {
+      "command": "Chess fixture attempt 3",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-3.json",
+      "dragRan": false
+    },
+    {
+      "command": "Chess fixture attempt 4",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-4.json",
+      "dragRan": false
+    },
+    {
+      "command": "Chess Command PID drag",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-5.json",
+      "dragRan": true,
+      "moved": false
+    },
+    {
+      "command": "review regression tests before fixes",
+      "exitCode": 1,
+      "passed": 23,
+      "failed": 2
+    },
+    {
+      "command": "review regressions after fixes and combined focus tests",
+      "exitCode": 0,
+      "passed": 31
+    },
+    {
+      "command": "Chess modifier regression before fix",
+      "exitCode": 1,
+      "passed": 24,
+      "failed": 1
+    },
+    {
+      "command": "Chess modifier fix and combined focus tests",
+      "exitCode": 0,
+      "passed": 31
+    },
+    {
+      "command": "Chess unmodified PID drag",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-6.json",
+      "dragRan": true,
+      "moved": false
+    },
+    {
+      "command": "npm run check (first)",
+      "exitCode": 0,
+      "unitTests": 299,
+      "modTests": 8
+    },
+    {
+      "command": "npm run lint:prose (first)",
+      "exitCode": 2,
+      "reason": "Missing worktree-local .vale/styles"
+    },
+    {
+      "command": "vale sync (sandbox)",
+      "exitCode": 2,
+      "reason": "DNS denied for pinned style download"
+    },
+    {
+      "command": "vale sync (host)",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run lint:prose (second)",
+      "exitCode": 1,
+      "errors": 17
+    },
+    {
+      "command": "npm run lint:prose (third)",
+      "exitCode": 1,
+      "errors": 1
+    },
+    {
+      "command": "production bridge unit test (first)",
+      "exitCode": 1,
+      "reason": "Native uint64 fields serialized as strings; assertion expected a number"
+    },
+    {
+      "command": "apply_patch test and report edit",
+      "result": "verification refused",
+      "reason": "Expected report line did not include its leading text",
+      "filesChanged": false
+    },
+    {
+      "command": "production bridge, drag and focus tests",
+      "exitCode": 0,
+      "passed": 32
+    },
+    {
+      "command": "Chess fixture regression tests",
+      "exitCode": 0,
+      "passed": 2
+    },
+    {
+      "command": "npm run lint:prose (fourth)",
+      "exitCode": 0,
+      "errors": 0
+    },
+    {
+      "command": "npm run check (second, sandbox)",
+      "exitCode": 1,
+      "passed": 301,
+      "failed": 1,
+      "reason": "Existing preapproved-process cancellation test: kill EPERM while checking the owned process group"
+    },
+    {
+      "command": "npm run check (unchanged, host)",
+      "exitCode": 0,
+      "unitTests": 302,
+      "modTests": 8
+    },
+    {
+      "command": "npm run lint:prose (fifth)",
+      "exitCode": 0,
+      "errors": 0
+    },
+    {
+      "command": "Chess engine control in recorded window",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-control.json",
+      "dragRan": false,
+      "reason": "Window disappeared while another session held the lock"
+    },
+    {
+      "command": "Chess fixture renderer regression before fix",
+      "exitCode": 1,
+      "passed": 1,
+      "failed": 1
+    },
+    {
+      "command": "Chess fixture renderer regression after fix",
+      "exitCode": 0,
+      "passed": 2
+    },
+    {
+      "command": "unchanged foreground regression before fix",
+      "exitCode": 1,
+      "failed": 1
+    },
+    {
+      "command": "release error precedence regression before fix",
+      "exitCode": 1,
+      "failed": 1
+    },
+    {
+      "command": "combined bridge, drag and focus regressions after fixes",
+      "exitCode": 0,
+      "passed": 33
+    },
+    {
+      "command": "extracted Chess recovery regression before module",
+      "exitCode": 1
+    },
+    {
+      "command": "Chess recovery tests after extraction",
+      "exitCode": 0,
+      "passed": 2
+    },
+    {
+      "command": "Chess save completion regression before verified button",
+      "exitCode": 1,
+      "passed": 1,
+      "failed": 1
+    },
+    {
+      "command": "Chess save completion regression after verified button",
+      "exitCode": 0,
+      "passed": 2
+    },
+    {
+      "command": "npm run check (final sandbox)",
+      "exitCode": 0,
+      "unitTests": 305,
+      "modTests": 8,
+      "manifestValidations": 2
+    },
+    {
+      "command": "chess-control live attempt",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-control-2.json",
+      "lockReleased": true,
+      "error": "Cannot identify one owned Chess game",
+      "runs": []
+    },
+    {
+      "command": "chess-control live attempt",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-control-3.json",
+      "lockReleased": true,
+      "error": "Chess e2-e4 move did not verify",
+      "runs": [
+        {
+          "windowId": 240864,
+          "passed": false,
+          "dragRan": true
+        }
+      ]
+    },
+    {
+      "command": "chess-image live attempt",
+      "exitCode": 0,
+      "receipt": "2026-10-04-background-drag-product-chess-image.json",
+      "lockReleased": true,
+      "runs": [
+        {
+          "windowId": 240864,
+          "dragRan": false
+        }
+      ]
+    },
+    {
+      "command": "chess live attempt",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-measured.json",
+      "lockReleased": true,
+      "error": "Command failed: /usr/bin/osascript -l JavaScript bench/drag-chess-fixture.js {\"op\":\"geometry\",\"windowId\":240864}\nbench/drag-chess-fixture.js: execution error: Error: Error: Can't get object. (-1728)\n",
+      "runs": [
+        {
+          "windowId": 240864,
+          "dragRan": true
+        }
+      ]
+    },
+    {
+      "command": "chess-finish live attempt",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-readback-2.json",
+      "lockReleased": true,
+      "error": "Game save not confirmed",
+      "runs": [
+        {
+          "windowId": 240864,
+          "passed": true,
+          "noDrag": true,
+          "dragRan": false
+        }
+      ]
+    },
+    {
+      "command": "chess-finish live attempt",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-readback-3.json",
+      "lockReleased": true,
+      "error": "Engine call failed",
+      "runs": []
+    },
+    {
+      "command": "chess-finish live attempt",
+      "exitCode": 0,
+      "receipt": "2026-10-04-background-drag-product-chess-readback.json",
+      "lockReleased": true,
+      "runs": []
+    },
+    {
+      "command": "npm run lint:prose (report geometry revision)",
+      "exitCode": 1,
+      "errors": 2
+    },
+    {
+      "command": "npm run lint:prose (after punctuation fixes)",
+      "exitCode": 0,
+      "errors": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    },
+    {
+      "command": "save-panel recovery and fixture privacy regressions before fixes",
+      "exitCode": 1,
+      "passed": 3,
+      "failed": 2
+    },
+    {
+      "command": "save-panel recovery and fixture privacy regressions after fixes",
+      "exitCode": 0,
+      "passed": 5
+    },
+    {
+      "command": "chess-finish live attempt",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-readback-4.json",
+      "lockReleased": true,
+      "error": "Engine window differs from owned benchmark game",
+      "runs": [
+        {
+          "windowId": 240864,
+          "passed": true,
+          "noDrag": true,
+          "dragRan": false
+        }
+      ]
+    },
+    {
+      "command": "npm run check (after save-panel and privacy regressions)",
+      "exitCode": 0,
+      "unitTests": 306,
+      "modTests": 8,
+      "manifestValidations": 2
+    },
+    {
+      "command": "npm run lint:prose (recovery report)",
+      "exitCode": 1,
+      "errors": 1
+    },
+    {
+      "command": "npm run lint:prose (plain wording)",
+      "exitCode": 0,
+      "errors": 0
+    },
+    {
+      "command": "owned-window raise regression before code",
+      "exitCode": 1,
+      "passed": 2,
+      "failed": 1
+    },
+    {
+      "command": "owned-window raise and recovery regressions after code",
+      "exitCode": 0,
+      "passed": 6
+    },
+    {
+      "command": "npm run check (final owned-window cleanup revision)",
+      "exitCode": 0,
+      "unitTests": 307,
+      "modTests": 8,
+      "manifestValidations": 2
+    },
+    {
+      "command": "git add (sandbox)",
+      "exitCode": 128,
+      "reason": "Worktree index.lock Operation not permitted"
+    },
+    {
+      "command": "git add (host)",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --cached --check",
+      "exitCode": 0
+    },
+    {
+      "command": "chess-finish live attempt",
+      "exitCode": 1,
+      "receipt": "2026-10-04-background-drag-product-chess-readback-5.json",
+      "lockReleased": true,
+      "error": "Owned save panel and destination did not verify",
+      "runs": [
+        {
+          "windowId": 240864,
+          "passed": true,
+          "noDrag": true,
+          "dragRan": false
+        }
+      ]
+    },
+    {
+      "command": "chess-finish live attempt",
+      "exitCode": 1,
+      "receipt": "2026-10-05-background-drag-product-chess-readback-6.json",
+      "lockReleased": true,
+      "error": "Engine window differs from owned benchmark game",
+      "runs": [
+        {
+          "windowId": 240864,
+          "passed": true,
+          "noDrag": true,
+          "dragRan": false
+        }
+      ]
+    },
+    {
+      "command": "npm run lint:prose (final)",
+      "exitCode": 0,
+      "errors": 0
+    }
+  ],
+  "review": {
+    "findingsFixed": [
+      "owner edit during foreground settling",
+      "unconfirmed background release"
+    ],
+    "reReview": "No remaining blockers",
+    "finalReview": "No remaining product blockers; Chess save/close recovery remains unverified"
+  },
+  "privacy": "Home paths replaced with ~; Chess window titles redacted in live receipts; no screenshots published",
+  "fullBenchmarkRan": false,
+  "chess": {
+    "moved": true,
+    "readback": "white e4, empty e2",
+    "windowId": 240864,
+    "quietDeliveryQualified": false,
+    "saveVerified": false,
+    "closeVerified": false,
+    "reason": "Engine read another session game despite exact-window AXMain/AXRaise; further input refused"
+  }
+}
