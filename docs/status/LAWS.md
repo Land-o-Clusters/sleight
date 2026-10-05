@@ -35,7 +35,9 @@ belong in [STATE.md](STATE.md).
 - The engine refuses terminals and OpenAI's own apps (ChatGPT, Codex, Atlas). sleight never modifies or
   wraps OpenAI's helper to change that. Users may opt in to drive those apps through sleight's own
   Accessibility path once they consent for each app. Each terminal command is shown to them before it
-  runs (owner, 2026-10-04).
+  runs (owner, 2026-10-04). Users who turn off the helper's refusal themselves
+  (`ComputerUseAllowForbiddenTargets`) get the engine's per-app session approval instead, with the
+  prompt saying so and settings windows refused. sleight never sets that default (owner, 2026-10-05).
 - sleight's `menu_bar`, `notifications` and `drag` tools act outside the engine, through macOS
   Accessibility and posted mouse events (owner's scope calls, 2026-10-03 and 2026-10-04). Each app's icon needs the user's approval, as do notifications,
   with the same session memory as engine approvals. Every action on an app waits for that approval.

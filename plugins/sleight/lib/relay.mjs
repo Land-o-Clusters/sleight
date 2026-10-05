@@ -65,7 +65,7 @@ import { FLOW_TOOL } from './flow-rules.mjs';
 import { browserCall, browserReply } from './browser-call.mjs';
 import { isLeaseRead } from './input-lease.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
-import { refusedApp } from './blocked-apps.mjs';
+import { forbiddenTargetWarning, isForbiddenSettingsWindow, refusedApp } from './blocked-apps.mjs';
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
 
 const META_KEY = 'x-codex-turn-metadata';
@@ -139,6 +139,7 @@ export function createRelay({
   idleTurnEndMs,
   inputLease,
   onLeaseFault = () => {},
+  engineForbiddenTargets = false,
   trace: writeTrace = () => {},
 }) {
   let traceFailed = false;
@@ -497,6 +498,10 @@ export function createRelay({
       if (!leaseWindow?.appId) {
         const recovery = recoveryTarget ? `${constApp ? '' : 'app = '}await ${recoveryTarget}` : 'await cua.getState()';
         leaseStop(msg, `a bundle ID and full window header are required. Send exactly \u0060${recovery}\u0060 in js, then read the intended window before acting.`);
+        return false;
+      }
+      if (engineForbiddenTargets && isForbiddenSettingsWindow(leaseWindow)) {
+        leaseStop(msg, `${leaseWindow.app}'s settings window is refused, so Claude can't change its approval or safety settings. Close it or read another window.`);
         return false;
       }
       try { key = inputLease.acquire(leaseWindow); }
@@ -1137,6 +1142,10 @@ export function createRelay({
       }
     }
     if (msg.method === undefined) { reportPreapprovals(msg); finishedCall(msg.id); }
+    if (engineForbiddenTargets && isAppApproval(msg)) {
+      const warning = forbiddenTargetWarning(msg.params?._meta?.tool_params?.app);
+      if (warning && msg.params) msg.params.message = `${msg.params.message ?? 'Allow Computer Use?'} ${warning}`;
+    }
     if (isAppApproval(msg)) {
       let granted;
       try {

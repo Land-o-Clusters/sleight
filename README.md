@@ -338,6 +338,11 @@ engine instances despite the installed extension. The final run detected both af
   clipboard shortcuts, screenshots and coordinate drags can pass without a match. Source attribution
   and UI parsing can miss values or block harmless text. This guards mistakes; arbitrary JavaScript
   can bypass it. [The design](docs/design/flow-rules.md) lists the limits.
+- After every `js` action, sleight's window guard reads the app again with diffing off and adds that
+  full tree to the result, so the input lease can check the window header. The engine alone would
+  return a diff. On a busy page that means the whole sidebar after each click, which costs tokens
+  and shows Claude more of the screen than the task needs (reported by another Claude session on
+  2026-10-05). Filtering in Claude's own code doesn't help, since the guard's read comes after it.
 - With input leases, a dialog or sheet the action opened (Open, Save) stops the next action until
   Claude reads the window again. Claude recovers, but textedit-save took about twice the turns.
 - The engine's helper can stop answering. On 2026-10-04 every `cua.getApp` timed out
@@ -545,6 +550,35 @@ refuses these apps, and its own approvals, badges and background typing don't ap
 own code does the driving, with the limits above (Accessibility and Screen Recording permissions
 for the app that runs Claude Code, settings refusal by window title, toolbar and foreground typing).
 [The design](docs/design/blocked-apps.md) has the details.
+
+### Fewer prompts: let the engine drive them
+
+If a prompt for every terminal command is too much, you can turn off the helper's refusal yourself.
+The setting belongs to OpenAI's helper, so Codex loses the refusal too. sleight never sets it.
+
+```bash
+defaults write -g ComputerUseAllowForbiddenTargets -bool YES
+```
+
+The helper reads it when it starts, and `--doctor` shows whether it's on. Then these apps go
+through the engine like any other app, with one approval per app for the session, and Claude types
+in the background without bringing the app forward. sleight's prompt tells you that a yes lets
+Claude run commands in a terminal for the rest of the session without asking again.
+
+sleight still refuses actions in these apps' settings windows. The relay checks the title of the
+window Claude last read against Terminal's pane names (General, Profiles and others) and the words
+Settings and Preferences. Like the other window guards, this check runs in cooperative code
+and is not a security boundary. To turn the setting back off:
+
+```bash
+defaults delete -g ComputerUseAllowForbiddenTargets
+```
+
+We tested it live on 2026-10-05 with engine 26.930.31730. Terminal ran an `echo` in the background
+2/2 and never came to the front. The prompt included the warning above. An action in Terminal's
+settings window was refused 1/1. OpenAI's apps reached the engine's approval prompt instead of its
+refusal, but driving them this way is untested. The setting is undocumented, so an engine update
+can remove it.
 
 ## Safety
 

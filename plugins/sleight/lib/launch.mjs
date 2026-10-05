@@ -8,7 +8,7 @@
 //   launch.mjs           run the server over stdio, through relay.mjs
 //   launch.mjs --doctor  print what would run, and check it exists
 
-import { execFile, spawn } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -20,7 +20,7 @@ import { loadFlowRules } from './flow-rules.mjs';
 import { InputLease } from './input-lease.mjs';
 import { loadPreapproved } from './preapproved.mjs';
 import { createGrantAudit } from './preapproved-audit.mjs';
-import { BLOCKED_APP_TOOL, callBlockedApp } from './blocked-apps.mjs';
+import { BLOCKED_APP_TOOL, callBlockedApp, forbiddenTargetsAllowed } from './blocked-apps.mjs';
 import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
 import { probeHelper, staleHelperJobs } from './helper-health.mjs';
 
@@ -82,10 +82,14 @@ export async function selectSurfaces(server, env = process.env, options) {
   server.env.BROWSER_USE_AVAILABLE_BACKENDS = 'chrome';
 }
 
+// The helper's own opt-out of its app refusals, which only the user sets.
+const readForbiddenTargets = () => execFileSync('/usr/bin/defaults', ['read', '-g', 'ComputerUseAllowForbiddenTargets'],
+  { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000 });
+
 const listLaunchdJobs = () => new Promise((resolve, reject) =>
   execFile('/bin/launchctl', ['list'], { timeout: 5000 }, (err, stdout) => (err ? reject(err) : resolve(stdout))));
 
-export async function doctor({ env = process.env, log = console.log, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs } = {}) {
+export async function doctor({ env = process.env, log = console.log, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs, forbiddenTargets = readForbiddenTargets } = {}) {
   const s = resolveServer(env);
   if (s.error) { log(`sleight: ${s.error}`); return 1; }
   await selectSurfaces(s, env);
@@ -98,6 +102,7 @@ export async function doctor({ env = process.env, log = console.log, timeoutMs =
   log(`Codex computer-use ${s.version}`);
   log(`config    ${s.configPath}`);
   log(`surfaces  ${s.env.CUA_REPL_ENABLED_SURFACES}`);
+  log(`refused apps  ${forbiddenTargetsAllowed(forbiddenTargets) ? 'allowed through the engine (ComputerUseAllowForbiddenTargets is on)' : 'refused by the engine; blocked_app drives them'}`);
   let ok = true;
   for (const [label, path] of checks) {
     const found = Boolean(path) && existsSync(path);
@@ -447,6 +452,7 @@ export async function run({ leaseDirectory } = {}) {
     // holds is released even where the mod doesn't run. 0 turns this off.
     idleTurnEndMs: Number(process.env.SLEIGHT_IDLE_TURN_END_MS ?? 30000),
     inputLease: new InputLease({ directory: leaseDirectory, holder: `session ${sessionId} (pid ${process.pid})` }),
+    engineForbiddenTargets: forbiddenTargetsAllowed(readForbiddenTargets),
     onLeaseFault: err => { process.stderr.write(`sleight: ${err.message}; stopping the owned engine.\n`); terminateEngine(); },
     // SLEIGHT_MENU_BAR=0 leaves out the menu bar and notification tools,
     // SLEIGHT_DRAG=0 the drag tool, SLEIGHT_HOVER=0 the hover tool,

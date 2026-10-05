@@ -39,17 +39,13 @@ the user or stop when a headless run refuses it. Changing the file is not an app
    approved, stop and tell the user. Don't retry around it. The engine refuses terminal apps and
    OpenAI's own apps (ChatGPT, Codex) before any prompt; for those, sleight's `blocked_app` tool is
    the path (see below), and the user's approval of its prompt is what allows it. Tell the user what
-   you're asking for and why.
+   you're asking for and why. If the user turned that refusal off themselves (`--doctor` says so),
+   `cua.getApp("com.apple.Terminal")` asks like any other app, and `js` drives it in the
+   background. Never set or suggest that setting yourself, and never act in these apps' settings.
 4. If a result says the user changed the app, re-read its state before acting again. The person may be
    using it.
 5. Use `app.getScreenshot()` with `nodeRepl.emitImage(...)` when the accessibility tree doesn't show what
    you need, such as canvases or images.
-6. Read only what you need. After a page re-renders, the engine's diff repeats the whole tree, sidebars and
-   recent-item lists included, which costs tokens and shows more of the user's screen than the task
-   needs. When you only need part of it, read with `emit: false` and print the lines you need, for
-   example `const s = await app.getAXState({ emit: false }); nodeRepl.write(s.split("\n").filter(l => /Save|Name/.test(l)).join("\n"))`.
-   Keep a full, emitted read right after acquiring the app and before acting on a new window: the
-   input lease and document scope check its Window header, and a filtered read can drop it.
 
 The relay takes a window lease before acting. If another sleight session holds it, the refusal names
 that session and the seconds left. Stop actions and tell the user, using reads if needed to inspect

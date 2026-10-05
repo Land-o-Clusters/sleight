@@ -47,6 +47,32 @@ export function refusedApp(text) {
 export const SETTINGS_TITLE = /^(?:settings|preferences|réglages|einstellungen|impostazioni|configuración|ajustes|preferencias|設定|设置|偏好设置)(?:…|\.{3})?$/i;
 export const isSettingsTitle = title => typeof title === 'string' && SETTINGS_TITLE.test(title.trim());
 // The exact RegExp construction the driver performs with the relay's request.
+// Terminal names its settings window after the open pane.
+const TERMINAL_SETTINGS_PANES = /^(?:general|profiles|window groups|encodings|advanced)$/i;
+
+// The user can turn off the helper's refusal themselves with
+// `defaults write -g ComputerUseAllowForbiddenTargets -bool YES` (OpenAI's
+// helper reads it; sleight never writes it). Then these apps go through the
+// engine with its per-app approval, and sleight adds what blocked_app had:
+// the prompt says what a yes covers, and settings windows are refused.
+export function forbiddenTargetsAllowed(read) {
+  try { return /^(?:1|true|yes)$/i.test(String(read()).trim()); } catch { return false; }
+}
+export function forbiddenTargetWarning(app) {
+  if (typeof app !== 'string') return undefined;
+  const bundleLike = /^[\w-]+(?:\.[\w-]+)+$/.test(app.trim());
+  const match = (bundleLike && matchBlockedApp(app, app)) || matchBlockedApp(app);
+  if (!match) return undefined;
+  return match.terminal
+    ? `${match.name} is a terminal. A yes lets Claude type and run commands in it for the rest of this session without asking again. Its settings windows stay refused.`
+    : `${match.name} is OpenAI's app. A yes covers every click in it for the rest of this session, its approval buttons included. Its settings windows stay refused.`;
+}
+export function isForbiddenSettingsWindow(window) {
+  const match = window && matchBlockedApp(window.app, window.appId);
+  if (!match) return false;
+  return isSettingsTitle(window.title) || (match.terminal && TERMINAL_SETTINGS_PANES.test(String(window.title ?? '').trim()));
+}
+
 export const driverSettingsRegExp = () => new RegExp(SETTINGS_TITLE.source, SETTINGS_TITLE.flags);
 
 // A click on a button named like these is named in the result, so the

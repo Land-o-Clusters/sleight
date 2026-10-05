@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0 (2026-10-05)
+
+- Fewer prompts for terminals and OpenAI's apps, opt-in. If you turn off the helper's refusal
+  yourself with `defaults write -g ComputerUseAllowForbiddenTargets -bool YES`, these apps go
+  through the engine with one approval per app for the session, and Claude types in the background.
+  sleight's prompt says a yes lets Claude run terminal commands without asking again, and actions
+  in these apps' settings windows are refused. `--doctor` shows whether the setting is on. sleight
+  never sets it. In the live check Terminal ran `echo` in the background 2/2, and its settings
+  window was refused 1/1.
+- The skill says a built-in browser is usually faster for public pages, and sleight's browser
+  surface fits pages that need the user's logged-in browser.
+- Known problem added: the window guard adds a full, non-diffed tree to every action result.
+
 ## 0.7.0 (2026-10-05)
 
 Benchmark: 16/18 from a clean arm folder (Sonnet 5.5, medium). Every task passed 3/3 except
