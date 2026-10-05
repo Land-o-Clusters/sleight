@@ -53,7 +53,7 @@ const call = async (name, args) => {
   // Open panels can expose unrelated filenames and the user's sidebar. Keep
   // their header and Open/Cancel buttons in results; full MCP traces stay local.
   stages.push({ name, args, isError: result?.isError ?? false, window,
-    text: rereadMode && !window?.url ? text.map(t => t.split('\n').filter(line =>
+    text: rereadMode && name === 'js' && !window?.url ? text.map(t => t.split('\n').filter(line =>
       /^Window: /.test(line) || /^\s*\d+ button(?: \([^)]*\))? (?:Open|Cancel)(?:,|$)/.test(line) || result?.isError).join('\n')) : text });
   assert.ok(!result?.isError, texts(result).split('\n## Computer Use')[0]);
   return result;
