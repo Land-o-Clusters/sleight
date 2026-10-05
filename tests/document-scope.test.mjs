@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
-import { guardedCode, readCode, windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
+import { GUARD_MARK, guardedCode, readCode, windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 
 test('headers require one exact identity, including a document URL', () => {
   assert.deepEqual(windowFromText('Window: "", App: Chess.\n0 standard window'), { title: '', app: 'Chess', url: null });
@@ -97,5 +97,5 @@ test('a bare read works after const app, and post-action state follows the acted
     readCode('await te.getAXState({disableDiffing:true});') + '\n' +
     guardedCode('await te.typeText("x")', { title: 'second', app: 'TextEdit', url: null });
   await runInNewContext(`(async () => { ${code} })()`, context);
-  assert.equal(outputs.at(-1), 'Window: "second", App: TextEdit');
+  assert.equal(outputs.at(-1), GUARD_MARK + 'Window: "second", App: TextEdit');
 });

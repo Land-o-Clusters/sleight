@@ -65,6 +65,7 @@ import { FLOW_TOOL } from './flow-rules.mjs';
 import { browserCall, browserReply } from './browser-call.mjs';
 import { isLeaseRead } from './input-lease.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
+import { createReadCompactor } from './compact-reads.mjs';
 import { forbiddenTargetWarning, isForbiddenSettingsWindow, refusedApp } from './blocked-apps.mjs';
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
 
@@ -142,6 +143,7 @@ export function createRelay({
   engineForbiddenTargets = false,
   trace: writeTrace = () => {},
 }) {
+  const compactor = createReadCompactor();
   let traceFailed = false;
   function trace(direction, msg) {
     if (traceFailed) {
@@ -1187,6 +1189,8 @@ export function createRelay({
         .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t))
         .concat(documentMode ? [DOCUMENT_TOOL, ...(localTools?.tools ?? []).filter(t => t.name === 'select_window')] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : []);
     }
+    // Last, after every check above has read the full tree.
+    if (msg.method === undefined && Array.isArray(msg.result?.content)) msg.result.content = compactor.process(msg.result.content);
     toClient(msg);
   }
 

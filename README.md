@@ -338,13 +338,13 @@ engine instances despite the installed extension. The final run detected both af
   clipboard shortcuts, screenshots and coordinate drags can pass without a match. Source attribution
   and UI parsing can miss values or block harmless text. This guards mistakes; arbitrary JavaScript
   can bypass it. [The design](docs/design/flow-rules.md) lists the limits.
-- After every `js` action, sleight's window guard reads the app again with diffing off and adds that
-  full tree to the result, so the input lease can check the window header. The engine alone would
-  return a diff. On a busy page that means the whole sidebar after each click, which costs tokens
-  and shows Claude more of the screen than the task needs (reported by another Claude session on
-  2026-10-05). Filtering in Claude's own code doesn't help, since the guard's read comes after it.
-- With input leases, a dialog or sheet the action opened (Open, Save) stops the next action until
-  Claude reads the window again. Claude recovers, but textedit-save took about twice the turns.
+- After every `js` action, sleight's window guard reads the whole tree again so the input lease can
+  check the window header. Since 0.9.0 Claude gets only the lines that changed since the last full
+  tree it saw for that window ([measurements](docs/benchmarks/2026-10-05-compact-reads.md)). A first
+  read, a new window or dialog, or a page that re-renders and renumbers its elements still comes
+  through whole. On TextEdit and Chess the result text per run fell 1 to 23%. Busy browser pages
+  are unmeasured. If Claude Code summarizes the conversation, Claude can lose the tree a diff refers
+  to, as with the engine's own diffs. A read with `disableDiffing: true` comes through whole.
 - TextEdit hung 2/2 when Claude pressed Cmd+Shift+S (Duplicate, in apps with autosave) right after
   setting a document's text. Its main thread waits forever on the document's save lock, so every
   read times out and the relay reports a stuck helper and suggests restarting ChatGPT, when only

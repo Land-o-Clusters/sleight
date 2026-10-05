@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0 (2026-10-05)
+
+- Smaller results after actions. The window guard's read after each `js` action now reaches Claude
+  as the lines that changed since the last full tree it saw for that window, or one "no change"
+  line, instead of the whole tree again (`docs/benchmarks/2026-10-05-compact-reads.md`). The relay
+  keeps that tree, so the engine's next diff still starts from what Claude knows. Benchmark 12/12;
+  46 guard reads were cut down, and result text per run fell 1 to 23% on TextEdit and Chess. Busy
+  browser pages, where the complaint came from, are unmeasured.
+
 ## 0.8.0 (2026-10-05)
 
 - Fewer prompts for terminals and OpenAI's apps, opt-in. If you turn off the helper's refusal

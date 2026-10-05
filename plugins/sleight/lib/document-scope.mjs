@@ -1,4 +1,7 @@
 // Header identity is a cooperative runtime observation, not an OS capability.
+// Marks the guard's after-action read, which the relay compacts (compact-reads.mjs).
+export const GUARD_MARK = '[sleight:guard-read]\n';
+
 export function windowFromText(text) {
   const headers = [...text.matchAll(/^Window: ("(?:[^"\\]|\\.)*"), App: (.+)\r?$/gm)];
   const windows = [];
@@ -47,7 +50,7 @@ export function guardedCode(code, window, reason = 'Document scope stopped this 
   return guardSetup({ window, reason, lease, ...options }) +
     (options.browserCandidate ? '\nglobalThis.__sleightDocumentGuard.activeApp = undefined;' : '') + `\n${code}
 if (globalThis.__sleightDocumentGuard.activeApp) {
-  nodeRepl.write(await globalThis.__sleightDocumentGuard.activeApp.getAXState({ disableDiffing: true, emit: false }));
+  nodeRepl.write(${JSON.stringify(GUARD_MARK)} + await globalThis.__sleightDocumentGuard.activeApp.getAXState({ disableDiffing: true, emit: false }));
 }`;
 }
 
