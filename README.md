@@ -96,7 +96,8 @@ Then run `/reload-plugins` in any open session, or start a new one.
 ~/.claude/plugins/marketplaces/sleight/plugins/sleight/bin/sleight-mcp --doctor
 ```
 
-`--doctor` prints the engine version it found and checks every file it needs. Then try:
+`--doctor` prints the engine version and file checks. It also probes a live helper inventory read
+with a five-second execution timeout. It doesn't grant app approval. Then try:
 
 ```text
 Use sleight to open Calculator in the background and work out 12 × 12 by clicking its buttons.
@@ -326,6 +327,19 @@ engine instances despite the installed extension. The final run detected both af
 - The engine's helper can stop answering. On 2026-10-04 every `cua.getApp` timed out
   (`-10005 timeoutReached`) for about 25 minutes, with the Mac unlocked and in use, until ChatGPT was
   restarted. We don't know the cause. It started right after a test that kills engine processes.
+  In 18 completed SIGKILL trials, reads passed before and after cleanup. Killing a responding helper
+  relaunched it, but no wedge was reproduced, so helper-only recovery from a wedge remains unproven.
+  After two consecutive `timeoutReached` failures on standalone reads of one app, the relay tells
+  Claude to stop retrying and ask the user to restart ChatGPT. sleight retries by itself.
+  For that app, `js` reads are refused between recovery attempts (at most one every 20 seconds),
+  and `js` actions using its known handles are refused until a read succeeds. After hidden recovery,
+  actions wait for a visible app read, which sleight makes a full read. Other apps, documentation,
+  `js_reset`, and turn cleanup remain available. Inventory failures have their own retry counter.
+  App identity comes from literal acquisitions, known handles and learned bundle aliases. Arbitrary
+  JavaScript can bypass this advisory check. An app hang can produce the same symptom, so the helper
+  diagnosis is provisional.
+  Doctor probes inventory, which does not prove that every app's accessibility read
+  works. [The investigation](docs/benchmarks/2026-10-04-helper-health.md) records each live attempt.
 - ChatGPT updates can break it. The version lookup handles the folder moving around, but not the API
   changing. Run `--doctor` first when something stops working.
 - The engine has no access to an app's icon in the menu bar or to notification banners: its inventory has
@@ -530,6 +544,7 @@ for the app that runs Claude Code, settings refusal by window title, toolbar and
 |---|---|---|
 | `no Codex computer-use plugin at …` | Computer Use never enabled in ChatGPT | Open ChatGPT → Codex, turn on Computer Use, and run one task |
 | `--doctor` shows `MISSING computer-use helper` | The helper app was removed or never installed | Same as above |
+| Repeated `timeoutReached`, or doctor reports a stuck helper | The helper stopped answering reads | Stop retries and tell the user. Restarting ChatGPT ends Codex sessions, so only the user should do it |
 | Approval prompt never appears | Claude Code too old for form elicitation | Update Claude Code |
 | "Not approved" right away in the desktop app, with no panel | The session started before sleight 0.1.1 | Start a new session |
 | A desktop session still shows as busy after Claude has finished | Before 0.3.1, nothing ended the engine's turn in the desktop app | Update sleight and start a new session |

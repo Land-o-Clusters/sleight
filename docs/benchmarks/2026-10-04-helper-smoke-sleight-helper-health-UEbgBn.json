@@ -1,0 +1,176 @@
+{
+  "mode": "smoke",
+  "remaining": false,
+  "bank": "/private/tmp/sleight-helper-health-UEbgBn",
+  "engine": "26.930.31730",
+  "records": [
+    {
+      "at": "2026-10-05T03:38:22.693Z",
+      "event": "start",
+      "platform": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428",
+      "node": "v26.4.0"
+    },
+    {
+      "label": "smoke-0",
+      "direction": "to-server",
+      "elapsedMs": 1,
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-06-18",
+          "capabilities": {
+            "elicitation": {
+              "form": {}
+            }
+          },
+          "clientInfo": {
+            "name": "smoke-0",
+            "version": "1"
+          }
+        }
+      }
+    },
+    {
+      "label": "smoke-0",
+      "direction": "to-client",
+      "elapsedMs": 149,
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": {
+          "protocolVersion": "2025-06-18",
+          "capabilities": {
+            "experimental": {
+              "codex/sandbox-state-meta": {}
+            },
+            "tools": {
+              "listChanged": true
+            }
+          },
+          "serverInfo": {
+            "name": "rmcp",
+            "version": "1.5.0"
+          },
+          "instructions": "UI automation through cua_repl using the initialized cua API."
+        }
+      }
+    },
+    {
+      "label": "smoke-0",
+      "direction": "to-server",
+      "elapsedMs": 149,
+      "msg": {
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized"
+      }
+    },
+    {
+      "label": "smoke-0",
+      "direction": "to-server",
+      "elapsedMs": 150,
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+          "name": "js",
+          "arguments": {
+            "code": "(() => {\n    const parse = function windowFromText(text) {\n  const headers = [...text.matchAll(/^Window: (\"(?:[^\"\\\\]|\\\\.)*\"), App: (.+)\\r?$/gm)];\n  const windows = [];\n  for (let i = 0; i < headers.length; i++) {\n    const header = headers[i];\n    const section = text.slice(header.index + header[0].length, headers[i + 1]?.index);\n    const urls = [...section.matchAll(/^(?:URL: (.+)|0 [^\\r\\n]*?\\bURL: (.*?)(?:, (?:Secondary Actions|ID|Help):.*)?)\\r?$/gm)];\n    if (urls.length > 1) return undefined;\n    try {\n      windows.push({ title: JSON.parse(header[1]), app: header[2].trim().replace(/\\.$/, ''), url: (urls[0]?.[1] ?? urls[0]?.[2])?.trim() || null });\n    } catch { return undefined; }\n  }\n  if (!windows.length || windows.some(w => !w.app)) return undefined;\n  if (windows.some(w => JSON.stringify(w) !== JSON.stringify(windows[0]))) return undefined;\n  return windows[0];\n};\n    const isCancel = function isCancelAction(name, args, text = '') {\n  if (name === 'pressKey') return /^(?:Escape|esc)$/i.test(args[0]);\n  if (name !== 'click' || !Number.isInteger(Number(args[0]))) return false;\n  return text.split('\\n').some(line => {\n    const button = /^\\s*(\\d+) button(?: \\(.*?\\))? Cancel(?:,|$)/.exec(line);\n    return button && Number(button[1]) === Number(args[0]);\n  });\n};\n    const state = globalThis.__sleightDocumentGuard ||= {\n      getApp: cua.getApp.bind(cua), proxies: new WeakSet(), wrapped: new WeakMap()\n    };\n    \n    const checkLease = async () => {\n      if (!state.lease) return;\n      const fs = await import('node:fs/promises');\n      let record;\n      try { record = JSON.parse(await fs.readFile(state.lease.path, 'utf8')); }\n      catch { throw new Error('Input lease stopped this action: the lease file is unavailable. End the turn and read the window again.'); }\n      if (record.token !== state.lease.token || record.expires <= Date.now()) {\n        throw new Error('Input lease stopped this action: ownership lost or expired. End the turn and read the window again.');\n      }\n    };\n    const wrap = target => {\n      if (state.proxies.has(target)) return target;\n      if (state.wrapped.has(target)) return state.wrapped.get(target);\n      const proxy = new Proxy(target, { get(raw, name) {\n        const value = Reflect.get(raw, name);\n        if (typeof value !== 'function') return value;\n        if (['getAXState', 'getAXStateAndScreenshot', 'getScreenshot'].includes(name)) return async (...args) => {\n          const result = await value.apply(raw, args);\n          state.activeApp = proxy;\n          return result;\n        };\n        if (!['click', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction',\n          'paste', 'pressKey', 'typeText'].includes(name)) return value.bind(raw);\n        return async (...args) => {\n          await checkLease();\n          if (state.fileOnly && name === 'pressKey' && isCancel(name, args)) {\n            state.activeApp = proxy;\n            return value.apply(raw, args);\n          }\n          const text = await raw.getAXState({ disableDiffing: true, emit: false });\n          const observed = parse(text);\n          const cancel = state.fileOnly && isCancel(name, args, text);\n          if (state.cancelOnly && !cancel) throw new Error('Change review: Cancel target changed. Read the current window before retrying.');\n          const dialog = state.fileOnly && observed?.app === state.expected?.app && !observed.url?.startsWith('file://');\n          if (!cancel && !dialog && (!observed || ['title', 'app', 'url'].some(key => observed[key] !== state.expected[key]))) {\n            throw new Error(state.reason + ' Observed ' + JSON.stringify(observed));\n          }\n          await checkLease();\n          state.activeApp = proxy;\n          return value.apply(raw, args);\n        };\n      } });\n      state.proxies.add(proxy); state.wrapped.set(target, proxy);\n      return proxy;\n    };\n    cua.getApp = async (...args) => state.activeApp = wrap(await state.getApp(...args));\n    \n  })();\nlet app = await cua.getApp(\"Calculator\")",
+            "timeout_ms": 8000
+          },
+          "_meta": {
+            "x-codex-turn-metadata": "{\"session_id\":\"smoke-0\",\"turn_id\":\"c246bb7b-cc33-47f2-9775-3bbb8c84a149\"}"
+          }
+        }
+      }
+    },
+    {
+      "label": "smoke-0",
+      "stderr": "WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1)\n"
+    },
+    {
+      "label": "smoke-0",
+      "stderr": "sandbox-exec: sandbox_apply: Operation not permitted\n"
+    },
+    {
+      "label": "smoke-0",
+      "stderr": "2026-10-05T03:38:22.880930Z ERROR node_repl::diagnostics: node_repl kernel terminated unexpectedly reason=\"stdout_eof\" stream_error=\"\" redacted_source_available=false redacted_source_exec_completed=false redacted_source=\"unavailable\" kernel_status=\"exited(code=71)\" kernel_stderr_available=true kernel_stderr_kind=\"macos_sandbox_failed\" target_os=\"macos\" target_arch=\"aarch64\"\n"
+    },
+    {
+      "label": "smoke-0",
+      "stderr": "node_repl kernel exited unexpectedly\n\nnode_repl diagnostics: {\"kernel_pid\":29987,\"kernel_status\":\"exited(code=71)\",\"kernel_stderr_tail\":\"WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1) | sandbox-exec: sandbox_apply: Operation not permitted\",\"reason\":\"stdout_eof\",\"stream_error\":null}\n"
+    },
+    {
+      "label": "smoke-0",
+      "direction": "to-client",
+      "elapsedMs": 185,
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "node_repl kernel exited unexpectedly\n\nnode_repl diagnostics: {\"kernel_pid\":29987,\"kernel_status\":\"exited(code=71)\",\"kernel_stderr_tail\":\"WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1) | sandbox-exec: sandbox_apply: Operation not permitted\",\"reason\":\"stdout_eof\",\"stream_error\":null}"
+            }
+          ],
+          "isError": true
+        }
+      }
+    },
+    {
+      "at": "2026-10-05T03:38:22.881Z",
+      "label": "smoke-0",
+      "health": false,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "node_repl kernel exited unexpectedly\n\nnode_repl diagnostics: {\"kernel_pid\":29987,\"kernel_status\":\"exited(code=71)\",\"kernel_stderr_tail\":\"WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1) | sandbox-exec: sandbox_apply: Operation not permitted\",\"reason\":\"stdout_eof\",\"stream_error\":null}"
+          }
+        ],
+        "isError": true
+      }
+    },
+    {
+      "label": "smoke-0",
+      "direction": "to-server",
+      "elapsedMs": 186,
+      "msg": {
+        "jsonrpc": "2.0",
+        "id": "sleight-0",
+        "method": "tools/call",
+        "params": {
+          "name": "turn_ended",
+          "arguments": {
+            "hook_event_name": "Stop",
+            "session_id": "smoke-0",
+            "turn_id": "c246bb7b-cc33-47f2-9775-3bbb8c84a149"
+          }
+        }
+      }
+    },
+    {
+      "label": "smoke-0",
+      "direction": "change-snapshots-deleted",
+      "elapsedMs": 186,
+      "msg": {}
+    },
+    {
+      "at": "2026-10-05T03:38:22.985Z",
+      "label": "smoke-0",
+      "engineCollected": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    {
+      "at": "2026-10-05T03:38:22.986Z",
+      "verdict": "FAIL",
+      "error": "healthy getApp failed"
+    }
+  ]
+}

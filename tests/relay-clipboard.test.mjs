@@ -22,7 +22,7 @@ function fixture({ mode = 'preserve', readFailure } = {}) {
     copy: () => { board = { count: board.count + 1, items: [[{ type: 'copy', data: 'Y29weQ==' }]] }; },
     reset: id => clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js_reset', arguments: {} } }) + '\n'),
     send: (id, code) => clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } }) + '\n'),
-    reply: (id, isError = false) => serverOut.write(JSON.stringify({ jsonrpc: '2.0', id, result: { isError, content: [{ type: 'text', text: 'engine result' }] } }) + '\n'),
+    reply: (id, isError = false, text = 'engine result') => serverOut.write(JSON.stringify({ jsonrpc: '2.0', id, result: { isError, content: [{ type: 'text', text }] } }) + '\n'),
   };
 }
 test('relay snapshots before Copy and restores before publishing its result; private Paste restores on engine failure', async () => {
@@ -39,6 +39,27 @@ test('relay snapshots before Copy and restores before publishing its result; pri
     assert.equal(h.board().items[0][0].type, 'old'); assert.equal(h.replies.at(-1).result.isError, true); assert.equal(h.held(), false);
   } finally { h.relay.close(); }
 });
+test('helper recovery waits for preserved Copy and keeps its reply behind clipboard restoration', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const h = fixture();
+  try {
+    h.send(1, 'let te = await cua.getApp("TextEdit")'); h.reply(1);
+    for (const id of [2, 3]) { h.send(id, 'let calc = await cua.getApp("Calculator")'); h.reply(id, true, '-10005 timeoutReached'); }
+    h.send(4, 'await te.pressKey("super+c")'); await setImmediate();
+    assert.equal(h.messages.at(-1).id, 4); assert.equal(h.held(), true);
+    t.mock.timers.tick(20000);
+    assert.equal(h.messages.at(-1).id, 4, 'the helper read waits for the Copy result');
+    h.copy(); h.reply(4); await setImmediate();
+    assert.equal(h.replies.at(-1).id, 4);
+    assert.equal(h.board().items[0][0].type, 'old'); assert.equal(h.held(), false);
+    t.mock.timers.tick(1000);
+    const probe = h.messages.at(-1);
+    assert.match(String(probe.id), /^sleight-helper-/);
+    h.reply(probe.id);
+    assert.equal(h.replies.at(-1).id, 4, 'the automatic reply stays internal');
+  } finally { await h.relay.close(); }
+});
+
 test('compound clipboard actions stop before forwarding; ordinary JS gets runtime enforcement', async () => {
   const h = fixture();
   try {
