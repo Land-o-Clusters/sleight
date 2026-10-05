@@ -55,3 +55,42 @@ verification paragraph. Both cleanup findings were addressed and reviewed.
 Rebasing the old drag-polish history first exited 1 on changes already merged
 into main. Its final tree matched main's `2e0e607` exactly. After aborting that
 rebase, skipping the merged commits exited 0. This branch starts from `2598a1b`.
+
+## Integration with background drag
+
+The next rebase fetched `origin/main` at `562f423`, which includes the requested
+`7540224`. It first exited 1 with conflicts in README, package.json and the drag
+test harness. Resolving them kept both sets of tests, all README measurements and
+the union of prose-lint files. Rebase continuation exited 0.
+
+The merged background path initially bypassed AXMain and AXRaise. The new
+regression run passed 31/34 and exited 1. The fix raises the exact chosen window
+for both paths. Background PID posting checks its own app's window order at both
+endpoints, while foreground HID posting checks every covering app. Background
+posting still accepts coverage by another app and avoids HID input. If AXRaise
+brings the target app forward, cleanup restores the prior front app while the
+target remains frontmost. Tests cover that restoration on success and refusal.
+
+Both paths explain off-Space windows before constructing events. Existing
+guards still prevent a second drag after changed, lost or unreadable text, or an
+unconfirmed background release. The focused run then passed 71/71, exit 0.
+
+`relay.mjs` and `launch.mjs` match main byte for byte. This preserves the
+pre-approved list, grant audit, once-only blocked-app prompts, change-review
+snapshots and dialogs, script runner options, hover buffer limits and drag focus
+capture. The stacked-Chess trials await a new owner-away window. Chess AX square
+coordinates need screenshot verification, as main's product trials found a
+vertical reversal. No merged live run or full benchmark ran during this rebase.
+
+The merged regression suite passed 72/72, including the compiled native fixture
+test, exit 0. Full `npm run check` first exited 1: 346/347 unit tests passed, and
+`a timeout collects a process group even when the child and descendant ignore TERM`
+failed with sandbox `kill EPERM`. The unchanged command was retried with host
+access. Prose lint first exited 1 with two flags in the added text, then passed
+with zero flags across the union of 28 files, exit 0.
+
+The unchanged host `npm run check` passed 347/347 unit tests, both manifest
+validations and 8 mod tests, exit 0. Read-only review covered the merged drag
+changes. Prose lint exited 1 again on two wording flags in this paragraph.
+Native background raising still needs the locked stacked-Chess trials when the
+owner is away.

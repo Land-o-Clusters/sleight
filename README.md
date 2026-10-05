@@ -266,13 +266,15 @@ engine instances despite the installed extension. The final run detected both af
   [Spacing repair](docs/benchmarks/2026-10-04-drag-polish.md) covers unique whole words at line ends.
   Other selections need a spacing check, and concurrent edits can confuse snapshot comparisons.
   The old-helper live reproduction was blocked by another session's larger window.
-  Named drags set AXMain and raise the window, then require it above other windows at both endpoints.
+  Both drag paths set AXMain and raise the window selected by `windowId`, then require it above same-app windows
+  at both endpoints. Foreground fallback also refuses covering apps.
   Off-screen windows must be brought to the current desktop for drag or hover.
   [Stacked Chess checks](docs/benchmarks/2026-10-04-drag-raise.md) have no measured moves yet;
   three fixture placement failures required owner-assisted cleanup. Calculator content guards remain unmeasured.
   The [background prototype](docs/benchmarks/2026-10-04-background-text-drag.md) moved TextEdit text
   4/4 after correcting its drop geometry, but joined `gammaalpha`. The product now uses that path
-  first and repairs the verified space. [Product trials](docs/benchmarks/2026-10-04-background-drag-product.md)
+  first and repairs the verified space. Before the named-window raise guard,
+  [product trials](docs/benchmarks/2026-10-04-background-drag-product.md)
   passed 3/3 TextEdit moves, with TextEdit inactive and the front app unchanged. The owner moved the
   pointer during one trial; it was unchanged throughout the other two.
   `CGEventSetWindowLocation` is a private macOS API. Missing symbols, invalid events or coordinates that fail the
