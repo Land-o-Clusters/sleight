@@ -32,6 +32,8 @@ types, byte lengths, hashes and generation counts. Home paths are `~`.
 | [23](2026-10-04-clipboard-attempt-23.json) | 1 | Round 2 sandbox could not resolve TextEdit. No app action ran. |
 | [24](2026-10-04-clipboard-attempt-24.json) | 0 | Default native mode passed 9/9 Copy/Cut/Paste trials. Copy remained readable through `pbpaste`, with a notice to Claude. |
 | [25](2026-10-04-clipboard-attempt-25.json) | 0 | Opt-in preservation passed 9/9 rich-text trials plus one promised-format fallback. Copy results explained the private destination. Fallback copied natively with a warning. |
+| [26](2026-10-04-clipboard-attempt-26.json) | 1 | Merged-code sandbox smoke could not resolve TextEdit. No app action ran. |
+| [27](2026-10-04-clipboard-attempt-27.json) | 0 | Merged-code Copy and Cut/Paste preserved both file items, 2/2. Cleanup restored the original clipboard. |
 
 The final relay check returned no tool errors. It restored the user's snapshot after the synthetic
 fixtures. The helper materializes and verifies every published item before exiting. The file-only
@@ -73,6 +75,13 @@ failed 1/10 before the relay stopped dispatch into the reset realm. The fixed te
 both `pressKey` argument wrappers, split-and-retry messages, native fallback and reset cleanup.
 Prose checks exited 1 on three style flags, then one, then five in the added report. The final check
 exited 0 after revision.
+
+Rebase verification used `562f423`, the status-only commit after the requested `7540224`. Both
+clipboard commits were replayed with main's approval audit, per-command prompts, later snapshots,
+dialog handling, hover and background drag retained. The merged lint list contains every file from
+both sides. `npm run check` exited 0 with 375 unit tests, manifest validation and 8 mod tests. The
+separate clipboard suite passed 44/44, exit 0. `npm run lint:prose` exited 0 across all 29 files.
+Attempt 27 ran once under the live-check lock, using the merged relay and launcher discovery.
 
 The local drags returned success but did not move the selected word. These trials measure clipboard
 changes. They do not qualify text drag. The conflict trial confirms that a replacement clipboard
