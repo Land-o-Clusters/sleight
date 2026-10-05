@@ -2,5 +2,30 @@
   "branch": "codex/change-review-reread",
   "base": "2598a1b",
   "changeReview": "SLEIGHT_CHANGE_REVIEW=1",
-  "attempts": []
+  "candidate": "2cd9341906dd9c1bdd9d921c24ab13b492439251",
+  "checks": {
+    "check": { "exitCode": 0, "unitTests": 298, "modTests": 8 },
+    "lintProse": { "exitCode": 0, "files": 25 },
+    "earlierLintExits": [2, 1, 1],
+    "earlierLintReasons": ["Vale styles absent in the new worktree; resolved by vale sync", "Four prose flags; corrected", "Three flags in the blocked-attempt report; corrected"]
+  },
+  "attempts": [
+    {
+      "number": 1,
+      "command": "node bench/change-review.mjs --reread",
+      "exitCode": 1,
+      "verdict": "BLOCKED",
+      "reason": "Waited for another thread's live lock, then interrupted through the owned terminal. The Chess thread retained the lock while recovering fixture windows and was waiting on an approval card.",
+      "bank": "/private/tmp/sleight-change-review-RECBuc",
+      "lockAcquired": false,
+      "windowsOpened": 0,
+      "engineStarted": false,
+      "cleanup": "No fixtures or child were started. The other holder's lock was left intact.",
+      "results": {
+        "stages": [{ "verdict": "FAIL", "error": "The operation was aborted" }],
+        "traceFile": "/private/tmp/sleight-change-review-RECBuc/trace.jsonl"
+      }
+    }
+  ],
+  "liveStatus": "Pending four overlapping Open/re-read trials and the owner-selected Undo/Keep check."
 }
