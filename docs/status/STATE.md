@@ -46,14 +46,13 @@ fair benchmark tied LCU at 15/18 on Opus 5.5.
 
 Market research (Codex, gpt-6.1-sol) is in `.dev/research/2026-10-04-competitors.md`, untracked.
 Publishing it is the owner's call. Flow rules finished the three new-ground items on the roadmap.
-Prompts are in `.dev/prompts/` (untracked), and the latest round is `round-4.md`. Merged to main since 0.6.0,
-unreleased: #7 background drag (research, then background-first in the drag tool), #4 doubled-keys
-probe, #6 drag window guards, #8 hover, #9 pre-approved apps, #10 blocked_app, B change review (opt-in
-again after 0/2 TextEdit tasks on 2026-10-04). Not merged: #3 action notes. Rebasing onto `7540224`:
-#1 helper stall, #2 clipboard (opt-in), #5 select_window, #6 drag raise, #11 browser surface, B re-read.
-Benchmark on `5782453`: 3/6. The change review failed both TextEdit tasks. The drag tasks failed on the
-test machine's state: TextEdit's window was on another Space, and four stacked Chess games were open.
-0.7.0 waits for a clean pass of the drag tasks.
+Prompts are in `.dev/prompts/` (untracked), and the latest round is `round-4.md`. Merged to main
+since 0.6.0, unreleased: #7 background drag (research, then background-first in the drag tool), #4
+doubled-keys probe, #6 drag window guards, #8 hover, #9 pre-approved apps, #10 blocked_app, B change
+review with the re-read fix (opt-in), #2 clipboard preservation (opt-in), #5 select_window, #11 browser
+surface (on when the extension is connected). Not merged: #3 action notes. Waiting: #1 helper stall
+(rebase again onto the browser merge), #6 drag raise (stacked-Chess trials need the owner away), #9's
+flaky process-group test. 0.7.0 waits for a clean pass of the two drag tasks.
 The marketplace installs from the default branch, so users installing now get main, not the 0.6.0 tag.
 
 ## Machine state outside the repo

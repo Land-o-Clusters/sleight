@@ -2,6 +2,10 @@
 export function browserCall(code, handles = new Set()) {
   const source = code.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '""');
   if (/cua\.(?:getApp|computer)\b/.test(source)) return undefined;
+  // Fail closed: cua reached other than by a literal browser method (computed access, destructuring,
+  // aliasing), or a global escape hatch, keeps the call on the native path and its guards.
+  if (/\bcua\b(?!\s*\.\s*(?:listBrowsers|listTabs|getBrowser|getTab|createBrowserTab)\s*\()/.test(source)) return undefined;
+  if (/\b(?:globalThis|window|self|eval|Function|Reflect|Proxy|require|import)\b/.test(source)) return undefined;
   const acquisition = source.match(/(?:(?:let|const|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.(?:getBrowser|getTab|createBrowserTab)\(/);
   const bindings = new Set(acquisition?.[1] ? [acquisition[1]] : []);
   const factories = /\.(?:getByRole|getByText|getByLabel|getByPlaceholder|getByTestId|locator|frameLocator|filter|first|last|nth|and|or|new|get)\(/;
