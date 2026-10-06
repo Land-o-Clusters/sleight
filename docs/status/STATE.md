@@ -11,6 +11,9 @@ stale-number refusals. 0.11.0 reuses Claude's reads for the guard (CNN 242 to 33
 to 10 to 14 ms) and has the launch README. A fresh-config install from GitHub worked. Launch files
 are in `.dev/launch/` (untracked): `demo.mp4` and `demo.gif` (recorded by sleight-arch from window
 captures only, no desktop), `thread.md`. Copies are in `~/Desktop/sleight-launch/` for the owner's social-media bot to post (owner, 2026-10-05).
+The current `demo.mp4` (take 8 of 9, 16.6 s) follows the bot's brief; the recorder is in
+`.dev/launch/rec/v2/` (per-window capture with Stickies in front, using permissions this Mac already has). The first cut is
+`demo-v0.*`.
 Promotion starts next (owner, 2026-10-05).
 
 0.8.0 adds the opt-in engine path for terminals and OpenAI's apps: the user sets the helper's own
