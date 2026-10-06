@@ -20,7 +20,7 @@ input.on('line', line => {
     assert.ok(initialized);
     assert.equal(call, undefined, 'only one tool call');
     assert.equal(msg.params.name, 'js');
-    assert.equal(msg.params.arguments.code, 'let app = await cua.getApp("Calculator")');
+    assert.equal(msg.params.arguments.code, 'let app = await cua.getApp("com.landoclusters.sleight.no-such-app")');
     call = msg;
     if (process.env.SLEIGHT_TEST_CAPTURE_LOG) appendFileSync(process.env.SLEIGHT_TEST_CAPTURE_LOG, 'capture\n');
     if (mode === 'exit') return process.exit(3);
@@ -36,9 +36,9 @@ input.on('line', line => {
   } else if (msg.id === call?.id) {
     assert.deepEqual(msg.result, { action: 'decline' });
     const content = mode === 'empty' ? [] : [
-      { type: 'text', text: '# Runtime API\n\ncua.getApp(name) → app' + (process.env.SLEIGHT_TEST_VERSION ? `\nVersion ${process.env.SLEIGHT_TEST_VERSION}` : '') },
+      { type: 'text', text: 'Invalid app: com.landoclusters.sleight.no-such-app' },
       { type: 'image', mimeType: 'image/png', data: 'unused' },
-      { type: 'text', text: 'Calculator approval declined.' },
+      { type: 'text', text: '# Runtime API\n\ncua.getApp(name) → app' + (process.env.SLEIGHT_TEST_VERSION ? `\nVersion ${process.env.SLEIGHT_TEST_VERSION}` : '') },
     ];
     // Split a JSON line across writes, including a UTF-8 character.
     const reply = Buffer.from(JSON.stringify({ jsonrpc: '2.0', id: call.id, result: { isError: true, content } }) + '\n');

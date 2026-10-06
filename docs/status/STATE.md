@@ -3,10 +3,15 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-05, flushed before the owner's clear)
+## Banner (2026-10-06 02:45 UTC, after the owner's clear)
 
-Public: `Land-o-Clusters/sleight`. `main` at `e381173`, CI green, clean tree, no open PRs, no
-in-flight branches. Latest release `v0.12.0` (plugin code `b6638c2`), installed on this Mac at user
+Engine updated to 26.930.51102 between Monday's watch and this boot. Its API docs match the
+26.930.31730 baseline line for line, and the watch's calculator-click task passed twice on it. The
+watch's docs capture used to request Calculator and rely on a decline; Calculator is now pre-approved,
+so the capture read its window into the snapshot. It now requests a bundle ID that doesn't exist and
+keeps only the docs. That change touches `scripts/` only, so 0.12.0 stays the current release.
+
+Public: `Land-o-Clusters/sleight`. CI green on `559e383`. Open PRs: none. In-flight branches: none. Latest release `v0.12.0` (plugin code `b6638c2`), installed on this Mac at user
 scope. Released on 2026-10-05: 0.7.0 through 0.12.0. The relay now sends the guard's read as changed
 lines matched by text, refuses stale element numbers (at call start and inside a batch), reuses
 Claude's reads for the guard, offers an opt-in engine path for terminals and OpenAI's apps, and the
@@ -41,7 +46,7 @@ Market research (Codex) is in `.dev/research/2026-10-04-competitors.md`, untrack
 ## Machine state outside the repo
 
 - Weekly launchd job `com.landoclusters.sleight-watch` (Mondays 9:00, `scripts/watch.sh`). It saves
-  the engine's API docs (`~/Library/Logs/sleight/engine-api-26.930.31730.md` is the baseline) and
+  the engine's API docs (`~/Library/Logs/sleight/engine-api-26.930.51102.md` is the latest) and
   diffs them on an engine update. Remove with `npm run watch:remove`.
 - `~/Library/Application Support/sleight/preapproved.json` lists Calculator (owner, 2026-10-04) and
   Helium (`net.imput.helium` and `Helium`, all `high`). Helium was added by sleight-arch on the

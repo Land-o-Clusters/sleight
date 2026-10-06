@@ -1,10 +1,11 @@
-// Print the engine's first-call text without granting any app approval.
+// Print the engine's first-call API docs without touching or approving any app.
 import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 const SERVER = fileURLToPath(new URL('../plugins/sleight/bin/sleight-mcp', import.meta.url));
+export const NO_APP = 'com.landoclusters.sleight.no-such-app';
 
 export async function captureEngineDocs({
   command = SERVER, args = [], env = process.env, timeoutMs = 60000,
@@ -58,17 +59,21 @@ export async function captureEngineDocs({
       clientInfo: { name: 'sleight-engine-docs', version: '1' },
     });
     send({ method: 'notifications/initialized' });
+    // An app that can't exist: a real one may be on the user's pre-approved list,
+    // and then the engine appends that app's window to the docs.
     const result = await request('tools/call', {
-      name: 'js', arguments: { code: 'let app = await cua.getApp("Calculator")' },
+      name: 'js', arguments: { code: `let app = await cua.getApp(${JSON.stringify(NO_APP)})` },
     });
-    // A declined getApp can set isError while still returning the API docs.
+    // A failed getApp sets isError while still returning the API docs.
     const text = result?.content?.filter(block => block.type === 'text' && typeof block.text === 'string')
       .map(block => block.text).join('\n\n');
     if (!text?.trim()) throw new Error('engine docs call returned no text');
     if (!/^#{1,6} .*\bAPI\b/im.test(text)) {
       throw new Error(`engine docs call returned no API docs: ${text.slice(0, 500)}`);
     }
-    return text.endsWith('\n') ? text : text + '\n';
+    // Drop the engine's "Invalid app" line, so snapshots differ only when the docs do.
+    const docs = text.slice(text.search(/^#{1,6} /m));
+    return docs.endsWith('\n') ? docs : docs + '\n';
   } finally {
     clearTimeout(timer);
     child.stdin.end(); // The launcher ends the turn and stops its engine child.

@@ -11,8 +11,8 @@ const capture = mode => captureEngineDocs({
   timeoutMs: mode === 'hang' ? 300 : 3000,
 });
 
-test('captures first-call text after declining approval, including an isError reply', async () => {
-  assert.equal(await capture('docs'), '# Runtime API\n\ncua.getApp(name) → app\n\nCalculator approval declined.\n');
+test('captures the API docs from an isError reply, without the invalid-app line before them', async () => {
+  assert.equal(await capture('docs'), '# Runtime API\n\ncua.getApp(name) → app\n');
 });
 
 for (const [mode, error] of [

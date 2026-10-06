@@ -171,7 +171,8 @@ SLEIGHT_TRACE=1 claude --plugin-dir plugins/sleight   # logs every relayed messa
 ### Update watch
 
 `scripts/watch.sh` runs `--doctor` and saves the engine's runtime API docs to
-`~/Library/Logs/sleight/engine-api-<version>.md`, declining the app approval during capture.
+`~/Library/Logs/sleight/engine-api-<version>.md`. The capture calls `getApp` with a bundle ID that
+doesn't exist, so it doesn't touch an app or prompt for approval.
 When the version changes, it writes `engine-api-<version>.diff` against the previous snapshot and runs
 one benchmark task, with the diff path in the macOS notification (the first run saves a baseline).
 It logs to `~/Library/Logs/sleight/watch.log` and also notifies when a check fails; an older watch
