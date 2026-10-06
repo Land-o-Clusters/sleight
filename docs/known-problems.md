@@ -117,10 +117,9 @@ our own runs. Dates and engine versions are given where they matter.
   can interrupt it. Hover's own pointer and front-app restoration has not been measured separately in
   live trials. The fixture also restores both, so its successful checks do not prove hover's restoration.
   It does not restore the full window order. Earlier fixture pointer mismatches remain unresolved.
-- The desktop app's Code tab runs its own Claude Code, 2.1.286 as of 2026-10-03, which is too old
-  for the mod. Approvals and every tool work there, and the engine's turn ends after 30 idle seconds.
-  The pane, status line and `/sleight stop` don't, so nobody has checked the pane's picture there yet.
-  It embeds the screenshot in an SVG, which the terminal doesn't need.
+- The desktop app's Code tab ran its own Claude Code 2.1.286 on 2026-10-03, too old for the mod, and
+  offered 2.1.288 on 2026-10-06. Approvals and every tool work there, and the engine's turn ends after
+  30 idle seconds. Nobody has checked the pane, status line or `/sleight stop` there yet.
 - Without the mod, the relay ends the engine's turn once no sleight call has run for 30 seconds, which
   releases the app the engine was holding (its badge on the app's window). Before 0.3.1 nothing ended
   the turn until the session closed. Desktop sessions twice showed as busy after Claude had finished,
@@ -153,6 +152,10 @@ our own runs. Dates and engine versions are given where they matter.
   message names a stuck helper. It now adds that the app itself may be hung if other apps still
   answer. Quitting TextEdit recovered it every time. The skill tells Claude to select and type in TextEdit
   instead of using `setValue`, and to use Cmd+S or File > Save As.
+- On 2026-10-06 TextEdit timed out every engine read after an AppleScript `close every document
+  saving no`. It still answered AppleScript, but its only window was an orphan "Save Panel Accessory
+  View" that Accessibility didn't list. The relay's message again named a stuck helper, while
+  `--doctor` passed. Quitting TextEdit fixed it.
 - The engine's helper can stop answering. On 2026-10-04 every `cua.getApp` timed out
   (`-10005 timeoutReached`) for about 25 minutes, with the Mac unlocked and in use, until ChatGPT was
   restarted. We don't know the cause. It started right after a test that kills engine processes.

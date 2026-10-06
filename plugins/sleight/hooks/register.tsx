@@ -32,6 +32,8 @@ const snapshottedApps = new Set<string>()
 // The pane's last drawn size, for sizing the next snapshot.
 let paneColumns = 48
 let paneRows = 20
+// The surface that last drew the pane; a snapshot carries only what it draws.
+let paneSurface = 'terminal'
 
 const now = () => new Date().toTimeString().slice(0, 8)
 
@@ -70,7 +72,8 @@ async function snapshot($: any, app: string) {
   await update($, view, () => ({ kind: 'snapshotting', app }) as ViewStatus)
   try {
     const result = await call($, 'js', {
-      code: snapshotCode(app, Math.max(8, paneColumns - 2), Math.max(4, paneRows - 8)),
+      // Leave rows for the status line, buttons, "Actions" and three log lines.
+      code: snapshotCode(app, Math.max(8, paneColumns - 2), Math.max(4, paneRows - 7), paneSurface === 'terminal'),
       title: 'sleight pane snapshot',
     })
     const text = result.content.map((block: { text?: string }) => block.text ?? '').join('\n')
@@ -189,18 +192,22 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e)
     const { Box, Text, Button } = els
+    paneSurface = e.surface
     paneColumns = Math.max(8, Math.min(120, e.props.bodyColumns ?? 48))
-    paneRows = Math.max(10, Math.min(40, Math.floor((e.viewport?.rows ?? 30) / 2)))
+    // The rows the surface gave the pane: about a third of the terminal inline,
+    // its full height docked. A picture sized to more pushes the buttons and
+    // log out of view.
+    paneRows = Math.max(10, Math.min(40, e.props.scroll?.bodyRows ?? Math.floor((e.viewport?.rows ?? 30) / 2)))
 
     const [entries, shot, status, isStopped] = await Promise.all([read($, log), read($, frame), read($, view), read($, stopped)])
 
     const picture = (() => {
       if (!shot) return <Text dimColor>No picture yet. It appears after Claude uses an app, or press Refresh.</Text>
-      if (e.surface === 'terminal' && 'Raster' in els) {
+      if (e.surface === 'terminal' && 'Raster' in els && shot.cells) {
         const { Raster } = els as any
         return <Raster key="frame" columns={shot.columns} rows={shot.rows} cells={shot.cells} />
       }
-      if ('Svg' in els) {
+      if ('Svg' in els && shot.image) {
         const { Svg } = els as any
         const w = 320
         const h = Math.round((shot.height / shot.width) * w)
@@ -209,7 +216,7 @@ export const register: Register = on => {
           `<image href="data:${shot.image.mime};base64,${shot.image.base64}" width="${w}" height="${h}"/></svg>`
         return <Svg source={source} alt={`Screenshot of ${shot.app}`} width={w} height={h} />
       }
-      return <Text dimColor>{`${shot.app}: picture not shown on this surface.`}</Text>
+      return <Text dimColor>{`${shot.app}: picture not shown on this surface. Press Refresh.`}</Text>
     })()
 
     const statusLine =

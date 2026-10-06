@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.1 (2026-10-06)
+
+- The pane's picture fits the pane. It was sized to half the terminal, but a pane above the prompt
+  gets about a third, so the picture pushed Refresh, Stop and the action log out of view. It now
+  uses the rows the pane has and leaves room for the buttons and three log lines.
+- The pane's snapshot holds half-block cells in a terminal and an image in the desktop app, never
+  both. Claude Code replaces an MCP result over about 100,000 characters with a
+  notice, and a docked terminal pane's snapshot of Calculator came to 107,707 with both, so the
+  pane showed "no frame in the result". Now it's 62,710 characters at 120 × 33 cells. The desktop
+  image is a JPEG at most 640 px wide, 53,536 characters for Calculator.
+- The update watch captures the engine's API docs without touching an app, so a pre-approved
+  Calculator no longer puts its window in the snapshot.
+- Checked live in a fullscreen terminal session: the docked pane showed Calculator with the full
+  log. The benchmark runs headless without the pane, so it wasn't rerun.
+
 ## 0.12.0 (2026-10-05)
 
 - A batch of clicks stops when an earlier action in the same call renumbers its target. Before each

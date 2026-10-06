@@ -3,12 +3,15 @@
 // engine, not here. snapshotCode() fills in the app and the frame size.
 //
 // It writes one line, `SLEIGHT_FRAME <json>`: the app's screenshot as
-// terminal cells (upper half blocks, two pixels per cell) and as an image
-// small enough to embed in an SVG. The engine's sandbox can't load `sharp`,
-// so it decodes with the bundled pure-JS jpeg-js and pngjs.
+// terminal cells (upper half blocks, two pixels per cell) for a terminal pane,
+// or else as an image small enough to embed in an SVG. Only one, to keep the
+// result small. The engine's sandbox can't load `sharp`, so it decodes with
+// the bundled pure-JS jpeg-js and pngjs.
 
 const SNAPSHOT_JS = `await (async () => {
-  const APP = __APP__, COLS = __COLS__, ROWS = __ROWS__, MAX_IMAGE_B64 = 120000;
+  // Claude Code replaces an MCP result over about 100,000 characters with a
+  // notice, so the image's share stays well under that.
+  const APP = __APP__, COLS = __COLS__, ROWS = __ROWS__, TERMINAL = __TERMINAL__, MAX_IMAGE_B64 = 40000;
   const app = await cua.getApp(APP);
   const shot = Buffer.from(await app.getScreenshot({ emit: false }));
   const isJpeg = shot[0] === 0xff && shot[1] === 0xd8;
@@ -33,8 +36,8 @@ const SNAPSHOT_JS = `await (async () => {
     return (Math.round(r / n) << 16) | (Math.round(g / n) << 8) | Math.round(b / n);
   };
   const rows = Math.ceil(outH / 2);
-  const cells = Buffer.alloc(outW * rows * 12);
-  for (let r = 0; r < rows; r++) for (let c = 0; c < outW; c++) {
+  const cells = Buffer.alloc(TERMINAL ? outW * rows * 12 : 0);
+  if (TERMINAL) for (let r = 0; r < rows; r++) for (let c = 0; c < outW; c++) {
     const o = (r * outW + c) * 12;
     cells.writeUInt32LE(0x2580, o);
     cells.writeUInt32LE(px(c, r * 2), o + 4);
@@ -42,29 +45,31 @@ const SNAPSHOT_JS = `await (async () => {
   }
 
   let image = { mime: isJpeg ? 'image/jpeg' : 'image/png', base64: shot.toString('base64') };
-  if (image.base64.length > MAX_IMAGE_B64) {
-    // Too big to embed: re-encode at a width that fits.
-    const { PNG } = await import('pngjs');
-    const w = 480, h = Math.max(1, Math.round(height * w / width));
-    const small = new PNG({ width: w, height: h });
+  if (TERMINAL) image = undefined;
+  else if (image.base64.length > MAX_IMAGE_B64) {
+    // Too big to embed: re-encode as a JPEG twice the width the desktop pane draws.
+    const w = Math.min(width, 640), h = Math.max(1, Math.round(height * w / width));
+    const small = Buffer.alloc(w * h * 4);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const si = (Math.floor(y * height / h) * width + Math.floor(x * width / w)) * 4, di = (y * w + x) * 4;
-      small.data[di] = data[si]; small.data[di + 1] = data[si + 1]; small.data[di + 2] = data[si + 2]; small.data[di + 3] = 255;
+      small[di] = data[si]; small[di + 1] = data[si + 1]; small[di + 2] = data[si + 2]; small[di + 3] = 255;
     }
-    image = { mime: 'image/png', base64: PNG.sync.write(small).toString('base64') };
+    const jpeg = (await import('jpeg-js')).default.encode({ data: small, width: w, height: h }, 75);
+    image = { mime: 'image/jpeg', base64: Buffer.from(jpeg.data).toString('base64') };
   }
 
   nodeRepl.write('SLEIGHT_FRAME ' + JSON.stringify({
-    app: APP, width, height, columns: outW, rows, cells: cells.toString('base64'), image,
+    app: APP, width, height, columns: outW, rows, cells: TERMINAL ? cells.toString('base64') : undefined, image,
   }));
 })()
 `
 
 export const FRAME_MARKER = 'SLEIGHT_FRAME '
 
-export function snapshotCode(app: string, columns: number, rows: number): string {
+export function snapshotCode(app: string, columns: number, rows: number, terminal: boolean): string {
   return SNAPSHOT_JS
     .replace('__APP__', JSON.stringify(app))
+    .replace('__TERMINAL__', String(terminal))
     .replace('__COLS__', String(columns))
     .replace('__ROWS__', String(rows))
 }

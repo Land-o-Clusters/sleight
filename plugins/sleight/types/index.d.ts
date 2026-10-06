@@ -14,12 +14,12 @@ export type LogEntry = {
 /** The pane's latest picture of the app, from lib's snapshot script. */
 export type Frame = {
   app: string
-  /** Terminal cells for a Raster: columns * rows little-endian u32 triplets, base64. */
+  /** Terminal cells for a Raster: columns * rows little-endian u32 triplets, base64. Terminal panes only. */
   columns: number
   rows: number
-  cells: string
-  /** The screenshot, small enough to embed in an SVG. */
-  image: { mime: string; base64: string }
+  cells?: string
+  /** The screenshot, small enough to embed in an SVG. Other surfaces only. */
+  image?: { mime: string; base64: string }
   width: number
   height: number
   at: string

@@ -3,19 +3,19 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-06 02:45 UTC, after the owner's clear)
+## Banner (2026-10-06 03:45 UTC)
 
-Engine updated to 26.930.51102 between Monday's watch and this boot. Its API docs match the
-26.930.31730 baseline line for line, and the watch's calculator-click task passed twice on it. The
-watch's docs capture used to request Calculator and rely on a decline; Calculator is now pre-approved,
-so the capture read its window into the snapshot. It now requests a bundle ID that doesn't exist and
-keeps only the docs. That change touches `scripts/` only, so 0.12.0 stays the current release.
+0.12.1 released: the pane's picture fits the pane, and its snapshot stays under Claude Code's MCP
+output limit (see CHANGELOG). Found while taking the pane screenshot for the launch post, now at
+`~/Desktop/sleight-launch/sleight-pane.png` (1100 x 1112, fullscreen Terminal session at 24 pt on
+the 1x Dell displays, docked pane, Calculator picture and 13-action log; pointer still for all
+18,816 samples over 17 min). The engine updated to 26.930.51102 with API docs unchanged, and the
+watch's docs capture no longer touches an app.
 
-Public: `Land-o-Clusters/sleight`. CI green on `559e383`. Open PRs: none. In-flight branches: none. Latest release `v0.12.0` (plugin code `b6638c2`), installed on this Mac at user
-scope. Released on 2026-10-05: 0.7.0 through 0.12.0. The relay now sends the guard's read as changed
-lines matched by text, refuses stale element numbers (at call start and inside a batch), reuses
-Claude's reads for the guard, offers an opt-in engine path for terminals and OpenAI's apps, and the
-README is rewritten for launch. Numbers are in the CHANGELOG and `docs/benchmarks/2026-10-05-*`.
+Public: `Land-o-Clusters/sleight`. Open PRs: none. Latest release `v0.12.1`, installed on this Mac
+at user scope from the repo folder. Released on 2026-10-05: 0.7.0 through 0.12.0. Numbers are in
+the CHANGELOG and `docs/benchmarks/2026-10-05-*`. `~/.claude.json` now marks
+`~/Library/Caches/sleight-bench/sleight-arm` trusted (set for the interactive pane session).
 
 Launch: licensing is fine (owner checked, 2026-10-05). The owner's Grok bot posts from
 `~/Desktop/sleight-launch/`: `demo.mp4`/`demo.gif` (take 8 of 9, 16.6 s, made to the bot's brief),
@@ -31,8 +31,13 @@ Next, in order:
 - Another session got "native pipe startup failed" three times in a row on 2026-10-05 while doctor
   passed. The helper quits after about 20 s idle, and 0.10.0 tells Claude to retry, then `js_reset`.
   Why it repeated is unknown.
-- When an app hangs (TextEdit's save-lock deadlock), the relay's message still blames the helper
-  first. It could check whether the app answers before saying so.
+- When an app hangs (TextEdit's save-lock deadlock, or the orphan Save panel window of 2026-10-06),
+  the relay's message still blames the helper first. It could check whether the app answers before
+  saying so.
+- Check the pane in the desktop app's Code tab, now that it offers Claude Code 2.1.288. The owner
+  has to type `/sleight` there.
+- Review `codex/browser-enforcement` (Codex, 2026-10-04, unreviewed): browser calls keep the native
+  guards unless the engine's reply confirms `browserUse`. Merge it or close it.
 - Chess square estimates (chess-drag 1/3 in the 0.7.0 check).
 - Re-register LCU in `~/Library/Caches/sleight-bench/lcu-arm` before any new comparison.
 
@@ -77,7 +82,6 @@ Market research (Codex) is in `.dev/research/2026-10-04-competitors.md`, untrack
 
 ## Waiting on the owner
 
-- Say whether `codex/browser-enforcement` is live work for review or can go with its Codex worktree.
 - Decide whether Helium stays on the pre-approved list and whether `ComputerUseAllowForbiddenTargets`
   stays on, when back on 2026-10-07.
 

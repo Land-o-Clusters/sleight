@@ -38,6 +38,28 @@ describe('sleight mod', () => {
     expect(lines.map(line => line?.replace(/^.*Chess: /, ''))).toEqual(['Play Bc4', 'Play Nf3', 'Play e4'])
   })
 
+  test('the picture is sized to the rows the pane has and carries only what the surface draws', async ($, on) => {
+    on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [{ type: 'text', text: 'App: Calculator.' }] } }) as never)
+    // Stand-ins for the engine: the pane's snapshot goes to the MCP server.
+    const codes: string[] = []
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async (_$, e) => {
+      codes.push(String(e.args.code ?? ''))
+      return { value: { content: [] } } as never
+    })
+    await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("Calculator")', title: 'Read' } as never)
+    for (const surface of SURFACES) {
+      codes.length = 0
+      const ui = await $.ui.mount({ ...PANE, surface, props: { bodyColumns: 60, scroll: { offset: 0, bodyRows: 30 } } as never })
+      await ui.press({ key: 'refresh' })
+      const snapshot = codes.find(code => code.includes('ROWS ='))
+      expect(snapshot?.match(/ROWS = (\d+)/)?.[1]).toBe('23')
+      // Each surface gets only what it draws: cells for a terminal, an image elsewhere.
+      expect(snapshot?.match(/TERMINAL = (\w+)/)?.[1]).toBe(String(surface === 'terminal'))
+      await ui.unmount()
+    }
+  })
+
   test('/sleight stop refuses js calls', async ($, on) => {
     on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [] } }) as never)
     const before = await $.tool.call({ tool: JS_TOOL, code: '1' } as never)
