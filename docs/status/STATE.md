@@ -3,62 +3,56 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-05, 0.12.0 released)
+## Banner (2026-10-05, flushed before the owner's clear)
 
-Public: `Land-o-Clusters/sleight`. Latest release `v0.12.0` (CI green). Installed on this Mac at user
-scope: 0.12.0, which also stops a batch of clicks once an earlier click renumbered its target. Since 0.9.0 the relay sends Claude the guard's read as changed lines, matched by text, with
-stale-number refusals. 0.11.0 reuses Claude's reads for the guard (CNN 242 to 332 ms per call down
-to 10 to 14 ms) and has the launch README. A fresh-config install from GitHub worked. Launch files
-are in `.dev/launch/` (untracked): `demo.mp4` and `demo.gif` (recorded by sleight-arch from window
-captures only, no desktop), `thread.md`. Copies are in `~/Desktop/sleight-launch/` for the owner's social-media bot to post (owner, 2026-10-05).
-The current `demo.mp4` (take 8 of 9, 16.6 s) follows the bot's brief; the recorder is in
-`.dev/launch/rec/v2/` (per-window capture with Stickies in front, using permissions this Mac already has). The first cut is
-`demo-v0.*`.
-Promotion starts next (owner, 2026-10-05).
+Public: `Land-o-Clusters/sleight`. `main` at `e381173`, CI green, clean tree, no open PRs, no
+in-flight branches. Latest release `v0.12.0` (plugin code `b6638c2`), installed on this Mac at user
+scope. Released on 2026-10-05: 0.7.0 through 0.12.0. The relay now sends the guard's read as changed
+lines matched by text, refuses stale element numbers (at call start and inside a batch), reuses
+Claude's reads for the guard, offers an opt-in engine path for terminals and OpenAI's apps, and the
+README is rewritten for launch. Numbers are in the CHANGELOG and `docs/benchmarks/2026-10-05-*`.
 
-0.8.0 adds the opt-in engine path for terminals and OpenAI's apps: the user sets the helper's own
-`ComputerUseAllowForbiddenTargets` default, and sleight warns in the prompt and refuses settings
-windows. The owner approved setting it on this Mac for the test, and it is still on
-(`defaults delete -g ComputerUseAllowForbiddenTargets` turns it off; Codex loses the refusal too
-while it's on). In the live check Terminal ran an echo in the background 2/2 and its settings window
-was refused 1/1. For OpenAI's apps the engine shows its approval prompt instead of a refusal, but driving them is untested.
+Launch: licensing is fine (owner checked, 2026-10-05). The owner's Grok bot posts from
+`~/Desktop/sleight-launch/`: `demo.mp4`/`demo.gif` (take 8 of 9, 16.6 s, made to the bot's brief),
+`demo-v0.*` (first cut), `thread.md`, `sleight-version.txt`. The recorder is
+`.dev/launch/rec/v2/` (`run.py`, `compose2.py`; per-window capture, Stickies in front). Codex could not
+record it: a Notes automation prompt blocked it, and sleight-arch denied that prompt on the owner's
+order.
 
-0.7.0 was released earlier today with the CI and doctor fixes, the restored CHANGELOG and the benchmark
-arms moved out of the repo (release check 16/18). 0.8.0 runs: TextEdit hung 2/2 on Cmd+Shift+S (Duplicate) after
-`setValue`. After a skill hint, TextEdit went 6/6.
+Background jobs: none. No live lock held.
 
 Next, in order:
 
 - Another session got "native pipe startup failed" three times in a row on 2026-10-05 while doctor
   passed. The helper quits after about 20 s idle, and 0.10.0 tells Claude to retry, then `js_reset`.
   Why it repeated is unknown.
-- The relay reads an app hang (TextEdit's Duplicate deadlock) as a stuck helper and tells Claude to
-  ask for a ChatGPT restart. It could check whether the app answers before saying so.
+- When an app hangs (TextEdit's save-lock deadlock), the relay's message still blames the helper
+  first. It could check whether the app answers before saying so.
 - Chess square estimates (chess-drag 1/3 in the 0.7.0 check).
 - Re-register LCU in `~/Library/Caches/sleight-bench/lcu-arm` before any new comparison.
 
-Codex threads (the owner runs them in worktrees under `~/Projects/sleight-wt/`; prompts in
-`.dev/prompts/`, untracked, latest `round-4.md` and `backlog.md`): all reported work is merged. No
-thread has open work. Every remote `codex/*` and `claude/blocked-apps` branch is squash-merged into
-`main` except `codex/action-result-note`. Git counts them as ahead because squash merges leave no
-shared commits. The 24 worktrees can be deleted with their branches once the owner closes those Codex threads.
+Codex threads (worktrees under `~/Projects/sleight-wt/`, prompts in `.dev/prompts/`, untracked): no
+open work. Every remote `codex/*` and `claude/blocked-apps` branch is squash-merged into `main` except
+`codex/action-result-note`. The 24 worktrees can go with their branches once the owner closes those
+threads.
 
-Background jobs: none.
-
-Market research (Codex, gpt-6.1-sol) is in `.dev/research/2026-10-04-competitors.md`, untracked.
-Publishing it is the owner's call.
+Market research (Codex) is in `.dev/research/2026-10-04-competitors.md`, untracked.
 
 ## Machine state outside the repo
 
 - Weekly launchd job `com.landoclusters.sleight-watch` (Mondays 9:00, `scripts/watch.sh`). It saves
   the engine's API docs (`~/Library/Logs/sleight/engine-api-26.930.31730.md` is the baseline) and
   diffs them on an engine update. Remove with `npm run watch:remove`.
-- `~/Library/Application Support/sleight/preapproved.json` lists Helium (`net.imput.helium` and
-  `Helium`, `high`), added by sleight-arch on the owner's explicit order on 2026-10-05 for testing
-  while away, to stay until the owner is back on Wednesday 2026-10-07. Backup of the earlier list
-  in this session's scratchpad. It also lists Calculator at `high`, written by the
-  owner for Codex 9's live check on 2026-10-04. The installed 0.9.0 reads it, so Calculator is
-  approved without a prompt in every session until the owner edits the file.
+- `~/Library/Application Support/sleight/preapproved.json` lists Calculator (owner, 2026-10-04) and
+  Helium (`net.imput.helium` and `Helium`, all `high`). Helium was added by sleight-arch on the
+  owner's explicit order on 2026-10-05, to stay until the owner is back on Wednesday 2026-10-07; the
+  list before it is `.dev/tools/preapproved.before-helium.json`. The installed sleight reads it, so
+  both apps are approved without a prompt in every session.
+- `ComputerUseAllowForbiddenTargets` is on (`defaults write -g`, owner-approved test, 2026-10-05).
+  Terminals and OpenAI's apps go through the engine for every engine client, Codex included, until
+  `defaults delete -g ComputerUseAllowForbiddenTargets`.
+- `.dev/tools/`: probe and timing clients for sleight's launcher, the CNN trial, transcript
+  dumpers, and `dialogs.swift` (lists permission dialogs on screen).
 - LCU 0.8.8 runtime-only at `~/.local/share/lcu`, registered only in `.dev/lcu-arm` (untracked),
   which the benchmark now refuses because it's inside the repo.
   `.dev/py/python3` links Homebrew Python 3.14 for it.
@@ -68,14 +62,16 @@ Publishing it is the owner's call.
 - `~/Library/Caches/sleight-bench/sleight-arm`: the benchmark's sleight arm folder.
 - `.dev/` (untracked): test CLI, old `sleight-arm` and `lcu-arm` bench folders, `DragProbe.app`, the
   compiled `textedit-drag-fixture`, pseudo-terminal harnesses, research, prompts.
-- Direct drag test scripts from 2026-10-05 live only in this session's scratchpad. To repeat: open a
-  temp file with `open -g -a TextEdit`, run `.dev/textedit-drag-fixture <path> select-drag`, call
-  `callLocalTool('drag', {app, from, to, windowId}, async () => true)` from `plugins/sleight/lib/launch.mjs`,
-  then `<fixture> <path> read`. Use `select-drag`, never `select`: plain `select` drops in the title bar.
+- Direct drag test: open a temp file with `open -g -a TextEdit`, run
+  `.dev/textedit-drag-fixture <path> select-drag`, run `.dev/tools/drag-direct.mjs` with the from/to
+  points and window id, then `<fixture> <path> read`. Use `select-drag`, never `select`: plain
+  `select` drops in the title bar.
 
 ## Waiting on the owner
 
 - Close the finished Codex threads, so their worktrees and branches can be deleted.
+- Decide whether Helium stays on the pre-approved list and whether `ComputerUseAllowForbiddenTargets`
+  stays on, when back on 2026-10-07.
 
 ## Reading list
 

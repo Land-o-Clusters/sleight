@@ -9,7 +9,8 @@ belong in [STATE.md](STATE.md).
   `no-workflow-edits-without-disabling-this-ruleset` blocks everyone else. Only the owner toggles it.
 - Going public, money, scope changes, and redistributing or bundling anything that depends on another
   vendor's app or engine are the owner's call.
-- sleight is public (owner, 2026-10-03). LCU gets a link and credit in the README, no heads-up, and
+- sleight is public (owner, 2026-10-03), and promoting it is cleared: the owner checked the licensing
+  of depending on the ChatGPT app's engine (2026-10-05). LCU gets a link and credit in the README, no heads-up, and
   the desktop app's declined prompts aren't reported to Anthropic.
 - The project's name is sleight, and its icon is the two-hands image from ChatGPT (2026-10-03).
 - sleight launches at 0.x (owner, 2026-10-03). 1.0 waits until it has survived two or three ChatGPT
@@ -29,9 +30,11 @@ belong in [STATE.md](STATE.md).
 - An accepted app approval lasts for one Claude Code session, kept in the relay's memory. The relay never
   sends `persist: "always"` and never remembers a decline. `SLEIGHT_APPROVAL_SCOPE=once` turns it off.
 - Apps get approved without a person at the moment of use only two ways: the benchmark's allowlist
-  (Calculator, TextEdit, Chess) in benchmark runs, and a list the user writes in a file outside any
-  project, read by sleight in every session, headless or not (owner, 2026-10-04). No project, plugin or Claude can add
-  to either. When a safety check blocks an action, the owner does it or it doesn't happen.
+  (Calculator, TextEdit, Chess, by name or bundle ID) in benchmark runs, and a list the user writes in
+  a file outside any project, read by sleight in every session, headless or not (owner, 2026-10-04).
+  No project or plugin can add to either. Claude edits the user's list only on the owner's explicit
+  order in chat, names the change and its end date in STATE, and keeps the earlier list (owner,
+  2026-10-05). When a safety check blocks an action, the owner does it or it doesn't happen.
 - The engine refuses terminals and OpenAI's own apps (ChatGPT, Codex, Atlas). sleight never modifies or
   wraps OpenAI's helper to change that. Users may opt in to drive those apps through sleight's own
   Accessibility path once they consent for each app. Each terminal command is shown to them before it
@@ -73,6 +76,9 @@ belong in [STATE.md](STATE.md).
 - The marketplace installs from the default branch, so `main` is what new users get. Keep it releasable:
   a default that fails the benchmark goes back to opt-in at once.
 - Window titles can include the owner's name (Chess games do). Scrub evidence and screenshots of them.
+- Recordings and screenshots capture individual windows (`screencapture -l`), never the whole screen
+  or a display region: messages, notifications and other apps on it are private. Open and Save panels
+  show the home folder, so their frames are left out.
 - The plugin folder contains only code the plugin runs. Research prototypes go in `bench/`.
 - Published results and logs show home paths as `~`. Check raw logs for personal data before publishing.
 - A guard that runs inside the engine's JavaScript can't be a security boundary, because Claude writes
