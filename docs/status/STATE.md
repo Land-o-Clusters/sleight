@@ -36,10 +36,13 @@ Next, in order:
 - Chess square estimates (chess-drag 1/3 in the 0.7.0 check).
 - Re-register LCU in `~/Library/Caches/sleight-bench/lcu-arm` before any new comparison.
 
-Codex threads (worktrees under `~/Projects/sleight-wt/`, prompts in `.dev/prompts/`, untracked): no
-open work. Every remote `codex/*` and `claude/blocked-apps` branch is squash-merged into `main` except
-`codex/action-result-note`. The 24 worktrees can go with their branches once the owner closes those
-threads.
+Codex worktrees: the 22 under `~/Projects/sleight-wt/` and their local branches were removed on the
+owner's request (2026-10-06). Each branch matched its copy on GitHub, and the remote branches stay.
+The 23 files that existed only in those worktrees (drag probe results, fixture binaries, three bench
+results) are in `.dev/worktree-archive/`. Every remote `codex/*` and `claude/blocked-apps` branch is
+squash-merged into `main` except `codex/action-result-note` and `codex/browser-enforcement`. The
+second one is unreviewed (one commit, 9 files), and its worktree is Codex's own at
+`~/.codex/worktrees/browser-enforcement/sleight`, left in place. Codex prompts are in `.dev/prompts/`.
 
 Market research (Codex) is in `.dev/research/2026-10-04-competitors.md`, untracked.
 
@@ -74,7 +77,7 @@ Market research (Codex) is in `.dev/research/2026-10-04-competitors.md`, untrack
 
 ## Waiting on the owner
 
-- Close the finished Codex threads, so their worktrees and branches can be deleted.
+- Say whether `codex/browser-enforcement` is live work for review or can go with its Codex worktree.
 - Decide whether Helium stays on the pre-approved list and whether `ComputerUseAllowForbiddenTargets`
   stays on, when back on 2026-10-07.
 
