@@ -3,7 +3,7 @@
 // plugin loaded, checked outside the agent. Writes bench/results/<stamp>.json
 // and prints a table.
 //
-//   node bench/run.mjs [--arm sleight|lcu|codex|all|a,b] [--tasks id,id] [--runs N] [--model M] [--effort E]
+//   node bench/run.mjs [--arm sleight|lcu|codex|all|a,b] [--suite default|real] [--tasks id,id] [--runs N] [--model M] [--effort E]
 //     [--codex-model M] [--codex-effort E] [--dry-run]
 //
 // Model and effort default to Sonnet 5.5 at medium (owner, 2026-10-03). Runs
@@ -16,9 +16,9 @@
 // first on PATH (LCU_PATH_PREFIX, default .dev/py). BENCH_ROOT tells the
 // approval hook where this repo is, since an arm may run from another folder.
 //
-// A real run AUTO-APPROVES Calculator, TextEdit and Chess for either arm (approve.mjs),
-// because -p can't show approval prompts. Run it only when you're fine with
-// Claude driving those three apps unattended. --dry-run sets up and checks
+// A live run AUTO-APPROVES BENCH_APPS for either arm (approve.mjs), because -p
+// can't show approval prompts. Run it only when you're fine with Claude
+// driving the selected task's apps unattended. --dry-run sets up and checks
 // tasks without a model call. Every run first checks that each arm loads its
 // own tool and not the other's.
 
@@ -28,11 +28,14 @@ import { existsSync, mkdirSync, rmdirSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BENCH_APPS, closeBenchTextEdit, quitChess, quitSimApp, tasks } from './tasks.mjs';
+import { BENCH_APPS, closeBenchTextEdit, quitChess, quitSimApp, getTasks } from './tasks.mjs';
 import { approveOnly, codexReady, runCodex } from './codex-arm.mjs';
 import { watchAppWindows } from './app-windows.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
 import { runTiming, traceTiming } from './timing.mjs';
+import { executeRealTask } from './real-run.mjs';
+import { observePermission } from './real-permission.mjs';
+import { runOwned } from './preapproved-process.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TIMEOUT_MS = 5 * 60 * 1000;
@@ -43,10 +46,17 @@ function option(name, fallback) {
 }
 // The git repo a folder belongs to, if any.
 function gitRoot(dir) {
-  try { return execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+  try { return execFileSync('/usr/bin/git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
   catch { return undefined; }
 }
 const isDryRun = process.argv.includes('--dry-run');
+const suite = option('suite', 'default');
+const suiteTasks = getTasks(suite);
+const controller = new AbortController();
+if (suite === 'real') {
+  process.on('SIGINT', () => controller.abort(new Error('run interrupted')));
+  process.on('SIGTERM', () => controller.abort(new Error('run interrupted')));
+}
 const armOption = option('arm', 'sleight');
 const ARM_HOME = join(homedir(), 'Library', 'Caches', 'sleight-bench');
 const ARMS = {
@@ -58,7 +68,7 @@ const ARMS = {
   sleight: {
     cwd: (() => {
       const dir = process.env.SLEIGHT_ARM_DIR || join(ARM_HOME, 'sleight-arm');
-      mkdirSync(dir, { recursive: true });
+      if (suite === 'default') mkdirSync(dir, { recursive: true });
       return dir;
     })(),
     args: ['--plugin-dir', join(ROOT, 'plugins', 'sleight'), // Every sleight tool, as a user who approves its prompts would have. Without
@@ -100,8 +110,9 @@ const codexModel = option('codex-model', 'gpt-6.1-sol');
 const codexEffort = option('codex-effort', effort);
 const wanted = option('tasks', undefined)?.split(',');
 const claudeBin = process.env.CLAUDE_BIN || 'claude';
-const selected = wanted ? tasks.filter(t => wanted.includes(t.id)) : tasks;
+const selected = wanted ? suiteTasks.filter(t => wanted.includes(t.id)) : suiteTasks;
 if (!selected.length) throw new Error(`no tasks match ${wanted}`);
+if (wanted?.some(id => !suiteTasks.some(task => task.id === id))) throw new Error('unknown task in selected suite');
 
 // SLEIGHT_APPROVAL_PROMPT=client keeps approvals going to approve.mjs, even
 // when the benchmark runs from a desktop app session.
@@ -111,6 +122,27 @@ const armEnv = arm => ({ ...process.env, BENCH_ROOT: ROOT, SLEIGHT_APPROVAL_PROM
 // stopped before any model call.
 function armServers(arm) {
   const args = ['-p', 'hi', '--output-format', 'stream-json', '--verbose', ...arm.args, '--settings', join(ROOT, 'bench', 'settings.json')];
+  if (suite === 'real') {
+    const initialized = new AbortController();
+    let buffer = '', servers;
+    return runOwned(claudeBin, args, { cwd: arm.cwd, env: armEnv(arm), timeoutMs: 60000,
+      signal: AbortSignal.any([initialized.signal, controller.signal]),
+      onStdout: data => {
+        buffer += data;
+        let i;
+        while ((i = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, i); buffer = buffer.slice(i + 1);
+          let event; try { event = JSON.parse(line); } catch { continue; }
+          if (event.type === 'system' && event.subtype === 'init') { servers = event.mcp_servers; initialized.abort(); }
+        }
+      },
+    }).then(result => {
+      if (!result.groupClean) throw new Error('Arm preflight process group cleanup unconfirmed');
+      if (!servers) throw new Error('Arm preflight returned no init event');
+      controller.signal.throwIfAborted();
+      return servers;
+    });
+  }
   return new Promise((resolve, reject) => {
     const child = spawn(claudeBin, args, { cwd: arm.cwd, env: armEnv(arm), stdio: ['ignore', 'pipe', 'ignore'] });
     const timer = setTimeout(() => { child.kill(); reject(new Error('no init event within 60 s')); }, 60000);
@@ -163,16 +195,27 @@ function benchKeyboardTaps() {
 // (no shell) can't. Every Claude arm runs without them.
 const OUTSIDE_TOOLS = ['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'WebSearch'];
 
-function runClaude(prompt, arm, env = {}) {
+function runClaude(prompt, arm, env = {}, { signal, evidenceDir } = {}) {
   const args = [
     '-p', prompt,
     ...arm.args,
     '--disallowedTools', OUTSIDE_TOOLS.join(','),
     '--settings', join(ROOT, 'bench', 'settings.json'),
-    '--output-format', 'json',
+    '--output-format', suite === 'real' ? 'stream-json' : 'json',
+    ...(suite === 'real' ? ['--verbose'] : []),
     '--model', model,
     '--effort', effort,
   ];
+  if (suite === 'real') {
+    return runOwned(claudeBin, args, { cwd: arm.cwd, env: { ...armEnv(arm), ...env }, timeoutMs: TIMEOUT_MS, signal }).then(response => {
+      let out;
+      try { out = response.stdout.trim().split('\n').map(line => JSON.parse(line)).findLast(event => event.type === 'result'); }
+      catch { out = undefined; }
+      if (evidenceDir) writeFileSync(join(evidenceDir, 'transcript.jsonl'), response.stdout, { mode: 0o600 });
+      return { code: response.exit.code, out, stderr: response.stderr.slice(-2000), groupClean: response.groupClean,
+        timedOut: response.timedOut, cancelled: response.cancelled, spawnError: response.spawnError };
+    });
+  }
   return new Promise(resolve => {
     const child = spawn(claudeBin, args, { cwd: arm.cwd, env: { ...armEnv(arm), ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
@@ -180,10 +223,17 @@ function runClaude(prompt, arm, env = {}) {
     child.stdout.on('data', d => (stdout += d));
     child.stderr.on('data', d => (stderr += d));
     const timer = setTimeout(() => child.kill('SIGTERM'), TIMEOUT_MS);
+    const interrupt = () => child.kill('SIGTERM');
+    signal?.addEventListener('abort', interrupt, { once: true });
+    child.on('error', error => { stderr += error.message; });
     child.on('close', code => {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', interrupt);
       let out;
-      try { out = JSON.parse(stdout); } catch { out = undefined; }
+      try {
+        out = suite === 'real' ? stdout.trim().split('\n').map(line => JSON.parse(line)).findLast(event => event.type === 'result') : JSON.parse(stdout);
+      } catch { out = undefined; }
+      if (evidenceDir) writeFileSync(join(evidenceDir, 'transcript.jsonl'), stdout, { mode: 0o600 });
       resolve({ code, out, stderr: stderr.slice(-2000) });
     });
   });
@@ -192,7 +242,11 @@ function runClaude(prompt, arm, env = {}) {
 // Window titles can carry the user's name (Chess: "Game 1 | Name - Computer"),
 // and Claude quotes them. Results are published, so answers lose it.
 const fullName = (() => { try { return execFileSync('id', ['-F'], { encoding: 'utf8' }).trim(); } catch { return ''; } })();
-const scrub = text => typeof text === 'string' && fullName.length > 2 ? text.split(fullName).join('<user>') : text;
+const scrub = text => {
+  if (typeof text !== 'string') return text;
+  if (suite === 'real') text = text.replaceAll(homedir(), '~').replaceAll(realpathSync(tmpdir()), '<temp>').replaceAll(tmpdir(), '<temp>');
+  return fullName.length > 2 ? text.split(fullName).join('<user>') : text;
+};
 
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const results = [];
@@ -200,8 +254,10 @@ const resultsDir = join(ROOT, 'bench', 'results');
 mkdirSync(resultsDir, { recursive: true });
 const file = join(resultsDir, `${stamp}${isDryRun ? '-dry' : ''}.json`);
 // Written after every run, so a run cut short keeps what it finished.
-const save = () =>
-  writeFileSync(file, JSON.stringify({ stamp, arms: armNames, model, effort, claude: claudeBin, results }, null, 2) + '\n');
+const save = () => {
+  const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite } : {}), arms: armNames, model, effort, claude: claudeBin, results }, null, 2);
+  writeFileSync(file, (suite === 'real' ? scrub(json) : json) + '\n');
+};
 // A live pass holds the shared lock, so no other live check drives apps on top of it. On
 // 2026-10-08 a Codex thread ran Safari tasks during two passes because this didn't.
 let unlock;
@@ -227,9 +283,41 @@ passes: for (let run = 1; run <= runs; run++) {
   for (const task of selected) {
     for (const armName of armNames) {
       const nonce = randomBytes(4).toString('hex');
-      const dir = join(tmpdir(), 'sleight-bench', stamp, `${armName}-${task.id}-${run}`);
+      const dir = join(suite === 'real' ? realpathSync(tmpdir()) : tmpdir(), 'sleight-bench', stamp, `${armName}-${task.id}-${run}`);
       mkdirSync(dir, { recursive: true });
       const ctx = { dir, nonce };
+      if (suite === 'real') {
+        if (controller.signal.aborted) break;
+        const evidenceDir = join(tmpdir(), 'sleight-real-evidence', stamp, `${armName}-${task.id}-${run}`);
+        mkdirSync(evidenceDir, { recursive: true, mode: 0o700 });
+        const result = await executeRealTask(task, ctx, { dryRun: isDryRun, signal: controller.signal,
+          stop: () => controller.abort(new Error('macOS permission prompt')),
+          permissionCheck: observePermission,
+          drive: async prompt => {
+            const response = await runClaude(prompt, ARMS[armName], armName === 'sleight' ? { SLEIGHT_TRACE: evidenceDir } : {},
+              { signal: controller.signal, evidenceDir });
+            response.timing = runTiming(response.out, armName === 'sleight' ? traceTiming(evidenceDir) : undefined);
+            return response;
+          },
+        });
+        const { out, code, ...rest } = result;
+        results.push({ arm: armName, task: task.id, run, ...rest,
+          reason: scrub(result.reason), cleanupError: scrub(result.cleanupError), prompt: scrub(result.prompt),
+          turns: out?.num_turns, costUsd: out?.total_cost_usd, models: Object.keys(out?.modelUsage ?? {}),
+          usage: out?.usage && { input: out.usage.input_tokens, cacheRead: out.usage.cache_read_input_tokens,
+            cacheWrite: out.usage.cache_creation_input_tokens, output: out.usage.output_tokens },
+          exitCode: code, answer: scrub(out?.result?.slice(0, 300)), stderr: code === 0 ? undefined : scrub(rest.stderr),
+        });
+        save();
+        console.error(`${result.passed ? 'PASS' : isDryRun ? 'DRY' : 'FAIL'} ${armName} ${task.id} #${run} ${result.seconds ?? 0}s${result.reason ? ` (${scrub(result.reason)})` : ''}`);
+        if (result.cleanupError || result.permissionPrompt || result.observerError) {
+          console.error(`STOP: ${scrub(result.cleanupError ?? 'macOS permission prompt')}`);
+          controller.abort(new Error('live safety stop'));
+          process.exitCode = 1;
+        }
+        if (!result.passed && !isDryRun) process.exitCode = 1;
+        continue;
+      }
       // A setup this Mac can't do (no iOS runtime for the simulator task) skips
       // the run rather than ending the pass; skipped runs stay out of the table.
       try { await task.setup?.(ctx); } catch (err) {
