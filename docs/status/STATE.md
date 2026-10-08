@@ -3,71 +3,68 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-08 03:55 UTC)
+## Banner (2026-10-08 03:15 UTC, flushed before the owner's clear)
 
-0.13.1 released. Against the first timing pass (owner's speed push): errors 21.5% to 12.7% of calls,
-turns 300 to 260, model time 589 to 470 s, total 902 to 825 s, 21/21 passed. Results in
-`docs/benchmarks/2026-10-07-{timing,element-ids,errors}.json`. textedit-save is the slowest task
-and didn't improve (median 27 turns), so it's next. A Codex brief for gpt-6-astra (allowed for deep
-perf tuning, owner 2026-10-07) is at `.dev/prompts/astra-guard-reads.md`: make the guard's
-per-action full reads cheaper without weakening its checks. Model passes (Haiku 5.5 as
-`claude-haiku-5-5`, Sonnet at low effort, Opus) still to run. Sonnet stays the default driver.
+Checkout: `~/Projects/sleight` is on branch `perf/save-in-one-call` at `498d9de` (pushed, not
+merged, no PR), one commit past `main` (`552a406`, 0.13.1). It keeps the input lease through guard
+stops (the stop includes the window header it read) and adds a one-call Save As to the skill. Not
+released: it needs the Sonnet pass below. Merge it to `main` and release 0.13.2 only if that pass
+holds against `docs/benchmarks/2026-10-07-errors.json` (21/21, 260 turns, 825 s), then switch the
+checkout back to `main`. The passes read the plugin from this checkout, so don't switch branches
+while they run.
 
-0.12.2 released. The input lease's recovery advice repeated an invalid app name as a bare
-assignment, and a session failed 20 of its first 22 calls. Now the advice works, and an engine
-session restart is detected and explained (CHANGELOG). Reported by the owner from another thread
-on 2026-10-07. Reproduced and verified live against Calculator.
+Background job, kept running through the clear: `nohup .dev/passes/passes.sh`, started 2026-10-08T03:13:06Z,
+four benchmark passes in a row, 3 runs per task each. First Sonnet 5.5 medium on `498d9de`, then Haiku 5.5
+(`claude-haiku-5-5`, which Claude Code 2.1.289 calls unrecognized, so its cost figures are suspect),
+Sonnet low and Opus 5.5 medium, for the owner's model comparison. Each pass takes and releases
+`/tmp/sleight-live.lock`. Progress and result files: `.dev/passes/passes.log`, per-pass logs
+`.dev/passes/pass-*.log`. About two hours. Publish each pass scrubbed (`run.mjs` strips the owner's
+full name; check paths) as `docs/benchmarks/2026-10-08-*.json` with a note, as for the 2026-10-07 ones.
 
-New benchmark task `simulator-form` (owner's order, 2026-10-07). Safari in an iPhone simulator,
-type a nonce, tap Submit, checked by what a local server received. 3/3 on iPhone 18 Pro, iOS 27.0,
-Xcode 27's DeviceHub (replaces Simulator.app, and its approval prompt names "Device Hub"), median
-39.6 s. The first pass failed 0/3 on that missing allowlist name. Both are published. The iOS 27.0
-runtime (8 GB) was downloaded on the owner's OK.
+Owner's speed push (2026-10-07): make sleight fast. Sonnet stays the default driver. Timing per run
+(model, engine, local tools, relay, Claude Code) is in the benchmark results since 2026-10-07; the
+first pass was 65.4% model, 23.6% engine, 0.1% relay. Turns are the lever, and errors cost turns.
+Released that day: 0.12.2 (lease recovery advice, engine session restarts), 0.12.3 (one copy per
+screenshot), 0.13.0 (`app.click({ id })`/`{ label }`), 0.13.1 (errors 21.5% to 12.7% of calls). The
+remaining error causes are in the 0.13.1 pass transcripts, and `docs/benchmark.md` has the history.
 
-0.12.1 (2026-10-06): the pane's picture fits the pane and stays under Claude Code's MCP output
-limit. The launch pane shot is `~/Desktop/sleight-launch/sleight-pane.png`.
+Codex: an Astra thread (gpt-6-astra, allowed for deep perf tuning only, LAWS) works on
+`codex/guard-reads` in `~/Projects/sleight-wt/guard-reads`, from `1532ae9` (the owner pasted the
+brief before its base was set, so it predates 0.13.1 and needs a rebase). Brief:
+`.dev/prompts/astra-guard-reads.md` (make the guard's per-action full reads cheaper; six guarantees,
+each with a test). Review and reproduce its numbers before merging. It takes the live lock for its
+checks. `codex/browser-enforcement` (Codex, 2026-10-04) is still unreviewed; its worktree is Codex's
+own at `~/.codex/worktrees/browser-enforcement/sleight`.
 
-Public: `Land-o-Clusters/sleight`. Open PRs: none. Latest release `v0.12.1`, installed on this Mac
-at user scope from the repo folder. Released on 2026-10-05: 0.7.0 through 0.12.0. Numbers are in
-the CHANGELOG and `docs/benchmarks/2026-10-05-*`. `~/.claude.json` now marks
-`~/Library/Caches/sleight-bench/sleight-arm` trusted (set for the interactive pane session).
+Public: `Land-o-Clusters/sleight`, latest release `v0.13.1`, installed at user scope from the repo
+folder. Open PRs: none. The first outside user (the owner's friend) runs his iOS simulator tests
+through sleight and finds it faster than Maestro. `~/.claude.json` marks
+`~/Library/Caches/sleight-bench/sleight-arm` trusted (set for the interactive pane session,
+2026-10-06). Launch files for the owner's Grok bot are in `~/Desktop/sleight-launch/`, including
+`sleight-pane.png` (2026-10-06). `sleight-version.txt` says how each was made.
 
-Launch: licensing is fine (owner checked, 2026-10-05). The owner's Grok bot posts from
-`~/Desktop/sleight-launch/`: `demo.mp4`/`demo.gif` (take 8 of 9, 16.6 s, made to the bot's brief),
-`demo-v0.*` (first cut), `thread.md`, `sleight-version.txt`. The recorder is
-`.dev/launch/rec/v2/` (`run.py`, `compose2.py`; per-window capture, Stickies in front). Codex could not
-record it: a Notes automation prompt blocked it, and sleight-arch denied that prompt on the owner's
-order.
+Next, in order:
 
-Background jobs: none. No live lock held.
+- Finish the passes above: publish them, merge or drop `perf/save-in-one-call`, then compare the
+  models on pass rate, turns, model time per turn and total time.
+- Review the Astra branch when it reports.
+- textedit-save is still the slowest task (median 27 turns on 2026-10-07). After the Sonnet pass,
+  trace its runs again.
+- The engine's first-call docs are 56% of all result text (about 21,000 characters per session), but
+  context is cached: a run re-reads about 668,000 cached tokens and writes about 1,500. Trimming
+  them needs a measured case and care with OpenAI's safety guidance.
+- `drag` once couldn't match a freshly launched Chess window to an accessibility window
+  (`docs/known-problems.md`). Drag failures otherwise came from the owner's windows covering the app.
+- When an app hangs, the relay's message still blames the helper first. It could check whether the
+  app answers.
+- "native pipe startup failed" three times in a row in one session on 2026-10-05. The cause is unknown.
+- Check the pane in the desktop app's Code tab (it offers Claude Code 2.1.288). The owner types
+  `/sleight` there.
+- Review `codex/browser-enforcement`. Chess square estimates. Re-register LCU before any comparison.
 
-Next, in order (owner asked for a perf and Codex-parity push, 2026-10-07; first step not yet chosen):
-
-- Measure where a run's time goes (model, tool, engine) from traces on benchmark runs.
-- Let the stale-number guard accept clicks by stable AX identifier, so Calculator's renumbering after
-  All Clear stops costing refused calls.
-- Another session got "native pipe startup failed" three times in a row on 2026-10-05 while doctor
-  passed. The helper quits after about 20 s idle, and 0.10.0 tells Claude to retry, then `js_reset`.
-  Why it repeated is unknown.
-- When an app hangs (TextEdit's save-lock deadlock, or the orphan Save panel window of 2026-10-06),
-  the relay's message still blames the helper first. It could check whether the app answers before
-  saying so.
-- Check the pane in the desktop app's Code tab, now that it offers Claude Code 2.1.288. The owner
-  has to type `/sleight` there.
-- Review `codex/browser-enforcement` (Codex, 2026-10-04, unreviewed): browser calls keep the native
-  guards unless the engine's reply confirms `browserUse`. Merge it or close it.
-- Chess square estimates (chess-drag 1/3 in the 0.7.0 check).
-- Re-register LCU in `~/Library/Caches/sleight-bench/lcu-arm` before any new comparison.
-
-Codex worktrees: the 22 under `~/Projects/sleight-wt/` and their local branches were removed on the
-owner's request (2026-10-06). Each branch matched its copy on GitHub, and the remote branches stay.
-The 23 files that existed only in those worktrees (drag probe results, fixture binaries, three bench
-results) are in `.dev/worktree-archive/`. Every remote `codex/*` and `claude/blocked-apps` branch is
-squash-merged into `main` except `codex/action-result-note` and `codex/browser-enforcement`. The
-second one is unreviewed (one commit, 9 files), and its worktree is Codex's own at
-`~/.codex/worktrees/browser-enforcement/sleight`, left in place. Codex prompts are in `.dev/prompts/`.
-
-Market research (Codex) is in `.dev/research/2026-10-04-competitors.md`, untracked.
+Codex worktrees: `~/Projects/sleight-wt/` holds only `guard-reads` now; 22 finished ones were removed
+on 2026-10-06. Their remote branches stay, and files only they had are in `.dev/worktree-archive/`. Codex
+prompts are in `.dev/prompts/`, market research in `.dev/research/2026-10-04-competitors.md`.
 
 ## Machine state outside the repo
 
@@ -88,8 +85,13 @@ Market research (Codex) is in `.dev/research/2026-10-04-competitors.md`, untrack
   which the benchmark now refuses because it's inside the repo.
   `.dev/py/python3` links Homebrew Python 3.14 for it.
 - Homebrew: `vale`, `ffmpeg`, and the `codex` cask 0.160 (0.153 rejected gpt-6.1-sol).
-  `~/.local/bin/claude` 2.1.289. The desktop app's Code tab bundles Claude Code 2.1.286 (checked
-  2026-10-04), too old for the mod.
+  `~/.local/bin/claude` 2.1.289. The desktop app's Code tab offers Claude Code 2.1.288 (checked
+  2026-10-06).
+- Xcode 27 at `/Applications/Xcode.app` (xcode-select still points at the Command Line Tools, so
+  `simctl` needs `DEVELOPER_DIR`; `bench/tasks.mjs` sets it). The iOS 27.0 simulator runtime (8 GB)
+  was downloaded on the owner's OK, 2026-10-07. Xcode 27 shows simulators in DeviceHub, not
+  Simulator.app. DeviceHub also lists the owner's own iPhone, so crop it out of any capture.
+- `.dev/passes/`: the chained benchmark passes script and its logs.
 - `~/Library/Caches/sleight-bench/sleight-arm`: the benchmark's sleight arm folder.
 - `.dev/` (untracked): test CLI, old `sleight-arm` and `lcu-arm` bench folders, `DragProbe.app`, the
   compiled `textedit-drag-fixture`, pseudo-terminal harnesses, research, prompts.
@@ -101,7 +103,7 @@ Market research (Codex) is in `.dev/research/2026-10-04-competitors.md`, untrack
 ## Waiting on the owner
 
 - Decide whether Helium stays on the pre-approved list and whether `ComputerUseAllowForbiddenTargets`
-  stays on, when back on 2026-10-07.
+  stays on. Both were due on 2026-10-07 and haven't been asked yet. Ask.
 
 ## Reading list
 
