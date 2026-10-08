@@ -86,8 +86,11 @@ Permission reports contain only the process and window title. An unavailable obs
 the run before it opens a fixture. A streamed engine refusal for browser-access permission also
 stops further trials, even if the system observer didn't see its window. The runner collects the
 driver and closes only the retained fixture. It doesn't retry browser access or switch methods.
-The [initial report](benchmarks/2026-10-08-real-use-tasks.md) records the setup failure and permission
-stop, with 0 completed model trials against 18 requested. Live qualification remains pending.
+The [round-2 report](benchmarks/2026-10-08-real-use-tasks-2.md) records 3 completed model trials against
+18 requested, with 1 pass. Safari wasn't running. Helium failed twice after browser permission
+requests were dismissed, and further live runs stopped. The stop gate has passing unit tests,
+but no new live proof. The [initial report](benchmarks/2026-10-08-real-use-tasks.md) retains the
+earlier setup failure and permission stop. Live qualification remains pending.
 
 ## Time per run
 

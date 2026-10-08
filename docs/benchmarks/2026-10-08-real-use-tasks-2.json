@@ -1,0 +1,347 @@
+{
+  "date": "2026-10-08",
+  "round": 2,
+  "branch": "codex/real-use-tasks",
+  "baseCommit": "2d2eb60855e30d916c731cfb6d703607b7bf980f",
+  "includesMainLockFix": "60b9946",
+  "measuredHeliumImplementationCommit": "cc92ef14ae8ed407d33157a9ea03705aea52f8fc",
+  "latestImplementationCommit": "2a64105dc513ad9e0ff90a792709b8fd98cfd32c",
+  "qualification": {
+    "requestedModelTrials": 18,
+    "completedModelTrials": 3,
+    "passedModelTrials": 1,
+    "status": "stopped, not qualified"
+  },
+  "tasks": [
+    {
+      "id": "safari-form",
+      "runs": [
+        "setup failed: Safari absent",
+        "setup failed: Safari absent",
+        "setup failed: Safari absent"
+      ],
+      "modelsStarted": 0
+    },
+    {
+      "id": "helium-form",
+      "runs": [
+        "fail: no server submission, browser permission dismissed",
+        "pass: all five fields submitted",
+        "fail: no server submission, browser permission dismissed"
+      ],
+      "modelsStarted": 3
+    },
+    {
+      "id": "preview-pdf",
+      "runs": [
+        "not started",
+        "not started",
+        "not started"
+      ],
+      "modelsStarted": 0
+    },
+    {
+      "id": "finder-files",
+      "runs": [
+        "not started",
+        "not started",
+        "not started"
+      ],
+      "modelsStarted": 0
+    },
+    {
+      "id": "textedit-calculator",
+      "runs": [
+        "not started",
+        "not started",
+        "not started"
+      ],
+      "modelsStarted": 0
+    },
+    {
+      "id": "simulator-flow",
+      "runs": [
+        "not started",
+        "not started",
+        "not started"
+      ],
+      "modelsStarted": 0
+    }
+  ],
+  "permissionStop": {
+    "kind": "engine browser-access refusal",
+    "reason": "permission request dismissed before a decision",
+    "measuredRuns": [
+      1,
+      3
+    ],
+    "matchingErrorToolResultsPerRun": 2,
+    "process": null,
+    "windowTitle": null,
+    "identityLimitation": "No process or window title was observed for these browser requests. The system-only observer did not detect them. Their contents were not inspected.",
+    "discovered": "After all three Helium trials, while reviewing saved results.",
+    "action": "Stopped Preview through its owned terminal while it was waiting for another holder's live lock. No further live runs.",
+    "repair": "The driver now stops on the first streamed typed browser permission refusal. A fresh system permission observation precedes app cleanup.",
+    "repairVerification": "Unit tests only; no live requalification after the permission stop."
+  },
+  "attemptsWithoutResultFile": [
+    {
+      "stamp": "2026-10-08T22-22-03-046Z",
+      "task": "safari-form",
+      "command": "node bench/run.mjs --arm sleight --suite real --tasks safari-form --runs 3",
+      "terminalExitCode": 1,
+      "reason": "Ordinary sandbox refused result-file write with EPERM before lock acquisition or fixture setup; no model call."
+    }
+  ],
+  "attempts": [
+    {
+      "source": "2026-10-08T22-22-25-208Z.json",
+      "stamp": "2026-10-08T22-22-25-208Z",
+      "suite": "real",
+      "arms": [
+        "sleight"
+      ],
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "claude",
+      "results": [
+        {
+          "arm": "sleight",
+          "task": "safari-form",
+          "run": 1,
+          "passed": false,
+          "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Safari must already be running to create an isolated fixture without restoring a session (-2700)",
+          "cleanupError": "Owned fixture window cleanup unconfirmed",
+          "fixtureDir": "<temp>/sleight-bench/2026-10-08T22-22-25-208Z/sleight-safari-form-1",
+          "models": []
+        }
+      ],
+      "terminalExitCode": 1
+    },
+    {
+      "source": "2026-10-08T22-25-23-457Z.json",
+      "stamp": "2026-10-08T22-25-23-457Z",
+      "suite": "real",
+      "arms": [
+        "sleight"
+      ],
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "claude",
+      "results": [
+        {
+          "arm": "sleight",
+          "task": "safari-form",
+          "run": 1,
+          "passed": false,
+          "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Safari must already be running to create an isolated fixture without restoring a session (-2700)",
+          "models": []
+        },
+        {
+          "arm": "sleight",
+          "task": "safari-form",
+          "run": 2,
+          "passed": false,
+          "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Safari must already be running to create an isolated fixture without restoring a session (-2700)",
+          "models": []
+        },
+        {
+          "arm": "sleight",
+          "task": "safari-form",
+          "run": 3,
+          "passed": false,
+          "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Safari must already be running to create an isolated fixture without restoring a session (-2700)",
+          "models": []
+        }
+      ],
+      "terminalExitCode": 1
+    },
+    {
+      "source": "2026-10-08T22-38-40-199Z.json",
+      "stamp": "2026-10-08T22-38-40-199Z",
+      "suite": "real",
+      "arms": [
+        "sleight"
+      ],
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "claude",
+      "results": [
+        {
+          "arm": "sleight",
+          "task": "helium-form",
+          "run": 1,
+          "groupClean": true,
+          "timedOut": false,
+          "cancelled": false,
+          "timing": {
+            "totalMs": 12421,
+            "modelMs": 9848,
+            "calls": 4,
+            "refused": 1,
+            "toolMs": 1975,
+            "engineMs": 1969,
+            "relayMs": 6,
+            "localMs": 0,
+            "otherMs": 598
+          },
+          "passed": false,
+          "reason": "server has no submission with all five expected values",
+          "seconds": 15.8,
+          "turns": 5,
+          "costUsd": 0.23504779999999997,
+          "models": [
+            "claude-sonnet-5-5"
+          ],
+          "usage": {
+            "input": 10,
+            "cacheRead": 166559,
+            "cacheWrite": 48364,
+            "output": 826
+          },
+          "exitCode": 0,
+          "answer": "I couldn't fill in or submit the form, so nothing has been entered. The Helium window with `http://127.0.0.1:62004/8dafe60b/` is untouched and still open.\n\nI tried to attach to that page twice. Both times the browser asked for permission to access `http://127.0.0.1:62004`, and the request was dismis"
+        },
+        {
+          "arm": "sleight",
+          "task": "helium-form",
+          "run": 2,
+          "groupClean": true,
+          "timedOut": false,
+          "cancelled": false,
+          "timing": {
+            "totalMs": 24068,
+            "modelMs": 17353,
+            "calls": 10,
+            "refused": 1,
+            "toolMs": 6179,
+            "engineMs": 6159,
+            "relayMs": 20,
+            "localMs": 0,
+            "guardReads": 14,
+            "guardReadMs": 3686.3923350000005,
+            "guardReadFailures": 0,
+            "otherMs": 536
+          },
+          "passed": true,
+          "seconds": 26.4,
+          "turns": 11,
+          "costUsd": 0.2131134,
+          "models": [
+            "claude-sonnet-5-5"
+          ],
+          "usage": {
+            "input": 20,
+            "cacheRead": 391197,
+            "cacheWrite": 29991,
+            "output": 1487
+          },
+          "exitCode": 0,
+          "answer": "I filled in and submitted the form in the Helium window, and the page now shows \"Submitted\". I set Name to \"Morgan Reed\", Email to \"morgan@example.test\", Team to \"Design\" and Code to \"0e5a3bef\", and checked \"Send updates\". I only worked in that window and left it open."
+        },
+        {
+          "arm": "sleight",
+          "task": "helium-form",
+          "run": 3,
+          "groupClean": true,
+          "timedOut": false,
+          "cancelled": false,
+          "timing": {
+            "totalMs": 13403,
+            "modelMs": 10705,
+            "calls": 5,
+            "refused": 1,
+            "toolMs": 2144,
+            "engineMs": 2139,
+            "relayMs": 5,
+            "localMs": 0,
+            "otherMs": 554
+          },
+          "passed": false,
+          "reason": "server has no submission with all five expected values",
+          "seconds": 15.8,
+          "turns": 6,
+          "costUsd": 0.2300932,
+          "models": [
+            "claude-sonnet-5-5"
+          ],
+          "usage": {
+            "input": 12,
+            "cacheRead": 251686,
+            "cacheWrite": 42868,
+            "output": 826
+          },
+          "exitCode": 0,
+          "answer": "I couldn't fill in or submit the form. Both attempts to attach to the Helium tab at http://127.0.0.1:62355/1f1ca01b/ failed. Each time, the browser permission request for 127.0.0.1:62355 was dismissed before anyone approved or denied it.\n\nI haven't touched the page, so nothing was filled in or submi"
+        }
+      ],
+      "terminalExitCode": 1
+    },
+    {
+      "source": "2026-10-08T22-40-40-088Z.json",
+      "stamp": "2026-10-08T22-40-40-088Z",
+      "suite": "real",
+      "arms": [
+        "sleight"
+      ],
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "claude",
+      "results": [],
+      "terminalExitCode": 1
+    }
+  ],
+  "cleanup": {
+    "firstSafariAttempt": {
+      "fixtureDir": "<temp>/sleight-bench/2026-10-08T22-22-25-208Z/sleight-safari-form-1",
+      "preserved": true,
+      "reportedCleanupError": "Owned fixture window cleanup unconfirmed",
+      "correction": "The helper refused before opening a window because Safari was absent. The later untouched-stage protocol fixes this false uncertainty without altering the original record.",
+      "serverClosed": true,
+      "helperCollected": true
+    },
+    "threeSafariPreflights": "No windows opened; fixtures removed and helper collection confirmed.",
+    "helium": "All three retained new fixture windows closed; fixtures removed; driver groups collected.",
+    "preview": "Cancelled while waiting for another holder's lock; no fixture, app, or model started.",
+    "lock": "Runner invoked directly; own live locks released on exit. Another holder's lock was left alone.",
+    "limitation": "Required lock release on exit still permits a subsequent holder if owned helper collection cannot be confirmed."
+  },
+  "boundaries": {
+    "realAppleEvents": false,
+    "heliumOwnerWindowInventory": false,
+    "heliumProfileOverride": false,
+    "sharedHelperModified": false,
+    "chatGPTRestartedOrModified": false,
+    "repositoryScreenshots": false,
+    "publicEvidenceScrubbed": true,
+    "defaultSevenTaskDefinitionsAndPromptsUnchanged": true
+  },
+  "verification": [
+    {
+      "command": "npm run check",
+      "environment": "ordinary sandbox",
+      "exitCode": 1,
+      "reason": "Seven loopback EPERM failures and one linker output-write refusal."
+    },
+    {
+      "command": "npm run check",
+      "environment": "scoped host access after actual sandbox denial",
+      "exitCode": 0,
+      "evidence": "Final implementation check, plugin validation and 9 mod tests passed."
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0
+    },
+    {
+      "command": "node --check bench/run.mjs",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    }
+  ],
+  "fullSuite": "No additional full dry or live benchmark suite in round 2. The round-1 full dry pass remains in the initial report.",
+  "initialReport": "2026-10-08-real-use-tasks.md"
+}
