@@ -7,6 +7,14 @@ identifier works with `let`, `const`, `var` or a plain reassignment. A bare
 acquisition also restores the global `app` handle without assigning a lexical
 `const app`.
 
+A call that starts with an acquisition statement and goes on to act, such as
+`let app = await cua.getApp("TextEdit"); await app.typeText("x")`, runs as two
+engine calls when the lease has no window for that app yet. The relay sends the
+acquisition alone, takes the lease from its reply, then sends the rest under the
+guard, and Claude gets both results as one. A failed acquisition stops before any
+action, and another holder's lease refuses the rest as it would refuse a second
+call. Document mode and a selected window keep the standalone acquisition.
+
 Window keys hash the bundle ID and observed URL, or title when no URL exists.
 The last completed full Window header and engine bundle ID identify the target.
 Bundle IDs stay attached to known handles across full reads and screenshots.

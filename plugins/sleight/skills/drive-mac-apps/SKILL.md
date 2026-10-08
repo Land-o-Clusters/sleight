@@ -23,8 +23,12 @@ the user or stop when a headless run refuses it. Changing the file is not an app
 
 ## How to use it
 
-1. Make the first `js` call exactly one API call, such as `let app = await cua.getApp("Calculator")`.
-   Its result contains the full API documentation and the app's current UI state. Read both before acting.
+1. Start with `let app = await cua.getApp("Calculator")`. Its result contains the full API documentation
+   and the app's current UI state. When you already know the first actions without seeing the UI
+   (a shortcut, typing, an ID the task names), put them in the same call:
+   `let app = await cua.getApp("TextEdit"); await app.pressKey("super+n"); await app.typeText("Hi")`.
+   sleight sends the acquisition first, checks the window, then runs the rest, and you get one result.
+   The same works when you switch to another app. Otherwise read the UI state before acting.
    When two copies of an app share a bundle ID (an installed app and a dev build), `getApp` with the ID
    fails as ambiguous. Pass the full path to the `.app` instead. If you don't know the app's name, look
    it up in one expression: `(await cua.listApps()).map(a => a.id + " " + a.displayName).join("\n")`.

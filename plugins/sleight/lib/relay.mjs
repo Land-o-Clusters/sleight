@@ -697,6 +697,14 @@ export function createRelay({
       });
       return;
     }
+    if (msg.method === undefined && splitCalls.has(msg.id)) {
+      const next = splitCalls.get(msg.id); splitCalls.delete(msg.id); next(msg); return;
+    }
+    if (msg.method === undefined && splitHeads.has(msg.id)) {
+      const head = splitHeads.get(msg.id); splitHeads.delete(msg.id);
+      msg = msg.result ? { ...msg, result: { ...msg.result, content: [...head, ...(msg.result.content ?? [])] } }
+        : { jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [...head, { type: 'text', text: msg.error?.message ?? 'error' }] } };
+    }
     if (helperProbes.has(msg.id) && msg.method === undefined) {
       const probe = helperProbes.get(msg.id);
       clearTimeout(probe.timer); helperProbes.delete(msg.id); probe.receive?.(msg);
@@ -908,8 +916,34 @@ export function createRelay({
     const echo = typeof msg.params?.arguments?.code === 'string' && jsArgs &&
       msg.params.arguments.code.trim().match(/^((?:let|const|var)\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.getApp\([^;]*\))\s*;\s*([A-Za-z_$][\w$]*)\s*;?$/);
     if (echo && echo[2] === echo[3]) msg.params.arguments.code = echo[1];
-    handleClient(msg);
+    if (!splitAcquisition(msg)) handleClient(msg);
   });
+
+  // `let app = await cua.getApp("X"); await app.click(…)` in one call. The lease needs the
+  // window before it lets an action through, so the relay sends the acquisition alone, takes
+  // the lease from its reply, then sends the rest, and Claude gets both results as one. Before,
+  // Claude spent a turn on the acquisition (the engine's first call, or a switch of app).
+  const splitCalls = new Map(), splitHeads = new Map();
+  function splitAcquisition(msg) {
+    if (!inputLease || documentMode || selectedWindow || msg.method !== 'tools/call' || msg.params?.name !== 'js' ||
+        msg.id === undefined || typeof msg.params.arguments?.code !== 'string') return false;
+    const code = msg.params.arguments.code;
+    const m = code.match(/^\s*((?:let|const|var)\s+[A-Za-z_$][\w$]*\s*=\s*await\s+cua\.getApp\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*\)\s*;?)/);
+    const rest = m && code.slice(m[0].length).trim();
+    if (!rest) return false;
+    // Same app as the lease already holds: the guard checks the window inside the one call.
+    const selector = m[2].slice(1, -1).toLowerCase();
+    if (leaseWindow?.appId && [leaseWindow.appId, leaseWindow.app].some(v => v?.toLowerCase() === selector)) return false;
+    const prefixId = `sleight-acquire-${nextInternalId++}`;
+    splitCalls.set(prefixId, reply => {
+      if (reply.error || reply.result?.isError) { toClient({ ...reply, id: msg.id }); return; }
+      splitHeads.set(msg.id, reply.result?.content ?? []);
+      handleClient({ ...msg, params: { ...msg.params, arguments: { ...msg.params.arguments, code: rest } } });
+    });
+    trace('acquisition-split', { id: msg.id, acquisition: prefixId });
+    handleClient({ ...msg, id: prefixId, params: { ...msg.params, arguments: { ...msg.params.arguments, code: m[1] } } });
+    return true;
+  }
   function handleClient(msg) {
     if (msg.method === 'server/discover' && msg.id !== undefined) {
       toClient({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'Method not found' } });

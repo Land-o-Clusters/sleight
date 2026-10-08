@@ -380,7 +380,8 @@ test('an acquisition that ends by naming its handle is still an acquisition', t 
 
 test('a refused first call that names its app gets that app\'s bare acquisition as the advice', t => {
   const a = setup(t).harness('fresh', { fresh: true });
-  a.send(rpc(1, 'js', { code: 'let app = await cua.getApp("com.apple.TextEdit"); await app.typeText("x")' }));
+  // An inline acquisition isn't a leading statement, so the relay can't split it off.
+  a.send(rpc(1, 'js', { code: 'await (await cua.getApp("com.apple.TextEdit")).typeText("x")' }));
   const recovery = a.received.at(-1).result.content[0].text.match(/`([^`]+)`/)?.[1];
   assert.equal(recovery, 'let app = await cua.getApp("com.apple.TextEdit")');
   a.send(rpc(2, 'js', { code: recovery })); a.reply(result(2));
@@ -392,7 +393,11 @@ test('a refused first call that names its app gets that app\'s bare acquisition 
 test('a trailing name that is not the acquired handle is left alone', t => {
   const a = setup(t).harness('fresh', { fresh: true });
   a.send(rpc(1, 'js', { code: 'let app = await cua.getApp("com.apple.TextEdit"); other' }));
-  assert.equal(a.forwarded.length, 0, 'an action with no confirmed window is still refused');
+  assert.equal(a.forwarded.length, 1);
+  assert.doesNotMatch(a.forwarded[0].params.arguments.code, /\bother;?\s*$/, 'the acquisition goes alone');
+  a.reply(result(a.forwarded[0].id));
+  assert.equal(a.forwarded[1].id, 1);
+  assert.match(a.forwarded[1].params.arguments.code, /\bother;?\s*$/m, 'the rest follows under the lease');
 });
 
 test('missing identity refusal supplies an executable recovery assignment', t => {
@@ -802,4 +807,58 @@ test('late approval after server input ends is suppressed; stream faults trigger
   assert.equal(faults.length, 0);
   h.clientOut.emit('error', new Error('EPIPE'));
   assert.equal(faults.length, 1);
+});
+
+test('acquire and act in one call: the relay sends the acquisition first, then the actions under the lease', t => {
+  const a = setup(t).harness('fresh', { fresh: true });
+  a.send(rpc(1, 'js', { code: 'let app = await cua.getApp("com.apple.TextEdit");\nawait app.typeText("x")' }));
+  assert.equal(a.forwarded.length, 1);
+  assert.match(a.forwarded[0].params.arguments.code, /let app = await cua\.getApp\("com\.apple\.TextEdit"\);\s*$/);
+  assert.doesNotMatch(a.forwarded[0].params.arguments.code, /typeText\("x"\)/, 'no action rides with the acquisition');
+  assert.notEqual(a.forwarded[0].id, 1, 'the acquisition runs under its own id');
+  a.reply(result(a.forwarded[0].id));
+  assert.equal(a.received.length, 0, 'Claude gets one reply, after the actions');
+  assert.equal(a.forwarded.length, 2);
+  assert.equal(a.forwarded[1].id, 1);
+  assert.match(a.forwarded[1].params.arguments.code, /typeText\("x"\)/);
+  assert.doesNotMatch(a.forwarded[1].params.arguments.code, /^let app = await cua\.getApp/m, 'the acquisition runs once');
+  a.reply(result(1, header + '\nWindow changed'));
+  assert.equal(a.received.length, 1);
+  const reply = a.received[0];
+  assert.equal(reply.id, 1); assert.notEqual(reply.result.isError, true);
+  const text = reply.result.content.map(c => c.text).join('\n');
+  assert.match(text, /Window: "a\.txt"/); assert.match(text, /Window changed/);
+});
+
+test('a failed acquisition in a combined call stops before any action', t => {
+  const a = setup(t).harness('fresh', { fresh: true });
+  a.send(rpc(1, 'js', { code: 'let app = await cua.getApp("Nope");\nawait app.click(3)' }));
+  const failed = result(a.forwarded[0].id, 'appNotFound'); failed.result.isError = true; delete failed.result._meta;
+  a.reply(failed);
+  assert.equal(a.forwarded.length, 1, 'no action reached the engine');
+  assert.equal(a.received.length, 1);
+  assert.equal(a.received[0].id, 1); assert.equal(a.received[0].result.isError, true);
+  assert.match(a.received[0].result.content[0].text, /appNotFound/);
+});
+
+test('another session\'s lease on the window refuses the actions of a combined call', t => {
+  const s = setup(t);
+  s.a.send(rpc(1, 'js', { code: 'await app.typeText("x")' }));
+  const c = s.harness('C', { fresh: true });
+  c.send(rpc(2, 'js', { code: 'let app = await cua.getApp("com.apple.TextEdit");\nawait app.typeText("y")' }));
+  c.reply(result(c.forwarded.at(-1).id));
+  const reply = c.received.at(-1);
+  assert.equal(reply.id, 2); assert.equal(reply.result.isError, true);
+  assert.match(reply.result.content.map(c => c.text).join('\n'), /held by A/);
+  assert.match(reply.result.content.map(c => c.text).join('\n'), /Window: "a\.txt"/, 'the read still reaches Claude');
+  assert.ok(!c.forwarded.some(m => m.id === 2), 'the actions never reached the engine');
+  s.a.reply(result(1));
+});
+
+test('a combined call is only split when it starts with an acquisition statement and does more', t => {
+  for (const code of ['await app.typeText("x")', 'let app = await cua.getApp("com.apple.TextEdit")', 'let app = await cua.getApp("com.apple.TextEdit"); app']) {
+    const a = setup(t).harness('fresh', { fresh: true });
+    a.send(rpc(1, 'js', { code }));
+    assert.ok(a.forwarded.every(m => m.id === 1) && a.received.every(m => m.id === 1), code);
+  }
 });
