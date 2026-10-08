@@ -174,7 +174,7 @@ function benchKeyboardTaps() {
 // (no shell) can't. Every Claude arm runs without them.
 const OUTSIDE_TOOLS = ['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'WebSearch'];
 
-function runClaude(prompt, arm, env = {}, { signal, evidenceDir } = {}) {
+function runClaude(prompt, arm, env = {}, { signal, evidenceDir, onPermissionRefusal } = {}) {
   const args = [
     '-p', prompt,
     ...arm.args,
@@ -186,7 +186,7 @@ function runClaude(prompt, arm, env = {}, { signal, evidenceDir } = {}) {
     '--effort', effort,
   ];
   return runDriver(claudeBin, args, { cwd: arm.cwd, env: { ...armEnv(arm), ...env }, timeoutMs: TIMEOUT_MS,
-    signal: signal ?? controller.signal, evidenceDir, format: suite === 'real' ? 'stream-json' : 'json' });
+    signal: signal ?? controller.signal, evidenceDir, onPermissionRefusal, format: suite === 'real' ? 'stream-json' : 'json' });
 }
 
 // Window titles can carry the user's name (Chess: "Game 1 | Name - Computer"),
@@ -249,9 +249,9 @@ pass: for (let run = 1; run <= runs; run++) {
           lockHeld: !isDryRun,
           stop: () => controller.abort(new Error('macOS permission prompt')),
           permissionCheck: observePermission,
-          drive: async prompt => {
+          drive: async (prompt, _ctx, callbacks) => {
             const response = await runClaude(prompt, ARMS[armName], armName === 'sleight' ? { SLEIGHT_TRACE: evidenceDir } : {},
-              { signal: controller.signal, evidenceDir });
+              { signal: controller.signal, evidenceDir, ...callbacks });
             response.timing = runTiming(response.out, armName === 'sleight' ? traceTiming(evidenceDir) : undefined);
             return response;
           },
@@ -266,8 +266,8 @@ pass: for (let run = 1; run <= runs; run++) {
         });
         save();
         console.error(`${result.passed ? 'PASS' : isDryRun ? 'DRY' : 'FAIL'} ${armName} ${task.id} #${run} ${result.seconds ?? 0}s${result.reason ? ` (${scrub(result.reason)})` : ''}`);
-        if (result.cleanupError || result.permissionPrompt || result.observerError) {
-          console.error(`STOP: ${scrub(result.cleanupError ?? 'macOS permission prompt')}`);
+        if (result.cleanupError || result.permissionPrompt || result.permissionRefusal || result.observerError) {
+          console.error(`STOP: ${scrub(result.cleanupError ?? result.reason ?? 'permission stop')}`);
           controller.abort(new Error('live safety stop'));
           process.exitCode = 1;
         }

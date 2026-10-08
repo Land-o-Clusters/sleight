@@ -42,21 +42,33 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, signal
     } else {
       const started = Date.now();
       driverStarted = true;
-      const response = await drive(prompt, ctx);
+      const response = await drive(prompt, ctx, { onPermissionRefusal: () => {
+        result.permissionRefusal = true;
+        // The request was dismissed or denied, so only retained-fixture cleanup
+        // remains allowed. A visible system prompt still aborts all AX activity.
+        stop?.();
+      } });
       Object.assign(result, response);
       const verdict = await task.check({ ...ctx, answer: response.out?.result ?? '' });
-      result.passed = response.code === 0 && verdict === true && !signal?.aborted && !result.permissionPrompt && !result.observerError;
-      result.reason = result.permissionPrompt ? 'macOS permission prompt: stopped' : signal?.aborted ? 'run interrupted' :
+      result.passed = response.code === 0 && verdict === true && !signal?.aborted && !result.permissionPrompt && !result.permissionRefusal && !result.observerError;
+      result.reason = result.permissionPrompt ? 'macOS permission prompt: stopped' : result.permissionRefusal ? 'browser-access permission refused: stopped' : signal?.aborted ? 'run interrupted' :
         verdict !== true ? verdict : response.code !== 0 ? `driver exited ${response.code}` : undefined;
       result.seconds = Math.round((Date.now() - started) / 100) / 10;
     }
   } catch (error) {
     result.passed = false;
     if (driverStarted && result.groupClean !== true) result.groupClean = false;
-    result.reason = result.permissionPrompt ? 'macOS permission prompt: stopped' : error.message;
+    result.reason = result.permissionPrompt ? 'macOS permission prompt: stopped' : result.permissionRefusal ? 'browser-access permission refused: stopped' : error.message;
   } finally {
     try {
       if (result.groupClean === false) throw new Error('Owned driver process group cleanup unconfirmed');
+      // A prompt may appear just as collection finishes, before the next poll.
+      // Refresh before any app cleanup, including after a short setup failure.
+      if (monitor) { await observation; await observe().catch(() => {}); }
+      if (cleanupController.signal.aborted) {
+        if (ctx.closeServer) { await ctx.closeServer(); ctx.closeServer = undefined; }
+        throw new Error('Fixture cleanup stopped by permission observation');
+      }
       await task.cleanup?.(ctx);
       if (ctx.pendingAcquisitions?.size) throw new Error(`Fixture acquisition unconfirmed: ${[...ctx.pendingAcquisitions].join(', ')}`);
       cleanupConfirmed = true;

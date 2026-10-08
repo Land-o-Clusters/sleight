@@ -66,6 +66,19 @@ test('document cleanup refuses a changed focus or document identity before press
   assert.throws(() => sandbox.closeOwnedWindow(owned, { mode: 'window' }, {}, api), /identity/);
 });
 
+test('a generic Archive title cannot establish Finder ownership during setup', () => {
+  const source = readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8');
+  const native = value => value;
+  native.AXUIElementCopyAttributeValue = (_window, name, output) => {
+    output[0] = name === 'AXTitle' ? 'Archive' : null; return 0;
+  };
+  const sandbox = { $: native, Ref: () => [], ObjC: { import() {}, castRefToObject: value => value, unwrap: value => value } };
+  runInNewContext(source, sandbox);
+  const api = sandbox.nativeAX(), request = { mode: 'folder', target: '/fixture/Files-abc', token: 'Files-abc' };
+  assert.equal(api.matches({}, request), false, 'a generic title must not authorize a new reference');
+  assert.equal(api.matches({}, request, true), true, 'the retained owned reference can navigate into Archive');
+});
+
 test('ordinary cancellation retains the helper until its owned window is closed', async t => {
   const { openFixture } = await import('../bench/real-fixture.mjs');
   const dir = mkdtempSync(join(tmpdir(), 'real-fixture-cancel-'));
