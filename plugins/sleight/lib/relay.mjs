@@ -931,9 +931,8 @@ export function createRelay({
     const m = code.match(/^\s*((?:let|const|var)\s+[A-Za-z_$][\w$]*\s*=\s*await\s+cua\.getApp\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*\)\s*;?)/);
     const rest = m && code.slice(m[0].length).trim();
     if (!rest) return false;
-    // Same app as the lease already holds: the guard checks the window inside the one call.
-    const selector = m[2].slice(1, -1).toLowerCase();
-    if (leaseWindow?.appId && [leaseWindow.appId, leaseWindow.app].some(v => v?.toLowerCase() === selector)) return false;
+    // Split even for the app the lease holds: the guard's setup refers to `app` before a `let app`
+    // in the same script, which throws (2/3 simulator-form runs, 2026-10-08).
     const prefixId = `sleight-acquire-${nextInternalId++}`;
     splitCalls.set(prefixId, reply => {
       if (reply.error || reply.result?.isError) { toClient({ ...reply, id: msg.id }); return; }

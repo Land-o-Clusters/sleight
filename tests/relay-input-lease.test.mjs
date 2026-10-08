@@ -866,3 +866,16 @@ test('a combined call is only split when it starts with an acquisition statement
     assert.ok(a.forwarded.every(m => m.id === 1) && a.received.every(m => m.id === 1), code);
   }
 });
+
+test('re-acquiring the app the lease already holds, then acting, is split too', t => {
+  // The guard's setup refers to `app` before a `let app` in the same script, which throws
+  // "Cannot access 'app' before initialization" (2/3 simulator-form runs, 2026-10-08).
+  const { a } = setup(t);
+  a.send(rpc(1, 'js', { code: 'let app = await cua.getApp("TextEdit"); await app.typeText("x")' }));
+  assert.equal(a.forwarded.length, 1);
+  assert.notEqual(a.forwarded[0].id, 1, 'the acquisition goes alone');
+  a.reply(result(a.forwarded[0].id));
+  assert.equal(a.forwarded[1].id, 1);
+  assert.doesNotMatch(a.forwarded[1].params.arguments.code, /let app = await cua\.getApp\("TextEdit"\)/);
+  a.reply(result(1)); assert.notEqual(a.received.at(-1).result.isError, true);
+});

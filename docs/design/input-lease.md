@@ -9,7 +9,7 @@ acquisition also restores the global `app` handle without assigning a lexical
 
 A call that starts with an acquisition statement and goes on to act, such as
 `let app = await cua.getApp("TextEdit"); await app.typeText("x")`, runs as two
-engine calls when the lease has no window for that app yet. The relay sends the
+engine calls, also for the app the lease already holds. The relay sends the
 acquisition alone, takes the lease from its reply, then sends the rest under the
 guard, and Claude gets both results as one. A failed acquisition stops before any
 action, and another holder's lease refuses the rest as it would refuse a second
