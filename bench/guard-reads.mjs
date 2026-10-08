@@ -17,7 +17,7 @@ import { guardTrialTiming } from './guard-reads-events.mjs';
 const phase = process.argv[2];
 assert.ok(['before', 'after', 'cleanup'].includes(phase), 'pass before, after or cleanup');
 const task = phase === 'cleanup' ? 'cleanup' : process.argv[3] ?? 'all';
-assert.ok(['all', 'calculator', 'textedit', 'chess', 'cleanup'].includes(task), 'unknown task');
+assert.ok(['all', 'calculator', 'textedit', 'chess', 'typing', 'cleanup'].includes(task), 'unknown task');
 const bank = await mkdtemp('/private/tmp/sleight-guard-reads-');
 const server = resolveServer();
 const report = { phase, task, engine: server.version, started: new Date().toISOString(), trials: [], probes: [], failures: [] };
@@ -42,8 +42,18 @@ const call = async code => {
 };
 const acquire = app => call(`var app = await cua.getApp(${JSON.stringify(app)})`);
 async function closeOwned(path) {
-  const receipt = await closeGuardFixture(code => client.call('js', { code }), path);
-  report.probes.push(JSON.parse(scrub(JSON.stringify(receipt))));
+  const attempt = { cleanupCalls: [] };
+  report.probes.push(attempt);
+  const receipt = await closeGuardFixture(async code => {
+    const result = await client.call('js', { code });
+    const header = windowFromText(plain(result));
+    attempt.cleanupCalls.push({ code, isError: !!result.isError,
+      ...(header ? { header: header.url === pathToFileURL(path).href ? header
+        : { app: header.app, title: '[other window]', url: header.url ? '[other URL]' : null } }
+        : { text: scrub(plain(result)) }) });
+    return result;
+  }, path);
+  Object.assign(attempt, JSON.parse(scrub(JSON.stringify(receipt))));
 }
 async function trial(task, repetition, code, verify = () => {}) {
   events = [];
@@ -99,7 +109,7 @@ try {
       text => assert.match(text, /12[, .]?345[, .]?678/));
   }
   }
-  if (['all', 'textedit'].includes(task)) {
+  if (['all', 'textedit', 'typing'].includes(task)) {
     owned = join(bank, 'guard-1.txt');
     await writeFile(owned, 'guard timing\n');
     await promisify(execFile)('/usr/bin/open', ['-a', 'TextEdit', owned]);
@@ -110,6 +120,18 @@ try {
     assert.equal(windowFromText(initial)?.url, pathToFileURL(owned).href, 'TextEdit must select the owned fixture');
     await parseProbe('TextEdit');
   for (let i = 1; i <= 5; i++) {
+    if (task === 'typing') {
+      for (const arm of i % 2 ? ['keys', 'text'] : ['text', 'keys']) {
+        // A distinct value per trial makes ignored replacement fail verification.
+        const token = `123456${i}${arm === 'keys' ? 0 : 1}`;
+        const input = arm === 'keys' ? `for (const key of ${JSON.stringify(token)}) await app.pressKey(key);`
+          : `await app.typeText(${JSON.stringify(token)});`;
+        await trial('textedit-' + arm, i,
+          'await app.pressKey("super+a"); ' + input + ' await app.pressKey("super+s");',
+          async () => assert.equal((await readFile(owned, 'utf8')).trim(), token));
+      }
+      continue;
+    }
     const token = `Guard timing ${i}`;
     await trial('textedit-type-save', i,
       `await app.pressKey("super+a"); await app.typeText(${JSON.stringify(token)}); await app.pressKey("super+s");`,
@@ -124,6 +146,10 @@ try {
   for (let i = 1; i <= 5; i++) {
     await trial('chess-read-then-act', i,
       'await app.getAXStateAndScreenshot(); await app.pressKey("Escape");');
+    await trial('chess-screenshot-then-act', i,
+      'await app.getScreenshot({ emit: false }); await app.pressKey("Escape");');
+    await trial('chess-act-then-screenshot', i,
+      'await app.pressKey("Escape"); await app.getScreenshot({ emit: false });');
   }
   }
   }

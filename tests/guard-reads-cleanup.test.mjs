@@ -23,3 +23,11 @@ test('cleanup accepts no windows after a capture error without repeating the clo
   assert.equal((await closeGuardFixture(c.call, path)).cleanup, 'no TextEdit windows remain');
   assert.equal(c.calls.filter(code => code.includes('super+w')).length, 1);
 });
+test('cleanup accepts the relay no-windows receipt only after closing the exact fixture', async () => {
+  const closed = reply('sleight: the app has no windows left, so the window this call closed was its last. Nothing more to read.');
+  const c = client([fixture, closed]);
+  assert.equal((await closeGuardFixture(c.call, path)).cleanup, 'no TextEdit windows remain');
+  assert.equal(c.calls.length, 2);
+  const refused = client([fixture, { ...closed, isError: true }, other]);
+  await assert.rejects(closeGuardFixture(refused.call, path), /unconfirmed/);
+});

@@ -42,6 +42,10 @@ the user or stop when a headless run refuses it. Changing the file is not an app
    this way keeps working when an earlier action in it renumbers the window (Calculator's All Clear
    does). The name must match one element exactly, or the
    action stops. The same works for `scroll`, `selectText`, `setValue` and `performSecondaryAction`.
+   For contiguous text, prefer one `await app.typeText("text")` to one `pressKey` call per character.
+   In TextEdit, eight digits took 4.1 s as keys and 1.4 s as text, with seven fewer guard reads.
+   Don't add a sleep solely to reduce the next capture's delay: it still waits after input. Check the
+   resulting text, especially after select-all replacement, which failed in one word-typing trial.
 3. The first time you touch an app, the user gets an approval prompt unless their list preapproved it.
    If the result says the app was not
    approved, stop and tell the user. Don't retry around it. The engine refuses terminal apps and

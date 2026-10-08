@@ -10,6 +10,11 @@ export async function closeGuardFixture(call, path) {
     throw new Error('Cleanup cannot confirm the owned document; no close sent.');
   }
   const closed = await call('await app.pressKey("super+w")');
+  // relay.mjs translates noWindowsAvailable after Cmd+W into this successful
+  // receipt. It follows the exact-fixture read above, not a blind close.
+  if (!closed.isError && text(closed) === 'sleight: the app has no windows left, so the window this call closed was its last. Nothing more to read.') {
+    return { cleanup: 'no TextEdit windows remain' };
+  }
   const observation = closed.isError && !/noWindowsAvailable/.test(text(closed)) ? await call(read) : closed;
   if (observation.isError && /noWindowsAvailable/.test(text(observation))) {
     return { cleanup: 'no TextEdit windows remain', ...(closed.isError ? { closeReadError: text(closed) } : {}) };

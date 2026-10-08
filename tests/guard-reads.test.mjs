@@ -24,7 +24,7 @@ function fixture({ current = () => tree(), action = () => {}, screenshotState } 
   for (const name of ['click', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction', 'paste', 'pressKey', 'typeText']) {
     raw[name] = async (...args) => { calls.push([name, ...args]); return action(name, args); };
   }
-  const context = { app: raw, cua: { getApp: async () => raw }, nodeRepl: { write: value => output.push(value) } };
+  const context = { app: raw, cua: { getApp: async () => raw }, nodeRepl: { write: value => output.push(value), emitImage: async () => {} } };
   const run = (code, options = {}, target = expected) => runInNewContext(`(async () => { ${guardedCode(code, target, 'changed window', undefined, options)} })()`, context);
   return { run, raw, calls, output, context };
 }
@@ -90,7 +90,7 @@ test('a combined snapshot cannot preserve a stale number, ID or label after an a
   }
 });
 
-test('new calls and screenshot-only reads cannot carry a combined snapshot into later input', async () => {
+test('new calls expire a combined snapshot; screenshots replace it with a fresh combined capture', async () => {
   const f = fixture();
   await f.run('await app.getAXStateAndScreenshot();');
   f.calls.length = 0;
@@ -98,10 +98,10 @@ test('new calls and screenshot-only reads cannot carry a combined snapshot into 
   assert.deepEqual(f.calls.map(c => c[0]), ['read', 'click', 'read']);
   f.calls.length = 0;
   await f.run('await app.getScreenshot(); await app.click(1);');
-  assert.deepEqual(f.calls.map(c => c[0]), ['screenshot', 'read', 'click', 'read']);
+  assert.deepEqual(f.calls.map(c => c[0]), ['both', 'click', 'read']);
   f.calls.length = 0;
   await f.run('await app.getAXStateAndScreenshot(); await app.getScreenshot(); await app.click(1);');
-  assert.deepEqual(f.calls.map(c => c[0]), ['both', 'screenshot', 'read', 'click', 'read']);
+  assert.deepEqual(f.calls.map(c => c[0]), ['both', 'both', 'click', 'read']);
 });
 
 test('input through another handle invalidates a combined observation of the same window', async () => {
@@ -175,15 +175,23 @@ for (const method of ['getAXState', 'getAXStateAndScreenshot']) {
     const pending = new Promise(resolve => { finish = resolve; });
     const f = fixture({ current: () => tree(changed ? { ...expected, title: 'other.txt' } : expected) });
     if (method === 'getAXStateAndScreenshot') {
-      f.raw[method] = async () => { const state = tree(); await pending; return { state }; };
+      let reads = 0;
+      f.raw[method] = async () => {
+        if (++reads === 1) { const state = tree(); await pending; return { state }; }
+        changed = true; finish();
+        return { state: tree({ ...expected, title: 'other.txt' }), screenshot: new Uint8Array([1]) };
+      };
     } else {
       let reads = 0;
       f.raw[method] = async () => {
         if (++reads === 1) { const state = tree(); await pending; return state; }
         return tree(changed ? { ...expected, title: 'other.txt' } : expected);
       };
+      f.raw.getAXStateAndScreenshot = async () => {
+        changed = true; finish();
+        return { state: tree({ ...expected, title: 'other.txt' }), screenshot: new Uint8Array([1]) };
+      };
     }
-    f.raw.getScreenshot = async () => { changed = true; finish(); return new Uint8Array([1]); };
     await assert.rejects(f.run(`const pending = app.${method}({ emit: false });
       await app.getScreenshot(); await pending; await app.click(1);`), /changed window/);
     assert.equal(f.calls.filter(c => c[0] === 'click').length, 0);
