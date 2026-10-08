@@ -1305,3 +1305,14 @@ test('without rules configured, the first-call docs pass unchanged', async () =>
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: '## Computer Use\n\nx\nWindow: "Calculator", App: Calculator' }] } }); await tick();
   assert.equal(h.toClient.find(m => m.id === 1).result.content.length, 1);
 });
+
+test('js always loads, so Claude needs no tool-search turn before its first call; the rest stay deferred', async () => {
+  const h = harness({ changeReview: false });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }); await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { tools: [
+    { name: 'js', description: 'Control native apps.', inputSchema: {}, _meta: { other: 1 } },
+    { name: 'js_reset', description: 'Reset.', inputSchema: {} }] } }); await tick();
+  const tools = h.toClient.find(m => m.id === 1).result.tools;
+  assert.deepEqual(tools.find(t => t.name === 'js')._meta, { other: 1, 'anthropic/alwaysLoad': true });
+  assert.equal(tools.find(t => t.name === 'js_reset')._meta?.['anthropic/alwaysLoad'], undefined);
+});

@@ -1282,6 +1282,9 @@ export function createRelay({
         .filter(t => !HIDDEN_TOOLS.has(t.name))
         .filter(t => !documentMode || t.name === 'js' || t.name === TURN_END_TOOL)
         .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t))
+        // Claude Code defers MCP tools behind a search, which cost a turn before the first call
+        // (2026-10-08). js is the one Claude always starts with, so it loads up front.
+        .map(t => (t.name === 'js' ? { ...t, _meta: { ...t._meta, 'anthropic/alwaysLoad': true } } : t))
         .concat(documentMode ? [DOCUMENT_TOOL, ...(localTools?.tools ?? []).filter(t => t.name === 'select_window')] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : []);
     }
     // Last, after every check above has read the full tree.
