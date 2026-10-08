@@ -1508,7 +1508,7 @@ test('without rules configured, the first-call docs pass unchanged', async () =>
 });
 
 test('sleight\'s tools load up front, so Claude needs no tool-search turn; turn_ended stays internal', async () => {
-  const h = harness({ changeReview: false });
+  const h = harness({ changeReview: false, localTools: { tools: [{ name: 'drag', description: 'Drag.', inputSchema: {} }], call: async () => ({}) } });
   h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }); await tick();
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { tools: [
     { name: 'js', description: 'Control native apps.', inputSchema: {}, _meta: { other: 1 } },
@@ -1517,6 +1517,7 @@ test('sleight\'s tools load up front, so Claude needs no tool-search turn; turn_
   const tools = h.toClient.find(m => m.id === 1).result.tools;
   assert.deepEqual(tools.find(t => t.name === 'js')._meta, { other: 1, 'anthropic/alwaysLoad': true });
   assert.equal(tools.find(t => t.name === 'js_reset')._meta?.['anthropic/alwaysLoad'], true);
+  assert.equal(tools.find(t => t.name === 'drag')._meta?.['anthropic/alwaysLoad'], true, 'local tools too: Claude searched before its first drag');
   assert.equal(tools.find(t => t.name === 'turn_ended')?._meta?.['anthropic/alwaysLoad'], undefined);
 });
 

@@ -1422,11 +1422,11 @@ export function createRelay({
         .filter(t => !HIDDEN_TOOLS.has(t.name))
         .filter(t => !documentMode || t.name === 'js' || t.name === TURN_END_TOOL)
         .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t))
+        .concat(documentMode ? [DOCUMENT_TOOL, ...(localTools?.tools ?? []).filter(t => t.name === 'select_window')] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : [])
         // Claude Code defers MCP tools behind a search, which cost a turn before the first call, and
         // again before the first drag (3/3 textedit-drag runs, 2026-10-08). sleight's descriptions
-        // are short, so all but the internal turn_ended load up front.
-        .map(t => (t.name !== TURN_END_TOOL ? { ...t, _meta: { ...t._meta, 'anthropic/alwaysLoad': true } } : t))
-        .concat(documentMode ? [DOCUMENT_TOOL, ...(localTools?.tools ?? []).filter(t => t.name === 'select_window')] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : []);
+        // are short, so all but the internal turn_ended load up front, local tools included.
+        .map(t => (t.name !== TURN_END_TOOL ? { ...t, _meta: { ...t._meta, 'anthropic/alwaysLoad': true } } : t));
     }
     // Last, after every check above has read the full tree.
     if (msg.method === undefined && Array.isArray(msg.result?.content)) {
