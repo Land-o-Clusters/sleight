@@ -9,9 +9,10 @@
 // the bundled pure-JS jpeg-js and pngjs.
 
 const SNAPSHOT_JS = `await (async () => {
-  // Claude Code replaces an MCP result over about 100,000 characters with a
-  // notice, so the image's share stays well under that.
-  const APP = __APP__, COLS = __COLS__, ROWS = __ROWS__, TERMINAL = __TERMINAL__, MAX_IMAGE_B64 = 40000;
+  // Claude Code replaces an MCP result over its token limit (25,000 by default)
+  // with a notice, and base64 counts heavily: a 51,135-character image never
+  // reached the desktop pane (2026-10-08). So the image stays near 16,000.
+  const APP = __APP__, COLS = __COLS__, ROWS = __ROWS__, TERMINAL = __TERMINAL__, MAX_IMAGE_B64 = 16000;
   const app = await cua.getApp(APP);
   const shot = Buffer.from(await app.getScreenshot({ emit: false }));
   const isJpeg = shot[0] === 0xff && shot[1] === 0xd8;
@@ -47,15 +48,19 @@ const SNAPSHOT_JS = `await (async () => {
   let image = { mime: isJpeg ? 'image/jpeg' : 'image/png', base64: shot.toString('base64') };
   if (TERMINAL) image = undefined;
   else if (image.base64.length > MAX_IMAGE_B64) {
-    // Too big to embed: re-encode as a JPEG twice the width the desktop pane draws.
-    const w = Math.min(width, 640), h = Math.max(1, Math.round(height * w / width));
-    const small = Buffer.alloc(w * h * 4);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const si = (Math.floor(y * height / h) * width + Math.floor(x * width / w)) * 4, di = (y * w + x) * 4;
-      small[di] = data[si]; small[di + 1] = data[si + 1]; small[di + 2] = data[si + 2]; small[di + 3] = 255;
+    // Too big to embed: re-encode as a JPEG, from 1.5 times the 320 px the desktop
+    // pane draws, smaller and rougher until it fits.
+    const { encode } = (await import('jpeg-js')).default;
+    for (const [maxW, quality] of [[480, 70], [400, 60], [320, 55], [240, 50], [160, 45]]) {
+      const w = Math.min(width, maxW), h = Math.max(1, Math.round(height * w / width));
+      const small = Buffer.alloc(w * h * 4);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const si = (Math.floor(y * height / h) * width + Math.floor(x * width / w)) * 4, di = (y * w + x) * 4;
+        small[di] = data[si]; small[di + 1] = data[si + 1]; small[di + 2] = data[si + 2]; small[di + 3] = 255;
+      }
+      image = { mime: 'image/jpeg', base64: Buffer.from(encode({ data: small, width: w, height: h }, quality).data).toString('base64') };
+      if (image.base64.length <= MAX_IMAGE_B64) break;
     }
-    const jpeg = (await import('jpeg-js')).default.encode({ data: small, width: w, height: h }, 75);
-    image = { mime: 'image/jpeg', base64: Buffer.from(jpeg.data).toString('base64') };
   }
 
   nodeRepl.write('SLEIGHT_FRAME ' + JSON.stringify({
