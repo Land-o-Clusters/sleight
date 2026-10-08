@@ -225,7 +225,13 @@ switch tools or alter the rules file to get around a refusal. Another call cance
 
 In a save dialog, `app.pressKey("super+shift+g")` opens Go to Folder. Set the folder there and press
 Return, then set the file name. A full path set into the name field with `app.setValue` doesn't move
-the dialog anywhere. The slashes end up in the file name.
+the dialog anywhere. The slashes end up in the file name. Once the save dialog shows, the whole save
+fits in one call, which saves several turns:
+
+```js
+await app.pressKey("super+shift+g"); await app.typeText("/path/to/folder"); await app.pressKey("Return");
+await app.setValue({ id: "saveAsNameTextField" }, "name.txt"); await app.pressKey("Return");
+```
 
 In TextEdit and other apps with autosave, `super+shift+s` is Duplicate, not Save As. Use
 `super+s` for an untitled document, or File > Save As from the menu.

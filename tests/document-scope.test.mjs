@@ -201,7 +201,8 @@ test('a batch stops when an earlier action in the call renumbers its target', as
   await run(readCode('await cua.getApp("Calculator");'));
   const window = { title: 'Calculator', app: 'Calculator', url: null };
   await assert.rejects(run(guardedCode('for (const i of [2, 3, 4]) await app.click(i);', window)),
-    /stopped before click\(3\).*was "button 8", now "button 9"/);
+    /stopped before click\(3\).*was "button 8", now "button 9"[\s\S]*\nWindow: "Calculator", App: Calculator\.\n0 standard window Calculator$/,
+    'the stop carries the header of the read it just took');
   assert.deepEqual(clicked, [2], 'only the first click ran');
   clicked.length = 0;
   await run(guardedCode('await app.click(1); await app.click(1);', window));

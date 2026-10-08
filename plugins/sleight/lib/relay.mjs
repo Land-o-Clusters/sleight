@@ -1160,7 +1160,9 @@ export function createRelay({
     if (inputLease && !automatic && !confirmedBrowser && msg.method === undefined && leaseCalls.get(msg.id)?.observe) {
       const call = leaseCalls.get(msg.id);
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
-      const window = !msg.error && !msg.result?.isError && windowFromText(text);
+      // A guard stop happens before its action and carries the header it just read.
+      const guardStop = msg.result?.isError && /^sleight stopped before /m.test(text);
+      const window = !msg.error && (!msg.result?.isError || guardStop) && windowFromText(text);
       const appId = msg.result?._meta?.['codex/toolSurface']?.app?.appId;
       const cached = call.acquisition ? selectorWindows.get(call.selector)
         : call.handle ? handleBundles.get(call.handle) : leaseWindow;

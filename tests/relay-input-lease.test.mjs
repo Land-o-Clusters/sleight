@@ -467,6 +467,20 @@ test('first-call docs without a js_reset mean the engine session restarted: hand
   assert.doesNotMatch(a.received.at(-1).result.content.at(-1).text, /session restarted/, 'docs after js_reset are expected');
 });
 
+test('a guard stop keeps the lease from the header it read; any other error drops it', t => {
+  for (const [text, kept] of [[`sleight stopped before click(3): an earlier action in this call changed what element 3 is.\n${header}`, true],
+    ['Computer Use server error -10005: timeoutReached', false]]) {
+    const a = setup(t).harness('stop', { changeReview: false });
+    a.send(rpc(0, 'js', { code: 'let app = await cua.getApp("TextEdit")' })); a.reply(result(0));
+    a.send(rpc(1, 'js', { code: 'await app.click(2); await app.click(3)' }));
+    a.reply({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [{ type: 'text', text }],
+      _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit' } } } } });
+    a.send(rpc(2, 'js', { code: 'await app.click({ id: "Save" })' }));
+    assert.equal(a.forwarded.length, kept ? 3 : 2, JSON.stringify(a.received.at(-1)));
+    if (kept) a.reply(result(2));
+  }
+});
+
 test('inventory search strings that mention getApp do not erase the target', t => {
   const { a } = setup(t);
   a.send(rpc(1, 'js', { code: 'JSON.stringify((await cua.listApps()).filter(a => a.name === "cua.getApp("))' }));

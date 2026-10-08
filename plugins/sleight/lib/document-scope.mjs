@@ -159,6 +159,9 @@ function guardSetup(update) {
           }
           const text = state.reads.get(proxy)?.text ?? await raw.getAXState({ disableDiffing: true, emit: false });
           const observed = parse(text);
+          // A stop carries the window header from this fresh read, so the relay keeps
+          // the lease and Claude can retry without acquiring the app again.
+          const stop = message => new Error(message + '\\n' + text.split('\\n').filter(l => /^(Window: |0 )/.test(l)).slice(0, 2).join('\\n'));
           // app.click({ id: "Seven" }) or ({ label: "Multiply" }): the one element with
           // that AX identifier or label in this read, so numbers an earlier action in
           // the call shifted don't matter.
@@ -167,7 +170,7 @@ function guardSetup(update) {
           if (byId) {
             const [kind, value, match] = typeof spec.id === 'string' ? ['ID', spec.id, hasIdentifier] : ['label', spec.label, hasLabel];
             const found = [...elements(text)].filter(([, line]) => match(line, value));
-            if (found.length !== 1) throw new Error('sleight stopped before ' + name + ': ' + (found.length ? found.length + ' elements' : 'no element') + ' with ' + kind + ' ' + JSON.stringify(value) + ' in this window. Read it and use an element number or another ID.');
+            if (found.length !== 1) throw stop('sleight stopped before ' + name + ': ' + (found.length ? found.length + ' elements' : 'no element') + ' with ' + kind + ' ' + JSON.stringify(value) + ' in this window. Read it and use an element number or another ID.');
             args = [found[0][0], ...args.slice(1)];
           }
           // An earlier action in this call can renumber the window (Calculator closes
@@ -175,7 +178,7 @@ function guardSetup(update) {
           if (!state.callElements.has(proxy)) state.callElements.set(proxy, elements(text));
           else if (typeof args[0] === 'number' && !byId) {
             const was = state.callElements.get(proxy).get(args[0]), now = elements(text).get(args[0]);
-            if (was !== now) throw new Error('sleight stopped before ' + name + '(' + args[0] + '): an earlier action in this call changed what element ' + args[0] + ' is (was ' + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + '). Read the window again and use its current numbers.');
+            if (was !== now) throw stop('sleight stopped before ' + name + '(' + args[0] + '): an earlier action in this call changed what element ' + args[0] + ' is (was ' + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + '). Read the window again and use its current numbers.');
           }
           const cancel = state.fileOnly && isCancel(name, args, text);
           if (state.cancelOnly && !cancel) throw new Error('Change review: Cancel target changed. Read the current window before retrying.');
