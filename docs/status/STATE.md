@@ -3,14 +3,18 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-08 01:35 UTC)
+## Banner (2026-10-08 02:10 UTC)
+
+0.12.2 released. The input lease's recovery advice repeated an invalid app name as a bare
+assignment, and a session failed 20 of its first 22 calls. Now the advice works, and an engine
+session restart is detected and explained (CHANGELOG). Reported by the owner from another thread
+on 2026-10-07. Reproduced and verified live against Calculator.
 
 New benchmark task `simulator-form` (owner's order, 2026-10-07). Safari in an iPhone simulator,
 type a nonce, tap Submit, checked by what a local server received. 3/3 on iPhone 18 Pro, iOS 27.0,
 Xcode 27's DeviceHub (replaces Simulator.app, and its approval prompt names "Device Hub"), median
-39.6 s. The first pass failed 0/3 on that missing allowlist name. Both are published. The iOS 27.0 runtime
-(8 GB) was downloaded on the owner's OK. Prompted by the first outside user, who runs his simulator
-tests through sleight and finds it faster than Maestro.
+39.6 s. The first pass failed 0/3 on that missing allowlist name. Both are published. The iOS 27.0
+runtime (8 GB) was downloaded on the owner's OK.
 
 0.12.1 (2026-10-06): the pane's picture fits the pane and stays under Claude Code's MCP output
 limit. The launch pane shot is `~/Desktop/sleight-launch/sleight-pane.png`.

@@ -160,6 +160,10 @@ our own runs. Dates and engine versions are given where they matter.
   garbled and uppercased, and its paste fallback inserted other text: the simulator shares the
   Mac's clipboard. Claude cleared the field both times and typed it right, so 3/3 runs passed, but a
   paste there can put whatever is on your clipboard into the app.
+- An action called without `await` that fails can end the engine's JavaScript session, and every
+  handle with it (`app.click(1); "x"` on a disabled Calculator element, 3/3 on 2026-10-07). sleight
+  notices when the engine's first-call docs come back without a `js_reset` and tells Claude, but the
+  call that restarted it may have done nothing.
 - The engine's helper can stop answering. On 2026-10-04 every `cua.getApp` timed out
   (`-10005 timeoutReached`) for about 25 minutes, with the Mac unlocked and in use, until ChatGPT was
   restarted. We don't know the cause. It started right after a test that kills engine processes.

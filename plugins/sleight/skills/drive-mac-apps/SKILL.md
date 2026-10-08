@@ -25,15 +25,17 @@ the user or stop when a headless run refuses it. Changing the file is not an app
 1. Make the first `js` call exactly one API call, such as `let app = await cua.getApp("Calculator")`.
    Its result contains the full API documentation and the app's current UI state. Read both before acting.
    When two copies of an app share a bundle ID (an installed app and a dev build), `getApp` with the ID
-   fails as ambiguous. Pass the full path to the `.app` instead.
+   fails as ambiguous. Pass the full path to the `.app` instead. If you don't know the app's name, look
+   it up in one expression: `(await cua.listApps()).map(a => a.id + " " + a.displayName).join("\n")`.
    To choose among several windows, call `select_window` with `app` and an exact file `url`,
    or an exact `title` when no URL is known. It uses AXRaise/AXMain without activating the app.
    Then acquire the app in a standalone `js` call and check its Window and URL before acting.
    Missing or duplicate matches stop selection. After a guard stop, follow the relay's selection
    recovery hint and check the header again. A changed or missing action header means
    "outcome unconfirmed", so read the document before retrying.
-2. Act by element index from the UI state (`app.click(12)`) when you can, and by coordinates only when an
-   element has no index. Batch several actions in one call when you're sure of them.
+2. Act by element index from the UI state (`await app.click(12)`) when you can, and by coordinates only
+   when an element has no index. Batch several actions in one call when you're sure of them. Await every
+   action: one that fails without `await` can end the engine's session and lose every handle.
 3. The first time you touch an app, the user gets an approval prompt unless their list preapproved it.
    If the result says the app was not
    approved, stop and tell the user. Don't retry around it. The engine refuses terminal apps and

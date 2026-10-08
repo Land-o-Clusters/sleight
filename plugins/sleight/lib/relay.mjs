@@ -192,6 +192,10 @@ export function createRelay({
   const browserCalls = new Map();
   const helperStates = new Map();
   const helperHandles = new Map();
+  // js calls awaiting a reply, and whether this engine session has shown its first-call docs:
+  // docs again without a js_reset mean the session restarted and every handle is gone.
+  const jsCalls = new Set();
+  let docsShown = false;
   const helperAliases = new Map();
   const helperReads = new Map();
   const helperProbes = new Map();
@@ -384,9 +388,13 @@ export function createRelay({
   const sameWindow = (a, b) => a && b && ['title', 'app', 'url'].every(key => a[key] === b[key]);
   function selectionRecovery() {
     const args = { app: selectedWindow.appId, ...(selectedWindow.url ? { url: selectedWindow.url } : { title: selectedWindow.title }) };
-    return `Call select_window with ${JSON.stringify(args)}, then send exactly \u0060${constApp ? '' : 'app = '}await cua.getApp(${JSON.stringify(selectedWindow.appId)})\u0060 in js and check its Window and URL.`;
+    return `Call select_window with ${JSON.stringify(args)}, then send exactly \u0060${constApp ? '' : 'let app = '}await cua.getApp(${JSON.stringify(selectedWindow.appId)})\u0060 in js and check its Window and URL.`;
   }
   let constApp = false;
+  // After js_reset, or when the engine's session restarts on its own, no handle survives.
+  function forgetHandles() {
+    clearSelection(); browserHandles.clear(); leaseWindow = undefined; handleBundles.clear(); handleSelectors.clear(); constApp = false;
+  }
   const handleBundles = new Map();
   const handleSelectors = new Map();
   const selectorWindows = new Map();
@@ -456,7 +464,7 @@ export function createRelay({
       return true;
     }
     if (name === DOCUMENT_TOOL.name) return true;
-    if (name === 'js_reset') { clearSelection(); browserHandles.clear(); leaseWindow = undefined; handleBundles.clear(); handleSelectors.clear(); constApp = false; return true; }
+    if (name === 'js_reset') { forgetHandles(); return true; }
     if (name !== 'js' && !localNames.has(name)) return true;
     const args = msg.params.arguments ?? {};
     const code = args.code;
@@ -483,7 +491,6 @@ export function createRelay({
     const handle = acquisition ? acquisition[2] ?? (constApp ? undefined : 'app')
       : read && code?.match(/([A-Za-z_$][\w$]*)\.(?:getAXState|getAXStateAndScreenshot|getScreenshot)\(/)?.[1];
     const selector = acquisition?.[3];
-    if (selector) recoveryTarget = `cua.getApp(${selector})`;
     if (selector && handle) handleSelectors.set(handle, selector);
     if (acquisition?.[1] === 'const' && handle === 'app') constApp = true;
     if (msg.id === undefined) { leaseStop(msg, 'actions and reads need a request id.'); return false; }
@@ -498,8 +505,12 @@ export function createRelay({
         leaseStop(msg, `selected window is not confirmed. ${selectionRecovery()}`); return false;
       }
       if (!leaseWindow?.appId) {
-        const recovery = recoveryTarget ? `${constApp ? '' : 'app = '}await ${recoveryTarget}` : 'await cua.getState()';
-        leaseStop(msg, `a bundle ID and full window header are required. Send exactly \u0060${recovery}\u0060 in js, then read the intended window before acting.`);
+        // `let`: a failed `let app = …` leaves no binding, so a bare `app = …` would fail, and the
+        // engine accepts `let` again for a name it already has (both checked 2026-10-07).
+        const recovery = recoveryTarget ? `${constApp ? '' : 'let app = '}await ${recoveryTarget}` : 'await cua.getState()';
+        const inventory = /\bcua\.(?:listApps|listWindows|getState)\(/.test(code)
+          ? ' To look up apps or windows, send one expression, such as \u0060(await cua.listApps()).map(a => a.id).join("\\n")\u0060.' : '';
+        leaseStop(msg, `a bundle ID and full window header are required. Send exactly \u0060${recovery}\u0060 in js, then read the intended window before acting.${inventory}`);
         return false;
       }
       const stale = name === 'js' ? compactor.staleIndex(leaseWindow, code) : undefined;
@@ -833,7 +844,8 @@ export function createRelay({
       toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: `Computer use recovered for ${needsFullRead}. Send a standalone app read before acting. sleight will make it a full read because automatic recovery consumed the engine's UI diff.` }] } });
       return;
     }
-    if (msg.method === 'tools/call' && msg.params?.name === 'js_reset') { helperHandles.clear(); helperActive = undefined; }
+    if (msg.method === 'tools/call' && msg.params?.name === 'js_reset') { helperHandles.clear(); helperActive = undefined; docsShown = false; }
+    if (msg.method === 'tools/call' && msg.params?.name === 'js' && msg.id !== undefined) jsCalls.add(msg.id);
     let flowPlan, clipboardAction;
     if (clipboard && msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name) && clipboard.pending) {
       clipboardStop(msg, 'Clipboard: wait for the pending clipboard action, then retry.'); return;
@@ -1034,6 +1046,16 @@ export function createRelay({
       }
     }
     if (msg.method === undefined && lateHelperReplies.delete(msg.id)) return;
+    if (msg.method === undefined && jsCalls.delete(msg.id) && Array.isArray(msg.result?.content)) {
+      const docs = msg.result.content.some(c => c.type === 'text' && /(^|\n)## Computer Use\n/.test(c.text ?? ''));
+      if (docs && docsShown) {
+        // An un-awaited action that fails can end the engine's session (reproduced 2026-10-07).
+        forgetHandles(); helperHandles.clear(); helperActive = undefined;
+        trace('engine-session-restarted', { id: msg.id });
+        msg.result.content.push({ type: 'text', text: "sleight: the engine's JavaScript session restarted before this call, so handles from earlier calls (such as `app`) are gone. An action that fails without `await` can end the session. Acquire the app again with `let app = await cua.getApp(…)`, and await every action." });
+      }
+      if (docs) docsShown = true;
+    }
     const healthPlan = msg.method === undefined ? helperReads.get(msg.id) : undefined;
     if (healthPlan) { helperReads.delete(msg.id); updateHelperRead(healthPlan, msg); }
     const helperStuck = helperStates.get(healthPlan?.key)?.stuck;
@@ -1119,10 +1141,10 @@ export function createRelay({
         recoveryTarget = `cua.getApp(${JSON.stringify(known)})`;
         if (call.selector) selectorWindows.set(call.selector, { window, appId: known });
         selectorWindows.set(JSON.stringify(known), { window, appId: known });
-      } else {
+      } else if (window) {
+        // A failed acquisition (an invalid app name) never becomes the advice.
         const selector = call.selector ?? handleSelectors.get(call.handle);
-        if (selector) recoveryTarget = `cua.getApp(${selector})`;
-        else if (window) recoveryTarget = `cua.getApp(${JSON.stringify(window.app)})`;
+        recoveryTarget = selector ? `cua.getApp(${selector})` : `cua.getApp(${JSON.stringify(window.app)})`;
       }
       if (selectedWindow && call.acquisition) {
         if (known && known !== selectedWindow.appId) {

@@ -371,7 +371,7 @@ test('missing identity refusal supplies an executable recovery assignment', t =>
   a.send(rpc(2, 'js', { code: 'await app.typeText("x")' }));
   const message = a.received.at(-1).result.content[0].text;
   const recovery = message.match(/`([^`]+)`/)?.[1];
-  assert.equal(recovery, 'app = await cua.getApp("com.apple.TextEdit")');
+  assert.equal(recovery, 'let app = await cua.getApp("com.apple.TextEdit")');
   a.send(rpc(3, 'js', { code: recovery })); a.reply(result(3));
   a.send(rpc(4, 'js', { code: 'await app.typeText("x")' }));
   assert.equal(a.forwarded.length, 3, JSON.stringify(a.received));
@@ -432,7 +432,39 @@ test('recovery follows an unknown handle after an interleaved read of another ap
   const knownRead = result(2); delete knownRead.result._meta; a.reply(knownRead);
   a.send(rpc(3, 'js', { code: 'await chess.getAXState({disableDiffing:true})' })); a.reply({ ...unknown, id: 3 });
   a.send(rpc(4, 'js', { code: 'await chess.click(1)' }));
-  assert.match(a.received.at(-1).result.content[0].text, /`app = await cua.getApp\("Chess"\)`/);
+  assert.match(a.received.at(-1).result.content[0].text, /`let app = await cua.getApp\("Chess"\)`/);
+});
+
+test('a failed acquisition never becomes the recovery advice; the last good app stays', t => {
+  const { a } = setup(t);
+  a.send(rpc(1, 'js', { code: 'let app = await cua.getApp("nosuchapp")' }));
+  a.reply({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [{ type: 'text', text: 'Invalid app: nosuchapp' }] } });
+  a.send(rpc(2, 'js', { code: 'await app.click(1)' }));
+  const message = a.received.at(-1).result.content[0].text;
+  assert.doesNotMatch(message, /nosuchapp/);
+  assert.match(message, /`let app = await cua\.getApp\("com\.apple\.TextEdit"\)`/);
+});
+
+test('a refused inventory statement is told the one-expression form that passes', t => {
+  const { a } = setup(t);
+  a.send(rpc(1, 'js_reset')); a.reply(result(1, 'reset'));
+  a.send(rpc(2, 'js', { code: 'let apps = await cua.listApps(); apps.length' }));
+  assert.match(a.received.at(-1).result.content[0].text, /one expression, such as `\(await cua\.listApps\(\)\)\.map/);
+});
+
+test('first-call docs without a js_reset mean the engine session restarted: handles are forgotten', t => {
+  const { a } = setup(t);
+  const docs = '## Computer Use\n\nControl native apps.\n';
+  a.send(rpc(1, 'js', { code: 'let app = await cua.getApp("TextEdit")' })); a.reply(result(1, docs + header));
+  assert.equal(a.received.at(-1).result.content.length, 1);
+  a.send(rpc(2, 'js', { code: 'await app.getAXState()' }));
+  a.reply({ jsonrpc: '2.0', id: 2, result: { isError: true, content: [{ type: 'text', text: 'app is not defined\n' + docs }] } });
+  assert.match(a.received.at(-1).result.content.at(-1).text, /session restarted.*`let app = await cua\.getApp/);
+  a.send(rpc(3, 'js', { code: 'await app.click(1)' }));
+  assert.equal(a.forwarded.length, 2, 'the action waits for a new acquisition');
+  a.send(rpc(4, 'js_reset')); a.reply(result(4, 'js kernel reset'));
+  a.send(rpc(5, 'js', { code: 'let app = await cua.getApp("TextEdit")' })); a.reply(result(5, docs + header));
+  assert.doesNotMatch(a.received.at(-1).result.content.at(-1).text, /session restarted/, 'docs after js_reset are expected');
 });
 
 test('inventory search strings that mention getApp do not erase the target', t => {

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.12.2 (2026-10-07)
+
+- The input lease's recovery advice works. A session asked for `getApp("grokbot")`, and no app
+  has that name. Every later refusal told Claude to send exactly that call again, as `app = …`. A failed
+  `let app` leaves no `app`, so the assignment failed with "app is not defined", and the session
+  failed 20 of its first 22 calls. The advice now uses the last app that was read successfully
+  (or `cua.getState()`), and declares the handle with `let`, which the engine accepts again for a
+  name it already has.
+- A refused `cua.listApps()` or `cua.getState()` statement is told the one-expression form that
+  passes the lease.
+- When the engine's JavaScript session restarts on its own, sleight now tells Claude that its
+  handles are gone and forgets them too. An action without `await` that fails can end the session:
+  `app.click(1); "x"` on a disabled Calculator element did it 3/3 times on 2026-10-07. The skill's
+  example now awaits its click, and the skill says how to look up an app's name.
+- Benchmark: `simulator-form`, a mobile end-to-end task in the iPhone simulator, 3/3
+  (`docs/benchmarks/2026-10-07-simulator-form.json`).
+
 ## 0.12.1 (2026-10-06)
 
 - The pane's picture fits the pane. It was sized to half the terminal, but a pane above the prompt
