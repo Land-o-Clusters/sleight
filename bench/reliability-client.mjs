@@ -7,7 +7,8 @@ import { resolveServer } from '../plugins/sleight/lib/launch.mjs';
 export async function reliabilityClient(record, options = {}) {
   const server = resolveServer();
   if (server.error) throw new Error(server.error);
-  const child = spawn(server.command, server.args, { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...server.env } });
+  const child = spawn(server.command, server.args, { detached: true, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...server.env } });
+  record({ engineStarted: child.pid });
   const closed = new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
   const clientIn = new PassThrough(), clientOut = new PassThrough();
   const pending = new Map(); let nextId = 0;
@@ -37,8 +38,8 @@ export async function reliabilityClient(record, options = {}) {
     clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
   });
   async function close() {
-      await relay.shutdown(); child.stdin.end();
       const timer = setTimeout(() => child.kill('SIGTERM'), 3000);
+      await Promise.race([relay.shutdown(), closed]); child.stdin.end();
       const exit = await closed; clearTimeout(timer); lines.close();
       for (const p of pending.values()) { clearTimeout(p.timer); p.reject(new Error('Live client closed')); }
       pending.clear();

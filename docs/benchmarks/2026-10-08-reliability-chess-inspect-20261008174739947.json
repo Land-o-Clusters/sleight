@@ -1,0 +1,10 @@
+{
+  "started": "2026-10-08T17:47:39.947Z",
+  "mode": "chess-inspect",
+  "attempts": [],
+  "lockRequested": "2026-10-08T17:47:39.947Z",
+  "error": {
+    "message": "Interrupted before live work"
+  },
+  "finished": "2026-10-08T17:51:44.222Z"
+}
