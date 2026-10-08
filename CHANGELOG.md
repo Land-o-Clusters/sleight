@@ -9,7 +9,9 @@
   point to a character and puts the word there, takes it out at the source with TextEdit's spacing,
   then checks the whole text. The result says `path: "accessibility"`.
 - The foreground drag, now the last resort, waits for 2 s without typing or mouse use (up to 10 s), and
-  stops if you type once it has taken focus.
+  stops if you type once it has taken focus. `hover` and the `menu_bar` real click wait the same way.
+- `noWindowsAvailable` from the engine now comes with what it means: the app's window is on another
+  Space (full screen or Split View), minimized or hidden. Claude asks you to show it instead of retrying.
 - The pane shows the app's picture in the desktop app's Code tab, Auto mode included. Auto mode
   refused the pane's between-turn snapshot because no request asked for it. A `tool.check` hook now
   allows exactly the snapshot code the mod built, and `turn_ended`, when Claude Code says the call

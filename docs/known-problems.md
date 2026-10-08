@@ -126,6 +126,9 @@ our own runs. Dates and engine versions are given where they matter.
   can interrupt it. Hover's own pointer and front-app restoration has not been measured separately in
   live trials. The fixture also restores both, so its successful checks do not prove hover's restoration.
   It does not restore the full window order. Earlier fixture pointer mismatches remain unresolved.
+  Since 0.16.0, hover and the `menu_bar` real click wait like the foreground drag for 2 s without
+  input (up to 10 s), and hover fails if keys are typed while it holds focus. Hover's guard has unit
+  tests. The `menu_bar` guard has none, and neither has had a live run.
 - The desktop app's Code tab runs Claude Code 2.1.293 (2026-10-08), new enough for the mod. The owner
   checked it in Auto mode twice. On 0.15.2 the pane drew no picture, because Auto mode refused its
   snapshot. On `0.15.3-pane.2` it worked: `/sleight` opened the pane and sent the prompt, Claude

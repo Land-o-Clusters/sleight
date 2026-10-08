@@ -40,6 +40,8 @@ function platform(failAt) {
     capture: () => { events.push('capture'); time += 50; if (failAt === 'capture') throw Error('capture failed'); return 'PNG'; },
     restorePointer: () => { events.push('restore pointer'); if (failAt === 'restore') throw Error('restore failed'); },
     restoreFront: () => { events.push('restore front'); },
+    idleSeconds: () => failAt === 'busy' || (failAt === 'pause' && time < 1000) ? 0.2 : 60,
+    typedSince: () => failAt === 'typed' && events.includes('activate'),
   };
   return { p, events };
 }
@@ -49,7 +51,26 @@ test('hover captures during the dwell, restores both resources and reports takeo
   assert.equal(result.ok, true);
   assert.equal(result.image, 'PNG');
   assert.equal(result.takeoverMs, 1650);
-  assert.deepEqual(events, ['visible', 'save', 'activate', 'wait 100', 'visible', 'move', 'wait 1500', 'visible', 'capture', 'restore pointer', 'restore front']);
+  assert.deepEqual(events, ['visible', 'visible', 'save', 'activate', 'wait 100', 'visible', 'move', 'wait 1500', 'visible', 'capture', 'restore pointer', 'restore front']);
+});
+test('hover waits for the person at the Mac to pause before taking the pointer', () => {
+  const { p, events } = platform('pause');
+  const result = controller().performHover({ app: 'TextEdit', at: [10, 20] }, p);
+  assert.equal(result.ok, true);
+  assert.deepEqual(events.slice(0, 4), ['visible', 'wait 500', 'wait 500', 'visible']);
+});
+test('a person who keeps using the Mac stops hover before takeover', () => {
+  const { p, events } = platform('busy');
+  const result = controller().performHover({ app: 'TextEdit', at: [10, 20] }, p);
+  assert.equal(result.ok, false); assert.match(result.error, /kept typing.*before takeover/);
+  assert.equal(events.includes('activate'), false); assert.equal(result.takeoverMs, 0);
+});
+test('keys typed during the hover fail it and still restore pointer and front app', () => {
+  const { p, events } = platform('typed');
+  const result = controller().performHover({ app: 'TextEdit', at: [10, 20] }, p);
+  assert.equal(result.ok, false); assert.match(result.error, /typed while TextEdit was in front/);
+  assert.equal(events.includes('capture'), false);
+  assert.deepEqual(events.slice(-2), ['restore pointer', 'restore front']);
 });
 test('covered points refuse before activation or moving the pointer', () => {
   const { p, events } = platform('covered');
@@ -99,12 +120,13 @@ test('activation, input and capture failures still restore pointer and front app
   }
 });
 test('coverage is checked again after activation and before capture', () => {
-  for (const blockedRead of [2, 3]) {
+  // Read 2 is the check after waiting for the person at the Mac, before takeover.
+  for (const blockedRead of [3, 4]) {
     const { p, events } = platform(); let reads = 0;
     p.visible = () => ++reads !== blockedRead;
     assert.equal(controller().performHover({ app: 'TextEdit', at: [1, 2] }, p).ok, false);
     assert.equal(events.includes('capture'), false);
-    assert.equal(events.includes('move'), blockedRead === 3);
+    assert.equal(events.includes('move'), blockedRead === 4);
     assert.deepEqual(events.slice(-2), ['restore pointer', 'restore front']);
   }
 });

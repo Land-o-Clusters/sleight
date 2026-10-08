@@ -79,6 +79,12 @@ function readWindow(win) {
 // A real click at the status item's center, then the pointer goes back where
 // it was. SwiftUI's window-style menu bar items ignore the accessibility press.
 function realClick(item) {
+  // Wait, as drag and hover do, until the person at the Mac has paused for 2 s (up to
+  // 10 s), so the click can't land in the middle of their own click or drag.
+  for (let waited = 0; $.CGEventSourceSecondsSinceLastEventType(1, 0xFFFFFFFF) < 2; waited += 0.5) {
+    if (waited >= 10) throw new Error('the person at the Mac kept typing or using the mouse for 10 s, and this icon needs a real click; nothing was clicked. Tell the user, and retry when they have paused');
+    delay(0.5);
+  }
   const pos = item.position();
   const size = item.size();
   const point = $.CGPointMake(pos[0] + size[0] / 2, pos[1] + size[1] / 2);

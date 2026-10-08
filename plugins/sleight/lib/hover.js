@@ -24,6 +24,13 @@ function performHover(request, native) {
       }
     };
     check();
+    // Hover takes the pointer and focus, so it waits, as drag does, for the person at the
+    // Mac to pause for 2 s (up to 10 s): keys typed then would go into the target app.
+    for (let waited = 0; native.idleSeconds() < 2; waited += 500) {
+      if (waited >= 10000) throw new Error('the person at the Mac kept typing or using the mouse for 10 s, and hover would take their pointer and focus; hover stopped before takeover. Tell the user, and retry when they have paused');
+      native.wait(500);
+    }
+    check();
     saved = native.save();
     started = native.now();
     native.activate(target);
@@ -32,6 +39,7 @@ function performHover(request, native) {
     native.move(point);
     native.wait(waitMs);
     check();
+    if (native.typedSince(started)) throw new Error(`the user typed while ${app} was in front, so their keys may have gone into it. Read the app again before continuing, and tell the user`);
     result.image = native.capture(target);
     result.app = app;
     result.at = at;
@@ -68,6 +76,9 @@ const inside = (b, p) => p.x >= b.X && p.x < b.X + b.Width && p.y >= b.Y && p.y 
 function nativeHover() {
   return {
     now: () => Date.now(),
+    // HID system state: the person's own input. 0xFFFFFFFF is any event type, 10 is key down.
+    idleSeconds: () => $.CGEventSourceSecondsSinceLastEventType(1, 0xFFFFFFFF),
+    typedSince: startedMs => $.CGEventSourceSecondsSinceLastEventType(1, 10) <= (Date.now() - startedMs) / 1000,
     screenCaptureAllowed: () => Boolean($.CGPreflightScreenCaptureAccess()),
     resolve(name) {
       const apps = $.NSWorkspace.sharedWorkspace.runningApplications;

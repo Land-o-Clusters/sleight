@@ -1235,6 +1235,11 @@ export function createRelay({
     if (jsCode !== undefined && msg.result?.isError && /\bsuper\+w\b|cmd\+w\b|command\+w\b/i.test(jsCode) &&
         (msg.result.content ?? []).some(c => c.type === 'text' && /noWindowsAvailable/.test(c.text ?? ''))) {
       msg.result = { ...msg.result, isError: false, content: [{ type: 'text', text: 'sleight: the app has no windows left, so the window this call closed was its last. Nothing more to read.' }] };
+    } else if (jsCode !== undefined && msg.result?.isError && Array.isArray(msg.result.content) &&
+        msg.result.content.some(c => c.type === 'text' && /noWindowsAvailable/.test(c.text ?? ''))) {
+      // The engine says this when the app's window is on another Space: the user in full
+      // screen or Split View failed 8 of 21 runs on 2026-10-08, and Claude retried blind.
+      msg.result.content.push({ type: 'text', text: "sleight: noWindowsAvailable means the engine found no window of this app on the current desktop. If the app has a window, it's on another Space (the user may be in full screen or Split View), minimized or hidden. Clicks may still reach it, but drags and some reads won't. Don't retry the same call: ask the user to show the window on the current desktop, or open a window if the app has none." });
     }
     if (msg.method === undefined && jsCalls.delete(msg.id) && Array.isArray(msg.result?.content)) {
       const docs = msg.result.content.some(c => c.type === 'text' && /(^|\n)## Computer Use\n/.test(c.text ?? ''));

@@ -1477,7 +1477,10 @@ test('noWindowsAvailable after a close shortcut is reported as the closed last w
   assert.match(closed.result.content[0].text, /no windows left/);
   call(2, 'await app.getAXState()'); await tick();
   h.fromServer(failed(2)); await tick();
-  assert.equal(h.toClient.find(m => m.id === 2).result.isError, true, 'without a close it stays an error');
+  const other = h.toClient.find(m => m.id === 2).result;
+  assert.equal(other.isError, true, 'without a close it stays an error');
+  assert.match(other.content.at(-1).text, /another Space.*full screen or Split View/);
+  assert.equal(closed.result.content.some(c => /another Space/.test(c.text)), false);
 });
 
 test('sleight\'s rules follow the engine\'s first-call docs once per session, so Claude needs no skill turn', async () => {
