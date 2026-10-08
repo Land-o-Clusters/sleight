@@ -14,9 +14,17 @@ time per turn 2.05 s (from 1.81), textedit-save median 16 turns (from 27)
 the checkout to `main` once the passes below finish. They read the plugin from this checkout.
 
 Background job: `nohup .dev/passes/passes.sh`, started 2026-10-08T03:13:06Z, 3 runs per task per
-pass. Sonnet medium is done (above). Haiku 5.5 started 03:26 UTC (`claude-haiku-5-5`, which Claude
-Code 2.1.289 calls unrecognized, so its cost figures are suspect), then Sonnet low and Opus 5.5
-medium, for the owner's model comparison. Each pass takes and releases `/tmp/sleight-live.lock`.
+pass. Sonnet medium is done (above). Haiku 5.5 medium (`claude-haiku-5-5`, which Claude Code 2.1.289
+calls unrecognized, so its $10.27 cost figure is suspect) passed 20/21: 235 turns, 625 s, 1.54 s of
+model time per turn (`bench/results/2026-10-08T03-26-27-848Z.json`, not published yet). Then Sonnet
+low and Opus 5.5 medium, for the owner's model comparison.
+
+Haiku's failure was a sleight bug, fixed on `fix/acquisition-echo` (`f40c639`, pushed, worktree at
+the session scratchpad's `wt-echo`, check 574/574 and 9/9). Haiku sent
+`let app = await cua.getApp("com.apple.TextEdit"); app`, the lease didn't recognize it as an
+acquisition, and its advice (`await cua.getState()`) acquires nothing. Not merged: it changes default
+lease behavior, so it needs a Sonnet pass (LAWS) after the model passes free the lock. Then release
+0.13.3. Each pass takes and releases `/tmp/sleight-live.lock`.
 Progress: `.dev/passes/passes.log`, per-pass logs `.dev/passes/pass-*.log`. Publish each scrubbed as
 `docs/benchmarks/2026-10-08-<model>-<effort>.json` with a note in `docs/benchmark.md`, then compare
 pass rate, turns, model time per turn and total time.
