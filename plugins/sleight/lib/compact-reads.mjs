@@ -155,7 +155,8 @@ export function createReadCompactor() {
       const valid = window && seen.get(documentKey({ title: window.title, app: window.app, url: window.url }))?.valid;
       if (!valid || typeof code !== 'string') return undefined;
       for (const [, arg] of code.matchAll(/\.(?:click|setValue|selectText|performSecondaryAction|scroll)\(\s*([^,)\s]+)/g)) {
-        if (arg.startsWith('[')) continue;
+        // Coordinates aren't element numbers, and an { id } is resolved fresh inside the call.
+        if (arg.startsWith('[') || arg.startsWith('{')) continue;
         if (!/^\d+$/.test(arg)) return { computed: arg };
         if (!valid.has(Number(arg))) return { number: Number(arg) };
       }

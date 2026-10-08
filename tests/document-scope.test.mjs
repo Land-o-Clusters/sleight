@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
-import { GUARD_END, GUARD_MARK, guardedCode, readCode, windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
+import { GUARD_END, GUARD_MARK, guardedCode, hasIdentifier, hasLabel, readCode, windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 
 test('headers require one exact identity, including a document URL', () => {
   assert.deepEqual(windowFromText('Window: "", App: Chess.\n0 standard window'), { title: '', app: 'Chess', url: null });
@@ -141,6 +141,39 @@ test('a window that only gains a URL mid-call stays the same window, unless docu
   await run(readCode('await cua.getApp("TextEdit");'));
   await assert.rejects(run(guardedCode('await app.pressKey("a");', window, 'stopped', undefined, { adoptUrl: true })), /stopped/,
     'a different title is still a different window');
+});
+
+test('an element given by its AX ID is found in the read before each action, even after a renumber', async () => {
+  let shifted = false; const clicked = [];
+  const keys = [['AllClear', 'All Clear'], ['Seven', '7'], ['Equals', '=']];
+  const tree = () => ['Window: "Calculator", App: Calculator.', '0 standard window Calculator',
+    ...(shifted ? [] : ['\t1 list HistoryView']),
+    ...keys.map(([id, label], i) => `\t${i + (shifted ? 1 : 2)} button Description: ${label}, ID: ${id}`),
+    `\t${shifted ? 4 : 5} button Description: Seven Up, ID: SevenUp`].join('\n');
+  const raw = { getAXState: async () => tree(), click: async n => { clicked.push(n); shifted = true; } };
+  const context = { cua: { getApp: async () => raw }, nodeRepl: { write: () => {} } };
+  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  await run(readCode('await cua.getApp("Calculator");'));
+  const window = { title: 'Calculator', app: 'Calculator', url: null };
+  await run(guardedCode('for (const id of ["AllClear", "Seven", "Equals"]) await app.click({ id });', window));
+  assert.deepEqual(clicked, [2, 2, 3], 'All Clear at 2, then Seven and Equals at their new numbers');
+  await assert.rejects(run(guardedCode('await app.click({ id: "Eight" });', window)), /no element with ID "Eight"/);
+  clicked.length = 0;
+  await run(guardedCode('await app.click({ label: "=" }); await app.click({ label: "7" });', window));
+  assert.deepEqual(clicked, [3, 2], 'labels match descriptions');
+  raw.getAXState = async () => tree() + '\n\t9 button Description: 7, ID: Seven';
+  await assert.rejects(run(guardedCode('await app.click({ id: "Seven" });', window)), /2 elements with ID "Seven"/);
+});
+
+test('labels match a description or a title, whole, never part of one', () => {
+  assert.equal(hasLabel('button Multiply', 'Multiply'), true);
+  assert.equal(hasLabel('toggle button Bold, Value: 0', 'Bold'), true);
+  assert.equal(hasLabel('button Description: 7, ID: Seven', '7'), true);
+  assert.equal(hasLabel('button Multiply Twice', 'Multiply'), false);
+  assert.equal(hasLabel('button Description: 70, ID: X', '7'), false);
+  assert.equal(hasLabel('text Description: Last Expression, Value: 7', '7'), false);
+  assert.equal(hasIdentifier('button Description: Mode, ID: Mode: scientific; unitConversion: false, Secondary Actions: Raise', 'Mode: scientific; unitConversion: false'), true);
+  assert.equal(hasIdentifier('button Description: 7, ID: SevenUp', 'Seven'), false);
 });
 
 test('a batch stops when an earlier action in the call renumbers its target', async () => {

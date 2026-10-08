@@ -25,6 +25,32 @@ export function elementLines(text) {
   return new Map(text.split('\n').map(line => /^(\t*)(\d+) (.*)$/.exec(line)).filter(Boolean).map(m => [Number(m[2]), m[3]]));
 }
 
+// Whether an element line carries exactly this AX identifier, as `ID: Seven`
+// ending the line or followed by a comma. Identifiers can hold colons and
+// semicolons ("Mode: scientific; unitConversion: false").
+export function hasIdentifier(line, id) {
+  for (let at = line.indexOf('ID: ' + id); at >= 0; at = line.indexOf('ID: ' + id, at + 1)) {
+    const end = at + 4 + id.length;
+    if ((at === 0 || line[at - 1] === ' ') && (end === line.length || line[end] === ',')) return true;
+  }
+  return false;
+}
+
+// Whether an element line is labeled this, by its description
+// ("button Description: 7, ID: Seven") or its title after the lowercase role
+// ("button Multiply", "toggle button Bold").
+export function hasLabel(line, label) {
+  const ends = at => at === line.length || line[at] === ',';
+  const described = line.indexOf('Description: ' + label);
+  if (described >= 0 && ends(described + 13 + label.length)) return true;
+  // The role is one or more lowercase words, so try each space in that run.
+  const role = /^[a-z][a-z ]*/.exec(line)?.[0] ?? '';
+  for (let at = role.indexOf(' '); at >= 0; at = role.indexOf(' ', at + 1)) {
+    if (line.startsWith(label, at + 1) && ends(at + 1 + label.length)) return true;
+  }
+  return false;
+}
+
 export const documentKey = window => window && JSON.stringify(window);
 export const documentLabel = window => `${JSON.stringify(window.title)} in ${window.app}${window.url ? ` (${window.url})` : ''}`;
 
@@ -84,6 +110,8 @@ function guardSetup(update) {
     // Element lines at this call's first action, which Claude's numbers refer to.
     state.callElements = new WeakMap();
     const elements = ${elementLines.toString()};
+    const hasIdentifier = ${hasIdentifier.toString()};
+    const hasLabel = ${hasLabel.toString()};
     const checkNative = () => { if (state.nativeDenied) throw new Error(state.nativeDenied); };
     const checkLease = async () => {
       if (!state.lease) return;
@@ -131,10 +159,21 @@ function guardSetup(update) {
           }
           const text = state.reads.get(proxy)?.text ?? await raw.getAXState({ disableDiffing: true, emit: false });
           const observed = parse(text);
+          // app.click({ id: "Seven" }) or ({ label: "Multiply" }): the one element with
+          // that AX identifier or label in this read, so numbers an earlier action in
+          // the call shifted don't matter.
+          const spec = args[0] && typeof args[0] === 'object' && !Array.isArray(args[0]) ? args[0] : undefined;
+          const byId = typeof spec?.id === 'string' || typeof spec?.label === 'string';
+          if (byId) {
+            const [kind, value, match] = typeof spec.id === 'string' ? ['ID', spec.id, hasIdentifier] : ['label', spec.label, hasLabel];
+            const found = [...elements(text)].filter(([, line]) => match(line, value));
+            if (found.length !== 1) throw new Error('sleight stopped before ' + name + ': ' + (found.length ? found.length + ' elements' : 'no element') + ' with ' + kind + ' ' + JSON.stringify(value) + ' in this window. Read it and use an element number or another ID.');
+            args = [found[0][0], ...args.slice(1)];
+          }
           // An earlier action in this call can renumber the window (Calculator closes
           // its history and every button shifts), so a batch of numbers goes stale.
           if (!state.callElements.has(proxy)) state.callElements.set(proxy, elements(text));
-          else if (typeof args[0] === 'number') {
+          else if (typeof args[0] === 'number' && !byId) {
             const was = state.callElements.get(proxy).get(args[0]), now = elements(text).get(args[0]);
             if (was !== now) throw new Error('sleight stopped before ' + name + '(' + args[0] + '): an earlier action in this call changed what element ' + args[0] + ' is (was ' + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + '). Read the window again and use its current numbers.');
           }

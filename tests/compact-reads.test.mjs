@@ -78,6 +78,7 @@ test('loaded content renumbers later elements: they are left out and counted, an
   assert.deepEqual(c.staleIndex(window, 'await app.click(10)'), { number: 10 }, 'a shifted number is refused');
   assert.deepEqual(c.staleIndex(window, 'await app.click(i)'), { computed: 'i' });
   assert.equal(c.staleIndex(window, 'await app.click([10, 20])'), undefined, 'coordinates are not element numbers');
+  assert.equal(c.staleIndex(window, 'await app.click({ id: "Seven" })'), undefined, 'an ID resolves fresh inside the call');
   apply(c, grown);
   assert.equal(c.staleIndex(window, 'await app.click(10)'), undefined, 'a full read makes every number current');
 });

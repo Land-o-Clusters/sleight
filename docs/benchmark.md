@@ -76,6 +76,15 @@ Mirroring. textedit-drag failed 0/3 because the Claude app and Grok Bot covered 
 window, and `drag` refuses to press where another window covers the point. 8 of the 21 runs had
 at least one call refused by sleight's guards, each costing Claude an extra turn.
 
+With element IDs and labels in the skill (0.13.0), a second pass on the same settings
+([`2026-10-07-element-ids.json`](benchmarks/2026-10-07-element-ids.json)) had 7 refused calls
+instead of 14, 5 runs with a refusal instead of 8, and 281 turns instead of 300. calculator-menu
+went from a median of 15 turns to 7 and calculator-click from 9 to 6. It passed 19/21 against
+18/21. Total time rose from 902 s to 1,172 s, mostly in the model: 2.59 s per turn against 1.96 s,
+and one 5-turn Calculator run spent 54 s waiting on the model. chess-drag failed 2/3: in one run
+Grok Bot and the Claude app covered the board, and in the other `drag` couldn't match the Chess
+window to an accessibility window.
+
 From 2026-10-04 on, runs default to Sonnet 5.5 at medium effort (`--model`, `--effort`).
 
 ```bash

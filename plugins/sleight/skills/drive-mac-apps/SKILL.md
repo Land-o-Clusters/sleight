@@ -36,6 +36,12 @@ the user or stop when a headless run refuses it. Changing the file is not an app
 2. Act by element index from the UI state (`await app.click(12)`) when you can, and by coordinates only
    when an element has no index. Batch several actions in one call when you're sure of them. Await every
    action: one that fails without `await` can end the engine's session and lose every handle.
+   In a native app you can address an element by its ID or label instead of its number:
+   `await app.click({ id: "Seven" })` for a line with `ID: Seven`, or `{ label: "Multiply" }` for its
+   description or title. sleight finds it in a fresh read just before the action. A batch addressed
+   this way keeps working when an earlier action in it renumbers the window (Calculator's All Clear
+   does). The name must match one element exactly, or the
+   action stops. The same works for `scroll`, `selectText`, `setValue` and `performSecondaryAction`.
 3. The first time you touch an app, the user gets an approval prompt unless their list preapproved it.
    If the result says the app was not
    approved, stop and tell the user. Don't retry around it. The engine refuses terminal apps and

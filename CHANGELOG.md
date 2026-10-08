@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0 (2026-10-07)
+
+- Claude can address an element by its AX ID or label instead of its number:
+  `await app.click({ id: "Seven" })` or `{ label: "Multiply" }`, also for `scroll`, `selectText`,
+  `setValue` and `performSecondaryAction`. sleight finds the element in the read it already takes
+  before each action. A batch addressed this way keeps working when an earlier action renumbers
+  the window. All
+  Clear and then 1234 × 5 = ran as one Calculator call and showed 6,170. A name that matches no
+  element or several stops the action. Over the benchmark (7 tasks, 3 runs each, Sonnet 5.5),
+  refused calls fell from 14 to 7 and turns from 300 to 281
+  (`docs/benchmarks/2026-10-07-element-ids.json`).
+- Benchmark answers have the user's full name replaced, because Chess window titles include it.
+
 ## 0.12.3 (2026-10-07)
 
 - Claude gets each screenshot once. The skill told Claude to pass `getScreenshot()` to

@@ -157,6 +157,11 @@ function runClaude(prompt, arm, env = {}) {
   });
 }
 
+// Window titles can carry the user's name (Chess: "Game 1 | Name - Computer"),
+// and Claude quotes them. Results are published, so answers lose it.
+const fullName = (() => { try { return execFileSync('id', ['-F'], { encoding: 'utf8' }).trim(); } catch { return ''; } })();
+const scrub = text => typeof text === 'string' && fullName.length > 2 ? text.split(fullName).join('<user>') : text;
+
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const results = [];
 const resultsDir = join(ROOT, 'bench', 'results');
@@ -200,16 +205,16 @@ for (let run = 1; run <= runs; run++) {
         task: task.id,
         run,
         passed: verdict === true,
-        reason: verdict === true ? undefined : verdict,
+        reason: verdict === true ? undefined : scrub(verdict),
         seconds: Math.round((Date.now() - started) / 100) / 10,
         turns: out?.num_turns,
         costUsd: out?.total_cost_usd,
         timing: runTiming(out, armName === 'sleight' ? traceTiming(dir) : undefined),
         exitCode: code,
-        answer: answer.slice(0, 300),
+        answer: scrub(answer.slice(0, 300)),
         // What Claude Code reports it used, to catch a model setting that didn't apply.
         models: Object.keys(out?.modelUsage ?? {}),
-        stderr: code === 0 ? undefined : stderr,
+        stderr: code === 0 ? undefined : scrub(stderr),
       });
       save();
       const r = results.at(-1);

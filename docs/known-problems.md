@@ -164,6 +164,9 @@ our own runs. Dates and engine versions are given where they matter.
   handle with it (`app.click(1); "x"` on a disabled Calculator element, 3/3 on 2026-10-07). sleight
   notices when the engine's first-call docs come back without a `js_reset` and tells Claude, but the
   call that restarted it may have done nothing.
+- On 2026-10-07 `drag` once refused a Chess window launched in the background seconds earlier,
+  because it couldn't find that window among Chess's accessibility windows. It matches by the window's AX number, or by bounds and
+  title, and neither matched. The same kind of window matched in another run. Why is unknown.
 - The engine's helper can stop answering. On 2026-10-04 every `cua.getApp` timed out
   (`-10005 timeoutReached`) for about 25 minutes, with the Mac unlocked and in use, until ChatGPT was
   restarted. We don't know the cause. It started right after a test that kills engine processes.

@@ -3,15 +3,14 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-08 02:40 UTC)
+## Banner (2026-10-08 03:20 UTC)
 
-Timing pass (owner's perf push, 2026-10-07): 65.4% model, 23.6% engine, 4.8% local tools, 6.2%
-Claude Code, 0.1% relay over 21 Sonnet runs (`docs/benchmarks/2026-10-07-timing.json`). Fewer
-turns is the lever. Owner approved, in order: stable-ID clicks so renumbering stops costing
-refusals, batching guidance, smaller results, then model passes (Haiku 5.5 as
-`claude-haiku-5-5`, Sonnet low effort, Opus). Sonnet stays the default driver. 0.12.3 is released, and Claude
-gets each screenshot once (checked live, 2 images before and 1 after). Chess runs now quit Chess cleanly: force
-quits had piled up restored game windows for the owner.
+0.13.0: element IDs and labels (`app.click({ id: "Seven" })`). Refused calls 14 to 7 and turns 300
+to 281 against the timing baseline (`docs/benchmarks/2026-10-07-{timing,element-ids}.json`); model
+time per turn rose in that pass (1.96 to 2.59 s), so total time did too. Next in the owner's perf
+push is batching guidance and smaller results. The model passes come after that, with Haiku 5.5 as
+`claude-haiku-5-5`, Sonnet at low effort, and Opus. Sonnet stays the default driver. At least 3 of
+the 5 drag failures on 2026-10-07 came from the owner's windows covering the target app.
 
 0.12.2 released. The input lease's recovery advice repeated an invalid app name as a bare
 assignment, and a session failed 20 of its first 22 calls. Now the advice works, and an engine
