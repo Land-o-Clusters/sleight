@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.15.2 (2026-10-08)
+
+- A window that retitles itself keeps its lease. Chess renames its window when a game starts, on each
+  move and on save. The guard still stops the next action, and the stop now includes the window it
+  saw, which the relay leases, so Claude's retry goes through. Before, the retry was refused
+  again and Claude had to acquire the app anew. Document scope and change review stay strict, and
+  another session holding the window still refuses.
+- Every sleight tool loads at session start, local tools included. Claude searched for `drag` before
+  each drag.
+- The skill says the window title is the confirmation of a save, not `ls` or `cat`.
+- The benchmark runner holds the live lock itself.
+- The next pass (`docs/benchmarks/2026-10-08-retitle.json`) passed 21/21 in 123 turns instead of 140,
+  with 101 calls. None were refused or tool searches, and one was a Bash check. It took 582 s, at 2.64 s of
+  model time per turn against 1.93.
+
 ## 0.15.1 (2026-10-08)
 
 - The skill is 7,528 characters instead of 17,549, with every safety rule kept. Claude reads it on

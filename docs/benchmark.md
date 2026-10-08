@@ -153,6 +153,23 @@ saving.
 ([`skill-trim`](benchmarks/2026-10-08-skill-trim.json)) passed 21/21 in 140 turns and 531 s, with 271 s
 of model time at 1.93 s per turn and 7.11M cached tokens read instead of 8.30M.
 
+0.15.2 keeps the lease on a window that retitles itself and loads every tool up front. Its pass
+([`retitle`](benchmarks/2026-10-08-retitle.json)) passed 21/21 in 123 turns, with 101 calls, none
+refused and no tool searches. It took 582 s at 2.64 s of model time per turn. The full passes that ran on the way are published too, with their caveats:
+
+- [`skill-trim-first`](benchmarks/2026-10-08-skill-trim-first.json), 0.15.1 before its last fix:
+  21/21 in 140 turns. A combined call re-acquiring the simulator app threw in 2 runs. A Codex
+  thread's Safari task also ran during it, because the runner didn't take the live lock yet.
+- [`retitle-calculator-unresponsive`](benchmarks/2026-10-08-retitle-calculator-unresponsive.json),
+  the Chess change: 21/21 in 157 turns and 923 s. Calculator stopped answering accessibility reads
+  (12 to 15 s each, and `AXError.cannotComplete`) while two system dialogs were on screen.
+- [`retitle-tools-deferred`](benchmarks/2026-10-08-retitle-tools-deferred.json), the Chess change
+  with sleight's local tools still deferred: 21/21 in 139 turns, with 3 tool searches before drags.
+
+The Codex thread's Safari run also overlapped `skill-trim` itself. The smoke tests on the turns
+branch (calculator-click and textedit-save, 3 runs each, twice) weren't kept, because their
+results were in a worktree that was removed.
+
 | Task | Median turns, 0.13.4 | 0.14.0 |
 |---|---:|---:|
 | calculator-click | 5 | 4 |
