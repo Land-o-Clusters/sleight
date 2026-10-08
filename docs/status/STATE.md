@@ -21,6 +21,14 @@ Sonnet low and Opus 5.5 medium, for the owner's model comparison. Each pass take
 `.dev/passes/pass-*.log`. About two hours. Publish each pass scrubbed (`run.mjs` strips the owner's
 full name; check paths) as `docs/benchmarks/2026-10-08-*.json` with a note, as for the 2026-10-07 ones.
 
+Engine update: the helper is now 26.1002.52244 (was 26.930.51102), found at boot on 2026-10-08, so
+the Sonnet pass is also the update check. Its API diff
+(`~/Library/Logs/sleight/engine-api-26.1002.52244.diff`, captured by hand because `watch.sh` would
+run a benchmark task during the pass) adds `click(…, { key, durationMs })` (modifiers held through the
+click, timed press) and `pressKey(key, { durationMs })`. Check whether sleight's relay, guards and
+skill pass these through, and whether the skill should document Shift/Cmd-click and long press.
+`watch-engine-version` still says 26.930.51102, so Monday's watch will run its benchmark task too.
+
 Owner's speed push (2026-10-07): make sleight fast. Sonnet stays the default driver. Timing per run
 (model, engine, local tools, relay, Claude Code) is in the benchmark results since 2026-10-07; the
 first pass was 65.4% model, 23.6% engine, 0.1% relay. Turns are the lever, and errors cost turns.
