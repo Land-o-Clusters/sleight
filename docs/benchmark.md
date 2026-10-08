@@ -122,7 +122,12 @@ failure was sleight's. The input lease didn't count `let app = await cua.getApp(
 acquisition, and its advice didn't get Haiku out of that. 0.13.3 fixes
 that, and its pass ([`acquisition-echo`](benchmarks/2026-10-08-acquisition-echo.json)) passed 21/21
 on Sonnet 5.5 medium. Claude Code 2.1.289 calls `claude-haiku-5-5` an unrecognized model, so Haiku's
-cost figures aren't shown here. One pass per model can't separate a model from that hour's API latency.
+cost figures aren't shown here.
+
+0.13.4's guard change ([`guard-reads`](benchmarks/2026-10-08-guard-reads.json)) passed all 20 runs
+that started, in 195 turns and 121 calls, with 190 s in the engine against 191 s before. Model time
+per turn was 2.51 s. chess-drag's first run was skipped: macOS failed to relaunch Chess right after
+the benchmark quit it (`open` error -600). One pass per model can't separate a model from that hour's API latency.
 
 From 2026-10-04 on, runs default to Sonnet 5.5 at medium effort (`--model`, `--effort`).
 

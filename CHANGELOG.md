@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.4 (2026-10-08)
+
+- Every action clears the window guard's saved reads for all handles in the call. Before, an action
+  through a second handle on the same window left the first handle's read in place, so that
+  handle's next action was checked against a stale tree.
+- A `getAXStateAndScreenshot()` read counts as the guard's read until the next action, which saves
+  one read per call that reads that way (Chess, 2 to 1). Other calls read as often as before.
+- With `SLEIGHT_TRACE` set, the trace times each guard read (`docs/design/guard-reads.md`). Reads
+  after an action take about 400 ms, against about 50 ms for the first in a call.
+- The next pass (`docs/benchmarks/2026-10-08-guard-reads.json`) passed all 20 runs that started, in
+  195 turns and 121 calls. Engine time was 190 s against 191 s. chess-drag's first run didn't start,
+  because macOS failed to relaunch Chess right after the benchmark quit it (error -600).
+
 ## 0.13.3 (2026-10-08)
 
 - `let app = await cua.getApp("X"); app` counts as an acquisition. The input lease knew only the

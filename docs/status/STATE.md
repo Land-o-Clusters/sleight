@@ -3,19 +3,28 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-08 04:35 UTC)
+## Banner (2026-10-08 13:00 UTC)
 
-Checkout: `~/Projects/sleight` is on `main`, released as 0.13.3. The chained model passes are done
-and nothing holds `/tmp/sleight-live.lock`.
+Checkout: `~/Projects/sleight` is on `main`, released as 0.13.4. The live lock `/tmp/sleight-live.lock` is free.
 
+- 0.13.4 is Astra's `codex/guard-reads`, rebased by sleight-arch on the owner's word (it applied without
+  conflicts) and squash-merged. Actions clear every handle's saved guard read (a latent stale-read
+  bug), combined reads count as guard reads, and `SLEIGHT_TRACE` times each guard read. Reproduced
+  live 15/15 with 9 / 4 / 1 guard reads per call. Its pass ran 20 of 21 runs and passed all 20, in
+  195 turns and 121 calls, engine 190 s (unchanged). The skipped run was Chess failing to relaunch (-600).
+- In Codex, Astra gets `.dev/prompts/engine-time.md` (why a read after an action costs 400 ms, and what
+  the guard can do instead), and Sol 6.1 gets `.dev/prompts/sol-reliability.md` (the fresh Chess
+  window, and a hung app reported as a stuck helper). The owner pastes both.
+- sleight-arch next: turns in textedit-save and chess-drag, `cua.getApp({ windowId })` on the new
+  engine, the engine's new click options in the skill, and merge or close `codex/browser-enforcement`.
 - 0.13.2 (input lease kept through guard stops, one-call Save As) passed 20/21 on Sonnet 5.5 medium, 213 turns
   (from 260), 687 s (from 825), textedit-save median 16 turns (from 27). The failure was the engine's
   `noWindowsAvailable` on a fresh Chess window (`docs/known-problems.md`).
 - Model comparison on 0.13.2's code, one pass each, in `docs/benchmark.md`. Haiku 5.5 medium passed 20/21
   in 235 turns and 625 s, Sonnet low 21/21 in 199 turns and 827 s, Opus 5.5 medium 21/21 in 223
   turns and 808 s with 0 refused calls. Haiku's cost figures are suspect (Claude Code 2.1.289 calls the model unrecognized).
-  One pass per model can't separate the model from API latency. Picking a default driver is the
-  owner's call. Sonnet medium stays the default until then.
+  One pass per model can't separate the model from API latency. The owner kept Sonnet medium as
+  the default (2026-10-08, LAWS).
 - 0.13.3: `let app = await cua.getApp("X"); app` counts as an acquisition (Haiku's failure), and a
   refused first call that asks for an app by name is advised that app's acquisition instead of
   `cua.getState()`. Proven by unit tests only: neither path came up live. Its Sonnet pass passed 21/21
@@ -35,15 +44,8 @@ Released that day: 0.12.2 (lease recovery advice, engine session restarts), 0.12
 screenshot), 0.13.0 (`app.click({ id })`/`{ label }`), 0.13.1 (errors 21.5% to 12.7% of calls). The
 remaining error causes are in the 0.13.1 pass transcripts, and `docs/benchmark.md` has the history.
 
-Codex: the Astra thread (gpt-6-astra, deep perf tuning only, LAWS) pushed `codex/guard-reads` at
-`8bebe53`, still on base `1532ae9`. It saved almost nothing. Guard reads per call stayed 9 in
-Calculator and 4 in TextEdit and fell 2 to 1 in Chess (about 57 ms a call). It found that later
-guard reads in a batch took about 400 to 475 ms against 50 ms for the first, and guard reads were 86
-to 95% of engine time in its probes. It also fixes a latent bug: an action through a second handle on
-the same window didn't clear the first handle's cached read. Not reproduced or merged. Round 2 brief
-(rebase onto 0.13.3, shorter note, measure the settle wait): `.dev/prompts/astra-guard-reads-rebase.md`.
-`codex/browser-enforcement` (Codex, 2026-10-04) is still unreviewed. Its worktree is Codex's own at
-`~/.codex/worktrees/browser-enforcement/sleight`.
+Codex: `codex/guard-reads` is merged (0.13.4). `codex/browser-enforcement` (Codex, 2026-10-04) is
+still unreviewed. Its worktree is Codex's own at `~/.codex/worktrees/browser-enforcement/sleight`.
 
 Public: `Land-o-Clusters/sleight`, latest release `v0.13.3`, installed at user scope from the repo
 folder. Open PRs: none. The first outside user (the owner's friend) runs his iOS simulator tests
@@ -54,7 +56,6 @@ through sleight and finds it faster than Maestro. `~/.claude.json` marks
 
 Next, in order:
 
-- Review the Astra branch when it reports.
 - textedit-save and chess-drag are the slowest tasks (median 16 turns each on 2026-10-08). Trace
   their runs for the next cut.
 - The engine's first-call docs are 56% of all result text (about 21,000 characters per session), but
@@ -79,13 +80,12 @@ prompts are in `.dev/prompts/`, market research in `.dev/research/2026-10-04-com
   the engine's API docs (`~/Library/Logs/sleight/engine-api-26.930.51102.md` is the latest) and
   diffs them on an engine update. Remove with `npm run watch:remove`.
 - `~/Library/Application Support/sleight/preapproved.json` lists Calculator (owner, 2026-10-04) and
-  Helium (`net.imput.helium` and `Helium`, all `high`). Helium was added by sleight-arch on the
-  owner's explicit order on 2026-10-05, to stay until the owner is back on Wednesday 2026-10-07; the
-  list before it is `.dev/tools/preapproved.before-helium.json`. The installed sleight reads it, so
-  both apps are approved without a prompt in every session.
-- `ComputerUseAllowForbiddenTargets` is on (`defaults write -g`, owner-approved test, 2026-10-05).
-  Terminals and OpenAI's apps go through the engine for every engine client, Codex included, until
-  `defaults delete -g ComputerUseAllowForbiddenTargets`.
+  Helium (`net.imput.helium` and `Helium`, all `high`). Helium was added on the owner's order on
+  2026-10-05, and the owner kept it with no end date on 2026-10-08. The list before it is
+  `.dev/tools/preapproved.before-helium.json`.
+- `ComputerUseAllowForbiddenTargets` is on (`defaults write -g`, set by the owner 2026-10-05, kept on
+  2026-10-08 so agents can drive terminals for tests). Terminals and OpenAI's apps go through the engine
+  for every engine client, Codex included. Off: `defaults delete -g ComputerUseAllowForbiddenTargets`.
 - `.dev/tools/`: probe and timing clients for sleight's launcher, the CNN trial, transcript
   dumpers, and `dialogs.swift` (lists permission dialogs on screen).
 - LCU 0.8.8 runtime-only at `~/.local/share/lcu`, registered only in `.dev/lcu-arm` (untracked),
@@ -109,10 +109,7 @@ prompts are in `.dev/prompts/`, market research in `.dev/research/2026-10-04-com
 
 ## Waiting on the owner
 
-- The model comparison (banner, `docs/benchmark.md`) is ready for the owner to read. Whether it
-  changes the default driver is theirs to decide.
-- Decide whether Helium stays on the pre-approved list and whether `ComputerUseAllowForbiddenTargets`
-  stays on. Both were due on 2026-10-07 and haven't been asked yet. Ask.
+Nothing.
 
 ## Reading list
 
