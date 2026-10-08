@@ -177,16 +177,24 @@ our own runs. Dates and engine versions are given where they matter.
   engine's drag answered `-10005 noWindowsAvailable` while reads of the window still worked, and
   `drag` reported the window off screen. The screen was unlocked and the display on. Later that day
   the benchmark's relaunch of Chess, right after quitting it, failed with LaunchServices error -600.
-  The [2026-10-08 investigation](benchmarks/2026-10-08-reliability.md) recorded an existing game
-  on screen at layer 0 with matching CG/AX bounds. Fresh trials stopped to preserve its unsaved moves:
-  0 engine and 0 local drags, before and after. Space and the historical failure's window state
-  remain unknown. The screenshot confirmed that Chess's AX square Y positions were inverted.
-  This does not explain a window-availability refusal. An off-screen refusal now tells Claude to have the user show that exact window,
+  The [2026-10-08 investigation](benchmarks/2026-10-08-reliability.md) completed ten fresh launches
+  through each drag path after the operator authorized closing the leftover game. The engine's
+  reads showed e4 in 10/10 calls. Independent AX verified 6/10. Local `drag` acknowledged 8/10 calls,
+  with 3/10 moves independently verified. One local call refused a covered source point without
+  input. Another ended in a command failure near its 30 s deadline. Native AX omitted e4 in nine
+  further move checks, leaving their outcomes unconfirmed. The historical availability refusals occurred 0/20 times.
+  Every selected window was on screen at layer 0 with matching CG/AX bounds. All twenty launches
+  succeeded after confirmed process absence, without a -600 retry. Space, the historical window
+  state and the native command failure's cause remain unknown. Some window captures returned black
+  pixels. Clear captures confirmed that Chess's AX square Y positions were inverted; this does not
+  explain a window-availability refusal. An off-screen refusal now tells Claude to have the user show that exact window,
   reacquire the app, and take a fresh screenshot before using current window IDs and coordinates.
-  It never retries the old drag or substitutes another window. That recovery remains unverified.
+  It never retries the old drag or substitutes another window. In a separate minimized-window control,
+  the refusal left the board unchanged, and restoring and reacquiring the same window led to a verified
+  move (1/1). Recovery from another Space remains untested.
   The benchmark's force-quit fallback
   could return before process exit. Launch now waits for absence and retries only -600, at most
-  three times. Unit boundaries pass. Native relaunch evidence is still pending.
+  three times. Unit boundaries pass. The historical -600 cause remains unproved.
 - The engine's helper can stop answering. On 2026-10-04 every `cua.getApp` timed out
   (`-10005 timeoutReached`) for about 25 minutes, with the Mac unlocked and in use, until ChatGPT was
   restarted. We don't know the cause. It started right after a test that kills engine processes.

@@ -1,4 +1,4 @@
-import { execFile, spawn } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdir, rmdir, writeFile, readFile, mkdtemp, unlink, access } from 'node:fs/promises';
 import { reliabilityEvidence } from './reliability-evidence.mjs';
@@ -8,6 +8,7 @@ import { diagnoseReadFailure } from '../plugins/sleight/lib/read-failure.mjs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { restartChess } from './chess-launch.mjs';
+import { cleanupChessTrial } from './reliability-cleanup.mjs';
 
 const execute = promisify(execFile);
 const inspector = join(homedir(), '.codex/bin/codex-macos-inspect');
@@ -33,13 +34,24 @@ const until = async fn => {
   while (!await fn()) { if (cancelled || Date.now() > deadline) throw new Error('Fixture state deadline'); await wait(100); }
 };
 const exists = async path => { try { await access(path); return true; } catch { return false; } };
-let held = false;
+let held = false, cleanupUnconfirmed = false;
 try {
+  receipt.lockRequested = new Date().toISOString();
+  let nextLockNotice = 0;
   while (!held && !cancelled) {
     try { await mkdir('/tmp/sleight-live.lock'); held = true; }
-    catch (error) { if (error.code !== 'EEXIST') throw error; await wait(1000); }
+    catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      if (Date.now() >= nextLockNotice) {
+        console.log('Waiting for /tmp/sleight-live.lock; no app input posted.');
+        nextLockNotice = Date.now() + 30000;
+      }
+      await wait(1000);
+    }
   }
   if (cancelled) throw new Error('Interrupted before live work');
+  receipt.lockAcquired = new Date().toISOString();
+  console.log('Acquired /tmp/sleight-live.lock for ' + receipt.mode);
   if (process.argv[2] === 'ax') {
     await command('/usr/bin/open', ['-g', '-a', 'Calculator']);
     receipt.attempts.push(await execute('/usr/bin/osascript', ['-l', 'JavaScript', 'bench/reliability-ax.js', 'com.apple.calculator'], { timeout: 3000 }));
@@ -55,52 +67,74 @@ try {
     receipt.bank = await mkdtemp('/private/tmp/sleight-reliability-observe-');
     receipt.image = join(receipt.bank, 'board.png');
     await command('/usr/sbin/screencapture', ['-x', '-l', String(match[0].windowNumber), receipt.image]);
-  } else if (/^chess-(?:before|after|inspect)$/.test(process.argv[2])) {
-    const existing = await chess({ op: 'snapshot' }); receipt.existing = existing;
+  } else if (/^chess-(?:before|after|inspect|recovery)$/.test(process.argv[2])) {
+    let existing = await chess({ op: 'snapshot' }); receipt.existing = existing;
     if (existing.windows.some(w => w.title && w.bounds.Width > 400) && !process.argv.includes('--close-existing')) {
       throw new Error('Chess has an existing game; closing it requires explicit operator approval');
     }
-    // The named benchmark investigation owns Chess while this lock is held.
-    for (const win of existing.windows.filter(w => w.title && w.bounds.Width > 400)) {
-      const closed = await chess({ op: 'close', title: win.title });
-      if (!closed.closed) throw new Error('Existing benchmark Chess game did not close');
+    if (existing.running) {
+      receipt.initialCleanup = [];
+      const owned = op => chess({ ...op, expectedPid: existing.pid });
+      try {
+        await cleanupChessTrial({ pid: existing.pid, titles: existing.windows.filter(w => w.title && w.bounds.Width > 400).map(w => w.title), initialTitles: [], journal: receipt.initialCleanup,
+          cancelDialog: () => owned({ op: 'cancel-new-game' }), close: title => owned({ op: 'close', title, allowTurnChange: true }), snapshot: () => owned({ op: 'snapshot' }),
+          quit: () => owned({ op: 'quit' }), process: () => owned({ op: 'process' }), wait });
+      } catch (error) { cleanupUnconfirmed = true; throw error; }
     }
-    if (existing.running) await command('/usr/bin/osascript', ['-e', 'tell application "Chess" to quit']);
     const bank = await mkdtemp('/private/tmp/sleight-reliability-'); receipt.bank = bank;
     receipt.trace = [];
-    client = await reliabilityClient(value => {
+    const newClient = () => reliabilityClient(value => {
       // Screenshots stay in the private bank; receipts retain tool text and metadata.
       const copy = JSON.parse(JSON.stringify(value, (key, item) => item?.type === 'image' ? { type: 'image', omitted: true } : item));
       receipt.trace.push(copy);
-    }, { localTools: { tools: [{ name: 'drag' }], call: callLocalTool } });
-    receipt.engine = client.version;
-    await client.js('await cua.rewriteDocumentation()');
-    const count = process.argv[2].endsWith('inspect') ? 1 : 20;
+    }, { changeReview: true, localTools: { tools: [{ name: 'drag' }], call: callLocalTool } });
+    const recovery = process.argv[2] === 'chess-recovery';
+    const count = process.argv[2].endsWith('inspect') || recovery ? 1 : 20;
     for (let n = 0; n < count && !cancelled; n++) {
-      const trial = { n: n + 1, path: n % 2 ? 'local' : 'engine' }; receipt.attempts.push(trial);
+      const trial = { n: n + 1, path: recovery || n % 2 ? 'local' : 'engine' }; receipt.attempts.push(trial);
       let title;
       try {
+        client = await newClient(); receipt.engine = client.version;
+        await client.js('await cua.rewriteDocumentation()');
         // Immediate launch deliberately reproduces the benchmark's quit/open sequence.
-        if (process.argv[2] === 'chess-after') restartChess({ quit: () => {} });
+        trial.launchStarted = new Date().toISOString();
+        if (process.argv[2] === 'chess-after' || recovery) restartChess({ quit: () => {}, run: (cmd, args, options) => {
+          const attempt = { cmd, args }; (trial.launchChecks ??= []).push(attempt);
+          try { const result = execFileSync(cmd, args, options); attempt.status = 0; return result; }
+          catch (error) { attempt.status = error.status; attempt.error = String(error.stderr ?? error.message); throw error; }
+        } });
         else trial.launch = await command('/usr/bin/open', ['-g', '-a', 'Chess', '--args', '-ApplePersistenceIgnoreState', 'YES']);
+        trial.launchFinished = new Date().toISOString();
         await wait(3000);
+        if (cancelled) throw new Error('Interrupted during launch; no game setup posted');
         const before = await chess({ op: 'snapshot' }); trial.initialAX = before;
         trial.initialCG = JSON.parse(await command(inspector, ['windows-for-pid', String(before.pid), '--scope', 'all']));
         const acquired = await client.js('var chess = await cua.getApp("com.apple.Chess")');
+        trial.acquired = acquired;
         if (acquired.isError) throw new Error(text(acquired));
-        const dialog = await client.js('await chess.pressKey("super+n"); await chess.getAXState({disableDiffing:true})');
-        const start = /(?:^|\n)\s*(\d+) button (?:Play|Start|New Game)\b/.exec(text(dialog));
+        if (cancelled) throw new Error('Interrupted before new game shortcut');
+        trial.newGameShortcut = await client.js('await chess.pressKey("super+n")');
+        await wait(300);
+        if (cancelled) throw new Error('Interrupted before new game dialog read');
+        const dialog = await client.js('await chess.getAXState({disableDiffing:true})');
+        trial.dialog = dialog;
+        const dialogText = text(dialog).includes('sleight: no change') ? text(trial.newGameShortcut) : text(dialog);
+        const start = /(?:^|\n)\s*(\d+) button (?:Play|Start|New Game)\b/.exec(dialogText);
         if (!start) throw new Error('No recognized new game button: ' + text(dialog));
+        if (cancelled) throw new Error('Interrupted before new game Start');
         const started = await client.js(`await chess.click(${Number(start[1])}); await chess.getAXState({disableDiffing:true})`);
         trial.started = text(started);
         const after = await chess({ op: 'snapshot' }); trial.newAX = after;
         const created = after.windows.filter(w => w.title && w.bounds.Width > 400 && !before.windows.some(old => old.title === w.title));
         if (created.length !== 1) throw new Error('Cannot identify one new owned game');
         title = created[0].title;
+        const visible = await client.js('await chess.getAXState({disableDiffing:true})');
+        trial.beforeDragRead = text(visible);
+        if (visible.isError || !trial.beforeDragRead.includes(`Window: "${title}", App: Chess.`)) throw new Error('Engine read does not identify the owned new game');
         const cg = JSON.parse(await command(inspector, ['windows-for-pid', String(after.pid), '--scope', 'all']));
         trial.newCG = cg;
         const b = created[0].bounds;
-        const match = cg.filter(w => w.layer === 0 && Math.abs(w.bounds.x - b.X) < 1 && Math.abs(w.bounds.y - b.Y) < 1 && Math.abs(w.bounds.width - b.Width) < 1 && Math.abs(w.bounds.height - b.Height) < 1);
+        const match = cg.filter(w => !trial.initialCG.some(old => old.windowNumber === w.windowNumber) && w.layer === 0 && Math.abs(w.bounds.x - b.X) < 1 && Math.abs(w.bounds.y - b.Y) < 1 && Math.abs(w.bounds.width - b.Width) < 1 && Math.abs(w.bounds.height - b.Height) < 1);
         if (match.length !== 1) throw new Error('CG/AX game mapping not unique');
         trial.windowId = match[0].windowNumber;
         trial.geometry = await chess({ op: 'geometry', title });
@@ -108,24 +142,80 @@ try {
         if (n === 0) {
           await command('/usr/sbin/screencapture', ['-x', '-l', String(trial.windowId), image]);
           trial.image = image;
+          if (process.argv.includes('--inspect-first')) {
+            receipt.inspectionGate = join(bank, 'continue');
+            await save(); console.log(publish({ image, inspectionGate: receipt.inspectionGate }));
+            const deadline = Date.now() + 120000;
+            while (!await exists(receipt.inspectionGate)) {
+              if (cancelled || Date.now() > deadline) throw new Error('Screenshot inspection deadline; no drag posted');
+              await wait(250);
+            }
+            const fresh = await chess({ op: 'geometry', title });
+            if (JSON.stringify(fresh.bounds) !== JSON.stringify(b) ||
+                JSON.stringify(fresh.squares) !== JSON.stringify(trial.geometry.squares)) throw new Error('Board changed during screenshot inspection; no drag posted');
+            const read = await client.js('var chess = await cua.getApp("com.apple.Chess"); await chess.getAXState({disableDiffing:true})');
+            if (read.isError || !text(read).includes(`Window: "${title}", App: Chess.`)) throw new Error('Board read changed during screenshot inspection; no drag posted');
+          }
         }
         if (process.argv[2].endsWith('inspect')) break;
         const measured = JSON.parse(await readFile('bench/reliability-chess-points.json', 'utf8'));
         if (JSON.stringify(measured.bounds) !== JSON.stringify(b)) throw new Error('Screenshot geometry changed; no drag posted');
+        if (cancelled) throw new Error('Interrupted before drag');
+        if (recovery) {
+          const result = trial.recovery = {};
+          result.minimized = await chess({ op: 'minimize', title, expectedPid: after.pid });
+          result.offscreenCG = JSON.parse(await command(inspector, ['windows-for-pid', String(after.pid), '--scope', 'all']));
+          result.refusal = await client.tool('drag', { app: 'Chess', windowId: trial.windowId, from: measured.from, to: measured.to });
+          result.afterRefusal = await chess({ op: 'geometry', title });
+          if (!result.minimized.minimized || !result.refusal.isError || !/off screen/.test(text(result.refusal)) ||
+              JSON.stringify(result.afterRefusal.squares.map(s => s.name)) !== JSON.stringify(trial.geometry.squares.map(s => s.name))) throw new Error('Minimized refusal did not verify; no recovery drag posted');
+          result.restored = await chess({ op: 'restore', title, expectedPid: after.pid });
+          result.reacquired = await client.js('var chess = await cua.getApp("com.apple.Chess"); await chess.getAXState({disableDiffing:true})');
+          if (result.reacquired.isError || !text(result.reacquired).includes(`Window: "${title}", App: Chess.`)) throw new Error('Recovered engine read does not identify the same game');
+          result.freshAX = await chess({ op: 'geometry', title });
+          if (JSON.stringify(result.freshAX.bounds) !== JSON.stringify(measured.bounds)) throw new Error('Recovered screenshot geometry changed; no drag posted');
+          result.freshCG = JSON.parse(await command(inspector, ['windows-for-pid', String(after.pid), '--scope', 'all']));
+          const fresh = result.freshCG.filter(w => w.windowNumber === trial.windowId && w.layer === 0 && w.onScreen &&
+            Math.abs(w.bounds.x - b.X) < 1 && Math.abs(w.bounds.y - b.Y) < 1 &&
+            Math.abs(w.bounds.width - b.Width) < 1 && Math.abs(w.bounds.height - b.Height) < 1);
+          if (fresh.length !== 1 || result.restored.minimized) throw new Error('Recovered game is not uniquely on screen');
+          trial.windowId = fresh[0].windowNumber;
+          result.image = join(bank, 'recovered-board.png');
+          await command('/usr/sbin/screencapture', ['-x', '-l', String(trial.windowId), result.image]);
+          if (cancelled) throw new Error('Interrupted before recovered drag');
+        }
+        const dragStarted = Date.now();
+        trial.dragPosted = true;
         trial.reply = trial.path === 'engine'
           ? await client.js(`await chess.drag(${JSON.stringify(measured.from)}, ${JSON.stringify(measured.to)}); await chess.getAXState({disableDiffing:true})`)
           : await client.tool('drag', { app: 'Chess', windowId: trial.windowId, from: measured.from, to: measured.to });
-        trial.after = await chess({ op: 'geometry', title });
-        trial.passed = !trial.reply.isError && trial.after.squares.some(s => /white pawn, e4/.test(s.name)) && !trial.after.squares.some(s => /white pawn, e2/.test(s.name));
-      } catch (error) { trial.error = { message: error.message, stdout: error.stdout, stderr: error.stderr }; }
+        trial.dragElapsedMs = Date.now() - dragStarted;
+        trial.after = await chess({ op: 'geometry', title, allowTurnChange: true });
+        if (recovery) {
+          trial.afterLabels = await chess({ op: 'labels', title, allowTurnChange: true, expectedPid: after.pid });
+          await wait(1000);
+          trial.afterSettled = await chess({ op: 'geometry', title, allowTurnChange: true, expectedPid: after.pid });
+          trial.afterRead = await client.js('await chess.getAXState({disableDiffing:true})');
+        }
+        trial.afterCG = JSON.parse(await command(inspector, ['windows-for-pid', String(after.pid), '--scope', 'all']));
+        const verified = trial.afterSettled ?? trial.after;
+        trial.passed = !trial.reply.isError && verified.squares.some(s => /white pawn, e4/.test(s.name)) && !verified.squares.some(s => /white pawn, e2/.test(s.name));
+      } catch (error) {
+        trial.error = { message: error.message, stdout: error.stdout, stderr: error.stderr };
+        trial.failureAX = await chess({ op: 'snapshot' });
+        if (trial.failureAX.running) trial.failureCG = JSON.parse(await command(inspector, ['windows-for-pid', String(trial.failureAX.pid), '--scope', 'all']));
+      }
       finally {
-        if (title) trial.closed = await chess({ op: 'close', title });
-        const remaining = await chess({ op: 'snapshot' });
-        // This runner started Chess when absent. Stop if a concurrent game appeared.
-        const games = remaining.windows.filter(w => w.title && w.bounds.Width > 400);
-        if (games.length > 1 || (title && games.some(w => w.title === title))) throw new Error('Chess fixture cleanup unconfirmed');
-        if (remaining.running) await command('/usr/bin/osascript', ['-e', 'tell application "Chess" to quit']);
+        trial.cleanup = [];
+        try {
+          const owned = op => chess({ ...op, expectedPid: trial.initialAX?.pid });
+          await cleanupChessTrial({ title, pid: trial.initialAX?.pid, initialTitles: (trial.initialAX?.windows ?? []).filter(w => w.title && w.bounds.Width > 400).map(w => w.title), journal: trial.cleanup,
+            cancelDialog: () => owned({ op: 'cancel-new-game' }), close: title => owned({ op: 'close', title, allowTurnChange: true }), snapshot: () => owned({ op: 'snapshot' }),
+            quit: () => owned({ op: 'quit' }), process: () => owned({ op: 'process' }), wait });
+          if (client) { await client.close(); client = undefined; }
+        } catch (error) { cleanupUnconfirmed = true; trial.cleanupError = error.message; throw error; }
         await save(); console.log(publish({ n: trial.n, path: trial.path, passed: trial.passed, error: trial.error, windowId: trial.windowId }));
+        if (trial.error && !trial.dragPosted) throw new Error('Setup failed before drag; series stopped');
       }
     }
   } else if (/^fixture-(?:before|after)$/.test(process.argv[2])) {
@@ -174,8 +264,8 @@ try {
       await unlink(join(control, 'hang')).catch(error => { if (error.code !== 'ENOENT') throw error; });
       receipt.fixtureCollected = await fixtureClosed;
     }
-    if (client) await client.close();
+    if (client) { try { await client.close(); } catch (error) { cleanupUnconfirmed = true; throw error; } }
     await save();
-  } finally { if (held) await rmdir('/tmp/sleight-live.lock'); }
+  } finally { if (held && !cleanupUnconfirmed) await rmdir('/tmp/sleight-live.lock'); }
   console.log(publish({ mode: receipt.mode, image: receipt.image, attempts: receipt.attempts.map(({ n, elapsedMs, passed, error, reply }) => ({ n, elapsedMs, passed, error, reply: reply && text(reply) })), error: receipt.error, fixtureCollected: receipt.fixtureCollected, directAXAfter: receipt.directAXAfter }));
 }

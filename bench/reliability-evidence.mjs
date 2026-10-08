@@ -3,6 +3,7 @@ import { sanitizeHelperEvidence } from './helper-evidence.mjs';
 export function reliabilityEvidence(value, titles = [], home) {
   const variants = new Set();
   for (let title of titles) {
+    if (typeof title !== 'string' || !title.trim()) continue;
     for (let depth = 0; depth < 8; depth++) {
       variants.add(title);
       title = JSON.stringify(title).slice(1, -1);

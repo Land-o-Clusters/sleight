@@ -12,3 +12,13 @@ test('Chess owner titles in AX records and nested errors are scrubbed with home 
   assert.match(serialized, /\[Chess window\]/);
   assert.deepEqual(JSON.parse(serialized).content, [{ type: 'image', omitted: true }]);
 });
+
+test('untitled Chess dialogs preserve receipt fields while owner titles are scrubbed', () => {
+  const value = { mode: 'chess-inspect', windowId: 123, text: 'Window: "", App: Chess.\n0 standard window',
+    game: 'Window: "Game 2 | Owner Name", App: Chess.\n0 standard window' };
+  const result = JSON.parse(reliabilityEvidence(value, ['', 'Game 2 | Owner Name']));
+  assert.equal(result.mode, 'chess-inspect');
+  assert.equal(result.windowId, 123);
+  assert.equal(result.text, value.text);
+  assert.doesNotMatch(result.game, /Owner Name/);
+});
