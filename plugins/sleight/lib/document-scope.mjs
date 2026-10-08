@@ -169,10 +169,24 @@ function guardSetup(update) {
           state.activeApp = proxy;
           return result;
         };
-        if (name === 'getScreenshot') return async (...args) => {
+        if (name === 'getScreenshot') return async (options = {}) => {
           checkNative();
-          state.reads.delete(proxy);
-          const result = await value.apply(raw, args);
+          const reads = state.reads, reading = {};
+          reads.set(proxy, reading);
+          // macOS captures AX and pixels together even for a screenshot. Ask
+          // for both so that capture can also supply the guard's fresh header
+          // and selectors, while returning/emitting only the requested image.
+          if (typeof raw.getAXStateAndScreenshot === 'function') {
+            const result = await raw.getAXStateAndScreenshot({ ...options, disableDiffing: true, emit: false });
+            if (!result?.screenshot) throw new Error('Screenshot unavailable for this window.');
+            if (options?.emit !== false) await nodeRepl.emitImage(result.screenshot);
+            if (state.reads === reads && reads.get(proxy) === reading && typeof result.state === 'string' && parse(result.state)) {
+              reads.set(proxy, { text: result.state, emitted: false });
+            }
+            state.activeApp = proxy;
+            return result.screenshot;
+          }
+          const result = await value.call(raw, options);
           state.activeApp = proxy;
           return result;
         };
