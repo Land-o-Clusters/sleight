@@ -3,42 +3,46 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-08 23:20 UTC, flushed before the owner's clear)
+## Banner (2026-10-08 23:55 UTC, building 0.16.0)
 
-Released: `main` and `v0.15.2` at `2d2eb60`, CI green. No background jobs are running, and
-`/tmp/sleight-live.lock` is free.
+Released: `main` and `v0.15.2` at `2d2eb60`, CI green. The owner's desktop pane check on
+`0.15.3-pane.2` passed (screenshot, about 23:03 UTC), with Calculator's picture, 6 actions and the
+status line. No pass is running, and `/tmp/sleight-live.lock` is free.
 
-Checkout: `~/Projects/sleight` is on `pane/auto-mode` (`dc5a016` plus the STATE flush, pushed). It has
-two unreleased changes on top of 0.15.2:
+Owner's call (2026-10-08): batch several fixes and features per release, one full pass per release,
+and only the affected tasks during development. So 0.15.3 became 0.16.0 and holds more.
 
-- `known/unawaited` (`49604cf`, pushed): the relay refuses an action written without `await` when more
-  code follows it. 659/659 unit tests. Known-problems entries 5, 16, 21 and 32 updated.
-- `pane/auto-mode`: the desktop pane. A `tool.check` hook lets Auto mode run the mod's own snapshot
-  (matched by `next.origin.plugin === 'sleight'` and the exact snapshot code) and `turn_ended`
-  (owner approved, LAWS); `/sleight` awaits `$.mcp.connect` before sending the prompt; the desktop
-  image re-encodes until it's 16,000 base64 characters or less (51,135 was dropped, likely by Claude
-  Code's MCP token limit); and a local `h` that shadowed JSX's `h` broke the drawing. 11/11 mod tests.
-  `plugin.json` says `0.15.3-pane.2` so the owner's install picks it up: set it to 0.15.3 at release.
+Checkout: `~/Projects/sleight` is on `pane/auto-mode`. 0.16.0 so far, on top of 0.15.2:
+
+- The relay refuses an action written without `await` when more code follows it (`49604cf`).
+- The desktop pane works in Auto mode (`0bfc4e9`, `e14f0cd`, `dc5a016`). LAWS has the `tool.check` rule.
+- Benchmark runner: closes a failed run's TextEdit documents between runs, and samples whether the
+  task's app has a window on the current Space (`d7f7833`, live-tested).
+- `drag` into a covered TextEdit window moves the text through Accessibility, with no pointer or focus
+  change (1/1 live, Claude covering TextEdit). The foreground drag, now the last resort, waits for 2 s
+  without input (up to 10 s) and stops on keys typed after it takes focus. 45/45 drag-window tests,
+  670/670 in all. Uncommitted when this banner was written.
+- Published: `covered-drags` (18/21; textedit-drag 0/3 because the owner's windows covered TextEdit
+  and the foreground drag took their focus) and `await-stopped` (2/5).
+- `plugin.json` still says `0.15.3-pane.2`. Set it to 0.16.0 at release. CHANGELOG still has a
+  `PASS_LINE` placeholder.
 
 Next:
 
-1. Ask the owner to check the desktop pane once more. In a new Code tab session in Auto mode,
-   `/sleight open Calculator in the background and work out 12 × 12 by clicking its buttons`, should show
-   Calculator's picture. The owner's install is `0.15.3-pane.2` (`installed_plugins.json`).
-2. Run one pass on `pane/auto-mode` with a regular desktop showing (no full screen or Split View,
-   LAWS), then release 0.15.3 and run `claude plugin marketplace update sleight` and
-   `claude plugin update sleight@sleight` so the owner's install matches.
-3. Benchmark runner: restart TextEdit between runs when only benchmark documents are open (a
-   leftover "Untitled 6" kept a stale Save sheet alive), and record per run whether the task's app
-   window is on the current Space.
-4. Owner's plan, step 3 (better). Sol's `codex/real-use-tasks` (`7420d18`, round two) passed 1 of 18
-   qualifying runs. Safari wasn't running; Helium failed twice because the engine's browser-access
-   request can't be answered in `claude -p`, and sleight never pre-approves browser requests (LAWS).
-   Decide how Helium runs headless (as a native app through the engine, or with the owner answering live), then finish
-   qualification, review and merge, then the head-to-head with native Codex computer use.
-5. Owner's plan, step 4: the rest of `docs/known-problems.md`, including the Accessibility text-move
-   experiment for drags into covered windows, and a clearer message than `noWindowsAvailable` when
-   an app is on another Space. Then step 5, the 1.0 decision with the owner.
+1. Commit the drag change, then check textedit-drag 3 runs with TextEdit covered. Then more 0.16.0
+   items from Next 3, then one full pass (best while the owner is away), release 0.16.0 and update
+   the owner's install (`claude plugin marketplace update sleight`, `claude plugin update sleight@sleight`).
+2. Owner's plan, step 3 (better). Sol's `codex/real-use-tasks` (`7420d18`, round two) completed 3 of 18
+   trials, 1 passed (report in `~/Projects/sleight-wt/real-use-tasks/docs/benchmarks/`). Safari's setup
+   failed 3/3 because Safari wasn't running (setup should launch it). Helium failed 2/3 because the
+   engine's browser-access request can't be answered in `claude -p`, and sleight never pre-approves
+   browser requests (LAWS). Owner agreed (2026-10-08): probe Helium as a native app through the engine,
+   one live call with no model. If no browser request appears, Sol switches `helium-form` to that and
+   adds the Safari launch; otherwise Helium leaves the qualifying suite with a known-problems entry.
+   Then qualification, review, merge, and the head-to-head with native Codex computer use.
+3. Owner's plan, step 4, the rest of `docs/known-problems.md`. First a clearer message than
+   `noWindowsAvailable` when an app is on another Space. The input guard should also cover `hover` and
+   the `menu_bar` fallback. Then step 5, the 1.0 decision with the owner.
 
 Read first, published today: `docs/benchmark.md` (every pass since 0.13.1, with caveats),
 `docs/known-problems.md` (Split View, the desktop pane, Calculator's AX churn after launch).
@@ -61,7 +65,7 @@ merged. Their worktrees in `~/Projects/sleight-wt/` can go once Codex is done wi
 
 Public: `Land-o-Clusters/sleight`, latest release `v0.15.2`. The owner's install is a
 version-keyed copy in `~/.claude/plugins/cache/sleight/sleight/`, refreshed only by
-`claude plugin update` (now `0.15.3-pane.2`). Open PRs: none. The first outside user (the owner's friend) runs his iOS simulator tests
+`claude plugin update` (now `0.15.3-pane.2`). Open PRs: none. The first outside user (the owner's friend) runs their iOS simulator tests
 through sleight and finds it faster than Maestro. `~/.claude.json` marks
 `~/Library/Caches/sleight-bench/sleight-arm` trusted (set for the interactive pane session,
 2026-10-06). Launch files for the owner's Grok bot are in `~/Desktop/sleight-launch/`, including
@@ -114,8 +118,6 @@ prompts are in `.dev/prompts/`, market research in `.dev/research/2026-10-04-com
 
 ## Waiting on the owner
 
-- The desktop pane check on `0.15.3-pane.2` (Next, item 1).
-- How Helium runs in the headless real-use suite (Next, item 4).
 - Rotating the OpenAI API key kept in plain text in an iCloud TextEdit note (told 2026-10-08).
 
 ## Reading list

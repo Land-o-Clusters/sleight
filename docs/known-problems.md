@@ -78,7 +78,14 @@ our own runs. Dates and engine versions are given where they matter.
   first and repairs the verified space. It only works when no other app's window covers the drag
   points, because macOS picks the drop target from what's on screen there: 3/3 TextEdit moves with
   the window uncovered, 0/3 with this Claude window over it (2026-10-05). When another app covers
-  either point, the tool goes straight to the foreground drag and names that app. Before the
+  either point, or the posted drag leaves the text unchanged, the tool now moves the text through
+  Accessibility. It maps the drop point to a character and puts the word there, takes it out at the
+  source with TextEdit's spacing, then checks the whole text. That moved a word 1/1 live with Claude
+  covering TextEdit and the front app unchanged (2026-10-08). It inserts plain text, so a moved word in
+  a rich text document takes the formatting at the drop point, and undoing it takes two Cmd+Z. Other
+  apps' text areas haven't been tried. The foreground drag is the last resort. On 2026-10-08 it took the
+  owner's focus mid-sentence during a pass, and a typed space went into TextEdit, so it now waits for
+  2 s without any input (up to 10 s), and stops if keys are typed once it has taken focus. Before the
   named-window raise guard,
   [product trials](benchmarks/2026-10-04-background-drag-product.md)
   passed 3/3 TextEdit moves, with TextEdit inactive and the front app unchanged. The owner moved the
@@ -120,13 +127,12 @@ our own runs. Dates and engine versions are given where they matter.
   live trials. The fixture also restores both, so its successful checks do not prove hover's restoration.
   It does not restore the full window order. Earlier fixture pointer mismatches remain unresolved.
 - The desktop app's Code tab runs Claude Code 2.1.293 (2026-10-08), new enough for the mod. The owner
-  checked it once in Auto mode: `/sleight` opened the pane and sent the prompt, the action log listed
-  both actions, and the status line showed sleight. The picture failed. The pane reads the app with
-  `js` between turns, and Auto mode's classifier refused that call because no user request asked for
-  it, so in Auto mode the pane doesn't show a picture. In the same session `/sleight` sent the prompt
-  before sleight's tools had loaded, and Claude ran `open` and `osascript` itself first. The desktop's
-  own command picker says "/sleight isn't a command here" while you type it, though the mod still
-  handles it. `/sleight stop` hasn't been checked there.
+  checked it in Auto mode twice. On 0.15.2 the pane drew no picture, because Auto mode refused its
+  snapshot. On `0.15.3-pane.2` it worked: `/sleight` opened the pane and sent the prompt, Claude
+  used sleight from its first call, the pane showed Calculator's picture and 6 actions, and the
+  status line showed `Calculator · 6 actions`. The desktop's own command picker still says
+  "/sleight isn't a command here", though the mod handles it. `/sleight stop` hasn't been checked
+  there.
 - When you work in a full-screen or Split View Space, apps sleight drives in the background are on
   another Space. Clicks and typing still reach them, but the engine's `app.drag` answers
   `noWindowsAvailable`, sleight's `drag` refuses the off-screen window, and TextEdit's reads timed

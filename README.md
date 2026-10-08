@@ -135,8 +135,10 @@ before relying on a diff.
 - Per-app approvals apply however you've set up the `js` tool. An accepted approval lasts for the
   session ([approval scope](docs/settings.md#approval-scope)).
 - Foreground `drag` fallback, `hover` and the `menu_bar` fallback for SwiftUI icons move your pointer
-  briefly. `drag` refuses points outside the chosen window's visible content; foreground also refuses
-  covered endpoints, after bringing the app forward.
+  briefly. `drag` moves text in a window you've covered through Accessibility instead, and takes the
+  pointer only when that can't work, after you've stopped typing for 2 s. `drag` refuses points outside
+  the chosen window's visible content; foreground also refuses covered endpoints, after bringing the
+  app forward.
   `hover` refuses points another window covers, including
   another window of the same app, and takes about two seconds with the default dwell.
 - The repo is small enough to read before you install it. It holds a launcher, a relay, a mod, a skill,
@@ -206,7 +208,8 @@ The benchmark task auto-approves Calculator, like any benchmark run.
 - [x] A fair benchmark against LCU, with each arm checked to load only its own tool
 - [x] Text drags: a drag of sleight's own that holds the mouse down and moves in steps
 - [x] TextEdit drags in the background, with verified text readback and foreground fallback
-- [ ] The pane, status line and `/sleight stop` in the desktop app, once its Claude Code reaches 2.1.287
+- [x] The pane and status line in the desktop app's Code tab
+- [ ] `/sleight stop` checked in the desktop app's Code tab
 - [ ] Windows, if the ChatGPT app there includes the computer-use helper (unchecked)
 - [x] Approve one document instead of a whole app (`SLEIGHT_APPROVAL_SCOPE=document`, a guard against
   mistakes rather than a security boundary)

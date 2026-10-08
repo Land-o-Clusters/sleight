@@ -12,6 +12,27 @@
 ObjC.import('AppKit');
 ObjC.import('CoreGraphics');
 
+// The person at the Mac. The foreground path takes the pointer and keyboard
+// focus for a few seconds, and keys typed then land in the target app: a
+// space the owner typed into Claude went into TextEdit's selection mid-drag
+// (2026-10-08). So it starts only after IDLE_S without any input, waits up to
+// WAIT_S for that, and checks for keys typed once it has taken focus.
+const IDLE_S = 2, WAIT_S = 10;
+const sinceInput = type => $.CGEventSourceSecondsSinceLastEventType(1, type); // HID system state
+function waitForIdle() {
+  for (let waited = 0; ;) {
+    const idle = sinceInput(0xFFFFFFFF); // any input
+    if (idle >= IDLE_S) return;
+    const step = Math.max(0.2, IDLE_S - idle);
+    if (waited + step > WAIT_S) {
+      throw new Error(`the person at the Mac kept typing or using the mouse for ${WAIT_S} s, and a foreground drag would take their pointer and keyboard focus; nothing was pressed. Tell the user, and retry when they've paused, or ask them to uncover the drop point so the drag can run in the background`);
+    }
+    delay(step);
+    waited += step;
+  }
+}
+const typedSince = startedAt => sinceInput(10) <= (Date.now() - startedAt) / 1000; // key down
+
 function windows(onScreenOnly) {
   const options = onScreenOnly ? $.kCGWindowListOptionOnScreenOnly : $.kCGWindowListOptionAll;
   const list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo(options | $.kCGWindowListExcludeDesktopElements, 0));
@@ -160,6 +181,111 @@ function finishTextDrop(snapshot, window) {
   return outcome;
 }
 
+// The text area under a screen point, through the Accessibility C API, which
+// can map a point to a character and write text without the pointer or focus.
+// JXA can't pass struct pointers, so AXValues are built from an NSValue's bytes.
+function axTextArea(pid, point) {
+  ObjC.import('ApplicationServices');
+  ObjC.bindFunction('malloc', ['void*', ['unsigned long']]);
+  ObjC.bindFunction('free', ['void', ['void*']]);
+  ObjC.bindFunction('AXValueCreate', ['id', ['int', 'void*']]);
+  const axValue = (type, nsvalue) => { const buf = $.malloc(32); try { nsvalue.getValue(buf); return $.AXValueCreate(type, buf); } finally { $.free(buf); } };
+  const range = (location, length) => axValue(4, $.NSValue.valueWithRange($.NSMakeRange(location, length)));
+  const described = ref => ObjC.unwrap(ObjC.castRefToObject(ref).description);
+  const get = (el, name) => { const out = Ref(); const err = $.AXUIElementCopyAttributeValue(el, $(name), out); if (err) throw new Error(`AX ${name} failed (${err})`); return out[0]; };
+  const ask = (el, name, arg) => { const out = Ref(); const err = $.AXUIElementCopyParameterizedAttributeValue(el, $(name), arg, out); if (err) throw new Error(`AX ${name} failed (${err})`); return out[0]; };
+  const set = (el, name, v) => { const err = $.AXUIElementSetAttributeValue(el, $(name), v); if (err) throw new Error(`AX write of ${name} failed (${err})`); };
+  const app = $.AXUIElementCreateApplication(pid);
+  const hit = Ref();
+  // An app element hit-tests only that app's windows, so a covering app doesn't matter.
+  if ($.AXUIElementCopyElementAtPosition(app, point.x, point.y, hit)) throw new Error('no accessibility element at the drop point');
+  const el = hit[0];
+  if (ObjC.unwrap(ObjC.castRefToObject(get(el, 'AXRole'))) !== 'AXTextArea') throw new Error('the drop point is not in a text area');
+  const rangeOf = ref => { const m = /location:(\d+) length:(\d+)/.exec(described(ref)); if (!m) throw new Error('unreadable AX range'); return { location: +m[1], length: +m[2] }; };
+  const rect = index => {
+    const m = /x:([-\d.]+) y:([-\d.]+) w:([-\d.]+) h:([-\d.]+)/.exec(described(ask(el, 'AXBoundsForRange', range(index, 1))));
+    return m && { X: +m[1], Y: +m[2], Width: +m[3], Height: +m[4] };
+  };
+  return {
+    value: () => ObjC.unwrap(ObjC.castRefToObject(get(el, 'AXValue'))),
+    selection: () => rangeOf(get(el, 'AXSelectedTextRange')),
+    indexAt: p => rangeOf(ask(el, 'AXRangeForPosition', axValue(1, $.NSValue.valueWithPoint($.NSMakePoint(p.x, p.y))))).location,
+    rect,
+    lineEnd: index => {
+      const line = ObjC.unwrap(ObjC.castRefToObject(ask(el, 'AXLineForIndex', $(index))));
+      const r = rangeOf(ask(el, 'AXRangeForLine', $(line)));
+      return r.location + r.length;
+    },
+    replace: (location, length, text) => { set(el, 'AXSelectedTextRange', range(location, length)); set(el, 'AXSelectedText', $(text)); },
+    select: (location, length) => set(el, 'AXSelectedTextRange', range(location, length)),
+  };
+}
+
+// Where text dropped at a point lands: before or after the character under it,
+// or at the end of its line when the point is past the line's last character
+// (AXRangeForPosition answers 0 there).
+function dropIndex(area, p, text) {
+  const onRow = r => r && p.y >= r.Y && p.y < r.Y + r.Height;
+  const index = area.indexAt(p), r = area.rect(index);
+  if (onRow(r) && p.x >= r.X && p.x < r.X + r.Width) return p.x < r.X + r.Width / 2 ? index : index + 1;
+  for (let x = p.x - 4; x >= p.x - 600; x -= 4) {
+    const i = area.indexAt({ x, y: p.y }), q = area.rect(i);
+    if (onRow(q) && x >= q.X && x < q.X + q.Width) {
+      const end = area.lineEnd(i);
+      return end > 0 && text[end - 1] === '\n' ? end - 1 : end;
+    }
+  }
+  throw new Error('cannot find where the drop point falls in the text; nothing was changed');
+}
+
+// Moves the selected text to the drop point the way TextEdit's own drag does:
+// one space comes out with a word at the source, and one goes in at the drop
+// when the word would touch another. Checks the whole result, and on a mismatch
+// says to undo.
+function accessibilityMove(area, snapshot, end, window) {
+  const before = area.value(), sel = area.selection();
+  if (before !== snapshot.text || before.slice(sel.location, sel.location + sel.length) !== snapshot.selected) {
+    throw new Error('the text or selection changed before the move; nothing was changed, read the window again');
+  }
+  const word = snapshot.selected, src = sel.location, srcEnd = src + sel.length;
+  const dest = dropIndex(area, end, before);
+  if (dest >= src && dest <= srcEnd) throw new Error('the drop point is inside the selection; nothing was changed');
+  const isWord = /^[\p{L}\p{N}]/u.test(word) && /[\p{L}\p{N}]$/u.test(word);
+  // Source span, with one space when the word leaves two side by side or one at a line edge.
+  let cutFrom = src, cutTo = srcEnd;
+  if (isWord) {
+    const left = before[src - 1], right = before[srcEnd];
+    if (right === ' ' && (left === undefined || left === '\n' || left === ' ')) cutTo++;
+    else if (left === ' ' && (right === undefined || right === '\n' || right === ' ')) cutFrom--;
+  }
+  const leftOfDrop = before[dest - 1], rightOfDrop = before[dest];
+  const touches = c => c !== undefined && /[\p{L}\p{N}]/u.test(c);
+  const insert = (isWord && touches(leftOfDrop) ? ' ' : '') + word + (isWord && touches(rightOfDrop) ? ' ' : '');
+  const expected = dest > srcEnd
+    ? before.slice(0, cutFrom) + before.slice(cutTo, dest) + insert + before.slice(dest)
+    : before.slice(0, dest) + insert + before.slice(dest, cutFrom) + before.slice(cutTo);
+  // The later edit first, so the earlier one's indices still hold.
+  const edits = dest > srcEnd ? [[dest, 0, insert], [cutFrom, cutTo - cutFrom, '']] : [[cutFrom, cutTo - cutFrom, ''], [dest, 0, insert]];
+  let after;
+  try {
+    area.replace(...edits[0]);
+  } catch (e) {
+    after = attempt(() => area.value(), null);
+    if (after === before) throw e; // nothing changed, so another path may try
+  }
+  if (after === undefined) {
+    try { area.replace(...edits[1]); } catch (_) {}
+    after = attempt(() => area.value(), null);
+  }
+  if (after !== expected) {
+    return { lostText: typeof after !== 'string' || after.replace(/\s/gu, '').length < before.replace(/\s/gu, '').length,
+      error: `The text in TextEdit window ${window.id} (${window.title}) isn't what the move should have made. Press Cmd+Z twice in that window, then read it again before continuing.` };
+  }
+  const movedAt = after.indexOf(word, dest > srcEnd ? dest - (cutTo - cutFrom) : dest);
+  attempt(() => area.select(movedAt, word.length));
+  return { textChanged: true, spaceInserted: insert !== word };
+}
+
 function findApp(name) {
   const apps = $.NSWorkspace.sharedWorkspace.runningApplications;
   for (let i = 0; i < apps.count; i++) {
@@ -276,6 +402,26 @@ function run(argv) {
       // drop (0/3 covered, 3/3 uncovered, 2026-10-05). Go straight to foreground.
       const cover = coveringApp(ordered, main, points);
       if (cover) fallbackReason = `background skipped: ${cover} covers the window at the drag points`;
+      // A text move can be done without any pointer at all: the foreground
+      // path took the owner's pointer and focus mid-sentence (2026-10-08).
+      const byAccessibility = () => {
+        let area;
+        try { area = axTextArea(pid, points.end); }
+        catch (e) { fallbackReason += `; accessibility move unavailable: ${e.message || e}`; return null; }
+        try {
+          const outcome = accessibilityMove(area, points.text, points.end, main);
+          path = 'accessibility';
+          return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, path, fallbackReason, ...outcome });
+        } catch (e) {
+          if (/changed before the move|inside the selection/.test(String(e.message))) throw e;
+          fallbackReason += `; accessibility move failed: ${e.message || e}`;
+          return null;
+        }
+      };
+      if (cover && points.text) {
+        const moved = byAccessibility();
+        if (moved) return moved;
+      }
       let sequence;
       if (!cover) try {
         const moves = Array.from({ length: steps }, (_, i) => ({
@@ -329,13 +475,19 @@ function run(argv) {
         }
         fallbackReason = 'background text unchanged';
         backgroundSnapshot = points.text;
+        unchangedText();
+        const moved = byAccessibility();
+        if (moved) return moved;
       }
     }
+    unchangedText();
+    waitForIdle();
     unchangedText();
     path = 'foreground';
     const ws = $.NSWorkspace.sharedWorkspace;
     previous = previous || ws.frontmostApplication;
     saved = $.CGEventGetLocation($.CGEventCreate(null));
+    const focusedAt = Date.now();
     target.activateWithOptions(0);
     // AXRaise alone can leave another stacked document as the app's main window.
     // Some apps expose AXMain as read-only, so coverage still decides whether
@@ -361,6 +513,7 @@ function run(argv) {
     post($.kCGEventMouseMoved, start);
     current = start;
     delay(0.05);
+    if (typedSince(focusedAt)) throw new Error(`the user typed while ${app} was in front, so their keys may have gone into it; nothing was pressed. Read the window again before continuing, and tell the user`);
     unchangedText();
     post($.kCGEventLeftMouseDown, start);
     pressed = true; didPress = true;
@@ -374,6 +527,9 @@ function run(argv) {
     pressed = false;
     delay(0.2);
     const outcome = finishTextDrop(text, main);
+    if (typedSince(focusedAt)) {
+      outcome.error = [outcome.error, `the user typed during the drag while ${app} was in front, so their keys may have gone into it. Read the window again and tell the user`].filter(Boolean).join('; ');
+    }
     return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, holdMs, steps, path, fallbackReason, ...outcome });
   } catch (e) {
     const message = String(e.message || e);

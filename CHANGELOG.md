@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.16.0 (2026-10-08)
+
+- A text drag into a window you've covered no longer takes your pointer. macOS drops a background
+  drag on whatever is on screen at the drop point, so a covered TextEdit window used to fall back to a
+  real drag that took the pointer and focus. In a pass on 2026-10-08 that caught the owner typing, and a
+  space went into TextEdit. `drag` now moves the text through Accessibility instead. It maps the drop
+  point to a character and puts the word there, takes it out at the source with TextEdit's spacing,
+  then checks the whole text. The result says `path: "accessibility"`.
+- The foreground drag, now the last resort, waits for 2 s without typing or mouse use (up to 10 s), and
+  stops if you type once it has taken focus.
+- The pane shows the app's picture in the desktop app's Code tab, Auto mode included. Auto mode
+  refused the pane's between-turn snapshot because no request asked for it. A `tool.check` hook now
+  allows exactly the snapshot code the mod built, and `turn_ended`, when Claude Code says the call
+  came from sleight itself. Claude's own calls still go through the normal check. The picture also
+  re-encodes until it's 16,000 base64 characters or less. At 51,135 it went over Claude Code's MCP
+  output limit and was dropped. In the owner's Auto mode check, the pane showed Calculator's picture and 6
+  actions, and the status line showed sleight.
+- `/sleight <prompt>` waits for sleight's tools to load before it sends the prompt. In a new session
+  Claude used to start with `open` and `osascript` because they hadn't loaded yet.
+- The relay refuses an action written without `await` when more code follows it. A failed action
+  without `await` can end the engine's JavaScript session and every app handle with it (3/3 on
+  2026-10-07).
+- The benchmark closes the documents a failed run left in TextEdit before the next run, and records
+  whether each task's app had a window on the current Space.
+PASS_LINE
+
 ## 0.15.2 (2026-10-08)
 
 - A window that retitles itself keeps its lease. Chess renames its window when a game starts, on each

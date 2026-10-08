@@ -252,7 +252,9 @@ const DRAG_TOOL = {
     'moving selected text (select it with js first). `from` and `to` are in the same frame as the app\'s engine ' +
     'screenshot, from that window\'s top-left corner. Pass `windowId` when several windows fit; an ambiguous target refuses. ' +
     'Both points must be in window content; TextEdit requires the same text area. A lost-text error tells you to press Cmd+Z in the named window. ' +
-    'It tries background PID posting first, with a 500 ms hold. TextEdit falls back to foreground only if text is unchanged; ' +
+    'It tries background PID posting first, with a 500 ms hold. When another app covers the points, or the posted drag ' +
+    'leaves TextEdit text unchanged, it moves the text through Accessibility instead, with no pointer or focus change. ' +
+    'Only if that is unavailable does it fall back to foreground, after the user has paused typing and using the mouse; ' +
     'an unavailable private window-local API also selects foreground before posting. The result names the path. ' +
     'Foreground fallback moves the pointer and restores it and the front app. Other apps require readback to verify the move. ' +
     'For a line-end text drop, use the final glyph bounds, never a zero-length end-of-line range. The user approves each app once per session.',

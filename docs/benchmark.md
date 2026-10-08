@@ -170,6 +170,18 @@ The Codex thread's Safari run also overlapped `skill-trim` itself. The smoke tes
 branch (calculator-click and textedit-save, 3 runs each, twice) weren't kept, because their
 results were in a worktree that was removed.
 
+Passes on the way to 0.16.0, before its drag change:
+
+- [`await-stopped`](benchmarks/2026-10-08-await-stopped.json), the `await` check: stopped after 5
+  runs, 2/5. All three TextEdit runs failed on reads that timed out, after an untitled document a
+  failed run had left kept a Save sheet open. The runner now closes such documents between runs.
+- [`covered-drags`](benchmarks/2026-10-08-covered-drags.json), the desktop pane changes: 18/21 in
+  152 turns and 1,077 s, 2.30 s of model time per turn. The owner was using the Mac, and Claude or
+  another app covered TextEdit at the drag points in every textedit-drag run, so `drag` took the
+  foreground path and textedit-drag failed 0/3. Its window samples show TextEdit on the current Space
+  throughout. One chess-drag run hit the runner's 5-minute limit after saving a correct game, so it
+  passed without a turn count.
+
 | Task | Median turns, 0.13.4 | 0.14.0 |
 |---|---:|---:|
 | calculator-click | 5 | 4 |

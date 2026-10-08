@@ -5,9 +5,9 @@ import vm from 'node:vm';
 
 // Only the native AX/CG boundary is replaced. run() does the real selection,
 // validation, coordinate conversion, mouse sequence and post-drop check.
-function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', setterFails = false, readFails = false, postFails = false, releaseFails = false, changeOnActivate = false, second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection = 'alpha', repairDeletesText = false, movedOnActivate = false, coveredEnd = false, coveredPid = 7, splitAreas = false, missingContent = false, extraElements = 0, stacked = false, raiseWorks = true, raiseActivates = false, offSpace = false, noWindows = false, appId = 'com.apple.TextEdit' } = {}) {
+function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', setterFails = false, readFails = false, postFails = false, releaseFails = false, changeOnActivate = false, second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection = 'alpha', repairDeletesText = false, movedOnActivate = false, coveredEnd = false, coveredPid = 7, splitAreas = false, missingContent = false, extraElements = 0, stacked = false, raiseWorks = true, raiseActivates = false, offSpace = false, noWindows = false, appId = 'com.apple.TextEdit', busyChecks = 0, typesAt = null, ax = null } = {}) {
   const events = [], restored = [], activations = [], pidEvents = [], mainWrites = [];
-  let visited = 0;
+  let visited = 0, inputChecks = 0;
   let mainId = 22;
   let order = [22, 11];
   const frames = new Map([[11, { X: 100, Y: 100, Width: 600, Height: 400 }], [22, { X: 900, Y: 200, Width: 800, Height: 500 }]]);
@@ -61,6 +61,16 @@ function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', se
       }
     },
     NSProcessInfo: { processInfo: { systemUptime: 1 } },
+    // The person at the Mac: busy for the first busyChecks idle checks, and typing
+    // after activation ('focused') or during the drag ('dragging').
+    CGEventSourceSecondsSinceLastEventType: (_state, type) => {
+      if (type === 10) {
+        const typed = typesAt === 'focused' ? activations.length > 0 : typesAt === 'dragging' && events.some(e => e.type === 1);
+        return typed ? 0 : 60;
+      }
+      inputChecks++;
+      return inputChecks <= busyChecks ? 0.1 : 60;
+    },
     NSEvent: { mouseEventWithTypeLocationModifierFlagsTimestampWindowNumberContextEventNumberClickCountPressure: (type, point, flags) => ({ type, point, flags }) },
     objc_msgSend: e => e,
     CGEventSetWindowLocation: (e, p) => { if (setterFails) throw new Error('setter failed'); e.local = p; },
@@ -73,17 +83,96 @@ function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', se
       if (postFails && e.type === 6) throw new Error('posting interrupted');
     },
   };
-  const context = vm.createContext({ $, ObjC: { import() {}, unwrap: v => v, bindFunction() { if (!background) throw new Error('private API missing'); } }, delay() {},
+  const delays = [];
+  const context = vm.createContext({ $, ObjC: { import() {}, unwrap: v => v, bindFunction() { if (!background) throw new Error('private API missing'); } }, delay: s => delays.push(s),
     Application: () => ({ processes: { whose: () => [proc] } }) });
   vm.runInContext(readFileSync(new URL('../plugins/sleight/lib/drag.js', import.meta.url), 'utf8'), context);
   context.findApp = () => target;
+  // A one-line text area in window 11 at 8 px per character, 13 px tall.
+  // Past the line's end, indexAt answers 0, as AXRangeForPosition does.
+  const axWrites = [];
+  context.axTextArea = () => {
+    if (!ax) throw new Error('AX unavailable');
+    const x0 = frames.get(11).X + 5, y0 = frames.get(11).Y + 30, text = () => values.get(11);
+    return {
+      value: () => ax.changedBeforeMove ? 'owner edit\n' : text(),
+      selection: () => ({ location: text().indexOf(selected.get(11)), length: selected.get(11).length }),
+      indexAt: p => { const i = Math.floor((p.x - x0) / 8); return p.y >= y0 && p.y < y0 + 13 && i >= 0 && i < text().length - 1 ? i : 0; },
+      rect: i => i < text().length - 1 ? { X: x0 + 8 * i, Y: y0, Width: 8, Height: 13 } : null,
+      lineEnd: () => text().length,
+      replace: (location, length, s) => {
+        if (ax.failWrite === axWrites.length + 1) throw new Error('AX write failed');
+        axWrites.push([location, length, s]);
+        values.set(11, text().slice(0, location) + s + text().slice(location + length));
+      },
+      select: () => {},
+    };
+  };
   context.windows = onScreenOnly => noWindows || (onScreenOnly && offSpace) ? [] : [
-    ...(coveredEnd ? [{ id: 33, pid: coveredPid, owner: coveredPid === 7 ? 'TextEdit' : 'Other app', title: 'cover.txt', layer: 0, bounds: { X: 210, Y: 130, Width: 40, Height: 40 } }] : []),
+    ...(coveredEnd ? [{ id: 33, pid: coveredPid, owner: coveredPid === 7 ? 'TextEdit' : 'Other app', title: 'cover.txt', layer: 0, bounds: { X: 180, Y: 130, Width: 80, Height: 40 } }] : []),
     ...order.filter(id => second || id === 11).map(id => ({ id, pid: 7, owner: 'TextEdit', title: `${id}.txt`, layer: 0, bounds: { ...frames.get(id) } })),
   ];
   const run = changes => JSON.parse(context.run([JSON.stringify({ app: 'TextEdit', from: [26.6, 38.5], to: [119, 38.5], ...changes })]));
-  return { run, events, restored, activations, pidEvents, values, mainWrites, visits: () => visited };
+  return { run, events, restored, activations, pidEvents, values, mainWrites, delays, axWrites, visits: () => visited };
 }
+// Window 11's text area starts at x 105, so [150, 38.5] is past the line's end.
+const pastEnd = { windowId: 11, to: [150, 38.5] };
+test('a covered text drop moves the text through Accessibility with no pointer, focus or posting', () => {
+  const h = harness({ background: true, coveredEnd: true, coveredPid: 9, ax: {} }); const r = h.run(pastEnd);
+  assert.equal(r.ok, true, r.error); assert.equal(r.path, 'accessibility');
+  assert.equal(h.values.get(11), 'beta gamma alpha\n'); assert.equal(r.spaceInserted, true);
+  assert.equal(h.activations.length, 0); assert.equal(h.events.length, 0); assert.equal(h.pidEvents.length, 0);
+  assert.equal(h.restored.length, 0);
+});
+test('an unchanged background drag moves the text through Accessibility before any foreground drag', () => {
+  const h = harness({ background: true, backgroundAfter: 'alpha beta gamma\n', ax: {} }); const r = h.run(pastEnd);
+  assert.equal(r.path, 'accessibility'); assert.equal(h.values.get(11), 'beta gamma alpha\n');
+  assert.equal(h.activations.length, 0); assert.equal(h.events.length, 0);
+});
+test('a drop inside a line lands before the word under it, with one space each side', () => {
+  // x 193 is the left half of "gamma"'s g (index 11, x 193 to 201).
+  const h = harness({ background: true, coveredEnd: true, coveredPid: 9, ax: {} }); const r = h.run({ windowId: 11, to: [93, 38.5] });
+  assert.equal(r.ok, true, r.error); assert.equal(h.values.get(11), 'beta alpha gamma\n');
+});
+test('text that changed before the Accessibility move stops everything', () => {
+  const h = harness({ background: true, coveredEnd: true, coveredPid: 9, ax: { changedBeforeMove: true } }); const r = h.run(pastEnd);
+  assert.equal(r.ok, false); assert.match(r.error, /changed before the move/);
+  assert.equal(h.axWrites.length, 0); assert.equal(h.activations.length, 0); assert.equal(h.events.length, 0);
+});
+test('a failed first Accessibility write that changed nothing falls back to the guarded foreground drag', () => {
+  const h = harness({ background: true, coveredEnd: true, coveredPid: 9, ax: { failWrite: 1 } }); const r = h.run(pastEnd);
+  assert.equal(r.path, 'foreground'); assert.match(r.fallbackReason, /accessibility move failed: AX write failed/);
+});
+test('a failed second Accessibility write reports the half-done move with Cmd+Z and never falls back', () => {
+  const h = harness({ background: true, coveredEnd: true, coveredPid: 9, ax: { failWrite: 2 } }); const r = h.run(pastEnd);
+  assert.equal(r.ok, false); assert.equal(r.path, 'accessibility'); assert.match(r.error, /Cmd\+Z twice/);
+  assert.equal(h.activations.length, 0); assert.equal(h.events.length, 0);
+});
+test('the foreground path waits for the person at the Mac to stop, then drags', () => {
+  const h = harness({ busyChecks: 3 }); const r = h.run({ windowId: 11 });
+  assert.equal(r.ok, true, r.error); assert.equal(r.path, 'foreground');
+  assert.equal(h.delays.filter(s => s === 1.9).length, 3, 'waits out the 2 s idle window three times');
+});
+test('a person who keeps using the Mac stops the foreground path before it takes focus', () => {
+  const h = harness({ busyChecks: Infinity }); const r = h.run({ windowId: 11 });
+  assert.equal(r.ok, false); assert.match(r.error, /kept typing.*nothing was pressed/);
+  assert.equal(h.activations.length, 0); assert.equal(h.events.length, 0);
+  assert.ok(h.delays.reduce((a, b) => a + b, 0) <= 10.01);
+});
+test('the background path never waits for the person at the Mac', () => {
+  const h = harness({ background: true, busyChecks: Infinity }); const r = h.run({ windowId: 11 });
+  assert.equal(r.ok, true); assert.equal(r.path, 'background');
+});
+test('keys typed after the target takes focus stop the press and report it', () => {
+  const h = harness({ typesAt: 'focused' }); const r = h.run({ windowId: 11 });
+  assert.equal(r.ok, false); assert.match(r.error, /typed while TextEdit was in front.*nothing was pressed/);
+  assert.equal(h.events.some(e => e.type === 1), false); assert.ok(h.restored.includes('app'));
+});
+test('keys typed during the drag turn a success into an error that says so', () => {
+  const h = harness({ typesAt: 'dragging' }); const r = h.run({ windowId: 11 });
+  assert.equal(r.ok, false); assert.match(r.error, /typed during the drag/);
+  assert.equal(h.values.get(11), 'beta gamma alpha\n');
+});
 test('background text move uses PID posting, repairs spacing and never activates or warps', () => {
   const h = harness({ background: true }); const r = h.run({ windowId: 11 });
   assert.equal(r.ok, true); assert.equal(r.path, 'background'); assert.equal(r.spaceInserted, true);
@@ -94,12 +183,12 @@ test('background text move uses PID posting, repairs spacing and never activates
 });
 test('unchanged background text alone permits the foreground fallback', () => {
   const h = harness({ background: true, backgroundAfter: 'alpha beta gamma\n' }); const r = h.run({ windowId: 11 });
-  assert.equal(r.ok, true); assert.equal(r.path, 'foreground'); assert.equal(r.fallbackReason, 'background text unchanged');
+  assert.equal(r.ok, true); assert.equal(r.path, 'foreground'); assert.match(r.fallbackReason, /^background text unchanged; accessibility move unavailable/);
   assert.equal(h.pidEvents.length, 28); assert.equal(h.activations.length, 1); assert.equal(h.events.length, 28);
 });
 test('another app covering the drag points skips background posting and says which app', () => {
   const h = harness({ background: true, coveredEnd: true, coveredPid: 9 }); const r = h.run({ windowId: 11 });
-  assert.equal(r.path, 'foreground'); assert.equal(r.fallbackReason, 'background skipped: Other app covers the window at the drag points');
+  assert.equal(r.path, 'foreground'); assert.match(r.fallbackReason, /^background skipped: Other app covers the window at the drag points; accessibility move unavailable/);
   assert.equal(h.pidEvents.length, 0);
 });
 test('missing or failing private setter skips posting and names the foreground path', () => {

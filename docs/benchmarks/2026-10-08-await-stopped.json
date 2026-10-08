@@ -1,0 +1,181 @@
+{
+  "stamp": "2026-10-08T22-38-40-834Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 12.5,
+      "turns": 3,
+      "costUsd": 0.159866,
+      "usage": {
+        "input": 6,
+        "cacheRead": 133190,
+        "cacheWrite": 32569,
+        "output": 294
+      },
+      "timing": {
+        "totalMs": 10991,
+        "modelMs": 5826,
+        "calls": 2,
+        "refused": 0,
+        "toolMs": 3927,
+        "engineMs": 3919,
+        "relayMs": 8,
+        "localMs": 0,
+        "guardReads": 7,
+        "guardReadMs": 2783.8871240000003,
+        "guardReadFailures": 0,
+        "otherMs": 1238
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 1,
+      "passed": true,
+      "seconds": 24.8,
+      "turns": 9,
+      "costUsd": 0.2675044,
+      "usage": {
+        "input": 18,
+        "cacheRead": 507062,
+        "cacheWrite": 38744,
+        "output": 1108
+      },
+      "timing": {
+        "totalMs": 22919,
+        "modelMs": 15387,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 5536,
+        "engineMs": 5512,
+        "relayMs": 24,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 3356.194709,
+        "guardReadFailures": 1,
+        "otherMs": 1996
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": false,
+      "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-08T22-38-40-834Z/sleight-textedit-save-1/a8970c84.txt was not saved",
+      "seconds": 127.1,
+      "turns": 40,
+      "costUsd": 1.4931811999999998,
+      "usage": {
+        "input": 68,
+        "cacheRead": 3865886,
+        "cacheWrite": 164222,
+        "output": 6298
+      },
+      "timing": {
+        "totalMs": 125278,
+        "modelMs": 77284,
+        "calls": 32,
+        "refused": 1,
+        "toolMs": 44766,
+        "engineMs": 42663,
+        "relayMs": 1007,
+        "localMs": 1096,
+        "guardReads": 38,
+        "guardReadMs": 24070.321291000004,
+        "guardReadFailures": 0,
+        "otherMs": 3228
+      },
+      "exitCode": 0,
+      "answer": "I couldn't finish this: the file `a8970c84.txt` was not saved, and the document is still open. I checked the folder on disk, and it holds only `trace-50010.jsonl`.\n\n**What worked:**\n- A new TextEdit document (\"Untitled 6\") was created, with Make Plain Text applied via ⌘⇧T.\n- The text `sleight bench ",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\\n\"",
+      "seconds": 78.3,
+      "turns": 18,
+      "costUsd": 0.458619,
+      "usage": {
+        "input": 36,
+        "cacheRead": 1082095,
+        "cacheWrite": 50527,
+        "output": 4002
+      },
+      "timing": {
+        "totalMs": 76704,
+        "modelMs": 44654,
+        "calls": 16,
+        "refused": 1,
+        "toolMs": 28839,
+        "engineMs": 28670,
+        "relayMs": 169,
+        "localMs": 0,
+        "guardReads": 20,
+        "guardReadMs": 12939.001207999989,
+        "guardReadFailures": 1,
+        "otherMs": 3211
+      },
+      "exitCode": 0,
+      "answer": "I couldn't finish this: the file hasn't been opened, edited or saved, and TextEdit has stopped responding to the automation.\n\n- **What worked:** I got as far as TextEdit's Open dialog and selected `fa33224a-edit.txt` in the right folder.\n- **Where it stuck:** The dialog's Open button stayed disabled",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 1,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\"",
+      "seconds": 19.4,
+      "turns": 3,
+      "costUsd": 0.1268238,
+      "usage": {
+        "input": 6,
+        "cacheRead": 125219,
+        "cacheWrite": 24287,
+        "output": 462
+      },
+      "timing": {
+        "totalMs": 17962,
+        "modelMs": 6097,
+        "calls": 2,
+        "refused": 0,
+        "toolMs": 10453,
+        "engineMs": 10310,
+        "relayMs": 143,
+        "localMs": 0,
+        "otherMs": 1412
+      },
+      "exitCode": 0,
+      "answer": "I couldn't do this task. Two attempts to read TextEdit through computer use both timed out. I don't know whether TextEdit or the automation helper is at fault.\n\nI haven't opened `d47ba058-drag.txt`, selected \"alpha\", dragged it, saved or closed anything. The file is unchanged and still reads as it d",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}
