@@ -203,6 +203,7 @@ const MENU_BAR_TOOLS = [
   {
     name: 'menu_bar',
     description: "Use apps' status items in the macOS menu bar (the icons at the right end), which the js tool can't reach. " +
+      "Not for an app's own menus (File, Edit, Format, View): those are in its tree, so use js. " +
       'op "apps" lists the apps that have one. "open" clicks an app\'s item and returns its menu (read, then closed again) ' +
       'or the window it opened, with numbered elements. "choose" clicks the menu item at `path`, a list of titles from the ' +
       'top menu down. "press" clicks `element` in the open window. "close" closes the menu. `item` picks among several ' +

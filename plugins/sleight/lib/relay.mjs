@@ -212,7 +212,7 @@ export function createRelay({
   const helperHandles = new Map();
   // js calls awaiting a reply, and whether this engine session has shown its first-call docs:
   // docs again without a js_reset mean the session restarted and every handle is gone.
-  const jsCalls = new Set();
+  const jsCalls = new Map();
   let docsShown = false;
   const helperAliases = new Map();
   const helperReads = new Map();
@@ -817,6 +817,12 @@ export function createRelay({
     }
     // When each tool call arrived, so a trace can time the relay's own work on it.
     if (msg.method === 'tools/call') trace('call-received', { id: msg.id, method: msg.method, params: { name: msg.params?.name } });
+    // Claude sometimes sends js the Bash tool's parameter name (6 of 437 calls, 2026-10-07).
+    const jsArgs = msg.method === 'tools/call' && msg.params?.name === 'js' ? msg.params.arguments : undefined;
+    if (jsArgs && jsArgs.code === undefined && typeof jsArgs.command === 'string') {
+      const { command, ...rest } = jsArgs;
+      msg.params.arguments = { ...rest, code: command };
+    }
     handleClient(msg);
   });
   function handleClient(msg) {
@@ -865,7 +871,7 @@ export function createRelay({
       return;
     }
     if (msg.method === 'tools/call' && msg.params?.name === 'js_reset') { helperHandles.clear(); helperActive = undefined; docsShown = false; }
-    if (msg.method === 'tools/call' && msg.params?.name === 'js' && msg.id !== undefined) jsCalls.add(msg.id);
+    if (msg.method === 'tools/call' && msg.params?.name === 'js' && msg.id !== undefined) jsCalls.set(msg.id, originalCode ?? '');
     let flowPlan, clipboardAction;
     if (clipboard && msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name) && clipboard.pending) {
       clipboardStop(msg, 'Clipboard: wait for the pending clipboard action, then retry.'); return;
@@ -1068,6 +1074,13 @@ export function createRelay({
       }
     }
     if (msg.method === undefined && lateHelperReplies.delete(msg.id)) return;
+    const jsCode = msg.method === undefined ? jsCalls.get(msg.id) : undefined;
+    // Reading after ⌘W closed the last window fails with noWindowsAvailable, but the
+    // close worked (7 of 437 calls, 2026-10-07). Say so instead of reporting an error.
+    if (jsCode !== undefined && msg.result?.isError && /\bsuper\+w\b|cmd\+w\b|command\+w\b/i.test(jsCode) &&
+        (msg.result.content ?? []).some(c => c.type === 'text' && /noWindowsAvailable/.test(c.text ?? ''))) {
+      msg.result = { ...msg.result, isError: false, content: [{ type: 'text', text: 'sleight: the app has no windows left, so the window this call closed was its last. Nothing more to read.' }] };
+    }
     if (msg.method === undefined && jsCalls.delete(msg.id) && Array.isArray(msg.result?.content)) {
       const docs = msg.result.content.some(c => c.type === 'text' && /(^|\n)## Computer Use\n/.test(c.text ?? ''));
       if (docs && docsShown) {

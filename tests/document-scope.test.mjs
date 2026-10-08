@@ -176,6 +176,21 @@ test('labels match a description or a title, whole, never part of one', () => {
   assert.equal(hasIdentifier('button Description: 7, ID: SevenUp', 'Seven'), false);
 });
 
+test('an untitled sheet the call opened in the same app passes the lease, but not document scope', async () => {
+  let sheet = false; const typed = [];
+  const raw = { getAXState: async () => sheet ? 'Window: "", App: TextEdit.\n0 sheet Description: Go to Folder'
+    : 'Window: "a.txt", App: TextEdit.\n0 standard window a.txt', pressKey: async () => { sheet = true; }, typeText: async t => typed.push(t) };
+  const window = { title: 'a.txt', app: 'TextEdit', url: null };
+  for (const [options, ok] of [[{ adoptUrl: true }, true], [{ adoptUrl: false }, false]]) {
+    sheet = false; typed.length = 0;
+    const context = { cua: { getApp: async () => raw }, nodeRepl: { write: () => {} } };
+    const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+    await run(readCode('await cua.getApp("TextEdit");'));
+    const done = run(guardedCode('await app.pressKey("super+shift+g"); await app.typeText("/tmp");', window, 'stopped', undefined, options));
+    if (ok) { await done; assert.deepEqual(typed, ['/tmp']); } else await assert.rejects(done, /stopped/);
+  }
+});
+
 test('a batch stops when an earlier action in the call renumbers its target', async () => {
   let shifted = false; const clicked = [];
   const tree = () => ['Window: "Calculator", App: Calculator.', '0 standard window Calculator',

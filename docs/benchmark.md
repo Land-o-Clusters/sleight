@@ -85,6 +85,20 @@ and one 5-turn Calculator run spent 54 s waiting on the model. chess-drag failed
 Grok Bot and the Claude app covered the board, and in the other `drag` couldn't match the Chess
 window to an accessibility window.
 
+In those two passes 94 of 437 calls returned an error, and each one cost Claude a turn. Apart from
+covered windows, 0.13.1 fixes the four biggest causes:
+
+- A Save panel's Go to Folder sheet stopped the input lease (18 errors).
+- Claude called `js`'s parameter `command` (6).
+- A read right after ⌘W failed because the last window had closed (7).
+- The benchmark arm refused sleight's other tools (8).
+
+The pass after it
+([`2026-10-07-errors.json`](benchmarks/2026-10-07-errors.json)) passed 21/21 with errors in 23 of
+181 calls (12.7%, from 21.5%). Against the first timing pass it took 260 turns instead of 300, 470 s
+of model time instead of 589, and 825 s in total instead of 902, at 1.81 s of model time per turn
+against 1.96. textedit-save didn't get faster (median 27 turns).
+
 From 2026-10-04 on, runs default to Sonnet 5.5 at medium effort (`--model`, `--effort`).
 
 ```bash

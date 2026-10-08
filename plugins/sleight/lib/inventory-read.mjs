@@ -2,7 +2,7 @@
 // cua's three inventory methods. No evaluation, statements or mutation.
 export function isInventoryRead(code) {
   const tokens = [];
-  const token = /\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\/(?:[^/\\\r\n]|\\[^\r\n])+\/[dgimsuvy]*|[A-Za-z_$][\w$]*|\d+(?:\.\d+)?|===|!==|==|!=|<=|>=|&&|\|\||=>|[().,!<>+?:;])/y;
+  const token = /\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\/(?:[^/\\\r\n]|\\[^\r\n])+\/[dgimsuvy]*|[A-Za-z_$][\w$]*|\d+(?:\.\d+)?|===|!==|==|!=|<=|>=|&&|\|\||=>|[().,!<>+?:;{}])/y;
   let offset = 0;
   while (offset < code.trimEnd().length) {
     token.lastIndex = offset;
@@ -38,7 +38,10 @@ export function isInventoryRead(code) {
     else if (take('cua')) {
       need('.');
       if (!['listApps', 'listWindows', 'getState'].includes(identifier())) throw new Error('inventory method');
-      need('('); need(')'); inventories++;
+      need('(');
+      // { emit: false } only silences the engine's own printout of the inventory.
+      if (take('{')) { need('emit'); need(':'); if (!take('true')) need('false'); need('}'); }
+      need(')'); inventories++;
     } else if (take('JSON')) {
       need('.'); need('stringify'); need('('); expression(locals); need(')');
     } else if (take('nodeRepl')) {

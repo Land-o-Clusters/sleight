@@ -28,7 +28,7 @@ function statusItems(app) {
   const proc = se.processes.byName(app);
   if (!attempt(() => proc.exists(), false)) throw new Error(`${app} isn't running`);
   const bars = proc.menuBars();
-  if (bars.length < 2) throw new Error(`${app} has no status item in the menu bar`);
+  if (bars.length < 2) throw new Error(`${app} has no status item in the menu bar. Its own menus (File, Edit, Format…) are in its tree: use js.`);
   return { proc, items: bars[1].menuBarItems() };
 }
 

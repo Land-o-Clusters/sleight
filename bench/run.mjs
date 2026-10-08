@@ -57,7 +57,9 @@ const ARMS = {
       mkdirSync(dir, { recursive: true });
       return dir;
     })(),
-    args: ['--plugin-dir', join(ROOT, 'plugins', 'sleight'), '--allowedTools', 'mcp__plugin_sleight_computer__js,mcp__plugin_sleight_computer__drag'],
+    args: ['--plugin-dir', join(ROOT, 'plugins', 'sleight'), // Every sleight tool, as a user who approves its prompts would have. Without
+    // them Claude lost 8 turns to refused select_window and menu_bar calls (2026-10-07).
+    '--allowedTools', ['js', 'js_reset', 'drag', 'hover', 'menu_bar', 'notifications', 'select_window', 'blocked_app'].map(t => `mcp__plugin_sleight_computer__${t}`).join(',')],
     env: {},
     server: 'plugin:sleight:computer',
   },
@@ -209,6 +211,9 @@ for (let run = 1; run <= runs; run++) {
         seconds: Math.round((Date.now() - started) / 100) / 10,
         turns: out?.num_turns,
         costUsd: out?.total_cost_usd,
+        // Input, cached and output tokens: what a smaller result would save.
+        usage: out?.usage && { input: out.usage.input_tokens, cacheRead: out.usage.cache_read_input_tokens,
+          cacheWrite: out.usage.cache_creation_input_tokens, output: out.usage.output_tokens },
         timing: runTiming(out, armName === 'sleight' ? traceTiming(dir) : undefined),
         exitCode: code,
         answer: scrub(answer.slice(0, 300)),

@@ -1255,3 +1255,26 @@ test('cancelled review leaves changes pending and an engine failure cannot autho
   assert.match(h.toClient.at(-1).result.content[0].text, /Undo refused/);
   assert.equal(readFileSync(path, 'utf8'), 'partial change\n');
 });
+
+test('a js call sent with Bash\'s command parameter reaches the engine as code', async () => {
+  const h = harness({ changeReview: false });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { command: 'await cua.getState()', title: 't' } } });
+  await tick();
+  const sent = h.toServer.find(m => m.id === 1);
+  assert.equal(sent.params.arguments.command, undefined);
+  assert.match(sent.params.arguments.code, /await cua\.getState\(\)/);
+});
+
+test('noWindowsAvailable after a close shortcut is reported as the closed last window, not an error', async () => {
+  const h = harness({ changeReview: false });
+  const call = (id, code) => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } });
+  const failed = id => ({ jsonrpc: '2.0', id, result: { isError: true, content: [{ type: 'text', text: 'Computer Use server error -10005: noWindowsAvailable' }] } });
+  call(1, 'await app.pressKey("super+w"); await app.getAXState()'); await tick();
+  h.fromServer(failed(1)); await tick();
+  const closed = h.toClient.find(m => m.id === 1);
+  assert.equal(closed.result.isError, false);
+  assert.match(closed.result.content[0].text, /no windows left/);
+  call(2, 'await app.getAXState()'); await tick();
+  h.fromServer(failed(2)); await tick();
+  assert.equal(h.toClient.find(m => m.id === 2).result.isError, true, 'without a close it stays an error');
+});

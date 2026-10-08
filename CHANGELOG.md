@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.1 (2026-10-07)
+
+- Fewer errors, so fewer turns. In two benchmark passes 94 of 437 calls failed. A Save panel's Go to
+  Folder sheet has no title, and the input lease stopped the call that opened it (18 errors); an
+  untitled sheet or panel of the same app now passes. `js` accepts `command` for `code`, which Claude
+  sent 6 times. Reading after ⌘W closed the last window reports that instead of a
+  `noWindowsAvailable` error (7). Inventory reads may pass `{ emit: false }`. The next pass passed
+  21/21 with 12.7% of calls failing instead of 21.5%, and took 260 turns instead of 300 and 825 s
+  instead of 902 (`docs/benchmarks/2026-10-07-errors.json`).
+- `menu_bar` says it isn't for an app's own menus, and its error points to `js` (Claude used it for
+  File and Format 3 times). Not measured yet.
+- Benchmark runs record token usage and allow every sleight tool.
+
 ## 0.13.0 (2026-10-07)
 
 - Claude can address an element by its AX ID or label instead of its number:

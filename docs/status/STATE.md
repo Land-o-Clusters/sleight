@@ -3,14 +3,15 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-08 03:20 UTC)
+## Banner (2026-10-08 03:55 UTC)
 
-0.13.0: element IDs and labels (`app.click({ id: "Seven" })`). Refused calls 14 to 7 and turns 300
-to 281 against the timing baseline (`docs/benchmarks/2026-10-07-{timing,element-ids}.json`); model
-time per turn rose in that pass (1.96 to 2.59 s), so total time did too. Next in the owner's perf
-push is batching guidance and smaller results. The model passes come after that, with Haiku 5.5 as
-`claude-haiku-5-5`, Sonnet at low effort, and Opus. Sonnet stays the default driver. At least 3 of
-the 5 drag failures on 2026-10-07 came from the owner's windows covering the target app.
+0.13.1 released. Against the first timing pass (owner's speed push): errors 21.5% to 12.7% of calls,
+turns 300 to 260, model time 589 to 470 s, total 902 to 825 s, 21/21 passed. Results in
+`docs/benchmarks/2026-10-07-{timing,element-ids,errors}.json`. textedit-save is the slowest task
+and didn't improve (median 27 turns), so it's next. A Codex brief for gpt-6-astra (allowed for deep
+perf tuning, owner 2026-10-07) is at `.dev/prompts/astra-guard-reads.md`: make the guard's
+per-action full reads cheaper without weakening its checks. Model passes (Haiku 5.5 as
+`claude-haiku-5-5`, Sonnet at low effort, Opus) still to run. Sonnet stays the default driver.
 
 0.12.2 released. The input lease's recovery advice repeated an invalid app name as a bare
 assignment, and a session failed 20 of its first 22 calls. Now the advice works, and an engine

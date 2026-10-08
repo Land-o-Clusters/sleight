@@ -184,7 +184,11 @@ function guardSetup(update) {
           // window. Document scope and change review stay strict about URLs.
           if (state.adoptUrl && observed && state.expected && state.expected.url == null && observed.url &&
             observed.app === state.expected.app && observed.title === state.expected.title) state.expected = observed;
-          if (!cancel && !dialog && (!observed || ['title', 'app', 'url'].some(key => observed[key] !== state.expected[key]))) {
+          // A sheet or panel this call opened in the same app has no title (Go to Folder
+          // in a Save panel: 18 stopped calls in two benchmark passes, 2026-10-07). It
+          // isn't another document, so the lease alone lets it through.
+          const panel = state.adoptUrl && observed?.app === state.expected?.app && observed.title === '' && !observed.url;
+          if (!cancel && !dialog && !panel && (!observed || ['title', 'app', 'url'].some(key => observed[key] !== state.expected[key]))) {
             throw new Error(state.reason + ' Observed ' + JSON.stringify(observed));
           }
           await checkLease();
