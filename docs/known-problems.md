@@ -167,6 +167,9 @@ our own runs. Dates and engine versions are given where they matter.
 - On 2026-10-07 `drag` once refused a Chess window launched in the background seconds earlier,
   because it couldn't find that window among Chess's accessibility windows. It matches by the window's AX number, or by bounds and
   title, and neither matched. The same kind of window matched in another run. Why is unknown.
+  On 2026-10-08 (engine 26.1002.52244) it happened again in 1 of 3 runs, in a new game's window: the
+  engine's drag answered `-10005 noWindowsAvailable` while reads of the window still worked, and
+  `drag` reported the window off screen. The screen was unlocked and the display on.
 - The engine's helper can stop answering. On 2026-10-04 every `cua.getApp` timed out
   (`-10005 timeoutReached`) for about 25 minutes, with the Mac unlocked and in use, until ChatGPT was
   restarted. We don't know the cause. It started right after a test that kills engine processes.

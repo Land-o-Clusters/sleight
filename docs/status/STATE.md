@@ -3,31 +3,30 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-08 03:15 UTC, flushed before the owner's clear)
+## Banner (2026-10-08 03:40 UTC, sleight-arch rebooted after the owner's clear)
 
-Checkout: `~/Projects/sleight` is on branch `perf/save-in-one-call` at `498d9de` (pushed, not
-merged, no PR), one commit past `main` (`552a406`, 0.13.1). It keeps the input lease through guard
-stops (the stop includes the window header it read) and adds a one-call Save As to the skill. Not
-released: it needs the Sonnet pass below. Merge it to `main` and release 0.13.2 only if that pass
-holds against `docs/benchmarks/2026-10-07-errors.json` (21/21, 260 turns, 825 s), then switch the
-checkout back to `main`. The passes read the plugin from this checkout, so don't switch branches
-while they run.
+Checkout: `~/Projects/sleight` is on branch `perf/save-in-one-call`, which is now also `main`
+(fast-forwarded) and released as 0.13.2: the relay keeps the input lease through guard stops, and the skill shows a
+one-call Save As. Its Sonnet medium pass passed 20/21, 213 turns (from 260), 687 s (from 825), model
+time per turn 2.05 s (from 1.81), textedit-save median 16 turns (from 27)
+(`docs/benchmarks/2026-10-08-save-in-one-call.json`). The failure, chess-drag run 1, was the engine's
+`noWindowsAvailable` on a fresh Chess window (`docs/known-problems.md`), not the branch's code. Switch
+the checkout to `main` once the passes below finish. They read the plugin from this checkout.
 
-Background job, kept running through the clear: `nohup .dev/passes/passes.sh`, started 2026-10-08T03:13:06Z,
-four benchmark passes in a row, 3 runs per task each. First Sonnet 5.5 medium on `498d9de`, then Haiku 5.5
-(`claude-haiku-5-5`, which Claude Code 2.1.289 calls unrecognized, so its cost figures are suspect),
-Sonnet low and Opus 5.5 medium, for the owner's model comparison. Each pass takes and releases
-`/tmp/sleight-live.lock`. Progress and result files: `.dev/passes/passes.log`, per-pass logs
-`.dev/passes/pass-*.log`. About two hours. Publish each pass scrubbed (`run.mjs` strips the owner's
-full name; check paths) as `docs/benchmarks/2026-10-08-*.json` with a note, as for the 2026-10-07 ones.
+Background job: `nohup .dev/passes/passes.sh`, started 2026-10-08T03:13:06Z, 3 runs per task per
+pass. Sonnet medium is done (above). Haiku 5.5 started 03:26 UTC (`claude-haiku-5-5`, which Claude
+Code 2.1.289 calls unrecognized, so its cost figures are suspect), then Sonnet low and Opus 5.5
+medium, for the owner's model comparison. Each pass takes and releases `/tmp/sleight-live.lock`.
+Progress: `.dev/passes/passes.log`, per-pass logs `.dev/passes/pass-*.log`. Publish each scrubbed as
+`docs/benchmarks/2026-10-08-<model>-<effort>.json` with a note in `docs/benchmark.md`, then compare
+pass rate, turns, model time per turn and total time.
 
-Engine update: the helper is now 26.1002.52244 (was 26.930.51102), found at boot on 2026-10-08, so
-the Sonnet pass is also the update check. Its API diff
-(`~/Library/Logs/sleight/engine-api-26.1002.52244.diff`, captured by hand because `watch.sh` would
-run a benchmark task during the pass) adds `click(…, { key, durationMs })` (modifiers held through the
-click, timed press) and `pressKey(key, { durationMs })`. Check whether sleight's relay, guards and
-skill pass these through, and whether the skill should document Shift/Cmd-click and long press.
-`watch-engine-version` still says 26.930.51102, so Monday's watch will run its benchmark task too.
+Engine update: the helper is now 26.1002.52244 (was 26.930.51102), found at boot on 2026-10-08. Its
+API diff (`~/Library/Logs/sleight/engine-api-26.1002.52244.diff`, captured by hand because
+`watch.sh` would run a benchmark task during the pass) adds `click(…, { key, durationMs })`
+(modifiers held through the click, timed press) and `pressKey(key, { durationMs })`. The relay passes
+`click` options through untouched. Open: whether the skill should document Shift/Cmd-click and long
+press. `watch-engine-version` still says 26.930.51102, so Monday's watch will run its benchmark task.
 
 Owner's speed push (2026-10-07): make sleight fast. Sonnet stays the default driver. Timing per run
 (model, engine, local tools, relay, Claude Code) is in the benchmark results since 2026-10-07; the
@@ -44,7 +43,7 @@ each with a test). Review and reproduce its numbers before merging. It takes the
 checks. `codex/browser-enforcement` (Codex, 2026-10-04) is still unreviewed; its worktree is Codex's
 own at `~/.codex/worktrees/browser-enforcement/sleight`.
 
-Public: `Land-o-Clusters/sleight`, latest release `v0.13.1`, installed at user scope from the repo
+Public: `Land-o-Clusters/sleight`, latest release `v0.13.2`, installed at user scope from the repo
 folder. Open PRs: none. The first outside user (the owner's friend) runs his iOS simulator tests
 through sleight and finds it faster than Maestro. `~/.claude.json` marks
 `~/Library/Caches/sleight-bench/sleight-arm` trusted (set for the interactive pane session,
@@ -53,11 +52,11 @@ through sleight and finds it faster than Maestro. `~/.claude.json` marks
 
 Next, in order:
 
-- Finish the passes above: publish them, merge or drop `perf/save-in-one-call`, then compare the
-  models on pass rate, turns, model time per turn and total time.
+- Finish the passes above: publish them, then compare the models on pass rate, turns, model time
+  per turn and total time.
 - Review the Astra branch when it reports.
-- textedit-save is still the slowest task (median 27 turns on 2026-10-07). After the Sonnet pass,
-  trace its runs again.
+- textedit-save and chess-drag are the slowest tasks (median 16 turns each on 2026-10-08). Trace
+  their runs for the next cut.
 - The engine's first-call docs are 56% of all result text (about 21,000 characters per session), but
   context is cached: a run re-reads about 668,000 cached tokens and writes about 1,500. Trimming
   them needs a measured case and care with OpenAI's safety guidance.

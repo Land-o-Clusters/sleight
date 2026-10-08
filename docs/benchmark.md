@@ -99,6 +99,14 @@ The pass after it
 of model time instead of 589, and 825 s in total instead of 902, at 1.81 s of model time per turn
 against 1.96. textedit-save didn't get faster (median 27 turns).
 
+0.13.2 keeps the input lease after sleight stops an action, and its skill shows a Save As in one
+call. Its pass ([`2026-10-08-save-in-one-call.json`](benchmarks/2026-10-08-save-in-one-call.json),
+on ChatGPT engine 26.1002.52244) passed 20/21 and took 213 turns instead of 260, 131 calls instead
+of 181, 436 s of model time instead of 470 and 687 s in total instead of 825. Model time per turn
+rose from 1.81 s to 2.05 s. textedit-save took 16, 12 and 20 turns (median 16, from 27). Errors fell
+to 15 of 131 calls (11.5%), 8 of them in the one failure: chess-drag's first run, where the engine
+answered `noWindowsAvailable` for a freshly launched Chess window and `drag` called it off screen.
+
 From 2026-10-04 on, runs default to Sonnet 5.5 at medium effort (`--model`, `--effort`).
 
 ```bash

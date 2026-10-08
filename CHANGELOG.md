@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.13.2 (2026-10-08)
+
+- sleight keeps the input lease when it stops an action (a renumbered batch, or an AX ID that
+  doesn't match). The stop message includes the window header from the read it took, so Claude
+  retries without acquiring the app again. Before, a textedit-save run's correct retry was refused and cost
+  a turn and a 21,043-character tree.
+- The skill shows a Save As in one call (Go to Folder, the folder, Return, the name by ID, Return).
+- The next pass (`docs/benchmarks/2026-10-08-save-in-one-call.json`) passed 20/21 and took 213 turns
+  instead of 260, and 687 s instead of 825, at 2.05 s of model time per turn against 1.81.
+  textedit-save's median fell from 27 turns to 16. The failure was a Chess window the engine
+  couldn't drag in (`docs/known-problems.md`).
+
 ## 0.13.1 (2026-10-07)
 
 - Fewer errors, so fewer turns. In two benchmark passes 94 of 437 calls failed. A Save panel's Go to
