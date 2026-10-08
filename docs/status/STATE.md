@@ -48,8 +48,9 @@ Released that day: 0.12.2 (lease recovery advice, engine session restarts), 0.12
 screenshot), 0.13.0 (`app.click({ id })`/`{ label }`), 0.13.1 (errors 21.5% to 12.7% of calls). The
 remaining error causes are in the 0.13.1 pass transcripts, and `docs/benchmark.md` has the history.
 
-Codex: `codex/guard-reads` is merged (0.13.4). `codex/browser-enforcement` (Codex, 2026-10-04) is
-still unreviewed. Its worktree is Codex's own at `~/.codex/worktrees/browser-enforcement/sleight`.
+Codex: `codex/guard-reads` (0.13.4), `codex/engine-time` (0.13.5) and `codex/reliability` (0.14.1) are
+merged. `codex/browser-enforcement` had been on main since 2026-10-04 (`b234f55`), so its remote
+branch was deleted on 2026-10-08. Sol's next brief: `.dev/prompts/sol-real-use-tasks.md`.
 
 Public: `Land-o-Clusters/sleight`, latest release `v0.13.3`, installed at user scope from the repo
 folder. Open PRs: none. The first outside user (the owner's friend) runs his iOS simulator tests
@@ -72,7 +73,7 @@ Next, in order:
 - "native pipe startup failed" three times in a row in one session on 2026-10-05. The cause is unknown.
 - Check the pane in the desktop app's Code tab (it offers Claude Code 2.1.288). The owner types
   `/sleight` there.
-- Review `codex/browser-enforcement`. Chess square estimates. Re-register LCU before any comparison.
+- Chess square estimates. Re-register LCU before any comparison.
 
 Codex worktrees: `~/Projects/sleight-wt/` holds only `guard-reads` now; 22 finished ones were removed
 on 2026-10-06. Their remote branches stay, and files only they had are in `.dev/worktree-archive/`. Codex
