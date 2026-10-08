@@ -5,7 +5,7 @@ What is true now. One banner, replaced in place as work happens. Always-true rul
 
 ## Banner (2026-10-08 18:30 UTC)
 
-Checkout: `~/Projects/sleight` is on `main`, released as 0.15.0.
+Checkout: `~/Projects/sleight` is on `main`, released as 0.15.1.
 
 - 0.14.0 cuts turns, the owner's priority (native Codex computer use felt faster). The skill rides on
   the engine's first result instead of costing a Skill turn, `js` loads at session start (no tool
@@ -23,8 +23,9 @@ Checkout: `~/Projects/sleight` is on `main`, released as 0.15.0.
   the repo's hang fixture to be auto-approved by its probe (LAWS).
 - Owner's plan (2026-10-08), run in order without check-ins:
   1. Done: acquire-and-act is in 0.15.0 (21/21, but no run combined a call, so no saving yet).
-  2. Faster: trace chess-drag and textedit-save turns (medians 10 and 13 in the 0.14.1 pass) and cut
-     the waste, and shorten the skill (17,500 characters read every turn). Engine-side tuning stops.
+  2. Faster: 0.15.1 halved the skill and fixed what a trace of the slow tasks found (21/21, 140
+     turns, 531 s). Left: chess-drag (9 to 13 turns) and textedit-drag (9 to 13), against a floor
+     of about 5. The Chess title changes with whose turn it is and trips the lease.
   3. Better: widen the benchmark with 4 to 6 real-use tasks (browser page, Finder, Notes, a two-app
      copy and paste, a simulator flow), then a head-to-head with native Codex computer use on the
      same tasks (the owner approved spending Codex usage for it).

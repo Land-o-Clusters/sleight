@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.15.1 (2026-10-08)
+
+- The skill is 7,528 characters instead of 17,549, with every safety rule kept. Claude reads it on
+  every turn now. It adds what a trace of 12 slow-task runs found: exact text by `paste`, because
+  `typeText` goes through macOS auto-capitalization ("sleight" was saved as "Sleight" in 6/6 runs);
+  the whole Save, final Return included, in one call; the result's title as the save's confirmation
+  instead of a Bash check; menu shortcuts; and `menu_bar` only for menu bar icons.
+- An action whose result shows another window of the same app says which window it acted on and
+  which it shows. After closing a Chess game, Claude used to probe for it.
+- A call that starts with an acquisition is split for the app the lease already holds too. In one
+  call, the guard's setup referred to `app` before Claude's `let app` and threw.
+- The next pass (`docs/benchmarks/2026-10-08-skill-trim.json`) passed 21/21 in 140 turns instead of
+  156 and 531 s instead of 638, with 271 s of model time at 1.93 s per turn. textedit-save took 6 to
+  8 turns instead of 9 to 14.
+
 ## 0.15.0 (2026-10-08)
 
 - Claude can acquire an app and act on it in one call:
