@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.14.0 (2026-10-08)
+
+Fewer turns. In the 0.13.4 pass, 20 of 155 tool calls only loaded the skill, and without it Claude
+spent the turn searching for the `js` tool instead.
+
+- The relay adds the skill to the engine's first result, which Claude waits for anyway, and Claude
+  no longer invokes the skill itself (`/sleight:drive-mac-apps` still shows it).
+- `js` loads at session start (`_meta` `anthropic/alwaysLoad`), so Claude doesn't search for it before
+  its first call. sleight's other tools load on demand, as before.
+- `getAXState({ disableDiffing: true })` comes back whole, as sleight's own advice promises. Before,
+  it could say "no change", and Claude took a screenshot to check.
+- Each pre-approval grant appears once per result, where a batch of Calculator clicks used to repeat
+  it 12 times.
+- The next pass (`docs/benchmarks/2026-10-08-turns.json`) passed 21/21 in 157 turns instead of 195,
+  with 426 s of model time instead of 490 and 717 s in total instead of 756. Model time per turn
+  rose from 2.51 s to 2.71 s. Every task took fewer turns.
+
 ## 0.13.5 (2026-10-08)
 
 - `getScreenshot()` takes the engine's combined capture and keeps its AX half as the guard's read,

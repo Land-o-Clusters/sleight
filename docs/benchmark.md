@@ -133,7 +133,22 @@ the benchmark quit it (`open` error -600).
 21/21 ([`engine-time-pass`](benchmarks/2026-10-08-engine-time-pass.json)) in 212 turns and 877 s,
 with 275 s in the engine. calculator-click runs 1 and 2 took 83 s of that and 26 turns, while
 Calculator's AX tree kept changing after launch. The other six tasks took 188 s in the engine against
-173 s in the previous pass. One pass per model can't separate a model from that hour's API latency.
+173 s in the previous pass.
+
+0.14.0 removes two turns that every run paid before its first action: loading the skill, and the
+tool search that replaced it. Its pass ([`turns`](benchmarks/2026-10-08-turns.json)) passed 21/21 in
+157 turns instead of 195, with 426 s of model time instead of 490 and 717 s in total instead of 756,
+at 2.71 s of model time per turn against 2.51.
+
+| Task | Median turns, 0.13.4 | 0.14.0 |
+|---|---:|---:|
+| calculator-click | 5 | 4 |
+| calculator-menu | 7 | 4 |
+| textedit-save | 16 | 10 |
+| textedit-edit | 9 | 7 |
+| textedit-drag | 11 | 8 |
+| chess-drag | 15.5 | 13 |
+| simulator-form | 7 | 5 | One pass per model can't separate a model from that hour's API latency.
 
 From 2026-10-04 on, runs default to Sonnet 5.5 at medium effort (`--model`, `--effort`).
 

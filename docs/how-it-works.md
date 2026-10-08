@@ -10,7 +10,10 @@ Claude Code ──MCP──▶ bin/sleight-mcp ──▶ ChatGPT.app's cua-repl 
 2. `bin/sleight-mcp` runs on the Node runtime bundled in ChatGPT.app, finds the newest version folder and
    starts the server described there. A hard-coded path would break within days.
 3. The server has one main tool, `js`, a persistent JavaScript session. Its first call returns the API
-   docs for whichever engine version is installed, so Claude always gets the current API.
+   docs for whichever engine version is installed, so Claude always gets the current API. The relay
+   adds sleight's skill to that result, so Claude learns sleight's rules in a turn it pays for anyway,
+   and marks `js` to load at session start instead of behind Claude Code's tool search. Claude no
+   longer invokes the skill itself; `/sleight:drive-mac-apps` still shows it.
 4. Per-app approvals arrive as MCP form elicitations, which Claude Code shows as an ordinary prompt.
    The desktop app's Code tab gets sleight's own panel instead (`lib/ask.js`, see
    [Approval scope](settings.md#approval-scope)).

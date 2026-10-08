@@ -3,27 +3,26 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-08 17:55 UTC)
+## Banner (2026-10-08 18:30 UTC)
 
-Checkout: `~/Projects/sleight` is on `main`, released as 0.13.5. The Sol thread holds the live lock
-for its Chess trials.
+Checkout: `~/Projects/sleight` is on `main`, released as 0.14.0.
 
-- 0.13.5 is Astra's `codex/engine-time`, reproduced 25/25 and squash-merged. `getScreenshot()` reuses
-  the engine's AX read, and the skill says to type contiguous text at once. Its pass ran 21/21 in 212
-  turns and 877 s. Two calculator-click runs took 26 turns and 83 s of engine time while Calculator's
-  AX tree kept changing after launch (known problems). Astra's finding: any read after input costs
-  about 415 ms, however long the caller waits. Its proposal to skip the guard's checks between
-  actions in a batch stays out (43.9 s of a 756 s pass, and it would send input to a dialog that
-  opened mid-batch).
+- 0.14.0 cuts turns, the owner's priority (native Codex computer use felt faster). The skill rides on
+  the engine's first result instead of costing a Skill turn, `js` loads at session start (no tool
+  search), an explicit full read comes back whole, and each pre-approval grant appears once per
+  result. Its pass ran 21/21 in 157 turns (from 195), 426 s of model time (from 490) and 717 s total
+  (from 756). Every task took fewer turns (`docs/benchmark.md`).
+- 0.13.5 (Astra's `codex/engine-time`): `getScreenshot()` reuses the engine's AX read and the skill
+  says to type contiguous text at once. A read after any input costs about 415 ms however long the
+  caller waits. Astra's proposal to skip the guard's checks between actions in a batch stays out
+  (43.9 s of a 756 s pass, and it would send input to a dialog that opened mid-batch).
 - `codex/reliability` (Sol 6.1, `38a8ded`) is reviewed, not merged. The hang diagnosis works (wrong
   "restart ChatGPT" advice 1/1 before, 0/6 after) and the benchmark waits for Chess to exit before
   relaunching. Its fresh-Chess drag trials were blocked on a leftover Chess game, which the owner
   says isn't theirs (2026-10-08). Merge after it reports, with one pass.
-- Turns are the owner's priority now (native Codex computer use felt faster). In the 0.13.4 pass, 20
-  of 155 tool calls loaded the skill and 16 acquired the app alone: about 2 overhead turns per run.
-  sleight-arch is building, in this order: the skill's essentials in the `js` tool description (no
-  Skill turn), the engine's first-call docs fetched by the relay at startup (no docs turn), then a
-  design for acquiring and acting in one call, to show the owner before building it.
+- Next on turns: acquiring and acting in one call (a lease design to show the owner first), and
+  the remaining per-task turns (chess-drag median 13, textedit-save 10). The benchmark's Calculator
+  tasks don't reset the display between runs. A repeated answer then reads as "no change".
 - Earlier on 2026-10-08: 0.13.2 to 0.13.4 (lease kept through guard stops, one-call Save As, the
   echoed-handle acquisition, guard reads cleared for every handle; `CHANGELOG.md`), and a four-model
   comparison on 0.13.2's code (`docs/benchmark.md`). The owner kept Sonnet 5.5 medium (LAWS).

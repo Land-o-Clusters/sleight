@@ -192,7 +192,8 @@ The benchmark task auto-approves Calculator, like any benchmark run.
 - [x] Session and turn ids, so the engine can scope approvals and cleanup
 - [x] Approvals that last for the session, as in Codex
 - [x] Hide or block the engine's internal tools for Claude
-- [x] A skill that tells Claude when to use sleight and when to fall back to a pointer-moving tool
+- [x] A skill that tells Claude when to use sleight and when to fall back to a pointer-moving tool,
+  delivered with the engine's first result so it costs no turn
 - [x] Per-turn cleanup through the mod's `turn.complete` hook
 - [x] Live pane with the app's latest picture and an action log
 - [x] Status line entry and `/sleight stop`
