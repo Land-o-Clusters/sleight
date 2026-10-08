@@ -27,7 +27,8 @@ import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tasks } from './tasks.mjs';
+import { quitChess, tasks } from './tasks.mjs';
+import { runTiming, traceTiming } from './timing.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TIMEOUT_MS = 5 * 60 * 1000;
@@ -131,7 +132,7 @@ for (const name of armNames) {
   if (leaked.length) throw new Error(`${name} arm also loads ${leaked.map(s => s.name).join(', ')}`);
 }
 
-function runClaude(prompt, arm) {
+function runClaude(prompt, arm, env = {}) {
   const args = [
     '-p', prompt,
     ...arm.args,
@@ -141,7 +142,7 @@ function runClaude(prompt, arm) {
     '--effort', effort,
   ];
   return new Promise(resolve => {
-    const child = spawn(claudeBin, args, { cwd: arm.cwd, env: armEnv(arm), stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(claudeBin, args, { cwd: arm.cwd, env: { ...armEnv(arm), ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', d => (stdout += d));
@@ -188,10 +189,12 @@ for (let run = 1; run <= runs; run++) {
       }
 
       const started = Date.now();
-      const { code, out, stderr } = await runClaude(prompt, ARMS[armName]);
+      // sleight traces into the run's scratch folder, so its timing comes from this run alone.
+      const { code, out, stderr } = await runClaude(prompt, ARMS[armName], armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {});
       const answer = out?.result ?? '';
       let verdict;
       try { verdict = task.check({ ...ctx, answer }); } catch (err) { verdict = err.message; }
+      try { task.cleanup?.(ctx); } catch {} // leaving an app open doesn't change the verdict
       results.push({
         arm: armName,
         task: task.id,
@@ -201,6 +204,7 @@ for (let run = 1; run <= runs; run++) {
         seconds: Math.round((Date.now() - started) / 100) / 10,
         turns: out?.num_turns,
         costUsd: out?.total_cost_usd,
+        timing: runTiming(out, armName === 'sleight' ? traceTiming(dir) : undefined),
         exitCode: code,
         answer: answer.slice(0, 300),
         // What Claude Code reports it used, to catch a model setting that didn't apply.
@@ -217,25 +221,24 @@ for (let run = 1; run <= runs; run++) {
 save();
 
 // Leave the desktop as we found it: close the TextEdit documents the runs
-// made (only files under this run's scratch folder) and quit Chess, whose
-// games are throwaway. Chess isn't scriptable, so it's terminated.
+// made (only files under this run's scratch folder) and quit Chess cleanly.
 if (!isDryRun) {
   const scratch = join(tmpdir(), 'sleight-bench', stamp);
   const closeDocs = `tell application "TextEdit" to close (every document whose path starts with ${JSON.stringify(scratch)} or path starts with ${JSON.stringify(existsSync(scratch) ? realpathSync(scratch) : scratch)}) saving no`;
-  for (const [cmd, args] of [['osascript', ['-e', `if application "TextEdit" is running then ${closeDocs}`]], ['pkill', ['-x', 'Chess']]]) {
-    try { execFileSync(cmd, args, { stdio: 'ignore' }); } catch {} // nothing to close
-  }
+  try { execFileSync('osascript', ['-e', `if application "TextEdit" is running then ${closeDocs}`], { stdio: 'ignore' }); } catch {} // nothing to close
+  quitChess();
 }
 
 if (!isDryRun) {
-  console.log('\n| Arm | Task | Passed | Median s | Median turns | API-price cost |');
-  console.log('|---|---|---|---|---|---|');
+  console.log('\n| Arm | Task | Passed | Median s | Model s | Engine s | Local tools s | Relay ms | Median turns | API-price cost |');
+  console.log('|---|---|---|---|---|---|---|---|---|---|');
   const median = xs => { const s = xs.filter(x => x != null).sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : '–'; };
   for (const task of selected) {
     for (const armName of armNames) {
       const rs = results.filter(r => r.task === task.id && r.arm === armName && !r.skipped);
       const cost = rs.reduce((sum, r) => sum + (r.costUsd ?? 0), 0);
-      console.log(`| ${armName} | ${task.id} | ${rs.filter(r => r.passed).length}/${rs.length} | ${median(rs.map(r => r.seconds))} | ${median(rs.map(r => r.turns))} | $${cost.toFixed(2)} |`);
+      const ms = (key, scale) => { const m = median(rs.map(r => r.timing?.[key])); return m === '–' ? m : Math.round(m / scale * 10) / 10; };
+      console.log(`| ${armName} | ${task.id} | ${rs.filter(r => r.passed).length}/${rs.length} | ${median(rs.map(r => r.seconds))} | ${ms('modelMs', 1000)} | ${ms('engineMs', 1000)} | ${ms('localMs', 1000)} | ${ms('relayMs', 1)} | ${median(rs.map(r => r.turns))} | $${cost.toFixed(2)} |`);
     }
   }
 }

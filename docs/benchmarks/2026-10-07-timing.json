@@ -1,0 +1,540 @@
+{
+  "stamp": "2026-10-08T01-42-58-606Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 21,
+      "turns": 9,
+      "costUsd": 0.24919940000000002,
+      "timing": {
+        "totalMs": 19520,
+        "modelMs": 13466,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 4279,
+        "engineMs": 4263,
+        "relayMs": 16,
+        "localMs": 0,
+        "otherMs": 1775
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 1,
+      "passed": true,
+      "seconds": 32.3,
+      "turns": 15,
+      "costUsd": 0.3447048,
+      "timing": {
+        "totalMs": 30504,
+        "modelMs": 23402,
+        "calls": 11,
+        "refused": 1,
+        "toolMs": 4791,
+        "engineMs": 4766,
+        "relayMs": 25,
+        "localMs": 0,
+        "otherMs": 2311
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 60.3,
+      "turns": 17,
+      "costUsd": 0.4254480000000001,
+      "timing": {
+        "totalMs": 58878,
+        "modelMs": 28597,
+        "calls": 13,
+        "refused": 0,
+        "toolMs": 27137,
+        "engineMs": 27060,
+        "relayMs": 77,
+        "localMs": 0,
+        "otherMs": 3144
+      },
+      "exitCode": 0,
+      "answer": "I created the plain-text TextEdit document containing \"sleight bench d2a65f23\", saved it to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-08T01-42-58-606Z/sleight-textedit-save-1/d2a65f23.txt`, and closed it.\n\nI checked the saved file in a shell. It contains exactly that te",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 36.5,
+      "turns": 12,
+      "costUsd": 0.2823002,
+      "timing": {
+        "totalMs": 34708,
+        "modelMs": 16581,
+        "calls": 8,
+        "refused": 1,
+        "toolMs": 14759,
+        "engineMs": 14733,
+        "relayMs": 26,
+        "localMs": 0,
+        "otherMs": 3368
+      },
+      "exitCode": 0,
+      "answer": "I changed \"beta\" to \"delta\" in the file in TextEdit, saved it, and closed the document. The saved file now reads `alpha delta gamma`.\n\nThe close step isn't fully confirmed. The \"Edited\" marker cleared after the save, and the last close call returned a \"no windows available\" error, which suggests the",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 1,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\"",
+      "seconds": 68.9,
+      "turns": 16,
+      "costUsd": 0.33495139999999995,
+      "timing": {
+        "totalMs": 67282,
+        "modelMs": 38990,
+        "calls": 11,
+        "refused": 1,
+        "toolMs": 24793,
+        "engineMs": 10732,
+        "relayMs": 19,
+        "localMs": 14042,
+        "otherMs": 3499
+      },
+      "exitCode": 0,
+      "answer": "I couldn't finish this. The drag-and-drop didn't work, so the document still reads \"alpha beta gamma\". Nothing was saved or closed, and TextEdit still has the file open.\n\nI opened the file and selected \"alpha\" without touching the text. I then ran the `drag` tool three times, from inside the selecti",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 60.8,
+      "turns": 18,
+      "costUsd": 0.43992900000000007,
+      "timing": {
+        "totalMs": 58737,
+        "modelMs": 33477,
+        "calls": 14,
+        "refused": 0,
+        "toolMs": 21278,
+        "engineMs": 21231,
+        "relayMs": 47,
+        "localMs": 0,
+        "otherMs": 3982
+      },
+      "exitCode": 0,
+      "answer": "I started a new game in Chess, dragged the e2 pawn to e4 as White, saved the game, and closed that window.\n\n- **Save:** The file is at `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-08T01-42-58-606Z/sleight-chess-drag-1/20ba9100.game`. I confirmed it exists on disk, 1364 byt",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 1,
+      "passed": true,
+      "seconds": 24.2,
+      "turns": 7,
+      "costUsd": 0.30951799999999996,
+      "timing": {
+        "totalMs": 21187,
+        "modelMs": 12683,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 6146,
+        "engineMs": 6132,
+        "relayMs": 14,
+        "localMs": 0,
+        "otherMs": 2358
+      },
+      "exitCode": 0,
+      "answer": "The page now says \"Sent\". I typed \"sleight bench f8ccf9b2\" into the Message field in Safari on the iPhone 18 Pro simulator, then tapped Submit.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 2,
+      "passed": true,
+      "seconds": 29.2,
+      "turns": 12,
+      "costUsd": 0.2958138,
+      "timing": {
+        "totalMs": 26985,
+        "modelMs": 20233,
+        "calls": 9,
+        "refused": 0,
+        "toolMs": 4778,
+        "engineMs": 4757,
+        "relayMs": 21,
+        "localMs": 0,
+        "otherMs": 1974
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 2,
+      "passed": true,
+      "seconds": 40.1,
+      "turns": 15,
+      "costUsd": 0.3656674000000001,
+      "timing": {
+        "totalMs": 38072,
+        "modelMs": 26884,
+        "calls": 12,
+        "refused": 1,
+        "toolMs": 8527,
+        "engineMs": 8492,
+        "relayMs": 35,
+        "localMs": 0,
+        "otherMs": 2661
+      },
+      "exitCode": 0,
+      "answer": "Calculator is in Scientific mode and shows the result of 2 ^ 10.\n\n1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 70.4,
+      "turns": 26,
+      "costUsd": 0.5658461999999999,
+      "timing": {
+        "totalMs": 68767,
+        "modelMs": 47066,
+        "calls": 21,
+        "refused": 3,
+        "toolMs": 18538,
+        "engineMs": 18487,
+        "relayMs": 51,
+        "localMs": 0,
+        "otherMs": 3163
+      },
+      "exitCode": 0,
+      "answer": "I created the plain-text TextEdit document, saved it, and closed it. The file is `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-08T01-42-58-606Z/sleight-textedit-save-2/0680b9b8.txt`. I checked it on disk with `od`: it contains exactly `sleight bench 0680b9b8` with no traili",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 2,
+      "passed": true,
+      "seconds": 31.2,
+      "turns": 12,
+      "costUsd": 0.2809526,
+      "timing": {
+        "totalMs": 29081,
+        "modelMs": 18627,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 8809,
+        "engineMs": 8786,
+        "relayMs": 23,
+        "localMs": 0,
+        "otherMs": 1645
+      },
+      "exitCode": 0,
+      "answer": "I replaced \"beta\" with \"delta\" in `c7056be5-edit.txt`, saved it, and closed the document. I checked the file on disk and it now reads `alpha delta gamma`.\n\nA different TextEdit document, `d06af3ca-drag.txt`, was already open from an earlier task. I left it open and didn't change it.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 2,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\"",
+      "seconds": 72,
+      "turns": 16,
+      "costUsd": 0.359558,
+      "timing": {
+        "totalMs": 70083,
+        "modelMs": 46694,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 20918,
+        "engineMs": 3038,
+        "relayMs": 11,
+        "localMs": 17869,
+        "otherMs": 2471
+      },
+      "exitCode": 0,
+      "answer": "I couldn't do the drag, so the file still reads \"alpha beta gamma\" and nothing has been saved or closed.\n\nThe Claude app window is full-screen over the TextEdit window. The drag tool refuses to press the mouse at points another window covers, and it refuses in foreground mode too. I confirmed this f",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 2,
+      "passed": true,
+      "seconds": 59.8,
+      "turns": 18,
+      "costUsd": 0.46623459999999994,
+      "timing": {
+        "totalMs": 58193,
+        "modelMs": 42471,
+        "calls": 14,
+        "refused": 0,
+        "toolMs": 12723,
+        "engineMs": 12684,
+        "relayMs": 39,
+        "localMs": 0,
+        "otherMs": 2999
+      },
+      "exitCode": 0,
+      "answer": "I started a new game in Chess (Game 10) and dragged the e2 pawn to e4 as White. I saved it to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-08T01-42-58-606Z/sleight-chess-drag-2/e49fca03.game`, and `ls` shows the file there (1365 bytes).\n\nThe computer answered with a black ",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 2,
+      "passed": true,
+      "seconds": 30.6,
+      "turns": 8,
+      "costUsd": 0.2950356,
+      "timing": {
+        "totalMs": 28878,
+        "modelMs": 19717,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 7118,
+        "engineMs": 7106,
+        "relayMs": 12,
+        "localMs": 0,
+        "otherMs": 2043
+      },
+      "exitCode": 0,
+      "answer": "The page now says **Sent**. I typed \"sleight bench 4e2b40df\" into the Message field in Safari on the iPhone 18 Pro simulator and tapped Submit. I did it through the DeviceHub window in the background.\n\nMy first click missed the field because I scaled the coordinates wrong. I corrected the scale and ",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 3,
+      "passed": true,
+      "seconds": 22.2,
+      "turns": 9,
+      "costUsd": 0.2501308,
+      "timing": {
+        "totalMs": 20732,
+        "modelMs": 14236,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 4636,
+        "engineMs": 4623,
+        "relayMs": 13,
+        "localMs": 0,
+        "otherMs": 1860
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 3,
+      "passed": true,
+      "seconds": 45.5,
+      "turns": 14,
+      "costUsd": 0.3425496,
+      "timing": {
+        "totalMs": 44050,
+        "modelMs": 36820,
+        "calls": 10,
+        "refused": 0,
+        "toolMs": 5291,
+        "engineMs": 5273,
+        "relayMs": 18,
+        "localMs": 0,
+        "otherMs": 1939
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 3,
+      "passed": true,
+      "seconds": 73.7,
+      "turns": 24,
+      "costUsd": 0.585488,
+      "timing": {
+        "totalMs": 72000,
+        "modelMs": 52855,
+        "calls": 19,
+        "refused": 5,
+        "toolMs": 14772,
+        "engineMs": 14731,
+        "relayMs": 41,
+        "localMs": 0,
+        "otherMs": 4373
+      },
+      "exitCode": 0,
+      "answer": "I saved a new plain-text TextEdit document with the text `sleight bench 526f98b1` to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-08T01-42-58-606Z/sleight-textedit-save-3/526f98b1.txt`, then closed it. I checked the saved file afterward: it holds exactly that text, with no",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 3,
+      "passed": true,
+      "seconds": 28.9,
+      "turns": 12,
+      "costUsd": 0.29793260000000005,
+      "timing": {
+        "totalMs": 27346,
+        "modelMs": 17114,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 8153,
+        "engineMs": 8133,
+        "relayMs": 20,
+        "localMs": 0,
+        "otherMs": 2079
+      },
+      "exitCode": 0,
+      "answer": "I replaced \"beta\" with \"delta\" in `2d7cc992-edit.txt`, saved it, and closed the document. The file on disk reads \"alpha delta gamma\".\n\nThe close left no save prompt, and the edit window is gone. An unrelated document, `92842641-drag.txt`, was already open in TextEdit before I started. I left it unto",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 3,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\"",
+      "seconds": 44.5,
+      "turns": 14,
+      "costUsd": 0.3351588000000001,
+      "timing": {
+        "totalMs": 42810,
+        "modelMs": 25812,
+        "calls": 9,
+        "refused": 1,
+        "toolMs": 14883,
+        "engineMs": 3609,
+        "relayMs": 15,
+        "localMs": 11259,
+        "otherMs": 2115
+      },
+      "exitCode": 0,
+      "answer": "I couldn't do the drag, so the file is unchanged and still reads \"alpha beta gamma\". Nothing was saved or closed.\n\nThe Grok Bot app has a window on top of the TextEdit window. The `drag` tool refused twice with \"from is covered by another window; nothing was pressed\". Raising the TextEdit window did",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 3,
+      "passed": true,
+      "seconds": 56.7,
+      "turns": 18,
+      "costUsd": 0.5488812,
+      "timing": {
+        "totalMs": 54250,
+        "modelMs": 34251,
+        "calls": 14,
+        "refused": 1,
+        "toolMs": 15915,
+        "engineMs": 15866,
+        "relayMs": 49,
+        "localMs": 0,
+        "otherMs": 4084
+      },
+      "exitCode": 0,
+      "answer": "I started a new game in Chess, dragged the e2 pawn to e4 as White, and saved the game. The saved file is at `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-08T01-42-58-606Z/sleight-chess-drag-3/7aa55b81.game`, and I confirmed it exists on disk.\n\nI closed the Game 10 window. C",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 3,
+      "passed": true,
+      "seconds": 32.9,
+      "turns": 8,
+      "costUsd": 0.36314199999999996,
+      "timing": {
+        "totalMs": 29675,
+        "modelMs": 19374,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 7981,
+        "engineMs": 7957,
+        "relayMs": 24,
+        "localMs": 0,
+        "otherMs": 2320
+      },
+      "exitCode": 0,
+      "answer": "The page says **Sent**. I typed \"sleight bench 6fe1852a\" into the Message field in Safari on the iPhone 18 Pro simulator and tapped Submit. I did this in the background through DeviceHub.\n\nMy first click missed the field because I used the wrong coordinate scale. It only moved the pointer, and nothi",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ],
+  "note": "Timing pass, 2026-10-07. Sonnet 5.5, medium effort, sleight arm, 3 runs per task. timing splits each run: modelMs from Claude Code (duration_api_ms), engineMs/relayMs/localMs from the sleight trace, otherMs the rest (mostly Claude Code startup). The owner was using the Mac and another sleight session (iPhone Mirroring) during the pass; textedit-drag failed 0/3 because the Claude app and Grok Bot covered the TextEdit window, and the drag tool refuses covered points."
+}

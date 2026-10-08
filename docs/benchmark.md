@@ -51,6 +51,31 @@ the allowlist lacked it. Both passes are in
 [`2026-10-07-simulator-form.json`](benchmarks/2026-10-07-simulator-form.json). The task needs Xcode
 and an iOS runtime (`xcodebuild -downloadPlatform iOS`, 8 GB). Without them its runs are skipped.
 
+## Time per run
+
+Each run's result now splits its time. Claude Code reports the time spent in the model API, and
+sleight's trace times each tool call in the engine, in sleight's own local tools (`drag`, `hover`)
+and in the relay. The rest is Claude Code itself, mostly startup. The first timing pass, on
+2026-10-07 with Sonnet 5.5 at medium effort, 3 runs per task
+([`2026-10-07-timing.json`](benchmarks/2026-10-07-timing.json)), put 65.4% of the time in the
+model, 23.6% in the engine, 4.8% in local tools, 6.2% in Claude Code and 0.1% in the relay (14 to
+51 ms per run). Medians per task:
+
+| Task | Passed | Total s | Model s | Engine s | Turns |
+|---|---|---|---|---|---|
+| calculator-click | 3/3 | 20.7 | 14.2 | 4.6 | 9 |
+| calculator-menu | 3/3 | 38.1 | 26.9 | 5.3 | 15 |
+| textedit-save | 3/3 | 68.8 | 47.1 | 18.5 | 24 |
+| textedit-edit | 3/3 | 29.1 | 17.1 | 8.8 | 12 |
+| textedit-drag | 0/3 | 67.3 | 39.0 | 3.6 | 16 |
+| chess-drag | 3/3 | 58.2 | 34.3 | 15.9 | 18 |
+| simulator-form | 3/3 | 28.9 | 19.4 | 7.1 | 8 |
+
+The owner was using the Mac during the pass, with another sleight session driving iPhone
+Mirroring. textedit-drag failed 0/3 because the Claude app and Grok Bot covered the TextEdit
+window, and `drag` refuses to press where another window covers the point. 8 of the 21 runs had
+at least one call refused by sleight's guards, each costing Claude an extra turn.
+
 From 2026-10-04 on, runs default to Sonnet 5.5 at medium effort (`--model`, `--effort`).
 
 ```bash

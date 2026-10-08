@@ -25,6 +25,38 @@ function freshTextEdit() {
   }
 }
 
+// Quits Chess without leaving its windows behind. Chess restores the windows
+// it had when it last quit, and a force quit keeps them, so killed runs piled up
+// game windows for the owner (9 restored on 2026-10-07). Closing its windows
+// first (Don't Save) and quitting normally leaves a clean state; a Chess that
+// won't quit is terminated.
+export function quitChess() {
+  try { execFileSync('pgrep', ['-x', 'Chess']); } catch { return; } // not running
+  const close = `tell application "System Events" to tell process "Chess"
+    repeat 40 times
+      if (count windows) is 0 then exit repeat
+      set w to window 1
+      try
+        click (first button of w whose subrole is "AXCloseButton")
+      end try
+      delay 0.4
+      try
+        repeat with b in buttons of sheet 1 of w
+          if name of b is in {"Don’t Save", "Don't Save", "Delete"} then click b
+        end repeat
+      end try
+      delay 0.3
+    end repeat
+  end tell
+  tell application "Chess" to quit`;
+  try { execFileSync('osascript', ['-e', close], { timeout: 30000, stdio: 'ignore' }); } catch {}
+  for (let i = 0; i < 20; i++) {
+    try { execFileSync('pgrep', ['-x', 'Chess']); } catch { return; }
+    execFileSync('sleep', ['0.25']);
+  }
+  try { execFileSync('pkill', ['-x', 'Chess']); } catch {}
+}
+
 // The only apps a benchmark run may approve (see approve.mjs), by name and by
 // bundle ID: input leases have Claude acquire apps by bundle ID, and local tools
 // ask with the identifier Claude passed (a Chess drag was declined, 2026-10-05).
@@ -134,13 +166,15 @@ export const tasks = [
   {
     id: 'chess-drag',
     app: 'Chess',
-    // Each run starts from a fresh Chess. Left running, games and windows pile
-    // up between runs, an unsaved game blocks a normal quit, and Chess hung
-    // once (2026-10-03). Its games here are throwaway, so terminate it.
+    // Each run starts from a fresh Chess with one window: left running, games
+    // and windows pile up between runs, and Chess hung once (2026-10-03). The
+    // launch ignores saved windows, and the run quits Chess cleanly after.
     setup: () => {
-      try { execFileSync('pkill', ['-x', 'Chess']); } catch {} // exits 1 when Chess isn't running
-      execFileSync('sleep', ['2']);
+      quitChess();
+      execFileSync('open', ['-g', '-a', 'Chess', '--args', '-ApplePersistenceIgnoreState', 'YES']);
+      execFileSync('sleep', ['3']);
     },
+    cleanup: quitChess,
     prompt: ({ dir, nonce }) =>
       'Using computer use in the background, open Chess and start a new game. As White, move the pawn from ' +
       `e2 to e4 by dragging it with the mouse. Then save the game as ${join(dir, `${nonce}.game`)} and close the window.`,

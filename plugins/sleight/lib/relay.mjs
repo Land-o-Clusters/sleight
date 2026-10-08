@@ -797,6 +797,8 @@ export function createRelay({
       serverIn.write(line + '\n');
       return;
     }
+    // When each tool call arrived, so a trace can time the relay's own work on it.
+    if (msg.method === 'tools/call') trace('call-received', { id: msg.id, method: msg.method, params: { name: msg.params?.name } });
     handleClient(msg);
   });
   function handleClient(msg) {
@@ -1014,6 +1016,8 @@ export function createRelay({
       clientOut.write(line + '\n');
       return;
     }
+    // Only the id: with to-server and to-client it splits engine time from the relay's own.
+    trace('from-server', { id: msg.id, method: msg.method });
     if (msg.method === undefined && clipboardReplies.has(msg.id)) {
       const pending = clipboardReplies.get(msg.id); clipboardReplies.delete(msg.id); pending.receive(msg); return;
     }
