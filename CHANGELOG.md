@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.14.1 (2026-10-08)
+
+- When an app's reads time out twice, sleight asks the app over Accessibility (500 ms, no prompts)
+  and reads another approved app as a control before advising anything. It tells Claude to have
+  the user restart ChatGPT only when the helper itself is stuck, and to quit the app when the app is.
+  Restarting ChatGPT ends every Codex thread. Wrong restart advice fell from 1/1 to 0/6 runs with a
+  hung fixture app (`docs/benchmarks/2026-10-08-reliability.md`).
+- `drag`'s refusal for a window that's off screen or minimized says how to recover.
+- The benchmark waits for Chess to exit before relaunching it and retries LaunchServices -600.
+- The next pass (`docs/benchmarks/2026-10-08-reliability-pass.json`) passed 21/21 in 157 turns and
+  586 s, with no refused calls.
+
 ## 0.14.0 (2026-10-08)
 
 Fewer turns. In the 0.13.4 pass, 20 of 155 tool calls only loaded the skill, and without it Claude

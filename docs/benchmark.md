@@ -140,6 +140,10 @@ tool search that replaced it. Its pass ([`turns`](benchmarks/2026-10-08-turns.js
 157 turns instead of 195, with 426 s of model time instead of 490 and 717 s in total instead of 756,
 at 2.71 s of model time per turn against 2.51.
 
+0.14.1 (Sol's hang diagnosis and Chess relaunch) passed 21/21
+([`reliability-pass`](benchmarks/2026-10-08-reliability-pass.json)) in 157 turns and 586 s, with 332 s
+of model time at 2.12 s per turn and no refused calls.
+
 | Task | Median turns, 0.13.4 | 0.14.0 |
 |---|---:|---:|
 | calculator-click | 5 | 4 |

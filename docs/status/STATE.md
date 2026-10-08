@@ -5,7 +5,7 @@ What is true now. One banner, replaced in place as work happens. Always-true rul
 
 ## Banner (2026-10-08 18:30 UTC)
 
-Checkout: `~/Projects/sleight` is on `main`, released as 0.14.0.
+Checkout: `~/Projects/sleight` is on `main`, released as 0.14.1.
 
 - 0.14.0 cuts turns, the owner's priority (native Codex computer use felt faster). The skill rides on
   the engine's first result instead of costing a Skill turn, `js` loads at session start (no tool
@@ -16,12 +16,13 @@ Checkout: `~/Projects/sleight` is on `main`, released as 0.14.0.
   says to type contiguous text at once. A read after any input costs about 415 ms however long the
   caller waits. Astra's proposal to skip the guard's checks between actions in a batch stays out
   (43.9 s of a 756 s pass, and it would send input to a dialog that opened mid-batch).
-- `codex/reliability` (Sol 6.1, `38a8ded`) is reviewed, not merged. The hang diagnosis works (wrong
-  "restart ChatGPT" advice 1/1 before, 0/6 after) and the benchmark waits for Chess to exit before
-  relaunching. Its fresh-Chess drag trials were blocked on a leftover Chess game, which the owner
-  says isn't theirs (2026-10-08). Merge after it reports, with one pass.
-- Next on turns: acquiring and acting in one call (a lease design to show the owner first), and
-  the remaining per-task turns (chess-drag median 13, textedit-save 10). The benchmark's Calculator
+- 0.14.1 is Sol's `codex/reliability`, rebased onto 0.14.0 (three relay conflicts resolved by hand,
+  owner's go-ahead for rebasing Codex work) and squash-merged. The relay tells a hung app from a
+  stuck helper (wrong restart advice 1/1 before, 0/6 after, reproduced 1/1), and the benchmark waits
+  for Chess to exit before relaunching. Its pass ran 21/21 in 157 turns and 586 s. The owner allowed
+  the repo's hang fixture to be auto-approved by its probe (LAWS).
+- Next on turns: acquiring and acting in one call (approved by the owner, built on
+  `turns/acquire-and-act`, its pass running), then the remaining per-task turns (chess-drag median 13, textedit-save 10). The benchmark's Calculator
   tasks don't reset the display between runs. A repeated answer then reads as "no change".
 - Earlier on 2026-10-08: 0.13.2 to 0.13.4 (lease kept through guard stops, one-call Save As, the
   echoed-handle acquisition, guard reads cleared for every handle; `CHANGELOG.md`), and a four-model
