@@ -76,6 +76,24 @@ const TURN_END_DESCRIPTION = 'Internal to sleight: its hooks call this when a Cl
 const SHUTDOWN_GRACE_MS = 3000;
 
 // Splits a stream into newline-delimited JSON-RPC messages.
+// getScreenshot() already shows its image, so passing it to nodeRepl.emitImage
+// shows it twice: 2 images per step, 64 in one iPhone Mirroring session
+// (2026-10-07). Drop exact repeats within a result and say so once.
+export function dropRepeatedImages(content) {
+  const seen = new Set();
+  let dropped = 0;
+  const kept = content.filter(block => {
+    if (block?.type !== 'image' || typeof block.data !== 'string') return true;
+    if (seen.has(block.data)) { dropped++; return false; }
+    seen.add(block.data);
+    return true;
+  });
+  if (!dropped) return content;
+  const copies = dropped === 1 ? 'a repeated copy' : `${dropped} repeated copies`;
+  kept.push({ type: 'text', text: `sleight: dropped ${copies} of the same image. getScreenshot() already shows its picture, so don't pass it to nodeRepl.emitImage too.` });
+  return kept;
+}
+
 function lines(stream, onLine) {
   let buffer = '';
   stream.setEncoding('utf8');
@@ -1229,7 +1247,9 @@ export function createRelay({
         .concat(documentMode ? [DOCUMENT_TOOL, ...(localTools?.tools ?? []).filter(t => t.name === 'select_window')] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : []);
     }
     // Last, after every check above has read the full tree.
-    if (msg.method === undefined && Array.isArray(msg.result?.content)) msg.result.content = compactor.process(msg.result.content);
+    if (msg.method === undefined && Array.isArray(msg.result?.content)) {
+      msg.result.content = compactor.process(dropRepeatedImages(msg.result.content));
+    }
     toClient(msg);
   }
 

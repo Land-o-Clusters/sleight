@@ -9,9 +9,8 @@ Timing pass (owner's perf push, 2026-10-07): 65.4% model, 23.6% engine, 4.8% loc
 Claude Code, 0.1% relay over 21 Sonnet runs (`docs/benchmarks/2026-10-07-timing.json`). Fewer
 turns is the lever. Owner approved, in order: stable-ID clicks so renumbering stops costing
 refusals, batching guidance, smaller results, then model passes (Haiku 5.5 as
-`claude-haiku-5-5`, Sonnet low effort, Opus). Sonnet stays the default driver. In flight in the
-worktree `~/Projects/sleight-wt/image-dedupe`: the relay drops a repeated image, and the skill no
-longer pairs getScreenshot with emitImage. It needs a live check. Chess runs now quit Chess cleanly: force
+`claude-haiku-5-5`, Sonnet low effort, Opus). Sonnet stays the default driver. 0.12.3 is released, and Claude
+gets each screenshot once (checked live, 2 images before and 1 after). Chess runs now quit Chess cleanly: force
 quits had piled up restored game windows for the owner.
 
 0.12.2 released. The input lease's recovery advice repeated an invalid app name as a bare

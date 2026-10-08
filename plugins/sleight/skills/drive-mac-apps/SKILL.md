@@ -46,8 +46,10 @@ the user or stop when a headless run refuses it. Changing the file is not an app
    background. Never set or suggest that setting yourself, and never act in these apps' settings.
 4. If a result says the user changed the app, re-read its state before acting again. The person may be
    using it.
-5. Use `app.getScreenshot()` with `nodeRepl.emitImage(...)` when the accessibility tree doesn't show what
-   you need, such as canvases or images.
+5. Use `await app.getScreenshot()` when the accessibility tree doesn't show what you need, such as
+   canvases, images or iPhone Mirroring. It already shows you the picture, so don't pass it to
+   `nodeRepl.emitImage(...)` too. Keep using the same handle between actions instead of acquiring the
+   app again before each one.
 
 The relay takes a window lease before acting. If another sleight session holds it, the refusal names
 that session and the seconds left. Stop actions and tell the user, using reads if needed to inspect

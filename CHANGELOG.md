@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.3 (2026-10-07)
+
+- Claude gets each screenshot once. The skill told Claude to pass `getScreenshot()` to
+  `nodeRepl.emitImage`, but `getScreenshot()` already shows its picture, so every step sent two
+  copies: 64 images over one iPhone Mirroring session. The skill now says to call it alone, and the
+  relay drops an exact repeat within a result and tells Claude why (checked live: 2 images before,
+  1 after). The skill also says to keep one handle between actions instead of acquiring the app
+  again before each one.
+- Benchmark results split each run's time into model, engine, sleight's local tools, the relay and
+  Claude Code (`docs/benchmark.md`).
+
 ## 0.12.2 (2026-10-07)
 
 - The input lease's recovery advice works. A session asked for `getApp("grokbot")`, and no app
