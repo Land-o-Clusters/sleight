@@ -1545,3 +1545,22 @@ test('getAXState({ disableDiffing: true }) in Claude\'s code returns the whole t
   h.fromServer({ jsonrpc: '2.0', id: 3, result: { content: [{ type: 'text', text: GUARD_MARK + tree }] } }); await tick();
   assert.match(h.toClient.find(m => m.id === 3).result.content[0].text, /Key 39/);
 });
+
+test('an action written as a statement without await is refused before it reaches the engine', async () => {
+  // A failed un-awaited action can end the engine's session and every handle (3/3, 2026-10-07).
+  const h = harness({ changeReview: false });
+  const call = (id, code) => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } });
+  call(1, 'app.click(3); await app.getAXState()'); await tick();
+  call(2, 'app.typeText("x")\nawait app.click(1)'); await tick();
+  for (const id of [1, 2]) {
+    const reply = h.toClient.find(m => m.id === id);
+    assert.equal(reply?.result?.isError, true, `call ${id}`);
+    assert.match(reply.result.content[0].text, /await/);
+    assert.ok(!h.toServer.some(m => m.id === id), `call ${id} never reached the engine`);
+  }
+  call(3, 'await app.click(3); for (const k of ["a"]) await app.pressKey(k); const t = await app.getAXState(); t'); await tick();
+  call(4, 'await Promise.all([app.click(1)]); await app.click(2).then(() => 1)'); await tick();
+  call(5, 'await app.typeText("app.click(9); done")'); await tick();
+  call(6, 'await app.click(1); app.pressKey("super+c")'); await tick();
+  for (const id of [3, 4, 5, 6]) assert.ok(h.toServer.some(m => m.id === id), `call ${id} is forwarded`);
+});

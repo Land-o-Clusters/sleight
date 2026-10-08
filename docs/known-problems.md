@@ -25,7 +25,9 @@ our own runs. Dates and engine versions are given where they matter.
   Private copies end with a successful reset or session exit. A process crash during private Paste
   can leave temporary data on the clipboard. File URLs preserve references, not deleted files or
   file-promise providers. Native sessions and other tools do not take the preservation lock.
-- Exact window selection is unavailable on macOS engine 26.930.31730. Its API lists
+- Exact window selection is unavailable on macOS. Engine 26.1002.52244's docs say `getApp({ windowId })`
+  is for Linux and Windows and macOS takes an app name, path or bundle ID (not retested live). On
+  26.930.31730 the API listed
   `cua.getApp({ windowId })`, but it rejects that selector with "macOS getApp requires an app name,
   path, or bundle ID." `cua.getState()` also omits window IDs. With two temporary TextEdit documents,
   3/3 exact selections were rejected before editing. `select_window` uses AXRaise/AXMain instead:
@@ -144,9 +146,11 @@ our own runs. Dates and engine versions are given where they matter.
   Click-only and typing batches keep their existing read counts. The product retains every
   intermediate identity and selector check.
 - In a TextEdit typing probe on 2026-10-08, select-all followed by `typeText("engine01")` and save
-  left `Engine01engine01` instead of replacing the text. The cause is unknown. A separate digit
-  probe passed all five key-by-key and five bulk replacements. It does not explain the word failure.
-  Read the resulting text before continuing. [All attempts](benchmarks/2026-10-08-engine-time.json)
+  left `Engine01engine01` instead of replacing the text. Part of it is macOS auto-capitalization,
+  which `typeText` goes through: a later probe typed "sleight is here. it works" and TextEdit saved
+  "Sleight is here. It works", while `paste` saved it exactly. We don't know why select-all didn't replace the old text.
+  A separate digit probe passed all five key-by-key and five bulk replacements. The skill says to
+  paste exact text and to read the result. [All attempts](benchmarks/2026-10-08-engine-time.json)
   include the failure and later fixture cleanup.
 - After every `js` action without a later reusable observation, sleight's window guard reads the whole tree again so the input lease can
   check the window header. Since 0.9.0 Claude gets only the lines that changed since the last full
@@ -177,7 +181,9 @@ our own runs. Dates and engine versions are given where they matter.
 - An action called without `await` that fails can end the engine's JavaScript session, and every
   handle with it (`app.click(1); "x"` on a disabled Calculator element, 3/3 on 2026-10-07). sleight
   notices when the engine's first-call docs come back without a `js_reset` and tells Claude, but the
-  call that restarted it may have done nothing.
+  call that restarted it may have done nothing. Since 0.15.3 the relay refuses a call whose action is
+  a statement without `await` with more code after it. It doesn't see an un-awaited action inside an
+  expression or a callback, and a last statement is left alone because the call returns its promise.
 - On 2026-10-08 two calculator-click runs took 16 and 10 turns instead of 5. Right after Calculator
   launched, its first read took 7.1 s, the IDs `AllClear` and `Seven` were missing and then came
   back, and one button's line changed from `Description: 7, ID: Seven` to `Seven` between reads.
@@ -279,6 +285,7 @@ our own runs. Dates and engine versions are given where they matter.
 - Calculator button indices changed during a [preapproval trial](benchmarks/2026-10-04-preapproved-apps.md),
   producing the wrong expression. A filtered read then lost the window header, and the input lease
   stopped the retry. Use current indices from full UI reads, and preserve their window headers.
+  Since 0.13.0, `{ id }` and `{ label }` address Calculator's buttons without indices.
 - Document scope checks the last observed window before forwarding a call and stops on changed or
   missing Window/URL headers. Its injected action guard checks again, but arbitrary JavaScript can
   bypass it or forge observations. Result checks cannot undo actions already taken. Discovery reads

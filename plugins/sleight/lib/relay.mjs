@@ -71,6 +71,21 @@ import { forbiddenTargetWarning, isForbiddenSettingsWindow, refusedApp } from '.
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
 import { readFailureAdvice } from './read-failure.mjs';
 
+// `app.click(3); …` with no await and more code after it: the call goes on without the action,
+// and a failure then ends the session. A last statement is fine, since the call returns its promise.
+// Strings are blanked first, so typed text that mentions an action doesn't count.
+export function unawaitedAction(code) {
+  const bare = code.replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g, '""');
+  for (const m of bare.matchAll(/(?:^|[;{}\n])\s*([A-Za-z_$][\w$]*\.(?:click|drag|scroll|selectText|setValue|performSecondaryAction|paste|pressKey|typeText)\()/g)) {
+    let depth = 0, end = m.index + m[0].length - 1;
+    for (; end < bare.length; end++) {
+      if (bare[end] === '(') depth++;
+      else if (bare[end] === ')' && --depth === 0) break;
+    }
+    if (bare.slice(end + 1).replace(/^\s*;?/, '').trim()) return m[1];
+  }
+}
+
 const META_KEY = 'x-codex-turn-metadata';
 const HIDDEN_TOOLS = new Set(['js_add_node_module_dir']);
 const TURN_END_TOOL = 'turn_ended';
@@ -1002,6 +1017,15 @@ export function createRelay({
     if (clipboard && msg.method === 'tools/call' && msg.params?.name === 'js' && typeof originalCode === 'string') {
       try { clipboardAction = clipboardPlan(originalCode); }
       catch (error) { clipboardStop(msg, error.message); return; }
+    }
+    // A failed action without await, with more code after it, can end the engine's session and
+    // every handle (3/3, 2026-10-07), so it never reaches the engine.
+    const unawaited = msg.method === 'tools/call' && msg.params?.name === 'js' && msg.id !== undefined &&
+      typeof originalCode === 'string' && unawaitedAction(originalCode);
+    if (unawaited) {
+      toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text:
+        `sleight stopped this call before it ran: \u0060${unawaited}…)\u0060 has no await and more code follows it. A failed action without await can end the engine's session and lose every handle. Add await and send it again.` }] } });
+      return;
     }
     if (flowRules && msg.method === 'tools/call' && ['js', 'drag', 'menu_bar', 'blocked_app'].includes(msg.params?.name)) {
       if (running.size || localRunning.size || documentAsking || reviewing) { flowStop(msg, 'wait for the pending call or prompt'); return; }
