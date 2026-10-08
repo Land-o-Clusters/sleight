@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
-import { createRelay } from '../plugins/sleight/lib/relay.mjs';
+import { createRelay, imageSize, screenshotOf } from '../plugins/sleight/lib/relay.mjs';
 import { FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
 import { PreapprovedApps } from '../plugins/sleight/lib/preapproved.mjs';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, realpathSync } from 'node:fs';
@@ -1566,4 +1566,33 @@ test('an action written as a statement without await is refused before it reache
   call(5, 'await app.typeText("app.click(9); done")'); await tick();
   call(6, 'await app.click(1); app.pressKey("super+c")'); await tick();
   for (const id of [3, 4, 5, 6]) assert.ok(h.toServer.some(m => m.id === id), `call ${id} is forwarded`);
+});
+
+// A PNG and a JPEG header with only the size fields that imageSize reads.
+const pngOf = (w, h) => { const b = Buffer.alloc(33); b.writeUInt32BE(0x89504e47, 0); b.writeUInt32BE(0x0d0a1a0a, 4); b.writeUInt32BE(13, 8); b.write('IHDR', 12); b.writeUInt32BE(w, 16); b.writeUInt32BE(h, 20); return b.toString('base64'); };
+const jpegOf = (w, h) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0, 0, 0xff, 0xc0, 0x00, 0x11, 0x08, h >> 8, h & 255, w >> 8, w & 255, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]).toString('base64');
+
+test('imageSize reads PNG and JPEG sizes and screenshotOf names the one app in the result', () => {
+  assert.deepEqual(imageSize(pngOf(1312, 844)), { width: 1312, height: 844 });
+  assert.deepEqual(imageSize(jpegOf(1312, 844)), { width: 1312, height: 844 });
+  assert.equal(imageSize('bm90IGFuIGltYWdl'), undefined);
+  const content = [{ type: 'text', text: 'Window: "a.txt", App: TextEdit.' }, { type: 'image', data: jpegOf(1312, 844), mimeType: 'image/jpeg' }];
+  assert.deepEqual(screenshotOf(content), ['TextEdit', { width: 1312, height: 844 }]);
+  assert.equal(screenshotOf([content[1]]), undefined, 'no app named');
+  assert.equal(screenshotOf([...content, { type: 'text', text: 'Window: "b", App: Chess.' }]), undefined, 'two apps');
+});
+
+test('drag gets the size of the app\'s latest engine screenshot, so it can convert pixels to points', async () => {
+  const calls = [];
+  const h = harness({ changeReview: false, localTools: { tools: [{ name: 'drag', description: 'Drag.', inputSchema: {} }],
+    call: async (name, args) => { calls.push(args); return { content: [{ type: 'text', text: 'ok' }] }; } } });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'await app.getScreenshot()' } } });
+  await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: 'Window: "a.txt", App: TextEdit.' }, { type: 'image', data: jpegOf(1312, 844), mimeType: 'image/jpeg' }] } });
+  await tick();
+  h.fromClient({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'drag', arguments: { app: 'TextEdit', from: [90, 77], to: [476, 77], screenshot: [1, 1] } } });
+  h.fromClient({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'drag', arguments: { app: 'Chess', from: [1, 2], to: [3, 4] } } });
+  await settle();
+  assert.deepEqual(calls[0].screenshot, [1312, 844]);
+  assert.equal(calls[1].screenshot, undefined, 'no screenshot of Chess, and Claude can\'t supply one');
 });

@@ -111,6 +111,30 @@ export function dropRepeatedImages(content) {
   return kept;
 }
 
+// A PNG's or JPEG's pixel size from its base64 data, or undefined.
+export function imageSize(data) {
+  let b;
+  try { b = Buffer.from(data.slice(0, 200000), 'base64'); } catch { return undefined; }
+  if (b.length > 24 && b.readUInt32BE(0) === 0x89504e47) return { width: b.readUInt32BE(16), height: b.readUInt32BE(20) };
+  for (let i = 2; b[0] === 0xff && b[1] === 0xd8 && i + 9 < b.length && b[i] === 0xff;) {
+    const marker = b[i + 1];
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) return { width: b.readUInt16BE(i + 7), height: b.readUInt16BE(i + 5) };
+    i += 2 + b.readUInt16BE(i + 2);
+  }
+  return undefined;
+}
+
+// The engine's screenshots are in pixels, 2× a window's points on a Retina display, and Claude
+// reads drag points off them. Returns [app name, size] for the last image in an engine result
+// that names one app ("Window: …, App: TextEdit."), so drag can convert.
+export function screenshotOf(content) {
+  const image = content.filter(c => c?.type === 'image' && typeof c.data === 'string').at(-1);
+  if (!image) return undefined;
+  const apps = new Set(content.filter(c => c?.type === 'text').flatMap(c => [...(c.text ?? '').matchAll(/\bApp: ([^\n.]+)\./g)].map(m => m[1].trim())));
+  const size = imageSize(image.data);
+  return apps.size === 1 && size ? [[...apps][0], size] : undefined;
+}
+
 function lines(stream, onLine) {
   let buffer = '';
   stream.setEncoding('utf8');
@@ -233,6 +257,7 @@ export function createRelay({
   // js calls awaiting a reply, and whether this engine session has shown its first-call docs:
   // docs again without a js_reset mean the session restarted and every handle is gone.
   const jsCalls = new Map();
+  const screenshots = new Map(); // lowercased app name -> pixel size of its latest engine screenshot
   let docsShown = false;
   // Once per session: Claude keeps them in context across engine restarts.
   let rulesShown = false;
@@ -871,8 +896,13 @@ export function createRelay({
         const key = inputLease.acquire(target, appTool ? 'app' : 'desktop');
         leaseCalls.set(msg.id, { key }); refreshHeartbeat();
       }
-      const callArgs = name === 'select_window' && resolved
+      let callArgs = name === 'select_window' && resolved
         ? { ...args, expectedAppId: resolved.appId } : args;
+      if (name === 'drag') {
+        // drag converts Claude's screenshot pixels to window points with this size (2026-10-08).
+        const shot = [args.app, resolved?.app].map(a => typeof a === 'string' && screenshots.get(a.toLowerCase())).find(Boolean);
+        callArgs = { ...args, screenshot: shot ? [shot.width, shot.height] : undefined };
+      }
       result = await localTools.call(name, callArgs, async (parts, message, options) => {
         const allowed = await approve(parts, message, msg.id, options);
         if (closing || disposed) throw new Error('Input lease: this session is closing.');
@@ -1459,6 +1489,8 @@ export function createRelay({
     }
     // Last, after every check above has read the full tree.
     if (msg.method === undefined && Array.isArray(msg.result?.content)) {
+      const shot = jsCode !== undefined && screenshotOf(msg.result.content);
+      if (shot) screenshots.set(shot[0].toLowerCase(), shot[1]);
       // sleight's own advice says getAXState({ disableDiffing: true }) gives a full read. Compacting
       // it to "no change" sent Claude to a screenshot instead (2026-10-08). Recovery's visible read
       // is full too.

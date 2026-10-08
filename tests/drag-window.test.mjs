@@ -386,3 +386,15 @@ test('off-Space diagnosis precedes both background and foreground event construc
     assert.equal(h.events.length, 0); assert.equal(h.mainWrites.length, 0);
   }
 });
+test('screenshot pixels convert to window points with the relay\'s screenshot size', () => {
+  // Window 11 is 600×400 points; a 1200×800 screenshot is 2×. [300, 77] is [150, 38.5] in points.
+  const h = harness({ background: true, coveredEnd: true, coveredPid: 9, ax: {} });
+  const r = h.run({ windowId: 11, from: [53.2, 77], to: [300, 77], screenshot: [1200, 800] });
+  assert.equal(r.ok, true, r.error); assert.equal(r.screenshotScale, 2); assert.equal(h.values.get(11), 'beta gamma alpha\n');
+});
+test('a screenshot of another window shape is ignored and the result says the points were window points', () => {
+  const h = harness({ second: false });
+  const r = h.run({ screenshot: [1000, 1000] });
+  assert.equal(r.ok, true, r.error); assert.match(r.coordinates, /another window size/);
+  assert.equal(h.run({}).coordinates, 'window points: no engine screenshot of this app yet');
+});

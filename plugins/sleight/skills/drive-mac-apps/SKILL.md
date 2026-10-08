@@ -86,7 +86,8 @@ live-check lock.
 - `app.drag` works for things that move at once, like Chess pieces. Chess's tree names each square
   but doesn't give its position, so take squares from a screenshot.
 - Selected text needs the mouse held first: select it with `js`, then call sleight's `drag` with
-  `app`, `windowId` and window-relative `from` and `to`, both inside the window's visible content
+  `app`, `windowId`, and `from` and `to` read off the latest engine screenshot of that window (sleight
+  converts its pixels to points), both inside the window's visible content
   (in TextEdit, the same text area, a non-blank selection). For a line end, use the last glyph's
   bounds plus a small offset. If it reports the text disappeared, press Cmd+Z in that window and
   read it. If the user declines, cut and paste instead.

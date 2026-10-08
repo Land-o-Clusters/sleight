@@ -64,9 +64,23 @@ function clip(a, b) {
   const X = Math.max(a.X, b.X), Y = Math.max(a.Y, b.Y);
   return { X, Y, Width: Math.max(0, Math.min(a.X + a.Width, b.X + b.Width) - X), Height: Math.max(0, Math.min(a.Y + a.Height, b.Y + b.Height) - Y) };
 }
+// Claude reads from and to off the engine's screenshot, which is in pixels: 1312×844 for a
+// 656×422-point TextEdit window on a Retina display (2026-10-08). Taken as points, they
+// landed a line below the text, and 3 of Claude's first drags per run changed nothing.
+// The relay passes the size of the app's latest engine screenshot; a size that doesn't
+// match this window's shape is from another window and is ignored.
+function screenshotScale(request, bounds) {
+  const s = request.screenshot;
+  if (!Array.isArray(s) || s.length !== 2 || !s.every(n => Number.isFinite(n) && n > 0)) return null;
+  const x = s[0] / bounds.Width, y = s[1] / bounds.Height;
+  return Math.abs(x - y) <= 0.03 * Math.max(x, y) && x >= 0.25 && x <= 4 ? { x, y } : null;
+}
+const toPoints = (p, scale) => scale ? [p[0] / scale.x, p[1] / scale.y] : p;
 function resolveWindow(own, request) {
   const list = () => JSON.stringify(own.map(w => ({ windowId: w.id, title: w.title, bounds: w.bounds })));
-  const candidates = request.windowId === undefined ? own.filter(w => inside(w.bounds, at(w.bounds, request.from))) : own.filter(w => w.id === request.windowId);
+  const candidates = request.windowId === undefined
+    ? own.filter(w => inside(w.bounds, at(w.bounds, toPoints(request.from, screenshotScale(request, w.bounds)))))
+    : own.filter(w => w.id === request.windowId);
   if (candidates.length !== 1) throw new Error(`drag target is ${candidates.length > 1 ? 'ambiguous; supply windowId' : 'unavailable; read the window again'}. Windows: ${list()}`);
   return candidates[0];
 }
@@ -358,7 +372,7 @@ function coveringApp(list, main, points) {
 
 function run(argv) {
   let previous = null, saved = null, pid = null, pressed = false, didPress = false, post = null, current = null;
-  let path = 'none', fallbackReason = null;
+  let path = 'none', fallbackReason = null, units = {};
   let backgroundSnapshot = null;
   const unchangedText = () => {
     if (backgroundSnapshot && (backgroundSnapshot.el.value() !== backgroundSnapshot.text ||
@@ -383,6 +397,10 @@ function run(argv) {
       if (!own.length) throw new Error(`${app} has no window; open one on the current desktop before dragging`);
     }
     let main = resolveWindow(own, request);
+    const scale = screenshotScale(request, main.bounds);
+    const pointFrom = toPoints(from, scale), pointTo = toPoints(to, scale);
+    units = scale ? { screenshotScale: Math.round(scale.x * 1000) / 1000 }
+      : { coordinates: request.screenshot ? 'window points: the latest screenshot is of another window size' : 'window points: no engine screenshot of this app yet' };
     const win = axWindow(pid, main);
     let build;
     try { build = backgroundBuilder(); }
@@ -392,7 +410,7 @@ function run(argv) {
       raiseWindow(win);
       delay(settleMs / 1000);
       checkWindow(main, pid, win);
-      const points = validatePoints(content(win, main.bounds), main.bounds, from, to, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit');
+      const points = validatePoints(content(win, main.bounds), main.bounds, pointFrom, pointTo, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit');
       // Another document of this app must not receive the press: check fresh
       // own-app order at both ends, then other apps' coverage below.
       const ordered = checkWindow(main, pid, win);
@@ -411,7 +429,7 @@ function run(argv) {
         try {
           const outcome = accessibilityMove(area, points.text, points.end, main);
           path = 'accessibility';
-          return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, path, fallbackReason, ...outcome });
+          return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, ...units, path, fallbackReason, ...outcome });
         } catch (e) {
           if (/changed before the move|inside the selection/.test(String(e.message))) throw e;
           fallbackReason += `; accessibility move failed: ${e.message || e}`;
@@ -464,13 +482,13 @@ function run(argv) {
         if (points.text && typeof after !== 'string') throw new Error('cannot verify background text; read the window before continuing');
         if (releaseError) {
           const outcome = finishTextDrop(points.text, main);
-          return JSON.stringify({ ok: false, path, app, windowId: main.id, ...outcome,
+          return JSON.stringify({ ok: false, path, app, windowId: main.id, ...units, ...outcome,
             error: [outcome.error, releaseError].filter(Boolean).join('; ') });
         }
         if (!points.text || after !== points.text.text) {
           const outcome = finishTextDrop(points.text, main);
           if (postingError && !outcome.error) outcome.error = postingError;
-          return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, holdMs, steps, path,
+          return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, ...units, holdMs, steps, path,
             textChanged: points.text ? true : null, deliveryVerified: !!points.text && !outcome.error, ...outcome });
         }
         fallbackReason = 'background text unchanged';
@@ -498,7 +516,7 @@ function run(argv) {
     delay(settleMs / 1000);
     main = windows(true).find(w => w.id === main.id && w.pid === pid && w.layer === 0);
     if (!main || !sameBounds(frame(win), main.bounds)) throw new Error('the chosen window changed or disappeared; read it again');
-    const { start, end, text } = validatePoints(content(win, main.bounds), main.bounds, from, to, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit');
+    const { start, end, text } = validatePoints(content(win, main.bounds), main.bounds, pointFrom, pointTo, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit');
     // Match the exact window at both endpoints, even for another window of
     // the same app. The engine cursor overlay lets events through.
     const currentWindows = windows(true);
@@ -530,10 +548,10 @@ function run(argv) {
     if (typedSince(focusedAt)) {
       outcome.error = [outcome.error, `the user typed during the drag while ${app} was in front, so their keys may have gone into it. Read the window again and tell the user`].filter(Boolean).join('; ');
     }
-    return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, holdMs, steps, path, fallbackReason, ...outcome });
+    return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, ...units, holdMs, steps, path, fallbackReason, ...outcome });
   } catch (e) {
     const message = String(e.message || e);
-    return JSON.stringify({ ok: false, path, fallbackReason, error: message + (!didPress && !message.includes('nothing was pressed') ? '; nothing was pressed' : '') });
+    return JSON.stringify({ ok: false, path, fallbackReason, ...units, error: message + (!didPress && !message.includes('nothing was pressed') ? '; nothing was pressed' : '') });
   } finally {
     if (pressed && post) attempt(() => post($.kCGEventLeftMouseUp, current));
     if (saved) attempt(() => $.CGWarpMouseCursorPosition(saved));

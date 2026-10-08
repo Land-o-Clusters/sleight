@@ -334,9 +334,9 @@ async function performDrag(args, runLocal) {
   try { result = await runLocal('drag.js', args); }
   catch (e) { result = { ok: false, error: String(e.message || e) }; }
   finally {
-    // A completed background attempt never owned focus, including lost text.
+    // A completed background or Accessibility attempt never owned focus, including lost text.
     // Unknown child termination retains the existing guarded timeout cleanup.
-    if (!['background', 'none'].includes(result?.path)) {
+    if (!['background', 'accessibility', 'none'].includes(result?.path)) {
       try {
         const restored = await runLocal('drag-focus.js', { ...focus, op: 'restore' }, { cleanup: true });
         if (!restored.ok) throw new Error(restored.error);

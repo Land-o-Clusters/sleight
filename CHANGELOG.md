@@ -8,6 +8,11 @@
   space went into TextEdit. `drag` now moves the text through Accessibility instead. It maps the drop
   point to a character and puts the word there, takes it out at the source with TextEdit's spacing,
   then checks the whole text. The result says `path: "accessibility"`.
+- `drag` takes `from` and `to` in the engine screenshot's pixels, as its description always said. It
+  read them as window points, which are half that on a Retina display, so drops landed a line below
+  the text. In 3 textedit-drag runs on 2026-10-08, Claude's first 2 or 3 drags each changed nothing,
+  and one run never found the cause. The relay now tells `drag` the size of the app's latest engine
+  screenshot, and the result says the scale it used.
 - The foreground drag, now the last resort, waits for 2 s without typing or mouse use (up to 10 s), and
   stops if you type once it has taken focus. `hover` and the `menu_bar` real click wait the same way.
 - `noWindowsAvailable` from the engine now comes with what it means: the app's window is on another
