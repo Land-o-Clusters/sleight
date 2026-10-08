@@ -1507,15 +1507,17 @@ test('without rules configured, the first-call docs pass unchanged', async () =>
   assert.equal(h.toClient.find(m => m.id === 1).result.content.length, 1);
 });
 
-test('js always loads, so Claude needs no tool-search turn before its first call; the rest stay deferred', async () => {
+test('sleight\'s tools load up front, so Claude needs no tool-search turn; turn_ended stays internal', async () => {
   const h = harness({ changeReview: false });
   h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }); await tick();
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { tools: [
     { name: 'js', description: 'Control native apps.', inputSchema: {}, _meta: { other: 1 } },
-    { name: 'js_reset', description: 'Reset.', inputSchema: {} }] } }); await tick();
+    { name: 'js_reset', description: 'Reset.', inputSchema: {} },
+    { name: 'turn_ended', description: 'End.', inputSchema: {} }] } }); await tick();
   const tools = h.toClient.find(m => m.id === 1).result.tools;
   assert.deepEqual(tools.find(t => t.name === 'js')._meta, { other: 1, 'anthropic/alwaysLoad': true });
-  assert.equal(tools.find(t => t.name === 'js_reset')._meta?.['anthropic/alwaysLoad'], undefined);
+  assert.equal(tools.find(t => t.name === 'js_reset')._meta?.['anthropic/alwaysLoad'], true);
+  assert.equal(tools.find(t => t.name === 'turn_ended')?._meta?.['anthropic/alwaysLoad'], undefined);
 });
 
 test('a result names each pre-approval grant once, however many actions it covered', async () => {

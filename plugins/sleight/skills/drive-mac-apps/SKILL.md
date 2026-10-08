@@ -49,7 +49,8 @@ it. If an app needs approval, ask the user, or stop when a headless run refuses 
   await app.setValue({ id: "saveAsNameTextField" }, "name.txt"); await app.pressKey("Return");
   ```
 
-  The result's window title and URL confirm the save, so don't check the file another way. A full path
+  The result's window title and URL name the saved file. That is the confirmation: don't run `ls`
+  or `cat` on it afterwards. A full path
   in the name field becomes a file name with slashes. In TextEdit, `super+shift+s` is Duplicate:
   use `super+s` for an untitled document.
 
