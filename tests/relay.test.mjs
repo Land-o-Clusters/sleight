@@ -1316,3 +1316,12 @@ test('js always loads, so Claude needs no tool-search turn before its first call
   assert.deepEqual(tools.find(t => t.name === 'js')._meta, { other: 1, 'anthropic/alwaysLoad': true });
   assert.equal(tools.find(t => t.name === 'js_reset')._meta?.['anthropic/alwaysLoad'], undefined);
 });
+
+test('a result names each pre-approval grant once, however many actions it covered', async () => {
+  const h = harness({ preapproved: preapproved(), stderr: { write: () => {} } });
+  flowCall(h, 1, 'for (const id of ["One", "Two", "Three"]) await app.click({ id })'); await tick();
+  h.fromServer(appApproval(11)); h.fromServer(appApproval(12)); h.fromServer(appApproval(13)); await tick();
+  flowAnswer(h, 1, 'Calculator state'); await tick();
+  const text = h.toClient.find(m => m.id === 1).result.content.map(c => c.text).join('\n');
+  assert.equal(text.match(/pre-approved by the user's list/g)?.length, 1, text);
+});

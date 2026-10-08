@@ -666,7 +666,9 @@ export function createRelay({
     const grants = preapprovalNotes.get(msg.id);
     preapprovalNotes.delete(msg.id);
     if (!grants?.length) return;
-    const text = grants.map(g => `${g.app} (${g.riskLevel}, ${g.tool}) was pre-approved by the user's list at ${g.source}.`).join('\n');
+    // The engine asks once per action, so a batch of clicks repeats the same grant (12 lines in
+    // one Calculator result, 2026-10-08). Name each distinct grant once.
+    const text = [...new Set(grants.map(g => `${g.app} (${g.riskLevel}, ${g.tool}) was pre-approved by the user's list at ${g.source}.`))].join('\n');
     if (msg.result) msg.result = { ...msg.result, content: [...(msg.result.content ?? []), { type: 'text', text }] };
     else if (msg.error) msg.error = { ...msg.error, data: { detail: msg.error.data, preapprovals: grants } };
   }
