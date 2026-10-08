@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createContext, runInContext } from 'node:vm';
+import { GUARD_MARK, GUARD_END } from '../plugins/sleight/lib/compact-reads.mjs';
 
 const fixtureRoot = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-relay-review-')));
 const fixturePath = join(fixtureRoot, 'a.txt');
@@ -43,13 +44,213 @@ const tick = () => new Promise(r => setImmediate(r));
 const helperRead = (h, id, code = 'let app = await cua.getApp("Calculator")') => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } });
 const helperReply = (h, id, text = 'Error: -10005 timeoutReached', isError = true) => h.fromServer({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }], isError } });
 
+test('two timeouts from one app do not advise restarting ChatGPT without independent evidence', () => {
+  const h = harness();
+  for (const id of [1, 2]) { helperRead(h, id); helperReply(h, id); }
+  const advice = h.toClient.at(-1).result.content.at(-1).text;
+  assert.doesNotMatch(advice, /restart ChatGPT/);
+  assert.match(advice, /could not distinguish/);
+});
+
+test('an app hang is diagnosed before its second failed reply and uses a fresh guarded control read', async () => {
+  const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');
+  const h = harness({ diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, {
+    probeApp: async key => ({ status: key === 'textedit' ? 'timeout' : 'responding', windows: 1 }), readControl,
+  }) });
+  helperRead(h, 1); helperReply(h, 1, 'Window: "Calculator", App: Calculator', false);
+  helperRead(h, 2, 'var te = await cua.getApp("TextEdit")'); helperReply(h, 2);
+  helperRead(h, 3, 'await te.getAXState()'); helperReply(h, 3);
+  await tick();
+  const probe = h.toServer.at(-1);
+  assert.match(probe.id, /^sleight-diagnosis-/);
+  assert.match(probe.params.arguments.code, /cua.getApp\("Calculator"\)/);
+  assert.ok(!h.toClient.some(msg => msg.id === 3), 'fault reply waits for independent evidence');
+  helperReply(h, probe.id, 'Window: "Calculator", App: Calculator', false);
+  await tick();
+  const advice = h.toClient.find(msg => msg.id === 3).result.content.at(-1).text;
+  assert.match(advice, /quit and reopen textedit/); assert.doesNotMatch(advice, /restart ChatGPT/);
+  assert.ok(!h.toClient.some(msg => msg.id === probe.id));
+  helperRead(h, 4, 'await app.click(1)');
+  assert.equal(h.toServer.at(-1).id, probe.id, 'hidden control read requires a visible full read before actions');
+});
+
+test('a diagnostic read declines an ungranted or riskier control approval without prompting', async () => {
+  const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');
+  let asked = 0;
+  const h = harness({ ask: async () => { asked++; return 'accept'; },
+    diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, {
+      probeApp: async () => ({ status: 'responding', windows: 1 }), readControl,
+    }) });
+  helperRead(h, 1); helperReply(h, 1, 'Window: "Calculator", App: Calculator', false);
+  helperRead(h, 2, 'var te = await cua.getApp("TextEdit")'); helperReply(h, 2);
+  helperRead(h, 3, 'await te.getAXState()'); helperReply(h, 3); await tick();
+  const probe = h.toServer.at(-1);
+  h.fromServer(appApproval('diagnostic-approval', ['session'], 'Calculator', 'high')); await tick();
+  assert.equal(asked, 0);
+  assert.equal(h.toServer.at(-1).result.action, 'decline');
+  helperReply(h, probe.id, 'not approved'); await tick();
+  assert.doesNotMatch(h.toClient.find(msg => msg.id === 3).result.content.at(-1).text, /restart ChatGPT/);
+});
+
+test('responsive AX processes plus a real engine control timeout permit helper recovery advice', async () => {
+  const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');
+  const h = harness({ diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, {
+    probeApp: async () => ({ status: 'responding', windows: 1 }), readControl,
+  }) });
+  helperRead(h, 1); helperReply(h, 1, 'Window: "Calculator", App: Calculator', false);
+  helperRead(h, 2, 'var te = await cua.getApp("TextEdit")'); helperReply(h, 2);
+  helperRead(h, 3, 'await te.getAXState()'); helperReply(h, 3); await tick();
+  helperReply(h, h.toServer.at(-1).id); await tick();
+  const advice = h.toClient.find(msg => msg.id === 3).result.content.at(-1).text;
+  assert.match(advice, /textedit and calculator answer Accessibility/);
+  assert.match(advice, /restart ChatGPT/);
+});
+
+test('an expired control deadline stays unknown and its late success cannot permit actions', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');
+  const h = harness({ diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, {
+    probeApp: async () => ({ status: 'responding', windows: 1 }), readControl,
+  }) });
+  helperRead(h, 1); helperReply(h, 1, 'Window: "Calculator", App: Calculator', false);
+  helperRead(h, 2, 'var te = await cua.getApp("TextEdit")'); helperReply(h, 2);
+  helperRead(h, 3, 'await te.getAXState()'); helperReply(h, 3); await tick();
+  const probe = h.toServer.at(-1);
+  t.mock.timers.tick(5500); await tick();
+  assert.doesNotMatch(h.toClient.find(msg => msg.id === 3).result.content.at(-1).text, /restart ChatGPT/);
+  helperReply(h, probe.id, 'Window: "Calculator", App: Calculator', false);
+  assert.ok(!h.toClient.some(msg => msg.id === probe.id));
+  helperRead(h, 4, 'await app.click(1)');
+  assert.equal(h.toServer.at(-1).id, probe.id);
+});
+
+test('hidden diagnosis does not consume the visible tree and its required refresh is full', async () => {
+  const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');
+  const h = harness({ diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, {
+    probeApp: async key => ({ status: key === 'textedit' ? 'timeout' : 'responding', windows: 1 }), readControl,
+  }) });
+  const tree = label => 'Window: "Calculator", App: Calculator\n0 window Calculator\n' +
+    Array.from({ length: 30 }, (_, i) => `${i + 1} button ${i === 0 ? label : 'Button ' + i}`).join('\n');
+  helperRead(h, 1); helperReply(h, 1, tree('before'), false);
+  helperRead(h, 2, 'var te = await cua.getApp("TextEdit")'); helperReply(h, 2);
+  helperRead(h, 3, 'await te.getAXState()'); helperReply(h, 3); await tick();
+  helperReply(h, h.toServer.at(-1).id, tree('hidden change'), false); await tick();
+  helperRead(h, 4, 'await app.getAXState()');
+  helperReply(h, 4, `${GUARD_MARK}${tree('hidden change')}${GUARD_END}`, false);
+  const visible = h.toClient.find(msg => msg.id === 4).result.content[0].text;
+  assert.match(visible, /1 button hidden change/); assert.match(visible, /30 button Button 29/);
+  assert.doesNotMatch(visible, /no change since/);
+});
+
+test('a visible refresh before diagnostic expiry cannot approve input after its late read', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');
+  const h = harness({ diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, {
+    probeApp: async () => ({ status: 'responding', windows: 1 }), readControl,
+  }) });
+  helperRead(h, 1); helperReply(h, 1, 'Window: "Calculator", App: Calculator', false);
+  helperRead(h, 2, 'var te = await cua.getApp("TextEdit")'); helperReply(h, 2);
+  helperRead(h, 3, 'await te.getAXState()'); helperReply(h, 3); await tick();
+  const probe = h.toServer.at(-1);
+  helperRead(h, 4, 'await app.getAXState()'); helperReply(h, 4, 'Window: "Calculator", App: Calculator', false);
+  t.mock.timers.tick(5500); await tick();
+  helperReply(h, probe.id, 'Window: "Calculator", App: Calculator', false);
+  const sent = h.toServer.length;
+  helperRead(h, 5, 'await app.click(1)'); assert.equal(h.toServer.length, sent);
+});
+
+test('expired diagnostics decline new approval without prompting', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');
+  let asked = 0;
+  const h = harness({ ask: async () => { asked++; return 'accept'; },
+    diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, {
+      probeApp: async () => ({ status: 'responding', windows: 1 }), readControl,
+    }) });
+  helperRead(h, 1); helperReply(h, 1, 'Window: "Calculator", App: Calculator', false);
+  helperRead(h, 2, 'var te = await cua.getApp("TextEdit")'); helperReply(h, 2);
+  helperRead(h, 3, 'await te.getAXState()'); helperReply(h, 3); await tick();
+  t.mock.timers.tick(5500); await tick();
+  h.fromServer(appApproval('expired-approval', ['session'], 'Calculator', 'high')); await tick();
+  assert.equal(asked, 0);
+  assert.equal(h.toServer.at(-1).result.action, 'decline');
+});
+
+test('reset settles diagnostics and old deadlines or replies cannot restore their state', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');
+  const h = harness({ diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, {
+    probeApp: async () => ({ status: 'responding', windows: 1 }), readControl,
+  }) });
+  helperRead(h, 1); helperReply(h, 1, 'Window: "Calculator", App: Calculator', false);
+  helperRead(h, 2, 'var te = await cua.getApp("TextEdit")'); helperReply(h, 2);
+  helperRead(h, 3, 'await te.getAXState()'); helperReply(h, 3); await tick();
+  const old = h.toServer.at(-1);
+  h.fromClient({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'js_reset', arguments: {} } });
+  helperReply(h, 4, 'reset', false); await tick();
+  assert.ok(h.toClient.some(msg => msg.id === 3), 'diagnosis settles on reset');
+  helperRead(h, 5); helperReply(h, 5, 'Window: "Calculator", App: Calculator', false);
+  t.mock.timers.tick(5500); await tick();
+  helperReply(h, old.id, 'Window: "Calculator", App: Calculator', false);
+  helperRead(h, 6, 'await app.click(1)');
+  assert.equal(h.toServer.at(-1).id, 6);
+  assert.ok(!h.toClient.some(msg => msg.id === old.id));
+});
+
+test('successful headerless diagnostic output mentioning timeoutReached is unknown', async () => {
+  const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');
+  const h = harness({ diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, {
+    probeApp: async () => ({ status: 'responding', windows: 1 }), readControl,
+  }) });
+  helperRead(h, 1); helperReply(h, 1, 'Window: "Calculator", App: Calculator', false);
+  helperRead(h, 2, 'var te = await cua.getApp("TextEdit")'); helperReply(h, 2);
+  helperRead(h, 3, 'await te.getAXState()'); helperReply(h, 3); await tick();
+  helperReply(h, h.toServer.at(-1).id, 'The displayed text is timeoutReached', false); await tick();
+  assert.doesNotMatch(h.toClient.find(msg => msg.id === 3).result.content.at(-1).text, /restart ChatGPT/);
+});
+
+test('a hidden diagnostic engine restart cannot expose its RPC or consume the visible baseline', async () => {
+  const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');
+  const h = harness({ diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, {
+    probeApp: async () => ({ status: 'responding', windows: 1 }), readControl,
+  }) });
+  helperRead(h, 0, 'await cua.rewriteDocumentation()'); helperReply(h, 0, '## Computer Use\ndocs', false);
+  helperRead(h, 1); helperReply(h, 1, 'Window: "Calculator", App: Calculator\n0 window Calculator', false);
+  helperRead(h, 2, 'var te = await cua.getApp("TextEdit")'); helperReply(h, 2);
+  helperRead(h, 3, 'await te.getAXState()'); helperReply(h, 3); await tick();
+  const probe = h.toServer.at(-1);
+  helperReply(h, probe.id, '## Computer Use\ndocs\n' + GUARD_MARK + 'Window: "Calculator", App: Calculator\n0 window Hidden' + GUARD_END, false); await tick();
+  assert.ok(!h.toClient.some(msg => msg.id === probe.id));
+  helperRead(h, 4); helperReply(h, 4, 'Window: "Calculator", App: Calculator\n0 window Calculator', false);
+  assert.doesNotMatch(h.toClient.find(msg => msg.id === 4).result.content[0].text, /Hidden/);
+});
+
+test('reset permits matching cached approval for a fresh read before an old diagnostic replies', async () => {
+  const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');
+  const h = harness({ diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, {
+    probeApp: async () => ({ status: 'responding', windows: 1 }), readControl,
+  }) });
+  helperRead(h, 1);
+  h.fromServer(appApproval('original', ['session'], 'Calculator'));
+  h.fromClient({ jsonrpc: '2.0', id: 'original', result: { action: 'accept' } });
+  helperReply(h, 1, 'Window: "Calculator", App: Calculator', false);
+  helperRead(h, 2, 'var te = await cua.getApp("TextEdit")'); helperReply(h, 2);
+  helperRead(h, 3, 'await te.getAXState()'); helperReply(h, 3); await tick();
+  h.fromClient({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'js_reset', arguments: {} } });
+  helperReply(h, 4, 'reset', false); await tick();
+  helperRead(h, 5);
+  const approval = appApproval('fresh', ['session'], 'Calculator'); approval.params._meta.progressToken = 987;
+  h.fromServer(approval);
+  assert.equal(h.toServer.at(-1).result.action, 'accept');
+});
+
 test('two failed helper reads stop that app and promise automatic recovery reads', () => {
   const h = harness();
   helperRead(h, 1); helperReply(h, 1);
   assert.doesNotMatch(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
   helperRead(h, 2, 'await app.getAXState({ disableDiffing: true })'); helperReply(h, 2);
   assert.equal(h.toClient.at(-1).result.isError, true);
-  assert.match(h.toClient.at(-1).result.content.at(-1).text, /SkyComputerUseService.*stuck.*Stop retrying.*user.*restart ChatGPT.*sleight will retry by itself/s);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /could not distinguish.*Stop retrying.*sleight will retry by itself/s);
   const sent = h.toServer.length;
   helperRead(h, 3);
   helperRead(h, 4, 'await app.click(1)');
@@ -82,13 +283,13 @@ test('timeout counts stay separate across apps and a reset cannot erase them', (
   helperRead(h, 2, 'let te = await cua.getApp("TextEdit")'); helperReply(h, 2);
   assert.doesNotMatch(JSON.stringify(h.toClient), /restart ChatGPT/);
   helperRead(h, 3); helperReply(h, 3);
-  assert.match(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /could not distinguish/);
   h.fromClient({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'js_reset', arguments: {} } });
   assert.equal(h.toServer.at(-1).params.name, 'js_reset');
   helperRead(h, 5);
   assert.equal(h.toServer.at(-1).id, 4, 'reset is available but does not clear the app fault');
   helperRead(h, 6, 'let te = await cua.getApp("TextEdit")'); helperReply(h, 6);
-  assert.match(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /could not distinguish/);
 });
 
 test('automatic recovery reads run every 20 s and a successful read clears the app fault', t => {
@@ -180,7 +381,7 @@ test('parallel replies for one app remain valid after another read succeeds', ()
   helperReply(h, 1, 'Window: "Calculator", App: Calculator', false);
   assert.doesNotThrow(() => helperReply(h, 2));
   helperRead(h, 3); helperReply(h, 3);
-  assert.match(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /could not distinguish/);
   const other = harness();
   helperRead(other, 1); helperRead(other, 2);
   helperReply(other, 1, 'Window: "Calculator", App: Calculator', false);
@@ -214,7 +415,7 @@ test('learned bundle aliases and screenshot reads share the same app fault', () 
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: 'Window: "Calculator", App: Calculator' }], _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.calculator' } } } } });
   helperRead(h, 2, 'await calc.getScreenshot()'); helperReply(h, 2);
   helperRead(h, 3, 'await cua.getApp("com.apple.calculator")'); helperReply(h, 3);
-  assert.match(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /could not distinguish/);
   const sent = h.toServer.length;
   helperRead(h, 4, 'await calc.getAXStateAndScreenshot()');
   assert.equal(h.toServer.length, sent);
@@ -226,7 +427,7 @@ test('surrounding whitespace cannot combine timeout counts for different apps', 
   helperRead(h, 2, '\n const te = await cua.getApp("TextEdit")\n'); helperReply(h, 2);
   assert.doesNotMatch(JSON.stringify(h.toClient), /restart ChatGPT/);
   helperRead(h, 3, ' await app.getAXState() '); helperReply(h, 3);
-  assert.match(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /could not distinguish/);
   const sent = h.toServer.length;
   helperRead(h, 4, '  await cua.getApp("Chess")  ');
   assert.equal(h.toServer.length, sent + 1);
@@ -313,7 +514,7 @@ test('a successful helper read resets consecutive timeouts, but documentation do
   assert.doesNotMatch(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
   helperRead(h, 4, 'await cua.rewriteDocumentation()'); helperReply(h, 4, '# API', false);
   helperRead(h, 5); helperReply(h, 5);
-  assert.match(h.toClient.at(-1).result.content.at(-1).text, /restart ChatGPT/);
+  assert.match(h.toClient.at(-1).result.content.at(-1).text, /could not distinguish/);
 });
 
 test('action timeouts, unrelated failures, UI text and server requests cannot diagnose a stuck helper', () => {
@@ -334,7 +535,7 @@ test('RPC timeout errors are diagnosed and turn cleanup stays available', () => 
     helperRead(h, id);
     h.fromServer({ jsonrpc: '2.0', id, error: { code: -32000, message: 'Sky error -10005: timeoutReached' } });
   }
-  assert.match(h.toClient.at(-1).error.message, /restart ChatGPT/);
+  assert.match(h.toClient.at(-1).error.message, /could not distinguish/);
   h.fromClient({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'turn_ended', arguments: {} } });
   assert.equal(h.toServer.at(-1).params.name, 'turn_ended');
   const fresh = harness(); helperRead(fresh, 1); helperReply(fresh, 1);
@@ -345,7 +546,7 @@ test('stuck-helper guidance in document mode does not ask Claude for another rea
   const h = harness({ approvalScope: 'document' });
   for (const id of [1, 2]) { helperRead(h, id); helperReply(h, id); }
   const blocks = h.toClient.at(-1).result.content;
-  assert.match(blocks.at(-1).text, /restart ChatGPT/);
+  assert.match(blocks.at(-1).text, /could not distinguish/);
   assert.ok(blocks.every(c => !c.text.includes('then ask the user with document_scope')));
 });
 const meta = msg => JSON.parse(msg.params._meta['x-codex-turn-metadata']);

@@ -1,0 +1,27 @@
+{
+  "started": "2026-10-08T13:07:40.014Z",
+  "mode": "chess-inspect",
+  "attempts": [],
+  "existing": {
+    "running": true,
+    "pid": 34100,
+    "windows": [
+      {
+        "title": "[Chess window]",
+        "number": null,
+        "bounds": {
+          "X": 46,
+          "Y": 80,
+          "Width": 1223,
+          "Height": 949
+        },
+        "minimized": false,
+        "main": true
+      }
+    ]
+  },
+  "error": {
+    "message": "Chess has an existing game; no existing game will be closed"
+  },
+  "finished": "2026-10-08T13:07:40.275Z"
+}
