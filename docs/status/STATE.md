@@ -35,13 +35,15 @@ Released that day: 0.12.2 (lease recovery advice, engine session restarts), 0.12
 screenshot), 0.13.0 (`app.click({ id })`/`{ label }`), 0.13.1 (errors 21.5% to 12.7% of calls). The
 remaining error causes are in the 0.13.1 pass transcripts, and `docs/benchmark.md` has the history.
 
-Codex: an Astra thread (gpt-6-astra, allowed for deep perf tuning only, LAWS) works on
-`codex/guard-reads` in `~/Projects/sleight-wt/guard-reads`, from `1532ae9` (the owner pasted the
-brief before its base was set, so it predates 0.13.1 and needs a rebase). Brief:
-`.dev/prompts/astra-guard-reads.md` (make the guard's per-action full reads cheaper; six guarantees,
-each with a test). Review and reproduce its numbers before merging. It takes the live lock for its
-checks. `codex/browser-enforcement` (Codex, 2026-10-04) is still unreviewed; its worktree is Codex's
-own at `~/.codex/worktrees/browser-enforcement/sleight`.
+Codex: the Astra thread (gpt-6-astra, deep perf tuning only, LAWS) pushed `codex/guard-reads` at
+`8bebe53`, still on base `1532ae9`. It saved almost nothing. Guard reads per call stayed 9 in
+Calculator and 4 in TextEdit and fell 2 to 1 in Chess (about 57 ms a call). It found that later
+guard reads in a batch took about 400 to 475 ms against 50 ms for the first, and guard reads were 86
+to 95% of engine time in its probes. It also fixes a latent bug: an action through a second handle on
+the same window didn't clear the first handle's cached read. Not reproduced or merged. Round 2 brief
+(rebase onto 0.13.3, shorter note, measure the settle wait): `.dev/prompts/astra-guard-reads-rebase.md`.
+`codex/browser-enforcement` (Codex, 2026-10-04) is still unreviewed. Its worktree is Codex's own at
+`~/.codex/worktrees/browser-enforcement/sleight`.
 
 Public: `Land-o-Clusters/sleight`, latest release `v0.13.3`, installed at user scope from the repo
 folder. Open PRs: none. The first outside user (the owner's friend) runs his iOS simulator tests
