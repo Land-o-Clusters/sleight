@@ -64,6 +64,7 @@ import { ChangeReview, REVIEW_TOOL, isChangeCancel } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
 import { browserCall, browserReply } from './browser-call.mjs';
 import { isLeaseRead } from './input-lease.mjs';
+import { stripGuardTiming } from './guard-timing.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
 import { createReadCompactor } from './compact-reads.mjs';
 import { forbiddenTargetWarning, isForbiddenSettingsWindow, refusedApp } from './blocked-apps.mjs';
@@ -159,6 +160,7 @@ export function createRelay({
   inputLease,
   onLeaseFault = () => {},
   engineForbiddenTargets = false,
+  guardTiming = false,
   trace: writeTrace = () => {},
 }) {
   const compactor = createReadCompactor();
@@ -991,7 +993,7 @@ export function createRelay({
           if (browser && !documentMode) {
             msg.params.arguments.code = guardedCode(originalCode, target, reason,
               inputLease && leaseCalls.get(msg.id)?.key ? inputLease.grant(leaseCalls.get(msg.id).key) : undefined,
-              { fileOnly: changeReview, browserCandidate: true,
+              { timing: guardTiming, fileOnly: changeReview, browserCandidate: true,
                 skipAppWrap: browserHandles.has('app') || browser.handles.includes('app'),
                 nativeDenied: nativeDenied ?? (!target
                   ? 'Native access stopped: send a standalone native app read before acting. No confirmed native window.' : undefined) });
@@ -1010,7 +1012,7 @@ export function createRelay({
           }
           else if (documentMode || inputLease || (changeReview && target)) msg.params.arguments.code = guardedCode(originalCode, target, reason,
             inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
-            { fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
+            { timing: guardTiming, fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
               adoptUrl: !documentMode && !changeReview, skipAppWrap: browserHandles.has('app') });
           if (clipboard) msg.params.arguments.code = clipboardCode(msg.params.arguments.code, clipboardAction);
         }
@@ -1057,6 +1059,9 @@ export function createRelay({
     observeServerMessage(msg);
   });
   function observeServerMessage(msg) {
+    if (msg.method === undefined && Array.isArray(msg.result?.content)) {
+      msg.result.content = stripGuardTiming(msg.result.content, metric => trace('guard-read', { id: msg.id, ...metric }));
+    }
     let windowNote;
     const confirmedBrowser = msg.method === undefined && browserCalls.has(msg.id) && browserReply(msg);
     if (msg.method === undefined && clipboardResets.delete(msg.id) && !msg.error && !msg.result?.isError) {

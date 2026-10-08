@@ -30,3 +30,17 @@ test('no trace leaves only the model split', () => {
   assert.equal(traceTiming('/no/such/dir'), undefined);
   assert.deepEqual(runTiming({ duration_ms: 5000, duration_api_ms: 4000 }), { totalMs: 5000, modelMs: 4000 });
 });
+
+test('guard reads are counted as a subset of engine time, including failed reads', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'sleight-guard-timing-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'trace-2.jsonl'), [
+    line(0, 'call-received', call(1, 'js')), line(2, 'to-server', call(1, 'js')),
+    line(102, 'from-server', { id: 1 }),
+    line(103, 'guard-read', { id: 1, phase: 'before-action', ms: 30.5, chars: 100, failed: false }),
+    line(103, 'guard-read', { id: 1, phase: 'after-call', ms: 40.5, chars: 0, failed: true }),
+    line(104, 'to-client', { id: 1, result: {} }),
+  ].join('\n'));
+  assert.deepEqual(traceTiming(dir), { calls: 1, refused: 0, toolMs: 104, engineMs: 100, relayMs: 4,
+    localMs: 0, guardReads: 2, guardReadMs: 71, guardReadFailures: 1 });
+});
