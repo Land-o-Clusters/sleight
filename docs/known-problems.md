@@ -3,6 +3,13 @@
 What doesn't work, or works only partly, with the measurements behind it. We found all of these in
 our own runs. Dates and engine versions are given where they matter.
 
+- The real-use benchmark has 0 completed model trials against 18 requested (2026-10-08).
+  Safari setup timed out before its new window ID returned. macOS's authorization process was active
+  with two on-screen windows on layer 8. The observer originally checked layer 0, and now catches
+  the measured layer in its unit test. Live checks stopped. Safari fixture cleanup remains unconfirmed,
+  and the other tasks have not run live. The cooperative lock was released on exit.
+  [The report](benchmarks/2026-10-08-real-use-tasks.md) includes the failed attempts and recovery path.
+
 - Native `app.paste` temporarily changed the clipboard, then restored all measured bytes in 4/4
   fixtures. Text entry and engine drag left it unchanged in 4/4 each. Local drag did in 2/2.
   Copy/Cut use the user's clipboard by default, so deliberate copies remain available to menu Paste,

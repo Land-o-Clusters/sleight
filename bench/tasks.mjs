@@ -9,6 +9,8 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { restartChess } from './chess-launch.mjs';
+import { realTasks } from './tasks-real.mjs';
+export { writeTestPDF } from './real-pdf.mjs';
 
 // Calculator shows digit grouping ("1,024"), and Claude reports what it shows.
 const hasNumber = (answer, n) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(answer.replace(/(?<=\d)[,\u202f\u00a0 ](?=\d{3})/g, ''));
@@ -121,13 +123,14 @@ export function quitChess() {
 // Simulator added on the owner's order (2026-10-07), with DeviceHub, which
 // replaces Simulator.app in Xcode 27 (the engine asks for it as "Device Hub").
 export const BENCH_APPS = ['Calculator', 'TextEdit', 'Chess', 'Simulator', 'DeviceHub', 'Device Hub', 'com.apple.calculator',
-  'com.apple.TextEdit', 'com.apple.Chess', 'com.apple.iphonesimulator', 'com.apple.dt.Devices'];
+  'com.apple.TextEdit', 'com.apple.Chess', 'com.apple.iphonesimulator', 'com.apple.dt.Devices',
+  'Safari', 'com.apple.Safari', 'Preview', 'com.apple.Preview', 'Finder', 'com.apple.finder', 'Helium', 'net.imput.helium'];
 
 // simctl from Xcode, even when xcode-select points at the Command Line Tools.
 const XCODE = '/Applications/Xcode.app/Contents/Developer';
 // The app that shows simulators: DeviceHub from Xcode 27, Simulator before it.
 const SIM_APPS = [['DeviceHub', join(XCODE, '../Applications/DeviceHub.app')], ['Simulator', join(XCODE, 'Applications/Simulator.app')]];
-function simctl(...args) {
+export function simctl(...args) {
   const env = existsSync(XCODE) ? { ...process.env, DEVELOPER_DIR: XCODE } : process.env;
   return execFileSync('xcrun', ['simctl', ...args], { encoding: 'utf8', env, timeout: 180000 });
 }
@@ -149,18 +152,24 @@ export function quitSimApp() {
 
 // A booted iPhone simulator with the app showing it open behind the other
 // windows. Boots the first available iPhone when none is running.
-function bootedIPhone() {
+export function bootedIPhone({ trackOwnership = false } = {}) {
   const devices = Object.values(JSON.parse(simctl('list', 'devices', 'available', '--json')).devices).flat()
     .filter(d => d.name.startsWith('iPhone'));
   if (!devices.length) {
     throw new Error('no iPhone simulator: install an iOS runtime (xcodebuild -downloadPlatform iOS) first');
   }
   const device = devices.find(d => d.state === 'Booted') ?? devices[0];
+  const bootedByTask = device.state !== 'Booted';
   if (device.state !== 'Booted') simctl('boot', device.udid);
   simctl('bootstatus', device.udid, '-b');
   const [app, path] = SIM_APPS.find(([, path]) => existsSync(path)) ?? ['Simulator'];
+  let viewerLaunchedByTask = false;
+  if (trackOwnership) {
+    try { execFileSync('/usr/bin/pgrep', ['-x', app], { stdio: 'ignore' }); }
+    catch { viewerLaunchedByTask = true; }
+  }
   execFileSync('open', ['-g', ...(path ? [path] : ['-a', app])]);
-  return { udid: device.udid, name: device.name, app };
+  return { udid: device.udid, name: device.name, app, ...(trackOwnership ? { bootedByTask, viewerLaunchedByTask } : {}) };
 }
 
 // A one-field form on 127.0.0.1, which the simulator reaches through the
@@ -282,3 +291,9 @@ export const tasks = [
     },
   },
 ];
+
+export function getTasks(suite = 'default') {
+  if (suite === 'default') return tasks;
+  if (suite === 'real') return realTasks;
+  throw new Error(`unknown suite ${suite}`);
+}

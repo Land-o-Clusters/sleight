@@ -51,6 +51,29 @@ the allowlist lacked it. Both passes are in
 [`2026-10-07-simulator-form.json`](benchmarks/2026-10-07-simulator-form.json). The task needs Xcode
 and an iOS runtime (`xcodebuild -downloadPlatform iOS`, 8 GB). Without them its runs are skipped.
 
+## Real-use tasks
+
+`node bench/run.mjs --arm sleight --suite real --tasks safari-form --runs 3` selects the new suite.
+Without `--suite real`, the same seven tasks and prompts run as before.
+
+Tasks submit a form in Safari and Helium, rotate and save page 2 of a PDF in Preview, rename and
+move files in Finder, copy a number from TextEdit through Calculator and save its result, and go
+through a profile form in the iOS simulator. Checks read the submitted fields, saved PDF rotation,
+folder contents, saved text, or the server's screen sequence and value. An agent's answer cannot
+pass a task. Each check has a passing case and cases that must fail in the unit tests.
+
+Each live run waits for `/tmp/sleight-live.lock` and holds it through cleanup. Only the newly opened
+browser window is used and closed, including on Helium's existing profile. Fixture files and servers
+are removed after the check. A cleanup failure stops the pass and preserves its fixture for recovery.
+The runner releases the cooperative lock on exit, including a failed run.
+Raw transcripts and traces stay in the private temporary evidence folder, outside the repo.
+Safari, Preview, Finder and Helium join the benchmark approval list by name and exact bundle ID
+(owner, 2026-10-08). macOS permission prompts stop a run.
+The host needs `codex-macos-inspect` for permission observation. An unavailable observer stops
+the run before it opens a fixture.
+The [initial report](benchmarks/2026-10-08-real-use-tasks.md) records the setup failure and permission
+stop, with 0 completed model trials against 18 requested. Live qualification remains pending.
+
 ## Time per run
 
 Each run's result now splits its time. Claude Code reports the time spent in the model API, and
@@ -235,4 +258,5 @@ else drives apps during a pass. `--dry-run` doesn't take it.
 > Headless runs can't show approval prompts, so a benchmark run auto-approves Calculator, TextEdit,
 > Chess and the iOS Simulator (Simulator, or DeviceHub from Xcode 27) for either arm, and sleight's `drag` and `hover` in those apps (`bench/approve.mjs`, loaded only through
 > `bench/settings.json`). Only run it when you're fine with Claude driving those four apps unattended. `--dry-run` checks the setup without
-> launching Claude.
+> launching Claude. The real suite also drives Safari, Preview, Finder and Helium, and the same
+> hook accepts those apps by name and bundle ID (owner, 2026-10-08).

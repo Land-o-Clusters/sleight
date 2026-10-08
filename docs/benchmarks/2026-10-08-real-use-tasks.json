@@ -1,0 +1,130 @@
+{
+  "suite": "real",
+  "status": "qualification-blocked",
+  "completedModelTrials": 0,
+  "requestedModelTrials": 18,
+  "authorizationObservation": {
+    "bundleIdentifier": "com.apple.UserNotificationCenter",
+    "isActive": true,
+    "onScreenWindowLayers": [
+      8,
+      8
+    ],
+    "promptContentsInspected": false
+  },
+  "lockReleasedOnExit": true,
+  "cleanupConfirmed": false,
+  "fixture": "<temp>/sleight-bench/2026-10-08T21-21-53-369Z/sleight-safari-form-1",
+  "attempts": [
+    {
+      "source": "2026-10-08T21-12-05-983Z-dry.json",
+      "stamp": "2026-10-08T21-12-05-983Z",
+      "suite": "real",
+      "arms": [
+        "sleight"
+      ],
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "claude",
+      "results": [
+        {
+          "arm": "sleight",
+          "task": "safari-form",
+          "run": 1,
+          "dryRun": true,
+          "prompt": "Using computer use, work only in the new Safari window showing http://127.0.0.1:58897/0aa8dcd2/. Fill Name with \"Morgan Reed\", Email with \"morgan@example.test\", select \"Design\" for Team, check \"Send updates\", and fill Code with \"0aa8dcd2\". Submit the form. Leave that window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+          "check": "server has no submission with all five expected values",
+          "models": []
+        },
+        {
+          "arm": "sleight",
+          "task": "helium-form",
+          "run": 1,
+          "dryRun": true,
+          "prompt": "Using computer use, work only in the new Helium window showing http://127.0.0.1:58898/65354b36/. Fill Name with \"Morgan Reed\", Email with \"morgan@example.test\", select \"Design\" for Team, check \"Send updates\", and fill Code with \"65354b36\". Submit the form. Leave that window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+          "check": "server has no submission with all five expected values",
+          "models": []
+        },
+        {
+          "arm": "sleight",
+          "task": "preview-pdf",
+          "run": 1,
+          "dryRun": true,
+          "prompt": "Using computer use in Preview, open <temp>/sleight-bench/2026-10-08T21-12-05-983Z/sleight-preview-pdf-1/Pages-a4b21110.pdf. Rotate only page 2 clockwise by 90 degrees, save the same PDF, and leave it open. Keep page 1 unchanged.",
+          "check": "saved PDF must retain both pages, with only page 2 rotated clockwise 90 degrees",
+          "models": []
+        },
+        {
+          "arm": "sleight",
+          "task": "finder-files",
+          "run": 1,
+          "dryRun": true,
+          "prompt": "Using computer use in Finder, stay inside <temp>/sleight-bench/2026-10-08T21-12-05-983Z/sleight-finder-files-1/Files-b2202f15 and its Archive subfolder. Rename alpha.txt to renamed.txt, move bravo.txt into Archive, and leave charlie.txt unchanged. Use Finder for both operations. Leave this window open. Do not open or modify anything outside this folder.",
+          "check": "folder has missing or extra files",
+          "models": []
+        },
+        {
+          "arm": "sleight",
+          "task": "textedit-calculator",
+          "run": 1,
+          "dryRun": true,
+          "prompt": "Using computer use, open <temp>/sleight-bench/2026-10-08T21-12-05-983Z/sleight-textedit-calculator-1/Calculation-02c6fc04.txt in TextEdit and copy its number. Choose Basic mode and clear Calculator before pasting the number. Multiply it by 23, copy the result, and paste it into TextEdit, replacing the original number. Save that same plain text document and leave it open. Use copy and paste between the apps.",
+          "check": "saved document does not contain only 391",
+          "models": []
+        },
+        {
+          "arm": "sleight",
+          "task": "simulator-flow",
+          "run": 1,
+          "dryRun": true,
+          "prompt": "Using computer use in the Simulator app's iPhone simulator, Safari shows http://127.0.0.1:58966/c1515a80/. Tap Edit profile, fill Value with \"Flow c1515a80\", tap Save, tap Back to profile, and check that the profile shows \"Flow c1515a80\". Leave the profile screen visible.",
+          "check": "server has no saved value followed by a return to the profile",
+          "models": []
+        }
+      ]
+    },
+    {
+      "source": "2026-10-08T21-12-51-168Z.json",
+      "stamp": "2026-10-08T21-12-51-168Z",
+      "suite": "real",
+      "arms": [
+        "sleight"
+      ],
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "claude",
+      "results": [
+        {
+          "arm": "sleight",
+          "task": "safari-form",
+          "run": 1,
+          "passed": false,
+          "reason": "The operation was aborted",
+          "models": []
+        }
+      ]
+    },
+    {
+      "source": "2026-10-08T21-21-53-369Z.json",
+      "stamp": "2026-10-08T21-21-53-369Z",
+      "suite": "real",
+      "arms": [
+        "sleight"
+      ],
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "claude",
+      "results": [
+        {
+          "arm": "sleight",
+          "task": "safari-form",
+          "run": 1,
+          "passed": false,
+          "reason": "Command failed: /usr/bin/osascript ~/Projects/sleight-wt/real-use-tasks/bench/real-safari.applescript open com.apple.Safari http://127.0.0.1:62356/e0e21e4b/\n",
+          "cleanupError": "Browser window creation was interrupted before its ID was recorded; cleanup unconfirmed",
+          "models": []
+        }
+      ]
+    }
+  ]
+}

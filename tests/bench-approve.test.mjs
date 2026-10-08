@@ -7,7 +7,7 @@ const approve = message => {
   const output = execFileSync(process.execPath, ['bench/approve.mjs'], { cwd: new URL('..', import.meta.url), input: JSON.stringify(input), encoding: 'utf8' });
   return output ? JSON.parse(output).hookSpecificOutput.action : null;
 };
-test('focused menu benchmarks approve only the three benchmark apps', () => {
+test('benchmark menu approvals cover the original apps and exclude unapproved targets', () => {
   for (const app of ['Calculator', 'TextEdit', 'Chess']) assert.equal(approve(`Allow Claude to use ${app}'s menu bar item?`), 'accept');
   for (const app of ['System Settings', 'ChatGPT', 'TextEdit copy']) assert.equal(approve(`Allow Claude to use ${app}'s menu bar item?`), null);
   assert.equal(approve('Allow Claude to read and use your notifications?'), null);
@@ -16,8 +16,16 @@ test('benchmark drags approve the three apps by bundle ID too, exact case only',
   for (const app of ['com.apple.Chess', 'com.apple.TextEdit', 'com.apple.calculator', 'Chess']) {
     assert.equal(approve(`Allow Claude to drag in ${app}? It moves the pointer.`), 'accept');
   }
-  for (const app of ['com.apple.chess', 'com.apple.Safari', 'com.apple.Chess.evil']) {
+  for (const app of ['com.apple.chess', 'com.apple.Safari.copy', 'com.apple.Chess.evil']) {
     assert.equal(approve(`Allow Claude to drag in ${app}? It moves the pointer.`), null);
+  }
+});
+test('real tasks approve only the four added apps and their exact bundle IDs', () => {
+  for (const app of ['Safari', 'com.apple.Safari', 'Preview', 'com.apple.Preview', 'Finder', 'com.apple.finder', 'Helium', 'net.imput.helium']) {
+    assert.equal(approve(`Allow Computer Use to use "${app}"?`), 'accept');
+  }
+  for (const app of ['Google Chrome', 'net.imput.helium.copy', 'com.apple.preview']) {
+    assert.equal(approve(`Allow Computer Use to use "${app}"?`), null);
   }
 });
 test('benchmark runs approve Simulator and DeviceHub by name and bundle ID', () => {

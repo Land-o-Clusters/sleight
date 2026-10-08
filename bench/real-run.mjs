@@ -1,0 +1,78 @@
+import { mkdirSync, rmSync } from 'node:fs';
+import { acquireLiveLock } from './live-lock.mjs';
+
+// Only the real suite uses this lifecycle, preserving older benchmark passes.
+// A cleanup failure preserves its fixture and stops the pass. The cooperative
+// lock is released on exit, as the task brief requires.
+export async function executeRealTask(task, ctx, { drive, dryRun = false, signal, permissionCheck, stop } = {}) {
+  let release, cleanupConfirmed = false, driverStarted = false;
+  let monitor, observation;
+  const cleanupController = new AbortController();
+  const result = {};
+  ctx.signal = signal;
+  ctx.cleanupSignal = cleanupController.signal;
+  const observe = async () => {
+    try {
+      if (await permissionCheck()) { result.permissionPrompt = true; stop?.(); cleanupController.abort(); }
+    } catch (error) { result.observerError = error.message; stop?.(); cleanupController.abort(); throw error; }
+  };
+  try {
+    if (!dryRun) release = await acquireLiveLock(ctx.lockPath ?? '/tmp/sleight-live.lock', { wait: true, signal, interval: 2000 });
+    signal?.throwIfAborted();
+    if (!dryRun && permissionCheck) {
+      await observe();
+      signal?.throwIfAborted();
+      if (result.permissionPrompt) throw new Error('macOS permission prompt: stopped');
+      monitor = setInterval(() => {
+        if (observation) return;
+        observation = observe().catch(() => {}).finally(() => { observation = undefined; });
+      }, 3000);
+    }
+    mkdirSync(ctx.dir, { recursive: true });
+    await (dryRun ? task.prepare?.(ctx) : task.setup?.(ctx));
+    signal?.throwIfAborted();
+    const prompt = task.prompt(ctx);
+    if (dryRun) {
+      Object.assign(result, { dryRun: true, prompt, check: String(await task.check({ ...ctx, answer: '' })) });
+    } else {
+      const started = Date.now();
+      driverStarted = true;
+      const response = await drive(prompt, ctx);
+      Object.assign(result, response);
+      const verdict = await task.check({ ...ctx, answer: response.out?.result ?? '' });
+      result.passed = response.code === 0 && verdict === true && !signal?.aborted && !result.permissionPrompt && !result.observerError;
+      result.reason = result.permissionPrompt ? 'macOS permission prompt: stopped' : signal?.aborted ? 'run interrupted' :
+        verdict !== true ? verdict : response.code !== 0 ? `driver exited ${response.code}` : undefined;
+      result.seconds = Math.round((Date.now() - started) / 100) / 10;
+    }
+  } catch (error) {
+    result.passed = false;
+    if (driverStarted && result.groupClean !== true) result.groupClean = false;
+    result.reason = result.permissionPrompt ? 'macOS permission prompt: stopped' : error.message;
+  } finally {
+    try {
+      if (result.groupClean === false) throw new Error('Owned driver process group cleanup unconfirmed');
+      await task.cleanup?.(ctx);
+      if (ctx.pendingAcquisitions?.size) throw new Error(`Fixture acquisition unconfirmed: ${[...ctx.pendingAcquisitions].join(', ')}`);
+      cleanupConfirmed = true;
+    }
+    catch (error) { result.passed = false; result.cleanupError = error.message; }
+    clearInterval(monitor);
+    await observation;
+    if (result.permissionPrompt) { result.passed = false; result.reason = 'macOS permission prompt: stopped'; }
+    if (result.observerError) { result.passed = false; result.reason = `macOS permission observer failed: ${result.observerError}`; }
+    if (cleanupConfirmed) {
+      rmSync(ctx.dir, { recursive: true, force: true });
+    } else result.fixtureDir = ctx.dir;
+    await release?.();
+  }
+  return result;
+}
+
+export async function acquireFixture(ctx, key, operation) {
+  ctx.pendingAcquisitions ??= new Set();
+  ctx.pendingAcquisitions.add(key);
+  ctx[key] = await operation();
+  ctx.pendingAcquisitions.delete(key);
+  return ctx[key];
+}

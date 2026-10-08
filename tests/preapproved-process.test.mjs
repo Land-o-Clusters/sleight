@@ -12,6 +12,12 @@ const hangs = `
   const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM",()=>{}); console.log("ready"); setInterval(()=>{},1000)'], {stdio:'inherit'});
   setInterval(()=>{},1000);
 `;
+test('owned runs pass the specified benchmark environment to their child', async () => {
+  const result = await runOwned(process.execPath, ['-e', 'console.log(process.env.SLEIGHT_BENCH_TEST_VALUE)'],
+    { env: { ...process.env, SLEIGHT_BENCH_TEST_VALUE: 'fixture-trace' } });
+  assert.equal(result.stdout.trim(), 'fixture-trace');
+  assert.equal(result.groupClean, true);
+});
 test('a timeout collects a process group even when the child and descendant ignore TERM', async () => {
   const start = Date.now();
   const result = await runOwned(process.execPath, ['-e', hangs], { timeoutMs: 300, graceMs: 100 });
