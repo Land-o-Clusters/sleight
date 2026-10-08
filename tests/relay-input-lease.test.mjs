@@ -36,12 +36,16 @@ test('missing or ambiguous action headers leave a selected outcome unconfirmed',
     assert.match(a.received.at(-1).result.content.at(-1).text, /outcome unconfirmed.*a.txt.*missing full window header/);
   }
 });
-test('ordinary window changes and missing headers have no selection note', t => {
-  for (const response of ['Window: "b.txt", App: TextEdit', 'done']) {
-    const { a } = setup(t);
-    a.send(rpc(1, 'js', { code: 'await app.pressKey("super+n")' })); a.reply(result(1, response));
-    assert.equal(a.received.at(-1).result.content.length, 1);
-  }
+test('an action that leaves another window in front says so; a missing header adds nothing', t => {
+  const { a } = setup(t);
+  a.send(rpc(1, 'js', { code: 'await app.pressKey("super+w")' })); a.reply(result(1, 'Window: "b.txt", App: TextEdit'));
+  assert.match(a.received.at(-1).result.content.at(-1).text, /acted on .*a\.txt.*now is .*b\.txt/);
+  const { a: other } = setup(t);
+  other.send(rpc(1, 'js', { code: 'await app.pressKey("super+n")' })); other.reply(result(1, 'done'));
+  assert.equal(other.received.at(-1).result.content.length, 1);
+  const { a: same } = setup(t);
+  same.send(rpc(1, 'js', { code: 'await app.typeText("x")' })); same.reply(result(1));
+  assert.equal(same.received.at(-1).result.content.length, 1, 'the same window adds nothing');
 });
 function setup(t) {
   const directory = mkdtempSync(join(tmpdir(), 'sleight-relay-lease-'));

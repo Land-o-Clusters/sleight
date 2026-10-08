@@ -1311,6 +1311,13 @@ export function createRelay({
       const matches = window && cached && (call.acquisition
         ? documentKey(cached.window) === documentKey(window) : cached.app === window.app);
       const known = window && (typeof appId === 'string' && appId ? appId : matches ? cached.appId : undefined);
+      // An action whose result shows another window of the same app (a close, a new window). Said
+      // plainly, or a "no change" about the window now in front reads as a failed action: Claude
+      // probed after closing a Chess game in 4/6 runs (2026-10-08).
+      if (call.key && !windowNote && window && !msg.result?.isError && leaseWindow?.app === window.app &&
+          !sameWindow(leaseWindow, window)) {
+        windowNote = `sleight: this call acted on ${documentLabel(leaseWindow)}. The window it shows now is ${documentLabel(window)}.`;
+      }
       leaseWindow = window ? { ...window, ...(known ? { appId: known } : {}) } : undefined;
       if (call.handle) {
         if (known) handleBundles.set(call.handle, leaseWindow);
