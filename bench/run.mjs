@@ -23,11 +23,12 @@
 
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, rmdirSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { quitChess, tasks } from './tasks.mjs';
+import { acquireLiveLock } from './live-lock.mjs';
 import { runTiming, traceTiming } from './timing.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -172,6 +173,16 @@ const file = join(resultsDir, `${stamp}${isDryRun ? '-dry' : ''}.json`);
 // Written after every run, so a run cut short keeps what it finished.
 const save = () =>
   writeFileSync(file, JSON.stringify({ stamp, arms: armNames, model, effort, claude: claudeBin, results }, null, 2) + '\n');
+// A live pass holds the shared lock, so no other live check drives apps on top of it. On
+// 2026-10-08 a Codex thread ran Safari tasks during two passes because this didn't.
+let unlock;
+if (!isDryRun) {
+  console.error('Waiting for /tmp/sleight-live.lock if another live run holds it.');
+  unlock = await acquireLiveLock(undefined, { wait: true });
+  const release = () => { const u = unlock; unlock = undefined; return u?.().catch(() => {}); };
+  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await release(); process.exit(130); });
+  process.once('exit', () => { if (unlock) try { rmdirSync('/tmp/sleight-live.lock'); } catch {} });
+}
 // Arms alternate task by task, so both see the same conditions over time.
 for (let run = 1; run <= runs; run++) {
   for (const task of selected) {
@@ -238,6 +249,8 @@ if (!isDryRun) {
   try { execFileSync('osascript', ['-e', `if application "TextEdit" is running then ${closeDocs}`], { stdio: 'ignore' }); } catch {} // nothing to close
   quitChess();
 }
+await unlock?.();
+unlock = undefined;
 
 if (!isDryRun) {
   console.log('\n| Arm | Task | Passed | Median s | Model s | Engine s | Local tools s | Relay ms | Median turns | API-price cost |');

@@ -172,6 +172,9 @@ npm run bench -- --arm all --runs 3   # sleight and LCU
 
 The LCU arm needs LCU registered for Claude Code in a separate folder. `bench/run.mjs` has the steps.
 
+A live run waits for and holds `/tmp/sleight-live.lock`, the lock every live check takes, so nothing
+else drives apps during a pass. `--dry-run` doesn't take it.
+
 > [!WARNING]
 > Headless runs can't show approval prompts, so a benchmark run auto-approves Calculator, TextEdit,
 > Chess and the iOS Simulator (Simulator, or DeviceHub from Xcode 27) for either arm, and sleight's `drag` and `hover` in those apps (`bench/approve.mjs`, loaded only through
