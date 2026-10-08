@@ -177,6 +177,11 @@ our own runs. Dates and engine versions are given where they matter.
   handle with it (`app.click(1); "x"` on a disabled Calculator element, 3/3 on 2026-10-07). sleight
   notices when the engine's first-call docs come back without a `js_reset` and tells Claude, but the
   call that restarted it may have done nothing.
+- On 2026-10-08 two calculator-click runs took 16 and 10 turns instead of 5. Right after Calculator
+  launched, its first read took 7.1 s, the IDs `AllClear` and `Seven` were missing and then came
+  back, and one button's line changed from `Description: 7, ID: Seven` to `Seven` between reads.
+  Each change stopped an action and cost Claude a turn. The Mac was under heavy load from other
+  processes that day. We don't know whether the load or Calculator's launch caused it.
 - On 2026-10-07 `drag` once refused a Chess window launched in the background seconds earlier,
   because it couldn't find that window among Chess's accessibility windows. It matches by the window's AX number, or by bounds and
   title, and neither matched. The same kind of window matched in another run. Why is unknown.

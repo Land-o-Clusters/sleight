@@ -127,7 +127,13 @@ cost figures aren't shown here.
 0.13.4's guard change ([`guard-reads`](benchmarks/2026-10-08-guard-reads.json)) passed all 20 runs
 that started, in 195 turns and 121 calls, with 190 s in the engine against 191 s before. Model time
 per turn was 2.51 s. chess-drag's first run was skipped: macOS failed to relaunch Chess right after
-the benchmark quit it (`open` error -600). One pass per model can't separate a model from that hour's API latency.
+the benchmark quit it (`open` error -600).
+
+0.13.5 (`getScreenshot()` reuses the engine's AX read, one `typeText` for contiguous text) passed
+21/21 ([`engine-time-pass`](benchmarks/2026-10-08-engine-time-pass.json)) in 212 turns and 877 s,
+with 275 s in the engine. calculator-click runs 1 and 2 took 83 s of that and 26 turns, while
+Calculator's AX tree kept changing after launch. The other six tasks took 188 s in the engine against
+173 s in the previous pass. One pass per model can't separate a model from that hour's API latency.
 
 From 2026-10-04 on, runs default to Sonnet 5.5 at medium effort (`--model`, `--effort`).
 

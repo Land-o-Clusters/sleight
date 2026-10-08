@@ -3,32 +3,30 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-08 13:00 UTC)
+## Banner (2026-10-08 17:55 UTC)
 
-Checkout: `~/Projects/sleight` is on `main`, released as 0.13.4. The live lock `/tmp/sleight-live.lock` is free.
+Checkout: `~/Projects/sleight` is on `main`, released as 0.13.5. The Sol thread holds the live lock
+for its Chess trials.
 
-- 0.13.4 is Astra's `codex/guard-reads`, rebased by sleight-arch on the owner's word (it applied without
-  conflicts) and squash-merged. Actions clear every handle's saved guard read (a latent stale-read
-  bug), combined reads count as guard reads, and `SLEIGHT_TRACE` times each guard read. Reproduced
-  live 15/15 with 9 / 4 / 1 guard reads per call. Its pass ran 20 of 21 runs and passed all 20, in
-  195 turns and 121 calls, engine 190 s (unchanged). The skipped run was Chess failing to relaunch (-600).
-- In Codex, Astra gets `.dev/prompts/engine-time.md` (why a read after an action costs 400 ms, and what
-  the guard can do instead), and Sol 6.1 gets `.dev/prompts/sol-reliability.md` (the fresh Chess
-  window, and a hung app reported as a stuck helper). The owner pastes both.
-- sleight-arch next: turns in textedit-save and chess-drag, `cua.getApp({ windowId })` on the new
-  engine, the engine's new click options in the skill, and merge or close `codex/browser-enforcement`.
-- 0.13.2 (input lease kept through guard stops, one-call Save As) passed 20/21 on Sonnet 5.5 medium, 213 turns
-  (from 260), 687 s (from 825), textedit-save median 16 turns (from 27). The failure was the engine's
-  `noWindowsAvailable` on a fresh Chess window (`docs/known-problems.md`).
-- Model comparison on 0.13.2's code, one pass each, in `docs/benchmark.md`. Haiku 5.5 medium passed 20/21
-  in 235 turns and 625 s, Sonnet low 21/21 in 199 turns and 827 s, Opus 5.5 medium 21/21 in 223
-  turns and 808 s with 0 refused calls. Haiku's cost figures are suspect (Claude Code 2.1.289 calls the model unrecognized).
-  One pass per model can't separate the model from API latency. The owner kept Sonnet medium as
-  the default (2026-10-08, LAWS).
-- 0.13.3: `let app = await cua.getApp("X"); app` counts as an acquisition (Haiku's failure), and a
-  refused first call that asks for an app by name is advised that app's acquisition instead of
-  `cua.getState()`. Proven by unit tests only: neither path came up live. Its Sonnet pass passed 21/21
-  (226 turns, 738 s), Haiku textedit-save 3/3.
+- 0.13.5 is Astra's `codex/engine-time`, reproduced 25/25 and squash-merged. `getScreenshot()` reuses
+  the engine's AX read, and the skill says to type contiguous text at once. Its pass ran 21/21 in 212
+  turns and 877 s. Two calculator-click runs took 26 turns and 83 s of engine time while Calculator's
+  AX tree kept changing after launch (known problems). Astra's finding: any read after input costs
+  about 415 ms, however long the caller waits. Its proposal to skip the guard's checks between
+  actions in a batch stays out (43.9 s of a 756 s pass, and it would send input to a dialog that
+  opened mid-batch).
+- `codex/reliability` (Sol 6.1, `38a8ded`) is reviewed, not merged. The hang diagnosis works (wrong
+  "restart ChatGPT" advice 1/1 before, 0/6 after) and the benchmark waits for Chess to exit before
+  relaunching. Its fresh-Chess drag trials were blocked on a leftover Chess game, which the owner
+  says isn't theirs (2026-10-08). Merge after it reports, with one pass.
+- Turns are the owner's priority now (native Codex computer use felt faster). In the 0.13.4 pass, 20
+  of 155 tool calls loaded the skill and 16 acquired the app alone: about 2 overhead turns per run.
+  sleight-arch is building, in this order: the skill's essentials in the `js` tool description (no
+  Skill turn), the engine's first-call docs fetched by the relay at startup (no docs turn), then a
+  design for acquiring and acting in one call, to show the owner before building it.
+- Earlier on 2026-10-08: 0.13.2 to 0.13.4 (lease kept through guard stops, one-call Save As, the
+  echoed-handle acquisition, guard reads cleared for every handle; `CHANGELOG.md`), and a four-model
+  comparison on 0.13.2's code (`docs/benchmark.md`). The owner kept Sonnet 5.5 medium (LAWS).
 
 Engine update: the helper is now 26.1002.52244 (was 26.930.51102), found at boot on 2026-10-08. Its
 API diff (`~/Library/Logs/sleight/engine-api-26.1002.52244.diff`, captured by hand because

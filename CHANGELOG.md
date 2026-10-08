@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.5 (2026-10-08)
+
+- `getScreenshot()` takes the engine's combined capture and keeps its AX half as the guard's read,
+  with the same image. A screenshot then an action took 469 ms instead of 501, and an action then a
+  screenshot 468 instead of 520 (`docs/design/engine-time.md`).
+- The skill says to type contiguous text with one `typeText` instead of a `pressKey` per character.
+  Typing 8 digits in TextEdit took 1.4 s instead of 4.2 s.
+- Reads after any input cost about 415 ms however long the caller waits first. The skill says not to
+  sleep before a read.
+- The next pass (`docs/benchmarks/2026-10-08-engine-time-pass.json`) passed 21/21 in 212 turns and
+  877 s. Two calculator-click runs took 16 and 10 turns while Calculator's AX tree changed under them
+  (`docs/known-problems.md`). The other tasks matched the previous pass.
+
 ## 0.13.4 (2026-10-08)
 
 - Every action clears the window guard's saved reads for all handles in the call. Before, an action
