@@ -4,7 +4,7 @@ import { acquireLiveLock } from './live-lock.mjs';
 // Only the real suite uses this lifecycle, preserving older benchmark passes.
 // A cleanup failure preserves its fixture and stops the pass. The cooperative
 // lock is released on exit, as the task brief requires.
-export async function executeRealTask(task, ctx, { drive, dryRun = false, signal, permissionCheck, stop } = {}) {
+export async function executeRealTask(task, ctx, { drive, dryRun = false, signal, permissionCheck, stop, lockHeld = false } = {}) {
   let release, cleanupConfirmed = false, driverStarted = false;
   let monitor, observation;
   const cleanupController = new AbortController();
@@ -13,11 +13,16 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, signal
   ctx.cleanupSignal = cleanupController.signal;
   const observe = async () => {
     try {
-      if (await permissionCheck()) { result.permissionPrompt = true; stop?.(); cleanupController.abort(); }
+      const permission = await permissionCheck();
+      if (permission) {
+        result.permissionPrompt = true;
+        if (typeof permission === 'object') result.permissionWindow = permission;
+        stop?.(); cleanupController.abort();
+      }
     } catch (error) { result.observerError = error.message; stop?.(); cleanupController.abort(); throw error; }
   };
   try {
-    if (!dryRun) release = await acquireLiveLock(ctx.lockPath ?? '/tmp/sleight-live.lock', { wait: true, signal, interval: 2000 });
+    if (!dryRun && !lockHeld) release = await acquireLiveLock(ctx.lockPath ?? '/tmp/sleight-live.lock', { wait: true, signal, interval: 2000 });
     signal?.throwIfAborted();
     if (!dryRun && permissionCheck) {
       await observe();
@@ -57,6 +62,11 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, signal
       cleanupConfirmed = true;
     }
     catch (error) { result.passed = false; result.cleanupError = error.message; }
+    for (const helper of ctx.windowLeases ?? []) {
+      try {
+        if (!await helper.dispose()) throw new Error('Fixture helper process group cleanup unconfirmed');
+      } catch (error) { result.passed = false; result.cleanupError = error.message; cleanupConfirmed = false; }
+    }
     clearInterval(monitor);
     await observation;
     if (result.permissionPrompt) { result.passed = false; result.reason = 'macOS permission prompt: stopped'; }
@@ -72,7 +82,8 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, signal
 export async function acquireFixture(ctx, key, operation) {
   ctx.pendingAcquisitions ??= new Set();
   ctx.pendingAcquisitions.add(key);
-  ctx[key] = await operation();
+  try { ctx[key] = await operation(); }
+  catch (error) { if (error.noMutation === true) ctx.pendingAcquisitions.delete(key); throw error; }
   ctx.pendingAcquisitions.delete(key);
   return ctx[key];
 }
