@@ -49,7 +49,7 @@ function setup(t) {
   writeFileSync(path, 'before\n');
   const relays = [];
   t.after(() => { for (const r of relays) r.close(); rmSync(directory, { recursive: true, force: true }); });
-  const harness = (holder, options = {}) => {
+  const harness = (holder, { fresh, ...options } = {}) => {
     const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
     const forwarded = [], received = [];
     for (const [stream, output] of [[serverIn, forwarded], [clientOut, received]]) {
@@ -60,7 +60,7 @@ function setup(t) {
     relays.push(relay);
     const send = msg => clientIn.write(JSON.stringify(msg) + '\n');
     const reply = msg => serverOut.write(JSON.stringify(msg).replaceAll('file:///tmp/a.txt', pathToFileURL(path).href) + '\n');
-    send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); reply(result('read'));
+    if (!fresh) { send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); reply(result('read')); }
     forwarded.length = received.length = 0;
     return { send, reply, forwarded, received, relay, inputLease, serverIn, clientOut };
   };
@@ -363,6 +363,36 @@ test('bare getApp after reset recovers the session window bundle identity', t =>
   a.send(rpc(3, 'js', { code: 'await app.typeText("x")' }));
   assert.equal(a.forwarded.length, 3, JSON.stringify(a.received));
   a.reply(result(3));
+});
+
+test('an acquisition that ends by naming its handle is still an acquisition', t => {
+  // Haiku 5.5 sent this three times on 2026-10-08 and was refused each time.
+  for (const code of ['let app = await cua.getApp("com.apple.TextEdit"); app', 'const doc = await cua.getApp("TextEdit");\ndoc;']) {
+    const a = setup(t).harness('fresh', { fresh: true });
+    a.send(rpc(1, 'js', { code })); a.reply(result(1));
+    assert.equal(a.forwarded.length, 1, JSON.stringify(a.received));
+    assert.doesNotMatch(a.forwarded[0].params.arguments.code, /;\s*(app|doc);?\s*$/);
+    a.send(rpc(2, 'js', { code: `await ${code.match(/(app|doc) =/)[1]}.typeText("x")` }));
+    assert.equal(a.forwarded.length, 2, JSON.stringify(a.received));
+    a.reply(result(2));
+  }
+});
+
+test('a refused first call that names its app gets that app\'s bare acquisition as the advice', t => {
+  const a = setup(t).harness('fresh', { fresh: true });
+  a.send(rpc(1, 'js', { code: 'let app = await cua.getApp("com.apple.TextEdit"); await app.typeText("x")' }));
+  const recovery = a.received.at(-1).result.content[0].text.match(/`([^`]+)`/)?.[1];
+  assert.equal(recovery, 'let app = await cua.getApp("com.apple.TextEdit")');
+  a.send(rpc(2, 'js', { code: recovery })); a.reply(result(2));
+  a.send(rpc(3, 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(a.forwarded.length, 2, JSON.stringify(a.received));
+  a.reply(result(3));
+});
+
+test('a trailing name that is not the acquired handle is left alone', t => {
+  const a = setup(t).harness('fresh', { fresh: true });
+  a.send(rpc(1, 'js', { code: 'let app = await cua.getApp("com.apple.TextEdit"); other' }));
+  assert.equal(a.forwarded.length, 0, 'an action with no confirmed window is still refused');
 });
 
 test('missing identity refusal supplies an executable recovery assignment', t => {

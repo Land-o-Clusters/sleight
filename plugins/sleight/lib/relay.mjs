@@ -525,7 +525,10 @@ export function createRelay({
       if (!leaseWindow?.appId) {
         // `let`: a failed `let app = …` leaves no binding, so a bare `app = …` would fail, and the
         // engine accepts `let` again for a name it already has (both checked 2026-10-07).
-        const recovery = recoveryTarget ? `${constApp ? '' : 'let app = '}await ${recoveryTarget}` : 'await cua.getState()';
+        // With no app read yet, an app named in this call beats getState, which acquires nothing.
+        const named = code.match(/cua\.getApp\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*\)/)?.[1];
+        const target = recoveryTarget ?? (named && `cua.getApp(${named})`);
+        const recovery = target ? `${constApp ? '' : 'let app = '}await ${target}` : 'await cua.getState()';
         const inventory = /\bcua\.(?:listApps|listWindows|getState)\(/.test(code)
           ? ' To look up apps or windows, send one expression, such as \u0060(await cua.listApps()).map(a => a.id).join("\\n")\u0060.' : '';
         leaseStop(msg, `a bundle ID and full window header are required. Send exactly \u0060${recovery}\u0060 in js, then read the intended window before acting.${inventory}`);
@@ -823,6 +826,12 @@ export function createRelay({
       const { command, ...rest } = jsArgs;
       msg.params.arguments = { ...rest, code: command };
     }
+    // `let app = await cua.getApp("X"); app` echoes the handle it just bound, which the
+    // acquisition adds nothing to. Haiku 5.5 sent it 3 times on 2026-10-08, and the lease
+    // refused each one as an action.
+    const echo = typeof msg.params?.arguments?.code === 'string' && jsArgs &&
+      msg.params.arguments.code.trim().match(/^((?:let|const|var)\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.getApp\([^;]*\))\s*;\s*([A-Za-z_$][\w$]*)\s*;?$/);
+    if (echo && echo[2] === echo[3]) msg.params.arguments.code = echo[1];
     handleClient(msg);
   });
   function handleClient(msg) {
