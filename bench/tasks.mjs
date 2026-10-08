@@ -4,26 +4,83 @@
 // so every arm gets the same words.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { restartChess } from './chess-launch.mjs';
 
 // Calculator shows digit grouping ("1,024"), and Claude reports what it shows.
 const hasNumber = (answer, n) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(answer.replace(/(?<=\d)[,\u202f\u00a0 ](?=\d{3})/g, ''));
 
-// TextEdit opens a document next to its other windows, which can sit on another
-// desktop, and drag then refuses (textedit-drag 2/3 runs, 2026-10-05). Quitting
-// it first puts its windows on the current desktop. It only quits a TextEdit
-// with no open documents, so it never closes one.
-function freshTextEdit() {
-  // A hung TextEdit times out here (2026-10-05); the run then goes ahead and its check records it.
-  try { execFileSync('osascript', ['-e', 'if application "TextEdit" is running then tell application "TextEdit" to if (count documents) is 0 then quit'], { timeout: 15000, stdio: 'ignore' }); }
-  catch { return; }
+const SCRATCH = join(tmpdir(), 'sleight-bench');
+const SCRATCH_REAL = join(realpathSync(tmpdir()), 'sleight-bench'); // TextEdit reports /private/var/…
+const textEditGone = () => { try { execFileSync('pgrep', ['-x', 'TextEdit']); return false; } catch { return true; } };
+function waitTextEditGone() {
   for (let i = 0; i < 20; i++) {
-    try { execFileSync('pgrep', ['-x', 'TextEdit']); } catch { return; } // pgrep exits 1 once it's gone
+    if (textEditGone()) return true;
     execFileSync('sleep', ['0.25']);
   }
+  return false;
+}
+
+// TextEdit's open documents as { name, path }, [] when it isn't running, and
+// undefined when it doesn't answer.
+function textEditDocs() {
+  const script = 'const t = Application("TextEdit"); t.running() ? JSON.stringify(t.documents().map(d => ({ name: d.name(), path: d.path() }))) : "[]"';
+  try { return JSON.parse(execFileSync('osascript', ['-l', 'JavaScript', '-e', script], { encoding: 'utf8', timeout: 15000 })); }
+  catch { return undefined; }
+}
+
+// The documents open before this pass's first TextEdit task. They're the
+// user's, so the benchmark never closes them or quits TextEdit around them.
+let userDocs;
+const docKey = d => `${d.name}\0${d.path}`;
+// A benchmark document is under the scratch folder, or an untitled one this
+// pass made (a run that failed before saving leaves one, autosaved to iCloud).
+const isBenchDoc = d => d.path?.startsWith(SCRATCH) || d.path?.startsWith(SCRATCH_REAL) ||
+  (userDocs !== undefined && /^Untitled\b/.test(d.name) && !userDocs.has(docKey(d)));
+
+// Closes this pass's documents without saving, and with quit, quits TextEdit
+// too when nothing else is open. Returns whether TextEdit ended up quit.
+export function closeBenchTextEdit({ quit = false } = {}) {
+  const docs = textEditDocs();
+  if (!docs) return false; // hung: the run goes ahead and its check records it (2026-10-05)
+  const bench = docs.filter(isBenchDoc);
+  const quitting = quit && bench.length === docs.length;
+  if (!bench.length && !quitting) return false;
+  if (bench.length) {
+    const names = JSON.stringify(bench.map(d => d.name));
+    const close = `const t = Application("TextEdit"); for (const n of ${names}) t.documents.byName(n).close({ saving: "no" });`;
+    try { execFileSync('osascript', ['-l', 'JavaScript', '-e', close], { timeout: 15000, stdio: 'ignore' }); } catch {}
+  }
+  if (!quitting) return false;
+  try { execFileSync('osascript', ['-e', 'tell application "TextEdit" to quit saving no'], { timeout: 15000, stdio: 'ignore' }); } catch {}
+  if (waitTextEditGone()) return true;
+  // A Save sheet left by a failed run blocked both (stale "Untitled 6", 2026-10-08). Every
+  // document was the benchmark's, so it's killed, then opened once without restoring its
+  // windows and quit, so the next launch doesn't bring the documents back.
+  try { execFileSync('pkill', ['-x', 'TextEdit']); } catch {}
+  if (!waitTextEditGone()) return false;
+  try {
+    execFileSync('open', ['-g', '-a', 'TextEdit', '--args', '-ApplePersistenceIgnoreState', 'YES'], { timeout: 15000, stdio: 'ignore' });
+    execFileSync('sleep', ['2']);
+    execFileSync('osascript', ['-e', 'tell application "TextEdit" to quit saving no'], { timeout: 15000, stdio: 'ignore' });
+  } catch {}
+  return waitTextEditGone();
+}
+
+// TextEdit opens a document next to its other windows, which can sit on another
+// desktop, and drag then refuses (textedit-drag 2/3 runs, 2026-10-05). Quitting
+// it first puts its windows on the current desktop. It quits only when every
+// open document is the benchmark's, so it never closes one of the user's.
+function freshTextEdit() {
+  if (userDocs === undefined) {
+    const docs = textEditDocs();
+    if (!docs) return;
+    userDocs = new Set(docs.filter(d => !isBenchDoc(d)).map(docKey));
+  }
+  closeBenchTextEdit({ quit: true });
 }
 
 // Quits Chess without leaving its windows behind. Chess restores the windows

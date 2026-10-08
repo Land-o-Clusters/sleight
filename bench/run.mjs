@@ -23,11 +23,12 @@
 
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, realpathSync, rmdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmdirSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { quitChess, tasks } from './tasks.mjs';
+import { closeBenchTextEdit, quitChess, tasks } from './tasks.mjs';
+import { watchAppWindows } from './app-windows.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
 import { runTiming, traceTiming } from './timing.mjs';
 
@@ -207,8 +208,10 @@ for (let run = 1; run <= runs; run++) {
       }
 
       const started = Date.now();
+      const stopWatching = watchAppWindows(ctx.sim?.app ?? task.app);
       // sleight traces into the run's scratch folder, so its timing comes from this run alone.
       const { code, out, stderr } = await runClaude(prompt, ARMS[armName], armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {});
+      const appWindows = await stopWatching();
       const answer = out?.result ?? '';
       let verdict;
       try { verdict = task.check({ ...ctx, answer }); } catch (err) { verdict = err.message; }
@@ -226,6 +229,8 @@ for (let run = 1; run <= runs; run++) {
         usage: out?.usage && { input: out.usage.input_tokens, cacheRead: out.usage.cache_read_input_tokens,
           cacheWrite: out.usage.cache_creation_input_tokens, output: out.usage.output_tokens },
         timing: runTiming(out, armName === 'sleight' ? traceTiming(dir) : undefined),
+        // Samples every 5 s of the app's windows: on the current Space, only off it, or none.
+        appWindows,
         exitCode: code,
         answer: scrub(answer.slice(0, 300)),
         // What Claude Code reports it used, to catch a model setting that didn't apply.
@@ -242,11 +247,9 @@ for (let run = 1; run <= runs; run++) {
 save();
 
 // Leave the desktop as we found it: close the TextEdit documents the runs
-// made (only files under this run's scratch folder) and quit Chess cleanly.
+// made (under the scratch folder, or untitled ones this pass opened) and quit Chess cleanly.
 if (!isDryRun) {
-  const scratch = join(tmpdir(), 'sleight-bench', stamp);
-  const closeDocs = `tell application "TextEdit" to close (every document whose path starts with ${JSON.stringify(scratch)} or path starts with ${JSON.stringify(existsSync(scratch) ? realpathSync(scratch) : scratch)}) saving no`;
-  try { execFileSync('osascript', ['-e', `if application "TextEdit" is running then ${closeDocs}`], { stdio: 'ignore' }); } catch {} // nothing to close
+  closeBenchTextEdit();
   quitChess();
 }
 await unlock?.();
