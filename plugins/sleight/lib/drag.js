@@ -253,7 +253,7 @@ function run(argv) {
     const own = windows(true).filter(w => w.pid === pid && w.layer === 0);
     if (!own.length || (request.windowId !== undefined && !own.some(w => w.id === request.windowId))) {
       const offScreen = windows(false).filter(w => w.pid === pid && w.layer === 0 && (request.windowId === undefined || w.id === request.windowId));
-      if (offScreen.length) throw new Error(`${app}'s window is off screen, on another desktop or Space (or hidden/minimized). Drag needs that window on screen; bring it to the current desktop first`);
+      if (offScreen.length) throw new Error(`${app}'s window is off screen, on another desktop or Space (or hidden/minimized); nothing was pressed. Ask the user to show and unminimize this exact window on the current desktop. Drag needs it on screen. Then acquire the app again, take a fresh window screenshot, and use its current windowId and coordinates. Do not retry the old drag or switch to another window`);
       if (!own.length) throw new Error(`${app} has no window; open one on the current desktop before dragging`);
     }
     let main = resolveWindow(own, request);

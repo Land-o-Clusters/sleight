@@ -69,6 +69,7 @@ import { isInventoryRead } from './inventory-read.mjs';
 import { createReadCompactor } from './compact-reads.mjs';
 import { forbiddenTargetWarning, isForbiddenSettingsWindow, refusedApp } from './blocked-apps.mjs';
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
+import { readFailureAdvice } from './read-failure.mjs';
 
 const META_KEY = 'x-codex-turn-metadata';
 const HIDDEN_TOOLS = new Set(['js_add_node_module_dir']);
@@ -161,6 +162,7 @@ export function createRelay({
   onLeaseFault = () => {},
   engineForbiddenTargets = false,
   guardTiming = false,
+  diagnoseRead,
   trace: writeTrace = () => {},
 }) {
   const compactor = createReadCompactor();
@@ -222,7 +224,49 @@ export function createRelay({
   const helperFullReads = new Set();
   const lateHelperReplies = new Set();
   let helperActive;
-  const helperAdvice = key => `The SkyComputerUseService helper appears stuck when reading ${key}. Stop retrying. Tell the user they need to restart ChatGPT to recover computer use. sleight will retry by itself with one standalone read every 20 s and resume this app after a successful read. Restarting ends their Codex sessions; never restart or quit ChatGPT yourself. If other apps still answer, ${key} itself may be hung instead (TextEdit hung this way 3 times on 2026-10-05): tell the user, since quitting that app is the first fix to try.`;
+  const helperControls = new Map();
+  const helperDiagnosticReplies = new Map();
+  const lateDiagnosticControls = new Map();
+  let diagnosisGeneration = 0;
+  const helperAdvice = key => readFailureAdvice(key, helperStates.get(key)?.diagnosis);
+
+  function invalidateDiagnostics() {
+    diagnosisGeneration++;
+    for (const [id, probe] of helperProbes) {
+      if (!probe.control) continue;
+      clearTimeout(probe.timer); helperProbes.delete(id); helperReads.delete(id); jsCalls.delete(id);
+      documentCalls.delete(id); changeCalls.delete(id); lateHelperReplies.add(id); finishedCall(id);
+      lateDiagnosticControls.set(id, { key: probe.control.key, generation: probe.generation });
+      probe.receive({ error: { message: 'engine session changed' } });
+    }
+  }
+
+  function controlRead(control) {
+    if (disposed || closing || running.size || localRunning.size || documentAsking || reviewing || flowAsking || approvalScope !== 'session') return Promise.resolve({ status: 'unknown' });
+    return new Promise(resolve => {
+      const id = `sleight-diagnosis-${nextInternalId++}`;
+      const generation = diagnosisGeneration;
+      const finish = msg => {
+        if (generation !== diagnosisGeneration) { resolve({ status: 'unknown' }); return; }
+        helperFullReads.add(control.key);
+        const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+        resolve({ status: !msg.error && !msg.result?.isError && windowFromText(text) ? 'responding'
+          : (msg.error || msg.result?.isError) && /\btimeoutReached\b/.test(msg.error?.message ?? text) ? 'timeout' : 'unknown' });
+      };
+      const probe = { receive: finish, control, generation };
+      helperProbes.set(id, probe);
+      helperFullReads.add(control.key);
+      handleClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code: control.probe, timeout_ms: 1500 } } });
+      if (!helperProbes.has(id)) return;
+      probe.timer = setTimeout(() => {
+        helperProbes.delete(id); helperReads.delete(id); jsCalls.delete(id);
+        documentCalls.delete(id); changeCalls.delete(id); lateHelperReplies.add(id); finishedCall(id);
+        lateDiagnosticControls.set(id, { key: control.key, generation }); helperFullReads.add(control.key);
+        // A relay response deadline is weaker evidence than a native timeoutReached.
+        resolve({ status: 'unknown' });
+      }, 5500);
+    });
+  }
 
   function helperSelector(selector) {
     let key;
@@ -298,17 +342,29 @@ export function createRelay({
       if (plan.selector) for (const alias of [appId, window?.app]) {
         if (typeof alias === 'string') helperAliases.set(alias.toLowerCase(), plan.key);
       }
+      if (window && plan.selector && plan.key !== 'helper inventory') helperControls.set(plan.key, plan);
       return;
     }
+    helperControls.delete(plan.key);
     state.timeouts = /\btimeoutReached\b/.test(error) ? state.timeouts + 1 : 0;
     if (state.timeouts >= 2 && !state.stuck) {
       state.stuck = true; state.retryAt = Date.now() + 20000;
       trace('helper-stuck', { id: msg.id, app: plan.key, consecutiveReadTimeouts: state.timeouts });
+      if (diagnoseRead && !helperProbes.has(msg.id)) {
+        const generation = diagnosisGeneration;
+        const control = [...helperControls.values()].find(other => other.key !== plan.key && !helperStates.get(other.key)?.stuck);
+        state.diagnosing = Promise.resolve().then(() => diagnoseRead(plan.key, control?.key, () => control && generation === diagnosisGeneration ? controlRead(control) : Promise.resolve({ status: 'unknown' })))
+          .then(diagnosis => { state.diagnosis = generation === diagnosisGeneration ? diagnosis : { kind: 'unknown' }; trace('helper-diagnosis', { app: plan.key, ...state.diagnosis }); })
+          .catch(() => { state.diagnosis = { kind: 'unknown' }; });
+        helperDiagnosticReplies.set(msg.id, state);
+      }
     }
     if (state.stuck) {
       scheduleHelperRead(state);
-      if (msg.error) msg.error.message += `\n\n${helperAdvice(plan.key)}`;
-      else msg.result = { ...msg.result, isError: true, content: [...(msg.result?.content ?? []), { type: 'text', text: helperAdvice(plan.key) }] };
+      if (!helperDiagnosticReplies.has(msg.id)) {
+        if (msg.error) msg.error.message += `\n\n${helperAdvice(plan.key)}`;
+        else msg.result = { ...msg.result, isError: true, content: [...(msg.result?.content ?? []), { type: 'text', text: helperAdvice(plan.key) }] };
+      }
     }
   }
   const flowCalls = new Map();
@@ -626,8 +682,21 @@ export function createRelay({
     serverIn.write(JSON.stringify(msg) + '\n');
   };
   const toClient = msg => {
+    if (msg.method === undefined && helperDiagnosticReplies.has(msg.id)) {
+      const state = helperDiagnosticReplies.get(msg.id); helperDiagnosticReplies.delete(msg.id);
+      state.diagnosing.finally(() => {
+        if (disposed || closing) return;
+        const advice = helperStates.get(state.key) === state ? readFailureAdvice(state.key, state.diagnosis)
+          : `A read of ${state.key} succeeded while sleight checked the fault. Read that app again before continuing.`;
+        if (msg.error) msg.error.message += `\n\n${advice}`;
+        else msg.result = { ...msg.result, isError: true, content: [...(msg.result?.content ?? []), { type: 'text', text: advice }] };
+        toClient(msg);
+      });
+      return;
+    }
     if (helperProbes.has(msg.id) && msg.method === undefined) {
-      clearTimeout(helperProbes.get(msg.id).timer); helperProbes.delete(msg.id);
+      const probe = helperProbes.get(msg.id);
+      clearTimeout(probe.timer); helperProbes.delete(msg.id); probe.receive?.(msg);
       trace('helper-recovery-result', msg); return;
     }
     if (clientOut.writableEnded || clientOut.destroyed) { trace('client-output-closed', { id: msg.id }); return; }
@@ -868,6 +937,11 @@ export function createRelay({
       leaseStop(msg, 'browser candidates need a request id and no pending call.'); return;
     }
     const healthPlan = msg.method === 'tools/call' && msg.params?.name === 'js' && !browser ? helperPlan(originalCode) : undefined;
+    if (!healthPlan?.read && healthPlan?.keys?.some(key =>
+      [...helperProbes.values()].some(probe => probe.control?.key === key) || [...lateDiagnosticControls.values()].some(control => control.key === key && control.generation === diagnosisGeneration))) {
+      toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: 'A diagnostic read of this app is still pending. Wait for it to finish, then send a standalone full app read before acting.' }] } });
+      return;
+    }
     const blockedApp = (healthPlan?.read ? [healthPlan.key] : healthPlan?.keys ?? []).find(key => {
       const state = helperStates.get(key);
       return state?.stuck && (!healthPlan.read || state.pending !== undefined || Date.now() < state.retryAt);
@@ -881,7 +955,7 @@ export function createRelay({
       toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: `Computer use recovered for ${needsFullRead}. Send a standalone app read before acting. sleight will make it a full read because automatic recovery consumed the engine's UI diff.` }] } });
       return;
     }
-    if (msg.method === 'tools/call' && msg.params?.name === 'js_reset') { helperHandles.clear(); helperActive = undefined; docsShown = false; }
+    if (msg.method === 'tools/call' && msg.params?.name === 'js_reset') { invalidateDiagnostics(); helperHandles.clear(); helperControls.clear(); helperActive = undefined; docsShown = false; }
     if (msg.method === 'tools/call' && msg.params?.name === 'js' && msg.id !== undefined) jsCalls.set(msg.id, originalCode ?? '');
     let flowPlan, clipboardAction;
     if (clipboard && msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name) && clipboard.pending) {
@@ -1062,6 +1136,7 @@ export function createRelay({
     if (msg.method === undefined && Array.isArray(msg.result?.content)) {
       msg.result.content = stripGuardTiming(msg.result.content, metric => trace('guard-read', { id: msg.id, ...metric }));
     }
+    const automatic = msg.method === undefined && helperProbes.has(msg.id);
     let windowNote;
     const confirmedBrowser = msg.method === undefined && browserCalls.has(msg.id) && browserReply(msg);
     if (msg.method === undefined && clipboardResets.delete(msg.id) && !msg.error && !msg.result?.isError) {
@@ -1087,7 +1162,11 @@ export function createRelay({
         else browserHandles.delete(handle);
       }
     }
-    if (msg.method === undefined && lateHelperReplies.delete(msg.id)) return;
+    if (msg.method === undefined && lateHelperReplies.delete(msg.id)) {
+      const control = lateDiagnosticControls.get(msg.id); lateDiagnosticControls.delete(msg.id);
+      if (control?.generation === diagnosisGeneration) helperFullReads.add(control.key);
+      return;
+    }
     const jsCode = msg.method === undefined ? jsCalls.get(msg.id) : undefined;
     // Reading after ⌘W closed the last window fails with noWindowsAvailable, but the
     // close worked (7 of 437 calls, 2026-10-07). Say so instead of reporting an error.
@@ -1099,16 +1178,20 @@ export function createRelay({
       const docs = msg.result.content.some(c => c.type === 'text' && /(^|\n)## Computer Use\n/.test(c.text ?? ''));
       if (docs && docsShown) {
         // An un-awaited action that fails can end the engine's session (reproduced 2026-10-07).
-        forgetHandles(); helperHandles.clear(); helperActive = undefined;
+        invalidateDiagnostics(); forgetHandles(); helperHandles.clear(); helperControls.clear(); helperActive = undefined;
         trace('engine-session-restarted', { id: msg.id });
         msg.result.content.push({ type: 'text', text: "sleight: the engine's JavaScript session restarted before this call, so handles from earlier calls (such as `app`) are gone. An action that fails without `await` can end the session. Acquire the app again with `let app = await cua.getApp(…)`, and await every action." });
       }
       if (docs) docsShown = true;
     }
+    if (automatic && !helperProbes.has(msg.id)) {
+      // A session restart invalidated this probe while processing its reply.
+      // Keep its result internal even though the live probe record is gone.
+      lateHelperReplies.delete(msg.id); lateDiagnosticControls.delete(msg.id); return;
+    }
     const healthPlan = msg.method === undefined ? helperReads.get(msg.id) : undefined;
     if (healthPlan) { helperReads.delete(msg.id); updateHelperRead(healthPlan, msg); }
     const helperStuck = helperStates.get(healthPlan?.key)?.stuck;
-    const automatic = helperProbes.has(msg.id);
     if (msg.method === undefined && flowCalls.has(msg.id)) {
       flowRules.observe(msg.result, flowCalls.get(msg.id));
       flowCalls.delete(msg.id);
@@ -1235,6 +1318,19 @@ export function createRelay({
       if (warning && msg.params) msg.params.message = `${msg.params.message ?? 'Allow Computer Use?'} ${warning}`;
     }
     if (isAppApproval(msg)) {
+      const diagnostic = [...helperProbes.entries()].filter(([id, probe]) => probe.control && running.has(id));
+      const app = msg.params?._meta?.tool_params?.app;
+      const key = typeof app === 'string' ? helperSelector(JSON.stringify(app)) : undefined;
+      const expired = [...lateDiagnosticControls.values()].some(control => control.key === key);
+      // Native approval tokens are not relay RPC IDs. While a read may still
+      // elicit, accept only a grant that already covers this app and risk.
+      if (expired || diagnostic.some(([, probe]) => key === probe.control.key) ||
+          (diagnostic.length && running.size === diagnostic.length)) {
+        let allowed = approved.has(approvalKey(msg));
+        try { allowed ||= userListGrant(app, msg.params?._meta?.riskLevel, 'engine', [...diagnostic.map(([id]) => id), ...lateDiagnosticControls.keys()]); } catch { allowed = false; }
+        toServer({ jsonrpc: '2.0', id: msg.id, result: { action: allowed ? 'accept' : 'decline', ...(allowed ? { content: {} } : {}) } });
+        return;
+      }
       let granted;
       try {
         granted = userListGrant(msg.params?._meta?.tool_params?.app,
@@ -1277,7 +1373,7 @@ export function createRelay({
     }
     // Last, after every check above has read the full tree.
     if (msg.method === undefined && Array.isArray(msg.result?.content)) {
-      msg.result.content = compactor.process(dropRepeatedImages(msg.result.content));
+      if (!automatic) msg.result.content = compactor.process(dropRepeatedImages(msg.result.content), { forceFull: healthPlan?.fullVisible === true });
     }
     toClient(msg);
   }
@@ -1313,7 +1409,8 @@ export function createRelay({
     preapprovalNotes.clear();
     helperReads.clear();
     for (const state of helperStates.values()) clearTimeout(state.timer);
-    for (const probe of helperProbes.values()) clearTimeout(probe.timer);
+    for (const probe of helperProbes.values()) { clearTimeout(probe.timer); probe.receive?.({ error: { message: 'session ended' } }); }
+    helperControls.clear(); helperDiagnosticReplies.clear(); lateDiagnosticControls.clear();
     helperStates.clear(); helperHandles.clear(); helperAliases.clear(); helperProbes.clear(); helperFullReads.clear();
     changes.dispose();
     trace('change-snapshots-deleted', { directory: changes.directory });

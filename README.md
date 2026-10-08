@@ -148,7 +148,8 @@ before relying on a diff.
 |---|---|---|
 | `no Codex computer-use plugin at …` | Computer Use never enabled in ChatGPT | Open ChatGPT → Codex, turn on Computer Use, and run one task |
 | `--doctor` shows `MISSING computer-use helper` | The helper app was removed or never installed | Same as above |
-| Repeated `timeoutReached`, or doctor reports a stuck helper | The helper stopped answering reads | Stop retries and tell the user. Restarting ChatGPT ends Codex sessions, so only the user should do it |
+| Repeated `timeoutReached` | An app or the helper stopped answering reads | Stop retries. sleight checks native Accessibility and a fresh read of another previously acquired app. Follow the resulting app advice; if evidence is incomplete, report that uncertainty |
+| The helper diagnosis reports two responsive AX apps and a timed-out control read | The engine's read path appears stuck | Tell the user. Only they should restart ChatGPT, which ends Codex sessions. Doctor's inventory result alone cannot distinguish an app hang |
 | Approval prompt never appears | Claude Code too old for form elicitation | Update Claude Code |
 | "Not approved" right away in the desktop app, with no panel | The session started before sleight 0.1.1 | Start a new session |
 | A desktop session still shows as busy after Claude has finished | Before 0.3.1, nothing ended the engine's turn in the desktop app | Update sleight and start a new session |

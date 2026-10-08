@@ -125,7 +125,7 @@ export function createReadCompactor() {
     // Rewrites a result's text items. Everything one js call writes arrives
     // as one item, so marked trees (Claude's reads and the guard's) sit among
     // Claude's other output. Each is compacted against what Claude saw before it.
-    process(content) {
+    process(content, { forceFull = false } = {}) {
       if (!Array.isArray(content)) return content;
       return content.map(item => {
         if (item?.type !== 'text' || typeof item.text !== 'string' || !item.text.includes(GUARD_MARK)) {
@@ -141,7 +141,8 @@ export function createReadCompactor() {
           if (at < 0) break;
           const start = at + GUARD_MARK.length, end = item.text.indexOf(GUARD_END, start);
           const tree = item.text.slice(start, end < 0 ? undefined : end);
-          const sent = compact(tree, seenText);
+          const sent = forceFull ? tree : compact(tree, seenText);
+          if (forceFull) remember(tree);
           add(sent); seenText += '\n' + sent;
           if (end < 0) break;
           pos = end + GUARD_END.length;
