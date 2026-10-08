@@ -21,9 +21,15 @@ Checkout: `~/Projects/sleight` is on `main`, released as 0.14.1.
   stuck helper (wrong restart advice 1/1 before, 0/6 after, reproduced 1/1), and the benchmark waits
   for Chess to exit before relaunching. Its pass ran 21/21 in 157 turns and 586 s. The owner allowed
   the repo's hang fixture to be auto-approved by its probe (LAWS).
-- Next on turns: acquiring and acting in one call (approved by the owner, built on
-  `turns/acquire-and-act`, its pass running), then the remaining per-task turns (chess-drag median 13, textedit-save 10). The benchmark's Calculator
-  tasks don't reset the display between runs. A repeated answer then reads as "no change".
+- Owner's plan (2026-10-08), run in order without check-ins:
+  1. Finish acquire-and-act (`turns/acquire-and-act`, pass running).
+  2. Faster: trace chess-drag and textedit-save turns (medians 10 and 13 in the 0.14.1 pass) and cut
+     the waste, and shorten the skill (17,500 characters read every turn). Engine-side tuning stops.
+  3. Better: widen the benchmark with 4 to 6 real-use tasks (browser page, Finder, Notes, a two-app
+     copy and paste, a simulator flow), then a head-to-head with native Codex computer use on the
+     same tasks (the owner approved spending Codex usage for it).
+  4. Resolve what's left on `docs/known-problems.md`.
+  5. Then decide on 1.0 with the owner.
 - Earlier on 2026-10-08: 0.13.2 to 0.13.4 (lease kept through guard stops, one-call Save As, the
   echoed-handle acquisition, guard reads cleared for every handle; `CHANGELOG.md`), and a four-model
   comparison on 0.13.2's code (`docs/benchmark.md`). The owner kept Sonnet 5.5 medium (LAWS).
