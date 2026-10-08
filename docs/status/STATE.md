@@ -5,7 +5,7 @@ What is true now. One banner, replaced in place as work happens. Always-true rul
 
 ## Banner (2026-10-08 18:30 UTC)
 
-Checkout: `~/Projects/sleight` is on `main`, released as 0.14.1.
+Checkout: `~/Projects/sleight` is on `main`, released as 0.15.0.
 
 - 0.14.0 cuts turns, the owner's priority (native Codex computer use felt faster). The skill rides on
   the engine's first result instead of costing a Skill turn, `js` loads at session start (no tool
@@ -22,7 +22,7 @@ Checkout: `~/Projects/sleight` is on `main`, released as 0.14.1.
   for Chess to exit before relaunching. Its pass ran 21/21 in 157 turns and 586 s. The owner allowed
   the repo's hang fixture to be auto-approved by its probe (LAWS).
 - Owner's plan (2026-10-08), run in order without check-ins:
-  1. Finish acquire-and-act (`turns/acquire-and-act`, pass running).
+  1. Done: acquire-and-act is in 0.15.0 (21/21, but no run combined a call, so no saving yet).
   2. Faster: trace chess-drag and textedit-save turns (medians 10 and 13 in the 0.14.1 pass) and cut
      the waste, and shorten the skill (17,500 characters read every turn). Engine-side tuning stops.
   3. Better: widen the benchmark with 4 to 6 real-use tasks (browser page, Finder, Notes, a two-app

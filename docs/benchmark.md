@@ -144,6 +144,11 @@ at 2.71 s of model time per turn against 2.51.
 ([`reliability-pass`](benchmarks/2026-10-08-reliability-pass.json)) in 157 turns and 586 s, with 332 s
 of model time at 2.12 s per turn and no refused calls.
 
+0.15.0 lets Claude acquire an app and act in one call. Its pass
+([`acquire-and-act`](benchmarks/2026-10-08-acquire-and-act.json)) passed 21/21 in 156 turns and 638 s.
+Claude never combined the two in these tasks. The pass checks that nothing broke and doesn't measure a
+saving.
+
 | Task | Median turns, 0.13.4 | 0.14.0 |
 |---|---:|---:|
 | calculator-click | 5 | 4 |

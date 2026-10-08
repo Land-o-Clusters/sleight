@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.15.0 (2026-10-08)
+
+- Claude can acquire an app and act on it in one call:
+  `let app = await cua.getApp("TextEdit"); await app.pressKey("super+n")`. The lease used to refuse
+  that until the app was acquired in a call of its own. Now the relay sends the acquisition alone and
+  takes the lease from its reply. Then it sends the rest under the guard and returns one result. A failed
+  acquisition stops before any action, and another session's lease refuses the rest as before. The
+  skill says to combine them when the first actions don't depend on the UI.
+- The next pass (`docs/benchmarks/2026-10-08-acquire-and-act.json`) passed 21/21 in 156 turns and 638
+  s. Claude didn't combine a call in any of its runs, so it measures that nothing broke, not a saving.
+  The benchmark has no task that switches apps, where this saves the most.
+
 ## 0.14.1 (2026-10-08)
 
 - When an app's reads time out twice, sleight asks the app over Accessibility (500 ms, no prompts)
