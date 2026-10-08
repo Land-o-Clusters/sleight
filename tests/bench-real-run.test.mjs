@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, existsSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, existsSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -14,6 +14,17 @@ function fixture(t) {
   t.after(() => rmSync(bank, { recursive: true, force: true }));
   return { dir: join(bank, 'fixture'), nonce: 'abc123', lockPath: join(bank, 'lock') };
 }
+
+test('an explicit no-mutation acquisition refusal removes only that pending acquisition', async t => {
+  const { acquireFixture } = await import('../bench/real-run.mjs');
+  const ctx = fixture(t);
+  await assert.rejects(acquireFixture(ctx, 'browser', async () => {
+    throw Object.assign(new Error('app unavailable'), { noMutation: true });
+  }), /unavailable/);
+  assert.equal(ctx.pendingAcquisitions.size, 0);
+  await assert.rejects(acquireFixture(ctx, 'browser', async () => { throw new Error('identity unknown'); }), /unknown/);
+  assert.deepEqual([...ctx.pendingAcquisitions], ['browser']);
+});
 
 test('real runner holds the lock through the awaited check and cleanup, then removes fixture files', async t => {
   const execute = await runner(), ctx = fixture(t), order = [];
@@ -140,4 +151,31 @@ test('fixture acquisition records ownership before resolving and retains uncerta
     await assert.rejects(acquireFixture(ctx, 'sim', async () => { throw new Error(stage); }), new RegExp(stage));
     assert.ok(ctx.pendingAcquisitions.has('sim'));
   }
+});
+
+test('a task under the runner-owned lock does not wait on itself or release its caller lock', async t => {
+  const execute = await runner(), ctx = fixture(t);
+  mkdirSync(ctx.lockPath);
+  const result = await execute({ setup: () => {}, prompt: () => 'task', check: () => true,
+    cleanup: () => assert.ok(existsSync(ctx.lockPath)),
+  }, ctx, { lockHeld: true, signal: AbortSignal.timeout(150), drive: async () => ({ code: 0, out: {} }) });
+  assert.equal(result.passed, true);
+  assert.equal(existsSync(ctx.lockPath), true);
+});
+
+test('a refused cleanup collects fixture helpers before releasing its live lock', async t => {
+  const execute = await runner(), ctx = fixture(t);
+  let collected = false;
+  ctx.windowLeases = [{ dispose: async () => {
+    assert.ok(existsSync(ctx.lockPath));
+    await new Promise(resolve => setTimeout(resolve, 10));
+    collected = true;
+    return true;
+  } }];
+  const result = await execute({ setup: () => {}, prompt: () => '', check: () => true,
+    cleanup: () => assert.fail('no app actions while the driver remains active'),
+  }, ctx, { drive: async () => ({ code: 1, groupClean: false }) });
+  assert.equal(collected, true);
+  assert.match(result.cleanupError, /process group/);
+  assert.equal(existsSync(ctx.lockPath), false);
 });

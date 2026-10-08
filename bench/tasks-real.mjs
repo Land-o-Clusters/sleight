@@ -1,25 +1,14 @@
-import { execFile, execFileSync } from 'node:child_process';
-import { promisify } from 'node:util';
-import { lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
 import { bootedIPhone, simctl } from './tasks.mjs';
 import { serveRealPage, checkForm, checkFlow } from './real-server.mjs';
 import { writeTestPDF, checkPDF } from './real-pdf.mjs';
 import { acquireFixture } from './real-run.mjs';
+import { openFixture, closeFixtures } from './real-fixture.mjs';
 
-const execute = promisify(execFile);
-async function fixtureWindow(op, app, target, id, signal) {
-  const script = app === 'net.imput.helium' ? 'real-helium.applescript' : app === 'com.apple.Safari' ? 'real-safari.applescript' : 'real-window.applescript';
-  const windowScript = fileURLToPath(new URL(script, import.meta.url));
-  const { stdout } = await execute('/usr/bin/osascript', [windowScript, op, app, target, ...(id == null ? [] : [String(id)])],
-    { encoding: 'utf8', timeout: 15000, signal });
-  return stdout.trim();
-}
-async function closePage(ctx, app) {
+async function closePage(ctx) {
   try {
-    if (ctx.windowOpening && !ctx.windowID) throw new Error('Browser window creation was interrupted before its ID was recorded; cleanup unconfirmed');
-    if (ctx.windowID) await fixtureWindow('close', app, ctx.url, ctx.windowID, ctx.cleanupSignal);
+    await closeFixtures(ctx);
   } finally {
     if (ctx.closeServer) { await ctx.closeServer(); ctx.closeServer = undefined; }
   }
@@ -29,16 +18,14 @@ const desktopForm = (id, app, bundle) => ({
   prepare: ctx => serveRealPage(ctx),
   setup: async ctx => {
     await serveRealPage(ctx);
-    ctx.windowOpening = true;
-    ctx.windowID = await fixtureWindow('open', bundle, ctx.url, undefined, ctx.signal);
-    ctx.windowOpening = false;
+    await acquireFixture(ctx, 'browser', () => openFixture(ctx, { app, bundle, target: ctx.url, token: ctx.nonce, mode: 'window' }));
   },
   prompt: ctx => `Using computer use, work only in the new ${app} window showing ${ctx.url}. ` +
     'Fill Name with "Morgan Reed", Email with "morgan@example.test", select "Design" for Team, ' +
     `check "Send updates", and fill Code with "${ctx.nonce}". Submit the form. ` +
     'Leave that window open for cleanup. Do not read, list, switch to or close any other tabs or windows.',
   check: checkForm,
-  cleanup: ctx => closePage(ctx, bundle),
+  cleanup: closePage,
 });
 
 function checkFiles(ctx) {
@@ -73,47 +60,35 @@ export const realTasks = [
     setup: async ctx => {
       ctx.pdf = join(ctx.dir, `Pages-${ctx.nonce}.pdf`);
       await acquireFixture(ctx, 'pdfFixture', () => writeTestPDF(ctx.pdf, [0, 0], ctx.signal));
-      await acquireFixture(ctx, 'previewIdentity', async () => {
-        execFileSync('/usr/bin/open', ['-g', '-b', 'com.apple.Preview', ctx.pdf]);
-        ctx.previewOpened = true;
-        const { stdout } = await execute('/usr/bin/osascript', [fileURLToPath(new URL('./real-preview.applescript', import.meta.url)),
-          'identify', pathToFileURL(ctx.pdf).href, basename(ctx.pdf)], { timeout: 15000, signal: ctx.signal });
-        return stdout.trim();
-      });
+      await acquireFixture(ctx, 'preview', () => openFixture(ctx, { app: 'Preview', bundle: 'com.apple.Preview',
+        target: ctx.pdf, token: basename(ctx.pdf), mode: 'document' }));
     },
     prompt: ctx => `Using computer use in Preview, open ${ctx.pdf}. Rotate only page 2 clockwise by 90 degrees, ` +
       'save the same PDF, and leave it open. Keep page 1 unchanged.',
     check: checkPDF,
-    cleanup: async ctx => {
-      if (ctx.previewOpened && !ctx.previewIdentity) throw new Error('Preview fixture identity was not recorded; cleanup unconfirmed');
-      if (ctx.previewOpened) await execute('/usr/bin/osascript', [fileURLToPath(new URL('./real-preview.applescript', import.meta.url)),
-        'close', pathToFileURL(ctx.pdf).href, ctx.previewIdentity], { timeout: 15000, signal: ctx.cleanupSignal });
-    },
+    cleanup: closeFixtures,
   },
   {
     id: 'finder-files', app: 'Finder', prepare: prepareFiles,
     setup: async ctx => {
       prepareFiles(ctx);
-      ctx.windowOpening = true;
-      ctx.windowID = await fixtureWindow('open', 'com.apple.finder', ctx.folder, undefined, ctx.signal);
-      ctx.windowOpening = false;
+      await acquireFixture(ctx, 'finder', () => openFixture(ctx, { app: 'Finder', bundle: 'com.apple.finder',
+        target: ctx.folder, token: basename(ctx.folder), mode: 'folder' }));
     },
     prompt: ctx => `Using computer use in Finder, stay inside ${ctx.folder} and its Archive subfolder. ` +
       'Rename alpha.txt to renamed.txt, move bravo.txt into Archive, and leave charlie.txt unchanged. ' +
       'Use Finder for both operations. Leave this window open. Do not open or modify anything outside this folder.',
     check: checkFiles,
-    cleanup: async ctx => {
-      if (ctx.windowOpening && !ctx.windowID) throw new Error('Finder window creation was interrupted; cleanup unconfirmed');
-      if (ctx.windowID) await fixtureWindow('close', 'com.apple.finder', ctx.folder, ctx.windowID, ctx.cleanupSignal);
-    },
+    cleanup: closeFixtures,
   },
   {
     id: 'textedit-calculator', app: 'TextEdit', prepare: prepareText,
     setup: async ctx => {
       prepareText(ctx);
-      ctx.textOpened = true;
-      await fixtureWindow('open', 'com.apple.TextEdit', ctx.document, undefined, ctx.signal);
-      await acquireFixture(ctx, 'calculatorOwnership', () => fixtureWindow('open', 'com.apple.calculator', '', undefined, ctx.signal));
+      await acquireFixture(ctx, 'textedit', () => openFixture(ctx, { app: 'TextEdit', bundle: 'com.apple.TextEdit',
+        target: ctx.document, token: basename(ctx.document), mode: 'document' }));
+      await acquireFixture(ctx, 'calculator', () => openFixture(ctx, { app: 'Calculator', bundle: 'com.apple.calculator',
+        target: '', mode: 'inherit' }));
     },
     prompt: ctx => `Using computer use, open ${ctx.document} in TextEdit and copy its number. ` +
       'Choose Basic mode and clear Calculator before pasting the number. Multiply it by 23, copy the result, and paste it into TextEdit, ' +
@@ -122,18 +97,21 @@ export const realTasks = [
       try { return readFileSync(ctx.document, 'utf8').trim() === '391' || 'saved document does not contain only 391'; }
       catch { return 'calculation document is missing'; }
     },
-    cleanup: async ctx => {
-      if (ctx.textOpened) await fixtureWindow('close', 'com.apple.TextEdit', ctx.document, undefined, ctx.cleanupSignal);
-      if (ctx.calculatorOwnership === 'owned') await fixtureWindow('close', 'com.apple.calculator', '', 'owned', ctx.cleanupSignal);
-    },
+    cleanup: closeFixtures,
   },
   {
     id: 'simulator-flow', app: 'Simulator', prepare: ctx => serveRealPage(ctx, true),
     setup: async ctx => {
-      await acquireFixture(ctx, 'sim', () => bootedIPhone({ trackOwnership: true }));
-      await serveRealPage(ctx, true);
-      simctl('openurl', ctx.sim.udid, ctx.url);
-      ctx.simPageOpened = true;
+      const modern = existsSync('/Applications/Xcode.app/Contents/Applications/DeviceHub.app');
+      await acquireFixture(ctx, 'simViewer', () => openFixture(ctx, { app: modern ? 'DeviceHub' : 'Simulator',
+        bundle: modern ? 'com.apple.dt.Devices' : 'com.apple.iphonesimulator', target: '', mode: 'inherit' }, {
+        launch: async () => {
+          await acquireFixture(ctx, 'sim', () => bootedIPhone({ trackOwnership: true }));
+          await serveRealPage(ctx, true);
+          simctl('openurl', ctx.sim.udid, ctx.url);
+          ctx.simPageOpened = true;
+        },
+      }));
     },
     prompt: ctx => `Using computer use in the ${ctx.sim?.app ?? 'Simulator'} app's ${ctx.sim?.name ?? 'iPhone'} simulator, ` +
       `Safari shows ${ctx.url}. Tap Edit profile, fill Value with "Flow ${ctx.nonce}", tap Save, ` +
@@ -142,8 +120,8 @@ export const realTasks = [
     cleanup: async ctx => {
       try {
         if (ctx.simPageOpened) simctl('terminate', ctx.sim.udid, 'com.apple.mobilesafari');
+        await closeFixtures(ctx);
         if (ctx.sim?.bootedByTask) simctl('shutdown', ctx.sim.udid);
-        if (ctx.sim?.viewerLaunchedByTask) await fixtureWindow('close', 'simulator-viewer', ctx.sim.app, undefined, ctx.cleanupSignal);
       }
       finally { if (ctx.closeServer) { await ctx.closeServer(); ctx.closeServer = undefined; } }
     },

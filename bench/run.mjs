@@ -22,20 +22,21 @@
 // tasks without a model call. Every run first checks that each arm loads its
 // own tool and not the other's.
 
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, rmdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BENCH_APPS, closeBenchTextEdit, quitChess, quitSimApp, getTasks } from './tasks.mjs';
 import { approveOnly, codexReady, runCodex } from './codex-arm.mjs';
 import { watchAppWindows } from './app-windows.mjs';
-import { acquireLiveLock } from './live-lock.mjs';
 import { runTiming, traceTiming } from './timing.mjs';
 import { executeRealTask } from './real-run.mjs';
 import { observePermission } from './real-permission.mjs';
 import { runOwned } from './preapproved-process.mjs';
+import { acquireLiveLock } from './live-lock.mjs';
+import { runDriver } from './driver.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TIMEOUT_MS = 5 * 60 * 1000;
@@ -53,10 +54,8 @@ const isDryRun = process.argv.includes('--dry-run');
 const suite = option('suite', 'default');
 const suiteTasks = getTasks(suite);
 const controller = new AbortController();
-if (suite === 'real') {
-  process.on('SIGINT', () => controller.abort(new Error('run interrupted')));
-  process.on('SIGTERM', () => controller.abort(new Error('run interrupted')));
-}
+process.on('SIGINT', () => controller.abort(new Error('run interrupted')));
+process.on('SIGTERM', () => controller.abort(new Error('run interrupted')));
 const armOption = option('arm', 'sleight');
 const ARM_HOME = join(homedir(), 'Library', 'Caches', 'sleight-bench');
 const ARMS = {
@@ -122,7 +121,7 @@ const armEnv = arm => ({ ...process.env, BENCH_ROOT: ROOT, SLEIGHT_APPROVAL_PROM
 // stopped before any model call.
 function armServers(arm) {
   const args = ['-p', 'hi', '--output-format', 'stream-json', '--verbose', ...arm.args, '--settings', join(ROOT, 'bench', 'settings.json')];
-  if (suite === 'real') {
+  {
     const initialized = new AbortController();
     let buffer = '', servers;
     return runOwned(claudeBin, args, { cwd: arm.cwd, env: armEnv(arm), timeoutMs: 60000,
@@ -143,26 +142,6 @@ function armServers(arm) {
       return servers;
     });
   }
-  return new Promise((resolve, reject) => {
-    const child = spawn(claudeBin, args, { cwd: arm.cwd, env: armEnv(arm), stdio: ['ignore', 'pipe', 'ignore'] });
-    const timer = setTimeout(() => { child.kill(); reject(new Error('no init event within 60 s')); }, 60000);
-    let buffer = '';
-    child.stdout.on('data', chunk => {
-      buffer += chunk;
-      let i;
-      while ((i = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, i);
-        buffer = buffer.slice(i + 1);
-        let msg;
-        try { msg = JSON.parse(line); } catch { continue; }
-        if (msg.type === 'system' && msg.subtype === 'init') {
-          clearTimeout(timer);
-          child.kill();
-          resolve(msg.mcp_servers);
-        }
-      }
-    });
-  });
 }
 
 // Each arm must have its own tool connected and not the other's. A user-level
@@ -206,37 +185,8 @@ function runClaude(prompt, arm, env = {}, { signal, evidenceDir } = {}) {
     '--model', model,
     '--effort', effort,
   ];
-  if (suite === 'real') {
-    return runOwned(claudeBin, args, { cwd: arm.cwd, env: { ...armEnv(arm), ...env }, timeoutMs: TIMEOUT_MS, signal }).then(response => {
-      let out;
-      try { out = response.stdout.trim().split('\n').map(line => JSON.parse(line)).findLast(event => event.type === 'result'); }
-      catch { out = undefined; }
-      if (evidenceDir) writeFileSync(join(evidenceDir, 'transcript.jsonl'), response.stdout, { mode: 0o600 });
-      return { code: response.exit.code, out, stderr: response.stderr.slice(-2000), groupClean: response.groupClean,
-        timedOut: response.timedOut, cancelled: response.cancelled, spawnError: response.spawnError };
-    });
-  }
-  return new Promise(resolve => {
-    const child = spawn(claudeBin, args, { cwd: arm.cwd, env: { ...armEnv(arm), ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', d => (stdout += d));
-    child.stderr.on('data', d => (stderr += d));
-    const timer = setTimeout(() => child.kill('SIGTERM'), TIMEOUT_MS);
-    const interrupt = () => child.kill('SIGTERM');
-    signal?.addEventListener('abort', interrupt, { once: true });
-    child.on('error', error => { stderr += error.message; });
-    child.on('close', code => {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', interrupt);
-      let out;
-      try {
-        out = suite === 'real' ? stdout.trim().split('\n').map(line => JSON.parse(line)).findLast(event => event.type === 'result') : JSON.parse(stdout);
-      } catch { out = undefined; }
-      if (evidenceDir) writeFileSync(join(evidenceDir, 'transcript.jsonl'), stdout, { mode: 0o600 });
-      resolve({ code, out, stderr: stderr.slice(-2000) });
-    });
-  });
+  return runDriver(claudeBin, args, { cwd: arm.cwd, env: { ...armEnv(arm), ...env }, timeoutMs: TIMEOUT_MS,
+    signal: signal ?? controller.signal, evidenceDir, format: suite === 'real' ? 'stream-json' : 'json' });
 }
 
 // Window titles can carry the user's name (Chess: "Game 1 | Name - Computer"),
@@ -258,14 +208,14 @@ const save = () => {
   const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite } : {}), arms: armNames, model, effort, claude: claudeBin, results }, null, 2);
   writeFileSync(file, (suite === 'real' ? scrub(json) : json) + '\n');
 };
-// A live pass holds the shared lock, so no other live check drives apps on top of it. On
-// 2026-10-08 a Codex thread ran Safari tasks during two passes because this didn't.
-let unlock;
+// The runner owns the pass lock. Real tasks reuse it, so they cannot wait on
+// themselves. This extends main's pass lock through driver collection.
+let unlock, lockIdentity;
 if (!isDryRun) {
+  save();
   console.error('Waiting for /tmp/sleight-live.lock if another live run holds it.');
-  unlock = await acquireLiveLock(undefined, { wait: true });
-  const release = () => { const u = unlock; unlock = undefined; return u?.().catch(() => {}); };
-  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await release(); process.exit(130); });
+  unlock = await acquireLiveLock(undefined, { wait: true, signal: controller.signal, interval: 2000 });
+  lockIdentity = statSync('/tmp/sleight-live.lock');
   // Codex can't answer app prompts headless, so the engine's "Always allow" list holds exactly the
   // benchmark apps for the pass, then goes back to what it was (exit handler below).
   if (armNames.some(n => ARMS[n].codex)) {
@@ -275,22 +225,28 @@ if (!isDryRun) {
     process.once('exit', () => { try { restore(); } catch (err) { console.error(`Restore the app approvals from ${backup}: ${err.message}`); } });
     console.error(`App approvals set to the benchmark apps; saved the previous list to ${backup}.`);
   }
-  process.once('exit', () => { if (unlock) try { rmdirSync('/tmp/sleight-live.lock'); } catch {} });
+  process.once('exit', () => {
+    if (!unlock) return;
+    try {
+      const current = statSync('/tmp/sleight-live.lock');
+      if (current.dev === lockIdentity.dev && current.ino === lockIdentity.ino) rmdirSync('/tmp/sleight-live.lock');
+    } catch {}
+  });
 }
 // Arms alternate task by task, so both see the same conditions over time.
-let stopped = false;
-passes: for (let run = 1; run <= runs; run++) {
+pass: for (let run = 1; run <= runs; run++) {
   for (const task of selected) {
     for (const armName of armNames) {
+      if (controller.signal.aborted) break pass;
       const nonce = randomBytes(4).toString('hex');
       const dir = join(suite === 'real' ? realpathSync(tmpdir()) : tmpdir(), 'sleight-bench', stamp, `${armName}-${task.id}-${run}`);
       mkdirSync(dir, { recursive: true });
       const ctx = { dir, nonce };
       if (suite === 'real') {
-        if (controller.signal.aborted) break;
         const evidenceDir = join(tmpdir(), 'sleight-real-evidence', stamp, `${armName}-${task.id}-${run}`);
         mkdirSync(evidenceDir, { recursive: true, mode: 0o700 });
         const result = await executeRealTask(task, ctx, { dryRun: isDryRun, signal: controller.signal,
+          lockHeld: !isDryRun,
           stop: () => controller.abort(new Error('macOS permission prompt')),
           permissionCheck: observePermission,
           drive: async prompt => {
@@ -338,14 +294,15 @@ passes: for (let run = 1; run <= runs; run++) {
       // sleight traces into the run's scratch folder, so its timing comes from this run alone.
       const arm = ARMS[armName];
       const codexRun = arm.codex ? await runCodex(prompt, { cwd: arm.cwd, model: codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS }) : undefined;
-      const { code, out, stderr } = codexRun ?? await runClaude(prompt, arm, armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {});
+      const { code, out, stderr, groupClean = true, cancelled } = codexRun ?? await runClaude(prompt, arm, armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {});
       const appWindows = await stopWatching();
       const answer = out?.result ?? '';
       let verdict;
-      try { verdict = task.check({ ...ctx, answer }); } catch (err) { verdict = err.message; }
+      try { verdict = groupClean ? task.check({ ...ctx, answer }) : 'Driver process group cleanup unconfirmed'; } catch (err) { verdict = err.message; }
       // A shell or file edit could pass a check without the app, so it fails the run.
       if (codexRun?.forbidden.length) verdict = `used ${[...new Set(codexRun.forbidden)].join(' and ')}`;
-      try { task.cleanup?.(ctx); } catch {} // leaving an app open doesn't change the verdict
+      if (groupClean) try { await task.cleanup?.(ctx); } catch {} // leaving an app open doesn't change the verdict
+      else { controller.abort(new Error('Driver cleanup unconfirmed')); process.exitCode = 1; }
       const heldTaps = isDryRun ? [] : benchKeyboardTaps();
       results.push({
         arm: armName,
@@ -363,6 +320,7 @@ passes: for (let run = 1; run <= runs; run++) {
         // Samples every 5 s of the app's windows: on the current Space, only off it, or none.
         appWindows,
         exitCode: code,
+        groupClean, cancelled,
         answer: scrub(answer.slice(0, 300)),
         // What Claude Code reports it used, to catch a model setting that didn't apply.
         models: Object.keys(out?.modelUsage ?? {}),
@@ -376,7 +334,7 @@ passes: for (let run = 1; run <= runs; run++) {
       if (heldTaps.length) {
         quitSimApp(); quitChess();
         console.error(`STOP: ${heldTaps.map(t => t.app).join(', ')} still holds a keyboard event tap after cleanup, which can stall every key on the Mac. The pass stopped.`);
-        stopped = true; break passes;
+        process.exitCode = 1; break pass;
       }
     }
   }
@@ -393,6 +351,7 @@ if (!isDryRun) {
 }
 await unlock?.();
 unlock = undefined;
+if (controller.signal.aborted && !process.exitCode) process.exitCode = 130;
 
 if (!isDryRun) {
   console.log('\n| Arm | Task | Passed | Median s | Model s | Engine s | Local tools s | Relay ms | Median turns | API-price cost |');
