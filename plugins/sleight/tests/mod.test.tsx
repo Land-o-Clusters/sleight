@@ -69,6 +69,21 @@ describe('sleight mod', () => {
     }
   })
 
+  test('the desktop pane draws the picture a snapshot returns', async ($, on) => {
+    on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [{ type: 'text', text: 'App: Calculator.' }] } }) as never)
+    // A 1x1 JPEG, as the engine's snapshot returns an image for the desktop.
+    const jpeg = '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA='
+    const frame = { app: 'Calculator', width: 674, height: 408, columns: 46, rows: 13, image: { mime: 'image/jpeg', base64: jpeg } }
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async () => ({ value: { content: [{ type: 'text', text: 'Window: "Calculator", App: Calculator.\nSLEIGHT_FRAME ' + JSON.stringify(frame) }] } }) as never)
+    await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("Calculator")', title: 'Read' } as never)
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop', props: { bodyColumns: 60, scroll: { offset: 0, bodyRows: 30 } } as never })
+    await ui.press({ key: 'refresh' })
+    expect(await ui.find({ type: 'Svg' })).toBeDefined()
+    expect(await ui.find({ text: /Couldn’t refresh|Couldn't refresh/ })).toBeUndefined()
+    await ui.unmount()
+  })
+
   test('/sleight stop refuses js calls', async ($, on) => {
     on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [] } }) as never)
     const before = await $.tool.call({ tool: JS_TOOL, code: '1' } as never)

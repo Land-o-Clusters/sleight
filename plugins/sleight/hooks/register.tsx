@@ -231,12 +231,13 @@ export const register: Register = on => {
       }
       if ('Svg' in els && shot.image) {
         const { Svg } = els as any
-        const w = 320
-        const h = Math.round((shot.height / shot.width) * w)
+        // Not `h`: JSX compiles to calls of the global h, and a local h broke the drawing.
+        const width = 320
+        const height = Math.round((shot.height / shot.width) * width)
         const source =
-          `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
-          `<image href="data:${shot.image.mime};base64,${shot.image.base64}" width="${w}" height="${h}"/></svg>`
-        return <Svg source={source} alt={`Screenshot of ${shot.app}`} width={w} height={h} />
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+          `<image href="data:${shot.image.mime};base64,${shot.image.base64}" width="${width}" height="${height}"/></svg>`
+        return <Svg source={source} alt={`Screenshot of ${shot.app}`} width={width} height={height} />
       }
       return <Text dimColor>{`${shot.app}: picture not shown on this surface. Press Refresh.`}</Text>
     })()
