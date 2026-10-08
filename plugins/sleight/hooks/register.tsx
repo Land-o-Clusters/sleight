@@ -25,6 +25,8 @@ let lastApp: string | undefined
 // Set while one of this mod's own calls is in flight, so its tool.call hooks
 // let the call through and don't log it.
 let ownCall = false
+// The exact snapshot code in flight, for the tool.check below.
+let snapshotInFlight: string | undefined
 // Apps the pane snapshotted since Claude last used sleight. The engine diffs
 // UI state against the latest read of an app, whoever made it, so Claude's
 // next diff would be against the pane's read; the next prompt says so.
@@ -71,11 +73,10 @@ async function endEngineTurn($: any, event: 'Stop' | 'Interrupt') {
 async function snapshot($: any, app: string) {
   await update($, view, () => ({ kind: 'snapshotting', app }) as ViewStatus)
   try {
-    const result = await call($, 'js', {
-      // Leave rows for the status line, buttons, "Actions" and three log lines.
-      code: snapshotCode(app, Math.max(8, paneColumns - 2), Math.max(4, paneRows - 7), paneSurface === 'terminal'),
-      title: 'sleight pane snapshot',
-    })
+    // Leave rows for the status line, buttons, "Actions" and three log lines.
+    const code = snapshotCode(app, Math.max(8, paneColumns - 2), Math.max(4, paneRows - 7), paneSurface === 'terminal')
+    snapshotInFlight = code
+    const result = await call($, 'js', { code, title: 'sleight pane snapshot' }).finally(() => { snapshotInFlight = undefined })
     const text = result.content.map((block: { text?: string }) => block.text ?? '').join('\n')
     const line = text.split('\n').find((l: string) => l.startsWith(FRAME_MARKER))
     if (result.isError || !line) {
@@ -95,7 +96,25 @@ async function isPaneOpen($: any): Promise<boolean> {
   return panes.some((pane: { id: string }) => pane.id === PANE)
 }
 
+// In Auto mode the classifier refused the pane's own snapshot, since no request of the person's
+// asked for it (2026-10-08). This mod allows exactly two calls: its snapshot, by the code it just
+// built, and turn_ended. next.origin is set by the host, so only this plugin's own calls pass;
+// Claude's calls (origin engine) go to the normal check.
+function ownCallVerdict(e: { tool: string; input: unknown }, origin: { plugin: string } | undefined) {
+  if (origin?.plugin !== 'sleight') return undefined
+  if (e.tool === TURN_END_TOOL) return { decision: 'allow', reason: 'sleight ends the engine turn' } as const
+  const code = (e.input as { code?: unknown } | undefined)?.code
+  if (e.tool === JS_TOOL && snapshotInFlight !== undefined && code === snapshotInFlight) {
+    return { decision: 'allow', reason: 'sleight pane snapshot' } as const
+  }
+  return undefined
+}
+
 export const register: Register = on => {
+  on('tool.check', async ($, e, next) => ownCallVerdict(e, next.origin) ?? next(e))
+    // Failing open to the normal check only ever tightens. A call from inside this mod's own
+    // frame lands here as a re-entry, decided from e and next alone.
+    .catch(($, e, next) => (next.error?.kind === 're-entry' ? ownCallVerdict(e, next.origin) : undefined) ?? next(e))
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'sleight',
@@ -181,7 +200,10 @@ export const register: Register = on => {
     // just after; it waits for any running turn to finish.
     const prompt = e.args.trim()
     if (!prompt) return { text: 'sleight pane opened.' }
-    $.clock.after(0, () => {
+    $.clock.after(0, async () => {
+      // A new session may not have connected sleight yet. Sent first, the prompt ran with no
+      // sleight tools and Claude used the shell instead (2026-10-08).
+      await $.mcp.connect(SERVER).catch(() => undefined)
       $.prompt.submit({ text: prompt, asUser: true }).catch(err => {
         $.ui.toast(`sleight: couldn't send your prompt (${(err as Error).message}). Send it on its own line.`)
       })

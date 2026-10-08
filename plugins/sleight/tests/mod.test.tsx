@@ -6,6 +6,15 @@ const PANE = { plugin: 'sleight', component: 'Pane', requestId: 'sleight' } as c
 const SURFACES = ['terminal', 'desktop'] as const
 
 describe('sleight mod', () => {
+  test('a js call this mod didn\'t raise never gets its snapshot allowance', async ($, on) => {
+    // Stands in for the engine's own check. The test's query is not sleight's origin, so this decides.
+    on('tool.check', async () => ({ decision: 'ask', reason: 'core check' }) as never)
+    const verdict = await $.tool.check({ tool: JS_TOOL, input: { code: 'await app.click(1)', title: 'x' } } as never)
+    expect((verdict as { reason?: string }).reason).toBe('core check')
+    const ended = await $.tool.check({ tool: TURN_END_TOOL, input: {} } as never)
+    expect((ended as { reason?: string }).reason).toBe('core check')
+  })
+
   test('the pane draws with no activity yet on each surface', async $ => {
     for (const surface of SURFACES) {
       const ui = await $.ui.mount({ ...PANE, surface, props: { bodyColumns: 60 } as never })
