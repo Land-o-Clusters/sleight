@@ -161,6 +161,7 @@ export function createRelay({
   onLeaseFault = () => {},
   engineForbiddenTargets = false,
   guardTiming = false,
+  firstCallRules,
   trace: writeTrace = () => {},
 }) {
   const compactor = createReadCompactor();
@@ -216,6 +217,8 @@ export function createRelay({
   // docs again without a js_reset mean the session restarted and every handle is gone.
   const jsCalls = new Map();
   let docsShown = false;
+  // Once per session: Claude keeps them in context across engine restarts.
+  let rulesShown = false;
   const helperAliases = new Map();
   const helperReads = new Map();
   const helperProbes = new Map();
@@ -1102,6 +1105,12 @@ export function createRelay({
         forgetHandles(); helperHandles.clear(); helperActive = undefined;
         trace('engine-session-restarted', { id: msg.id });
         msg.result.content.push({ type: 'text', text: "sleight: the engine's JavaScript session restarted before this call, so handles from earlier calls (such as `app`) are gone. An action that fails without `await` can end the session. Acquire the app again with `let app = await cua.getApp(…)`, and await every action." });
+      }
+      // The engine's first call returns its docs and nothing else Claude can act on, so sleight's
+      // own rules ride along here instead of costing Claude a skill turn (one per benchmark run).
+      if (docs && firstCallRules && !rulesShown) {
+        rulesShown = true;
+        msg.result.content.push({ type: 'text', text: firstCallRules });
       }
       if (docs) docsShown = true;
     }

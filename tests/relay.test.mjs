@@ -1278,3 +1278,30 @@ test('noWindowsAvailable after a close shortcut is reported as the closed last w
   h.fromServer(failed(2)); await tick();
   assert.equal(h.toClient.find(m => m.id === 2).result.isError, true, 'without a close it stays an error');
 });
+
+test('sleight\'s rules follow the engine\'s first-call docs once per session, so Claude needs no skill turn', async () => {
+  const h = harness({ changeReview: false, firstCallRules: '# Driving Mac apps with sleight\nRULES' });
+  const docs = '## Computer Use\n\nControl native apps.\n';
+  const call = (id, code) => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } });
+  const reply = (id, text) => h.fromServer({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }] } });
+  call(1, 'let app = await cua.getApp("Calculator")'); await tick();
+  reply(1, docs + 'Window: "Calculator", App: Calculator'); await tick();
+  const first = h.toClient.find(m => m.id === 1).result.content;
+  assert.match(first.at(-1).text, /RULES/);
+  assert.equal(first.filter(c => /RULES/.test(c.text ?? '')).length, 1);
+  call(2, 'await app.getAXState()'); await tick();
+  reply(2, 'Window: "Calculator", App: Calculator'); await tick();
+  assert.doesNotMatch(JSON.stringify(h.toClient.find(m => m.id === 2)), /RULES/);
+  h.fromClient({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'js_reset', arguments: {} } }); await tick();
+  reply(4, 'reset'); await tick();
+  call(5, 'let app = await cua.getApp("Calculator")'); await tick();
+  reply(5, docs + 'Window: "Calculator", App: Calculator'); await tick();
+  assert.doesNotMatch(JSON.stringify(h.toClient.find(m => m.id === 5)), /RULES/, 'Claude already has them');
+});
+
+test('without rules configured, the first-call docs pass unchanged', async () => {
+  const h = harness({ changeReview: false });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("Calculator")' } } }); await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: '## Computer Use\n\nx\nWindow: "Calculator", App: Calculator' }] } }); await tick();
+  assert.equal(h.toClient.find(m => m.id === 1).result.content.length, 1);
+});

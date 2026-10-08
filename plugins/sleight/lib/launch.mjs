@@ -151,6 +151,12 @@ export function approvalLogging(preapproved, env = process.env, auditDirectory) 
 // without showing them, so under it the relay asks this way instead. The
 // prompt gives up (cancel) after five minutes; the engine waits that long.
 const LIB = dirname(fileURLToPath(import.meta.url));
+
+// The skill's body, sent after the engine's first-call docs. Missing or unreadable means none.
+export function skillRules(path = join(LIB, '..', 'skills', 'drive-mac-apps', 'SKILL.md')) {
+  try { return readFileSync(path, 'utf8').replace(/^---\n[\s\S]*?\n---\n+/, '').trim() || undefined; }
+  catch { return undefined; }
+}
 const ICON = join(LIB, '..', 'assets', 'icon.png');
 const ASK_SECONDS = 300;
 const ownedHelpers = new Set();
@@ -471,6 +477,7 @@ export async function run({ leaseDirectory } = {}) {
     },
     trace: relayTrace,
     guardTiming: !!process.env.SLEIGHT_TRACE,
+    firstCallRules: skillRules(),
   });
   process.once('exit', () => relay.close());
 
