@@ -469,6 +469,7 @@ export async function run({ leaseDirectory } = {}) {
       },
     },
     trace: relayTrace,
+    guardTiming: !!process.env.SLEIGHT_TRACE,
   });
   process.once('exit', () => relay.close());
 

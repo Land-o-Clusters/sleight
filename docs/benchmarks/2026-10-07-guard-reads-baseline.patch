@@ -1,0 +1,51 @@
+diff --git a/plugins/sleight/lib/document-scope.mjs b/plugins/sleight/lib/document-scope.mjs
+index 66d0d43..05e8f51 100644
+--- a/plugins/sleight/lib/document-scope.mjs
++++ b/plugins/sleight/lib/document-scope.mjs
+@@ -86,7 +86,7 @@ export function guardedCode(code, window, reason = 'Document scope stopped this
+ {
+   const guard = globalThis.__sleightDocumentGuard, last = guard.activeApp && guard.reads.get(guard.activeApp);
+   if (guard.activeApp && !last?.emitted) {
+-    const text = last?.text ?? await guard.activeApp.getAXState({ disableDiffing: true, emit: false });
++    const text = last?.text ?? await guard.readAfter(guard.activeApp);
+     nodeRepl.write(${JSON.stringify(GUARD_MARK)} + text + ${JSON.stringify(GUARD_END)});
+   }
+ }`;
+@@ -104,6 +104,19 @@ function guardSetup(update) {
+     state.fileOnly = ${!!update.fileOnly}; state.cancelOnly = ${!!update.cancelOnly};
+     state.adoptUrl = ${!!update.adoptUrl};` : ''}
+     state.nativeDenied = ${JSON.stringify(update?.nativeDenied) ?? 'undefined'};
++    state.timing = ${!!update?.timing};
++    const clock = () => globalThis.performance?.now() ?? Date.now();
++    const timedRead = async (raw, phase) => {
++      const start = clock();
++      let text;
++      try { return text = await raw.getAXState({ disableDiffing: true, emit: false }); }
++      finally {
++        if (state.timing) nodeRepl.write('[sleight:guard-timing]' + JSON.stringify({ phase,
++          ms: clock() - start, chars: typeof text === 'string' ? text.length : 0, failed: text === undefined }) + '\\n');
++      }
++    };
++    state.readAfter = proxy => timedRead(state.raws.get(proxy), 'after-call');
++    state.raws ||= new WeakMap();
+     // Full reads taken in this call since the handle's last action. A new call
+     // always reads again, because the user may have changed the window between.
+     state.reads = new WeakMap();
+@@ -157,7 +170,7 @@ function guardSetup(update) {
+             state.reads.delete(proxy);
+             return value.apply(raw, args);
+           }
+-          const text = state.reads.get(proxy)?.text ?? await raw.getAXState({ disableDiffing: true, emit: false });
++          const text = state.reads.get(proxy)?.text ?? await timedRead(raw, 'before-action');
+           const observed = parse(text);
+           // app.click({ id: "Seven" }) or ({ label: "Multiply" }): the one element with
+           // that AX identifier or label in this read, so numbers an earlier action in
+@@ -193,7 +206,7 @@ function guardSetup(update) {
+           return value.apply(raw, args);
+         };
+       } });
+-      state.proxies.add(proxy); state.wrapped.set(target, proxy);
++      state.proxies.add(proxy); state.wrapped.set(target, proxy); state.raws.set(proxy, target);
+       return proxy;
+     };
+     cua.getApp = async (...args) => { checkNative(); return state.activeApp = wrap(await state.getApp(...args)); };

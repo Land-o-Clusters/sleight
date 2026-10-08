@@ -38,6 +38,7 @@ export async function benchmarkApproval(params) {
 }
 
 export async function probeClient(server, { relay: throughRelay, record, timeoutMs = 60000,
+  relayOptions = {},
   label = throughRelay ? 'sleight' : 'direct' } = {}) {
   const sessionId = randomUUID();
   let turnId = randomUUID();
@@ -62,6 +63,7 @@ export async function probeClient(server, { relay: throughRelay, record, timeout
   child.once('exit', (code, signal) => fail(new Error(`owned ${label} engine exited (${signal ?? code})`)));
   child.stdin.on('error', fail);
   const relay = throughRelay ? createRelay({ clientIn, clientOut, serverIn: child.stdin, serverOut: child.stdout,
+    ...relayOptions,
     sessionId, inputLease: new InputLease({ holder: `double-keys probe ${sessionId}` }),
     idleTurnEndMs: 30000,
     onLeaseFault: error => { record({ client: label, event: 'lease-fault', error: error.message }); void close(); },

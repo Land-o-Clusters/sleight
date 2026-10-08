@@ -31,6 +31,9 @@ export function traceTiming(dir) {
       }
       const call = calls.get(key);
       if (!call) continue;
+      if (e.direction === 'guard-read' && Number.isFinite(e.msg.ms) && e.msg.ms >= 0) {
+        (call.guardReads ??= []).push(e.msg);
+      }
       if (e.direction === 'to-server' && call.sent === undefined) call.sent = t;
       if (e.direction === 'from-server' && e.msg.method === undefined && call.sent !== undefined && call.engineDone === undefined) call.engineDone = t;
       if (e.direction === 'to-client' && e.msg.method === undefined) call.answered = t;
@@ -39,6 +42,7 @@ export function traceTiming(dir) {
   const done = [...calls.values()].filter(c => c.answered !== undefined);
   const local = done.filter(c => LOCAL.has(c.tool)), relayed = done.filter(c => !LOCAL.has(c.tool));
   const sum = (list, f) => list.reduce((total, c) => total + f(c), 0);
+  const guardReads = done.flatMap(c => c.guardReads ?? []);
   return {
     calls: done.length,
     refused: relayed.filter(c => c.sent === undefined).length,
@@ -47,6 +51,8 @@ export function traceTiming(dir) {
     relayMs: sum(relayed, c => c.sent === undefined || c.engineDone === undefined ? c.answered - c.received
       : (c.sent - c.received) + (c.answered - c.engineDone)),
     localMs: sum(local, c => c.answered - c.received),
+    ...(guardReads.length ? { guardReads: guardReads.length,
+      guardReadMs: sum(guardReads, r => r.ms), guardReadFailures: guardReads.filter(r => r.failed).length } : {}),
   };
 }
 

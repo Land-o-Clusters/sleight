@@ -135,7 +135,12 @@ our own runs. Dates and engine versions are given where they matter.
   clipboard shortcuts, screenshots and coordinate drags can pass without a match. Source attribution
   and UI parsing can miss values or block harmless text. This guards mistakes; arbitrary JavaScript
   can bypass it. [The design](design/flow-rules.md) lists the limits.
-- After every `js` action, sleight's window guard reads the whole tree again so the input lease can
+- The native guard still needs full AX reads after preceding actions. Engine 26.1002.52244 exposes
+  no header-only read, and its reply does not split AX, settling, capture and transfer time.
+  Combined AX/screenshot observations now count as reusable reads within the call; click-only and
+  typing batches keep their existing read counts. The [guard timing study](design/guard-reads.md)
+  records the measurement limits and all attempts.
+- After every `js` action without a later reusable observation, sleight's window guard reads the whole tree again so the input lease can
   check the window header. Since 0.9.0 Claude gets only the lines that changed since the last full
   tree it saw for that window ([measurements](benchmarks/2026-10-05-compact-reads.md)). A first
   read, a new window or dialog, or a page that re-renders and renumbers its elements still comes
