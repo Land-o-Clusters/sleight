@@ -197,8 +197,8 @@ our own runs. Dates and engine versions are given where they matter.
   control points to the target app. ChatGPT restart advice requires both AX processes to respond
   with windows and an actual engine control timeout. Missing evidence stays unknown.
   In [owned fixture trials](benchmarks/2026-10-08-reliability.md), the original relay misdiagnosed
-  1/1 completed hang runs (two actual read timeouts). Revised diagnosis identified the app in 5/5
-  runs (ten timeouts), with no ChatGPT restart advice. The last two runs also verified full visible
+  1/1 completed hang runs (two actual read timeouts). Revised diagnosis identified the app in 6/6
+  runs (twelve timeouts), with no ChatGPT restart advice. The last three runs also verified full visible
   control and recovered fixture reads. The first three exposed a compactor defect now covered by tests.
   One earlier harness deadline failure remains in the receipts. No shared helper wedge was induced.
   Claude stops retrying. sleight retries by itself.
