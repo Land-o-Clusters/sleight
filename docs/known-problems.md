@@ -3,13 +3,18 @@
 What doesn't work, or works only partly, with the measurements behind it. We found all of these in
 our own runs. Dates and engine versions are given where they matter.
 
-- The real-use benchmark has 0 completed model trials against 18 requested (2026-10-08).
-  The first Safari setup used Apple Events and timed out. The round-2 brief identified one Safari
-  Automation prompt and one harmless report that a fixture crashed. The native replacement doesn't use Apple
-  Events and requires Safari to be running, so it can create a fixture without restoring a session.
-  Safari was absent at its first round-2 attempt. The earlier Safari cleanup remains unconfirmed.
+- The real-use benchmark has 3 completed model trials against 18 requested, with 1 pass
+  (2026-10-08). Safari wasn't running, so all three setups failed before a model call.
+  Helium passed once and failed twice after browser permission requests were dismissed.
+  The system-only observer missed those requests. The refusals were found after all three trials,
+  and further live runs stopped. Their process and window title weren't observed.
+  The streamed refusal stop gate and fresh observation before cleanup have passing unit tests,
+  but no new live proof. Native setup and cleanup don't use Apple Events. Safari must already be
+  running. Helium retains only its new fixture window, without reading the owner's existing windows.
   The cooperative lock is released on exit, even when helper collection remains unconfirmed.
-  [The initial report](benchmarks/2026-10-08-real-use-tasks.md) includes the failed attempts and recovery path.
+  [The round-2 report](benchmarks/2026-10-08-real-use-tasks-2.md) retains all attempts and remaining
+  qualification. [The initial report](benchmarks/2026-10-08-real-use-tasks.md) retains the earlier
+  Safari Automation prompt and unconfirmed cleanup. Safari was absent at the round-2 preflights.
 
 - Native `app.paste` temporarily changed the clipboard, then restored all measured bytes in 4/4
   fixtures. Text entry and engine drag left it unchanged in 4/4 each. Local drag did in 2/2.
