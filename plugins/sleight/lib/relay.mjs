@@ -1291,7 +1291,10 @@ export function createRelay({
     }
     // Last, after every check above has read the full tree.
     if (msg.method === undefined && Array.isArray(msg.result?.content)) {
-      msg.result.content = compactor.process(dropRepeatedImages(msg.result.content));
+      // sleight's own advice says getAXState({ disableDiffing: true }) gives a full read. Compacting
+      // it to "no change" sent Claude to a screenshot instead (2026-10-08).
+      msg.result.content = compactor.process(dropRepeatedImages(msg.result.content),
+        { forceFull: /\bdisableDiffing\s*:\s*true\b/.test(jsCode ?? '') });
     }
     toClient(msg);
   }

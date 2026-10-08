@@ -1325,3 +1325,19 @@ test('a result names each pre-approval grant once, however many actions it cover
   const text = h.toClient.find(m => m.id === 1).result.content.map(c => c.text).join('\n');
   assert.equal(text.match(/pre-approved by the user's list/g)?.length, 1, text);
 });
+
+test('getAXState({ disableDiffing: true }) in Claude\'s code returns the whole tree, as sleight\'s advice promises', async () => {
+  const h = harness({ changeReview: false });
+  const rows = Array.from({ length: 40 }, (_, i) => `\t${i + 1} button Key ${i}`).join('\n');
+  const call = (id, code) => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } });
+  const { GUARD_MARK } = await import('../plugins/sleight/lib/compact-reads.mjs');
+  const tree = `Window: "Calculator", App: Calculator.\n0 standard window Calculator, ID: main\n${rows}`;
+  call(1, 'await app.getAXState()'); await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: GUARD_MARK + tree }] } }); await tick();
+  call(2, 'await app.getAXState()'); await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 2, result: { content: [{ type: 'text', text: GUARD_MARK + tree }] } }); await tick();
+  assert.match(h.toClient.find(m => m.id === 2).result.content[0].text, /no change/);
+  call(3, 'await app.getAXState({ disableDiffing: true })'); await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 3, result: { content: [{ type: 'text', text: GUARD_MARK + tree }] } }); await tick();
+  assert.match(h.toClient.find(m => m.id === 3).result.content[0].text, /Key 39/);
+});

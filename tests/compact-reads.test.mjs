@@ -146,3 +146,12 @@ test('a helper startup failure tells Claude nothing reached an app and how to re
   const text = toClient.find(m => m.id === 1).result.content.map(c => c.text).join('\n');
   assert.match(text, /never reached an app.*Retry the same call once.*js_reset/s);
 });
+
+test('a read Claude asked to see whole comes back whole, and later diffs start from it', () => {
+  const c = createReadCompactor();
+  apply(c, tree(sidebar));
+  const [whole] = c.process([text(GUARD_MARK + tree(sidebar))], { forceFull: true }).map(i => i.text);
+  assert.equal(whole, tree(sidebar));
+  const [next] = apply(c, GUARD_MARK + tree([...sidebar, '\t60 button OK']));
+  assert.match(next, /\+ \t60 button OK$/);
+});
