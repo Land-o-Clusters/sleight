@@ -1,0 +1,104 @@
+{
+  "stamp": "2026-10-08T04-23-10-154Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-haiku-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 73.7,
+      "turns": 23,
+      "costUsd": 0.9451637999999999,
+      "usage": {
+        "input": 44,
+        "cacheRead": 1631719,
+        "cacheWrite": 60683,
+        "output": 6659
+      },
+      "timing": {
+        "totalMs": 70474,
+        "modelMs": 36505,
+        "calls": 17,
+        "refused": 1,
+        "toolMs": 28230,
+        "engineMs": 28173,
+        "relayMs": 57,
+        "localMs": 0,
+        "otherMs": 5739
+      },
+      "exitCode": 0,
+      "answer": "The TextEdit document is created, made plain text, typed, saved, and closed.\n\nThe file is at `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-08T04-23-10-154Z/sleight-textedit-save-1/0218aa62.txt`. It contains exactly `sleight bench 0218aa62` (22 bytes, no trailing newline).\n\n",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 72.6,
+      "turns": 23,
+      "costUsd": 1.0353544000000001,
+      "usage": {
+        "input": 42,
+        "cacheRead": 1600512,
+        "cacheWrite": 70978,
+        "output": 7363
+      },
+      "timing": {
+        "totalMs": 70713,
+        "modelMs": 40609,
+        "calls": 19,
+        "refused": 0,
+        "toolMs": 26708,
+        "engineMs": 26641,
+        "relayMs": 67,
+        "localMs": 0,
+        "otherMs": 3396
+      },
+      "exitCode": 0,
+      "answer": "The document is saved and closed. It's at `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-08T04-23-10-154Z/sleight-textedit-save-2/d5dc77d0.txt`, and it contains \"sleight bench d5dc77d0\" as plain text.\n\nBefore I started, TextEdit already had an Open dialog up from an earlier ",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 3,
+      "passed": true,
+      "seconds": 44.7,
+      "turns": 17,
+      "costUsd": 0.704351,
+      "usage": {
+        "input": 32,
+        "cacheRead": 1106915,
+        "cacheWrite": 49790,
+        "output": 4226
+      },
+      "timing": {
+        "totalMs": 43299,
+        "modelMs": 24769,
+        "calls": 11,
+        "refused": 0,
+        "toolMs": 13926,
+        "engineMs": 13901,
+        "relayMs": 25,
+        "localMs": 0,
+        "otherMs": 4604
+      },
+      "exitCode": 0,
+      "answer": "The file is saved at the requested path with the exact contents \"sleight bench 92736db4\" (22 bytes, plain text, no trailing newline), and I closed the document window.\n\nTwo things you should know:\n- TextEdit auto-capitalized the first letter when I typed, so I replaced the text by pasting it. The sa",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    }
+  ]
+}

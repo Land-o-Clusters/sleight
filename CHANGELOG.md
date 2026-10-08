@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.3 (2026-10-08)
+
+- `let app = await cua.getApp("X"); app` counts as an acquisition. The input lease knew only the
+  form without the trailing `app`, refused Haiku 5.5's three tries at it as actions, and advised
+  `await cua.getState()`, which acquires nothing (a textedit-save failure, 2026-10-08). When a
+  refused first call names its app, the advice is now that app's acquisition. Unit tests cover both.
+  Neither came up in the passes after the fix. Sonnet 5.5 medium passed 21/21 in 226 turns and 738 s
+  (`docs/benchmarks/2026-10-08-acquisition-echo.json`), and Haiku 5.5 passed textedit-save 3/3.
+- `docs/benchmark.md` compares Sonnet 5.5 at medium and low effort, Haiku 5.5 and Opus 5.5 on 0.13.2.
+
 ## 0.13.2 (2026-10-08)
 
 - sleight keeps the input lease when it stops an action (a renumbered batch, or an AX ID that

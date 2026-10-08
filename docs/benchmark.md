@@ -107,6 +107,23 @@ rose from 1.81 s to 2.05 s. textedit-save took 16, 12 and 20 turns (median 16, f
 to 15 of 131 calls (11.5%), 8 of them in the one failure: chess-drag's first run, where the engine
 answered `noWindowsAvailable` for a freshly launched Chess window and `drag` called it off screen.
 
+The same code then ran with three other models, one pass each, 3 runs per task, back to back on
+2026-10-08, unattended (whether the owner was using the Mac isn't recorded):
+
+| Model | Passed | Turns | Calls | Model s per turn | Total s | Files |
+|---|---|---|---|---|---|---|
+| Sonnet 5.5, medium | 20/21 | 213 | 131 | 2.05 | 687 | [`save-in-one-call`](benchmarks/2026-10-08-save-in-one-call.json) |
+| Haiku 5.5, medium | 20/21 | 235 | 151 | 1.54 | 625 | [`haiku-medium`](benchmarks/2026-10-08-haiku-medium.json) |
+| Sonnet 5.5, low | 21/21 | 199 | 131 | 2.31 | 827 | [`sonnet-low`](benchmarks/2026-10-08-sonnet-low.json) |
+| Opus 5.5, medium | 21/21 | 223 | 118 | 2.41 | 808 | [`opus-medium`](benchmarks/2026-10-08-opus-medium.json) |
+
+Haiku was fastest in total because its turns were shortest, though it took the most. Its one
+failure was sleight's. The input lease didn't count `let app = await cua.getApp(…); app` as an
+acquisition, and its advice didn't get Haiku out of that. 0.13.3 fixes
+that, and its pass ([`acquisition-echo`](benchmarks/2026-10-08-acquisition-echo.json)) passed 21/21
+on Sonnet 5.5 medium. Claude Code 2.1.289 calls `claude-haiku-5-5` an unrecognized model, so Haiku's
+cost figures aren't shown here. One pass per model can't separate a model from that hour's API latency.
+
 From 2026-10-04 on, runs default to Sonnet 5.5 at medium effort (`--model`, `--effort`).
 
 ```bash

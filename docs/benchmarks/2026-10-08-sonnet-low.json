@@ -1,0 +1,662 @@
+{
+  "stamp": "2026-10-08T03-38-47-588Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "low",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 13.7,
+      "turns": 5,
+      "costUsd": 0.1860812,
+      "usage": {
+        "input": 8,
+        "cacheRead": 176116,
+        "cacheWrite": 36788,
+        "output": 369
+      },
+      "timing": {
+        "totalMs": 12195,
+        "modelMs": 6671,
+        "calls": 2,
+        "refused": 0,
+        "toolMs": 4194,
+        "engineMs": 4186,
+        "relayMs": 8,
+        "localMs": 0,
+        "otherMs": 1330
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 1,
+      "passed": true,
+      "seconds": 82.4,
+      "turns": 12,
+      "costUsd": 0.30117520000000003,
+      "usage": {
+        "input": 22,
+        "cacheRead": 614756,
+        "cacheWrite": 42205,
+        "output": 936
+      },
+      "timing": {
+        "totalMs": 81029,
+        "modelMs": 25242,
+        "calls": 9,
+        "refused": 0,
+        "toolMs": 52512,
+        "engineMs": 52479,
+        "relayMs": 33,
+        "localMs": 0,
+        "otherMs": 3275
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 62.3,
+      "turns": 13,
+      "costUsd": 0.37600160000000005,
+      "usage": {
+        "input": 24,
+        "cacheRead": 754558,
+        "cacheWrite": 52013,
+        "output": 1699
+      },
+      "timing": {
+        "totalMs": 59935,
+        "modelMs": 37284,
+        "calls": 10,
+        "refused": 0,
+        "toolMs": 18584,
+        "engineMs": 18550,
+        "relayMs": 34,
+        "localMs": 0,
+        "otherMs": 4067
+      },
+      "exitCode": 0,
+      "answer": "I saved the document at the requested path and closed it. The text in the saved file is \"sleight bench 61232a1f\".\n\n- **Plain text:** I used the Make Plain Text shortcut (Shift+Cmd+T) instead of the Format menu. I didn't check the Format menu afterward. The ruler and formatting bar disappeared and th",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 29.9,
+      "turns": 9,
+      "costUsd": 0.2360076,
+      "usage": {
+        "input": 14,
+        "cacheRead": 360138,
+        "cacheWrite": 38658,
+        "output": 932
+      },
+      "timing": {
+        "totalMs": 28420,
+        "modelMs": 14828,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 12675,
+        "engineMs": 12658,
+        "relayMs": 17,
+        "localMs": 0,
+        "otherMs": 917
+      },
+      "exitCode": 0,
+      "answer": "I replaced \"beta\" with \"delta\" in `ec7a29da-edit.txt`, saved it, and closed the document. TextEdit has no windows open now. I read the file afterward and it contains `alpha delta gamma`.\n\nTextEdit opened on an Open dialog, so I used Go to Folder there to reach the file.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 46.7,
+      "turns": 9,
+      "costUsd": 0.2469302,
+      "usage": {
+        "input": 16,
+        "cacheRead": 420671,
+        "cacheWrite": 38396,
+        "output": 918
+      },
+      "timing": {
+        "totalMs": 44727,
+        "modelMs": 23456,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 17370,
+        "engineMs": 12231,
+        "relayMs": 19,
+        "localMs": 5120,
+        "otherMs": 3901
+      },
+      "exitCode": 0,
+      "answer": "I dragged \"alpha\" to the end of the line with the mouse, so the text now reads \"beta gamma alpha\". I then saved with Cmd+S and closed the window with Cmd+W.\n\nI didn't reopen the file afterward to check the saved contents. The last read before saving showed \"beta gamma alpha\". TextEdit then closed wi",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 46.4,
+      "turns": 16,
+      "costUsd": 0.3978916,
+      "usage": {
+        "input": 30,
+        "cacheRead": 905198,
+        "cacheWrite": 49123,
+        "output": 2030
+      },
+      "timing": {
+        "totalMs": 43123,
+        "modelMs": 27783,
+        "calls": 13,
+        "refused": 0,
+        "toolMs": 10263,
+        "engineMs": 10222,
+        "relayMs": 41,
+        "localMs": 0,
+        "otherMs": 5077
+      },
+      "exitCode": 0,
+      "answer": "I opened Chess, played e2 to e4 as White by dragging the pawn, saved the game, and closed that window.\n\n- **Save:** the game is at `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-08T03-38-47-588Z/sleight-chess-drag-1/7b69f92c.game`. The window title showed that filename and p",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 1,
+      "passed": true,
+      "seconds": 22.1,
+      "turns": 7,
+      "costUsd": 0.22631439999999997,
+      "usage": {
+        "input": 12,
+        "cacheRead": 298192,
+        "cacheWrite": 40528,
+        "output": 454
+      },
+      "timing": {
+        "totalMs": 19317,
+        "modelMs": 9641,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 6538,
+        "engineMs": 6524,
+        "relayMs": 14,
+        "localMs": 0,
+        "otherMs": 3138
+      },
+      "exitCode": 0,
+      "answer": "The page now says \"Sent\". I typed \"sleight bench af6ac9f9\" into the Message field in Safari on the iPhone 18 Pro simulator and tapped Submit. Nothing else is left to do.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 2,
+      "passed": true,
+      "seconds": 16,
+      "turns": 5,
+      "costUsd": 0.1853504,
+      "usage": {
+        "input": 8,
+        "cacheRead": 176142,
+        "cacheWrite": 36689,
+        "output": 335
+      },
+      "timing": {
+        "totalMs": 13734,
+        "modelMs": 6877,
+        "calls": 2,
+        "refused": 0,
+        "toolMs": 4754,
+        "engineMs": 4742,
+        "relayMs": 12,
+        "localMs": 0,
+        "otherMs": 2103
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 2,
+      "passed": true,
+      "seconds": 20.8,
+      "turns": 7,
+      "costUsd": 0.2244288,
+      "usage": {
+        "input": 12,
+        "cacheRead": 298964,
+        "cacheWrite": 39618,
+        "output": 614
+      },
+      "timing": {
+        "totalMs": 19127,
+        "modelMs": 12639,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 4717,
+        "engineMs": 4702,
+        "relayMs": 15,
+        "localMs": 0,
+        "otherMs": 1771
+      },
+      "exitCode": 0,
+      "answer": "Calculator is in Scientific mode and shows the result of 2^10, so I'm giving you the number now.\n\n1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 39,
+      "turns": 9,
+      "costUsd": 0.30111920000000003,
+      "usage": {
+        "input": 16,
+        "cacheRead": 450556,
+        "cacheWrite": 49349,
+        "output": 1358
+      },
+      "timing": {
+        "totalMs": 37662,
+        "modelMs": 22180,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 13120,
+        "engineMs": 13106,
+        "relayMs": 14,
+        "localMs": 0,
+        "otherMs": 2362
+      },
+      "exitCode": 0,
+      "answer": "The document is saved and closed. The file is 22 bytes and shows as Plain Text in the Open dialog, which matches \"sleight bench 1d4362bd\". I didn't read the file back to confirm its contents. TextEdit is now showing its Open dialog, which I left as is.\n\n- **Plain text:** I switched to plain text wit",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 2,
+      "passed": true,
+      "seconds": 28.8,
+      "turns": 8,
+      "costUsd": 0.23630800000000002,
+      "usage": {
+        "input": 14,
+        "cacheRead": 359510,
+        "cacheWrite": 38817,
+        "output": 911
+      },
+      "timing": {
+        "totalMs": 27310,
+        "modelMs": 16259,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 8914,
+        "engineMs": 8895,
+        "relayMs": 19,
+        "localMs": 0,
+        "otherMs": 2137
+      },
+      "exitCode": 0,
+      "answer": "I replaced \"beta\" with \"delta\" in `e0c99583-edit.txt`, saved it, and closed the document. The text read \"alpha delta gamma\" before I saved. The file's size in the Open panel went from 17 to 18 bytes, which I didn't investigate. I didn't reopen the file to check it on disk.\n\nTextEdit already had an O",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 2,
+      "passed": true,
+      "seconds": 41.3,
+      "turns": 9,
+      "costUsd": 0.2514996,
+      "usage": {
+        "input": 16,
+        "cacheRead": 421008,
+        "cacheWrite": 39209,
+        "output": 1043
+      },
+      "timing": {
+        "totalMs": 39939,
+        "modelMs": 25122,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 12601,
+        "engineMs": 8113,
+        "relayMs": 19,
+        "localMs": 4469,
+        "otherMs": 2216
+      },
+      "exitCode": 0,
+      "answer": "I dragged \"alpha\" to the end of the line in TextEdit, so the document now reads \"beta gamma alpha\". I did it with a mouse drag and drop, not typing or cut and paste.\n\nI saved with Cmd+S and then closed the document with Cmd+W. After the close, TextEdit's Open dialog came back up, showing `c80508b1-d",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 2,
+      "passed": true,
+      "seconds": 151.6,
+      "turns": 18,
+      "costUsd": 0.4190218,
+      "usage": {
+        "input": 32,
+        "cacheRead": 973449,
+        "cacheWrite": 49422,
+        "output": 2658
+      },
+      "timing": {
+        "totalMs": 149308,
+        "modelMs": 79503,
+        "calls": 15,
+        "refused": 0,
+        "toolMs": 66949,
+        "engineMs": 12792,
+        "relayMs": 33,
+        "localMs": 54124,
+        "otherMs": 2856
+      },
+      "exitCode": 0,
+      "answer": "I moved the e2 pawn to e4 by dragging, saved the game, and closed its window. Chess then opened a new, empty \"Game 1\" window on its own, and I left that open.\n\n- **Game:** Chess already had a fresh game open at the starting position with White to move, so I used it instead of starting another. The c",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 2,
+      "passed": true,
+      "seconds": 20.1,
+      "turns": 7,
+      "costUsd": 0.227531,
+      "usage": {
+        "input": 12,
+        "cacheRead": 298235,
+        "cacheWrite": 40705,
+        "output": 504
+      },
+      "timing": {
+        "totalMs": 18424,
+        "modelMs": 10389,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 6399,
+        "engineMs": 6386,
+        "relayMs": 13,
+        "localMs": 0,
+        "otherMs": 1636
+      },
+      "exitCode": 0,
+      "answer": "The page in Safari on the iPhone 18 Pro simulator now says \"Sent\". I typed \"sleight bench 47eb2f22\" into the Message field and tapped Submit.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 3,
+      "passed": true,
+      "seconds": 14.9,
+      "turns": 5,
+      "costUsd": 0.18562260000000003,
+      "usage": {
+        "input": 8,
+        "cacheRead": 176193,
+        "cacheWrite": 36707,
+        "output": 354
+      },
+      "timing": {
+        "totalMs": 13512,
+        "modelMs": 6394,
+        "calls": 2,
+        "refused": 0,
+        "toolMs": 4204,
+        "engineMs": 4197,
+        "relayMs": 7,
+        "localMs": 0,
+        "otherMs": 2914
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 3,
+      "passed": true,
+      "seconds": 23.8,
+      "turns": 6,
+      "costUsd": 0.208339,
+      "usage": {
+        "input": 10,
+        "cacheRead": 236255,
+        "cacheWrite": 39092,
+        "output": 470
+      },
+      "timing": {
+        "totalMs": 22588,
+        "modelMs": 13674,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 4619,
+        "engineMs": 4607,
+        "relayMs": 12,
+        "localMs": 0,
+        "otherMs": 4295
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 3,
+      "passed": true,
+      "seconds": 37.3,
+      "turns": 10,
+      "costUsd": 0.30243699999999996,
+      "usage": {
+        "input": 16,
+        "cacheRead": 453495,
+        "cacheWrite": 49564,
+        "output": 1345
+      },
+      "timing": {
+        "totalMs": 36118,
+        "modelMs": 16906,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 17871,
+        "engineMs": 17849,
+        "relayMs": 22,
+        "localMs": 0,
+        "otherMs": 1341
+      },
+      "exitCode": 0,
+      "answer": "I created the TextEdit document, saved it as plain text to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-08T03-38-47-588Z/sleight-textedit-save-3/ab678264.txt`, and closed it. I read the file back afterwards, and it contains exactly `sleight bench ab678264`.\n\n- **Capitaliza",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 3,
+      "passed": true,
+      "seconds": 40.8,
+      "turns": 12,
+      "costUsd": 0.263341,
+      "usage": {
+        "input": 18,
+        "cacheRead": 479645,
+        "cacheWrite": 38594,
+        "output": 1300
+      },
+      "timing": {
+        "totalMs": 39601,
+        "modelMs": 25567,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 11470,
+        "engineMs": 11445,
+        "relayMs": 25,
+        "localMs": 0,
+        "otherMs": 2564
+      },
+      "exitCode": 0,
+      "answer": "I replaced \"beta\" with \"delta\" in `5e394cc9-edit.txt`, saved it, and closed the document. The file on disk now reads `alpha delta gamma`.\n\nClosing the document made TextEdit show an Open dialog. I cancelled it, and TextEdit now reports no windows, so it's gone.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 3,
+      "passed": true,
+      "seconds": 35.4,
+      "turns": 9,
+      "costUsd": 0.2484672,
+      "usage": {
+        "input": 16,
+        "cacheRead": 421406,
+        "cacheWrite": 38606,
+        "output": 973
+      },
+      "timing": {
+        "totalMs": 34102,
+        "modelMs": 13873,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 18511,
+        "engineMs": 13962,
+        "relayMs": 17,
+        "localMs": 4532,
+        "otherMs": 1718
+      },
+      "exitCode": 0,
+      "answer": "I opened the file in TextEdit, selected \"alpha\" and dragged it to the end of the line. It now reads \"beta gamma alpha\". The drag was a real mouse drag, not typing or cut and paste.\n\nI saved with Cmd+S and then closed the window. The save and close went through without a dialog. I didn't re-read the ",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 3,
+      "passed": true,
+      "seconds": 71.2,
+      "turns": 16,
+      "costUsd": 0.37397120000000006,
+      "usage": {
+        "input": 30,
+        "cacheRead": 887786,
+        "cacheWrite": 44471,
+        "output": 1847
+      },
+      "timing": {
+        "totalMs": 68721,
+        "modelMs": 56446,
+        "calls": 12,
+        "refused": 1,
+        "toolMs": 9035,
+        "engineMs": 9005,
+        "relayMs": 30,
+        "localMs": 0,
+        "otherMs": 3240
+      },
+      "exitCode": 0,
+      "answer": "I started a new game in Chess and moved the white e2 pawn to e4 by dragging it. Black replied with a pawn to e6. I saved the game to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-08T03-38-47-588Z/sleight-chess-drag-3/88d72bd2.game`. The file exists (1,364 bytes), but I didn",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 3,
+      "passed": true,
+      "seconds": 19.9,
+      "turns": 7,
+      "costUsd": 0.22794920000000002,
+      "usage": {
+        "input": 12,
+        "cacheRead": 298306,
+        "cacheWrite": 40766,
+        "output": 520
+      },
+      "timing": {
+        "totalMs": 17852,
+        "modelMs": 9341,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 6226,
+        "engineMs": 6212,
+        "relayMs": 14,
+        "localMs": 0,
+        "otherMs": 2285
+      },
+      "exitCode": 0,
+      "answer": "The page now says **Sent**. I typed \"sleight bench 4ba78264\" into the Message field on the iPhone 18 Pro simulator and tapped Submit. My first Submit tap missed because the page zoomed when the field took focus, so I tapped again at the new position.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

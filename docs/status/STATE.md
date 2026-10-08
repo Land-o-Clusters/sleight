@@ -3,31 +3,23 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-08 03:40 UTC, sleight-arch rebooted after the owner's clear)
+## Banner (2026-10-08 04:35 UTC)
 
-Checkout: `~/Projects/sleight` is on branch `perf/save-in-one-call`, which is now also `main`
-(fast-forwarded) and released as 0.13.2: the relay keeps the input lease through guard stops, and the skill shows a
-one-call Save As. Its Sonnet medium pass passed 20/21, 213 turns (from 260), 687 s (from 825), model
-time per turn 2.05 s (from 1.81), textedit-save median 16 turns (from 27)
-(`docs/benchmarks/2026-10-08-save-in-one-call.json`). The failure, chess-drag run 1, was the engine's
-`noWindowsAvailable` on a fresh Chess window (`docs/known-problems.md`), not the branch's code. Switch
-the checkout to `main` once the passes below finish. They read the plugin from this checkout.
+Checkout: `~/Projects/sleight` is on `main`, released as 0.13.3. The chained model passes are done
+and nothing holds `/tmp/sleight-live.lock`.
 
-Background job: `nohup .dev/passes/passes.sh`, started 2026-10-08T03:13:06Z, 3 runs per task per
-pass. Sonnet medium is done (above). Haiku 5.5 medium (`claude-haiku-5-5`, which Claude Code 2.1.289
-calls unrecognized, so its $10.27 cost figure is suspect) passed 20/21: 235 turns, 625 s, 1.54 s of
-model time per turn (`bench/results/2026-10-08T03-26-27-848Z.json`, not published yet). Then Sonnet
-low and Opus 5.5 medium, for the owner's model comparison.
-
-Haiku's failure was a sleight bug, fixed on `fix/acquisition-echo` (`f40c639`, pushed, worktree at
-the session scratchpad's `wt-echo`, check 574/574 and 9/9). Haiku sent
-`let app = await cua.getApp("com.apple.TextEdit"); app`, the lease didn't recognize it as an
-acquisition, and its advice (`await cua.getState()`) acquires nothing. Not merged: it changes default
-lease behavior, so it needs a Sonnet pass (LAWS) after the model passes free the lock. Then release
-0.13.3. Each pass takes and releases `/tmp/sleight-live.lock`.
-Progress: `.dev/passes/passes.log`, per-pass logs `.dev/passes/pass-*.log`. Publish each scrubbed as
-`docs/benchmarks/2026-10-08-<model>-<effort>.json` with a note in `docs/benchmark.md`, then compare
-pass rate, turns, model time per turn and total time.
+- 0.13.2 (input lease kept through guard stops, one-call Save As) passed 20/21 on Sonnet 5.5 medium, 213 turns
+  (from 260), 687 s (from 825), textedit-save median 16 turns (from 27). The failure was the engine's
+  `noWindowsAvailable` on a fresh Chess window (`docs/known-problems.md`).
+- Model comparison on 0.13.2's code, one pass each, in `docs/benchmark.md`. Haiku 5.5 medium passed 20/21
+  in 235 turns and 625 s, Sonnet low 21/21 in 199 turns and 827 s, Opus 5.5 medium 21/21 in 223
+  turns and 808 s with 0 refused calls. Haiku's cost figures are suspect (Claude Code 2.1.289 calls the model unrecognized).
+  One pass per model can't separate the model from API latency. Picking a default driver is the
+  owner's call. Sonnet medium stays the default until then.
+- 0.13.3: `let app = await cua.getApp("X"); app` counts as an acquisition (Haiku's failure), and a
+  refused first call that asks for an app by name is advised that app's acquisition instead of
+  `cua.getState()`. Proven by unit tests only: neither path came up live. Its Sonnet pass passed 21/21
+  (226 turns, 738 s), Haiku textedit-save 3/3.
 
 Engine update: the helper is now 26.1002.52244 (was 26.930.51102), found at boot on 2026-10-08. Its
 API diff (`~/Library/Logs/sleight/engine-api-26.1002.52244.diff`, captured by hand because
@@ -51,7 +43,7 @@ each with a test). Review and reproduce its numbers before merging. It takes the
 checks. `codex/browser-enforcement` (Codex, 2026-10-04) is still unreviewed; its worktree is Codex's
 own at `~/.codex/worktrees/browser-enforcement/sleight`.
 
-Public: `Land-o-Clusters/sleight`, latest release `v0.13.2`, installed at user scope from the repo
+Public: `Land-o-Clusters/sleight`, latest release `v0.13.3`, installed at user scope from the repo
 folder. Open PRs: none. The first outside user (the owner's friend) runs his iOS simulator tests
 through sleight and finds it faster than Maestro. `~/.claude.json` marks
 `~/Library/Caches/sleight-bench/sleight-arm` trusted (set for the interactive pane session,
@@ -60,8 +52,6 @@ through sleight and finds it faster than Maestro. `~/.claude.json` marks
 
 Next, in order:
 
-- Finish the passes above: publish them, then compare the models on pass rate, turns, model time
-  per turn and total time.
 - Review the Astra branch when it reports.
 - textedit-save and chess-drag are the slowest tasks (median 16 turns each on 2026-10-08). Trace
   their runs for the next cut.
@@ -117,6 +107,8 @@ prompts are in `.dev/prompts/`, market research in `.dev/research/2026-10-04-com
 
 ## Waiting on the owner
 
+- The model comparison (banner, `docs/benchmark.md`) is ready for the owner to read. Whether it
+  changes the default driver is theirs to decide.
 - Decide whether Helium stays on the pre-approved list and whether `ComputerUseAllowForbiddenTargets`
   stays on. Both were due on 2026-10-07 and haven't been asked yet. Ask.
 
