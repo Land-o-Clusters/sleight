@@ -3,36 +3,50 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-08 18:30 UTC)
+## Banner (2026-10-08 23:20 UTC, flushed before the owner's clear)
 
-Checkout: `~/Projects/sleight` is on `main`, released as 0.15.2.
+Released: `main` and `v0.15.2` at `2d2eb60`, CI green. No background jobs are running, and
+`/tmp/sleight-live.lock` is free.
 
-- 0.14.0 cuts turns, the owner's priority (native Codex computer use felt faster). The skill rides on
-  the engine's first result instead of costing a Skill turn, `js` loads at session start (no tool
-  search), an explicit full read comes back whole, and each pre-approval grant appears once per
-  result. Its pass ran 21/21 in 157 turns (from 195), 426 s of model time (from 490) and 717 s total
-  (from 756). Every task took fewer turns (`docs/benchmark.md`).
-- 0.13.5 (Astra's `codex/engine-time`): `getScreenshot()` reuses the engine's AX read and the skill
-  says to type contiguous text at once. A read after any input costs about 415 ms however long the
-  caller waits. Astra's proposal to skip the guard's checks between actions in a batch stays out
-  (43.9 s of a 756 s pass, and it would send input to a dialog that opened mid-batch).
-- 0.14.1 is Sol's `codex/reliability`, rebased onto 0.14.0 (three relay conflicts resolved by hand,
-  owner's go-ahead for rebasing Codex work) and squash-merged. The relay tells a hung app from a
-  stuck helper (wrong restart advice 1/1 before, 0/6 after, reproduced 1/1), and the benchmark waits
-  for Chess to exit before relaunching. Its pass ran 21/21 in 157 turns and 586 s. The owner allowed
-  the repo's hang fixture to be auto-approved by its probe (LAWS).
-- Owner's plan (2026-10-08), run in order without check-ins:
-  1. Done: acquire-and-act is in 0.15.0 (21/21, but no run combined a call, so no saving yet).
-  2. Faster: done. 0.15.1 halved the skill, 0.15.2 fixed the Chess lease and tool loading. The
-     0.15.2 pass took 123 turns (from 195 on 0.13.4), 101 calls, none refused.
-  3. Better: widen the benchmark with 4 to 6 real-use tasks (browser page, Finder, Notes, a two-app
-     copy and paste, a simulator flow), then a head-to-head with native Codex computer use on the
-     same tasks (the owner approved spending Codex usage for it).
-  4. Resolve what's left on `docs/known-problems.md`.
-  5. Then decide on 1.0 with the owner.
-- Earlier on 2026-10-08: 0.13.2 to 0.13.4 (lease kept through guard stops, one-call Save As, the
-  echoed-handle acquisition, guard reads cleared for every handle; `CHANGELOG.md`), and a four-model
-  comparison on 0.13.2's code (`docs/benchmark.md`). The owner kept Sonnet 5.5 medium (LAWS).
+Checkout: `~/Projects/sleight` is on `pane/auto-mode` (`dc5a016` plus the STATE flush, pushed). It has
+two unreleased changes on top of 0.15.2:
+
+- `known/unawaited` (`49604cf`, pushed): the relay refuses an action written without `await` when more
+  code follows it. 659/659 unit tests. Known-problems entries 5, 16, 21 and 32 updated.
+- `pane/auto-mode`: the desktop pane. A `tool.check` hook lets Auto mode run the mod's own snapshot
+  (matched by `next.origin.plugin === 'sleight'` and the exact snapshot code) and `turn_ended`
+  (owner approved, LAWS); `/sleight` awaits `$.mcp.connect` before sending the prompt; the desktop
+  image re-encodes until it's 16,000 base64 characters or less (51,135 was dropped, likely by Claude
+  Code's MCP token limit); and a local `h` that shadowed JSX's `h` broke the drawing. 11/11 mod tests.
+  `plugin.json` says `0.15.3-pane.2` so the owner's install picks it up: set it to 0.15.3 at release.
+
+Next:
+
+1. Ask the owner to check the desktop pane once more. In a new Code tab session in Auto mode,
+   `/sleight open Calculator in the background and work out 12 × 12 by clicking its buttons`, should show
+   Calculator's picture. The owner's install is `0.15.3-pane.2` (`installed_plugins.json`).
+2. Run one pass on `pane/auto-mode` with a regular desktop showing (no full screen or Split View,
+   LAWS), then release 0.15.3 and run `claude plugin marketplace update sleight` and
+   `claude plugin update sleight@sleight` so the owner's install matches.
+3. Benchmark runner: restart TextEdit between runs when only benchmark documents are open (a
+   leftover "Untitled 6" kept a stale Save sheet alive), and record per run whether the task's app
+   window is on the current Space.
+4. Owner's plan, step 3 (better). Sol's `codex/real-use-tasks` (`7420d18`, round two) passed 1 of 18
+   qualifying runs. Safari wasn't running; Helium failed twice because the engine's browser-access
+   request can't be answered in `claude -p`, and sleight never pre-approves browser requests (LAWS).
+   Decide how Helium runs headless (as a native app through the engine, or with the owner answering live), then finish
+   qualification, review and merge, then the head-to-head with native Codex computer use.
+5. Owner's plan, step 4: the rest of `docs/known-problems.md`, including the Accessibility text-move
+   experiment for drags into covered windows, and a clearer message than `noWindowsAvailable` when
+   an app is on another Space. Then step 5, the 1.0 decision with the owner.
+
+Read first, published today: `docs/benchmark.md` (every pass since 0.13.1, with caveats),
+`docs/known-problems.md` (Split View, the desktop pane, Calculator's AX churn after launch).
+
+Owner's plan (2026-10-08), run in order without check-ins: (1) acquire-and-act, done in 0.15.0;
+(2) faster, done: 0.15.2 took 123 turns against 195 on 0.13.4, 101 calls, none refused; (3) better:
+the real-use suite, then the Codex head-to-head (the owner approved Codex usage for it). (4) Known
+problems. (5) The 1.0 decision.
 
 Engine update: the helper is now 26.1002.52244 (was 26.930.51102), found at boot on 2026-10-08. Its
 API diff (`~/Library/Logs/sleight/engine-api-26.1002.52244.diff`, captured by hand because
@@ -41,39 +55,25 @@ API diff (`~/Library/Logs/sleight/engine-api-26.1002.52244.diff`, captured by ha
 `click` options through untouched. Open: whether the skill should document Shift/Cmd-click and long
 press. `watch-engine-version` still says 26.930.51102, so Monday's watch will run its benchmark task.
 
-Owner's speed push (2026-10-07): make sleight fast. Sonnet stays the default driver. Timing per run
-(model, engine, local tools, relay, Claude Code) is in the benchmark results since 2026-10-07; the
-first pass was 65.4% model, 23.6% engine, 0.1% relay. Turns are the lever, and errors cost turns.
-Released that day: 0.12.2 (lease recovery advice, engine session restarts), 0.12.3 (one copy per
-screenshot), 0.13.0 (`app.click({ id })`/`{ label }`), 0.13.1 (errors 21.5% to 12.7% of calls). The
-remaining error causes are in the 0.13.1 pass transcripts, and `docs/benchmark.md` has the history.
-
 Codex: `codex/guard-reads` (0.13.4), `codex/engine-time` (0.13.5) and `codex/reliability` (0.14.1) are
-merged. `codex/browser-enforcement` had been on main since 2026-10-04 (`b234f55`), so its remote
-branch was deleted on 2026-10-08. Sol's next brief: `.dev/prompts/sol-real-use-tasks.md`.
+merged. Their worktrees in `~/Projects/sleight-wt/` can go once Codex is done with them.
+`codex/real-use-tasks` (Sol) is open, see Next. Briefs are in `.dev/prompts/`.
 
-Public: `Land-o-Clusters/sleight`, latest release `v0.13.3`, installed at user scope from the repo
-folder. Open PRs: none. The first outside user (the owner's friend) runs his iOS simulator tests
+Public: `Land-o-Clusters/sleight`, latest release `v0.15.2`. The owner's install is a
+version-keyed copy in `~/.claude/plugins/cache/sleight/sleight/`, refreshed only by
+`claude plugin update` (now `0.15.3-pane.2`). Open PRs: none. The first outside user (the owner's friend) runs his iOS simulator tests
 through sleight and finds it faster than Maestro. `~/.claude.json` marks
 `~/Library/Caches/sleight-bench/sleight-arm` trusted (set for the interactive pane session,
 2026-10-06). Launch files for the owner's Grok bot are in `~/Desktop/sleight-launch/`, including
 `sleight-pane.png` (2026-10-06). `sleight-version.txt` says how each was made.
 
-Next, in order:
+Later:
 
-- textedit-save and chess-drag are the slowest tasks (median 16 turns each on 2026-10-08). Trace
-  their runs for the next cut.
-- The engine's first-call docs are 56% of all result text (about 21,000 characters per session), but
-  context is cached: a run re-reads about 668,000 cached tokens and writes about 1,500. Trimming
-  them needs a measured case and care with OpenAI's safety guidance.
-- `drag` once couldn't match a freshly launched Chess window to an accessibility window
-  (`docs/known-problems.md`). Drag failures otherwise came from the owner's windows covering the app.
-- When an app hangs, the relay's message still blames the helper first. It could check whether the
-  app answers.
-- "native pipe startup failed" three times in a row in one session on 2026-10-05. The cause is unknown.
-- Check the pane in the desktop app's Code tab (it offers Claude Code 2.1.288). The owner types
-  `/sleight` there.
-- Chess square estimates. Re-register LCU before any comparison.
+- The engine's first-call docs are about 21,000 characters per session, cached after the first turn.
+  Trimming them needs a measured case and care with OpenAI's safety guidance.
+- "native pipe startup failed" three times in a row in one session on 2026-10-05. Cause unknown.
+- Whether the skill should document the engine's Shift/Cmd-click and long press.
+- Re-register LCU before any comparison with it.
 
 Codex worktrees: `~/Projects/sleight-wt/` holds only `guard-reads` now; 22 finished ones were removed
 on 2026-10-06. Their remote branches stay, and files only they had are in `.dev/worktree-archive/`. Codex
@@ -82,7 +82,7 @@ prompts are in `.dev/prompts/`, market research in `.dev/research/2026-10-04-com
 ## Machine state outside the repo
 
 - Weekly launchd job `com.landoclusters.sleight-watch` (Mondays 9:00, `scripts/watch.sh`). It saves
-  the engine's API docs (`~/Library/Logs/sleight/engine-api-26.930.51102.md` is the latest) and
+  the engine's API docs (`~/Library/Logs/sleight/engine-api-26.1002.52244.md` is the latest) and
   diffs them on an engine update. Remove with `npm run watch:remove`.
 - `~/Library/Application Support/sleight/preapproved.json` lists Calculator (owner, 2026-10-04) and
   Helium (`net.imput.helium` and `Helium`, all `high`). Helium was added on the owner's order on
@@ -114,7 +114,9 @@ prompts are in `.dev/prompts/`, market research in `.dev/research/2026-10-04-com
 
 ## Waiting on the owner
 
-Nothing.
+- The desktop pane check on `0.15.3-pane.2` (Next, item 1).
+- How Helium runs in the headless real-use suite (Next, item 4).
+- Rotating the OpenAI API key kept in plain text in an iCloud TextEdit note (told 2026-10-08).
 
 ## Reading list
 

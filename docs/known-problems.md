@@ -119,9 +119,20 @@ our own runs. Dates and engine versions are given where they matter.
   can interrupt it. Hover's own pointer and front-app restoration has not been measured separately in
   live trials. The fixture also restores both, so its successful checks do not prove hover's restoration.
   It does not restore the full window order. Earlier fixture pointer mismatches remain unresolved.
-- The desktop app's Code tab ran its own Claude Code 2.1.286 on 2026-10-03, too old for the mod, and
-  offered 2.1.288 on 2026-10-06. Approvals and every tool work there, and the engine's turn ends after
-  30 idle seconds. Nobody has checked the pane, status line or `/sleight stop` there yet.
+- The desktop app's Code tab runs Claude Code 2.1.293 (2026-10-08), new enough for the mod. The owner
+  checked it once in Auto mode: `/sleight` opened the pane and sent the prompt, the action log listed
+  both actions, and the status line showed sleight. The picture failed. The pane reads the app with
+  `js` between turns, and Auto mode's classifier refused that call because no user request asked for
+  it, so in Auto mode the pane doesn't show a picture. In the same session `/sleight` sent the prompt
+  before sleight's tools had loaded, and Claude ran `open` and `osascript` itself first. The desktop's
+  own command picker says "/sleight isn't a command here" while you type it, though the mod still
+  handles it. `/sleight stop` hasn't been checked there.
+- When you work in a full-screen or Split View Space, apps sleight drives in the background are on
+  another Space. Clicks and typing still reach them, but the engine's `app.drag` answers
+  `noWindowsAvailable`, sleight's `drag` refuses the off-screen window, and TextEdit's reads timed
+  out. A pass with the Claude app in Split View failed 8 of 21 runs, all in TextEdit, Chess and the
+  simulator (`docs/benchmarks/2026-10-08-await-split-view.json`). Moving a window into a full-screen
+  Space needs private macOS APIs, so leave full screen while sleight drags.
 - Without the mod, the relay ends the engine's turn once no sleight call has run for 30 seconds, which
   releases the app the engine was holding (its badge on the app's window). Before 0.3.1 nothing ended
   the turn until the session closed. Desktop sessions twice showed as busy after Claude had finished,

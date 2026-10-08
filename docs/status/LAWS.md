@@ -49,6 +49,9 @@ belong in [STATE.md](STATE.md).
 - sleight's `menu_bar`, `notifications` and `drag` tools act outside the engine, through macOS
   Accessibility and posted mouse events (owner's scope calls, 2026-10-03 and 2026-10-04). Each app's icon needs the user's approval, as do notifications,
   with the same session memory as engine approvals. Every action on an app waits for that approval.
+- sleight's mod may approve, in Claude Code's `tool.check`, only its own pane snapshot (the exact code
+  it built) and `turn_ended`, matched by `next.origin.plugin === 'sleight'`, which the host sets. It
+  never approves a call Claude made (owner, 2026-10-08).
 - sleight's branding uses only its own marks, never another company's logo or mascot.
 
 ## The engine
@@ -68,7 +71,11 @@ belong in [STATE.md](STATE.md).
 - Live behavior is proven by a live run, judged from the relay trace and the transcript, not the screen.
 - Benchmark results are published in full: every run, failures included, with the raw results file
   in `docs/benchmarks/` and the caveats stated (owner, 2026-10-03). We never pick runs after seeing
-  them.
+  them: every full pass is published, intermediate and noisy ones too.
+- A pass measures sleight only while a regular desktop shows the benchmark apps' Space and the screen
+  is clear of system dialogs. Any other pass is published with that caveat.
+- The owner's installed sleight is a copy keyed by version, refreshed only by `claude plugin update`.
+  Before asking the owner to check anything in a session, update it and confirm its `gitCommitSha`.
 - Codex agents build on `codex/*` branches in their own worktrees and never push to `main`. sleight-arch
   reviews each branch (design note, safety paths, evidence for personal data), squash-merges it onto
   `main` so scrubbed history stays off it, and releases. Conflicts in the relay's core go back to
