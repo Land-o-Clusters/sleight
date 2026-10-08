@@ -83,7 +83,9 @@ and stops the pass. If helper collection fails, the required release on exit per
 while that process may still be running.
 The host needs existing Accessibility access and `codex-macos-inspect` for permission observation.
 Permission reports contain only the process and window title. An unavailable observer stops
-the run before it opens a fixture.
+the run before it opens a fixture. A streamed engine refusal for browser-access permission also
+stops further trials, even if the system observer didn't see its window. The runner collects the
+driver and closes only the retained fixture. It doesn't retry browser access or switch methods.
 The [initial report](benchmarks/2026-10-08-real-use-tasks.md) records the setup failure and permission
 stop, with 0 completed model trials against 18 requested. Live qualification remains pending.
 

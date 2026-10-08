@@ -5,7 +5,7 @@ ObjC.import('ApplicationServices');
 
 function closeOwnedWindow(window, request, app, api) {
   if (!window || !api.exists(window)) return;
-  if (!api.matches(window, request)) throw new Error('Owned fixture document identity changed');
+  if (!api.matches(window, request, true)) throw new Error('Owned fixture document identity changed');
   if (request.mode === 'document') {
     if (!api.equal(api.focused(app), window)) throw new Error('Owned document lost focus; cleanup refused');
     api.closeDocument(app);
@@ -14,7 +14,7 @@ function closeOwnedWindow(window, request, app, api) {
     api.wait();
     if (!api.exists(window)) return;
     api.discard(window);
-    if (request.mode === 'document' && !api.matches(window, request)) return;
+    if (request.mode === 'document' && !api.matches(window, request, true)) return;
   }
   throw new Error('Owned fixture window is still open');
 }
@@ -65,7 +65,7 @@ function nativeAX() {
     var url = $.NSURL.URLWithString(value);
     return url.isNil() || !url.isFileURL ? null : ObjC.unwrap(url.URLByResolvingSymlinksInPath.path);
   }
-  function matches(window, request) {
+  function matches(window, request, retained) {
     var document = text(window, 'AXDocument');
     if (document) {
       if (request.target && request.target.indexOf('http://') === 0) return document.indexOf(request.target) === 0;
@@ -76,7 +76,7 @@ function nativeAX() {
     }
     var title = text(window, 'AXTitle');
     return request.mode === 'inherit' || title.indexOf(request.token) !== -1 ||
-      (request.mode === 'folder' && title === 'Archive');
+      (retained === true && request.mode === 'folder' && title === 'Archive');
   }
   return {
     read: read, text: text, press: press, fileMenu: fileMenu,

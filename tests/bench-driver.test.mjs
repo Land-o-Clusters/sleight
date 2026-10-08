@@ -26,3 +26,25 @@ test('default driver cancellation collects the driver while the pass lock remain
   assert.equal(readFileSync(receipt, 'utf8'), 'true');
   assert.equal(existsSync(lock), true);
 });
+
+test('a streamed browser permission refusal stops before another driver action', async t => {
+  const { runDriver } = await import('../bench/driver.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'bench-permission-stop-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const marker = join(dir, 'another-action'), controller = new AbortController();
+  let refusals = 0;
+  const event = { type: 'user', message: { content: [{ type: 'tool_result', is_error: true,
+    content: 'Browser Use could not complete this action because a browser security check was unavailable. Reason: The permission request was dismissed before a decision was made.' }] } };
+  const response = await runDriver(process.execPath, ['-e', `
+    console.log(JSON.stringify({message:{content:{unexpected:'frame'}}}));
+    console.log(JSON.stringify({message:{content:[{type:'tool_result',content:'Browser Use could not complete this action: permission request dismissed',is_error:false}]}}));
+    console.log(${JSON.stringify(JSON.stringify(event))});
+    setTimeout(() => require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'wrong'), 200);
+    setInterval(() => {}, 1000);
+  `], { format: 'stream-json', signal: controller.signal, timeoutMs: 1500, graceMs: 500,
+    onPermissionRefusal: () => { refusals++; controller.abort(); } });
+  assert.equal(refusals, 1);
+  assert.equal(response.cancelled, true);
+  assert.equal(response.groupClean, true);
+  assert.equal(existsSync(marker), false);
+});

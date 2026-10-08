@@ -26,6 +26,47 @@ test('an explicit no-mutation acquisition refusal removes only that pending acqu
   assert.deepEqual([...ctx.pendingAcquisitions], ['browser']);
 });
 
+test('a browser permission refusal records the stop and still closes the retained owned fixture', async t => {
+  const execute = await runner(), ctx = fixture(t), controller = new AbortController();
+  let cleaned = false;
+  const result = await execute({ setup() {}, prompt: () => 'fixture', check: () => true,
+    cleanup(context) { assert.equal(context.cleanupSignal.aborted, false); cleaned = true; } }, ctx, {
+    signal: controller.signal, stop: () => controller.abort(), permissionCheck: async () => false,
+    drive: async (_prompt, _ctx, callbacks) => {
+      callbacks.onPermissionRefusal();
+      return { code: null, cancelled: true, groupClean: true };
+    },
+  });
+  assert.equal(result.permissionRefusal, true);
+  assert.equal(result.passed, false);
+  assert.match(result.reason, /browser-access permission/);
+  assert.equal(cleaned, true);
+  assert.equal(existsSync(ctx.lockPath), false);
+  assert.equal(existsSync(ctx.dir), false);
+});
+
+test('a prompt appearing with a streamed refusal is observed before any fixture close', async t => {
+  const execute = await runner(), ctx = fixture(t), controller = new AbortController();
+  let visible = false, observations = 0, serverClosed = false;
+  ctx.closeServer = async () => { serverClosed = true; };
+  const result = await execute({ setup() {}, prompt: () => 'fixture', check: () => true,
+    cleanup() { assert.fail('must not close a fixture while a permission window is visible'); } }, ctx, {
+    signal: controller.signal, stop: () => controller.abort(),
+    permissionCheck: async () => { observations++; return visible ? { process: 'Authorization', title: 'Permission' } : false; },
+    drive: async (_prompt, _ctx, callbacks) => {
+      visible = true; callbacks.onPermissionRefusal();
+      return { code: null, cancelled: true, groupClean: true };
+    },
+  });
+  assert.equal(observations, 2);
+  assert.equal(result.permissionPrompt, true);
+  assert.deepEqual(result.permissionWindow, { process: 'Authorization', title: 'Permission' });
+  assert.match(result.cleanupError, /permission/);
+  assert.equal(serverClosed, true);
+  assert.equal(existsSync(ctx.dir), true);
+  assert.equal(existsSync(ctx.lockPath), false);
+});
+
 test('real runner holds the lock through the awaited check and cleanup, then removes fixture files', async t => {
   const execute = await runner(), ctx = fixture(t), order = [];
   const result = await execute({
