@@ -9,16 +9,20 @@ then resumed cooperatively. Every fixture exited 0. No macOS permission prompt a
 | Arm | Completed runs | Actual read timeouts | Wrong ChatGPT restart advice |
 |---|---:|---:|---:|
 | Original relay | 1 | 2 | 1 |
-| Revised diagnosis | 5 | 10 | 0 |
+| Revised diagnosis | 6 | 12 | 0 |
 
 Native AX returned `cannotComplete` (-25204) while the fixture was blocked and responded after it
 resumed. Calculator's engine read succeeded during the hang. The original second failed read
 named the helper first. Revised replies named the unresponsive fixture. Reads took about 16.7 to 21.2 s.
 
 The first three revised runs exposed a separate defect during review: their visible Calculator
-refresh returned a compacted “no change.” The last two runs verified the full visible Calculator tree
+refresh returned a compacted “no change.” The last three runs verified the full visible Calculator tree
 and the recovered fixture tree after the automatic retry. Unit regressions cover hidden baselines,
 expired approvals, late replies, resets and successful UI text mentioning `timeoutReached`.
+
+The final native run passed on `b583c80`, after rebasing onto `b3de45f`. Both required commands
+also exited 0 there. Check passed 620 unit tests and nine mod tests, including plugin validation.
+Prose lint passed.
 
 One earlier baseline attempt hit the harness's initial 16 s response deadline before recording a
 read result. Its failed receipt remains published. The corrected harness waits 90 s. Sandbox
