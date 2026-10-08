@@ -156,6 +156,10 @@ our own runs. Dates and engine versions are given where they matter.
   saving no`. It still answered AppleScript, but its only window was an orphan "Save Panel Accessory
   View" that Accessibility didn't list. The relay's message again named a stuck helper, while
   `--doctor` passed. Quitting TextEdit fixed it.
+- In the iPhone simulator (2026-10-07), Claude's first `typeText` into a Safari field once came out
+  garbled and uppercased, and its paste fallback inserted other text: the simulator shares the
+  Mac's clipboard. Claude cleared the field both times and typed it right, so 3/3 runs passed, but a
+  paste there can put whatever is on your clipboard into the app.
 - The engine's helper can stop answering. On 2026-10-04 every `cua.getApp` timed out
   (`-10005 timeoutReached`) for about 25 minutes, with the Mac unlocked and in use, until ChatGPT was
   restarted. We don't know the cause. It started right after a test that kills engine processes.

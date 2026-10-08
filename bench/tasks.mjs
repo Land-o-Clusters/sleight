@@ -4,7 +4,8 @@
 // so every arm gets the same words.
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { join } from 'node:path';
 
 // Calculator shows digit grouping ("1,024"), and Claude reports what it shows.
@@ -27,7 +28,58 @@ function freshTextEdit() {
 // The only apps a benchmark run may approve (see approve.mjs), by name and by
 // bundle ID: input leases have Claude acquire apps by bundle ID, and local tools
 // ask with the identifier Claude passed (a Chess drag was declined, 2026-10-05).
-export const BENCH_APPS = ['Calculator', 'TextEdit', 'Chess', 'com.apple.calculator', 'com.apple.TextEdit', 'com.apple.Chess'];
+// Simulator added on the owner's order (2026-10-07), with DeviceHub, which
+// replaces Simulator.app in Xcode 27 (the engine asks for it as "Device Hub").
+export const BENCH_APPS = ['Calculator', 'TextEdit', 'Chess', 'Simulator', 'DeviceHub', 'Device Hub', 'com.apple.calculator',
+  'com.apple.TextEdit', 'com.apple.Chess', 'com.apple.iphonesimulator', 'com.apple.dt.Devices'];
+
+// simctl from Xcode, even when xcode-select points at the Command Line Tools.
+const XCODE = '/Applications/Xcode.app/Contents/Developer';
+// The app that shows simulators: DeviceHub from Xcode 27, Simulator before it.
+const SIM_APPS = [['DeviceHub', join(XCODE, '../Applications/DeviceHub.app')], ['Simulator', join(XCODE, 'Applications/Simulator.app')]];
+function simctl(...args) {
+  const env = existsSync(XCODE) ? { ...process.env, DEVELOPER_DIR: XCODE } : process.env;
+  return execFileSync('xcrun', ['simctl', ...args], { encoding: 'utf8', env, timeout: 180000 });
+}
+
+// A booted iPhone simulator with the app showing it open behind the other
+// windows. Boots the first available iPhone when none is running.
+function bootedIPhone() {
+  const devices = Object.values(JSON.parse(simctl('list', 'devices', 'available', '--json')).devices).flat()
+    .filter(d => d.name.startsWith('iPhone'));
+  if (!devices.length) {
+    throw new Error('no iPhone simulator: install an iOS runtime (xcodebuild -downloadPlatform iOS) first');
+  }
+  const device = devices.find(d => d.state === 'Booted') ?? devices[0];
+  if (device.state !== 'Booted') simctl('boot', device.udid);
+  simctl('bootstatus', device.udid, '-b');
+  const [app, path] = SIM_APPS.find(([, path]) => existsSync(path)) ?? ['Simulator'];
+  execFileSync('open', ['-g', ...(path ? [path] : ['-a', app])]);
+  return { udid: device.udid, name: device.name, app };
+}
+
+// A one-field form on 127.0.0.1, which the simulator reaches through the
+// Mac's network. The page turns off autocapitalization and autocorrect, so
+// what arrives is what Claude typed. Each run gets its own server; check closes it.
+const forms = new Map();
+export async function serveForm(nonce) {
+  const form = { received: [] };
+  form.server = createServer((req, res) => {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      if (req.method === 'POST') form.received.push(new URLSearchParams(body).get('message') ?? '');
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(req.method === 'POST' ? '<!doctype html><meta name="viewport" content="width=device-width"><h1>Sent</h1>'
+        : '<!doctype html><meta name="viewport" content="width=device-width"><title>sleight bench</title>' +
+          '<form method="post"><label>Message <input name="message" autocapitalize="off" autocorrect="off" ' +
+          'autocomplete="off" spellcheck="false"></label> <button>Submit</button></form>');
+    });
+  });
+  await new Promise(resolve => form.server.listen(0, '127.0.0.1', resolve));
+  forms.set(nonce, form);
+  return `http://127.0.0.1:${form.server.address().port}/`;
+}
 
 export const tasks = [
   {
@@ -99,6 +151,27 @@ export const tasks = [
       // A .game file is a plist whose Moves string lists moves as e2e4, one per line.
       const moves = /<key>Moves<\/key>\s*<string>([^<]*)/.exec(text)?.[1].trim().split(/\s+/) ?? [];
       return moves[0] === 'e2e4' || `${path} has moves ${JSON.stringify(moves.slice(0, 4))}`;
+    },
+  },
+  {
+    id: 'simulator-form',
+    app: 'Simulator',
+    // Safari in the simulator opens the form, as an app under test would be
+    // launched to its first screen. The check is what the server received.
+    setup: async ctx => {
+      ctx.sim = bootedIPhone();
+      ctx.url = await serveForm(ctx.nonce);
+      simctl('openurl', ctx.sim.udid, ctx.url);
+    },
+    prompt: ({ nonce, sim }) =>
+      `Using computer use in the background, go to the ${sim.name} simulator in the ${sim.app} app, where Safari ` +
+      `shows a form. Type exactly "sleight bench ${nonce}" into its Message field and tap Submit. Reply when the page says Sent.`,
+    check: ({ nonce }) => {
+      const form = forms.get(nonce);
+      form?.server.close();
+      forms.delete(nonce);
+      const got = form?.received ?? [];
+      return got.includes(`sleight bench ${nonce}`) || `server received ${JSON.stringify(got.slice(0, 3))}`;
     },
   },
 ];

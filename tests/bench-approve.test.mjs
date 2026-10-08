@@ -20,3 +20,7 @@ test('benchmark drags approve the three apps by bundle ID too, exact case only',
     assert.equal(approve(`Allow Claude to drag in ${app}? It moves the pointer.`), null);
   }
 });
+test('benchmark runs approve Simulator and DeviceHub by name and bundle ID', () => {
+  for (const app of ['Simulator', 'com.apple.iphonesimulator', 'DeviceHub', 'Device Hub', 'com.apple.dt.Devices']) assert.equal(approve(`Allow Computer Use to use "${app}"?`), 'accept');
+  assert.equal(approve('Allow Computer Use to use "Xcode"?'), null);
+});

@@ -3,14 +3,17 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-06 03:45 UTC)
+## Banner (2026-10-08 01:35 UTC)
 
-0.12.1 released: the pane's picture fits the pane, and its snapshot stays under Claude Code's MCP
-output limit (see CHANGELOG). Found while taking the pane screenshot for the launch post, now at
-`~/Desktop/sleight-launch/sleight-pane.png` (1100 x 1112, fullscreen Terminal session at 24 pt on
-the 1x Dell displays, docked pane, Calculator picture and 13-action log; pointer still for all
-18,816 samples over 17 min). The engine updated to 26.930.51102 with API docs unchanged, and the
-watch's docs capture no longer touches an app.
+New benchmark task `simulator-form` (owner's order, 2026-10-07). Safari in an iPhone simulator,
+type a nonce, tap Submit, checked by what a local server received. 3/3 on iPhone 18 Pro, iOS 27.0,
+Xcode 27's DeviceHub (replaces Simulator.app, and its approval prompt names "Device Hub"), median
+39.6 s. The first pass failed 0/3 on that missing allowlist name. Both are published. The iOS 27.0 runtime
+(8 GB) was downloaded on the owner's OK. Prompted by the first outside user, who runs his simulator
+tests through sleight and finds it faster than Maestro.
+
+0.12.1 (2026-10-06): the pane's picture fits the pane and stays under Claude Code's MCP output
+limit. The launch pane shot is `~/Desktop/sleight-launch/sleight-pane.png`.
 
 Public: `Land-o-Clusters/sleight`. Open PRs: none. Latest release `v0.12.1`, installed on this Mac
 at user scope from the repo folder. Released on 2026-10-05: 0.7.0 through 0.12.0. Numbers are in
@@ -26,8 +29,11 @@ order.
 
 Background jobs: none. No live lock held.
 
-Next, in order:
+Next, in order (owner asked for a perf and Codex-parity push, 2026-10-07; first step not yet chosen):
 
+- Measure where a run's time goes (model, tool, engine) from traces on benchmark runs.
+- Let the stale-number guard accept clicks by stable AX identifier, so Calculator's renumbering after
+  All Clear stops costing refused calls.
 - Another session got "native pipe startup failed" three times in a row on 2026-10-05 while doctor
   passed. The helper quits after about 20 s idle, and 0.10.0 tells Claude to retry, then `js_reset`.
   Why it repeated is unknown.

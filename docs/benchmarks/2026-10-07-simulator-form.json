@@ -1,0 +1,114 @@
+{
+  "note": "simulator-form, first runs. Pass 1 failed 0/3 in the harness: the engine asks to approve \"Device Hub\" (with a space), which the benchmark allowlist lacked, so Claude stopped. Pass 2 ran after adding that name.",
+  "passes": [
+    {
+      "stamp": "2026-10-08T01-23-43-494Z",
+      "arms": [
+        "sleight"
+      ],
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "claude",
+      "results": [
+        {
+          "arm": "sleight",
+          "task": "simulator-form",
+          "run": 1,
+          "passed": false,
+          "reason": "server received []",
+          "seconds": 11.1,
+          "turns": 4,
+          "costUsd": 0.152279,
+          "exitCode": 0,
+          "answer": "I couldn't do this. The computer-use session wasn't approved to control the DeviceHub app (the error read \"Computer Use was not approved to use Device Hub\"). I stopped there. I didn't try another route into the app, and I never reached the simulator or the form.\n\nThe message \"sleight bench c9430e21\"",
+          "models": [
+            "claude-sonnet-5-5"
+          ]
+        },
+        {
+          "arm": "sleight",
+          "task": "simulator-form",
+          "run": 2,
+          "passed": false,
+          "reason": "server received []",
+          "seconds": 9.7,
+          "turns": 4,
+          "costUsd": 0.1443598,
+          "exitCode": 0,
+          "answer": "I couldn't do this. The Computer Use tool wasn't approved to control the DeviceHub app (\"Computer Use was not approved to use Device Hub\"), so I never reached the simulator, the form, or the Message field. Nothing was typed or submitted, and I haven't seen the page say Sent.\n\nApproving DeviceHub is ",
+          "models": [
+            "claude-sonnet-5-5"
+          ]
+        },
+        {
+          "arm": "sleight",
+          "task": "simulator-form",
+          "run": 3,
+          "passed": false,
+          "reason": "server received []",
+          "seconds": 9.6,
+          "turns": 4,
+          "costUsd": 0.145427,
+          "exitCode": 0,
+          "answer": "I couldn't do this. Computer use wasn't approved to control the DeviceHub app (the error was \"Computer Use was not approved to use Device Hub\"), and I didn't try to work around it.\n\nI haven't typed anything into the Message field or tapped Submit, so the page won't say Sent yet.\n\nTo go ahead, approv",
+          "models": [
+            "claude-sonnet-5-5"
+          ]
+        }
+      ]
+    },
+    {
+      "stamp": "2026-10-08T01-24-30-971Z",
+      "arms": [
+        "sleight"
+      ],
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "claude",
+      "results": [
+        {
+          "arm": "sleight",
+          "task": "simulator-form",
+          "run": 1,
+          "passed": true,
+          "seconds": 55.2,
+          "turns": 11,
+          "costUsd": 0.4070012,
+          "exitCode": 0,
+          "answer": "The page now says **Sent**. I typed \"sleight bench f2c6c7c7\" into the Message field on the iPhone 18 Pro simulator and tapped Submit.\n\nThe first two attempts went wrong. `typeText` produced garbled, uppercased text, and a paste put in text I hadn't entered. I cleared the field both times. I then typ",
+          "models": [
+            "claude-sonnet-5-5"
+          ]
+        },
+        {
+          "arm": "sleight",
+          "task": "simulator-form",
+          "run": 2,
+          "passed": true,
+          "seconds": 35.3,
+          "turns": 8,
+          "costUsd": 0.36173720000000004,
+          "exitCode": 0,
+          "answer": "The page now says \"Sent\". I typed \"sleight bench 51f48645\" into the Message field in Safari on the iPhone 18 Pro simulator and tapped Submit. I did it in the background through DeviceHub.",
+          "models": [
+            "claude-sonnet-5-5"
+          ]
+        },
+        {
+          "arm": "sleight",
+          "task": "simulator-form",
+          "run": 3,
+          "passed": true,
+          "seconds": 39.6,
+          "turns": 8,
+          "costUsd": 0.2936466,
+          "exitCode": 0,
+          "answer": "The page now says \"Sent\". I typed \"sleight bench 474ec2cc\" into the Message field in Safari on the iPhone 18 Pro simulator in DeviceHub, then tapped Submit.",
+          "models": [
+            "claude-sonnet-5-5"
+          ]
+        }
+      ]
+    }
+  ]
+}

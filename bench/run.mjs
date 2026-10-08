@@ -172,7 +172,14 @@ for (let run = 1; run <= runs; run++) {
       const dir = join(tmpdir(), 'sleight-bench', stamp, `${armName}-${task.id}-${run}`);
       mkdirSync(dir, { recursive: true });
       const ctx = { dir, nonce };
-      task.setup?.(ctx);
+      // A setup this Mac can't do (no iOS runtime for the simulator task) skips
+      // the run rather than ending the pass; skipped runs stay out of the table.
+      try { await task.setup?.(ctx); } catch (err) {
+        results.push({ arm: armName, task: task.id, run, skipped: true, reason: `setup: ${err.message}` });
+        save();
+        console.error(`SKIP ${armName} ${task.id} #${run} (setup: ${err.message})`);
+        continue;
+      }
       const prompt = task.prompt(ctx);
 
       if (isDryRun) {
@@ -226,7 +233,7 @@ if (!isDryRun) {
   const median = xs => { const s = xs.filter(x => x != null).sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : '–'; };
   for (const task of selected) {
     for (const armName of armNames) {
-      const rs = results.filter(r => r.task === task.id && r.arm === armName);
+      const rs = results.filter(r => r.task === task.id && r.arm === armName && !r.skipped);
       const cost = rs.reduce((sum, r) => sum + (r.costUsd ?? 0), 0);
       console.log(`| ${armName} | ${task.id} | ${rs.filter(r => r.passed).length}/${rs.length} | ${median(rs.map(r => r.seconds))} | ${median(rs.map(r => r.turns))} | $${cost.toFixed(2)} |`);
     }

@@ -42,6 +42,15 @@ and 3/3 in a rerun. Getting there took three earlier passes, which found a helpe
 launch, two harness problems and the leaking arm folder.
 [The write-up](benchmarks/2026-10-05-release-0.7.0.md) has every run.
 
+`simulator-form` (2026-10-07) is a mobile end-to-end test. Safari in an iPhone simulator opens a
+form served from the benchmark's own process, and Claude types a nonce and taps Submit. The check
+is what the server received. It passed 3/3 on an iPhone 18 Pro with iOS 27.0 in Xcode 27's
+DeviceHub, which replaces Simulator.app: median 39.6 s and 8 turns, Sonnet 5.5 at medium. The pass
+before it failed 0/3 in the harness, because the engine asks to approve "Device Hub" with a space and
+the allowlist lacked it. Both passes are in
+[`2026-10-07-simulator-form.json`](benchmarks/2026-10-07-simulator-form.json). The task needs Xcode
+and an iOS runtime (`xcodebuild -downloadPlatform iOS`, 8 GB). Without them its runs are skipped.
+
 From 2026-10-04 on, runs default to Sonnet 5.5 at medium effort (`--model`, `--effort`).
 
 ```bash
@@ -52,7 +61,7 @@ npm run bench -- --arm all --runs 3   # sleight and LCU
 The LCU arm needs LCU registered for Claude Code in a separate folder. `bench/run.mjs` has the steps.
 
 > [!WARNING]
-> Headless runs can't show approval prompts, so a benchmark run auto-approves Calculator, TextEdit and
-> Chess for either arm, and sleight's `drag` and `hover` in those apps (`bench/approve.mjs`, loaded only through
-> `bench/settings.json`). Only run it when you're fine with Claude driving those three apps unattended. `--dry-run` checks the setup without
+> Headless runs can't show approval prompts, so a benchmark run auto-approves Calculator, TextEdit,
+> Chess and the iOS Simulator (Simulator, or DeviceHub from Xcode 27) for either arm, and sleight's `drag` and `hover` in those apps (`bench/approve.mjs`, loaded only through
+> `bench/settings.json`). Only run it when you're fine with Claude driving those four apps unattended. `--dry-run` checks the setup without
 > launching Claude.
