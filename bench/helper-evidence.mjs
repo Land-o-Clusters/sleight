@@ -6,7 +6,8 @@ export function sanitizeHelperEvidence(value, home = homedir()) {
   function collect(item) {
     if (typeof item === 'string') {
       for (const match of item.matchAll(/^Window: ("(?:[^"\\]|\\.)*"), App: Chess\.?\r?$/gm)) {
-        titles.add(JSON.parse(match[1]));
+        const title = JSON.parse(match[1]);
+        if (title.trim()) titles.add(title);
       }
     } else if (item && typeof item === 'object') {
       for (const child of Object.values(item)) collect(child);

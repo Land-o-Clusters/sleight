@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
+import { restartChess } from './chess-launch.mjs';
 
 // Calculator shows digit grouping ("1,024"), and Claude reports what it shows.
 const hasNumber = (answer, n) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(answer.replace(/(?<=\d)[,\u202f\u00a0 ](?=\d{3})/g, ''));
@@ -170,8 +171,7 @@ export const tasks = [
     // and windows pile up between runs, and Chess hung once (2026-10-03). The
     // launch ignores saved windows, and the run quits Chess cleanly after.
     setup: () => {
-      quitChess();
-      execFileSync('open', ['-g', '-a', 'Chess', '--args', '-ApplePersistenceIgnoreState', 'YES']);
+      restartChess({ quit: quitChess });
       execFileSync('sleep', ['3']);
     },
     cleanup: quitChess,

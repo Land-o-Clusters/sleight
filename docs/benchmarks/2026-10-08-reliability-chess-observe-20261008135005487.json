@@ -1,0 +1,135 @@
+{
+  "started": "2026-10-08T13:50:05.487Z",
+  "mode": "chess-observe",
+  "attempts": [],
+  "existing": {
+    "running": true,
+    "pid": 34100,
+    "windows": [
+      {
+        "title": "[Chess window]",
+        "number": null,
+        "bounds": {
+          "X": 46,
+          "Y": 80,
+          "Width": 1223,
+          "Height": 949
+        },
+        "minimized": false,
+        "main": true
+      }
+    ]
+  },
+  "cg": [
+    {
+      "alpha": 1,
+      "bounds": {
+        "height": 949,
+        "width": 1223,
+        "x": 46,
+        "y": 80
+      },
+      "layer": 0,
+      "onScreen": true,
+      "ownerName": "Chess",
+      "ownerPID": 34100,
+      "windowNumber": 52199
+    },
+    {
+      "alpha": 1,
+      "bounds": {
+        "height": 30,
+        "width": 1920,
+        "x": 0,
+        "y": 0
+      },
+      "layer": 0,
+      "onScreen": false,
+      "ownerName": "Chess",
+      "ownerPID": 34100,
+      "windowNumber": 52201
+    },
+    {
+      "alpha": 1,
+      "bounds": {
+        "height": 30,
+        "width": 1920,
+        "x": 0,
+        "y": 0
+      },
+      "layer": 0,
+      "onScreen": false,
+      "ownerName": "Chess",
+      "ownerPID": 34100,
+      "windowNumber": 52202
+    },
+    {
+      "alpha": 1,
+      "bounds": {
+        "height": 30,
+        "width": 1920,
+        "x": 0,
+        "y": 0
+      },
+      "layer": 0,
+      "onScreen": false,
+      "ownerName": "Chess",
+      "ownerPID": 34100,
+      "windowNumber": 52203
+    },
+    {
+      "alpha": 1,
+      "bounds": {
+        "height": 30,
+        "width": 1920,
+        "x": 0,
+        "y": 0
+      },
+      "layer": 0,
+      "onScreen": false,
+      "ownerName": "Chess",
+      "ownerPID": 34100,
+      "windowNumber": 52204
+    }
+  ],
+  "geometry": {
+    "pid": 34100,
+    "title": "[Chess window]",
+    "number": null,
+    "bounds": {
+      "X": 46,
+      "Y": 80,
+      "Width": 1223,
+      "Height": 949
+    },
+    "minimized": false,
+    "main": true,
+    "squares": [
+      {
+        "name": "white pawn, e2",
+        "point": [
+          652,
+          307
+        ],
+        "size": [
+          74,
+          70
+        ]
+      },
+      {
+        "name": "e4",
+        "point": [
+          650,
+          455
+        ],
+        "size": [
+          70,
+          62
+        ]
+      }
+    ]
+  },
+  "bank": "/private/tmp/sleight-reliability-observe-FLJ8zD",
+  "image": "/private/tmp/sleight-reliability-observe-FLJ8zD/board.png",
+  "finished": "2026-10-08T13:50:15.419Z"
+}

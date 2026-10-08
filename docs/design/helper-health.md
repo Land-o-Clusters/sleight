@@ -23,11 +23,11 @@ to an acquisition or screenshot. It must succeed before actions resume. Automati
 not replace the relay's current document, selected window or lease target. Browser calls stay on
 the browser path. A native helper fault does not block browser acquisitions or saved tab handles.
 
-The guidance names SkyComputerUseService and tells Claude to stop retrying. It asks the user to restart
-ChatGPT and says sleight will retry by itself. The relay never kills the shared helper or restarts
-ChatGPT. An app hang can produce the same
-symptom. The message says the helper appears stuck. Approval, document, and input lease rules still
-apply. This detector covers the narrow read grammar. Arbitrary JavaScript remains outside it.
+The guidance tells Claude to stop retrying and says sleight will retry by itself. Independent
+[app and control checks](read-failure.md) distinguish an app fault from a stuck engine read path
+before advising an app quit or ChatGPT restart. Incomplete evidence stays unknown. The relay never
+kills the shared helper or restarts ChatGPT. Approval, document, and input lease rules still apply.
+This detector covers the narrow read grammar. Arbitrary JavaScript remains outside it.
 
 Doctor checks files first, then starts an owned engine and calls `cua.getState()`. Startup has a
 ten-second deadline. The live inventory read has a five-second execution timeout and another 500 ms

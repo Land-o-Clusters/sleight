@@ -162,8 +162,9 @@ our own runs. Dates and engine versions are given where they matter.
 - TextEdit hung 3 times on 2026-10-05, each time after Claude set a document's text with `setValue`
   and then pressed a save shortcut (Cmd+Shift+S, which is Duplicate, twice and Cmd+S once). Its main
   thread waits forever on the document's save lock. Every read then times out, and the relay's
-  message names a stuck helper. It now adds that the app itself may be hung if other apps still
-  answer. Quitting TextEdit recovered it every time. The skill tells Claude to select and type in TextEdit
+  message named a stuck helper. Quitting TextEdit recovered it every time. The relay now checks
+  target AX and a fresh engine read of another acquired app before advising an app quit or helper
+  restart. The skill tells Claude to select and type in TextEdit
   instead of using `setValue`, and to use Cmd+S or File > Save As.
 - On 2026-10-06 TextEdit timed out every engine read after an AppleScript `close every document
   saving no`. It still answered AppleScript, but its only window was an orphan "Save Panel Accessory
@@ -189,20 +190,46 @@ our own runs. Dates and engine versions are given where they matter.
   engine's drag answered `-10005 noWindowsAvailable` while reads of the window still worked, and
   `drag` reported the window off screen. The screen was unlocked and the display on. Later that day
   the benchmark's relaunch of Chess, right after quitting it, failed with LaunchServices error -600.
+  The [2026-10-08 investigation](benchmarks/2026-10-08-reliability.md) completed ten fresh launches
+  through each drag path after the operator authorized closing the leftover game. The engine's
+  reads showed e4 in 10/10 calls. Independent AX verified 6/10. Local `drag` acknowledged 8/10 calls,
+  with 3/10 moves independently verified. One local call refused a covered source point without
+  input. Another ended in a command failure near its 30 s deadline. Native AX omitted e4 in nine
+  further move checks, leaving their outcomes unconfirmed. The historical availability refusals occurred 0/20 times.
+  Every selected window was on screen at layer 0 with matching CG/AX bounds. All twenty launches
+  succeeded after confirmed process absence, without a -600 retry. Space, the historical window
+  state and the native command failure's cause remain unknown. Some window captures returned black
+  pixels. Clear captures confirmed that Chess's AX square Y positions were inverted; this does not
+  explain a window-availability refusal. An off-screen refusal now tells Claude to have the user show that exact window,
+  reacquire the app, and take a fresh screenshot before using current window IDs and coordinates.
+  It never retries the old drag or substitutes another window. In a separate minimized-window control,
+  the refusal left the board unchanged, and restoring and reacquiring the same window led to a verified
+  move (1/1). Recovery from another Space remains untested.
+  The benchmark's force-quit fallback
+  could return before process exit. Launch now waits for absence and retries only -600, at most
+  three times. Unit boundaries pass. The historical -600 cause remains unproved.
 - The engine's helper can stop answering. On 2026-10-04 every `cua.getApp` timed out
   (`-10005 timeoutReached`) for about 25 minutes, with the Mac unlocked and in use, until ChatGPT was
   restarted. We don't know the cause. It started right after a test that kills engine processes.
   In 18 completed SIGKILL trials, reads passed before and after cleanup. Killing a responding helper
   relaunched it, but no wedge was reproduced, so helper-only recovery from a wedge remains unproven.
-  After two consecutive `timeoutReached` failures on standalone reads of one app, the relay tells
-  Claude to stop retrying and ask the user to restart ChatGPT. sleight retries by itself.
+  After two consecutive `timeoutReached` failures on standalone reads of one app, the relay checks
+  target AX, another acquired app's AX and a fresh engine read of that control app. A responding
+  control points to the target app. ChatGPT restart advice requires both AX processes to respond
+  with windows and an actual engine control timeout. Missing evidence stays unknown.
+  In [owned fixture trials](benchmarks/2026-10-08-reliability.md), the original relay misdiagnosed
+  1/1 completed hang runs (two actual read timeouts). Revised diagnosis identified the app in 6/6
+  runs (twelve timeouts), with no ChatGPT restart advice. The last three runs also verified full visible
+  control and recovered fixture reads. The first three exposed a compactor defect now covered by tests.
+  One earlier harness deadline failure remains in the receipts. No shared helper wedge was induced.
+  Claude stops retrying. sleight retries by itself.
   For that app, `js` reads are refused between recovery attempts (at most one every 20 seconds),
   and `js` actions using its known handles are refused until a read succeeds. After hidden recovery,
   actions wait for a visible app read, which sleight makes a full read. Other apps, documentation,
   `js_reset`, and turn cleanup remain available. Inventory failures have their own retry counter.
   App identity comes from literal acquisitions, known handles and learned bundle aliases. Arbitrary
-  JavaScript can bypass this advisory check. An app hang can produce the same symptom, so the helper
-  diagnosis is provisional.
+  JavaScript can bypass this advisory check. Independent checks establish evidence for the advice,
+  not the native cause of a shared helper fault.
   Doctor probes inventory, which does not prove that every app's accessibility read works. Before
   0.7.0 it also reported "ok" when the helper couldn't start at all.
   [The investigation](benchmarks/2026-10-04-helper-health.md) records each live attempt.

@@ -33,7 +33,8 @@ belong in [STATE.md](STATE.md).
 - An accepted app approval lasts for one Claude Code session, kept in the relay's memory. The relay never
   sends `persist: "always"` and never remembers a decline. `SLEIGHT_APPROVAL_SCOPE=once` turns it off.
 - Apps get approved without a person at the moment of use only two ways: the benchmark's allowlist
-  (Calculator, TextEdit, Chess, and Simulator or DeviceHub since 2026-10-07, by name or bundle ID) in benchmark runs, and a list the user writes in
+  (Calculator, TextEdit, Chess, and Simulator or DeviceHub since 2026-10-07, by name or bundle ID) in benchmark runs,
+  plus the repo's own hang fixture (`org.sleight.reliability-fixture`, owner, 2026-10-08) in its probe, and a list the user writes in
   a file outside any project, read by sleight in every session, headless or not (owner, 2026-10-04).
   No project or plugin can add to either. Claude edits the user's list only on the owner's explicit
   order in chat, names the change and its end date in STATE, and keeps the earlier list (owner,
