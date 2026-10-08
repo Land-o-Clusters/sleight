@@ -208,3 +208,20 @@ test('a batch stops when an earlier action in the call renumbers its target', as
   await run(guardedCode('await app.click(1); await app.click(1);', window));
   assert.deepEqual(clicked, [1, 1], 'an unchanged target goes through');
 });
+
+test('a lease stop for a retitled window carries the header it read, except under document scope', async () => {
+  // Chess renames its window when a game starts, on each move and on save (2026-10-08).
+  let title = 'Game 2 (White to Move)';
+  const raw = { getAXState: async () => `Window: "${title}", App: Chess.\n0 standard window ${title}\n\t1 button e2`,
+    click: async () => { title = 'Game 2 (Black to Move)'; } };
+  const context = { cua: { getApp: async () => raw }, nodeRepl: { write: () => {} } };
+  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  await run(readCode('await cua.getApp("Chess");'));
+  const window = { title: 'Game 2 (White to Move)', app: 'Chess', url: null };
+  const reason = 'Input lease stopped this action: window or URL changed. Read the intended window again before acting.';
+  await assert.rejects(run(guardedCode('await app.click(1); await app.click(1);', window, reason, undefined, { adoptUrl: true })),
+    /window or URL changed[\s\S]*\nWindow: "Game 2 \(Black to Move\)", App: Chess\.\n0 standard window Game 2 \(Black to Move\)$/);
+  title = 'Game 2 (White to Move)';
+  await assert.rejects(run(guardedCode('await app.click(1); await app.click(1);', window, undefined, undefined, {})),
+    error => /Document scope stopped/.test(error.message) && !/\nWindow: /.test(error.message), 'document scope keeps the plain stop');
+});

@@ -235,7 +235,9 @@ function guardSetup(update) {
           // isn't another document, so the lease alone lets it through.
           const panel = state.adoptUrl && observed?.app === state.expected?.app && observed.title === '' && !observed.url;
           if (!cancel && !dialog && !panel && (!observed || ['title', 'app', 'url'].some(key => observed[key] !== state.expected[key]))) {
-            throw new Error(state.reason + ' Observed ' + JSON.stringify(observed));
+            // Without document scope or change review, the stop carries the window it saw, so the
+            // relay can lease that window for Claude's retry (Chess retitles itself on each move).
+            throw (state.adoptUrl ? stop : message => new Error(message))(state.reason + ' Observed ' + JSON.stringify(observed));
           }
           await checkLease();
           state.activeApp = proxy;

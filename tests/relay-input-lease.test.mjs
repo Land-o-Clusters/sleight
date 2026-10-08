@@ -879,3 +879,16 @@ test('re-acquiring the app the lease already holds, then acting, is split too', 
   assert.doesNotMatch(a.forwarded[1].params.arguments.code, /let app = await cua\.getApp\("TextEdit"\)/);
   a.reply(result(1)); assert.notEqual(a.received.at(-1).result.isError, true);
 });
+
+test('a lease stop for a retitled window keeps the lease on the window it saw, so the retry needs no re-acquisition', t => {
+  const a = setup(t).harness('retitle', { changeReview: false });
+  a.send(rpc(0, 'js', { code: 'let app = await cua.getApp("TextEdit")' })); a.reply(result(0));
+  a.send(rpc(1, 'js', { code: 'await app.click(2); await app.click(3)' }));
+  a.reply({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [{ type: 'text', text:
+    'Input lease stopped this action: window or URL changed. Read the intended window again before acting. Observed {"title":"b.txt"}\nWindow: "b.txt", App: TextEdit\n0 standard window b.txt' }],
+    _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit' } } } } });
+  a.send(rpc(2, 'js', { code: 'await app.click(3)' }));
+  assert.equal(a.forwarded.length, 3, JSON.stringify(a.received.at(-1)));
+  assert.match(a.forwarded[2].params.arguments.code, /"b\.txt"/, 'the guard now expects the window it saw');
+  a.reply(result(2, 'Window: "b.txt", App: TextEdit'));
+});
