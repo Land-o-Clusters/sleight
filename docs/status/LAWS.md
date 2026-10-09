@@ -25,6 +25,9 @@ belong in [STATE.md](STATE.md).
   2026-10-08, after the four-model comparison in `docs/benchmark.md`).
 - Codex runs on gpt-6.1-sol (owner, 2026-10-04), except deep performance tuning in the code, which
   may run on gpt-6-astra (owner, 2026-10-07).
+- The benchmark grows toward the apps people use (owner, 2026-10-09): varied web pages (sheets,
+  docs, dense, interactive, collapsible), Microsoft Office (Word, Excel, PowerPoint), and mail
+  apps, where tasks only navigate and never send.
 - Codex time goes to known problems and enhancements, not benchmark runs (owner, 2026-10-04).
   SUPERSEDED (2026-10-09): "one benchmark pass per merge that changes default behavior". The owner
   now wants several fixes and features batched into each release, with one full pass per release. In
@@ -36,7 +39,8 @@ belong in [STATE.md](STATE.md).
   sends `persist: "always"` and never remembers a decline. `SLEIGHT_APPROVAL_SCOPE=once` turns it off.
 - Apps get approved without a person at the moment of use only two ways: the benchmark's allowlist
   (Calculator, TextEdit, Chess, and Simulator or DeviceHub since 2026-10-07, by name or bundle ID) in benchmark runs,
-  plus Safari, Preview, Finder and Helium for the real-use tasks (owner, 2026-10-08), and the repo's own
+  plus Safari, Preview, Finder and Helium for the real-use tasks (owner, 2026-10-08) and Word,
+  Excel, PowerPoint and Mail for them too (owner, 2026-10-09), and the repo's own
   hang fixture (`org.sleight.reliability-fixture`, owner, 2026-10-08) in its probe, and a list the user writes in
   a file outside any project, read by sleight in every session, headless or not (owner, 2026-10-04).
   No project or plugin can add to either. Claude edits the user's list only on the owner's explicit
