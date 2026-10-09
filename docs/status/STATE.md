@@ -63,7 +63,8 @@ Safari setup recovery can close a window without an identity check. Brief 6
 qualifies the five tasks without the simulator. simulator-flow's 3 slots run with the 1.0 runs while
 the owner is away. Brief 7 (`.dev/prompts/sol-real-use-tasks-7.md`, after brief 6) adds localhost
 web pages of six kinds, Word, Excel and PowerPoint, and Mail navigation on a fixture mailbox
-(owner, 2026-10-09). Mimestream waits for a test Gmail account from the owner. Rebase onto
+(owner, 2026-10-09). Brief 7b adds Mimestream on the owner's Gmail, opening and reading only, with
+published results that leave out all mail content. Rebase onto
 `pane/auto-mode` at merge. Safari, Preview, TextEdit, Calculator and
 Helium were running at 03:40 UTC. Leave them running.
 
@@ -115,7 +116,6 @@ Read first: `docs/known-problems.md` (grouped by area), `docs/benchmark.md` (eve
 ## Waiting on the owner
 
 - Stepping away from the Mac, so the Chess and simulator head-to-head and the 1.0 pass can run.
-- A test Gmail account for Mimestream's navigation tasks (2026-10-09).
 - Rotating the OpenAI API key kept in plain text in an iCloud TextEdit note (told 2026-10-08).
 
 ## Reading list
