@@ -40,6 +40,28 @@ Open, in order of user impact (full list in [known-problems.md](../known-problem
 
 ## 3. Performance (owner's goal: lightning fast)
 
+The owner's bar (2026-10-09) is what people love in Codex's computer use. sleight has to be
+lightning quick and stay quick under any load, and the Mac shouldn't feel it running. Codex drives
+the same engine, so Codex's own numbers are the target. Anything sleight adds in time or CPU stays
+only with a measured reason. In order:
+
+1. Measure what sleight adds. A head-to-head on the same tasks with sleight and Codex, at the
+   owner's normal load and with added load, recording time, turns and the CPU seconds of each arm's
+   own processes (sleight's relay, mod, helper spawns and pane snapshots against Codex's).
+2. Cut the reads Codex doesn't make. A read right after an action waits for the UI to settle
+   (about 400 ms, tens of seconds under load). The guard does one before each action after the
+   first in a call and one after the call. Keys, text and coordinates don't need the tree, so
+   skipping the read before them is the owner's safety call (below). Numbered actions keep it,
+   since it catches renumbering. The read after the call saves Claude a turn, so it stays only if
+   the head-to-head shows it pays.
+3. Stop spawning processes per call. The Space probe runs `osascript` on every app read
+   (about 150 ms of CPU each). One long-lived helper in the relay (persistent JXA answered in about
+   2 ms, Astra) or a probe only after a failure. Same for the keyboard-tap and other checks.
+4. Fewer turns. Model time is about two thirds of a run, so batching like Claude's own computer use
+   is the largest lever left once the reads are cheap.
+5. A release only when the head-to-head shows sleight at Codex's speed and footprint, with the numbers
+   published.
+
 Done: the relay "spike" was a timing bug (real relay time is about 0.4 s a pass). Measured and
 dropped: a first-call hint (8/12 runs still called `getState` first), trimming the engine's docs
 (about 0.1 s a run), and screenshot scaling (`perf/screenshot-scale`, 92 turns against 85 in 9 runs each).
