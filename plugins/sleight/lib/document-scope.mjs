@@ -115,6 +115,8 @@ function guardSetup(update) {
     state.adoptUrl = ${!!update.adoptUrl};` : ''}
     state.nativeDenied = ${JSON.stringify(update?.nativeDenied) ?? 'undefined'};
     state.timing = ${!!update?.timing};
+    // The relay shrank this app's screenshots for Claude: factors back to engine pixels.
+    state.scales = ${JSON.stringify(update?.scales) ?? 'undefined'};
     // The previous call's read, when the relay judged it reusable for this call's first action.
     state.prior = ${JSON.stringify(update?.prior) ?? 'undefined'};
     const clock = () => globalThis.performance?.now() ?? Date.now();
@@ -278,6 +280,13 @@ function guardSetup(update) {
           // A second handle may refer to this same app/window. Every input
           // invalidates the call's observations, including reads on that alias.
           state.reads = new WeakMap();
+          // Claude read these coordinates off a screenshot the relay shrank, so they go back to the
+          // engine's pixels: by this window's title, else the app's latest screenshot.
+          const scale = state.scales && (state.scales.byTitle?.[observed?.title] ?? state.scales.latest);
+          if (scale && scale !== 1 && ['click', 'drag', 'scroll'].includes(name)) {
+            args = args.map((arg, i) => Array.isArray(arg) && arg.length === 2 && arg.every(Number.isFinite) && (name === 'drag' || i === 0)
+              ? [Math.round(arg[0] * scale), Math.round(arg[1] * scale)] : arg);
+          }
           return value.apply(raw, args);
         };
         // An action Claude didn't await that fails would reject with no handler, and that ends the

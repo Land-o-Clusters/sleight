@@ -138,6 +138,46 @@ export function screenshotOf(content) {
   return apps.size === 1 && size ? [[...apps][0], size, titles.size === 1 ? [...titles][0] : undefined] : undefined;
 }
 
+// Claude Code shows an image over 2000 px on its long edge scaled down, with a note to multiply
+// coordinates back, and Claude's first coordinate from such a screenshot missed in every Chess run and
+// both failed simulator runs of 2026-10-09. sleight sends screenshots no larger than this instead, and
+// the window guard scales coordinates back to the engine's pixels (document-scope.mjs).
+export const MAX_IMAGE_EDGE = 1568;
+
+// Resizes one base64 image to fit MAX_IMAGE_EDGE with macOS sips. Returns base64 or undefined.
+export async function sipsResize(data, mimeType, edge = MAX_IMAGE_EDGE) {
+  const { mkdtemp, writeFile, readFile, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { execFile } = await import('node:child_process');
+  const dir = await mkdtemp(join(tmpdir(), 'sleight-shot-'));
+  const ext = /png/.test(mimeType ?? '') ? 'png' : 'jpg';
+  try {
+    await writeFile(join(dir, `in.${ext}`), Buffer.from(data, 'base64'));
+    await new Promise((resolve, reject) => execFile('sips', ['-Z', String(edge), join(dir, `in.${ext}`), '--out', join(dir, `out.${ext}`)],
+      { timeout: 10000 }, err => (err ? reject(err) : resolve())));
+    return (await readFile(join(dir, `out.${ext}`))).toString('base64');
+  } catch { return undefined; }
+  finally { await rm(dir, { recursive: true, force: true }).catch(() => {}); }
+}
+
+// The result's content with every image over MAX_IMAGE_EDGE shrunk, and the factor that maps the
+// last one back to engine pixels (1 when nothing changed).
+export async function shrinkImages(content, resize = sipsResize) {
+  let factor = 1;
+  const out = await Promise.all(content.map(async block => {
+    if (block?.type !== 'image' || typeof block.data !== 'string') return block;
+    const size = imageSize(block.data);
+    if (!size || Math.max(size.width, size.height) <= MAX_IMAGE_EDGE) { factor = 1; return block; }
+    const data = await resize(block.data, block.mimeType);
+    const small = data && imageSize(data);
+    if (!small) { factor = 1; return block; }
+    factor = size.width / small.width;
+    return { ...block, data };
+  }));
+  return { content: out, factor };
+}
+
 function lines(stream, onLine) {
   let buffer = '';
   stream.setEncoding('utf8');
@@ -188,6 +228,8 @@ function internalTurnEnd(tool) {
 export function createRelay({
   // Lists apps holding keyboard filter taps ([{ app, bundleId }]), checked when a turn ends.
   keyboardTaps,
+  // Shrinks a base64 screenshot to MAX_IMAGE_EDGE (sipsResize); tests pass a stand-in.
+  resizeImage = sipsResize,
   clientIn, clientOut, serverIn, serverOut,
   sessionId = randomUUID(),
   approvalScope = 'session',
@@ -215,6 +257,13 @@ export function createRelay({
   // Apps this session drove (names and bundle IDs), and turn_ended calls whose reply should say
   // when one of them holds a keyboard filter tap: the mod shows that to the user.
   const drivenApps = new Set(), turnEnds = new Set(), tapWarned = new Set();
+  const shrunk = new Map(); // call id -> factor from the image Claude sees back to engine pixels
+  // How the guard maps Claude's coordinates back for this app: by window title, and its latest.
+  const coordinateScales = app => {
+    const entry = typeof app === 'string' ? screenshots.get(app.toLowerCase()) : undefined;
+    if (!entry || (entry.factor === 1 && Object.values(entry.factors ?? {}).every(f => f === 1))) return undefined;
+    return { latest: entry.factor ?? 1, byTitle: entry.factors ?? {} };
+  };
   let traceFailed = false;
   function trace(direction, msg) {
     if (traceFailed) {
@@ -1210,7 +1259,8 @@ export function createRelay({
             msg.params.arguments.code = guardedCode(originalCode, target, reason,
               inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
               { timing: guardTiming, fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
-                adoptUrl: !documentMode && !changeReview, skipAppWrap: browserHandles.has('app'), prior });
+                adoptUrl: !documentMode && !changeReview, skipAppWrap: browserHandles.has('app'), prior,
+                scales: coordinateScales(target?.app) });
           }
           if (clipboard) msg.params.arguments.code = clipboardCode(msg.params.arguments.code, clipboardAction);
         }
@@ -1274,6 +1324,14 @@ export function createRelay({
       const pending = clipboardReplies.get(msg.id); clipboardReplies.delete(msg.id); pending.receive(msg); return;
     }
     if (retriedHelperStart(msg)) return;
+    if (msg.method === undefined && jsCalls.has(msg.id) && Array.isArray(msg.result?.content) &&
+        msg.result.content.some(c => c?.type === 'image' && typeof c.data === 'string' && Math.max(imageSize(c.data)?.width ?? 0, imageSize(c.data)?.height ?? 0) > MAX_IMAGE_EDGE)) {
+      shrinkImages(msg.result.content, resizeImage).then(({ content, factor }) => {
+        msg.result.content = content;
+        if (factor !== 1) shrunk.set(msg.id, factor);
+      }, () => {}).finally(() => observeServerMessage(msg));
+      return;
+    }
     if (msg.method === undefined && turnEnds.delete(msg.id)) {
       // Device Hub, left open after simulator runs, held a keyboard tap that stalled every key on the
       // Mac (2026-10-09). Name such an app once per session so the user knows what to quit.
@@ -1581,11 +1639,13 @@ export function createRelay({
     if (msg.method === undefined && Array.isArray(msg.result?.content)) {
       const shot = jsCode !== undefined && screenshotOf(msg.result.content);
       if (shot) {
-        const entry = screenshots.get(shot[0].toLowerCase()) ?? { byTitle: {} };
-        entry.latest = shot[1];
-        if (shot[2] !== undefined) entry.byTitle[shot[2]] = [shot[1].width, shot[1].height];
+        const entry = screenshots.get(shot[0].toLowerCase()) ?? { byTitle: {}, factors: {} };
+        const factor = shrunk.get(msg.id) ?? 1;
+        entry.latest = shot[1]; entry.factor = factor;
+        if (shot[2] !== undefined) { entry.byTitle[shot[2]] = [shot[1].width, shot[1].height]; (entry.factors ??= {})[shot[2]] = factor; }
         screenshots.set(shot[0].toLowerCase(), entry);
       }
+      shrunk.delete(msg.id);
       // sleight's own advice says getAXState({ disableDiffing: true }) gives a full read. Compacting
       // it to "no change" sent Claude to a screenshot instead (2026-10-08). Recovery's visible read
       // is full too.
