@@ -15,8 +15,9 @@ the event, 10 edits and then 10 `drag` moves saved with no hang; without it, 5 o
 Claude benchmark arms run without Bash, Write, Edit or web tools (`0270374`). No run had used them
 to pass a check (716 transcripts checked).
 1.0 conditions (LAWS): all four met as of 2026-10-09 (two engine updates, the friend's install, the
-desktop pane's picture, comparisons with LCU and Codex). Proposed to the owner: release 1.0.0 after
-Chess and the simulator head-to-head and a release pass on the current code. Waiting on the owner's yes.
+desktop pane's picture, comparisons with LCU and Codex). The owner approved 1.0.0 (2026-10-09) once the Chess and simulator
+head-to-head and a release pass on the current code have run with the owner away, with no new
+failure that's sleight's fault. Then tag, release, README, LAWS ("launches at 0.x"), install.
 Head-to-head on Calculator and TextEdit (`docs/benchmarks/2026-10-09-h2h-background.json`): sleight
 15/15 (446 s), Codex 12/15 (732 s), Codex 0/3 on textedit-drag. Chess and the simulator still need a
 run with the owner away. `main` has one README commit (`dcad210`, the release badge) that the branch
