@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- When a turn ends, sleight names any app it acted on that holds a keyboard event tap, once per
+  session, in a notice. Device Hub kept a tap after simulator runs and stalled every key on the Mac
+  for 40 s.
 - When a page renumbers its elements and Claude acts on a number from the tree it saw, sleight finds
   that element by its line in the current tree and tells Claude, instead of refusing the action and
   costing a read. If the line isn't on exactly one element, the refusal stays. Unit-tested only.

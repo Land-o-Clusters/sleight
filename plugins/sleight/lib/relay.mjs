@@ -186,6 +186,8 @@ function internalTurnEnd(tool) {
 }
 
 export function createRelay({
+  // Lists apps holding keyboard filter taps ([{ app, bundleId }]), checked when a turn ends.
+  keyboardTaps,
   clientIn, clientOut, serverIn, serverOut,
   sessionId = randomUUID(),
   approvalScope = 'session',
@@ -210,6 +212,9 @@ export function createRelay({
 }) {
   const compactor = createReadCompactor();
   const remapNotes = new Map(); // call id -> what remapStale changed, told to Claude with the result
+  // Apps this session drove (names and bundle IDs), and turn_ended calls whose reply should say
+  // when one of them holds a keyboard filter tap: the mod shows that to the user.
+  const drivenApps = new Set(), turnEnds = new Set(), tapWarned = new Set();
   let traceFailed = false;
   function trace(direction, msg) {
     if (traceFailed) {
@@ -1140,6 +1145,7 @@ export function createRelay({
       if (clipboard && name === 'js_reset') clipboardResets.add(msg.id);
       if (name === TURN_END_TOOL) {
         msg.params.arguments = endTurnArgs(msg.params.arguments);
+        if (keyboardTaps && msg.id !== undefined && drivenApps.size) turnEnds.add(msg.id);
         toServer(msg);
         rotateTurn();
         return;
@@ -1268,6 +1274,20 @@ export function createRelay({
       const pending = clipboardReplies.get(msg.id); clipboardReplies.delete(msg.id); pending.receive(msg); return;
     }
     if (retriedHelperStart(msg)) return;
+    if (msg.method === undefined && turnEnds.delete(msg.id)) {
+      // Device Hub, left open after simulator runs, held a keyboard tap that stalled every key on the
+      // Mac (2026-10-09). Name such an app once per session so the user knows what to quit.
+      Promise.resolve().then(keyboardTaps).then(taps => {
+        const held = [...new Set((taps ?? []).filter(t => drivenApps.has(t.app) || drivenApps.has(t.bundleId)).map(t => t.app || t.bundleId))]
+          .filter(app => !tapWarned.has(app));
+        if (held.length && msg.result) {
+          held.forEach(app => tapWarned.add(app));
+          msg.result.content = [...(msg.result.content ?? []), { type: 'text', text: `sleight-warning: ${held.join(' and ')} ${held.length > 1 ? 'hold' : 'holds'} a keyboard event tap. If your keys stop working, quit ${held.join(' and ')}.` }];
+          trace('keyboard-tap-warning', { apps: held });
+        }
+      }, () => {}).finally(() => observeServerMessage(msg));
+      return;
+    }
     observeServerMessage(msg);
   });
   function observeServerMessage(msg) {
@@ -1443,6 +1463,8 @@ export function createRelay({
         windowNote = `sleight: this call acted on ${documentLabel(leaseWindow)}. The window it shows now is ${documentLabel(window)}.`;
       }
       leaseWindow = window ? { ...window, ...(known ? { appId: known } : {}) } : undefined;
+      if (window?.app) drivenApps.add(window.app);
+      if (known) drivenApps.add(known);
       if (call.handle) {
         if (known) handleBundles.set(call.handle, leaseWindow);
         else if (call.acquisition) handleBundles.delete(call.handle);

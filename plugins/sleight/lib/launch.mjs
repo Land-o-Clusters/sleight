@@ -495,6 +495,7 @@ export async function run({ leaseDirectory } = {}) {
     trace: relayTrace,
     guardTiming: !!process.env.SLEIGHT_TRACE,
     firstCallRules: skillRules(),
+    keyboardTaps: async () => { const r = await runScript('keyboard-taps.js', {}); return r.ok ? r.taps : []; },
   });
   process.once('exit', () => relay.close());
 

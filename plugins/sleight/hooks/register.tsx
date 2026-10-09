@@ -65,6 +65,11 @@ async function endEngineTurn($: any, event: 'Stop' | 'Interrupt') {
   try {
     const ended = await call($, 'turn_ended', { hook_event_name: event })
     $.ui.log(`sleight: turn_ended ${ended.isError ? `failed: ${JSON.stringify(ended.content)}` : 'sent'}`, { to: 'debug' })
+    // The relay names an app sleight drove that holds a keyboard event tap, once per session.
+    for (const block of ended.content ?? []) {
+      const text = typeof block?.text === 'string' ? block.text : ''
+      if (text.startsWith('sleight-warning: ')) $.ui.toast(text.slice('sleight-warning: '.length))
+    }
   } catch (err) {
     $.ui.log(`sleight: could not end the turn: ${(err as Error).message}`, { to: 'debug' })
   }

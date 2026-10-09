@@ -1685,3 +1685,28 @@ test('a call that met the helper mid-restart is sent again once, and only a seco
   await new Promise(resolve => setTimeout(resolve, 1100));
   assert.equal(h.toServer.filter(m => m.id === 1).length, 2, 'never a third time');
 });
+
+test('when a turn ends, an app this session drove that holds a keyboard tap is named once', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
+  const directory = mkdtempSync(join(tmpdir(), 'sleight-taps-'));
+  let taps = [{ app: 'Device Hub', bundleId: 'com.apple.dt.Devices' }, { app: 'Magnet', bundleId: 'com.crowdcafe.windowmagnet' }];
+  const h = harness({ changeReview: false, keyboardTaps: async () => taps, inputLease: new InputLease({ directory, holder: 'A' }) });
+  try {
+    h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("com.apple.dt.Devices")' } } }); await tick();
+    h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: 'Window: "iPhone 18 Pro", App: Device Hub.\n0 standard window iPhone 18 Pro' }],
+      _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.dt.Devices' } } } } }); await tick();
+    const end = async id => {
+      h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'turn_ended', arguments: { hook_event_name: 'Stop' } } }); await tick();
+      h.fromServer({ jsonrpc: '2.0', id, result: { content: [] } });
+      for (let i = 0; i < 5; i++) await tick();
+      return JSON.stringify(h.toClient.find(m => m.id === id));
+    };
+    const first = await end(2);
+    assert.match(first, /sleight-warning: Device Hub holds a keyboard event tap\. If your keys stop working, quit Device Hub\./);
+    assert.doesNotMatch(first, /Magnet/, 'apps sleight never drove are not its business');
+    assert.doesNotMatch(await end(3), /sleight-warning/, 'once per session');
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});

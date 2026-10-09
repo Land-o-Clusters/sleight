@@ -353,7 +353,10 @@ our own runs. Dates and engine versions are given where they matter.
   simulator run had sent it 24 tool calls in 123 s, sleight's 7 turns in 35 s. The benchmark now
   quits the simulator app after each simulator run, and stops a pass if any benchmark app still
   holds a keyboard filter tap after a run. A user driving a simulator through sleight could hit the
-  same stall; if keys stop working, quit Device Hub or Simulator.
+  same stall. When a turn ends, sleight now names any app it acted on in the session that holds a keyboard filter tap,
+  once per session, in a notice from its mod: quit that app if keys stop working. That check has unit
+  tests, and its tap listing matched the benchmark's on this Mac, but no live session has shown the
+  notice yet.
 
 ## Hosts and platform
 
