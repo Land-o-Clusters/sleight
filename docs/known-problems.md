@@ -3,19 +3,19 @@
 What doesn't work, or works only partly, with the measurements behind it. We found all of these in
 our own runs. Dates and engine versions are given where they matter.
 
-- The real-use benchmark has 3 completed model trials against 18 requested, with 1 pass
-  (2026-10-08). Safari wasn't running, so all three setups failed before a model call.
-  Helium passed once and failed twice after browser permission requests were dismissed.
-  The system-only observer missed those requests. The refusals were found after all three trials,
-  and further live runs stopped. Their process and window title weren't observed.
-  The streamed refusal stop gate and fresh observation before cleanup have passing unit tests,
-  but no new live proof. Native setup and cleanup don't use Apple Events. The round-3 runner forces
-  `SLEIGHT_SURFACES=computer` and launches Safari in the background before acquiring a new window.
-  Helium retains only its new fixture window, without reading the owner's existing windows.
-  The cooperative lock is released on exit, even when helper collection remains unconfirmed.
-  [The round-2 report](benchmarks/2026-10-08-real-use-tasks-2.md) retains all attempts and remaining
-  qualification. [The initial report](benchmarks/2026-10-08-real-use-tasks.md) retains the earlier
-  Safari Automation prompt and unconfirmed cleanup. Safari was absent at the round-2 preflights.
+- The real-use benchmark remains unqualified (2026-10-08). Round 3 forced
+  `SLEIGHT_SURFACES=computer` and launched Safari in the background. Its first native setup then
+  failed on an AX read with `-25204`, before a model trial. Window cleanup was unconfirmed, so
+  further attempts stopped and the scratch folder was preserved. The record doesn't identify
+  the failed attribute or establish whether a new window had already been created.
+  [The round-3 report](benchmarks/2026-10-08-real-use-tasks-3.md) retains the attempt and recovery limits.
+  Round 2 completed 3 of 18 requested model trials, with 1 pass. Helium passed once and failed
+  twice after dismissed browser permission requests that the system-only observer missed.
+  The refusal stop gate has passing unit tests, but no new live proof. Native setup and cleanup
+  don't use Apple Events. Helium retains only its new fixture window, without reading the owner's
+  existing windows. The cooperative lock is released on exit even when cleanup remains unconfirmed.
+  [Round 2](benchmarks/2026-10-08-real-use-tasks-2.md) and
+  [the initial report](benchmarks/2026-10-08-real-use-tasks.md) retain the earlier failed attempts.
 
 - Native `app.paste` temporarily changed the clipboard, then restored all measured bytes in 4/4
   fixtures. Text entry and engine drag left it unchanged in 4/4 each. Local drag did in 2/2.
