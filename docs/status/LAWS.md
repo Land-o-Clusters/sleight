@@ -34,7 +34,8 @@ belong in [STATE.md](STATE.md).
 - Speed comes before the guard's read between actions in a batch (owner, 2026-10-09): keys,
   typing, paste and coordinate actions after the first action in a call skip it by default, as in
   Codex. The first action and numbered actions keep their check, and `SLEIGHT_GUARD=careful` keeps
-  every read. The bar is Codex's speed and footprint under any load.
+  every read. In the default mode, the first action may use Claude's full read from the call just before
+  when that read is less than 10 s old. The bar is Codex's speed and footprint under any load.
 - Codex time goes to known problems and enhancements, not benchmark runs (owner, 2026-10-04).
   SUPERSEDED (2026-10-09): "one benchmark pass per merge that changes default behavior". The owner
   now wants several fixes and features batched into each release, with one full pass per release. In

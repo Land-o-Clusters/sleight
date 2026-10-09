@@ -143,6 +143,18 @@ test('a window change mid-batch stops the next numbered action, and careful mode
   }
 });
 
+test('a prior read with no inventory is used as it is, and a degraded read still finds an element by ID', async () => {
+  const f = fixture({ current: () => tree(expected, '\t1 button One\n\t2 button Two') });
+  f.context.cua.listApps = async () => { f.calls.push(['listApps']); return []; };
+  await f.run('await app.click({ id: "Two" });', { prior: { text: tree(expected, '\t1 button One\n\t2 button Two'), windows: null } });
+  assert.deepEqual(f.calls.map(c => c[0]), ['click', 'read'], 'no inventory and no read before the click');
+  assert.deepEqual(f.calls.find(c => c[0] === 'click'), ['click', 2], 'the bare line named Two');
+  const ambiguous = fixture({ current: () => tree(expected, '\t1 button Two\n\t2 button Two') });
+  await assert.rejects(ambiguous.run('await app.click({ id: "Two" });'), /2 elements|no element/);
+  const attributed = fixture({ current: () => tree(expected, '\t1 button Description: 2, ID: Deux') });
+  await assert.rejects(attributed.run('await app.click({ id: "Two" });'), /no element/);
+});
+
 test('new calls expire a combined snapshot; screenshots replace it with a fresh combined capture', async () => {
   const f = fixture();
   await f.run('await app.getAXStateAndScreenshot();');

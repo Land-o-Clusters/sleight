@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The first action of a call uses the full read Claude made in the call just before, if it's less
+  than 10 s old. Under 20 CPU workers that read took 17 to 57 s, seconds
+  after Claude's own took 1.9 s. Document scope, change review and `SLEIGHT_GUARD=careful` keep it.
+  A lookup by ID or label that finds nothing in a read that dropped attributes now takes the one
+  bare line with that name (`button One`).
 - App probes (the full-screen check on each app read, and read-failure diagnosis) go to one
   long-lived helper per session instead of starting `osascript` each time: about 33 ms a probe after
   a 190 ms start, against about 180 ms for each spawn. The helper runs its run loop before each

@@ -1684,7 +1684,10 @@ test('drag gets the size of the app\'s latest engine screenshot, so it can conve
 });
 
 test('an acquisition\'s read stands in for the guard\'s first read in the next call only, and its window list stays hidden', async () => {
-  const h = harness();
+  // The default mode: change review off, an input lease on. Change review keeps every read.
+  const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
+  const { mkdtempSync } = await import('node:fs');
+  const h = harness({ changeReview: false, inputLease: new InputLease({ directory: mkdtempSync(join(tmpdir(), 'sleight-prior-')), holder: 'A' }) });
   const inventory = [{ id: 'com.apple.TextEdit', windows: [{ id: 5, app: 'TextEdit', title: 'a.txt' }] }];
   const state = 'Window: "a.txt", App: TextEdit\n0 standard window a.txt\n1 text entry area Value: hi';
   flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); await tick();
@@ -1700,6 +1703,22 @@ test('an acquisition\'s read stands in for the guard\'s first read in the next c
   flowAnswer(h, 2, state); await tick();
   flowCall(h, 3, 'await app.typeText("y")'); await tick();
   assert.match(h.toServer.find(m => m.id === 3).params.arguments.code, /state\.prior = undefined/);
+});
+
+test('Claude\'s own read stands in for the next call\'s first read in the default mode, never in careful mode', async () => {
+  const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
+  const { mkdtempSync } = await import('node:fs');
+  for (const [guardMode, reused] of [[undefined, true], ['careful', false]]) {
+    const h = harness({ changeReview: false, guardMode, inputLease: new InputLease({ directory: mkdtempSync(join(tmpdir(), 'sleight-prior-')), holder: 'A' }) });
+    const state = 'Window: "Calculator", App: Calculator\n0 standard window Calculator\n\t1 button Description: 1, ID: One';
+    flowCall(h, 1, 'let app = await cua.getApp("Calculator")'); await tick();
+    h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: state }], _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.calculator' } } } } }); await tick();
+    flowCall(h, 2, 'await app.getAXState()'); flowAnswer(h, 2, state); await tick();
+    flowCall(h, 3, 'await app.click(1)'); await tick();
+    const code = h.toServer.find(m => m.id === 3).params.arguments.code;
+    if (reused) { assert.match(code, /state\.prior = \{"text":"Window: \\"Calculator\\"/); assert.match(code, /"windows":null/); }
+    else assert.match(code, /state\.prior = undefined/);
+  }
 });
 
 test('SLEIGHT_FIRST_CALL_BATCH rewrites only the engine\'s first-call rule, only when it matches exactly', async () => {

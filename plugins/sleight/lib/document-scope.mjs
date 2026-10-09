@@ -244,12 +244,15 @@ function guardSetup(update) {
           if (text === undefined && state.prior) {
             const prior = state.prior; state.prior = undefined;
             const start = clock();
-            const now = await cua.listApps({ emit: false }).then(apps => apps.filter(a => a.id === prior.id).map(a => a.windows ?? []), () => null);
-            // Unchanged windows, or an app the acquisition launched whose one window is the read's.
-            // Engine 26.1002.52244 lists no windows at all, and two empty lists prove nothing, so
-            // then the guard reads (2026-10-09).
-            const same = now?.length === 1 && now[0].length > 0 && (JSON.stringify(now[0]) === JSON.stringify(prior.windows) ||
-              (prior.windows.length === 0 && now[0].length === 1 && now[0][0].title === prior.title));
+            // A read Claude made in the call just before, less than 10 s ago (the relay checks), is
+            // used as it is: Claude chose this action from it. One that came with an inventory is
+            // reused only while the app's windows match it: unchanged windows, or an app the
+            // acquisition launched whose one window is the read's. Engine 26.1002.52244 lists no
+            // windows at all, and two empty lists prove nothing, so then the guard reads.
+            const now = prior.windows === null ? null
+              : await cua.listApps({ emit: false }).then(apps => apps.filter(a => a.id === prior.id).map(a => a.windows ?? []), () => null);
+            const same = prior.windows === null || (now?.length === 1 && now[0].length > 0 && (JSON.stringify(now[0]) === JSON.stringify(prior.windows) ||
+              (prior.windows.length === 0 && now[0].length === 1 && now[0][0].title === prior.title)));
             if (state.timing) nodeRepl.write('[sleight:guard-timing]' + JSON.stringify({ phase: same ? 'reused' : 'reuse-refused', ms: clock() - start, chars: same ? prior.text.length : 0, failed: false }) + '\\n');
             if (same) text = prior.text;
           }
@@ -290,7 +293,11 @@ function guardSetup(update) {
           if (byId) {
             const [kind, value, match] = typeof spec.id === 'string' ? ['ID', spec.id, hasIdentifier]
               : typeof spec.label === 'string' ? ['label', spec.label, hasLabel] : ['line', spec.line, (line, value) => line === value];
-            const found = [...elements(text)].filter(([, line]) => match(line, value));
+            let found = [...elements(text)].filter(([, line]) => match(line, value));
+            // A read on a busy Mac can drop attributes: "button One" for "button Description: 1,
+            // ID: One" (2026-10-09). With no match at all, one bare line named exactly that is it.
+            if (!found.length && kind !== 'line') found = [...elements(text)].filter(([, line]) => /^[a-z][a-z ]* /.test(line) &&
+              !/,|: /.test(line) && line.slice(/^[a-z][a-z ]*? (?=[^a-z ]|$)/.exec(line)?.[0].length ?? line.length) === value);
             if (found.length !== 1) throw stop('sleight stopped before ' + name + ': ' + (found.length ? found.length + ' elements' : 'no element') + ' with ' + kind + ' ' + JSON.stringify(value) + ' in this window. Read it and use an element number or another ID.');
             args = [found[0][0], ...args.slice(1)];
           }

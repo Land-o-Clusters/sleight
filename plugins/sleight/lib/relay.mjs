@@ -1232,7 +1232,9 @@ export function createRelay({
           }
           else if (documentMode || inputLease || (changeReview && target)) {
             // The acquisition just before this call, if it read this same app less than 10 s ago.
-            const prior = priorRead && priorRead.seq + 1 === callSeqs.get(msg.id) && Date.now() - priorRead.at < 10000 &&
+            // Reuse is for the default mode. Document scope, change review and careful reads keep the
+            // read before acting, which is what stops an action on a window changed since Claude read it.
+            const prior = !documentMode && !changeReview && guardMode !== 'careful' && priorRead && priorRead.seq + 1 === callSeqs.get(msg.id) && Date.now() - priorRead.at < 10000 &&
               target?.app === priorRead.app ? { text: priorRead.text, id: priorRead.id, title: priorRead.title, windows: priorRead.windows } : undefined;
             msg.params.arguments.code = guardedCode(originalCode, target, reason,
               inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
@@ -1432,9 +1434,13 @@ export function createRelay({
       // The app's windows before the acquisition; none when the acquisition launched it.
       const appId = msg.result?._meta?.['codex/toolSurface']?.app?.appId;
       const before = inventory && typeof appId === 'string' && inventory.filter(a => a.id === appId);
-      priorRead = call.read && !msg.result?.isError && before && before.length <= 1 && lastWindow && text.includes('Window: ')
+      // Any read with a full tree can stand in for the next call's first read, not only an
+      // acquisition's: under load that read took 17 to 57 s, seconds after Claude's own (2026-10-09).
+      // windows is null when no inventory came with it; the guard then relies on the 10 s window.
+      priorRead = call.read && !msg.result?.isError && (!before || before.length <= 1) && lastWindow && text.includes('Window: ') &&
+        /\n\t*\d+ /.test(text.slice(text.indexOf('Window: ')))
         ? { seq: callSeqs.get(msg.id), at: Date.now(), app: lastWindow.app, title: lastWindow.title, id: appId,
-          windows: before[0]?.windows ?? [], text: text.slice(text.indexOf('Window: ')) }
+          windows: before ? before[0]?.windows ?? [] : null, text: text.slice(text.indexOf('Window: ')) }
         : undefined;
       callSeqs.delete(msg.id);
       if (!confirmedBrowser && selectedWindow && !call.read && call.target && msg.result &&

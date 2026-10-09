@@ -101,7 +101,9 @@ doesn't make that read. So by default, keys, typing, paste and clicks or drags a
 after typing, pasting or a plain key in the same call go straight to the engine. After a click, a
 shortcut, Return, Escape, Tab or Space, the next action still reads, since that read also waits for
 a panel or sheet the action opened. The first action of each call is checked, and so is every action on an element number, ID or label, which is what catches a window
-that renumbered mid-call. Set `SLEIGHT_GUARD=careful` to read before every action. Document scope
+that renumbered mid-call. When Claude read the window in the call just before, less than 10 s
+earlier, the first action uses that read instead of a new one (under load a new one took 17 to 57 s).
+Set `SLEIGHT_GUARD=careful` to read before every action. Document scope
 (`SLEIGHT_APPROVAL_SCOPE=document`) always reads.
 
 ## Flow rules
