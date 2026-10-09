@@ -1,0 +1,52 @@
+{
+  "stamp": "2026-10-09T14-45-57-016Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 1,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\"",
+      "seconds": 50.3,
+      "turns": 16,
+      "costUsd": 0.41216579999999997,
+      "usage": {
+        "input": 30,
+        "cacheRead": 730179,
+        "cacheWrite": 59515,
+        "output": 2801
+      },
+      "timing": {
+        "totalMs": 48522,
+        "modelMs": 36474,
+        "calls": 15,
+        "refused": 2,
+        "toolMs": 9674,
+        "engineMs": 8806,
+        "relayMs": 42,
+        "localMs": 826,
+        "guardReads": 8,
+        "guardReadMs": 2190.9154599999965,
+        "guardReadFailures": 0,
+        "otherMs": 2374
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 3,
+        "offScreenOnly": 5,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "I opened the file in TextEdit and selected \"alpha\", but the drag is blocked. The drag tool says TextEdit's window is off screen, on another desktop or Space, or minimized. I raised the window through Accessibility and tried again, with the same refusal. The tool says not to retry or work around it.\n",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

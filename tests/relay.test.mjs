@@ -53,24 +53,25 @@ test('two timeouts from one app do not advise restarting ChatGPT without indepen
   assert.match(advice, /could not distinguish/);
 });
 
-test('the first read of an app each turn says when its windows are on another Space', async () => {
+test('an app read says once a turn when the app\'s windows are on another Space', async () => {
   const probed = [];
   const away = { status: 'responding', windows: 0, minimized: 0, hidden: false, onScreen: 0, allWindows: 1, fullScreenSpace: true };
-  const h = harness({ spaceProbe: async app => { probed.push(app); return away; } });
-  helperRead(h, 1, 'let app = await cua.getApp("TextEdit")');
-  helperReply(h, 1, 'Window: "a.txt", App: TextEdit', false);
-  await tick(); await tick();
-  assert.deepEqual(probed, ['textedit']);
-  assert.match(h.toClient.find(msg => msg.id === 1).result.content.at(-1).text, /full-screen or Split View Space, and none of TextEdit's windows are on it/);
-  helperRead(h, 2, 'let app = await cua.getApp("TextEdit")');
-  helperReply(h, 2, 'Window: "a.txt", App: TextEdit', false);
-  await tick(); await tick();
-  assert.deepEqual(probed, ['textedit'], 'one check per app per turn');
-  h.fromClient({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'turn_ended', arguments: {} } });
-  helperRead(h, 4, 'let app = await cua.getApp("TextEdit")');
-  helperReply(h, 4, 'Window: "a.txt", App: TextEdit', false);
-  await tick(); await tick();
-  assert.deepEqual(probed, ['textedit', 'textedit'], 'checked again next turn');
+  const here = { ...away, windows: 1, onScreen: 1 };
+  const answers = [here, away, away, here, away, away];
+  const h = harness({ spaceProbe: async app => { probed.push(app); return answers[probed.length - 1]; } });
+  const noted = id => /full-screen or Split View Space, and none of TextEdit's windows are on it/.test(h.toClient.find(msg => msg.id === id).result.content.at(-1).text);
+  const read = async id => {
+    helperRead(h, id, 'let app = await cua.getApp("TextEdit")');
+    helperReply(h, id, 'Window: "a.txt", App: TextEdit', false);
+    await tick(); await tick();
+  };
+  await read(1); assert.equal(noted(1), false, 'an Open panel on this Space');
+  await read(2); assert.equal(noted(2), true, 'the document it opened is elsewhere');
+  await read(3); assert.equal(noted(3), false, 'said once');
+  await read(4); await read(5); assert.equal(noted(5), true, 'said again after it was back on screen');
+  h.fromClient({ jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'turn_ended', arguments: {} } });
+  await read(7); assert.equal(noted(7), true, 'said again next turn');
+  assert.deepEqual(probed, Array(6).fill('textedit'));
 });
 
 test('a read is not held up or annotated when the Space check finds the window on screen, fails or is slow', async t => {

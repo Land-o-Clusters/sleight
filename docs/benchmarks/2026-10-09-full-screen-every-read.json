@@ -1,0 +1,52 @@
+{
+  "stamp": "2026-10-09T14-48-41-053Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 1,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\"",
+      "seconds": 47,
+      "turns": 12,
+      "costUsd": 0.3325434,
+      "usage": {
+        "input": 24,
+        "cacheRead": 728237,
+        "cacheWrite": 41447,
+        "output": 2106
+      },
+      "timing": {
+        "totalMs": 45246,
+        "modelMs": 34145,
+        "calls": 11,
+        "refused": 1,
+        "toolMs": 8754,
+        "engineMs": 8257,
+        "relayMs": 497,
+        "localMs": 0,
+        "guardReads": 13,
+        "guardReadMs": 3471.044750999999,
+        "guardReadFailures": 0,
+        "otherMs": 2347
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 0,
+        "offScreenOnly": 10,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "I couldn't open the file in TextEdit, so nothing has been dragged, edited or saved.\n\nTextEdit is on a full-screen Space, and none of its windows are on the current desktop. The Open dialog is up with `327d44d7-drag.txt` selected, but its Open button stays greyed out and my double-click failed with `",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

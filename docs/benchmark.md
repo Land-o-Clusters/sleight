@@ -249,6 +249,17 @@ textedit-edit and textedit-save, 3 runs each, with the owner away). 8 of 12 runs
 `cua.getState()`, against 30 of 36 before, and the 12 runs took 80 turns against 68 in the 1.0.0 pass.
 It's reverted.
 
+textedit-drag ran once with a fixture app in full screen in front of TextEdit, after the relay
+learned to say so, with the owner away. Both runs failed, as they should: a drag fails on
+another Space. In the first, the check ran once per turn and caught TextEdit's Open panel, which
+was on the full-screen Space, so no note came. Claude stopped when `drag` refused the off-screen
+window, after 16 turns
+([`full-screen-first`](benchmarks/2026-10-09-full-screen-first.json)). With the check on every app
+read, the note came with Claude's first read, and Claude stopped after 12 turns and asked the user
+to leave full screen ([`full-screen-every-read`](benchmarks/2026-10-09-full-screen-every-read.json)).
+That run's first read got a scratch TextEdit window left from a hand check. The Mac's load
+average was about 100 from other processes during both.
+
 | Task | Median turns, 0.13.4 | 0.14.0 |
 |---|---:|---:|
 | calculator-click | 5 | 4 |

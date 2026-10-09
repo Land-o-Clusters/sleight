@@ -154,10 +154,11 @@ our own runs. Dates and engine versions are given where they matter.
   out. A pass with the Claude app in Split View failed 8 of 21 runs, all in TextEdit, Chess and the
   simulator (`docs/benchmarks/2026-10-08-await-split-view.json`). Moving a window into a full-screen
   Space needs private macOS APIs, so leave full screen while sleight drags. After 1.1.0 (unreleased)
-  the first read of each app in a turn tells Claude when the front window is in full screen and none
+  an app read tells Claude, once per app per turn, when the front window is in full screen and none
   of the app's windows are on screen, and a read that times out twice gets the same advice instead of
-  "cause unknown". This was checked live once, with a fixture app in full screen and Calculator
-  behind it (the note arrived with a 1,063 ms read). On another Space an app's windows drop out of
+  "cause unknown". This was checked live with a fixture app in full screen, in front of Calculator
+  (the note arrived with a 1,063 ms read) and in front of TextEdit in one textedit-drag run, where
+  Claude stopped after 12 turns and asked the user to leave full screen. On another Space an app's windows drop out of
   its Accessibility window list. The check counts them through CGWindowList instead. It can't tell a
   window on another Space from one that's ordered out, so an app with only hidden panels left would
   get the note too, but only while the user is in full screen.

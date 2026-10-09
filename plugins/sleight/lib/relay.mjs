@@ -287,9 +287,9 @@ export function createRelay({
   const lateDiagnosticControls = new Map();
   let diagnosisGeneration = 0;
   const helperAdvice = key => readFailureAdvice(key, helperStates.get(key)?.diagnosis);
-  // Apps whose windows were checked against the current Space this turn, and the reads that wait
-  // on that check: call id -> { app, health }.
-  const spaceChecked = new Set(), spaceChecks = new Map();
+  // Apps Claude was told this turn are off the current Space, and the reads that wait on that
+  // check: call id -> { key, health }.
+  const spaceNoted = new Set(), spaceChecks = new Map();
 
   function invalidateDiagnostics() {
     diagnosisGeneration++;
@@ -955,7 +955,7 @@ export function createRelay({
     releaseLeases();
     turnId = randomUUID();
     turnUsed = false;
-    spaceChecked.clear();
+    spaceNoted.clear();
   }
 
   lines(clientIn, line => {
@@ -1180,11 +1180,12 @@ export function createRelay({
           if (!helperProbes.has(msg.id)) {
             helperActive = healthPlan.key;
             if (healthPlan.handle) helperHandles.set(healthPlan.handle, healthPlan);
-            // The first read of an app each turn also checks, alongside the engine, whether the
-            // app's windows are on the current Space, so Claude hears it before a drag fails.
-            if (spaceProbe && healthPlan.selector && !healthPlan.key.startsWith('window:') && !spaceChecked.has(healthPlan.key)) {
-              spaceChecked.add(healthPlan.key);
-              spaceChecks.set(msg.id, { app: healthPlan.key, health: Promise.resolve().then(() => spaceProbe(healthPlan.key)).catch(() => undefined) });
+            // An app read also checks, alongside the engine, whether the app's windows are on the
+            // current Space, so Claude hears it before a drag fails. An Open panel can be on the
+            // current Space while the document it opens isn't (TextEdit, 2026-10-09), so every
+            // read checks.
+            if (spaceProbe && healthPlan.selector && !healthPlan.key.startsWith('window:')) {
+              spaceChecks.set(msg.id, { key: healthPlan.key, health: Promise.resolve().then(() => spaceProbe(healthPlan.key)).catch(() => undefined) });
             }
           }
         }
@@ -1308,9 +1309,11 @@ export function createRelay({
       const check = spaceChecks.get(msg.id); spaceChecks.delete(msg.id);
       const deadline = new Promise(resolve => setTimeout(resolve, 600).unref?.());
       Promise.race([check.health, deadline]).then(health => {
-        if (offSpace(health) && Array.isArray(msg.result?.content)) {
+        if (health && !offSpace(health)) spaceNoted.delete(check.key);
+        if (offSpace(health) && !spaceNoted.has(check.key) && Array.isArray(msg.result?.content)) {
+          spaceNoted.add(check.key);
           const text = msg.result.content.filter(c => c.type === 'text').map(c => c.text).join('\n');
-          const app = windowFromText(text)?.app ?? check.app;
+          const app = windowFromText(text)?.app ?? check.key;
           msg.result.content.push({ type: 'text', text: offSpaceNote(app) });
           trace('off-space', { id: msg.id, app, health });
         }

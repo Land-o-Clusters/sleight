@@ -3,10 +3,11 @@
 ## Unreleased
 
 - When the user is in a full-screen or Split View Space and the app Claude reads has no window on
-  it, the first read of that app in each turn says so: clicks and typing still work there, and
+  it, the read says so, once per app per turn: clicks and typing still work there, and
   drags and some reads don't. A second read timeout in a row on such an app gets the same advice instead
   of "cause unknown". A Split View pass failed 8 of 21 runs this way, with Claude spending up to 19
-  turns before it gave up. Checked live once, with a full-screen fixture in front of Calculator.
+  turns before it gave up. With a full-screen fixture in front of TextEdit, a textedit-drag run got
+  the note on its first read and stopped after 12 turns, asking the user to leave full screen.
 
 ## 1.1.0 (2026-10-09)
 
