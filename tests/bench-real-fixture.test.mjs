@@ -4,9 +4,11 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
+import { runOwned } from '../bench/preapproved-process.mjs';
+import { fileURLToPath } from 'node:url';
 
 function nativeSource() {
-  const sandbox = { ObjC: { import() {} } };
+  const sandbox = { ObjC: { import() {}, unwrap: value => value } };
   runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), sandbox);
   return sandbox;
 }
@@ -390,6 +392,15 @@ test('native quit refuses a replacement process and confirms only the launched a
   assert.throws(() => quitFixtureApplication(42, 'com.apple.Safari', () => ({ ...app, processIdentifier: 43 }),
     () => assert.fail('no quit of replacement')), /identity/);
 });
+
+test('native JXA quit identity unwraps a bridged bundle string without accessing an app',
+  { skip: process.platform !== 'darwin' }, async () => {
+    const result = await runOwned('/usr/bin/osascript', ['-l', 'JavaScript',
+      fileURLToPath(new URL('../bench/real-fixture.js', import.meta.url)), '{"mode":"self-test"}'], { timeoutMs: 15000 });
+    assert.equal(result.groupClean, true);
+    assert.equal(result.exit.code, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), { quit: true });
+  });
 
 test('a failed Safari File-menu lookup cancels that menu before propagating the failure', () => {
   const { chooseFileMenu } = nativeSource();
