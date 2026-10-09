@@ -120,8 +120,18 @@ func uniqueSafariAddress<Element>(_ candidates: [Element]) throws -> Element {
     return candidates[0]
 }
 
+// Safari exposes no AXDocument on its windows, so a navigated window is known by the run's nonce in
+// its title, as before navigation (2026-10-09: every Safari cleanup refused its own form page).
+func navigatedFixture(document: String, title: String, target: String, token: String) -> Bool {
+    document.isEmpty ? title.contains(token) : fixtureURL(document, target: target, token: token)
+}
+
 func regression(_ scenario: String) throws {
     if scenario == "fixture-navigation" {
+        guard navigatedFixture(document: "", title: "Personal — Form abc", target: "http://127.0.0.1:1234/abc/", token: "abc"),
+              !navigatedFixture(document: "", title: "Personal — Start Page", target: "http://127.0.0.1:1234/abc/", token: "abc"),
+              !navigatedFixture(document: "http://127.0.0.1:1234/other/", title: "Form abc", target: "http://127.0.0.1:1234/abc/", token: "abc")
+        else { throw FixtureError("Title fallback without a document misjudged") }
         let target = "http://127.0.0.1:1234/abc/"
         for document in [target, target + "article/tidal?view=full#notes"] {
             guard fixtureURL(document, target: target, token: "abc") else { throw FixtureError("Fixture navigation refused") }
@@ -270,7 +280,7 @@ func present(_ window: AXUIElement) throws -> Bool {
 }
 func matches(_ window: AXUIElement, target: String, token: String, navigating: Bool = false) throws -> Bool {
     let document = try text(window, kAXDocumentAttribute)
-    if navigating { return fixtureURL(document, target: target, token: token) }
+    if navigating { return navigatedFixture(document: document, title: try text(window, kAXTitleAttribute), target: target, token: token) }
     if !document.isEmpty { return document == target || document.hasPrefix(target + "#") }
     return try text(window, kAXTitleAttribute).contains(token)
 }
