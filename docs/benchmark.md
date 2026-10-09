@@ -74,20 +74,29 @@ Raw transcripts and traces stay in the private temporary evidence folder, outsid
 Safari, Preview, Finder and Helium join the benchmark approval list by name and exact bundle ID
 (owner, 2026-10-08). macOS permission prompts stop a run.
 Setup opens pages and files with `open`. A task-owned native Accessibility helper retains its window
-reference until cleanup, without Apple Events or browser window inventories. Helium uses a Swift
+reference until cleanup, without Apple Events or normal browser window inventories. Helium uses a Swift
 window-created callback, since JXA cannot supply AXObserver's C callback. It reads only the newly
 created reference and refuses multiple creation events. Helium must already be running on its real
 profile. Other apps use JXA with ObjC. Safari launches in the background with `open -g -a Safari`.
-The helper waits up to ten seconds for it to finish launching before creating a new window. Document cleanup
+The helper waits up to ten seconds for it to finish launching before creating a new window.
+Fresh native setup retries AX errors `-25204` and `-25205` for up to fifteen seconds, recording each
+retry and elapsed wait. Reads after an action on an existing fixture don't retry. Failed setup
+compares only exact nonce fixture titles in that app. A unique match is closed and verified gone;
+no match records “nothing created.” It continues only if no action preceded the failure.
+Inherited Calculator and Simulator windows aren't claimed or closed. Document cleanup
 refuses changed focus or identity. Ordinary cancellation keeps the helper alive through cleanup;
-a permission stop ends its AX activity immediately. A helper failure leaves cleanup unconfirmed
-and stops the pass. If helper collection fails, the required release on exit permits another holder
+a permission stop ends its AX activity immediately. Unconfirmed cleanup or a failure after an
+action stops the pass. If helper collection fails, the required release on exit permits another holder
 while that process may still be running.
 The host needs existing Accessibility access and `codex-macos-inspect` for permission observation.
 Permission reports contain only the process and window title. An unavailable observer stops
 the run before it opens a fixture. A streamed engine refusal for browser-access permission also
 stops further trials, even if the system observer didn't see its window. The runner collects the
 driver and closes only the retained fixture. It doesn't retry browser access or switch methods.
+The [round-4 report](benchmarks/2026-10-08-real-use-tasks-4.md) records one Safari setup failure:
+the File menu opened, but the requested “New Window” item was unavailable or ambiguous. Cleanup
+confirmed “nothing created,” and the required stop after an action left 17 slots unstarted.
+No model trial began. Startup retries weren't exercised live because Safari was already running.
 The [round-3 report](benchmarks/2026-10-08-real-use-tasks-3.md) records one Safari setup failure,
 before a model trial. Safari launched, but an AX read failed with `-25204` and window cleanup
 was unconfirmed. Further live attempts stopped. `SLEIGHT_SURFACES=computer` is recorded, but
