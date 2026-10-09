@@ -46,9 +46,9 @@ Branches and worktrees:
 - Older `codex/*` worktrees are earlier rounds. Leave them.
 
 Next, in order:
-- Astra's guard-speed brief (`.dev/prompts/astra-guard-speed.md`, worktree
-  `~/Projects/sleight-wt/guard-speed` on `codex/guard-speed`, cut at `1bdfd39`): a native window
-  check in place of the settle-bound full read. Astra is on it.
+- Astra's guard-speed work is squash-merged (`674502d`). The native check didn't work (socket
+  `connect EPERM` from the engine, AX observer failing under load). Next is the head-to-head under
+  normal load once Puddle's window closes.
 - After brief 9, rerun word-edit, excel-edit and powerpoint-edit, then merge `codex/real-use-tasks`.
 - A Codex arm for the real suite, then the real-use pass and the Codex head-to-head.
 

@@ -53,8 +53,12 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
   stopped 5 of 5 such calls on a renumbering check, against 0 of 5 without load. The false stops
   were degraded reads (`7d63e48` fixed them, 0 of 5 under load after). The cost is a settle wait of
   about 400 ms per action, tens of seconds under load, and the engine's inventory doesn't list windows to
-  check instead. Astra builds a native window check for keys, text and coordinates
-  (`.dev/prompts/astra-guard-speed.md`, `codex/guard-speed`).
+  check instead. Astra's native window check failed (`674502d`, report
+  `docs/benchmarks/2026-10-09-guard-speed.md`): the engine's JavaScript can't open a socket
+  (`connect EPERM`), and an Accessibility observer failed 14 of 20 reads at load 62 to 67, so a
+  loaded Mac starves any window check. Only the compactor fold for degraded lines was merged. Next:
+  the head-to-head under the owner's normal load, to size the gap on real tasks, then the owner's
+  call on an opt-in mode that skips the read between tree-free actions.
 - Batching (owner, 2026-10-09). Claude's own computer use groups more actions into one call. In 887 benchmark
   transcripts, 62% of `js` calls that act send one action, and 35% of all calls only read. Find
   what keeps Claude from batching (the guard's per-action reads, the skill, the tool description)
