@@ -1,0 +1,283 @@
+{
+  "date": "2026-10-08",
+  "branch": "codex/real-use-tasks",
+  "codeCommit": "69ba62981f9174906c646107171bbe4f9f3295d4",
+  "parentCommit": "dd720aebccd78225d905025308562f344d9d75b2",
+  "qualification": {
+    "requested": 18,
+    "setupAttempts": 1,
+    "modelTrialsStarted": 0,
+    "modelTrialsCompleted": 0,
+    "passed": 0,
+    "notStarted": 17,
+    "status": "stopped after setup action failure",
+    "ownerAtMac": "not recorded"
+  },
+  "changes": [
+    "Fresh native setup reads retry only AX -25204/-25205 with 100 ms backoff under a shared fifteen-second budget. Each retry and elapsed wait are recorded. Existing apps, cleanup and acted-on fixture windows do not retry.",
+    "Failed setup checks only the same app's exact nonce fixture title, refuses multiple matches, closes only a unique match, and confirms disappearance. Confirmed no match records nothing created.",
+    "Inherited Calculator/Simulator windows are never claimed or closed. Readiness requires a responding same-process app. Collected helper compilation and delayed recovery receipts can confirm an untouched acquisition.",
+    "Failures after setup actions or driver startup stop further live attempts even if cleanup is confirmed."
+  ],
+  "requestedTrials": [
+    {
+      "task": "safari-form",
+      "run": 1,
+      "status": "setup failed before model; nothing created; stopped after action"
+    },
+    {
+      "task": "safari-form",
+      "run": 2,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "safari-form",
+      "run": 3,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "helium-form",
+      "run": 1,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "helium-form",
+      "run": 2,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "helium-form",
+      "run": 3,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "preview-pdf",
+      "run": 1,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "preview-pdf",
+      "run": 2,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "preview-pdf",
+      "run": 3,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "finder-files",
+      "run": 1,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "finder-files",
+      "run": 2,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "finder-files",
+      "run": 3,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "textedit-calculator",
+      "run": 1,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "textedit-calculator",
+      "run": 2,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "textedit-calculator",
+      "run": 3,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "simulator-flow",
+      "run": 1,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "simulator-flow",
+      "run": 2,
+      "status": "not started due to first post-action stop"
+    },
+    {
+      "task": "simulator-flow",
+      "run": 3,
+      "status": "not started due to first post-action stop"
+    }
+  ],
+  "attempts": [
+    {
+      "command": "node bench/run.mjs --arm sleight --suite real --tasks safari-form --runs 3",
+      "terminalExit": 1,
+      "sourceFile": "bench/results/2026-10-09T01-38-31-540Z.json",
+      "resultFile": {
+        "stamp": "2026-10-09T01-38-31-540Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "safari-form",
+            "run": 1,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "fresh": false,
+                "cleanup": "nothing created"
+              }
+            ],
+            "stopAfterAction": true,
+            "models": []
+          }
+        ]
+      }
+    }
+  ],
+  "verification": [
+    {
+      "command": "npm run check",
+      "environment": "workspace sandbox",
+      "exit": 1,
+      "unitTests": 708,
+      "passed": 700,
+      "failed": 8,
+      "failures": [
+        {
+          "file": "tests/bench-real.test.mjs:30",
+          "test": "safari-form checks submitted fields, select and checkbox, ignoring the agent's answer",
+          "error": "listen EPERM: operation not permitted 127.0.0.1"
+        },
+        {
+          "file": "tests/bench-real.test.mjs:45",
+          "test": "safari-form rejects missing checkbox, changed select and a nonce from another run",
+          "error": "listen EPERM: operation not permitted 127.0.0.1"
+        },
+        {
+          "file": "tests/bench-real.test.mjs:30",
+          "test": "helium-form checks submitted fields, select and checkbox, ignoring the agent's answer",
+          "error": "listen EPERM: operation not permitted 127.0.0.1"
+        },
+        {
+          "file": "tests/bench-real.test.mjs:45",
+          "test": "helium-form rejects missing checkbox, changed select and a nonce from another run",
+          "error": "listen EPERM: operation not permitted 127.0.0.1"
+        },
+        {
+          "file": "tests/bench-real.test.mjs:103",
+          "test": "simulator-flow checks the saved value and the required screen sequence",
+          "error": "listen EPERM: operation not permitted 127.0.0.1"
+        },
+        {
+          "file": "tests/bench-real.test.mjs:118",
+          "test": "simulator-flow rejects wrong saved text and an unordered or incomplete flow",
+          "error": "listen EPERM: operation not permitted 127.0.0.1"
+        },
+        {
+          "file": "tests/bench-simulator.test.mjs:8",
+          "test": "the simulator form passes only on the exact text, then closes its server",
+          "error": "listen EPERM: operation not permitted 127.0.0.1"
+        },
+        {
+          "file": "tests/hover-fixture.test.mjs:5",
+          "test": "hover fixture refuses other apps, unknown operations and unnamed Chess windows before access",
+          "error": "ld: can't write output file: bench/results/hover-window-fixture"
+        }
+      ]
+    },
+    {
+      "command": "npm run check",
+      "environment": "scoped host retry after actual sandbox denial",
+      "exit": 0,
+      "unitTests": 712,
+      "modTests": 9,
+      "pluginValidation": "passed"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exit": 0,
+      "files": 50,
+      "scope": "before report"
+    },
+    {
+      "command": "node --test tests/bench-real-fixture.test.mjs tests/bench-real-run.test.mjs",
+      "exit": 0,
+      "tests": 33
+    },
+    {
+      "command": "node --check bench/real-fixture.js",
+      "exit": 0
+    },
+    {
+      "command": "node --check bench/run.mjs",
+      "exit": 0
+    },
+    {
+      "command": "/usr/bin/git diff --check",
+      "exit": 0
+    },
+    {
+      "command": "npm run lint:prose",
+      "scope": "first report draft",
+      "exit": 1,
+      "files": 51,
+      "flags": 7,
+      "errors": [
+        "ai-tells.ColonUsage",
+        "ai-tells.SemicolonUsage (two)",
+        "ai-tells.UniversalObject",
+        "ai-tells.NegatedObject (two)",
+        "ai-tells.ParallelStaccato"
+      ]
+    },
+    {
+      "command": "npm run lint:prose",
+      "scope": "final report and documentation",
+      "exit": 0,
+      "files": 51
+    }
+  ],
+  "review": {
+    "status": "no remaining critical or important findings",
+    "liveUIActions": false,
+    "addressed": [
+      "delayed recovered receipt race",
+      "inherited app falsely ready when absent",
+      "collected compile failure acquisition status",
+      "retry timing includes slow AX reads"
+    ]
+  },
+  "cleanup": {
+    "fixture": "nothing created",
+    "helper": "collected",
+    "pageServer": "closed",
+    "scratch": "removed",
+    "liveLock": "released; absent after terminal exit",
+    "safari": "left running",
+    "sharedChatGPTHelper": "untouched"
+  },
+  "limitations": [
+    "No fresh-app AX retry was exercised live: Safari was already running (fresh=false).",
+    "Safari File menu opened, but its requested New Window item was unavailable or ambiguous. The result does not distinguish absence from multiple matches.",
+    "No visible macOS permission window or streamed browser permission refusal was recorded. No permission was answered.",
+    "Seventeen remaining slots were not started under the required post-action failure stop.",
+    "Live qualification is incomplete."
+  ]
+}
