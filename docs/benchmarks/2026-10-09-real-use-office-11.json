@@ -1,0 +1,350 @@
+{
+  "stamp": "2026-10-09T19-13-20-188Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "word-edit",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 10.96,
+        "group": {
+          "claude": 2.11,
+          "engine node": 0.97,
+          "mcp@latest": 0.55,
+          "node": 0.22,
+          "osascript": 0.11,
+          "codex": 0.44
+        },
+        "outside": {
+          "Microsoft Word": 3.77,
+          "engine helper": 2.79
+        }
+      },
+      "timing": {
+        "totalMs": 40294,
+        "modelMs": 27952,
+        "calls": 9,
+        "refused": 0,
+        "toolMs": 10112,
+        "engineMs": 10075,
+        "relayMs": 37,
+        "localMs": 0,
+        "guardReads": 13,
+        "guardReadMs": 2293.2093340000056,
+        "guardReadFailures": 0,
+        "otherMs": 2230
+      },
+      "passed": true,
+      "seconds": 42.2,
+      "fixtureDiagnostics": [
+        {
+          "app": "Microsoft Word",
+          "bundle": "com.microsoft.Word",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 72606,
+          "setupCase": "already-running",
+          "launched": true,
+          "launchWait": {
+            "reason": "ready",
+            "setupCase": "already-running",
+            "elapsedMs": 884,
+            "code": -25205,
+            "attribute": "AXSheets"
+          },
+          "fresh": false,
+          "appDialogs": [
+            {
+              "app": "Microsoft Word",
+              "category": "application-result",
+              "title": "",
+              "buttons": [
+                "OK"
+              ],
+              "stop": false,
+              "description": "application-result application dialog"
+            },
+            {
+              "app": "Microsoft Word",
+              "category": "application-result",
+              "title": "Insert Table",
+              "buttons": [
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "OK",
+                "Cancel"
+              ],
+              "stop": false,
+              "description": "application-result application dialog"
+            }
+          ],
+          "menuItems": [
+            "New Document",
+            "New from Template...",
+            "Open...",
+            "Open Recent",
+            "",
+            "Close",
+            "Save",
+            "Save As...",
+            "Save as Template...",
+            "Convert Document",
+            "Move...",
+            "Rename...",
+            "",
+            "Browse Version History",
+            "",
+            "Share",
+            "",
+            "Always Open Read-Only",
+            "",
+            "Reduce File Size...",
+            "",
+            "Page Setup...",
+            "Print...",
+            "",
+            "Properties..."
+          ],
+          "menuCommands": [
+            {
+              "title": "New Document",
+              "enabled": true
+            },
+            {
+              "title": "New from Template...",
+              "enabled": true
+            },
+            {
+              "title": "Open...",
+              "enabled": true
+            },
+            {
+              "title": "Open Recent",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Close",
+              "enabled": true
+            },
+            {
+              "title": "Save",
+              "enabled": true
+            },
+            {
+              "title": "Save As...",
+              "enabled": true
+            },
+            {
+              "title": "Save as Template...",
+              "enabled": true
+            },
+            {
+              "title": "Convert Document",
+              "enabled": true
+            },
+            {
+              "title": "Move...",
+              "enabled": true
+            },
+            {
+              "title": "Rename...",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Browse Version History",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Share",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Always Open Read-Only",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Reduce File Size...",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Page Setup...",
+              "enabled": true
+            },
+            {
+              "title": "Print...",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Properties...",
+              "enabled": true
+            }
+          ]
+        }
+      ],
+      "appDialogs": [
+        {
+          "app": "Microsoft Word",
+          "category": "application-result",
+          "title": "",
+          "buttons": [
+            "OK"
+          ],
+          "stop": false,
+          "description": "application-result application dialog"
+        },
+        {
+          "app": "Microsoft Word",
+          "category": "application-result",
+          "title": "Insert Table",
+          "buttons": [
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "OK",
+            "Cancel"
+          ],
+          "stop": false,
+          "description": "application-result application dialog"
+        }
+      ],
+      "turns": 10,
+      "costUsd": 0.5260478,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 20,
+        "cacheRead": 634909,
+        "cacheWrite": 94379,
+        "output": 2151
+      },
+      "exitCode": 0,
+      "answer": "I made all the edits in `Report-65d3d917.docx`. I saved it with Cmd+S (the title bar shows \"Saved to my Mac\"), and it's still open in Word.\n\n- **Heading 1:** \"Report 65d3d917\" now has the Heading 1 style. My first attempt hit the last line by mistake. I undid that before applying it to the right par"
+    },
+    {
+      "arm": "sleight",
+      "task": "excel-edit",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 17.62,
+        "group": {
+          "claude": 2.96,
+          "engine node": 1.42,
+          "mcp@latest": 0.68,
+          "node": 0.25,
+          "osascript": 0.13,
+          "codex": 0.37
+        },
+        "outside": {
+          "Microsoft Excel": 5.94,
+          "engine helper": 5.87
+        }
+      },
+      "timing": {
+        "totalMs": 55805,
+        "modelMs": 37101,
+        "calls": 13,
+        "refused": 0,
+        "toolMs": 15469,
+        "engineMs": 15250,
+        "relayMs": 219,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 3284.9768750000003,
+        "guardReadFailures": 0,
+        "otherMs": 3235
+      },
+      "passed": false,
+      "seconds": 57.7,
+      "cleanupError": "Owned fixture window cleanup unconfirmed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25204 (AXFocusedWindow) (-2700)",
+      "fixtureDiagnostics": [
+        {
+          "app": "Microsoft Excel",
+          "bundle": "com.microsoft.Excel",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 69926,
+          "setupCase": "already-running",
+          "launched": true,
+          "launchWait": {
+            "reason": "ready",
+            "setupCase": "already-running",
+            "elapsedMs": 613,
+            "code": -25205,
+            "attribute": "AXSheets"
+          },
+          "fresh": false,
+          "closeFailure": "~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25204 (AXFocusedWindow) (-2700)"
+        }
+      ],
+      "fixtureDir": "<temp>/sleight-bench/2026-10-09T19-13-20-188Z/sleight-excel-edit-1",
+      "turns": 14,
+      "costUsd": 0.6796838000000001,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 28,
+        "cacheRead": 1099339,
+        "cacheWrite": 107950,
+        "output": 2796
+      },
+      "exitCode": 0,
+      "answer": "The edits are made and saved to `Inventory-89c4166b.xlsx`, and the workbook is still open in Excel. The title bar shows \"Saved to my Mac\", and D4 shows 15.\n\n- **Inventory sort:** A2:B4 now reads Apples 8, Bananas 5, Pears 3, with each quantity kept next to its item. I typed the sorted values into th"
+    }
+  ]
+}
