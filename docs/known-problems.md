@@ -150,7 +150,10 @@ our own runs. Dates and engine versions are given where they matter.
   It does not restore the full window order. Earlier fixture pointer mismatches remain unresolved.
   Since 0.16.0, hover and the `menu_bar` real click wait like the foreground drag for 2 s without
   input (up to 10 s), and hover fails if keys are typed while it holds focus. Hover's guard has unit
-  tests. The `menu_bar` guard has none, and neither has had a live run.
+  tests. The `menu_bar` guard now has five fake-clock tests (2026-10-09): the 2 s threshold,
+  input during the wait, refusal at 10 s, quiet at exactly 10 s and an unavailable input clock.
+  They verify that refusal doesn't post mouse events and success restores the pointer. Neither guard
+  has had a live run; no `menu_bar` approval was requested for these tests.
 - When you work in a full-screen or Split View Space, apps sleight drives in the background are on
   another Space. Clicks and typing still reach them, but the engine's `app.drag` answers
   `noWindowsAvailable`, sleight's `drag` refuses the off-screen window, and TextEdit's reads timed
