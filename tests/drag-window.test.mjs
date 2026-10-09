@@ -84,7 +84,7 @@ function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', se
     },
   };
   const delays = [];
-  const context = vm.createContext({ $, ObjC: { import() {}, unwrap: v => v, bindFunction() { if (!background) throw new Error('private API missing'); } }, delay: s => delays.push(s),
+  const context = vm.createContext({ SLEIGHT_ACCESSIBILITY_MOVE: ax !== null, $, ObjC: { import() {}, unwrap: v => v, bindFunction() { if (!background) throw new Error('private API missing'); } }, delay: s => delays.push(s),
     Application: () => ({ processes: { whose: () => [proc] } }) });
   vm.runInContext(readFileSync(new URL('../plugins/sleight/lib/drag.js', import.meta.url), 'utf8'), context);
   context.findApp = () => target;
@@ -183,12 +183,12 @@ test('background text move uses PID posting, repairs spacing and never activates
 });
 test('unchanged background text alone permits the foreground fallback', () => {
   const h = harness({ background: true, backgroundAfter: 'alpha beta gamma\n' }); const r = h.run({ windowId: 11 });
-  assert.equal(r.ok, true); assert.equal(r.path, 'foreground'); assert.match(r.fallbackReason, /^background text unchanged; accessibility move unavailable/);
+  assert.equal(r.ok, true); assert.equal(r.path, 'foreground'); assert.equal(r.fallbackReason, 'background text unchanged');
   assert.equal(h.pidEvents.length, 28); assert.equal(h.activations.length, 1); assert.equal(h.events.length, 28);
 });
 test('another app covering the drag points skips background posting and says which app', () => {
   const h = harness({ background: true, coveredEnd: true, coveredPid: 9 }); const r = h.run({ windowId: 11 });
-  assert.equal(r.path, 'foreground'); assert.match(r.fallbackReason, /^background skipped: Other app covers the window at the drag points; accessibility move unavailable/);
+  assert.equal(r.path, 'foreground'); assert.equal(r.fallbackReason, 'background skipped: Other app covers the window at the drag points');
   assert.equal(h.pidEvents.length, 0);
 });
 test('missing or failing private setter skips posting and names the foreground path', () => {

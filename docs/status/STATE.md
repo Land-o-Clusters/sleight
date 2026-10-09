@@ -3,35 +3,42 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-08 23:55 UTC, building 0.16.0)
+## Banner (2026-10-09 00:00 UTC, building 0.16.0)
 
 Released: `main` and `v0.15.2` at `2d2eb60`, CI green. The owner's desktop pane check on
 `0.15.3-pane.2` passed (screenshot, about 23:03 UTC), with Calculator's picture, 6 actions and the
-status line. No pass is running, and `/tmp/sleight-live.lock` is free.
+status line.
 
 Owner's call (2026-10-08): batch several fixes and features per release, one full pass per release,
 and only the affected tasks during development. So 0.15.3 became 0.16.0 and holds more.
 
-Checkout: `~/Projects/sleight` is on `pane/auto-mode`. 0.16.0 so far, on top of 0.15.2:
+Checkout: `~/Projects/sleight` is on `pane/auto-mode` (`2085955`, pushed). 0.16.0 so far, on top of
+0.15.2, with 677/677 unit tests:
 
 - The relay refuses an action written without `await` when more code follows it (`49604cf`).
 - The desktop pane works in Auto mode (`0bfc4e9`, `e14f0cd`, `dc5a016`). LAWS has the `tool.check` rule.
 - Benchmark runner: closes a failed run's TextEdit documents between runs, and samples whether the
   task's app has a window on the current Space (`d7f7833`, live-tested).
-- `drag` into a covered TextEdit window moves the text through Accessibility, with no pointer or focus
-  change (1/1 live, Claude covering TextEdit). The foreground drag, now the last resort, waits for 2 s
-  without input (up to 10 s) and stops on keys typed after it takes focus. 45/45 drag-window tests,
-  670/670 in all. Uncommitted when this banner was written.
-- Published: `covered-drags` (18/21; textedit-drag 0/3 because the owner's windows covered TextEdit
-  and the foreground drag took their focus) and `await-stopped` (2/5).
+- `drag` into a covered TextEdit window: the Accessibility move (`cc24eb2`) is off (`SLEIGHT_ACCESSIBILITY_MOVE`
+  in tests only). Probe `.dev/tools/ax-save-probe.mjs`: after an Accessibility text write, TextEdit's
+  next engine Cmd+S deadlocked in 10 of 13 trials (file opened through the Open panel), 0 of 3 with
+  `open -g`. Posted keystrokes didn't hang but auto-capitalize. The existing spacing repair writes text
+  the same way. Open: what holds the save lock, and whether an AppleScript save right after the
+  write avoids it (that probe broke when the Open panel stopped opening files).
+- The foreground drag, `hover` and the `menu_bar` real click wait for 2 s without input (up to 10 s);
+  the relay explains `noWindowsAvailable` (`97fcdd6`). Neither guard has had a live run.
+- `drag` reads `from` and `to` in the engine screenshot's pixels, scaled by the size the relay saw
+  (`310f6e0`). This was the main textedit-drag failure: on a Retina display Claude's points were 2×.
+  A second targeted check (textedit-drag ×3) is running: `.dev/passes/pass-drag-check2.log`.
+- Published: `covered-drags` (18/21) and `await-stopped` (2/5).
 - `plugin.json` still says `0.15.3-pane.2`. Set it to 0.16.0 at release. CHANGELOG still has a
-  `PASS_LINE` placeholder.
+  `PASS_LINE` placeholder, and the targeted checks' results aren't published yet.
 
 Next:
 
-1. Commit the drag change, then check textedit-drag 3 runs with TextEdit covered. Then more 0.16.0
-   items from Next 3, then one full pass (best while the owner is away), release 0.16.0 and update
-   the owner's install (`claude plugin marketplace update sleight`, `claude plugin update sleight@sleight`).
+1. When drag-check2 ends: publish both targeted checks, then the Helium native probe (Next 2). Then
+   one full pass (best while the owner is away), release 0.16.0 and update the owner's install
+   (`claude plugin marketplace update sleight`, `claude plugin update sleight@sleight`).
 2. Owner's plan, step 3 (better). Sol's `codex/real-use-tasks` (`7420d18`, round two) completed 3 of 18
    trials, 1 passed (report in `~/Projects/sleight-wt/real-use-tasks/docs/benchmarks/`). Safari's setup
    failed 3/3 because Safari wasn't running (setup should launch it). Helium failed 2/3 because the

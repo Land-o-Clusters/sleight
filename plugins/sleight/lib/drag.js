@@ -421,8 +421,11 @@ function run(argv) {
       const cover = coveringApp(ordered, main, points);
       if (cover) fallbackReason = `background skipped: ${cover} covers the window at the drag points`;
       // A text move can be done without any pointer at all: the foreground
-      // path took the owner's pointer and focus mid-sentence (2026-10-08).
+      // path took the owner's pointer and focus mid-sentence (2026-10-08). It's off:
+      // after an Accessibility text write, TextEdit's next Cmd+S deadlocked on its
+      // save lock in 10 of 13 probe trials (2026-10-08). The tests turn it on.
       const byAccessibility = () => {
+        if (globalThis.SLEIGHT_ACCESSIBILITY_MOVE !== true) return null;
         let area;
         try { area = axTextArea(pid, points.end); }
         catch (e) { fallbackReason += `; accessibility move unavailable: ${e.message || e}`; return null; }
