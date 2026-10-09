@@ -3,7 +3,7 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-09 04:40 UTC, overnight run)
+## Banner (2026-10-09 12:00 UTC, overnight run)
 
 Overnight (owner asleep from about 04:25 UTC, 2026-10-09, said "keep going until I wake up", work the
 whole ROADMAP without stopping). Amphetamine keeps the Mac awake, so don't add caffeinate. Live runs
@@ -19,15 +19,24 @@ chess-drag sleight 0/3, Codex 2/3, simulator-form 3/3 each
 in 2 of 3 release-pass runs, so no regression. One sleight bug showed: `drag.js` ran past its 30 s
 limit and returned only "Command failed".
 
-Next (on `fix/drag-chess`, `~/Projects/sleight-wt/drag-chess`, unit-tested, not live-checked yet):
-a timed-out local tool says so and a stuck posted mouse button gets released; `drag` reuses its
-content scan and won't start a press after 20 s; a covered non-text drag posts in the background
-first; the skill says to press a 3D piece at its head; an un-awaited failed action no longer ends the
-engine session (the guard attaches a handler to each action's promise and reports the failure); the benchmark's
-timing parser counts a split acquisition as engine time (relay time was 9.98 s, about 0.36 s is real).
-Measured and dropped: trimming the engine's 21,000-character first-call docs. They are about 8,100
-tokens and 11.7% of input tokens per run, at an estimated 0.17 s per request, so cutting their
-Linux, Windows and browser parts would save about 0.1 s per run.
+Since 1.0.0, on `pane/auto-mode` (each merged from `fix/drag-chess`, 707/707 tests):
+- `7783fa1`: an un-awaited failed action keeps the engine session (1.0.0 reset it 1/1, fixed 3/3
+  live); `drag.js` says when it timed out and releases a stuck posted button, won't press after 20 s,
+  scans once; a covered drag with no selected text refuses and points to `app.drag` (sleight's posts
+  missed a covered Chess pawn 0/2 where the engine's drag moved it 1/1); the skill says press a 3D
+  piece at its head, and the benchmark counts split acquisitions as engine time.
+- `fc1a1d3`: replay (`sleight-mcp record` and `replay`, `docs/design/replay.md`). A 3-call Calculator
+  run replayed in 5.5 s against 17 s and stopped safely when Calculator was in another state.
+- `1eda908`: a call that meets a restarting helper is resent once (unit-tested only). A first-call
+  hint in the js description didn't change behavior (8/12 still called `getState` first) and was
+  reverted and published (`docs/benchmarks/2026-10-09-first-call-hint.json`).
+- `39bf90f`: a stale element number Claude saw goes out as that element's `{ line }` when one line
+  matches (unit-tested only).
+- `08f69a7`: when a turn ends, an app sleight acted on that holds a keyboard filter tap is named once
+  per session, through the mod (unit-tested, and the JXA tap list matched the Swift one live).
+The 1.1.0 release pass started 11:57 UTC on `08f69a7` (`.dev/passes/pass-one.sh release-1.1.0`).
+Measured and dropped: trimming the engine's first-call docs (about 8,100 tokens, an estimated 0.1 s
+saved per run). The launch draft's 1.0 lines are filled. Its real-use line waits for Sol's suite.
 
 Owner's plan after 1.0 (2026-10-09), run in order without check-ins: (1) the real-use suite (Sol),
 then the Codex head-to-head on it; (2) the launch post, draft at `~/Desktop/sleight-launch/thread-1.0.md`
