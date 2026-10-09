@@ -9,7 +9,14 @@ Released: `v0.16.0` (`fa23007` on `main`, README fix `9952faa` after it), CI gre
 up. The owner's install is 0.16.0 at `9952faa`. Release pass 20/21 (`docs/benchmarks/2026-10-09-release-0.16.0.json`).
 LAWS now has the owner's rule to reread the README whole every release.
 
-Unreleased on `pane/auto-mode`: `drag` scales by its own window's screenshot (`2f3b512`).
+Unreleased on `pane/auto-mode`: `drag` scales by its own window's screenshot (`2f3b512`); the
+Accessibility text move is back on, settled with a Shift event posted to the app (`8947b12`). With
+the event, 10 edits and then 10 `drag` moves saved with no hang; without it, 5 of 8 edits hung.
+Claude benchmark arms run without Bash, Write, Edit or web tools (`0270374`). No run had used them
+to pass a check (716 transcripts checked).
+Sol's next brief, from a review of `550080e`: `.dev/prompts/sol-real-use-tasks-5.md` (quit launched
+apps, the keyboard-tap check for real runs, `REAL_APPS` kept out of the core allowlist, recovery
+only through owned references, one failure doesn't stop the suite). The owner pastes it to Sol.
 
 The core head-to-head stopped at 19 of 42 runs (about 01:30 UTC) when the owner's keyboard stopped
 working. Device Hub, left open after both arms' simulator runs, had a keyboard filter tap whose last
