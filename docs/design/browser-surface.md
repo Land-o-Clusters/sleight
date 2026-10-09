@@ -1,11 +1,15 @@
 # Browser control
 
-Startup discovery runs one owned engine with only browser control enabled. It calls
-`cua.listBrowsers({emit: false})` with fresh session and turn metadata. Only an extension entry with
-`metadata.extensionInstanceId` enables browser control in the session engine. Discovery declines any
+Ordinary startup enables native apps and extension browsers in one session engine. The engine's
+browser inventory reports connected extensions when the caller asks for it. There is no preflight
+engine and no startup approval. Automatic mode excludes the in-app browser. An explicit
+`SLEIGHT_SURFACES` preserves the requested surfaces and configured backends.
+
+Doctor still runs one owned discovery engine with only browser control enabled. It calls
+`cua.listBrowsers({emit: false})` with fresh session and turn metadata. Doctor enables browser control
+for its remaining checks only after an extension entry with `metadata.extensionInstanceId`. Discovery declines any
 unexpected prompt and hides its output. It times out after four seconds and collects its process. Failure
-leaves native control available. An explicit `SLEIGHT_SURFACES` skips discovery and preserves the
-configured backends. Automatic discovery enables extensions and excludes the in-app browser.
+leaves native control available. An explicit `SLEIGHT_SURFACES` skips doctor's discovery too.
 
 Browser call text is a first filter. It never turns off the native guards. The relay accepts browser
 status and learns browser handles only after a successful engine reply reports

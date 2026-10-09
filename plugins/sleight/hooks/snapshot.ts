@@ -16,6 +16,42 @@ const SNAPSHOT_JS = `await (async () => {
   const app = await cua.getApp(APP);
   const shot = Buffer.from(await app.getScreenshot({ emit: false }));
   const isJpeg = shot[0] === 0xff && shot[1] === 0xd8;
+  // A desktop image that fits needs dimensions, not decoded pixels. Read PNG's IHDR or JPEG's
+  // frame header; unsupported or truncated headers fall through to the existing decoder.
+  const dimensions = () => {
+    if (!isJpeg) {
+      if (shot.length >= 33 && shot.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) &&
+          shot.readUInt32BE(8) === 13 && shot.toString('ascii', 12, 16) === 'IHDR') {
+        return { width: shot.readUInt32BE(16), height: shot.readUInt32BE(20) };
+      }
+      return;
+    }
+    let at = 2;
+    while (at < shot.length) {
+      if (shot[at++] !== 0xff) return;
+      while (shot[at] === 0xff) at++;
+      const marker = shot[at++];
+      if (marker === 0xda || marker === 0xd9 || at + 2 > shot.length) return;
+      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+      const length = shot.readUInt16BE(at);
+      if (length < 2 || at + length > shot.length) return;
+      if ([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf].includes(marker) && length >= 8) {
+        return { width: shot.readUInt16BE(at + 5), height: shot.readUInt16BE(at + 3) };
+      }
+      at += length;
+    }
+  };
+  if (!TERMINAL && Math.ceil(shot.length / 3) * 4 <= MAX_IMAGE_B64) {
+    const size = dimensions();
+    if (size?.width > 0 && size?.height > 0) {
+      const scale = Math.max(size.width / COLS, size.height / (ROWS * 2));
+      const columns = Math.max(1, Math.min(COLS, Math.round(size.width / scale)));
+      const rows = Math.ceil(Math.max(2, Math.min(ROWS * 2, Math.round(size.height / scale))) / 2);
+      nodeRepl.write('SLEIGHT_FRAME ' + JSON.stringify({ app: APP, ...size,
+        columns, rows, image: { mime: isJpeg ? 'image/jpeg' : 'image/png', base64: shot.toString('base64') } }));
+      return;
+    }
+  }
   const decoded = isJpeg
     ? (await import('jpeg-js')).default.decode(shot, { useTArray: true })
     : (await import('pngjs')).PNG.sync.read(shot);
@@ -51,7 +87,7 @@ const SNAPSHOT_JS = `await (async () => {
     // Too big to embed: re-encode as a JPEG, from 1.5 times the 320 px the desktop
     // pane draws, smaller and rougher until it fits.
     const { encode } = (await import('jpeg-js')).default;
-    for (const [maxW, quality] of [[480, 70], [400, 60], [320, 55], [240, 50], [160, 45]]) {
+    for (const [maxW, quality] of [[480, 70], [400, 60], [320, 55], [240, 50], [160, 45], [96, 40], [48, 35]]) {
       const w = Math.min(width, maxW), h = Math.max(1, Math.round(height * w / width));
       const small = Buffer.alloc(w * h * 4);
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {

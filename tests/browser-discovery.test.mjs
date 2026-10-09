@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { selectSurfaces } from '../plugins/sleight/lib/launch.mjs';
+import { probeSurfaces as selectSurfaces } from '../plugins/sleight/lib/launch.mjs';
 function server(t, browsers, extra = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'sleight-browser-discovery-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));

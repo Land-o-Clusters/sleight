@@ -1,6 +1,7 @@
 import { execFile, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
 
 const HEALTH_SCRIPT = fileURLToPath(new URL('./app-health.js', import.meta.url));
 
@@ -8,11 +9,24 @@ const HEALTH_SCRIPT = fileURLToPath(new URL('./app-health.js', import.meta.url))
 // in time resolves 'unknown' and stops the helper, so a stuck Accessibility call can't hold up the
 // next one, which starts a fresh helper.
 export function createAppHealthHelper({ timeoutMs = 2000,
-  spawnHelper = () => spawn('/usr/bin/osascript', ['-l', 'JavaScript', HEALTH_SCRIPT], { stdio: ['pipe', 'pipe', 'ignore'] }) } = {}) {
+  spawnHelper = () => spawn('/usr/bin/osascript', ['-l', 'JavaScript', HEALTH_SCRIPT, '--session', dirname(HEALTH_SCRIPT)], { stdio: ['pipe', 'pipe', 'ignore'] }) } = {}) {
   let child, nextId = 0, closed = false;
   const pending = new Map();
-  const settleAll = () => { for (const finish of pending.values()) finish({ status: 'unknown' }); pending.clear(); };
-  function stop() { if (!child) return; const old = child; child = undefined; old.stdin.end(); old.kill(); settleAll(); }
+  const stopping = new Set();
+  const settleAll = () => { for (const finish of pending.values()) finish(); pending.clear(); };
+  function stop() {
+    if (!child) return;
+    const old = child; child = undefined;
+    // An idle helper is unref'd. Collection must keep the caller alive even after the force
+    // timer fires, until libuv has reaped the child and closed its pipes.
+    old.ref?.(); old.stdin.ref?.(); old.stdout.ref?.();
+    const done = new Promise(resolve => {
+      const force = setTimeout(() => old.kill('SIGKILL'), 2000);
+      old.once('close', () => { clearTimeout(force); resolve(); });
+    });
+    stopping.add(done); done.then(() => stopping.delete(done));
+    old.stdin.end(); old.kill(); settleAll();
+  }
   function start() {
     const current = child = spawnHelper();
     current.once('error', () => { if (child === current) stop(); });
@@ -27,18 +41,23 @@ export function createAppHealthHelper({ timeoutMs = 2000,
       pending.delete(reply.id); delete reply.id; finish(reply);
     });
   }
-  function probe(app) {
-    if (closed) return Promise.resolve({ status: 'unknown' });
+  function request(payload, fallback) {
+    if (closed) return Promise.resolve(fallback);
     if (!child) start();
     return new Promise(resolve => {
       const id = nextId++;
       // A pending probe keeps the process alive until its reply or deadline; the idle helper doesn't.
-      const timer = setTimeout(() => { if (pending.delete(id)) { resolve({ status: 'unknown' }); stop(); } }, timeoutMs);
-      pending.set(id, reply => { clearTimeout(timer); resolve(reply); });
-      child.stdin.write(JSON.stringify({ id, app }) + '\n');
+      const timer = setTimeout(() => { if (pending.delete(id)) { resolve(fallback); stop(); } }, timeoutMs);
+      pending.set(id, reply => { clearTimeout(timer); resolve(reply ?? fallback); });
+      child.stdin.write(JSON.stringify({ id, ...payload }) + '\n');
     });
   }
-  return { probe, close() { closed = true; stop(); } };
+  return {
+    probe: app => request({ app }, { status: 'unknown' }),
+    target: args => request({ op: 'lease-target', app: args.app }, { ok: false, error: 'session helper unavailable; read the app again' }),
+    keyboardTaps: async () => { const r = await request({ op: 'keyboard-taps' }, { ok: false }); return r.ok ? r.taps : []; },
+    close() { closed = true; stop(); return Promise.all([...stopping]); },
+  };
 }
 
 export function probeAppHealth(app) {
