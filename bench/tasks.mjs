@@ -155,7 +155,7 @@ export function quitSimApp({ ownedOnly = false, lease } = {}) {
 
 // A booted iPhone simulator with the app showing it open behind the other
 // windows. Boots the first available iPhone when none is running.
-export function bootedIPhone({ trackOwnership = false } = {}) {
+export function bootedIPhone({ trackOwnership = false, beforeViewerLaunch } = {}) {
   const devices = Object.values(JSON.parse(simctl('list', 'devices', 'available', '--json')).devices).flat()
     .filter(d => d.name.startsWith('iPhone'));
   if (!devices.length) {
@@ -169,8 +169,12 @@ export function bootedIPhone({ trackOwnership = false } = {}) {
   let viewerLaunchedByTask = false;
   if (trackOwnership) {
     try { execFileSync('/usr/bin/pgrep', ['-x', app], { stdio: 'ignore' }); }
-    catch { viewerLaunchedByTask = true; }
+    catch (error) {
+      if (error.status !== 1 || error.signal) throw new Error('Simulator viewer ownership unconfirmed', { cause: error });
+      viewerLaunchedByTask = true;
+    }
   }
+  beforeViewerLaunch?.(viewerLaunchedByTask);
   execFileSync('open', ['-g', ...(path ? [path] : ['-a', app])]);
   return { udid: device.udid, name: device.name, app, ...(trackOwnership ? { bootedByTask, viewerLaunchedByTask } : {}) };
 }

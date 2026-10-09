@@ -402,6 +402,75 @@ test('native JXA quit identity unwraps a bridged bundle string without accessing
     assert.deepEqual(JSON.parse(result.stdout), { quit: true });
   });
 
+test('native setup records a new app PID while launch is pending, before cancellation', () => {
+  const sandbox = nativeSource(), events = [];
+  let waits = 0, pumped = false;
+  const foundation = value => ({ dataUsingEncoding: () => value });
+  foundation.AXIsProcessTrusted = () => true;
+  foundation.NSRunningApplication = { runningApplicationsWithBundleIdentifier: () => {
+    assert.ok(waits < 2, 'never discover an app after cancellation');
+    const count = pumped ? 1 : 0;
+    return { count, objectAtIndex: () => ({ processIdentifier: 42 }) };
+  } };
+  foundation.NSFileHandle = { fileHandleWithStandardOutput: { writeData: line => events.push(JSON.parse(line)) } };
+  foundation.NSData = { dataWithContentsOfFile: () => ({ isNil: () => false }) };
+  foundation.NSString = { alloc: { initWithDataEncoding: () => JSON.stringify({ command: waits < 2 ? 'launching' : 'close' }) } };
+  sandbox.$ = foundation;
+  sandbox.waitForLaunch = () => { pumped = true; waits++; };
+  sandbox.nativeAX = () => ({ wait: () => assert.fail('PID visibility needs the main run loop'), focused: () => assert.fail('no AX read before launch completes') });
+  assert.throws(() => sandbox.run([JSON.stringify({ bundle: 'com.apple.dt.Devices', mode: 'inherit', control: 'fake-control' })]),
+    /interrupted before identity was recorded/);
+  assert.equal(events.find(event => event.stage === 'armed').running, false);
+  assert.equal(events.at(-1).pid, 42, 'failed launch keeps the original PID for exact app cleanup');
+});
+
+test('native setup never discovers an app during pre-launch simulator preparation', () => {
+  const sandbox = nativeSource(), events = [];
+  let waits = 0, appReads = 0;
+  const foundation = value => ({ dataUsingEncoding: () => value });
+  foundation.AXIsProcessTrusted = () => true;
+  foundation.NSRunningApplication = { runningApplicationsWithBundleIdentifier: () => {
+    assert.equal(appReads++, 0, 'only the initial running-state query is allowed before launch starts');
+    return { count: 0 };
+  } };
+  foundation.NSFileHandle = { fileHandleWithStandardOutput: { writeData: line => events.push(JSON.parse(line)) } };
+  foundation.NSData = { dataWithContentsOfFile: () => ({ isNil: () => false }) };
+  foundation.NSString = { alloc: { initWithDataEncoding: () => JSON.stringify({ command: waits < 2 ? '' : 'close' }) } };
+  sandbox.$ = foundation;
+  sandbox.waitForLaunch = () => { waits++; };
+  sandbox.nativeAX = () => ({ wait: () => { waits++; } });
+  assert.throws(() => sandbox.run([JSON.stringify({ bundle: 'com.apple.dt.Devices', mode: 'inherit', control: 'fake-control' })]),
+    /interrupted before identity was recorded/);
+  assert.equal(events.at(-1).pid, undefined);
+});
+
+test('a viewer opened during simulator preparation is preserved at the actual launch step', async t => {
+  const { openFixture, closeFixtures } = await import('../bench/real-fixture.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'real-viewer-existing-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ctx = { dir };
+  let finish;
+  await assert.rejects(openFixture(ctx, { app: 'DeviceHub', bundle: 'com.apple.dt.Devices', mode: 'inherit' }, {
+    launch: async beginLaunch => {
+      assert.equal(ctx.windowLeases[0].launched, false, 'simulator boot alone is not a viewer launch');
+      beginLaunch(false);
+      assert.equal(JSON.parse(readFileSync(join(dir, 'window-0-control.json'))).command, 'launching');
+      finish(); throw new Error('URL setup timed out');
+    },
+    run: async (_command, args, options) => {
+      assert.notEqual(JSON.parse(args.at(-1)).mode, 'quit', 'preserve the viewer that appeared before our open call');
+      options.onStdout('{"stage":"armed","running":false}\n');
+      return new Promise(resolve => { finish = () => {
+        const stdout = '{"stage":"setup-failure","cleanup":"unconfirmed","pid":42}\n';
+        options.onStdout(stdout); resolve({ exit: { code: 1 }, stdout, groupClean: true });
+      }; });
+    },
+  }), /URL setup timed out/);
+  await closeFixtures(ctx);
+  assert.equal(ctx.fixtureDiagnostics[0].running, false, 'keep the initial running report');
+  assert.equal(ctx.windowLeases[0].launched, false);
+});
+
 test('a failed Safari File-menu lookup cancels that menu before propagating the failure', () => {
   const { chooseFileMenu } = nativeSource();
   assert.equal(typeof chooseFileMenu, 'function');

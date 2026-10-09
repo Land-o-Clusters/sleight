@@ -106,8 +106,8 @@ export const realTasks = [
       const modern = existsSync('/Applications/Xcode.app/Contents/Applications/DeviceHub.app');
       await acquireFixture(ctx, 'simViewer', () => openFixture(ctx, { app: modern ? 'DeviceHub' : 'Simulator',
         bundle: modern ? 'com.apple.dt.Devices' : 'com.apple.iphonesimulator', target: '', mode: 'inherit' }, {
-        launch: async () => {
-          await acquireFixture(ctx, 'sim', () => bootedIPhone({ trackOwnership: true }));
+        launch: async beginLaunch => {
+          await acquireFixture(ctx, 'sim', () => bootedIPhone({ trackOwnership: true, beforeViewerLaunch: beginLaunch }));
           await serveRealPage(ctx, true);
           simctl('openurl', ctx.sim.udid, ctx.url);
           ctx.simPageOpened = true;
