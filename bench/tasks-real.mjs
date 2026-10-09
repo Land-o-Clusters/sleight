@@ -120,14 +120,16 @@ export const realTasks = [
     check: checkFlow,
     cleanup: async ctx => {
       try {
-        if (ctx.simPageOpened) simctl('terminate', ctx.sim.udid, 'com.apple.mobilesafari');
+        if (ctx.simPageOpened && ctx.sim?.bootedByTask) simctl('terminate', ctx.sim.udid, 'com.apple.mobilesafari');
         await closeFixtures(ctx);
-        if (ctx.sim?.bootedByTask) simctl('shutdown', ctx.sim.udid);
       }
       finally {
-        try { await quitSimApp({ ownedOnly: true,
-          lease: ctx.windowLeases?.find(lease => ['DeviceHub', 'Simulator'].includes(lease.app)) }); }
-        finally { if (ctx.closeServer) { await ctx.closeServer(); ctx.closeServer = undefined; } }
+        try { if (ctx.sim?.bootedByTask) simctl('shutdown', ctx.sim.udid); }
+        finally {
+          try { await quitSimApp({ ownedOnly: true,
+            lease: ctx.windowLeases?.find(lease => ['DeviceHub', 'Simulator'].includes(lease.app)) }); }
+          finally { if (ctx.closeServer) { await ctx.closeServer(); ctx.closeServer = undefined; } }
+        }
       }
     },
   },

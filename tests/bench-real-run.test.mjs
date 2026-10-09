@@ -15,6 +15,19 @@ function fixture(t) {
   return { dir: join(bank, 'fixture'), nonce: 'abc123', lockPath: join(bank, 'lock') };
 }
 
+test('fixture-only diagnostics run setup and cleanup under the lock without a model or task verdict', async t => {
+  const execute = await runner(), ctx = fixture(t), calls = [];
+  const result = await execute({ setup() { assert.equal(existsSync(ctx.lockPath), true); calls.push('setup'); },
+    prompt: () => 'fixture', check: () => assert.fail('no task verdict without a model'),
+    cleanup: () => calls.push('cleanup') }, ctx, {
+    setupOnly: true, drive: () => assert.fail('fixture-only run must not start a model'), permissionCheck: async () => false,
+  });
+  assert.equal(result.setupOnly, true);
+  assert.equal(result.passed, true);
+  assert.deepEqual(calls, ['setup', 'cleanup']);
+  assert.equal(existsSync(ctx.lockPath), false);
+});
+
 test('a failed setup action is recorded without forcing a stop after confirmed cleanup', async t => {
   const execute = await runner(), ctx = fixture(t);
   const result = await execute({ setup(context) {

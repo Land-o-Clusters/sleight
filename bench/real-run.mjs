@@ -4,11 +4,11 @@ import { acquireLiveLock } from './live-lock.mjs';
 // Only the real suite uses this lifecycle, preserving older benchmark passes.
 // A cleanup failure preserves its fixture and stops the pass. The cooperative
 // lock is released on exit, as the task brief requires.
-export async function executeRealTask(task, ctx, { drive, dryRun = false, signal, permissionCheck, stop, lockHeld = false } = {}) {
+export async function executeRealTask(task, ctx, { drive, dryRun = false, setupOnly = false, signal, permissionCheck, stop, lockHeld = false } = {}) {
   let release, cleanupConfirmed = false, driverStarted = false;
   let monitor, observation;
   const cleanupController = new AbortController();
-  const result = {};
+  const result = setupOnly ? { setupOnly: true } : {};
   ctx.signal = signal;
   ctx.cleanupSignal = cleanupController.signal;
   const observe = async () => {
@@ -40,6 +40,8 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, signal
     const prompt = task.prompt(ctx);
     if (dryRun) {
       Object.assign(result, { dryRun: true, prompt, check: String(await task.check({ ...ctx, answer: '' })) });
+    } else if (setupOnly) {
+      result.passed = true;
     } else {
       const started = Date.now();
       driverStarted = true;
