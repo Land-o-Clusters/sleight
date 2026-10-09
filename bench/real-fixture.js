@@ -3,6 +3,22 @@
 ObjC.import('AppKit');
 ObjC.import('ApplicationServices');
 
+function waitForLaunch() {
+  var deadline = $.NSDate.dateWithTimeIntervalSinceNow(0.1);
+  $.NSRunLoop.mainRunLoop.runModeBeforeDate($.NSDefaultRunLoopMode, deadline);
+  var remaining = Number(deadline.timeIntervalSinceNow);
+  if (remaining > 0) $.NSThread.sleepForTimeInterval(remaining);
+}
+
+function waitForApplication(application, wait) {
+  for (var attempt = 0; attempt < 100; attempt++) {
+    var target = application();
+    if (target && target.isFinishedLaunching) return target;
+    wait();
+  }
+  return null;
+}
+
 function closeOwnedWindow(window, request, app, api) {
   if (!window || !api.exists(window)) return;
   if (!api.matches(window, request, true)) throw new Error('Owned fixture document identity changed');
@@ -122,7 +138,9 @@ function run(argv) {
     if (Number(matches.count) > 1) throw new Error('Ambiguous fixture process');
     return Number(matches.count) === 1 ? matches.objectAtIndex(0) : null;
   }
-  var target = application(), running = !!target, pid, app, previous, owned;
+  var target = request.bundle === 'com.apple.Safari'
+    ? waitForApplication(application, waitForLaunch) : application();
+  var running = !!target, pid, app, previous, owned;
   if (target) {
     pid = Number(target.processIdentifier); app = $.AXUIElementCreateApplication(pid);
     $.AXUIElementSetMessagingTimeout(app, 0.5);
@@ -131,7 +149,7 @@ function run(argv) {
   if (request.bundle === 'com.apple.Safari') {
     if (!target) {
       emit({ stage: 'untouched' });
-      throw new Error('Safari must already be running to create an isolated fixture without restoring a session');
+      throw new Error('Safari process did not finish launching within ten seconds');
     }
     api.fileMenu(app, ['New Window']);
     for (var newTry = 0; newTry < 30; newTry++) {

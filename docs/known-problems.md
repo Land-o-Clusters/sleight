@@ -9,8 +9,9 @@ our own runs. Dates and engine versions are given where they matter.
   The system-only observer missed those requests. The refusals were found after all three trials,
   and further live runs stopped. Their process and window title weren't observed.
   The streamed refusal stop gate and fresh observation before cleanup have passing unit tests,
-  but no new live proof. Native setup and cleanup don't use Apple Events. Safari must already be
-  running. Helium retains only its new fixture window, without reading the owner's existing windows.
+  but no new live proof. Native setup and cleanup don't use Apple Events. The round-3 runner forces
+  `SLEIGHT_SURFACES=computer` and launches Safari in the background before acquiring a new window.
+  Helium retains only its new fixture window, without reading the owner's existing windows.
   The cooperative lock is released on exit, even when helper collection remains unconfirmed.
   [The round-2 report](benchmarks/2026-10-08-real-use-tasks-2.md) retains all attempts and remaining
   qualification. [The initial report](benchmarks/2026-10-08-real-use-tasks.md) retains the earlier
