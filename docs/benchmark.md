@@ -201,6 +201,15 @@ npm run bench -- --arm all --runs 3   # sleight and LCU
 
 The LCU arm needs LCU registered for Claude Code in a separate folder. `bench/run.mjs` has the steps.
 
+The `codex` arm runs native Codex computer use through `codex exec`, for a head-to-head
+(`--arm sleight,codex`). It uses its own Codex home, `~/.codex-bench` (log in once with
+`CODEX_HOME=~/.codex-bench codex login`), which configures only the engine server, so a user's
+AGENTS.md, memories, plugins and hooks stay out. Codex runs in a read-only sandbox with its shell
+off, and a shell command or file edit fails the run. Headless Codex can't answer app prompts, so
+for a pass with this arm the runner sets the engine's "Always allow" list to the benchmark apps
+and puts the previous list back when it exits. Model requests come from Codex's session log, and
+the two arms' token counts aren't comparable.
+
 A live run waits for and holds `/tmp/sleight-live.lock`, the lock every live check takes, so nothing
 else drives apps during a pass. `--dry-run` doesn't take it.
 

@@ -3,7 +3,8 @@
 // plugin loaded, checked outside the agent. Writes bench/results/<stamp>.json
 // and prints a table.
 //
-//   node bench/run.mjs [--arm sleight|lcu|all] [--tasks id,id] [--runs N] [--model M] [--effort E] [--dry-run]
+//   node bench/run.mjs [--arm sleight|lcu|codex|all|a,b] [--tasks id,id] [--runs N] [--model M] [--effort E]
+//     [--codex-model M] [--codex-effort E] [--dry-run]
 //
 // Model and effort default to Sonnet 5.5 at medium (owner, 2026-10-03). Runs
 // before that used Claude Code's default, Opus 5.5.
@@ -27,7 +28,8 @@ import { existsSync, mkdirSync, rmdirSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { closeBenchTextEdit, quitChess, tasks } from './tasks.mjs';
+import { BENCH_APPS, closeBenchTextEdit, quitChess, tasks } from './tasks.mjs';
+import { approveOnly, codexReady, runCodex } from './codex-arm.mjs';
 import { watchAppWindows } from './app-windows.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
 import { runTiming, traceTiming } from './timing.mjs';
@@ -65,6 +67,12 @@ const ARMS = {
     env: {},
     server: 'plugin:sleight:computer',
   },
+  // Native Codex computer use, for the head-to-head (owner, 2026-10-08). See codex-arm.mjs.
+  codex: {
+    cwd: (() => { const dir = join(ARM_HOME, 'codex-arm'); mkdirSync(dir, { recursive: true }); return dir; })(),
+    codex: true,
+    check: codexReady,
+  },
   lcu: (() => {
     const dir = process.env.LCU_ARM_DIR || join(ARM_HOME, 'lcu-arm');
     const prefix = process.env.LCU_PATH_PREFIX || join(ROOT, '.dev', 'py');
@@ -77,7 +85,7 @@ const ARMS = {
     };
   })(),
 };
-const armNames = armOption === 'all' ? Object.keys(ARMS) : [armOption];
+const armNames = armOption === 'all' ? ['sleight', 'lcu'] : armOption.split(',');
 for (const name of armNames) {
   if (!ARMS[name]) throw new Error(`unknown arm ${name}`);
   const ok = ARMS[name].check?.() ?? true;
@@ -88,6 +96,8 @@ for (const name of armNames) {
 const runs = Number(option('runs', '1'));
 const model = option('model', 'claude-sonnet-5-5');
 const effort = option('effort', 'medium');
+const codexModel = option('codex-model', 'gpt-6.1-sol');
+const codexEffort = option('codex-effort', effort);
 const wanted = option('tasks', undefined)?.split(',');
 const claudeBin = process.env.CLAUDE_BIN || 'claude';
 const selected = wanted ? tasks.filter(t => wanted.includes(t.id)) : tasks;
@@ -126,8 +136,8 @@ function armServers(arm) {
 // Each arm must have its own tool connected and not the other's. A user-level
 // install of either would otherwise leak into both arms (it did, 2026-10-03,
 // until settings.json turned off the installed sleight).
-const otherServers = Object.values(ARMS).map(a => a.server);
-for (const name of armNames) {
+const otherServers = Object.values(ARMS).map(a => a.server).filter(Boolean);
+for (const name of armNames.filter(n => !ARMS[n].codex)) {
   const arm = ARMS[name];
   const servers = await armServers(arm);
   const own = servers.find(s => s.name === arm.server);
@@ -182,6 +192,15 @@ if (!isDryRun) {
   unlock = await acquireLiveLock(undefined, { wait: true });
   const release = () => { const u = unlock; unlock = undefined; return u?.().catch(() => {}); };
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await release(); process.exit(130); });
+  // Codex can't answer app prompts headless, so the engine's "Always allow" list holds exactly the
+  // benchmark apps for the pass, then goes back to what it was (exit handler below).
+  if (armNames.some(n => ARMS[n].codex)) {
+    const backup = join(homedir(), 'Library', 'Logs', 'sleight', `ComputerUseAppApprovals.before-${stamp}.json`);
+    mkdirSync(dirname(backup), { recursive: true });
+    const restore = approveOnly(BENCH_APPS.filter(a => /^com\./.test(a)), backup);
+    process.once('exit', () => { try { restore(); } catch (err) { console.error(`Restore the app approvals from ${backup}: ${err.message}`); } });
+    console.error(`App approvals set to the benchmark apps; saved the previous list to ${backup}.`);
+  }
   process.once('exit', () => { if (unlock) try { rmdirSync('/tmp/sleight-live.lock'); } catch {} });
 }
 // Arms alternate task by task, so both see the same conditions over time.
@@ -210,11 +229,15 @@ for (let run = 1; run <= runs; run++) {
       const started = Date.now();
       const stopWatching = watchAppWindows(ctx.sim?.app ?? task.app);
       // sleight traces into the run's scratch folder, so its timing comes from this run alone.
-      const { code, out, stderr } = await runClaude(prompt, ARMS[armName], armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {});
+      const arm = ARMS[armName];
+      const codexRun = arm.codex ? await runCodex(prompt, { cwd: arm.cwd, model: codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS }) : undefined;
+      const { code, out, stderr } = codexRun ?? await runClaude(prompt, arm, armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {});
       const appWindows = await stopWatching();
       const answer = out?.result ?? '';
       let verdict;
       try { verdict = task.check({ ...ctx, answer }); } catch (err) { verdict = err.message; }
+      // A shell or file edit could pass a check without the app, so it fails the run.
+      if (codexRun?.forbidden.length) verdict = `used ${[...new Set(codexRun.forbidden)].join(' and ')}`;
       try { task.cleanup?.(ctx); } catch {} // leaving an app open doesn't change the verdict
       results.push({
         arm: armName,
@@ -235,6 +258,7 @@ for (let run = 1; run <= runs; run++) {
         answer: scrub(answer.slice(0, 300)),
         // What Claude Code reports it used, to catch a model setting that didn't apply.
         models: Object.keys(out?.modelUsage ?? {}),
+        ...(codexRun && { toolCalls: codexRun.toolCalls, engineMs: codexRun.engineMs }),
         stderr: code === 0 ? undefined : scrub(stderr),
       });
       save();
