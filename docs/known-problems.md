@@ -281,6 +281,11 @@ our own runs. Dates and engine versions are given where they matter.
   average of 101 from other processes, TextEdit, Safari and Calculator missed it in 5 of 5 probes and
   answered in 0.27 to 0.52 s with a 6 s deadline. A read failure then can be diagnosed as a hung app,
   with advice to quit and reopen it. Not fixed yet.
+- The 29.475 s first Calculator acquisition on 2026-10-09 spent 27.683 s inside the engine after
+  approval. Browser discovery had already ended; its removal does not explain or fix that wait.
+  [The footprint probes](benchmarks/2026-10-09-footprint-spawns.md) separate startup and acquisition.
+  Terminal pane snapshots and desktop images over the embedding limit still decode all pixels.
+  Small desktop images can skip decoding, though these probes do not establish Codex footprint parity.
 - The helper quits about 20 seconds after it goes idle and relaunches on the next call. A call
   during that restart can fail with "native pipe startup failed" before it reaches any app; another
   session hit it three times in a row on 2026-10-05 while doctor passed, and we don't know why it

@@ -49,22 +49,25 @@ export class InputLease {
       : 'Input lease: another session is updating this window lease. Stop actions and retry with a fresh read.');
   }
   transact(key, operation) {
-    mkdirSync(this.directory, { recursive: true, mode: 0o700 });
     const path = join(this.directory, key + '.json');
-    const coordinator = join(this.directory, '.coordinator.sqlite');
-    const db = new DatabaseSync(coordinator);
-    chmodSync(coordinator, 0o600);
-    try {
-      try { db.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE'); }
-      catch (err) {
-        if (err.errcode === 5 || /locked|busy/i.test(err.message)) {
-          const refusal = this.refusal(this.read(path)); refusal.leaseBusy = true; throw refusal;
-        }
-        throw err;
+    if (!this.db) {
+      mkdirSync(this.directory, { recursive: true, mode: 0o700 });
+      const coordinator = join(this.directory, '.coordinator.sqlite');
+      const db = new DatabaseSync(coordinator);
+      try { chmodSync(coordinator, 0o600); }
+      catch (err) { db.close(); throw err; }
+      this.db = db;
+    }
+    const db = this.db;
+    try { db.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE'); }
+    catch (err) {
+      if (err.errcode === 5 || /locked|busy/i.test(err.message)) {
+        const refusal = this.refusal(this.read(path)); refusal.leaseBusy = true; throw refusal;
       }
-      try { return operation(path, this.read(path)); }
-      finally { db.exec('ROLLBACK'); }
-    } finally { db.close(); }
+      throw err;
+    }
+    try { return operation(path, this.read(path)); }
+    finally { db.exec('ROLLBACK'); }
   }
   store(path, record) {
     const temporary = path + '.' + randomUUID();
@@ -115,5 +118,8 @@ export class InputLease {
     }
     if (errors.length) throw new AggregateError(errors, 'Input lease: release failed; remaining leases expire without renewal.');
   }
-  close() { this.release(); }
+  close() {
+    try { this.release(); }
+    finally { this.db?.close(); this.db = undefined; }
+  }
 }

@@ -37,7 +37,9 @@ actions. Each acquired handle receives the guard, including alternate and
 
 Leases live in `~/Library/Application Support/sleight/leases/`. Each JSON file
 stores a random ownership token, session name, target and expiry. A shared SQLite
-coordinator serializes file changes with zero busy timeout. It remains on disk
+coordinator serializes file changes with zero busy timeout. Each lease manager keeps one connection
+until close, with a rollback after every transaction, including refusals. The manager ends each
+transaction before returning to the caller. The coordinator remains on disk
 after JSON removal so processes always lock the same inode. This needs `node:sqlite`,
 available in the current ChatGPT bundled Node 24 runtime.
 
