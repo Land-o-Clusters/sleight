@@ -3,18 +3,19 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-09 21:40 UTC, flushed before the owner's clear)
+## Banner (2026-10-09 21:50 UTC, rebooted after the owner's clear)
 
 The owner is away from the Mac and working from their phone. Their bar (ROADMAP track 3, 2026-10-09):
 lightning quick, quick under any load, no noticeable load on the Mac, measured against Codex on the
-same engine. Nothing is running and the live lock is free. The checkout is clean with every commit
-pushed, and there are no open PRs.
+same engine. The checkout is clean with every commit pushed, and there are no open PRs. Engine
+26.1002.52244, doctor ok (21:42 UTC).
 
-**Before any live run, ask puddle arch.** Puddle's window 1009n (render and scroll-FPS timing in a real
-app window) started about 21:15 UTC on 2026-10-09 and should close about 22:00 to 22:10 UTC. Its end
-notice goes to the previous sleight session, so a fresh one must ask: `SendMessage` to
-`uds:/tmp/cc-socks/9177.sock` (from-name "puddle arch"). No app driving during a window. Ask before
-any run that adds load (memory `shared-mac-quiet-windows`).
+**Puddle's windows.** 1009n runs until about 21:55 UTC, and puddle arch messages this session (sleight
+arch, `local_314380cf`) when it closes. 1009o (train 86's pairs) starts no earlier than about 23:00 UTC
+and ends about 23:45 UTC. Puddle arch sends a firm start at least 15 minutes ahead. Between the two,
+the Mac is ours. No app driving during a window. Ask before any run that adds load (memory
+`shared-mac-quiet-windows`). Step 1's probe is ready at the session scratchpad's
+`menu-guard-live.mjs` (steps `read`, `stop`, `run <code>`).
 
 Released: `v1.1.0` (`0b6a1c0`, 2026-10-09), on `main`. Unreleased on `pane/auto-mode` at `874a280`:
 - Live-checked: full screen and Split View detection; one app-health helper per session
