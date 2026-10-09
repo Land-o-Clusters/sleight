@@ -173,6 +173,11 @@ test('labels match a description or a title, whole, never part of one', () => {
   assert.equal(hasLabel('button Multiply Twice', 'Multiply'), false);
   assert.equal(hasLabel('button Description: 70, ID: X', '7'), false);
   assert.equal(hasLabel('text Description: Last Expression, Value: 7', '7'), false);
+  assert.equal(hasLabel('text field (settable) Email', 'Email'), true, 'a state before the title');
+  assert.equal(hasLabel('text field (settable) (focused) Email, Value: x', 'Email'), true);
+  assert.equal(hasLabel('text field (settable) Emails', 'Email'), false);
+  assert.equal(hasLabel('Edit', 'Edit'), true, 'a menu bar item named alone');
+  assert.equal(hasLabel('Edit Mode', 'Edit'), false);
   assert.equal(hasIdentifier('button Description: Mode, ID: Mode: scientific; unitConversion: false, Secondary Actions: Raise', 'Mode: scientific; unitConversion: false'), true);
   assert.equal(hasIdentifier('button Description: 7, ID: SevenUp', 'Seven'), false);
 });

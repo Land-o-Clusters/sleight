@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `{ label }` matches a field whose line has states before its title (`text field (settable) Email`)
+  and a menu bar item named alone (`Edit`). Both stopped calls in the head-to-head.
 - A guard stop (a renumbered element, or no element with an ID or label) carries the window as it is
   now, so Claude can retry with current numbers without a turn spent reading again. Each stop cost
   safari-form a turn in the head-to-head.

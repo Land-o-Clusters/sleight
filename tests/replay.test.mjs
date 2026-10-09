@@ -10,7 +10,8 @@ test('an element number becomes a unique ID, then a unique label, then its whole
   assert.deepEqual(elementSpec(elementLine([TREE], 13)), { id: 'Seven' });
   assert.deepEqual(elementSpec(elementLine([TREE], 3)), { line: 'Scientific, ID: menuAction:' });
   assert.deepEqual(elementSpec(elementLine([TREE], 12)), { label: 'All Clear' });
-  assert.deepEqual(elementSpec(elementLine([TREE], 67)), { line: 'View' });
+  // A menu bar item named alone is its own label (hasLabel, 2026-10-09); older scripts' { line } still resolve.
+  assert.deepEqual(elementSpec(elementLine([TREE], 67)), { label: 'View' });
   assert.equal(elementSpec(elementLine([TREE], 99)), undefined);
   // Two lines alike can't be told apart, so the number stays and the step needs positions.
   assert.equal(elementSpec(elementLine(['\t1 button OK\n\t2 button OK'], 1)), undefined);

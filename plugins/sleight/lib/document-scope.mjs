@@ -41,12 +41,17 @@ export function hasIdentifier(line, id) {
 // ("button Multiply", "toggle button Bold").
 export function hasLabel(line, label) {
   const ends = at => at === line.length || line[at] === ',';
+  // A menu bar item's line is its name alone ("Edit"), with no role (finder-files, 2026-10-09).
+  if (line === label) return true;
   const described = line.indexOf('Description: ' + label);
   if (described >= 0 && ends(described + 13 + label.length)) return true;
-  // The role is one or more lowercase words, so try each space in that run.
+  // The role is one or more lowercase words, so try each space in that run. States in parentheses
+  // can come between the role and the title: "text field (settable) Email" (safari-form).
   const role = /^[a-z][a-z ]*/.exec(line)?.[0] ?? '';
   for (let at = role.indexOf(' '); at >= 0; at = role.indexOf(' ', at + 1)) {
-    if (line.startsWith(label, at + 1) && ends(at + 1 + label.length)) return true;
+    let start = at + 1;
+    for (let state; (state = /^\([^()]*\) /.exec(line.slice(start)));) start += state[0].length;
+    if (line.startsWith(label, start) && ends(start + label.length)) return true;
   }
   return false;
 }
