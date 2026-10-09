@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- In a call that starts with the app's acquisition, the first action uses that read, taken
+  milliseconds before, when the app was already running with a window (owner's call). An app the
+  acquisition launched, or one the probe couldn't see, is read again. With the reuse check fixed
+  earlier in this release, the guard read every time: 173 extra reads and 98 s across the benchmark
+  runs of 2026-10-09. Unit-tested only.
 - A call that only acquires an app, with no action after it, takes the acquisition's read as the
   window header the lease needs instead of reading the window again. Across the benchmark runs of
   2026-10-09, 53 such reads cost 27 s, each milliseconds after the acquisition read the same tree.

@@ -6,6 +6,8 @@ since the last action in the same call. It checks the window's title, app and UR
 `{ id }` and `{ label }`, and stops a numbered action that an earlier one renumbered. After the call
 it reads once more if nothing gave the relay a window header. A call that took no action after the
 relay split off its acquisition uses the acquisition's read for that header (2026-10-09).
+The first action of such a call uses that read too when the app was already running with a window
+before the acquisition (owner's call, 2026-10-09).
 
 Since 2026-10-09 (owner's call), keys, typing, paste and coordinate actions that follow typing,
 pasting or a plain key in the same call go ahead on the header the guard last checked, without a

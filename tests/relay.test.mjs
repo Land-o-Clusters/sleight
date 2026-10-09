@@ -1843,3 +1843,23 @@ test('when a turn ends, an app this session drove that holds a keyboard tap is n
     assert.doesNotMatch(await end(3), /sleight-warning/, 'once per session');
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
+
+test('a split acquisition\'s read stands in for the first action only when the app was already running with a window', async () => {
+  const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
+  const { mkdtempSync } = await import('node:fs');
+  const state = 'Window: "Calculator", App: Calculator\n0 standard window Calculator\n\t1 button Description: 1, ID: One';
+  for (const [health, reused] of [[{ status: 'responding', windows: 1 }, true], [{ status: 'absent' }, false],
+    [{ status: 'responding', windows: 0 }, false], [{ status: 'unknown' }, false]]) {
+    const h = harness({ changeReview: false, spaceProbe: async () => health,
+      inputLease: new InputLease({ directory: mkdtempSync(join(tmpdir(), 'sleight-split-')), holder: 'A' }) });
+    flowCall(h, 1, 'let app = await cua.getApp("Calculator"); await app.click({ id: "One" })'); await tick();
+    const acquisition = h.toServer.find(m => String(m.id).startsWith('sleight-acquire-'));
+    assert.ok(acquisition, 'the call was split');
+    h.fromServer({ jsonrpc: '2.0', id: acquisition.id, result: { content: [{ type: 'text', text: '[sleight:windows][]\n' + state }],
+      _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.calculator', kind: 'appId' }, kind: 'computerUse' } } } });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const code = h.toServer.find(m => m.id === 1).params.arguments.code;
+    assert.match(code, /"split":true/, JSON.stringify(health));
+    assert.equal(/"windows":null/.test(code), reused, JSON.stringify(health));
+  }
+});

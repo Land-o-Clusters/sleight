@@ -312,6 +312,9 @@ export function createRelay({
   // Apps Claude was told this turn are off the current Space, and the reads that wait on that
   // check: call id -> { key, health }.
   const spaceNoted = new Set(), spaceChecks = new Map();
+  // What the probe found before each read went to the engine. An app that was already running with
+  // a window wasn't launched by that read, which lets a split acquisition's read stand in below.
+  const preHealth = new Map();
 
   function invalidateDiagnostics() {
     diagnosisGeneration++;
@@ -1339,7 +1342,7 @@ export function createRelay({
       const deadline = new Promise(resolve => setTimeout(resolve, 600).unref?.());
       // An acquisition that launches the app is still launching when the first probe runs, so an
       // absent app is probed once more now that the engine has answered.
-      Promise.race([check.health, deadline]).then(health => health?.status === 'absent'
+      Promise.race([check.health, deadline]).then(health => (preHealth.set(msg.id, health), health)).then(health => health?.status === 'absent'
         ? Promise.race([Promise.resolve().then(() => spaceProbe(check.key)).catch(() => undefined), new Promise(resolve => setTimeout(resolve, 600).unref?.())])
         : health).then(health => {
         if (health && !offSpace(health)) spaceNoted.delete(check.key);
@@ -1450,13 +1453,19 @@ export function createRelay({
       // Any read with a full tree can stand in for the next call's first read, not only an
       // acquisition's: under load that read took 17 to 57 s, seconds after Claude's own (2026-10-09).
       // windows is null when no inventory came with it; the guard then relies on the 10 s window.
+      // A split acquisition's read is milliseconds old when the same call's first action runs. With
+      // no window list from the engine, it stands in (windows null) only for an app that was already
+      // running with a window, never one the acquisition launched (owner, 2026-10-09). Refusing it
+      // cost 173 reads and 98 s in the benchmark runs of 2026-10-09.
+      const split = String(msg.id).startsWith('sleight-acquire-'), health = preHealth.get(msg.id);
+      const settled = split && health?.status === 'responding' && health.windows > 0;
       priorRead = call.read && !msg.result?.isError && (!before || before.length <= 1) && lastWindow && text.includes('Window: ') &&
         /\n\t*\d+ /.test(text.slice(text.indexOf('Window: ')))
         ? { seq: callSeqs.get(msg.id), at: Date.now(), ms: Date.now() - (callStarts.get(msg.id) ?? Date.now()),
-          split: String(msg.id).startsWith('sleight-acquire-'), app: lastWindow.app, title: lastWindow.title, id: appId,
-          windows: before ? before[0]?.windows ?? [] : null, text: text.slice(text.indexOf('Window: ')) }
+          split, app: lastWindow.app, title: lastWindow.title, id: appId,
+          windows: settled ? null : before ? before[0]?.windows ?? [] : null, text: text.slice(text.indexOf('Window: ')) }
         : undefined;
-      callSeqs.delete(msg.id); callStarts.delete(msg.id);
+      callSeqs.delete(msg.id); callStarts.delete(msg.id); preHealth.delete(msg.id);
       if (!confirmedBrowser && selectedWindow && !call.read && call.target && msg.result &&
           (!lastWindow || ['title', 'app', 'url'].some(key => lastWindow[key] !== call.target[key]))) {
         windowNote = `Sleight: outcome unconfirmed. Intended ${documentLabel(call.target)}. ` +
