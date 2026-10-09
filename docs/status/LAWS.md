@@ -26,7 +26,9 @@ belong in [STATE.md](STATE.md).
 - Codex runs on gpt-6.1-sol (owner, 2026-10-04), except deep performance tuning in the code, which
   may run on gpt-6-astra (owner, 2026-10-07).
 - Codex time goes to known problems and enhancements, not benchmark runs (owner, 2026-10-04).
-  sleight-arch runs one benchmark pass per merge that changes default behavior.
+  SUPERSEDED (2026-10-09): "one benchmark pass per merge that changes default behavior". The owner
+  now wants several fixes and features batched into each release, with one full pass per release. In
+  development only the affected tasks run.
 
 ## Approvals and safety
 
@@ -84,7 +86,10 @@ belong in [STATE.md](STATE.md).
   the branch's author to rebase. Hand merges there broke the relay twice.
 - A Codex report is a claim until sleight-arch reproduces it under normal use: the owner at the Mac,
   other apps open. Results measured while the owner was away say so.
-- Live checks that drive apps hold `/tmp/sleight-live.lock`, taken with `mkdir`, released on exit.
+- Live checks that drive apps hold `/tmp/sleight-live.lock`, taken with `mkdir`, released on exit. A
+  command that can't take it stops there (`mkdir … || exit 1`), so nothing after it runs.
+- A run that can take the owner's pointer or keyboard happens only while the owner is away from the
+  Mac (owner, 2026-10-09). Chess drags and the simulator can, and so can any foreground fallback.
 - A benchmark run quits every app it launched, so no keyboard event tap is still installed after it. When the owner
   reports a dead keyboard or pointer, stop every live run first, then look (2026-10-09).
 - Benchmark arms run from folders outside any git repo. Claude Code loads CLAUDE.md from parent
