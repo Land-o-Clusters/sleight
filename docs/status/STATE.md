@@ -28,14 +28,14 @@ Next, once Puddle's window closes:
 Branches and worktrees:
 - `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it.
 - `codex/real-use-tasks` (`~/Projects/sleight-wt/real-use-tasks`, Sol): squash-merged through
-  `b8f4b3f`. Sol works brief 10 there; squash its next commits the same way.
+  `b8f4b3f`. Sol works brief 10 there. Squash its next commits the same way.
 - `arch/codex-real-arm` (`~/Projects/sleight-wt/codex-real`) and `codex/guard-speed`
   (`~/Projects/sleight-wt/guard-speed`): merged, safe to remove with their worktrees.
 - `perf/screenshot-scale` (`1aa574b`, `~/Projects/sleight-wt/shots`): parked.
 - `fix/drag-chess` and older `codex/*` worktrees: earlier rounds. Leave them.
 
-Waiting on the owner: clicking "Start Using Excel" in Excel, pasting brief 10 to Sol
-(`.dev/prompts/sol-real-use-tasks-10.md`), and watching Mail and Mimestream (about 10 minutes).
+Waiting on the owner: a click on "Start Using Excel" in Excel and brief 10 for Sol
+(`.dev/prompts/sol-real-use-tasks-10.md`). Mail and Mimestream need them watching for about 10 minutes.
 Qualification left fixture windows on their screen: about seven in Safari, two in Helium, six
 Preview `Pages-*.pdf`, and Word and Excel running with fixture documents.
 
