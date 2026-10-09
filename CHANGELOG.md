@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- When the engine's helper is restarting after 20 s idle and a call fails with "native pipe startup
+  failed", the relay sends it again once, a second later. Unit-tested only: no live idle gap hit the
+  race (0 of 6).
 - Replay: `sleight-mcp record <transcript or session id> task.json` turns a finished run into a
   script, and `sleight-mcp replay task.json` runs it again through sleight with no model. Element
   numbers become IDs, labels or whole lines the guard finds again, and a script that depends on

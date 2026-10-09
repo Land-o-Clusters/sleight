@@ -1222,7 +1222,26 @@ export function createRelay({
         clipboardNotices(result, error.clipboardNotices);
         observeServerMessage(result);
       });
-    } else toServer(msg);
+    } else {
+      if (msg.method === 'tools/call' && msg.id !== undefined && !restartRetries.has(msg.id)) restartRetries.set(msg.id, JSON.stringify(msg));
+      toServer(msg);
+    }
+  }
+
+  // The helper quits after about 20 s idle, and a call that arrives while it relaunches fails
+  // before reaching any app (2026-10-05). Send that call again once, a second later, instead of
+  // spending Claude's turn on it. Values are the call as sent; true means it was already resent.
+  const restartRetries = new Map();
+  const HELPER_RESTARTING = /Sky Computer Use native pipe startup failed/;
+  function retriedHelperStart(msg) {
+    if (msg.method !== undefined || !restartRetries.has(msg.id)) return false;
+    const sent = restartRetries.get(msg.id);
+    const failed = msg.result?.isError && (msg.result.content ?? []).some(c => c.type === 'text' && HELPER_RESTARTING.test(c.text ?? ''));
+    if (!failed || sent === true || closing) { restartRetries.delete(msg.id); return false; }
+    restartRetries.set(msg.id, true);
+    trace('helper-restart-retry', { id: msg.id });
+    setTimeout(() => toServer(JSON.parse(sent)), 1000).unref?.();
+    return true;
   }
 
   lines(serverOut, line => {
@@ -1238,6 +1257,7 @@ export function createRelay({
     if (msg.method === undefined && clipboardReplies.has(msg.id)) {
       const pending = clipboardReplies.get(msg.id); clipboardReplies.delete(msg.id); pending.receive(msg); return;
     }
+    if (retriedHelperStart(msg)) return;
     observeServerMessage(msg);
   });
   function observeServerMessage(msg) {
@@ -1444,7 +1464,7 @@ export function createRelay({
     // a call during that restart can fail before reaching any app (2026-10-05).
     if (msg.method === undefined && msg.result?.isError && Array.isArray(msg.result.content) &&
       msg.result.content.some(c => c.type === 'text' && /Sky Computer Use (?:native pipe|service) startup (?:request )?failed/.test(c.text ?? ''))) {
-      msg.result.content.push({ type: 'text', text: "sleight: the engine couldn't reach its helper (SkyComputerUseService), so this call never reached an app. The helper quits after about 20 seconds idle and restarts on the next call, which can race. Retry the same call once. If it fails again, call js_reset and retry. If that fails too, tell the user; `sleight-mcp --doctor` prints a fix when macOS won't relaunch the helper." });
+      msg.result.content.push({ type: 'text', text: "sleight: the engine couldn't reach its helper (SkyComputerUseService), so this call never reached an app. The helper quits after about 20 seconds idle and restarts on the next call, which can race. sleight already sent this call again once. Call js_reset and retry. If that fails too, tell the user; `sleight-mcp --doctor` prints a fix when macOS won't relaunch the helper." });
     }
     if (localNames.has('blocked_app') && msg.method === undefined && msg.result) {
       const text = (msg.result.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');

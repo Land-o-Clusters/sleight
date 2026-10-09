@@ -246,7 +246,9 @@ our own runs. Dates and engine versions are given where they matter.
 - The helper quits about 20 seconds after it goes idle and relaunches on the next call. A call
   during that restart can fail with "native pipe startup failed" before it reaches any app; another
   session hit it three times in a row on 2026-10-05 while doctor passed, and we don't know why it
-  repeated. sleight now tells Claude to retry once, then `js_reset` and retry.
+  repeated. sleight now sends such a call again once, a second later, without Claude, and tells Claude
+  to call `js_reset` and retry if that fails too. The resend has unit tests only: we haven't caught a
+  restart race since adding it.
 - The helper can also fail to start. On 2026-10-05 it quit normally when doctor's session ended, and
   every later launch failed with "Sky Computer Use service startup request failed" for at least five
   minutes: launchd still held the old job and answered "Operation already in progress". Removing that

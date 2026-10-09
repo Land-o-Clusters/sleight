@@ -1668,3 +1668,20 @@ test('the guard reuses a passed read only while the app\'s windows are unchanged
     assert.equal(fullReads - 1, reads, `before ${before.length}, now ${JSON.stringify(now)}`);
   }
 });
+
+test('a call that met the helper mid-restart is sent again once, and only a second failure reaches Claude', async () => {
+  const h = harness({ changeReview: false });
+  const failure = { content: [{ type: 'text', text: 'Sky Computer Use native pipe startup failed' }], isError: true };
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("Calculator")' } } }); await tick();
+  assert.equal(h.toServer.filter(m => m.id === 1).length, 1);
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: failure }); await tick();
+  assert.equal(h.toClient.filter(m => m.id === 1).length, 0, 'the first failure stays inside the relay');
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  const sent = h.toServer.filter(m => m.id === 1);
+  assert.equal(sent.length, 2); assert.deepEqual(sent[1], sent[0]);
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: failure }); await tick();
+  const reply = h.toClient.find(m => m.id === 1);
+  assert.equal(reply.result.isError, true); assert.match(JSON.stringify(reply), /already sent this call again once/);
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  assert.equal(h.toServer.filter(m => m.id === 1).length, 2, 'never a third time');
+});

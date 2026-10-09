@@ -1,0 +1,491 @@
+{
+  "stamp": "2026-10-09T04-47-27-982Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 13.8,
+      "turns": 3,
+      "costUsd": 0.1600522,
+      "usage": {
+        "input": 6,
+        "cacheRead": 132941,
+        "cacheWrite": 32488,
+        "output": 350
+      },
+      "timing": {
+        "totalMs": 11765,
+        "modelMs": 4930,
+        "calls": 2,
+        "refused": 0,
+        "toolMs": 5262,
+        "engineMs": 5251,
+        "relayMs": 11,
+        "localMs": 0,
+        "guardReads": 7,
+        "guardReadMs": 2893.7214999999987,
+        "guardReadFailures": 0,
+        "otherMs": 1573
+      },
+      "appWindows": {
+        "samples": 3,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 1,
+      "passed": true,
+      "seconds": 17.4,
+      "turns": 5,
+      "costUsd": 0.204384,
+      "usage": {
+        "input": 10,
+        "cacheRead": 255830,
+        "cacheWrite": 36762,
+        "output": 615
+      },
+      "timing": {
+        "totalMs": 15579,
+        "modelMs": 7722,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 5573,
+        "engineMs": 5555,
+        "relayMs": 18,
+        "localMs": 0,
+        "guardReads": 9,
+        "guardReadMs": 3093.231793000001,
+        "guardReadFailures": 0,
+        "otherMs": 2284
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 42,
+      "turns": 9,
+      "costUsd": 0.35909979999999997,
+      "usage": {
+        "input": 18,
+        "cacheRead": 589429,
+        "cacheWrite": 57252,
+        "output": 1217
+      },
+      "timing": {
+        "totalMs": 40262,
+        "modelMs": 14793,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 21890,
+        "engineMs": 21862,
+        "relayMs": 28,
+        "localMs": 0,
+        "guardReads": 20,
+        "guardReadMs": 18339.59271,
+        "guardReadFailures": 1,
+        "otherMs": 3579
+      },
+      "appWindows": {
+        "samples": 9,
+        "onScreen": 5,
+        "offScreenOnly": 2,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "The file is saved and the document is closed. The last Escape returned \"noWindowsAvailable\", which means TextEdit has no windows open, so the leftover Open panel is gone too.\n\n- **File:** `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T04-47-27-982Z/sleight-textedit-save-1",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 28.8,
+      "turns": 8,
+      "costUsd": 0.2081142,
+      "usage": {
+        "input": 16,
+        "cacheRead": 398451,
+        "cacheWrite": 29048,
+        "output": 1220
+      },
+      "timing": {
+        "totalMs": 27416,
+        "modelMs": 12810,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 12972,
+        "engineMs": 12952,
+        "relayMs": 20,
+        "localMs": 0,
+        "guardReads": 13,
+        "guardReadMs": 9894.135334999999,
+        "guardReadFailures": 1,
+        "otherMs": 1634
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 4,
+        "offScreenOnly": 1,
+        "none": 1
+      },
+      "exitCode": 0,
+      "answer": "I opened `3195ddfe-edit.txt` in TextEdit and replaced \"beta\" with \"delta\", so the text now reads \"alpha delta gamma\". I saved it and closed the document.\n\nI didn't re-read the file from disk afterwards. The save is confirmed only by the window's \"Edited\" marker clearing before I closed it.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 2,
+      "passed": true,
+      "seconds": 14.8,
+      "turns": 4,
+      "costUsd": 0.18194419999999997,
+      "usage": {
+        "input": 8,
+        "cacheRead": 194091,
+        "cacheWrite": 34515,
+        "output": 505
+      },
+      "timing": {
+        "totalMs": 13500,
+        "modelMs": 7443,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 4837,
+        "engineMs": 4806,
+        "relayMs": 31,
+        "localMs": 0,
+        "guardReads": 7,
+        "guardReadMs": 2687.205709,
+        "guardReadFailures": 0,
+        "otherMs": 1220
+      },
+      "appWindows": {
+        "samples": 3,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 2,
+      "passed": true,
+      "seconds": 26.6,
+      "turns": 13,
+      "costUsd": 0.2708564,
+      "usage": {
+        "input": 24,
+        "cacheRead": 635192,
+        "cacheWrite": 32815,
+        "output": 1251
+      },
+      "timing": {
+        "totalMs": 25118,
+        "modelMs": 18153,
+        "calls": 12,
+        "refused": 1,
+        "toolMs": 5606,
+        "engineMs": 5582,
+        "relayMs": 24,
+        "localMs": 0,
+        "guardReads": 16,
+        "guardReadMs": 4039.447667999998,
+        "guardReadFailures": 0,
+        "otherMs": 1359
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 6,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 30.6,
+      "turns": 7,
+      "costUsd": 0.312821,
+      "usage": {
+        "input": 14,
+        "cacheRead": 417485,
+        "cacheWrite": 54734,
+        "output": 1036
+      },
+      "timing": {
+        "totalMs": 28878,
+        "modelMs": 12217,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 14848,
+        "engineMs": 14829,
+        "relayMs": 19,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 6285.307208999999,
+        "guardReadFailures": 0,
+        "otherMs": 1813
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "I created the TextEdit document, set it to plain text, typed \"sleight bench c02f1ab3\", and saved it as `c02f1ab3.txt` in the `sleight-textedit-save-2` folder you named. The save finished without a prompt. The window title and URL showed that path, and the folder listing showed the file at 22 bytes a",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 2,
+      "passed": true,
+      "seconds": 35.3,
+      "turns": 8,
+      "costUsd": 0.2544598,
+      "usage": {
+        "input": 16,
+        "cacheRead": 447879,
+        "cacheWrite": 37583,
+        "output": 1452
+      },
+      "timing": {
+        "totalMs": 33644,
+        "modelMs": 16126,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 15511,
+        "engineMs": 15480,
+        "relayMs": 31,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 3239.590957000003,
+        "guardReadFailures": 0,
+        "otherMs": 2007
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 4,
+        "offScreenOnly": 1,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "I changed \"beta\" to \"delta\" in `6a728ae9-edit.txt`, saved it, and closed the document. The text now reads \"alpha delta gamma\".\n\nTextEdit left an Open dialog on screen from when I launched it. I cancelled it, and my last check found TextEdit with no windows, so it's gone. I didn't reopen the file to ",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 3,
+      "passed": true,
+      "seconds": 15.2,
+      "turns": 4,
+      "costUsd": 0.1811416,
+      "usage": {
+        "input": 8,
+        "cacheRead": 193928,
+        "cacheWrite": 34435,
+        "output": 460
+      },
+      "timing": {
+        "totalMs": 13738,
+        "modelMs": 7083,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 5275,
+        "engineMs": 5264,
+        "relayMs": 11,
+        "localMs": 0,
+        "guardReads": 7,
+        "guardReadMs": 2849.976835000002,
+        "guardReadFailures": 0,
+        "otherMs": 1380
+      },
+      "appWindows": {
+        "samples": 3,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 3,
+      "passed": true,
+      "seconds": 21.3,
+      "turns": 6,
+      "costUsd": 0.21810040000000003,
+      "usage": {
+        "input": 12,
+        "cacheRead": 319202,
+        "cacheWrite": 37054,
+        "output": 602
+      },
+      "timing": {
+        "totalMs": 19939,
+        "modelMs": 12130,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 6234,
+        "engineMs": 6215,
+        "relayMs": 19,
+        "localMs": 0,
+        "guardReads": 11,
+        "guardReadMs": 3927.9539570000024,
+        "guardReadFailures": 0,
+        "otherMs": 1575
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 3,
+      "passed": true,
+      "seconds": 45.7,
+      "turns": 7,
+      "costUsd": 0.3148074,
+      "usage": {
+        "input": 14,
+        "cacheRead": 418687,
+        "cacheWrite": 55253,
+        "output": 1003
+      },
+      "timing": {
+        "totalMs": 44348,
+        "modelMs": 15219,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 17287,
+        "engineMs": 17261,
+        "relayMs": 26,
+        "localMs": 0,
+        "guardReads": 16,
+        "guardReadMs": 12142.024957000009,
+        "guardReadFailures": 0,
+        "otherMs": 11842
+      },
+      "appWindows": {
+        "samples": 9,
+        "onScreen": 7,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "I created the TextEdit document, made it plain text, typed `sleight bench c4e50c27`, saved it, and closed it.\n\nThe file is at `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T04-47-27-982Z/sleight-textedit-save-3/c4e50c27.txt`. After the save, the window title and URL showe",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 3,
+      "passed": true,
+      "seconds": 29,
+      "turns": 6,
+      "costUsd": 0.2123174,
+      "usage": {
+        "input": 12,
+        "cacheRead": 317257,
+        "cacheWrite": 35088,
+        "output": 849
+      },
+      "timing": {
+        "totalMs": 27659,
+        "modelMs": 9591,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 12880,
+        "engineMs": 12864,
+        "relayMs": 16,
+        "localMs": 0,
+        "guardReads": 9,
+        "guardReadMs": 2215.5059170000013,
+        "guardReadFailures": 0,
+        "otherMs": 5188
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 3,
+        "offScreenOnly": 2,
+        "none": 1
+      },
+      "exitCode": 0,
+      "answer": "I replaced \"beta\" with \"delta\" in `34d44112-edit.txt`, so the text now reads \"alpha delta gamma\". I saved it and closed the document.\n\nTextEdit showed no unsaved-changes prompt when I closed it, and no windows are left open. I didn't reopen the file to check the saved contents.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

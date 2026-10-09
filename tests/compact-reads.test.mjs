@@ -141,10 +141,11 @@ test('a helper startup failure tells Claude nothing reached an app and how to re
   t.after(() => relay.close());
   clientIn.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("TextEdit")' } } }) + '\n');
   await new Promise(r => setTimeout(r, 20));
-  serverOut.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [{ type: 'text', text: 'Sky Computer Use native pipe startup failed' }] } }) + '\n');
+  // The relay sends a call that met a restarting helper once more on its own; this failure persists.
+  serverOut.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [{ type: 'text', text: 'Sky Computer Use service startup request failed' }] } }) + '\n');
   await new Promise(r => setTimeout(r, 20));
   const text = toClient.find(m => m.id === 1).result.content.map(c => c.text).join('\n');
-  assert.match(text, /never reached an app.*Retry the same call once.*js_reset/s);
+  assert.match(text, /never reached an app.*js_reset/s);
 });
 
 test('a read Claude asked to see whole comes back whole, and later diffs start from it', () => {

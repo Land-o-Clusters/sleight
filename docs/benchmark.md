@@ -223,6 +223,13 @@ screen. chess-drag passed 2/3. Its failed run pressed only below the pawn's head
 2/3: in its failed run Claude's first tap missed the field, and none of its four later taps and
 typing put text in it.
 
+A hint in the `js` tool's description to acquire the app in the first call, instead of calling
+`cua.getState()` first, didn't change what Claude did
+([`first-call-hint`](benchmarks/2026-10-09-first-call-hint.json), calculator-click, calculator-menu,
+textedit-edit and textedit-save, 3 runs each, with the owner away). 8 of 12 runs still opened with
+`cua.getState()`, against 30 of 36 before, and the 12 runs took 80 turns against 68 in the 1.0.0 pass.
+It's reverted.
+
 | Task | Median turns, 0.13.4 | 0.14.0 |
 |---|---:|---:|
 | calculator-click | 5 | 4 |
