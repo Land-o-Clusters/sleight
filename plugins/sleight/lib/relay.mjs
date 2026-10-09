@@ -286,6 +286,7 @@ export function createRelay({
   // Every tools/call gets the next number. An acquisition's read can stand in for the guard's
   // first read only in the call right after it (priorRead.seq + 1).
   let callSeq = 0, priorRead;
+  const callStarts = new Map(); // call id -> when it arrived, so a read's duration is known
   const callSeqs = new Map();
   let docsShown = false;
   // Once per session: Claude keeps them in context across engine restarts.
@@ -982,7 +983,7 @@ export function createRelay({
       return;
     }
     // When each tool call arrived, so a trace can time the relay's own work on it.
-    if (msg.method === 'tools/call') { trace('call-received', { id: msg.id, method: msg.method, params: { name: msg.params?.name } }); callSeqs.set(msg.id, ++callSeq); }
+    if (msg.method === 'tools/call') { trace('call-received', { id: msg.id, method: msg.method, params: { name: msg.params?.name } }); callSeqs.set(msg.id, ++callSeq); callStarts.set(msg.id, Date.now()); }
     // Claude sometimes sends js the Bash tool's parameter name (6 of 437 calls, 2026-10-07).
     const jsArgs = msg.method === 'tools/call' && msg.params?.name === 'js' ? msg.params.arguments : undefined;
     if (jsArgs && jsArgs.code === undefined && typeof jsArgs.command === 'string') {
@@ -1232,14 +1233,19 @@ export function createRelay({
           }
           else if (documentMode || inputLease || (changeReview && target)) {
             // The acquisition just before this call, if it read this same app less than 10 s ago.
-            // Reuse is for the default mode. Document scope, change review and careful reads keep the
-            // read before acting, which is what stops an action on a window changed since Claude read it.
-            const prior = !documentMode && !changeReview && guardMode !== 'careful' && priorRead && priorRead.seq + 1 === callSeqs.get(msg.id) && Date.now() - priorRead.at < 10000 &&
+            // Reuse is for the default mode, and only when reads are slow: a settled read before an action
+            // takes about 50 ms, but 17 to 57 s on a loaded Mac (2026-10-09), and without it a window
+            // that renumbered after Claude's read went unnoticed (textedit-save, the same day). Document
+            // scope, change review and careful reads always read before acting.
+            const prior = !documentMode && !changeReview && guardMode !== 'careful' && priorRead && (priorRead.split || priorRead.ms > 2000) && priorRead.seq + 1 === callSeqs.get(msg.id) && Date.now() - priorRead.at < 10000 &&
               target?.app === priorRead.app ? { text: priorRead.text, id: priorRead.id, title: priorRead.title, windows: priorRead.windows } : undefined;
             msg.params.arguments.code = guardedCode(originalCode, target, reason,
               inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
               { timing: guardTiming, careful: guardMode === 'careful' || documentMode, fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
-                adoptUrl: !documentMode && !changeReview, skipAppWrap: browserHandles.has('app'), prior });
+                adoptUrl: !documentMode && !changeReview, skipAppWrap: browserHandles.has('app'), prior,
+                // The lines Claude last saw for the numbers it acts on, so the first action stops when
+                // the window renumbered between Claude's read and this call.
+                seenLines: compactor.seenLines(target, [...new Set([...originalCode.matchAll(/\.(?:click|setValue|selectText|performSecondaryAction|scroll)\(\s*(\d+)\s*[,)]/g)].map(m => Number(m[1])))]) });
           }
           if (clipboard) msg.params.arguments.code = clipboardCode(msg.params.arguments.code, clipboardAction);
         }
@@ -1439,10 +1445,11 @@ export function createRelay({
       // windows is null when no inventory came with it; the guard then relies on the 10 s window.
       priorRead = call.read && !msg.result?.isError && (!before || before.length <= 1) && lastWindow && text.includes('Window: ') &&
         /\n\t*\d+ /.test(text.slice(text.indexOf('Window: ')))
-        ? { seq: callSeqs.get(msg.id), at: Date.now(), app: lastWindow.app, title: lastWindow.title, id: appId,
+        ? { seq: callSeqs.get(msg.id), at: Date.now(), ms: Date.now() - (callStarts.get(msg.id) ?? Date.now()),
+          split: String(msg.id).startsWith('sleight-acquire-'), app: lastWindow.app, title: lastWindow.title, id: appId,
           windows: before ? before[0]?.windows ?? [] : null, text: text.slice(text.indexOf('Window: ')) }
         : undefined;
-      callSeqs.delete(msg.id);
+      callSeqs.delete(msg.id); callStarts.delete(msg.id);
       if (!confirmedBrowser && selectedWindow && !call.read && call.target && msg.result &&
           (!lastWindow || ['title', 'app', 'url'].some(key => lastWindow[key] !== call.target[key]))) {
         windowNote = `Sleight: outcome unconfirmed. Intended ${documentLabel(call.target)}. ` +

@@ -183,6 +183,16 @@ export function createReadCompactor() {
         return { ...item, text: out };
       });
     },
+    // What Claude takes these element numbers to be in this window, from what it was last shown:
+    // number -> line text without its number, for the guard to check before the call's first action.
+    seenLines(window, numbers) {
+      const entry = window && seen.get(documentKey({ title: window.title, app: window.app, url: window.url }));
+      if (!entry) return undefined;
+      const believed = new Map(entry.believed ?? numbered(entry.lines));
+      const out = {};
+      for (const n of numbers) if (believed.has(n)) out[n] = believed.get(n).replace(/^\t*/, '');
+      return Object.keys(out).length ? out : undefined;
+    },
     // The first element number in `code` that Claude can't know is current
     // for this window: { number } for a literal, { computed } for an expression.
     staleIndex(window, code) {

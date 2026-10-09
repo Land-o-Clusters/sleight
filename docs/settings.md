@@ -101,8 +101,10 @@ doesn't make that read. So by default, keys, typing, paste and clicks or drags a
 after typing, pasting or a plain key in the same call go straight to the engine. After a click, a
 shortcut, Return, Escape, Tab or Space, the next action still reads, since that read also waits for
 a panel or sheet the action opened. The first action of each call is checked, and so is every action on an element number, ID or label, which is what catches a window
-that renumbered mid-call. When Claude read the window in the call just before, less than 10 s
-earlier, the first action uses that read instead of a new one (under load a new one took 17 to 57 s).
+that renumbered mid-call. When Claude's read in the call just before took over 2 s, as on a
+loaded Mac, and is less than 10 s old, the first action uses it. Under load a new one took 17 to 57 s.
+Otherwise the guard reads again and stops if an element Claude is about to act on changed since
+Claude read the window.
 Set `SLEIGHT_GUARD=careful` to read before every action. Document scope
 (`SLEIGHT_APPROVAL_SCOPE=document`) always reads.
 

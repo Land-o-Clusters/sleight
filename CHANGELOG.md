@@ -7,8 +7,11 @@
   safari-form a turn in the head-to-head.
 - `drag` refuses a drag another app covers and that has no selected text before raising or scanning
   the window, outside TextEdit. It took 10 to 13 s to reach the same refusal in Chess and Finder.
-- The first action of a call uses the full read Claude made in the call just before, if it's less
-  than 10 s old. Under 20 CPU workers that read took 17 to 57 s, seconds
+- On a loaded Mac, the first action of a call uses the full read Claude made in the call just before,
+  if that read took over 2 s and is less than 10 s old. Otherwise the guard reads again, about 50 ms
+  when the app has settled, and checks every number the call acts on against the line Claude last
+  saw: in the head-to-head a saved TextEdit document renumbered after Claude's read, and a click
+  meant for Format opened File. Under 20 CPU workers that read took 17 to 57 s, seconds
   after Claude's own took 1.9 s. Document scope, change review and `SLEIGHT_GUARD=careful` keep it.
   A lookup by ID or label that finds nothing in a read that dropped attributes now takes the one
   bare line with that name (`button One`).

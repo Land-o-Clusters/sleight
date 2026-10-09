@@ -1401,7 +1401,7 @@ test('a stale Cancel ID cannot bypass the runtime guard or mutate an outside edi
   const code = h.toServer.find(m => m.id === 4).params.arguments.code;
   const context = { app: { getAXState: async () => header + '\n63 button Delete', click: async () => writeFileSync(path, 'deleted\n') },
     cua: { getApp() {} }, nodeRepl: { write() {} } };
-  await assert.rejects(runInContext(`(async () => { ${code} })()`, createContext(context)), /Cancel.*changed/);
+  await assert.rejects(runInContext(`(async () => { ${code} })()`, createContext(context)), /Cancel.*changed|changed since you read/);
   assert.equal(readFileSync(path, 'utf8'), 'user\n');
 });
 
@@ -1683,7 +1683,8 @@ test('drag gets the size of the app\'s latest engine screenshot, so it can conve
   assert.equal(calls[1].screenshot, undefined, 'no screenshot of Chess, and Claude can\'t supply one');
 });
 
-test('an acquisition\'s read stands in for the guard\'s first read in the next call only, and its window list stays hidden', async () => {
+test('an acquisition\'s read stands in for the guard\'s first read in the next call only, and its window list stays hidden', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1000 });
   // The default mode: change review off, an input lease on. Change review keeps every read.
   const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
   const { mkdtempSync } = await import('node:fs');
@@ -1691,6 +1692,7 @@ test('an acquisition\'s read stands in for the guard\'s first read in the next c
   const inventory = [{ id: 'com.apple.TextEdit', windows: [{ id: 5, app: 'TextEdit', title: 'a.txt' }] }];
   const state = 'Window: "a.txt", App: TextEdit\n0 standard window a.txt\n1 text entry area Value: hi';
   flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); await tick();
+  t.mock.timers.tick(2500); // a slow read: reuse is for a loaded Mac
   assert.match(h.toServer.find(m => m.id === 1).params.arguments.code, /\[sleight:windows\]/);
   // The inventory is written before getApp's own output; the bundle ID comes from the result's metadata.
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: '[sleight:windows]' + JSON.stringify(inventory) + '\n' + state }],
@@ -1705,7 +1707,8 @@ test('an acquisition\'s read stands in for the guard\'s first read in the next c
   assert.match(h.toServer.find(m => m.id === 3).params.arguments.code, /state\.prior = undefined/);
 });
 
-test('Claude\'s own read stands in for the next call\'s first read in the default mode, never in careful mode', async () => {
+test('Claude\'s own read stands in for the next call\'s first read in the default mode when reads are slow, never in careful mode', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1000 });
   const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
   const { mkdtempSync } = await import('node:fs');
   for (const [guardMode, reused] of [[undefined, true], ['careful', false]]) {
@@ -1713,12 +1716,28 @@ test('Claude\'s own read stands in for the next call\'s first read in the defaul
     const state = 'Window: "Calculator", App: Calculator\n0 standard window Calculator\n\t1 button Description: 1, ID: One';
     flowCall(h, 1, 'let app = await cua.getApp("Calculator")'); await tick();
     h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: state }], _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.calculator' } } } } }); await tick();
-    flowCall(h, 2, 'await app.getAXState()'); flowAnswer(h, 2, state); await tick();
+    flowCall(h, 2, 'await app.getAXState()'); t.mock.timers.tick(2500); flowAnswer(h, 2, state); await tick();
     flowCall(h, 3, 'await app.click(1)'); await tick();
     const code = h.toServer.find(m => m.id === 3).params.arguments.code;
     if (reused) { assert.match(code, /state\.prior = \{"text":"Window: \\"Calculator\\"/); assert.match(code, /"windows":null/); }
     else assert.match(code, /state\.prior = undefined/);
+    // A fast read is read again: about 50 ms, and it catches a window that renumbered since.
+    flowAnswer(h, 3, state); await tick();
+    flowCall(h, 4, 'await app.getAXState()'); flowAnswer(h, 4, state); await tick();
+    flowCall(h, 5, 'await app.click(1)'); await tick();
+    assert.match(h.toServer.find(m => m.id === 5).params.arguments.code, /state\.prior = undefined/);
   }
+});
+
+test('the relay passes the lines Claude last saw for the numbers a call acts on', async () => {
+  const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
+  const { mkdtempSync } = await import('node:fs');
+  const h = harness({ changeReview: false, inputLease: new InputLease({ directory: mkdtempSync(join(tmpdir(), 'sleight-seen-')), holder: 'A' }) });
+  const state = 'Window: "a.txt", App: TextEdit\n0 standard window a.txt\n\t14 menu bar item Format\n\t15 button OK';
+  flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: state }], _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit' } } } } }); await tick();
+  flowCall(h, 2, 'await app.click(14); await app.click(15); await app.click(99)'); await tick();
+  assert.match(h.toServer.find(m => m.id === 2).params.arguments.code, /state\.seenLines = \{"14":"menu bar item Format","15":"button OK"\};/);
 });
 
 test('SLEIGHT_FIRST_CALL_BATCH rewrites only the engine\'s first-call rule, only when it matches exactly', async () => {

@@ -155,6 +155,17 @@ test('a prior read with no inventory is used as it is, and a degraded read still
   await assert.rejects(attributed.run('await app.click({ id: "Two" });'), /no element/);
 });
 
+test('the first action stops when its number changed since Claude read the window', async () => {
+  // TextEdit gave a saved document a URL and 14 became File (textedit-save, 2026-10-09).
+  const f = fixture({ current: () => tree(expected, '\t14 menu bar item File\n\t15 menu bar item Format') });
+  await assert.rejects(f.run('await app.click(14);', { seenLines: { 14: 'menu bar item Format' } }),
+    /click\(14\): element 14 changed since you read the window \(was "menu bar item Format", now "menu bar item File"\)[\s\S]*15 menu bar item Format/);
+  assert.deepEqual(f.calls.filter(c => c[0] === 'click'), []);
+  const same = fixture({ current: () => tree(expected, '\t14 menu bar item Format') });
+  await same.run('await app.click(14);', { seenLines: { 14: 'menu bar item Format' } });
+  assert.deepEqual(same.calls.filter(c => c[0] === 'click'), [['click', 14]]);
+});
+
 test('new calls expire a combined snapshot; screenshots replace it with a fresh combined capture', async () => {
   const f = fixture();
   await f.run('await app.getAXStateAndScreenshot();');

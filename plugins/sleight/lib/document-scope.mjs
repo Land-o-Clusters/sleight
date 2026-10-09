@@ -135,6 +135,8 @@ function guardSetup(update) {
     state.careful = ${!!update?.careful};
     // The previous call's read, when the relay judged it reusable for this call's first action.
     state.prior = ${JSON.stringify(update?.prior) ?? 'undefined'};
+    // What Claude was last shown for the numbers this call acts on (number -> line).
+    state.seenLines = ${JSON.stringify(update?.seenLines) ?? 'undefined'};
     const clock = () => globalThis.performance?.now() ?? Date.now();
     const timedRead = async (raw, phase) => {
       const start = clock();
@@ -304,7 +306,14 @@ function guardSetup(update) {
           }
           // An earlier action in this call can renumber the window (Calculator closes
           // its history and every button shifts), so a batch of numbers goes stale.
-          if (!state.callElements.has(proxy)) state.callElements.set(proxy, elements(text ?? ''));
+          if (!state.callElements.has(proxy)) {
+            state.callElements.set(proxy, elements(text ?? ''));
+            // The window can renumber between Claude's read and this call: TextEdit gave a saved
+            // document a URL and 14 became File (textedit-save, 2026-10-09).
+            const seen = typeof args[0] === 'number' && !byId ? state.seenLines?.[args[0]] : undefined;
+            const now = seen !== undefined && text !== undefined ? elements(text).get(args[0]) : undefined;
+            if (seen !== undefined && text !== undefined && !sameElement(seen, now)) throw stop('sleight stopped before ' + name + '(' + args[0] + '): element ' + args[0] + ' changed since you read the window (was ' + JSON.stringify(seen) + ', now ' + JSON.stringify(now ?? 'missing') + '). Use the current numbers in the window below.');
+          }
           else if (typeof args[0] === 'number' && !byId) {
             const was = state.callElements.get(proxy).get(args[0]), now = elements(text).get(args[0]);
             if (!sameElement(was, now)) throw stop('sleight stopped before ' + name + '(' + args[0] + '): an earlier action in this call changed what element ' + args[0] + ' is (was ' + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + '). Use the current numbers in the window below.');
