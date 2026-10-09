@@ -3,7 +3,7 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-09 03:45 UTC, flushed before the owner's clear)
+## Banner (2026-10-09 03:45 UTC, rechecked by sleight-arch after the clear)
 
 Released: `v0.16.0` (`fa23007`), `main` at `dcad210` (the release badge on top), CI green. The
 owner's install is 0.16.0 at `9952faa`. sleight-arch's background jobs have all ended, the live lock
@@ -46,13 +46,16 @@ script that replays through the engine with no model. Known-problems work fills 
 is at the Mac. Left there: keeping a moved word's own formatting in rich text, `/sleight stop` in the
 desktop app, TextEdit's orphan Save Panel window, the engine's 21,000-character first-call docs.
 
-Sol (`codex/real-use-tasks`, `~/Projects/sleight-wt/real-use-tasks`, head `efafe9d`, not running):
-working through brief 5 (`.dev/prompts/sol-real-use-tasks-5.md`). Runs so far: helium-form 3/3 (as a
-native app with `SLEIGHT_SURFACES=computer`), finder-files 3/3, preview-pdf failing in fixture setup;
-Safari, TextEdit with Calculator and simulator-flow not run. Before merging, review it against the
-review in brief 5 (quit launched apps, keyboard-tap check for real runs, `REAL_APPS` out of the core
-allowlist, recovery only through owned references, one failure doesn't stop the suite) and rebase it
-onto `pane/auto-mode`. Safari has been running since Sol's setup launched it at 01:14 UTC. Leave it running.
+Sol (`codex/real-use-tasks`, `~/Projects/sleight-wt/real-use-tasks`, head `1731df9`, not running):
+brief 5 (`.dev/prompts/sol-real-use-tasks-5.md`) round 5 stopped at 16/18 slots
+(`docs/benchmarks/2026-10-08-real-use-tasks-5.md` on the branch). All 6 model trials passed
+(helium-form 3/3, finder-files 3/3); the other 10 failed in setup before a model started (Safari's
+File-menu lookup 3/3, Preview and TextEdit readiness 3/3 each). Two simulator-flow slots wait on
+DeviceHub being quit, and it was not running at 03:40 UTC. The launch-identity fix (`efafe9d`) has
+unit proof only. Before merging, review it against the review in brief 5 (quit launched apps,
+keyboard-tap check for real runs, `REAL_APPS` out of the core allowlist, recovery only through owned
+references, one failure doesn't stop the suite) and rebase it onto `pane/auto-mode`. Safari, Preview,
+TextEdit, Calculator and Helium were running at 03:40 UTC. Leave them running.
 
 Read first: `docs/known-problems.md` (grouped by area), `docs/benchmark.md` (every pass with caveats),
 `.dev/research/` (the Codex head-to-head protocol, the TextEdit save lock).
