@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- When a drag point is covered, `drag` says by which window. A window of the same app with no title is
+  named as a likely dialog to finish or close first. Chess's New Game dialog stopped 9 drags in one
+  run.
 - Text moves in other apps' text areas and fields try the Accessibility move first. Safari's web
   text areas ignore those writes, so `drag` falls back there; other apps' native text views are
   untested. A move whose writes leave the text as it was now says so and tries the next path, where it used to

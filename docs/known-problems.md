@@ -291,7 +291,11 @@ our own runs. Dates and engine versions are given where they matter.
   Each change stopped an action and cost Claude a turn. The Mac was under heavy load from other
   processes that day. We don't know whether the load or Calculator's launch caused it. In the next
   full pass that evening, all 6 Calculator runs took 3 or 4 turns. In the 0.16.0 pass, the first run
-  after Calculator launched took 10 turns and 99.5 s, 31 s of it in guard reads.
+  after Calculator launched took 10 turns and 99.5 s, 31 s of it in guard reads. Its trace shows
+  where: the acquisition launched Calculator and its first read took 15.3 s, then the guard's read
+  before the next call's first action took 16.7 s more. Later guard reads took about 0.4 s. The guard
+  reads again at the start of every call on purpose, since the window may have changed between calls,
+  so we kept it.
 - Calculator button indices changed during a [preapproval trial](benchmarks/2026-10-04-preapproved-apps.md),
   producing the wrong expression. A filtered read then lost the window header, and the input lease
   stopped the retry. Use current indices from full UI reads, and preserve their window headers.
@@ -310,6 +314,10 @@ our own runs. Dates and engine versions are given where they matter.
   input. Another ended in a command failure near its 30 s deadline. Native AX omitted e4 in nine
   further move checks, leaving their outcomes unconfirmed. The historical availability refusals occurred 0/20 times.
   In the covered-drags pass that evening, chess-drag passed 3/3 with no window refusal.
+  In the 0.16.0 pass, chess-drag's failed run started with Cmd+N on a Chess that already had a fresh
+  game, which opened a New Game dialog as a separate, untitled window over the board. It stopped 3
+  engine drags and 6 of sleight's until Claude confirmed it 14 calls in. `drag` now names an untitled
+  window of the same app over a drag point as a likely dialog to finish or close first.
   Every selected window was on screen at layer 0 with matching CG/AX bounds. All twenty launches
   succeeded after confirmed process absence, without a -600 retry. Space, the historical window
   state and the native command failure's cause remain unknown. Some window captures returned black

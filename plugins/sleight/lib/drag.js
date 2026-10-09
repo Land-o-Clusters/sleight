@@ -395,7 +395,14 @@ function exposedEndpoints(list, main, points, sameAppOnly) {
   for (const [name, point] of [['from', points.start], ['to', points.end]]) {
     const top = list.find(w => inside(w.bounds, point) && !/Computer Use$/.test(w.owner) &&
       (!sameAppOnly || w.pid === main.pid));
-    if (!top || top.id !== main.id || top.pid !== main.pid) throw new Error(`${name} is covered by another window; nothing was pressed`);
+    if (!top || top.id !== main.id || top.pid !== main.pid) {
+      // A window of the same app with no title over the target is usually a dialog: Chess's New Game
+      // dialog covered the board and stopped 9 drags in one run (2026-10-09).
+      const dialog = top && top.pid === main.pid && !top.title
+        ? ` by another window of ${top.owner} with no title (windowId ${top.id}), likely a dialog or sheet: finish or close it, read the window again, then drag`
+        : top ? ` by ${top.pid === main.pid ? 'another window of ' + top.owner : top.owner} (windowId ${top.id}${top.title ? ', "' + top.title + '"' : ''})` : '';
+      throw new Error(`${name} is covered${dialog || ' by another window'}; nothing was pressed`);
+    }
   }
 }
 

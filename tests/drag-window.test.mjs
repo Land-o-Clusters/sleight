@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 // Only the native AX/CG boundary is replaced. run() does the real selection,
 // validation, coordinate conversion, mouse sequence and post-drop check.
-function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', setterFails = false, readFails = false, postFails = false, releaseFails = false, changeOnActivate = false, second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection, repairDeletesText = false, movedOnActivate = false, coveredEnd = false, coveredPid = 7, splitAreas = false, missingContent = false, extraElements = 0, stacked = false, raiseWorks = true, raiseActivates = false, offSpace = false, noWindows = false, appId = 'com.apple.TextEdit', busyChecks = 0, typesAt = null, ax = null } = {}) {
+function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', setterFails = false, readFails = false, postFails = false, releaseFails = false, changeOnActivate = false, second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection, repairDeletesText = false, movedOnActivate = false, coveredEnd = false, coveredPid = 7, splitAreas = false, missingContent = false, extraElements = 0, stacked = false, raiseWorks = true, raiseActivates = false, offSpace = false, noWindows = false, appId = 'com.apple.TextEdit', busyChecks = 0, typesAt = null, ax = null, coverTitle = 'cover.txt' } = {}) {
   // Other apps have no selected text unless a test says so: Chess has no text area at all.
   selection ??= appId === 'com.apple.TextEdit' ? 'alpha' : '';
   const events = [], restored = [], activations = [], pidEvents = [], mainWrites = [];
@@ -113,7 +113,7 @@ function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', se
     };
   };
   context.windows = onScreenOnly => noWindows || (onScreenOnly && offSpace) ? [] : [
-    ...(coveredEnd ? [{ id: 33, pid: coveredPid, owner: coveredPid === 7 ? 'TextEdit' : 'Other app', title: 'cover.txt', layer: 0, bounds: { X: 180, Y: 130, Width: 80, Height: 40 } }] : []),
+    ...(coveredEnd ? [{ id: 33, pid: coveredPid, owner: coveredPid === 7 ? 'TextEdit' : 'Other app', title: coverTitle, layer: 0, bounds: { X: 180, Y: 130, Width: 80, Height: 40 } }] : []),
     ...order.filter(id => second || id === 11).map(id => ({ id, pid: 7, owner: 'TextEdit', title: `${id}.txt`, layer: 0, bounds: { ...frames.get(id) } })),
   ];
   const run = changes => JSON.parse(context.run([JSON.stringify({ app: 'TextEdit', from: [26.6, 38.5], to: [119, 38.5], ...changes })]));
@@ -429,4 +429,10 @@ test('an app that ignores Accessibility writes gets the next path, with no undo 
   const h = harness({ background: true, appId: 'com.apple.Safari', selection: 'alpha', ax: { ignored: true } }); const r = h.run(pastEnd);
   assert.notEqual(r.path, 'accessibility'); assert.match(r.fallbackReason, /accessibility move failed: the app ignored/);
   assert.doesNotMatch(r.error ?? '', /Cmd\+Z twice/);
+});
+test('an untitled window of the same app over a drag point is named as a likely dialog', () => {
+  const dialog = harness({ coveredEnd: true, coverTitle: '' }).run({ windowId: 11 });
+  assert.equal(dialog.ok, false); assert.match(dialog.error, /no title \(windowId 33\), likely a dialog or sheet: finish or close it/);
+  const titled = harness({ coveredEnd: true }).run({ windowId: 11 });
+  assert.match(titled.error, /covered by another window of TextEdit \(windowId 33, "cover.txt"\)/);
 });
