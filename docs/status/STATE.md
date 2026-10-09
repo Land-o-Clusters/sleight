@@ -3,61 +3,69 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-09 20:45 UTC)
+## Banner (2026-10-09 21:40 UTC, flushed before the owner's clear)
 
-The owner is away from the Mac. Their bar (ROADMAP track 3): lightning quick, quick under any load,
-no noticeable load on the Mac, measured against Codex on the same engine. Other projects (Puddle,
-SignalCraft) run timed tests here: ask puddle arch before any run that adds load.
+The owner is away from the Mac and working from their phone. Their bar (ROADMAP track 3, 2026-10-09):
+lightning quick, quick under any load, no noticeable load on the Mac, measured against Codex on the
+same engine. Nothing is running and the live lock is free. The checkout is clean with every commit
+pushed, and there are no open PRs.
 
-Released: `v1.1.0` (`0b6a1c0`). Unreleased on `pane/auto-mode` (`09ea082`, pushed), all live-checked
-unless noted: full screen and Split View detection; the guard skipping its read after typing,
-pasting or a plain key (`44700ee`, refined in `db45c94` after a head-to-head failure); the first
-action reusing Claude's read from the call before (`c2bd713`, early live runs only); one app-health
-helper per session (`818f7e7`, fixed live in `025460d`); Sol's real-use suite through brief 10 and a
-Codex arm for it; a per-run CPU footprint (`2cf4394`, `2c30446`).
+**Before any live run, ask puddle arch.** Puddle's window 1009n (render and scroll-FPS timing in a real
+app window) started about 21:15 UTC on 2026-10-09 and should close about 22:00 to 22:10 UTC. Its end
+notice goes to the previous sleight session, so a fresh one must ask: `SendMessage` to
+`uds:/tmp/cc-socks/9177.sock` (from-name "puddle arch"). No app driving during a window. Ask before
+any run that adds load (memory `shared-mac-quiet-windows`).
 
-Head-to-head at normal load (published): sleight 20/21 and 904 s against Codex 16/21 and 1,292 s on
-the default tasks, 12/12 and 396 s against 11/11 and 429 s on six real-use tasks. Under 20 CPU
-workers (stopped early, 9 runs): both timed out on Calculator; sleight's reads before clicks by ID
-cost tens of seconds each, where Codex makes none.
+Released: `v1.1.0` (`0b6a1c0`, 2026-10-09), on `main`. Unreleased on `pane/auto-mode` at `874a280`:
+- Live-checked: full screen and Split View detection; one app-health helper per session
+  (`818f7e7`, `025460d`); the guard's read skipped after typing, pasting or a plain key (`44700ee`,
+  `db45c94`, owner's call); the reuse check that never checked now reads (`e66791a`); degraded reads
+  under load (`7d63e48`, `674502d`); Sol's real-use suite through brief 11 (`874a280`) and the Codex
+  arm for it (`768cbcd`); per-run CPU footprint (`2cf4394`, `2c30446`).
+- Unit-tested only, from a study of the slowest head-to-head runs. A guard stop includes the current
+  window (`94db208`); `drag` refuses an uncoverable drag before scanning (`94db208`); the first action
+  checks its numbers against what Claude last saw, and Claude's read stands in only when it took over
+  2 s (`f76ee76`); labels match settable fields and menu items named alone (`acf4b8d`); a note on
+  closing an open menu (`202b184`, changes what Claude does). Off by default, an experiment:
+  `SLEIGHT_FIRST_CALL_BATCH=1` (`6cd41ba`).
 
-Since 21:15 UTC, Puddle's window 1009n means no app driving until puddle arch says it closed. A study
-of the slowest head-to-head runs gave five fixes, unit-tested and waiting for live checks:
-- A guard stop includes the current window (`94db208`).
-- `drag` refuses an uncoverable drag before scanning (`94db208`).
-- The first action checks its numbers against what Claude last saw, and Claude's read stands in
-  for a fresh one only when reads are slow (`f76ee76`).
-- Labels match settable fields and menu items named alone (`acf4b8d`).
-- A note on how to close an open menu (`202b184`, which changes what Claude does).
+Head-to-head (published in `docs/benchmark.md`): at normal load sleight 20/21 in 904 s against Codex
+16/21 in 1,292 s on the default tasks, and 12/12 in 396 s against 11/11 in 429 s on six real-use
+tasks. Under 20 CPU workers (9 runs, stopped early) both timed out on Calculator, and sleight's
+reads before clicks by ID cost tens of seconds each.
 
-Next:
-- Live: a menu closed by `performSecondaryAction(0, "Cancel")`, a guard stop with its tree.
-- Rerun the CPU footprint with `2c30446` so Codex's engine counts, on a few tasks at normal load.
-- The batching A/B (`SLEIGHT_FIRST_CALL_BATCH=1`) on the default tasks' turns.
-- Office: brief 11 (cleanup reads retry), then excel-edit and powerpoint-edit; Mail and Mimestream
-  with the owner watching.
-- A release once a full pass confirms these numbers, with the README reread whole (LAWS).
+Next, in order, after Puddle's window:
+1. Live checks: `performSecondaryAction(0, "Cancel")` closes an open menu at element 0 (Calculator,
+   `.dev`-style relay client), and a guard stop shows its tree.
+2. Office qualification: `node bench/run.mjs --suite real --arm sleight --owner-away --runs 1 --tasks
+   excel-edit,powerpoint-edit`. Word passed 1/1 at `6f88fb3`.
+3. CPU footprint rerun with `2c30446` (Codex's engine now counts): calculator-click, textedit-edit,
+   textedit-save, `--arm sleight,codex --runs 2`.
+4. Batching A/B: sleight only, textedit-save, textedit-edit, calculator-menu, chess-drag, 3 runs each,
+   with `SLEIGHT_FIRST_CALL_BATCH` unset, then `=1`. Compare turns.
+5. A full release pass with the owner away, then reread README whole and release (LAWS).
 
 Branches and worktrees:
 - `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it.
-- `codex/real-use-tasks` (`~/Projects/sleight-wt/real-use-tasks`, Sol): squash-merged through
-  `b8f4b3f`. Sol works brief 10 there. Squash its next commits the same way.
-- `arch/codex-real-arm` (`~/Projects/sleight-wt/codex-real`) and `codex/guard-speed`
-  (`~/Projects/sleight-wt/guard-speed`): merged, safe to remove with their worktrees.
-- `perf/screenshot-scale` (`1aa574b`, `~/Projects/sleight-wt/shots`): parked.
-- `fix/drag-chess` and older `codex/*` worktrees: earlier rounds. Leave them.
+- `codex/real-use-tasks` (`1a73515`, `~/Projects/sleight-wt/real-use-tasks`, Sol, idle): applied
+  through `1a73515`. Apply Sol's next commits as a diff the same way.
+- Merged, safe to remove with their worktrees: `arch/codex-real-arm` (`~/Projects/sleight-wt/codex-real`),
+  `codex/guard-speed` (`~/Projects/sleight-wt/guard-speed`), `fix/drag-chess`.
+- `perf/screenshot-scale` (`1aa574b`, `~/Projects/sleight-wt/shots`): parked. Older `codex/*`
+  worktrees: earlier rounds. Leave them.
+- Proposed, not started: a session card "Replay: steps that wait for the app" (task `task_3df10eb3`).
 
-Waiting on the owner: brief 11 for Sol (`.dev/prompts/sol-real-use-tasks-11.md`). Mail and
-Mimestream need them watching for about 10 minutes.
-Qualification left fixture windows on their screen: about seven in Safari, two in Helium, six
-Preview `Pages-*.pdf`, and Word and Excel running with fixture documents.
+Waiting on the owner: watching Mail and Mimestream (about 10 minutes). Left on their screen: about
+seven Safari fixture windows, two Helium, six Preview `Pages-*.pdf`, Word and Excel with fixture
+documents, and a TextEdit "Untitled 6" in their iCloud TextEdit folder, probably a benchmark
+leftover (check it only by exact content, never by browsing their files).
 
-Owner's plan after 1.0 (2026-10-09), run in order without check-ins: (1) the real-use suite, then the
-Codex head-to-head on it, (2) the launch post (`~/Desktop/sleight-launch/thread-1.0.md`, where only
-the real-use line is still [PENDING]), and (3) replay's next steps. The full plan is `docs/status/ROADMAP.md`.
+Owner's plan after 1.0 (2026-10-09), run in order without check-ins: (1) the real-use pass and the
+Codex head-to-head on it (done at normal load; see Next), (2) the launch post
+(`~/Desktop/sleight-launch/thread-1.0.md`, whose real-use line is still [PENDING]), and (3) replay's
+next steps. The full plan is `docs/status/ROADMAP.md`.
 
-Read first: `docs/known-problems.md` (grouped by area), `docs/benchmark.md` (every pass with caveats),
-`.dev/research/` (the Codex head-to-head protocol, the TextEdit save lock).
+Read first: `docs/known-problems.md`, `docs/benchmark.md`, `docs/design/guard-reads.md`.
 
 ## Machine state outside the repo
 
@@ -94,6 +102,10 @@ Read first: `docs/known-problems.md` (grouped by area), `docs/benchmark.md` (eve
 - The weekly watch's baseline (`~/Library/Logs/sleight/watch-engine-version`) is 26.1002.52244, set by
   hand on 2026-10-08 after the diff was captured.
 - `~/Library/Caches/sleight-bench/sleight-arm`: the benchmark's sleight arm folder.
+- Scratch clients from 2026-10-09, in the session's scratchpad (gone after the clear): rebuild a
+  relay client with `bench/double-keys-client.mjs` (`probeClient`, `relay: true`), and a full-screen
+  fixture with a small Swift app calling `toggleFullScreen` (see the 2026-10-09 notes in
+  `docs/benchmark.md`).
 - `.dev/` (untracked): test CLI, old `sleight-arm` and `lcu-arm` bench folders, `DragProbe.app`, the
   compiled `textedit-drag-fixture`, pseudo-terminal harnesses, research, prompts.
 - Direct drag test: open a temp file with `open -g -a TextEdit`, run
@@ -103,7 +115,6 @@ Read first: `docs/known-problems.md` (grouped by area), `docs/benchmark.md` (eve
 
 ## Waiting on the owner
 
-- Clicking "Start Using Excel" in Excel and pasting brief 10 to Sol.
 - Watching the Mail and Mimestream tasks.
 - The OpenAI key note is theirs to handle. Don't raise it again (owner, 2026-10-09).
 

@@ -77,6 +77,9 @@ belong in [STATE.md](STATE.md).
   ChatGPT app. Restarting ChatGPT ends every Codex thread, so it's the owner's call, never a test step.
 - macOS picks a drag's drop target from what's on screen at the drop point. A drag posted to an app in
   the background never drops into a window another app covers there.
+- An engine read right after input waits for the UI to settle, and that wait is also what lets the
+  next key reach a panel or sheet the previous action opened. A guard that skips reads keeps them
+  after clicks, shortcuts, Return, Escape, Tab and Space.
 - The engine doesn't remember a session's approvals. In Codex the host does, so here the relay does. It
   does honor the "Always allow" list ChatGPT keeps (`ComputerUseAppApprovals.json`), with no prompt to
   sleight. That file is the user's ChatGPT setting: sleight reads it at most, and the owner decides any change.
@@ -98,6 +101,9 @@ belong in [STATE.md](STATE.md).
   the branch's author to rebase. Hand merges there broke the relay twice.
 - A Codex report is a claim until sleight-arch reproduces it under normal use: the owner at the Mac,
   other apps open. Results measured while the owner was away say so.
+- Other projects on this Mac run timed tests in announced windows. Their architects message this
+  session. No app driving during a window, ask before any run that adds load, and say in the results
+  when a run overlapped another project's load.
 - Live checks that drive apps hold `/tmp/sleight-live.lock`, taken with `mkdir`, released on exit. A
   command that can't take it stops there (`mkdir … || exit 1`), so nothing after it runs.
 - A run that can take the owner's pointer or keyboard happens only while the owner is away from the
