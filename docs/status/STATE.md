@@ -51,11 +51,14 @@ brief 5 (`.dev/prompts/sol-real-use-tasks-5.md`) round 5 stopped at 16/18 slots
 (`docs/benchmarks/2026-10-08-real-use-tasks-5.md` on the branch). All 6 model trials passed
 (helium-form 3/3, finder-files 3/3); the other 10 failed in setup before a model started (Safari's
 File-menu lookup 3/3, Preview and TextEdit readiness 3/3 each). Two simulator-flow slots wait on
-DeviceHub being quit, and it was not running at 03:40 UTC. The launch-identity fix (`efafe9d`) has
-unit proof only. Before merging, review it against the review in brief 5 (quit launched apps,
-keyboard-tap check for real runs, `REAL_APPS` out of the core allowlist, recovery only through owned
-references, one failure doesn't stop the suite) and rebase it onto `pane/auto-mode`. Safari, Preview,
-TextEdit, Calculator and Helium were running at 03:40 UTC. Leave them running.
+DeviceHub being quit, and it was not running at 03:40 UTC. sleight-arch reran its checks (754/754,
+lint 0 flags) and a review confirmed brief 5's six fixes in the code, but found the real suite's
+end-of-pass tail quits nothing, so a permission stop can leave a launched Device Hub open, and that
+Safari setup recovery can close a window without an identity check. Brief 6
+(`.dev/prompts/sol-real-use-tasks-6.md`, ready to paste) fixes those and the setup failures, then
+qualifies the five tasks without the simulator. simulator-flow's 3 slots run with the 1.0 runs while
+the owner is away. Rebase onto `pane/auto-mode` at merge. Safari, Preview, TextEdit, Calculator and
+Helium were running at 03:40 UTC. Leave them running.
 
 Read first: `docs/known-problems.md` (grouped by area), `docs/benchmark.md` (every pass with caveats),
 `.dev/research/` (the Codex head-to-head protocol, the TextEdit save lock).
