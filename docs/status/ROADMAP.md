@@ -55,8 +55,11 @@ only with a measured reason. In order:
    renumbering. The read after the call saves Claude a turn, so it stays only if the head-to-head
    shows it pays.
 3. Stop spawning processes per call. Done for app probes: one long-lived helper per session, about
-   33 ms a probe against about 180 ms a spawn (`818f7e7`). Left: the keyboard-tap check at turn end
-   and the pane's snapshot, once the footprint numbers say what they cost.
+   33 ms a probe against about 180 ms a spawn (`818f7e7`). Left, from a code audit (2026-10-09, costs
+   unmeasured until the footprint run). The pane snapshot decodes a full screenshot in JavaScript
+   after each turn that used sleight. A second engine starts at launch to find browser extensions,
+   which slows the first call. Local tools spawn `osascript` twice per call, each lease operation
+   opens SQLite, and the keyboard-tap scan holds up the turn end. Rank them by the footprint numbers.
 4. Fewer turns. Model time is about two thirds of a run, so batching like Claude's own computer use
    is the largest lever left once the reads are cheap.
 5. A release only when the head-to-head shows sleight at Codex's speed and footprint, with the numbers
