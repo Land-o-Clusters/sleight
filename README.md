@@ -137,7 +137,8 @@ before relying on a diff.
 - Per-app approvals apply however you've set up the `js` tool. An accepted approval lasts for the
   session ([approval scope](docs/settings.md#approval-scope)).
 - Foreground `drag` fallback, `hover` and the `menu_bar` fallback for SwiftUI icons move your pointer
-  briefly, and each waits until you've stopped typing and using the mouse for 2 s. `drag` refuses points outside
+  briefly, and each waits until you've stopped typing and using the mouse for 2 s. `drag` moves text
+  in a TextEdit window you've covered through Accessibility instead, without the pointer. `drag` refuses points outside
   the chosen window's visible content; foreground also refuses covered endpoints, after bringing the
   app forward.
   `hover` refuses points another window covers, including

@@ -78,15 +78,19 @@ our own runs. Dates and engine versions are given where they matter.
   first and repairs the verified space. It only works when no other app's window covers the drag
   points, because macOS picks the drop target from what's on screen there: 3/3 TextEdit moves with
   the window uncovered, 0/3 with this Claude window over it (2026-10-05). When another app covers
-  either point, the tool goes straight to the foreground drag and names that app. On 2026-10-08 that
-  took the owner's focus mid-sentence during a pass, and a typed space went into TextEdit, so it now
-  waits for 2 s without any input (up to 10 s), and stops if keys are typed once it has taken focus.
-  A pointer-free move through Accessibility worked (1/1 live, Claude covering TextEdit), but it's off.
+  either point, or the posted drag leaves the text unchanged, the tool moves the text through
+  Accessibility instead, with no pointer or focus change. It maps the drop point to a character, puts
+  the word there and takes it out at the source with TextEdit's spacing, then checks the whole text.
   After an Accessibility text write, TextEdit's next Cmd+S deadlocked on the document's save lock in 10
-  of 13 probe trials with the file opened through the Open panel, and in 0 of 3 opened with `open -g`.
-  That's the same hang as `setValue` on 2026-10-05, and the spacing repair below writes text the
-  same way. Typing the text with posted key events didn't hang, but TextEdit auto-capitalized it and
-  dropped an emoji. We don't know what holds the save lock. Before the
+  of 13 probe trials with the file opened through the Open panel (0 of 3 opened with `open -g`), the
+  same hang as `setValue` on 2026-10-05. One Shift press and release posted to TextEdit's process after
+  the write prevents it: 0 hangs in 10 trials that edited, against 5 in 8 without it, and then 10
+  `drag` moves in a row saved with no hang (2026-10-09). We don't know why the event helps, or what
+  held the lock. The move inserts plain text, so a moved word in a rich text document takes the
+  formatting at the drop point, and undoing it takes two Cmd+Z. Other apps' text areas haven't been
+  tried. The foreground drag is the last resort. On 2026-10-08 it took the owner's focus mid-sentence
+  during a pass, and a typed space went into TextEdit, so it now waits for 2 s without any input (up
+  to 10 s), and stops if keys are typed once it has taken focus. Before the
   named-window raise guard,
   [product trials](benchmarks/2026-10-04-background-drag-product.md)
   passed 3/3 TextEdit moves, with TextEdit inactive and the front app unchanged. The owner moved the

@@ -106,6 +106,7 @@ function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', se
         values.set(11, text().slice(0, location) + s + text().slice(location + length));
       },
       select: () => {},
+      settle: () => axWrites.push('settle'),
     };
   };
   context.windows = onScreenOnly => noWindows || (onScreenOnly && offSpace) ? [] : [
@@ -403,4 +404,10 @@ test('the screenshot of the dragged window wins over the app\'s latest one', () 
   const h = harness({ background: true, coveredEnd: true, coveredPid: 9, ax: {} });
   const r = h.run({ windowId: 11, from: [53.2, 77], to: [300, 77], screenshot: [1000, 1000], screenshots: { '11.txt': [1200, 800] } });
   assert.equal(r.ok, true, r.error); assert.equal(r.screenshotScale, 2);
+});
+test('an Accessibility move settles the app after writing, even when its second write fails', () => {
+  for (const failWrite of [undefined, 2]) {
+    const h = harness({ background: true, coveredEnd: true, coveredPid: 9, ax: { failWrite } }); h.run(pastEnd);
+    assert.equal(h.axWrites.at(-1), 'settle', `failWrite ${failWrite}`);
+  }
 });

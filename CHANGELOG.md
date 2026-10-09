@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A text drag into a TextEdit window you've covered no longer takes your pointer. `drag` moves the
+  text through Accessibility, then posts one Shift press and release to TextEdit's process. Without
+  that event, TextEdit's next Cmd+S deadlocked in 10 of 13 probe trials; with it, 0 in 10, and 10
+  `drag` moves in a row saved cleanly. The background mouse drag's spacing repair gets the same event.
+
 - The benchmark quits Device Hub or Simulator after each simulator run, and stops a pass when a
   benchmark app still holds a keyboard event tap afterwards. On 2026-10-09 Device Hub's tap stalled
   every key on the owner's Mac until it quit.

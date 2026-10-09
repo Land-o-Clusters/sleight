@@ -150,6 +150,7 @@ function textDropSpace(before, word, after, selected) {
 }
 
 function repairTextDrop(snapshot) {
+  const settle = () => { if (snapshot?.pid) attempt(() => settleAfterTextWrite(snapshot.pid)); };
   if (!snapshot) return { spaceInserted: false };
   try {
     const after = snapshot.el.value();
@@ -157,6 +158,7 @@ function repairTextDrop(snapshot) {
     const replacement = textDropSpace(snapshot.text, snapshot.selected, after, selected.value());
     if (!replacement) return { spaceInserted: false };
     selected.value = replacement;
+    settle();
     const at = after.indexOf(snapshot.selected);
     const expected = after.slice(0, at) + ' ' + after.slice(at);
     if (snapshot.el.value() !== expected) throw new Error('TextEdit did not confirm the spacing repair; read the document before continuing');
@@ -196,6 +198,20 @@ function finishTextDrop(snapshot, window) {
   return outcome;
 }
 
+// After another process writes text through Accessibility, TextEdit's next Cmd+S deadlocked on the
+// document's save lock in 10 of 13 probe trials (2026-10-08). One Shift press and release posted to
+// the app (not the HID stream, so it never reaches the user's keyboard) after the write: 0 hangs in
+// 10 trials that edited, against 5 in 8 without it (2026-10-09). Why it works is unknown.
+function settleAfterTextWrite(pid) {
+  for (const down of [true, false]) {
+    const e = $.CGEventCreateKeyboardEvent(null, 56, down); // kVK_Shift
+    $.CGEventSetFlags(e, down ? $.kCGEventFlagMaskShift : 0);
+    $.CGEventSetType(e, $.kCGEventFlagsChanged);
+    $.CGEventPostToPid(pid, e);
+    delay(0.05);
+  }
+}
+
 // The text area under a screen point, through the Accessibility C API, which
 // can map a point to a character and write text without the pointer or focus.
 // JXA can't pass struct pointers, so AXValues are built from an NSValue's bytes.
@@ -233,6 +249,7 @@ function axTextArea(pid, point) {
     },
     replace: (location, length, text) => { set(el, 'AXSelectedTextRange', range(location, length)); set(el, 'AXSelectedText', $(text)); },
     select: (location, length) => set(el, 'AXSelectedTextRange', range(location, length)),
+    settle: () => settleAfterTextWrite(pid),
   };
 }
 
@@ -292,6 +309,7 @@ function accessibilityMove(area, snapshot, end, window) {
     try { area.replace(...edits[1]); } catch (_) {}
     after = attempt(() => area.value(), null);
   }
+  attempt(() => area.settle());
   if (after !== expected) {
     return { lostText: typeof after !== 'string' || after.replace(/\s/gu, '').length < before.replace(/\s/gu, '').length,
       error: `The text in TextEdit window ${window.id} (${window.title}) isn't what the move should have made. Press Cmd+Z twice in that window, then read it again before continuing.` };
@@ -412,6 +430,7 @@ function run(argv) {
       delay(settleMs / 1000);
       checkWindow(main, pid, win);
       const points = validatePoints(content(win, main.bounds), main.bounds, pointFrom, pointTo, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit');
+      if (points.text) points.text.pid = pid;
       // Another document of this app must not receive the press: check fresh
       // own-app order at both ends, then other apps' coverage below.
       const ordered = checkWindow(main, pid, win);
@@ -422,11 +441,11 @@ function run(argv) {
       const cover = coveringApp(ordered, main, points);
       if (cover) fallbackReason = `background skipped: ${cover} covers the window at the drag points`;
       // A text move can be done without any pointer at all: the foreground
-      // path took the owner's pointer and focus mid-sentence (2026-10-08). It's off:
-      // after an Accessibility text write, TextEdit's next Cmd+S deadlocked on its
-      // save lock in 10 of 13 probe trials (2026-10-08). The tests turn it on.
+      // path took the owner's pointer and focus mid-sentence (2026-10-08). The write
+      // is followed by settleAfterTextWrite, without which TextEdit's next save could
+      // deadlock. The tests turn it off where they test the other paths.
       const byAccessibility = () => {
-        if (globalThis.SLEIGHT_ACCESSIBILITY_MOVE !== true) return null;
+        if (globalThis.SLEIGHT_ACCESSIBILITY_MOVE === false) return null;
         let area;
         try { area = axTextArea(pid, points.end); }
         catch (e) { fallbackReason += `; accessibility move unavailable: ${e.message || e}`; return null; }
@@ -521,6 +540,7 @@ function run(argv) {
     main = windows(true).find(w => w.id === main.id && w.pid === pid && w.layer === 0);
     if (!main || !sameBounds(frame(win), main.bounds)) throw new Error('the chosen window changed or disappeared; read it again');
     const { start, end, text } = validatePoints(content(win, main.bounds), main.bounds, pointFrom, pointTo, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit');
+    if (text) text.pid = pid;
     // Match the exact window at both endpoints, even for another window of
     // the same app. The engine cursor overlay lets events through.
     const currentWindows = windows(true);
