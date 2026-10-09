@@ -234,7 +234,10 @@ function guardSetup(update) {
           // in a Save panel: 18 stopped calls in two benchmark passes, 2026-10-07). It
           // isn't another document, so the lease alone lets it through.
           const panel = state.adoptUrl && observed?.app === state.expected?.app && observed.title === '' && !observed.url;
-          if (!cancel && !dialog && !panel && (!observed || ['title', 'app', 'url'].some(key => observed[key] !== state.expected[key]))) {
+          // A relay without a lease, document scope or change review forwards actions
+          // unguarded, yet handles a read acquired are still proxies. No guarded call
+          // has set a window then, so there is nothing to compare.
+          if (state.expected && !cancel && !dialog && !panel && (!observed ||['title', 'app', 'url'].some(key => observed[key] !== state.expected[key]))) {
             // Without document scope or change review, the stop carries the window it saw, so the
             // relay can lease that window for Claude's retry (Chess retitles itself on each move).
             throw (state.adoptUrl ? stop : message => new Error(message))(state.reason + ' Observed ' + JSON.stringify(observed));

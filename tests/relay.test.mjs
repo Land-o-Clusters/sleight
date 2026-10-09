@@ -1352,6 +1352,28 @@ test('a stale Cancel ID cannot bypass the runtime guard or mutate an outside edi
   assert.equal(readFileSync(path, 'utf8'), 'user\n');
 });
 
+test('without a lease, document scope or change review, actions on a handle a read proxied go through', async () => {
+  // The read installs the guard's proxy; the action goes out unguarded, so the
+  // guard has no expected window to compare.
+  let ui = 'Window: "x.txt", App: TextEdit\n0 standard window x.txt';
+  const keys = [];
+  const relaunched = () => ({ getAXState: async () => ui, pressKey: async key => keys.push(key) });
+  let raw = relaunched();
+  const context = createContext({ app: undefined, cua: { getApp: async () => raw }, nodeRepl: { write() {} } });
+  const h = harness({ changeReview: false });
+  const run = async (id, code) => {
+    flowCall(h, id, code);
+    const result = await runInContext(`(async () => { ${h.toServer.find(m => m.id === id).params.arguments.code} })()`, context);
+    flowAnswer(h, id, ui);
+    return result;
+  };
+  await run(1, 'app = await cua.getApp("TextEdit")');
+  raw = relaunched(); // TextEdit quit and relaunched: a new engine handle.
+  await run(2, 'app = await cua.getApp("TextEdit")');
+  await run(3, 'await app.pressKey("super+s"); return "saved"');
+  assert.deepEqual(keys, ['super+s']);
+});
+
 test('a concurrent read cannot disable the guard of an in-flight mutation', async () => {
   const path = join(fixtureRoot, 'concurrent-read.txt'); writeFileSync(path, 'before\n');
   const header = `Window: "concurrent-read.txt", App: TextEdit\nURL: ${pathToFileURL(path).href}`;
