@@ -40,16 +40,21 @@ Next:
    one full pass (best while the owner is away), release 0.16.0 and update the owner's install
    (`claude plugin marketplace update sleight`, `claude plugin update sleight@sleight`).
 2. Owner's plan, step 3 (better). Sol's `codex/real-use-tasks` (`7420d18`, round two) completed 3 of 18
-   trials, 1 passed (report in `~/Projects/sleight-wt/real-use-tasks/docs/benchmarks/`). Safari's setup
-   failed 3/3 because Safari wasn't running (setup should launch it). Helium failed 2/3 because the
-   engine's browser-access request can't be answered in `claude -p`, and sleight never pre-approves
-   browser requests (LAWS). Owner agreed (2026-10-08): probe Helium as a native app through the engine,
-   one live call with no model. If no browser request appears, Sol switches `helium-form` to that and
-   adds the Safari launch; otherwise Helium leaves the qualifying suite with a known-problems entry.
-   Then qualification, review, merge, and the head-to-head with native Codex computer use.
-3. Owner's plan, step 4, the rest of `docs/known-problems.md`. First a clearer message than
-   `noWindowsAvailable` when an app is on another Space. The input guard should also cover `hover` and
-   the `menu_bar` fallback. Then step 5, the 1.0 decision with the owner.
+   trials, 1 passed. Cause found 2026-10-08: `selectSurfaces` turns on the engine's browser surface
+   when it finds the browser extension (this Mac's Helium has it), so Claude drove Helium as a
+   browser and hit browser-access requests. A raw engine probe with only the `computer` surface
+   (`.dev/tools/helium-native-probe.mjs`) got only Helium's app approval and typed into the form (1/1).
+   Brief for round three: `.dev/prompts/sol-real-use-tasks-3.md` (runner sets `SLEIGHT_SURFACES=computer`,
+   Safari setup launches Safari, rerun 18 trials). The owner pastes it to Sol. Then review, merge, and
+   the Codex head-to-head (feasibility research running, notes to `.dev/research/`).
+3. Owner's plan, step 4, known problems. Done in 0.16.0: the `noWindowsAvailable` message, pause guards,
+   drag coordinates. Open: (a) TextEdit's save lock after Accessibility text writes (research running);
+   (b) Calculator's AX churn after launch; (c) `drag` refusing a fresh Chess window; (d) TextEdit's
+   orphan Save Panel window; (e) `/sleight stop` in the desktop app; (h) "reading 'title'" from the
+   relay for a test client (agent fixing it in a worktree). (f) done: the watch's baseline is now
+   26.1002.52244. (g) inconclusive: a probe of `click({ key: "shift" })` and `pressKey(…, { durationMs })`
+   on macOS (`.dev/tools/click-options-probe.mjs`) read the same selection whatever it did, so its
+   readings can't be trusted. The engine documents both for Linux only. Then step 5, the 1.0 decision.
 
 Read first, published today: `docs/benchmark.md` (every pass since 0.13.1, with caveats),
 `docs/known-problems.md` (Split View, the desktop pane, Calculator's AX churn after launch).
@@ -64,7 +69,7 @@ API diff (`~/Library/Logs/sleight/engine-api-26.1002.52244.diff`, captured by ha
 `watch.sh` would run a benchmark task during the pass) adds `click(…, { key, durationMs })`
 (modifiers held through the click, timed press) and `pressKey(key, { durationMs })`. The relay passes
 `click` options through untouched. Open: whether the skill should document Shift/Cmd-click and long
-press. `watch-engine-version` still says 26.930.51102, so Monday's watch will run its benchmark task.
+press. The watch's baseline was set to 26.1002.52244 by hand on 2026-10-08.
 
 Codex: `codex/guard-reads` (0.13.4), `codex/engine-time` (0.13.5) and `codex/reliability` (0.14.1) are
 merged. Their worktrees in `~/Projects/sleight-wt/` can go once Codex is done with them.
