@@ -75,8 +75,8 @@ Read first: `docs/known-problems.md` (grouped by area), `docs/benchmark.md` (eve
 
 ## Waiting on the owner
 
-- Stepping away from the Mac, so the Chess and simulator head-to-head and the 1.0 pass can run.
-- Rotating the OpenAI API key kept in plain text in an iCloud TextEdit note (told 2026-10-08).
+- Being at the Mac to watch the Mail and Mimestream tasks. The OpenAI key note is theirs to handle:
+  don't raise it again (owner, 2026-10-09).
 
 ## Reading list
 
