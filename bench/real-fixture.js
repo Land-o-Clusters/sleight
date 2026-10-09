@@ -258,7 +258,16 @@ function run(argv) {
   var inherited = request.mode === 'inherit';
   while (command() !== 'opened') {
     if (command() === 'close') throw new Error('Fixture opening interrupted before identity was recorded');
-    api.wait();
+    // A launch can open the app, then fail before its remaining setup finishes.
+    // Record that process while launch is pending, before cleanup can interrupt it.
+    if (!pid && command() === 'launching') {
+      target = application();
+      if (target) {
+        pid = Number(target.processIdentifier);
+        emit({ stage: 'launched', pid: pid });
+      }
+    }
+    waitForLaunch();
   }
   var applicationReady = false;
   for (var attempt = 0; attempt < 200; attempt++) {

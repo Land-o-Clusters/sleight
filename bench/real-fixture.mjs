@@ -76,6 +76,11 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
     async dispose() { controller.abort(); return (await response).groupClean === true; },
   };
   let command;
+  const beginLaunch = (launched = true) => {
+    lease.launched = launched;
+    diagnostics.launched = launched;
+    writeFileSync(control, JSON.stringify({ command: 'launching' }), { mode: 0o600 });
+  };
   try { command = await helper(request, signal); }
   catch (error) { if (error.noMutation === true) diagnostics.cleanup = 'nothing created'; throw error; }
   ctx.windowLeases.push(lease);
@@ -109,14 +114,14 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
   try {
   if (request.bundle === 'com.apple.Safari') {
     await waitStage('launch');
-    lease.launched = true;
+    beginLaunch();
     await open('/usr/bin/open', ['-g', '-a', 'Safari'], { signal, timeout: 15000 });
   }
   await waitStage('armed');
   signal?.throwIfAborted();
-  lease.launched = true;
-  if (launch) await launch();
+  if (launch) await launch(beginLaunch);
   else {
+    beginLaunch();
     const args = request.app === 'Helium'
       ? ['-n', '-g', '-a', request.app, '--args', '--new-window', request.target]
       : ['-g', '-a', request.app, ...(request.target ? [request.target] : [])];
