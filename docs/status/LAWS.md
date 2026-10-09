@@ -99,5 +99,7 @@ belong in [STATE.md](STATE.md).
   that code. Features built on one say so plainly; only the user decides approvals, keeps and undos.
 - A speed claim gives turns, model time and model time per turn with the total. The model API's
   latency changes from pass to pass, so total time alone can show a change that isn't sleight's.
+- Every release rereads README.md whole and fixes any number, version or behavior that's no longer
+  true (owner, 2026-10-09). A claim tied to a release or a pass names it.
 - Docs pass `npm run lint:prose` with zero flags. Limitations go in `docs/known-problems.md` when we find
   them.

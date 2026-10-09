@@ -81,12 +81,13 @@ then start a new session. A running session keeps the version it started with.
   intended one.
 - It's light on context. After each action Claude gets only what changed. On the CNN front page,
   scrolling down five times sent 39,655 characters instead of 203,160.
-- It asks once per app per session. A list you write yourself can pre-approve apps. Terminals and
+- It asks once per app per session, except for apps you marked "Always allow" in Codex or ChatGPT,
+  which the engine approves itself. A list you write yourself can pre-approve apps. Terminals and
   OpenAI's apps stay off until you opt in, and sleight shows you each terminal command first unless
   you turn that off too.
-- The benchmark results are published with their failures. It passed 16/18 in the 0.7.0 release
-  check and 12/12 in each of the five full passes since. Smaller passes in between lost runs
-  to TextEdit hangs, and those are published too.
+- The benchmark results are published with their failures. Its tasks in Calculator, TextEdit, Chess
+  and an iPhone simulator run three times each, and the 0.16.0 release pass passed 20/21. Every
+  pass on the way is published too, including one at 13/21 run while the apps were on another Space.
 
 sleight also does what the engine can't. It drags text, which the engine's own drag fails to move,
 and reaches menu bar icons and notification banners. Each of these needs its own approval.
