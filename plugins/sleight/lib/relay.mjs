@@ -94,6 +94,13 @@ const TURN_END_TOOL = 'turn_ended';
 // (batching study, 2026-10-09). Rewritten only while the engine's sentence is exactly this.
 const FIRST_CALL_RULE = 'execute exactly one of the API calls shown below, optionally assigning its result to a variable. Do not add other API calls, waits, or snapshots to that invocation.';
 const FIRST_CALL_BATCH = 'start with one of the API calls shown below, assigning the app to a variable. When you already know the first actions on that app, put them after it in the same call: sleight acquires the app and checks its window before they run. Chain every later action whose target you already know (keys, text, `{ id }` or `{ label }` clicks) in one call too.';
+// An open menu in front of a window reads as "0 menu Secondary Actions: Cancel". Escape left it open in
+// 3 of 3 tries in the head-to-head (TextEdit and Finder, 2026-10-09), and its Cancel action closed it.
+export function openMenuNote(text) {
+  const menu = typeof text === 'string' && /^\t*(\d+) menu (?:[^\n]*, )?Secondary Actions: [^\n]*\bCancel\b/m.exec(text);
+  return menu ? `sleight: a menu is open (element ${menu[1]}). Escape doesn't always close a menu in a background app; \`await app.performSecondaryAction(${menu[1]}, "Cancel")\` does.` : undefined;
+}
+
 export function batchingDescription(description) {
   return typeof description === 'string' && description.includes(FIRST_CALL_RULE) ? description.replace(FIRST_CALL_RULE, FIRST_CALL_BATCH) : description;
 }
@@ -1647,6 +1654,10 @@ export function createRelay({
         entry.latest = shot[1];
         if (shot[2] !== undefined) entry.byTitle[shot[2]] = [shot[1].width, shot[1].height];
         screenshots.set(shot[0].toLowerCase(), entry);
+      }
+      if (!automatic && jsCode !== undefined) {
+        const note = openMenuNote(msg.result.content.filter(c => c.type === 'text').map(c => c.text).join('\n'));
+        if (note) msg.result.content.push({ type: 'text', text: note });
       }
       // sleight's own advice says getAXState({ disableDiffing: true }) gives a full read. Compacting
       // it to "no change" sent Claude to a screenshot instead (2026-10-08). Recovery's visible read

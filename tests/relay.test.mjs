@@ -1740,6 +1740,17 @@ test('the relay passes the lines Claude last saw for the numbers a call acts on'
   assert.match(h.toServer.find(m => m.id === 2).params.arguments.code, /state\.seenLines = \{"14":"menu bar item Format","15":"button OK"\};/);
 });
 
+test('a read with an open menu in front says how to close it', async () => {
+  const { openMenuNote } = await import('../plugins/sleight/lib/relay.mjs');
+  assert.match(openMenuNote('Window: "", App: TextEdit.\n0 menu Secondary Actions: Cancel\n\t1 menu item Undo'), /element 0\)[\s\S]*performSecondaryAction\(0, "Cancel"\)/);
+  assert.match(openMenuNote('Window: "x", App: Finder.\n0 standard window x\n\t1 menu Secondary Actions: Cancel, Pick'), /performSecondaryAction\(1, "Cancel"\)/);
+  for (const text of ['0 menu bar\n\t1 Edit', '0 menu button Paste, Help: For more options', '0 standard window x', undefined]) assert.equal(openMenuNote(text), undefined);
+  const h = harness();
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("TextEdit")' } } }); await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: 'Window: "", App: TextEdit.\n0 menu Secondary Actions: Cancel\n\t1 menu item Undo' }] } }); await tick();
+  assert.match(h.toClient.find(m => m.id === 1).result.content.at(-1).text, /a menu is open/);
+});
+
 test('SLEIGHT_FIRST_CALL_BATCH rewrites only the engine\'s first-call rule, only when it matches exactly', async () => {
   const { batchingDescription } = await import('../plugins/sleight/lib/relay.mjs');
   const engine = 'Control apps.\n\nOn the first invocation of `cua_repl`, or after resetting it, execute exactly one of the API calls shown below, optionally assigning its result to a variable. Do not add other API calls, waits, or snapshots to that invocation.\nThe tool result will include documentation.';

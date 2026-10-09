@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A result whose window shows an open menu (`0 menu Secondary Actions: Cancel`) says how to close it.
+  Escape left such menus open in 3 of 3 tries in the head-to-head, and their Cancel action closed
+  one in Finder. Not yet checked live on a menu at element 0, and this changes what Claude does, so
+  the affected tasks run with it before release.
 - `{ label }` matches a field whose line has states before its title (`text field (settable) Email`)
   and a menu bar item named alone (`Edit`). Both stopped calls in the head-to-head.
 - A guard stop (a renumbered element, or no element with an ID or label) carries the window as it is
