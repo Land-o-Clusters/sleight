@@ -15,10 +15,12 @@ async function fixtureHelper(request, signal) {
 }
 
 // The child retains its AX window reference through cleanup. It never needs a
-// window inventory, a saved window title as authority, or an Apple Event.
+// normal window inventory or an Apple Event. Failed setup can recover by the
+// run's exact nonce title, under the owner's round-four instruction.
 export async function openFixture(ctx, request, { run = runOwned, open = execute, launch, helper = fixtureHelper } = {}) {
   ctx.signal?.throwIfAborted();
   ctx.cleanupSignal?.throwIfAborted();
+  const startedAtMs = Date.now();
   if (request.bundle === 'com.apple.Safari') {
     await open('/usr/bin/open', ['-g', '-a', 'Safari'], { signal: ctx.signal, timeout: 15000 });
     ctx.signal?.throwIfAborted();
@@ -31,13 +33,19 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
   // A permission stop ends all AX activity immediately instead.
   const helperSignal = AbortSignal.any([controller.signal, ctx.cleanupSignal].filter(Boolean));
   const stages = new Map();
+  const diagnostics = { app: request.app, bundle: request.bundle, retries: [], totalWaitMs: 0, actionTaken: false };
+  (ctx.fixtureDiagnostics ??= []).push(diagnostics);
   const stage = name => {
     if (!stages.has(name)) stages.set(name, Promise.withResolvers());
     return stages.get(name);
   };
   let buffer = '', response, completed;
   const untouched = result => result.groupClean === true && result.stdout?.split('\n').some(line => {
-    try { return JSON.parse(line).stage === 'untouched'; } catch { return false; }
+    try {
+      const event = JSON.parse(line);
+      return event.stage === 'untouched' || (event.stage === 'setup-failure' &&
+        ['nothing created', 'closed own fixture'].includes(event.cleanup) && !event.cleanupError);
+    } catch { return false; }
   });
   const lease = {
     async close() {
@@ -48,6 +56,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
       const result = await Promise.race([response, new Promise(resolve => { timer = setTimeout(() => {
         controller.abort(); resolve({ error: 'Fixture cleanup timed out', groupClean: false });
       }, 15000); })]).finally(() => clearTimeout(timer));
+      if (untouched(result)) return;
       if (!result.groupClean || result.error || result.exit.code !== 0 ||
         !result.stdout.split('\n').some(line => { try { return JSON.parse(line).stage === 'closed'; } catch { return false; } })) {
         throw new Error('Owned fixture window cleanup unconfirmed');
@@ -55,9 +64,11 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
     },
     async dispose() { controller.abort(); return (await response).groupClean === true; },
   };
-  const command = await helper(request, signal);
+  let command;
+  try { command = await helper(request, signal); }
+  catch (error) { if (error.noMutation === true) diagnostics.cleanup = 'nothing created'; throw error; }
   ctx.windowLeases.push(lease);
-  response = run(command.command, [...command.args, JSON.stringify({ ...request, control })], {
+  response = run(command.command, [...command.args, JSON.stringify({ ...request, control, startedAtMs })], {
     signal: helperSignal, timeoutMs: 600000, graceMs: 1000,
     onStdout: data => {
       buffer += String(data);
@@ -65,6 +76,10 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
       while ((index = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, index); buffer = buffer.slice(index + 1);
         let event; try { event = JSON.parse(line); } catch { continue; }
+        if (event.stage === 'retry') diagnostics.retries.push({ code: event.code, waitMs: event.waitMs, totalWaitMs: event.totalWaitMs });
+        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError']) {
+          if (event[key] !== undefined) diagnostics[key] = event[key];
+        }
         if (event.stage) stage(event.stage).resolve(event);
       }
     },
@@ -75,9 +90,10 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
       return await Promise.race([stage(name).promise, response.then(result => {
         throw Object.assign(new Error(`Fixture setup failed: ${result.stderr?.trim() || result.error || 'helper exited before readiness'}`),
           { noMutation: untouched(result) });
-      }), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Fixture setup readiness timed out')), 20000); })]);
+      }), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Fixture setup readiness timed out')), 40000); })]);
     } finally { clearTimeout(timer); }
   };
+  try {
   await waitStage('armed');
   signal?.throwIfAborted();
   if (launch) await launch();
@@ -90,6 +106,12 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
   writeFileSync(control, JSON.stringify({ command: 'opened' }), { mode: 0o600 });
   await waitStage('ready');
   return lease;
+  } catch (error) {
+    // LaunchServices errors and readiness deadlines can precede the helper's
+    // recovery receipt. Await that receipt before deciding acquisition status.
+    try { await ctx.beforeFixtureCleanup?.(); await lease.close(); error.noMutation = true; } catch {}
+    throw error;
+  }
 }
 
 export async function closeFixtures(ctx) {

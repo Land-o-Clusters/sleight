@@ -5,6 +5,159 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
+function nativeSource() {
+  const sandbox = { ObjC: { import() {} } };
+  runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), sandbox);
+  return sandbox;
+}
+
+test('fresh setup retries only the two startup AX errors and records the bounded wait', () => {
+  const { setupRead } = nativeSource();
+  assert.equal(typeof setupRead, 'function');
+  const state = { fresh: true, setup: true, retryWaitMs: 0 }, events = [];
+  let time = 0, attempts = 0;
+  const clock = { now: () => time, wait: ms => { time += ms; }, emit: event => events.push(event) };
+  const value = setupRead(() => {
+    attempts++;
+    if (attempts <= 2) throw Object.assign(new Error('starting'), { code: attempts === 1 ? -25204 : -25205 });
+    return 'ready';
+  }, state, clock);
+  assert.equal(value, 'ready');
+  assert.equal(events.length, 2);
+  assert.deepEqual(events.map(e => e.code), [-25204, -25205]);
+  assert.equal(state.retryWaitMs, 200);
+  attempts = 0;
+  assert.throws(() => setupRead(() => { attempts++; throw Object.assign(new Error('still starting'), { code: -25204 }); }, state, clock), /still starting/);
+  assert.equal(time, 15000, 'all reads share one fifteen-second startup budget');
+  assert.equal(attempts, 148, 'no additional read begins after the deadline');
+});
+
+test('retry elapsed time includes slow AX reads and stops before a read after fifteen seconds', () => {
+  const { setupRead } = nativeSource();
+  const state = { fresh: true, setup: true, retryWaitMs: 0 }, events = [];
+  let time = 0, lastReadAt = 0;
+  assert.throws(() => setupRead(() => {
+    lastReadAt = time; time += 500;
+    throw Object.assign(new Error('slow AX'), { code: -25204 });
+  }, state, { now: () => time, wait: ms => { time += ms; }, emit: event => events.push(event) }), /slow AX/);
+  assert.equal(time, 15500);
+  assert.equal(state.retryWaitMs, 15000);
+  assert.ok(lastReadAt < 15500);
+  assert.ok(events.at(-1).totalWaitMs <= 15000);
+  assert.ok(events.reduce((sum, e) => sum + e.waitMs, 0) < 3000);
+});
+
+test('existing apps, cleanup and acted-on fixtures never retry an AX read', () => {
+  const { setupRead } = nativeSource();
+  assert.equal(typeof setupRead, 'function');
+  for (const state of [
+    { fresh: false, setup: true }, { fresh: true, setup: false },
+    { fresh: true, setup: true, fixtureExists: true, actionTaken: true },
+  ]) {
+    let attempts = 0;
+    assert.throws(() => setupRead(() => { attempts++; throw Object.assign(new Error('refuse'), { code: -25204 }); }, state,
+      { now: () => 0, wait: () => assert.fail('no backoff'), emit: () => assert.fail('no retry') }), /refuse/);
+    assert.equal(attempts, 1);
+  }
+});
+
+test('failed setup recovery reads only app-scoped titles and closes one exact nonce match', () => {
+  const { recoverSetup } = nativeSource();
+  assert.equal(typeof recoverSetup, 'function');
+  const app = {}, owner = {}, prefix = {}, owned = {}, actions = [];
+  const request = { fixtureTitle: 'Form abc', mode: 'window' };
+  let windows = [owner, prefix, owned];
+  const api = {
+    windows: actual => { assert.equal(actual, app); return windows; },
+    text: (window, attribute) => {
+      assert.equal(attribute, 'AXTitle');
+      return window === owned ? 'Form abc' : window === prefix ? 'Form abc extra' : 'private owner title';
+    },
+    closeButton: window => { assert.equal(window, owned); actions.push('close'); windows = [owner, prefix]; },
+    wait() {},
+  };
+  assert.equal(recoverSetup(app, request, api), 'closed own fixture');
+  assert.deepEqual(actions, ['close']);
+  assert.equal(recoverSetup(app, request, api), 'nothing created');
+  windows = [owned, owned];
+  assert.throws(() => recoverSetup(app, request, api), /ambiguous/);
+  assert.deepEqual(actions, ['close']);
+});
+
+test('setup failure diagnostics confirm nothing-created cleanup and retain every retry', async t => {
+  const { openFixture, closeFixtures } = await import('../bench/real-fixture.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'real-startup-recovery-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ctx = { dir };
+  await assert.rejects(openFixture(ctx, { app: 'Preview', bundle: 'com.apple.Preview', mode: 'document' }, {
+    run: async (_command, _args, options) => {
+      const events = [{ stage: 'retry', code: -25204, waitMs: 100, totalWaitMs: 100 },
+        { stage: 'setup-failure', cleanup: 'nothing created', actionTaken: false, totalWaitMs: 100 }];
+      const stdout = events.map(e => JSON.stringify(e)).join('\n') + '\n';
+      options.onStdout(stdout);
+      return { exit: { code: 1 }, stdout, stderr: 'not ready', groupClean: true };
+    }, open: async () => assert.fail('no launch'),
+  }), error => error.noMutation === true);
+  await closeFixtures(ctx);
+  assert.equal(ctx.fixtureDiagnostics[0].retries.length, 1);
+  assert.equal(ctx.fixtureDiagnostics[0].totalWaitMs, 100);
+  assert.equal(ctx.fixtureDiagnostics[0].cleanup, 'nothing created');
+});
+
+test('a launch exception waits for recovery before clearing the pending acquisition', async t => {
+  const { openFixture, closeFixtures } = await import('../bench/real-fixture.mjs');
+  const { acquireFixture } = await import('../bench/real-run.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'real-launch-recovery-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ctx = { dir };
+  await assert.rejects(acquireFixture(ctx, 'preview', () => openFixture(ctx,
+    { app: 'Preview', bundle: 'com.apple.Preview', mode: 'document' }, {
+      run: async (_command, _args, options) => {
+        options.onStdout('{"stage":"armed"}\n');
+        await new Promise(resolve => {
+          const timer = setInterval(() => {
+            try { if (JSON.parse(readFileSync(join(dir, 'window-0-control.json'), 'utf8')).command === 'close') {
+              clearInterval(timer); resolve();
+            } } catch {}
+          }, 5);
+        });
+        const stdout = '{"stage":"setup-failure","cleanup":"nothing created","actionTaken":false,"totalWaitMs":0}\n';
+        options.onStdout(stdout);
+        return { exit: { code: 1 }, stdout, stderr: 'opening cancelled', groupClean: true };
+      }, open: async () => { throw new Error('launch refused'); },
+    })), /launch refused/);
+  await closeFixtures(ctx);
+  assert.equal(ctx.pendingAcquisitions.size, 0);
+  assert.equal(ctx.fixtureDiagnostics[0].cleanup, 'nothing created');
+});
+
+test('inherit helpers never claim or close an application window during setup recovery', () => {
+  const { recoverSetup } = nativeSource();
+  assert.equal(recoverSetup({}, { mode: 'inherit' }, {
+    windows: () => assert.fail('no task-owned window exists to inventory'),
+    closeButton: () => assert.fail('inherited app windows stay open'),
+  }), 'nothing created');
+});
+
+test('an inherited app that never launches fails setup before reporting readiness', () => {
+  const events = [];
+  let controlReads = 0;
+  const native = value => ({ dataUsingEncoding: () => value });
+  Object.assign(native, {
+    AXIsProcessTrusted: () => true,
+    NSRunningApplication: { runningApplicationsWithBundleIdentifier: () => ({ count: 0 }) },
+    NSData: { dataWithContentsOfFile: () => ({ isNil: () => false }) },
+    NSString: { alloc: { initWithDataEncoding: () => JSON.stringify({ command: ++controlReads > 201 ? 'close' : 'opened' }) } },
+    NSThread: { sleepForTimeInterval() {} },
+    NSFileHandle: { fileHandleWithStandardOutput: { writeData: value => events.push(JSON.parse(value)) } },
+  });
+  const sandbox = { $: native, ObjC: { import() {}, unwrap: value => value } };
+  runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), sandbox);
+  assert.throws(() => sandbox.run([JSON.stringify({ bundle: 'com.apple.calculator', mode: 'inherit', control: '/fake/control' })]), /readiness/);
+  assert.equal(events.some(e => e.stage === 'ready'), false);
+  assert.equal(events.at(-1).cleanup, 'nothing created');
+});
+
 test('Helium opens a new window on its real profile and closes through its retained helper', async t => {
   const { openFixture } = await import('../bench/real-fixture.mjs').catch(() => ({}));
   assert.equal(typeof openFixture, 'function');

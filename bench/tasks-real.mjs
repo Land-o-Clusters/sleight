@@ -18,7 +18,8 @@ const desktopForm = (id, app, bundle) => ({
   prepare: ctx => serveRealPage(ctx),
   setup: async ctx => {
     await serveRealPage(ctx);
-    await acquireFixture(ctx, 'browser', () => openFixture(ctx, { app, bundle, target: ctx.url, token: ctx.nonce, mode: 'window' }));
+    await acquireFixture(ctx, 'browser', () => openFixture(ctx, { app, bundle, target: ctx.url, token: ctx.nonce,
+      fixtureTitle: `Form ${ctx.nonce}`, mode: 'window' }));
   },
   prompt: ctx => `Using computer use, work only in the new ${app} window showing ${ctx.url}. ` +
     'Fill Name with "Morgan Reed", Email with "morgan@example.test", select "Design" for Team, ' +
@@ -61,7 +62,7 @@ export const realTasks = [
       ctx.pdf = join(ctx.dir, `Pages-${ctx.nonce}.pdf`);
       await acquireFixture(ctx, 'pdfFixture', () => writeTestPDF(ctx.pdf, [0, 0], ctx.signal));
       await acquireFixture(ctx, 'preview', () => openFixture(ctx, { app: 'Preview', bundle: 'com.apple.Preview',
-        target: ctx.pdf, token: basename(ctx.pdf), mode: 'document' }));
+        target: ctx.pdf, token: basename(ctx.pdf), fixtureTitle: basename(ctx.pdf), mode: 'document' }));
     },
     prompt: ctx => `Using computer use in Preview, open ${ctx.pdf}. Rotate only page 2 clockwise by 90 degrees, ` +
       'save the same PDF, and leave it open. Keep page 1 unchanged.',
@@ -73,7 +74,7 @@ export const realTasks = [
     setup: async ctx => {
       prepareFiles(ctx);
       await acquireFixture(ctx, 'finder', () => openFixture(ctx, { app: 'Finder', bundle: 'com.apple.finder',
-        target: ctx.folder, token: basename(ctx.folder), mode: 'folder' }));
+        target: ctx.folder, token: basename(ctx.folder), fixtureTitle: basename(ctx.folder), mode: 'folder' }));
     },
     prompt: ctx => `Using computer use in Finder, stay inside ${ctx.folder} and its Archive subfolder. ` +
       'Rename alpha.txt to renamed.txt, move bravo.txt into Archive, and leave charlie.txt unchanged. ' +
@@ -86,7 +87,7 @@ export const realTasks = [
     setup: async ctx => {
       prepareText(ctx);
       await acquireFixture(ctx, 'textedit', () => openFixture(ctx, { app: 'TextEdit', bundle: 'com.apple.TextEdit',
-        target: ctx.document, token: basename(ctx.document), mode: 'document' }));
+        target: ctx.document, token: basename(ctx.document), fixtureTitle: basename(ctx.document), mode: 'document' }));
       await acquireFixture(ctx, 'calculator', () => openFixture(ctx, { app: 'Calculator', bundle: 'com.apple.calculator',
         target: '', mode: 'inherit' }));
     },
