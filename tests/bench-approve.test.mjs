@@ -23,11 +23,11 @@ test('benchmark drags approve the three apps by bundle ID too, exact case only',
 });
 test('real tasks approve their apps and exact bundle IDs without widening core approval', () => {
   for (const app of ['Safari', 'com.apple.Safari', 'Preview', 'com.apple.Preview', 'Finder', 'com.apple.finder', 'Helium', 'net.imput.helium',
-    'Microsoft Word', 'Word', 'com.microsoft.Word', 'Microsoft Excel', 'Excel', 'com.microsoft.Excel', 'Microsoft PowerPoint', 'PowerPoint', 'com.microsoft.Powerpoint', 'Mail', 'com.apple.mail']) {
+    'Microsoft Word', 'Word', 'com.microsoft.Word', 'Microsoft Excel', 'Excel', 'com.microsoft.Excel', 'Microsoft PowerPoint', 'PowerPoint', 'com.microsoft.Powerpoint', 'Mail', 'com.apple.mail', 'Mimestream', 'com.mimestream.Mimestream']) {
     assert.equal(approve(`Allow Computer Use to use "${app}"?`), null);
     assert.equal(approve(`Allow Computer Use to use "${app}"?`, 'real'), 'accept');
   }
-  for (const app of ['Google Chrome', 'net.imput.helium.copy', 'com.apple.preview', 'com.microsoft.word', 'com.microsoft.Excel.copy', 'Mail copy', 'Mimestream']) {
+  for (const app of ['Google Chrome', 'net.imput.helium.copy', 'com.apple.preview', 'com.microsoft.word', 'com.microsoft.Excel.copy', 'Mail copy', 'Mimestream copy', 'com.mimestream.mimestream']) {
     assert.equal(approve(`Allow Computer Use to use "${app}"?`, 'real'), null);
   }
 });

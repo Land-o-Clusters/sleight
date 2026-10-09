@@ -26,6 +26,7 @@ test('suite selection preserves the default tasks and rejects an unknown suite',
     'safari-spa', 'helium-spa', 'safari-nested', 'helium-nested', 'safari-infinite', 'helium-infinite',
     'word-edit', 'excel-edit', 'powerpoint-edit',
     'mail-folder', 'mail-message', 'mail-thread', 'mail-attachment', 'mail-search',
+    'mimestream-label', 'mimestream-message', 'mimestream-thread', 'mimestream-scroll', 'mimestream-search',
   ]);
   for (const task of benchmark.getTasks('real')) {
     for (const method of ['prepare', 'setup', 'prompt', 'check', 'cleanup']) {

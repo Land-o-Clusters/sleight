@@ -3,7 +3,7 @@
   "date": "2026-10-09",
   "branch": "codex/real-use-tasks",
   "base": "39108e455a1a3ed43644b024caa5ede87090d948",
-  "status": "Implementation checked and reviewed; 20 live qualification slots await explicit owner-away confirmation",
+  "status": "Implementation checked and reviewed. The 20 original slots and 5 Mimestream slots remain unstarted.",
   "scope": {
     "tasks": [
       "safari-grid",
@@ -32,7 +32,7 @@
     "effort": "medium",
     "surface": "computer",
     "simulator": "excluded",
-    "mimestream": "excluded pending owner-provided test account"
+    "mimestream": "brief 7b authorizes navigation on the owner's already signed-in Gmail, without a test account"
   },
   "qualificationSlots": [
     {
@@ -137,6 +137,38 @@
     }
   ],
   "confirmedNewAppQuits": 0,
+  "mimestreamAddendum": {
+    "tasks": ["mimestream-label", "mimestream-message", "mimestream-thread", "mimestream-scroll", "mimestream-search"],
+    "runsPerTask": 1,
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "qualification": "All five model trials unstarted. Host probe found no running Mimestream process. Owner-away confirmation is pending.",
+    "dryResults": "2026-10-09-real-use-tasks-7b-dry.json",
+    "dryAttempts": [
+      { "attempt": 1, "exitCode": 1, "outcome": "Private publication refused before expanded write-denial diagnostics. No result file retained, app input or mail read." },
+      { "attempt": 2, "exitCode": 1, "outcome": "Linked-worktree result write denied by sandbox. No result file retained, app input or mail read." },
+      { "attempt": 3, "stamp": "2026-10-09T05-44-02-420Z", "exitCode": 0, "outcome": "Five dry preparations. No mail read, model task or app input. Before final settings and policy review fixes." },
+      { "attempt": 4, "stamp": "2026-10-09T05-49-00-845Z", "exitCode": 0, "outcome": "Five dry preparations and isolated settings preflight. No mail read, model task or app input. Before final legacy-env restriction." },
+      { "attempt": 5, "stamp": "2026-10-09T05-57-46-380Z", "exitCode": 0, "outcome": "Final five dry preparations. No mail read, model task or app input. Private settings and policy audit passed." }
+    ],
+    "readOnlyAttempts": [
+      { "attempt": 1, "sandbox": "workspace", "exitCode": 1, "code": "MIMESTREAM_ACCESSIBILITY_UNAVAILABLE", "input": false, "helperCollected": true, "privacyAudit": "passed" },
+      { "attempt": 2, "sandbox": "workspace", "exitCode": 1, "code": "MIMESTREAM_ACCESSIBILITY_UNAVAILABLE", "input": false, "helperCollected": true, "privacyAudit": "passed", "resultsAudit": "passed" },
+      { "attempt": 3, "sandbox": "host", "exitCode": 1, "code": "MIMESTREAM_NOT_RUNNING", "input": false, "helperCollected": true, "privacyAudit": "passed", "resultsAudit": "passed" }
+    ],
+    "validation": {
+      "check": { "command": "npm run check", "exitCode": 0, "unitTests": 883, "pluginValidations": 2, "modTests": 11,
+        "failedSandboxAttempt": { "exitCode": 1, "unitTests": 882, "passed": 840, "failed": 42, "reason": "41 localhost bind EPERM failures and one worktree fixture-linker output denial. Before final label-union regression." } },
+      "lintProse": { "command": "npm run lint:prose", "exitCode": 0, "files": 51, "failedAttempts": 3, "reason": "Negated-object, clipped-sentence and counted-subject wording corrected." },
+      "review": "No remaining Critical or Important findings in independent parent privacy and native lifecycle reviews"
+    },
+    "privacyAudit": "Before commit, quiet literal grep audited the dedicated dry results for @, the owner's full name, and every observed label. It passed. All probes stopped before mailbox reads, so no labels were observed. No Mimestream transcript or image is included.",
+    "failedVerification": [
+      "Initial native Swift self-test failed compilation. Throwing short-circuit expressions were corrected.",
+      "A focused parent check had 38 of 40 passing: native compilation and localhost sandbox binding failed.",
+      "A reviewer's incorrectly filtered aggregate test was cancelled after 15 JS tests passed. Terminal exit 1 confirmed, detached compiler-child collection unproved. No process signaling used."
+    ]
+  },
   "appPromptsAndDialogs": [],
   "attempts": [
     {

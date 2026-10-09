@@ -80,6 +80,12 @@ Sonnet 5.5 medium trial. The browser IDs pair `safari-` and `helium-` with `grid
 Mail adds `mail-folder`, `mail-message`, `mail-thread`, `mail-attachment` and `mail-search` in a
 local invented mailbox. All 20 dry fixtures ran. Desktop qualification awaits owner-away time.
 
+Brief 7b adds `mimestream-label`, `mimestream-message`, `mimestream-thread`, `mimestream-scroll`
+and `mimestream-search` on the owner's signed-in Gmail. Select those IDs in a separate sleight pass.
+Their results retain only verdicts, seconds, turns and salted answer hashes. The adapter requires
+explicit read state and unchanged mailbox counts, preserves Mimestream, and closes only its new
+window. Live qualification still awaits owner-away time.
+
 ## Time per run
 
 Each run's result now splits its time. Claude Code reports the time spent in the model API, and
