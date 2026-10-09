@@ -95,8 +95,10 @@ our own runs. Dates and engine versions are given where they matter.
   the write prevents it: 0 hangs in 10 trials that edited, against 5 in 8 without it, and then 10
   `drag` moves in a row saved with no hang (2026-10-09). We don't know why the event helps, or what
   held the lock. The move inserts plain text, so a moved word in a rich text document takes the
-  formatting at the drop point, and undoing it takes two Cmd+Z. Other apps' text areas haven't been
-  tried. The foreground drag is the last resort. On 2026-10-08 it took the owner's focus mid-sentence
+  formatting at the drop point, and undoing it takes two Cmd+Z. Since 2026-10-09 it also applies to a
+  selection in another app's text area or field, and there it runs first. Safari's web text areas
+  ignore Accessibility text writes (1/1), so `drag` falls back to its mouse paths there, as before.
+  Other apps' native text views should behave like TextEdit's, but none has been tried. The foreground drag is the last resort. On 2026-10-08 it took the owner's focus mid-sentence
   during a pass, and a typed space went into TextEdit, so it now waits for 2 s without any input (up
   to 10 s), and stops if keys are typed once it has taken focus. Before the
   named-window raise guard,

@@ -5,7 +5,9 @@ import vm from 'node:vm';
 
 // Only the native AX/CG boundary is replaced. run() does the real selection,
 // validation, coordinate conversion, mouse sequence and post-drop check.
-function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', setterFails = false, readFails = false, postFails = false, releaseFails = false, changeOnActivate = false, second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection = 'alpha', repairDeletesText = false, movedOnActivate = false, coveredEnd = false, coveredPid = 7, splitAreas = false, missingContent = false, extraElements = 0, stacked = false, raiseWorks = true, raiseActivates = false, offSpace = false, noWindows = false, appId = 'com.apple.TextEdit', busyChecks = 0, typesAt = null, ax = null } = {}) {
+function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', setterFails = false, readFails = false, postFails = false, releaseFails = false, changeOnActivate = false, second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection, repairDeletesText = false, movedOnActivate = false, coveredEnd = false, coveredPid = 7, splitAreas = false, missingContent = false, extraElements = 0, stacked = false, raiseWorks = true, raiseActivates = false, offSpace = false, noWindows = false, appId = 'com.apple.TextEdit', busyChecks = 0, typesAt = null, ax = null } = {}) {
+  // Other apps have no selected text unless a test says so: Chess has no text area at all.
+  selection ??= appId === 'com.apple.TextEdit' ? 'alpha' : '';
   const events = [], restored = [], activations = [], pidEvents = [], mainWrites = [];
   let visited = 0, inputChecks = 0;
   let mainId = 22;
@@ -102,6 +104,7 @@ function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', se
       lineEnd: () => text().length,
       replace: (location, length, s) => {
         if (ax.failWrite === axWrites.length + 1) throw new Error('AX write failed');
+        if (ax.ignored) { axWrites.push('ignored'); return; }
         axWrites.push([location, length, s]);
         values.set(11, text().slice(0, location) + s + text().slice(location + length));
       },
@@ -410,4 +413,20 @@ test('an Accessibility move settles the app after writing, even when its second 
     const h = harness({ background: true, coveredEnd: true, coveredPid: 9, ax: { failWrite } }); h.run(pastEnd);
     assert.equal(h.axWrites.at(-1), 'settle', `failWrite ${failWrite}`);
   }
+});
+test('a text field in another app moves through Accessibility first, never a Command-modified drag', () => {
+  // Safari-like: a text field with selected text in an app that isn't TextEdit, nothing covering it.
+  const h = harness({ background: true, appId: 'com.apple.Safari', selection: 'alpha', ax: {} }); const r = h.run(pastEnd);
+  assert.equal(r.ok, true, r.error); assert.equal(r.path, 'accessibility');
+  assert.equal(h.values.get(11), 'beta gamma alpha\n'); assert.equal(h.pidEvents.length, 0);
+  assert.match(r.fallbackReason ?? '', /^$/);
+});
+test('another app\'s text drag without Accessibility posts a plain drag, without Command', () => {
+  const h = harness({ background: true, appId: 'com.apple.Safari', selection: 'alpha' }); h.run(pastEnd);
+  assert.ok(h.pidEvents.length > 0 && h.pidEvents.every(e => e.flags === 0));
+});
+test('an app that ignores Accessibility writes gets the next path, with no undo advice', () => {
+  const h = harness({ background: true, appId: 'com.apple.Safari', selection: 'alpha', ax: { ignored: true } }); const r = h.run(pastEnd);
+  assert.notEqual(r.path, 'accessibility'); assert.match(r.fallbackReason, /accessibility move failed: the app ignored/);
+  assert.doesNotMatch(r.error ?? '', /Cmd\+Z twice/);
 });

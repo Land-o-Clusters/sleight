@@ -104,7 +104,7 @@ function content(win, bounds) {
     const visible = own ? clip(parent, own) : parent;
     if (role === 'AXToolbar') { if (own) toolbars.push(visible); return; }
     if (/^AX(?:Close|Minimize|Zoom|FullScreen|TitleBar)/.test(attempt(() => el.subrole(), ''))) return;
-    const body = ['AXScrollArea', 'AXTextArea', 'AXWebArea', 'AXTable', 'AXOutline', 'AXImage', 'AXSplitGroup'];
+    const body = ['AXScrollArea', 'AXTextArea', 'AXTextField', 'AXWebArea', 'AXTable', 'AXOutline', 'AXImage', 'AXSplitGroup'];
     // A group covering the whole frame is not evidence of a content area.
     if (own && (body.includes(role) || (role === 'AXGroup' && own.Y > bounds.Y))) areas.push({ el, role, bounds: visible });
     for (const child of attempt(() => el.uiElements(), [])) walk(child, visible, depth + 1);
@@ -112,7 +112,7 @@ function content(win, bounds) {
   walk(win, bounds, 0);
   return { areas, toolbars };
 }
-function validatePoints(info, bounds, from, to, isTextEdit) {
+function validatePoints(info, bounds, from, to, isTextEdit, app = 'TextEdit') {
   const start = at(bounds, from), end = at(bounds, to);
   for (const [name, point] of [['from', start], ['to', end]]) {
     if (!inside(bounds, point) || info.toolbars.some(b => inside(b, point)) || !info.areas.some(a => inside(a.bounds, point))) {
@@ -126,7 +126,15 @@ function validatePoints(info, bounds, from, to, isTextEdit) {
     const el = areas[0].el;
     const value = el.value(), selected = el.attributes.byName('AXSelectedText').value();
     if (typeof value !== 'string' || typeof selected !== 'string' || !selected.trim()) throw new Error('Select non-whitespace TextEdit text in this window before dragging; nothing was pressed');
-    text = { el, text: value, selected };
+    text = { el, text: value, selected, app };
+  } else {
+    // Any other app: a drag that starts in one text area or field with selected text, and ends in
+    // the same one, is a text move. Anything else stays an ordinary drag, as before.
+    const fields = info.areas.filter(a => ['AXTextArea', 'AXTextField'].includes(a.role) && inside(a.bounds, start));
+    const el = fields.length === 1 && inside(fields[0].bounds, end) ? fields[0].el : null;
+    const value = el && attempt(() => el.value(), null);
+    const selected = el && attempt(() => el.attributes.byName('AXSelectedText').value(), null);
+    if (typeof value === 'string' && typeof selected === 'string' && selected.trim()) text = { el, text: value, selected, app };
   }
   return { start, end, text };
 }
@@ -161,7 +169,7 @@ function repairTextDrop(snapshot) {
     settle();
     const at = after.indexOf(snapshot.selected);
     const expected = after.slice(0, at) + ' ' + after.slice(at);
-    if (snapshot.el.value() !== expected) throw new Error('TextEdit did not confirm the spacing repair; read the document before continuing');
+    if (snapshot.el.value() !== expected) throw new Error(`${snapshot.app ?? 'TextEdit'} did not confirm the spacing repair; read the text before continuing`);
     return { spaceInserted: true };
   } catch (e) {
     return { spaceInserted: false, spacingError: String(e.message || e) };
@@ -170,7 +178,7 @@ function repairTextDrop(snapshot) {
 
 function finishTextDrop(snapshot, window) {
   if (!snapshot) return { spaceInserted: false };
-  const name = `TextEdit window ${window.id} (${window.title})`;
+  const name = `${snapshot.app ?? 'TextEdit'} window ${window.id} (${window.title})`;
   if (snapshot.el.value() === snapshot.text) return {
     spaceInserted: false, textChanged: false,
     error: `Text in ${name} is unchanged after dragging; read it before continuing.`,
@@ -230,8 +238,16 @@ function axTextArea(pid, point) {
   const hit = Ref();
   // An app element hit-tests only that app's windows, so a covering app doesn't matter.
   if ($.AXUIElementCopyElementAtPosition(app, point.x, point.y, hit)) throw new Error('no accessibility element at the drop point');
-  const el = hit[0];
-  if (ObjC.unwrap(ObjC.castRefToObject(get(el, 'AXRole'))) !== 'AXTextArea') throw new Error('the drop point is not in a text area');
+  // A web text area answers the hit test with a group or static text inside it (Safari,
+  // 2026-10-09), so walk up to the nearest text area or field.
+  let el = hit[0];
+  const role = e => attempt(() => ObjC.unwrap(ObjC.castRefToObject(get(e, 'AXRole'))), '');
+  for (let up = 0; up < 6 && !['AXTextArea', 'AXTextField'].includes(role(el)); up++) {
+    const parent = attempt(() => get(el, 'AXParent'), null);
+    if (!parent) break;
+    el = ObjC.castRefToObject(parent); // a raw parent reference can't go back through the bridge
+  }
+  if (!['AXTextArea', 'AXTextField'].includes(role(el))) throw new Error('the drop point is not in a text area or field');
   const rangeOf = ref => { const m = /location:(\d+) length:(\d+)/.exec(described(ref)); if (!m) throw new Error('unreadable AX range'); return { location: +m[1], length: +m[2] }; };
   const rect = index => {
     const m = /x:([-\d.]+) y:([-\d.]+) w:([-\d.]+) h:([-\d.]+)/.exec(described(ask(el, 'AXBoundsForRange', range(index, 1))));
@@ -310,9 +326,12 @@ function accessibilityMove(area, snapshot, end, window) {
     after = attempt(() => area.value(), null);
   }
   attempt(() => area.settle());
+  // Safari's web text areas accept the writes and change nothing (2026-10-09). Nothing to undo,
+  // so another path may try.
+  if (after === before) throw new Error('the app ignored the Accessibility text writes');
   if (after !== expected) {
     return { lostText: typeof after !== 'string' || after.replace(/\s/gu, '').length < before.replace(/\s/gu, '').length,
-      error: `The text in TextEdit window ${window.id} (${window.title}) isn't what the move should have made. Press Cmd+Z twice in that window, then read it again before continuing.` };
+      error: `The text in ${snapshot.app ?? 'TextEdit'} window ${window.id} (${window.title}) isn't what the move should have made. Press Cmd+Z twice in that window, then read it again before continuing.` };
   }
   const movedAt = after.indexOf(word, dest > srcEnd ? dest - (cutTo - cutFrom) : dest);
   attempt(() => area.select(movedAt, word.length));
@@ -429,7 +448,8 @@ function run(argv) {
       raiseWindow(win);
       delay(settleMs / 1000);
       checkWindow(main, pid, win);
-      const points = validatePoints(content(win, main.bounds), main.bounds, pointFrom, pointTo, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit');
+      const isTextEdit = ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit';
+      const points = validatePoints(content(win, main.bounds), main.bounds, pointFrom, pointTo, isTextEdit, app);
       if (points.text) points.text.pid = pid;
       // Another document of this app must not receive the press: check fresh
       // own-app order at both ends, then other apps' coverage below.
@@ -459,7 +479,9 @@ function run(argv) {
           return null;
         }
       };
-      if (cover && points.text) {
+      // Outside TextEdit, the posted mouse drag's text settings are unmeasured, so text moves go
+      // through Accessibility first.
+      if (points.text && (cover || !isTextEdit)) {
         const moved = byAccessibility();
         if (moved) return moved;
       }
@@ -472,7 +494,7 @@ function run(argv) {
         // Prepare and validate every event, including the release, before down.
         // Keep the measured TextEdit modifier. Other apps, including Chess,
         // need an ordinary drag: Command can change the action's meaning.
-        const event = (type, p) => build(type, p, main, !!points.text);
+        const event = (type, p) => build(type, p, main, !!points.text && isTextEdit);
         sequence = [event(5, points.start), event(1, points.start),
           ...moves.map(p => event(6, p)), event(2, points.end)];
       } catch (e) { fallbackReason = `background unavailable: ${e.message || e}`; }
@@ -511,7 +533,7 @@ function run(argv) {
         if (!points.text || after !== points.text.text) {
           const outcome = finishTextDrop(points.text, main);
           if (postingError && !outcome.error) outcome.error = postingError;
-          return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, ...units, holdMs, steps, path,
+          return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, ...units, holdMs, steps, path, fallbackReason,
             textChanged: points.text ? true : null, deliveryVerified: !!points.text && !outcome.error, ...outcome });
         }
         fallbackReason = 'background text unchanged';
@@ -539,7 +561,7 @@ function run(argv) {
     delay(settleMs / 1000);
     main = windows(true).find(w => w.id === main.id && w.pid === pid && w.layer === 0);
     if (!main || !sameBounds(frame(win), main.bounds)) throw new Error('the chosen window changed or disappeared; read it again');
-    const { start, end, text } = validatePoints(content(win, main.bounds), main.bounds, pointFrom, pointTo, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit');
+    const { start, end, text } = validatePoints(content(win, main.bounds), main.bounds, pointFrom, pointTo, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit', app);
     if (text) text.pid = pid;
     // Match the exact window at both endpoints, even for another window of
     // the same app. The engine cursor overlay lets events through.

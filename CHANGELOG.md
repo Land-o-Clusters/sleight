@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Text moves in other apps' text areas and fields try the Accessibility move first. Safari's web
+  text areas ignore those writes, so `drag` falls back there; other apps' native text views are
+  untested. A move whose writes leave the text as it was now says so and tries the next path, where it used to
+  ask for Cmd+Z.
 - A text drag into a TextEdit window you've covered no longer takes your pointer. `drag` moves the
   text through Accessibility, then posts one Shift press and release to TextEdit's process. Without
   that event, TextEdit's next Cmd+S deadlocked in 10 of 13 probe trials; with it, 0 in 10, and 10
