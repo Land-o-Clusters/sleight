@@ -198,6 +198,11 @@ test('another app covering the drag points skips background posting and says whi
   assert.equal(r.path, 'foreground'); assert.equal(r.fallbackReason, 'background skipped: Other app covers the window at the drag points');
   assert.equal(h.pidEvents.length, 0);
 });
+test('a covered drag with no selected text, outside TextEdit, is refused before any raise or window scan', () => {
+  const h = harness({ background: true, coveredEnd: true, coveredPid: 9, appId: 'com.apple.Chess' }); const r = h.run({ windowId: 11 });
+  assert.equal(r.ok, false); assert.match(r.error, /Other app covers the window at the drag points, and this drag has no selected text/);
+  assert.deepEqual(h.delays, [], 'no settle wait'); assert.equal(h.pidEvents.length, 0); assert.equal(h.events.length, 0);
+});
 test('missing or failing private setter skips posting and names the foreground path', () => {
   for (const options of [{ background: false }, { background: true, setterFails: true }]) {
     const h = harness(options); const r = h.run({ windowId: 11 });

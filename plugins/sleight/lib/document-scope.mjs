@@ -280,9 +280,10 @@ function guardSetup(update) {
             observed = parse(text);
           }
           if (observed) state.callHeaders.set(proxy, observed);
-          // A stop carries the window header from this fresh read, so the relay keeps
-          // the lease and Claude can retry without acquiring the app again.
-          const stop = message => new Error(message + (text === undefined ? '' : '\\n' + text.split('\\n').filter(l => /^(Window: |0 )/.test(l)).slice(0, 2).join('\\n')));
+          // A stop carries this fresh read, header and tree, so the relay keeps the lease and Claude
+          // can retry with current numbers. With only the header, each stop cost Claude a turn to
+          // read again (2 of safari-form's 13, 2026-10-09). The relay's compactor shows it as a diff.
+          const stop = message => new Error(message + (text === undefined ? '' : '\\n' + text.slice(Math.max(0, text.indexOf('Window: ')))));
           // app.click({ id: "Seven" }) or ({ label: "Multiply" }): the one element with
           // that AX identifier or label in this read, so numbers an earlier action in
           // the call shifted don't matter.
@@ -298,7 +299,7 @@ function guardSetup(update) {
             // ID: One" (2026-10-09). With no match at all, one bare line named exactly that is it.
             if (!found.length && kind !== 'line') found = [...elements(text)].filter(([, line]) => /^[a-z][a-z ]* /.test(line) &&
               !/,|: /.test(line) && line.slice(/^[a-z][a-z ]*? (?=[^a-z ]|$)/.exec(line)?.[0].length ?? line.length) === value);
-            if (found.length !== 1) throw stop('sleight stopped before ' + name + ': ' + (found.length ? found.length + ' elements' : 'no element') + ' with ' + kind + ' ' + JSON.stringify(value) + ' in this window. Read it and use an element number or another ID.');
+            if (found.length !== 1) throw stop('sleight stopped before ' + name + ': ' + (found.length ? found.length + ' elements' : 'no element') + ' with ' + kind + ' ' + JSON.stringify(value) + ' in this window. Use an element number or another ID from the window below.');
             args = [found[0][0], ...args.slice(1)];
           }
           // An earlier action in this call can renumber the window (Calculator closes
@@ -306,7 +307,7 @@ function guardSetup(update) {
           if (!state.callElements.has(proxy)) state.callElements.set(proxy, elements(text ?? ''));
           else if (typeof args[0] === 'number' && !byId) {
             const was = state.callElements.get(proxy).get(args[0]), now = elements(text).get(args[0]);
-            if (!sameElement(was, now)) throw stop('sleight stopped before ' + name + '(' + args[0] + '): an earlier action in this call changed what element ' + args[0] + ' is (was ' + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + '). Read the window again and use its current numbers.');
+            if (!sameElement(was, now)) throw stop('sleight stopped before ' + name + '(' + args[0] + '): an earlier action in this call changed what element ' + args[0] + ' is (was ' + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + '). Use the current numbers in the window below.');
           }
           const cancel = state.fileOnly && isCancel(name, args, text ?? '');
           if (state.cancelOnly && !cancel) throw new Error('Change review: Cancel target changed. Read the current window before retrying.');

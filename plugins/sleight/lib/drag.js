@@ -386,6 +386,17 @@ function checkWindow(main, pid, win) {
   return list;
 }
 
+// The app's focused element's selected text, or '' when there is none or it can't be read.
+function focusedSelection(pid) {
+  return attempt(() => {
+    const proc = Application('System Events').processes.whose({ unixId: pid })[0];
+    const selected = proc.attributes.byName('AXFocusedUIElement').value().attributes.byName('AXSelectedText').value();
+    return typeof selected === 'string' ? selected.trim() : '';
+  }, '');
+}
+
+const COVERED_NO_TEXT = cover => `${cover} covers the window at the drag points, and this drag has no selected text. Use the engine's app.drag in js instead: it reaches a covered window (it moved a covered Chess pawn where this tool's posts didn't); nothing was pressed`;
+
 function raiseWindow(win) {
   attempt(() => { win.attributes.byName('AXMain').value = true; });
   win.actions.byName('AXRaise').perform();
@@ -451,6 +462,11 @@ function run(argv) {
     const pointFrom = toPoints(from, scale), pointTo = toPoints(to, scale);
     units = scale ? { screenshotScale: Math.round(scale.x * 1000) / 1000 }
       : { coordinates: request.screenshot ? 'window points: the latest screenshot is of another window size' : 'window points: no engine screenshot of this app yet' };
+    // A drag no other app lets through is decided before any window scan: without selected text it
+    // is refused below anyway, and the raise and scan took 10 to 13 s to get there (2026-10-09).
+    // TextEdit keeps the full path, which can move its text through Accessibility.
+    const early = coveringApp(windows(true), main, { start: at(main.bounds, pointFrom), end: at(main.bounds, pointTo) });
+    if (early && ObjC.unwrap(target.bundleIdentifier) !== 'com.apple.TextEdit' && !focusedSelection(pid)) throw new Error(COVERED_NO_TEXT(early));
     const win = axWindow(pid, main);
     let build;
     try { build = backgroundBuilder(); }
@@ -476,7 +492,7 @@ function run(argv) {
       const cover = coveringApp(ordered, main, points);
       // Without selected text this tool has no hold to offer, and its foreground path missed Chess
       // in every covered run of the 2026-10-09 head-to-head. Keep the pointer and say what works.
-      if (cover && !points.text) throw new Error(`${cover} covers the window at the drag points, and this drag has no selected text. Use the engine's app.drag in js instead: it reaches a covered window (it moved a covered Chess pawn where this tool's posts didn't); nothing was pressed`);
+      if (cover && !points.text) throw new Error(COVERED_NO_TEXT(cover));
       if (cover) fallbackReason = `background skipped: ${cover} covers the window at the drag points`;
       // A text move can be done without any pointer at all: the foreground
       // path took the owner's pointer and focus mid-sentence (2026-10-08). The write
