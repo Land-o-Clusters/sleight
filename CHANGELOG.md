@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- When a page renumbers its elements and Claude acts on a number from the tree it saw, sleight finds
+  that element by its line in the current tree and tells Claude, instead of refusing the action and
+  costing a read. If the line isn't on exactly one element, the refusal stays. Unit-tested only.
 - When the engine's helper is restarting after 20 s idle and a call fails with "native pipe startup
   failed", the relay sends it again once, a second later. Unit-tested only: no live idle gap hit the
   race (0 of 6).

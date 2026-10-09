@@ -207,8 +207,11 @@ our own runs. Dates and engine versions are given where they matter.
   through whole. On TextEdit and Chess the result text per run fell 1 to 23%. In Helium, a click on
   a local page with a 120-item sidebar sent 428 characters instead of 35,532, and five scrolls on
   the CNN front page sent 39,655 instead of 203,160. When loaded content renumbers elements, Claude
-  gets the count instead of the lines, and the relay refuses actions on numbers that changed until
-  Claude reads them again (8 refusals, 6 correct passes and none wrong in CNN trials). Literal
+  gets the count instead of the lines. A number Claude took from the older tree is now sent as the
+  line of the element Claude saw there, which the guard finds again, when exactly one line in the
+  current tree matches it. Otherwise the relay refuses the action until Claude reads again (8
+  refusals, 6 correct passes and none wrong in CNN trials, before the line lookup). The line lookup
+  has unit tests only. Literal
   numbers only: a call that computes an element number is refused in that state. If Claude Code summarizes the conversation, Claude can lose the tree a diff refers
   to, as with the engine's own diffs. A read with `disableDiffing: true` comes through whole.
 - An action called without `await` that fails used to end the engine's JavaScript session, and every

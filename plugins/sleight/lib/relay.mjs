@@ -209,6 +209,7 @@ export function createRelay({
   trace: writeTrace = () => {},
 }) {
   const compactor = createReadCompactor();
+  const remapNotes = new Map(); // call id -> what remapStale changed, told to Claude with the result
   let traceFailed = false;
   function trace(direction, msg) {
     if (traceFailed) {
@@ -1018,6 +1019,15 @@ export function createRelay({
       if (changeReview && msg.params?.name === REVIEW_TOOL.name) { reviewChanges(msg); return; }
       if (reviewing) { changeStop(msg, 'the user is reviewing changes, wait for their decision'); return; }
     }
+    if (inputLease && msg.method === 'tools/call' && msg.params?.name === 'js' && typeof msg.params.arguments?.code === 'string') {
+      const stale = compactor.remapStale(leaseWindow, msg.params.arguments.code);
+      if (stale) {
+        msg = { ...msg, params: { ...msg.params, arguments: { ...msg.params.arguments, code: stale.code } } };
+        remapNotes.set(msg.id, 'sleight: numbers in this window changed since you saw them, so ' +
+          stale.remapped.map(r => `${r.number} was found by its line ${JSON.stringify(r.line)}`).join(', ') + '. Use the numbers in this result from now on.');
+        trace('stale-remapped', { id: msg.id, numbers: stale.remapped.map(r => r.number) });
+      }
+    }
     const originalCode = msg.params?.arguments?.code;
     if (typeof originalCode === 'string') {
       const native = originalCode.match(/([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.getApp\(/);
@@ -1457,6 +1467,10 @@ export function createRelay({
       }
     }
     if (windowNote && msg.result) msg.result.content = [...(msg.result.content ?? []), { type: 'text', text: windowNote }];
+    if (msg.method === undefined && remapNotes.has(msg.id)) {
+      if (msg.result) msg.result.content = [...(msg.result.content ?? []), { type: 'text', text: remapNotes.get(msg.id) }];
+      remapNotes.delete(msg.id);
+    }
     // The engine refuses Terminal, iTerm2 and OpenAI's own apps before any
     // approval, so a user consent can never enable the engine on them. Say so,
     // and offer sleight's own Accessibility path: the prompt is the opt-in.

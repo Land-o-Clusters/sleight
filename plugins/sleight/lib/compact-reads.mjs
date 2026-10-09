@@ -22,6 +22,9 @@ const MAX_LINES = 3000; // above this, the line diff costs more than it saves
 const MAX_SHARE = 0.6; // a diff longer than this share of the tree is sent whole
 const ELEMENT = /^(\t*)(\d+) (.*)$/;
 
+// number -> text without the number, for every element line.
+const numbered = lines => lines.map(parse).filter(l => l.num !== undefined).map(l => [l.num, l.key]);
+
 // An element line's number and its text without the number.
 function parse(line) {
   const m = ELEMENT.exec(line);
@@ -80,12 +83,18 @@ export function createReadCompactor() {
     const old = before.lines.map(parse), now = lines.map(parse);
     const pairs = alignLines(before.lines, lines, line => parse(line).key);
     if (!pairs) return tree;
+    // What Claude takes each number to be: the full tree it saw, plus the lines shown since.
+    const believed = new Map(before.believed ?? numbered(before.lines));
     const valid = new Set(), changes = [];
     let renumbered = 0;
     for (const [i, j] of pairs) {
-      if (j < 0) { changes.push('- ' + (old[i].num === undefined ? before.lines[i] : old[i].key)); continue; }
+      if (j < 0) {
+        changes.push('- ' + (old[i].num === undefined ? before.lines[i] : old[i].key));
+        if (old[i].num !== undefined && believed.get(old[i].num) === old[i].key) believed.delete(old[i].num);
+        continue;
+      }
       const { num } = now[j];
-      if (i < 0) { changes.push('+ ' + lines[j]); if (num !== undefined) valid.add(num); continue; }
+      if (i < 0) { changes.push('+ ' + lines[j]); if (num !== undefined) { valid.add(num); believed.set(num, now[j].key); } continue; }
       if (num === undefined) continue;
       if (num !== old[i].num) renumbered++;
       else if (!before.valid || before.valid.has(num)) valid.add(num);
@@ -95,7 +104,7 @@ export function createReadCompactor() {
     const current = new Map(now.filter(l => l.num !== undefined).map(l => [l.num, l.key]));
     for (const line of prefix.split('\n')) {
       const shown = parse(line.replace(/^[+~] ?/, ''));
-      if (shown.num !== undefined && current.get(shown.num) === shown.key) valid.add(shown.num);
+      if (shown.num !== undefined && current.get(shown.num) === shown.key) { valid.add(shown.num); believed.set(shown.num, shown.key); }
     }
     const header = lines.slice(0, 2).join('\n');
     const body = changes.length
@@ -107,7 +116,7 @@ export function createReadCompactor() {
     const text = `${header}\n${body}${note}`;
     if (text.length > tree.length * MAX_SHARE) return tree;
     const allValid = [...current.keys()].every(num => valid.has(num));
-    seen.set(key, { lines, valid: allValid ? undefined : valid });
+    seen.set(key, { lines, valid: allValid ? undefined : valid, believed: allValid ? undefined : believed });
     return text;
   }
 
@@ -162,6 +171,26 @@ export function createReadCompactor() {
         if (!valid.has(Number(arg))) return { number: Number(arg) };
       }
       return undefined;
+    },
+    // A literal number Claude took from an older tree names the element it saw there. When that
+    // element's text is on exactly one line of the current tree, the action can name it by that
+    // line ({ line }), which the guard looks up fresh, instead of costing Claude a read and a turn.
+    // Undefined unless every stale number in the call can be named that way.
+    remapStale(window, code) {
+      const entry = window && seen.get(documentKey({ title: window.title, app: window.app, url: window.url }));
+      if (!entry?.valid || !entry.believed || typeof code !== 'string') return undefined;
+      const texts = entry.lines.map(parse).filter(l => l.num !== undefined).map(l => l.key.replace(/^\t*/, ''));
+      const remapped = [];
+      let missing = false;
+      const out = code.replace(/(\.(?:click|setValue|selectText|performSecondaryAction|scroll)\(\s*)(\d+)(?=\s*[,)])/g, (whole, head, digits) => {
+        const number = Number(digits);
+        if (entry.valid.has(number)) return whole;
+        const text = entry.believed.get(number)?.replace(/^\t*/, '');
+        if (text === undefined || texts.filter(t => t === text).length !== 1) { missing = true; return whole; }
+        remapped.push({ number, line: text });
+        return head + JSON.stringify({ line: text });
+      });
+      return !missing && remapped.length ? { code: out, remapped } : undefined;
     },
     reset() { seen.clear(); },
   };

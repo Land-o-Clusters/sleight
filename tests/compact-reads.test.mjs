@@ -100,7 +100,7 @@ test('windows that never renumber are never restricted', () => {
   assert.equal(c.staleIndex({ title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' }, 'app.click(n)'), undefined);
 });
 
-test('the relay refuses an action on a stale number and forwards one Claude saw', async t => {
+test('the relay remaps a stale number Claude saw, refuses one it never saw, and forwards a current one', async t => {
   const { PassThrough } = await import('node:stream');
   const { mkdtempSync, rmSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
@@ -123,9 +123,15 @@ test('the relay refuses an action on a stale number and forwards one Claude saw'
   js(1, 'let app = await cua.getApp("com.apple.TextEdit")'); await settle(); reply(1, page(60)); await settle();
   js(2, 'await app.click(5)'); await settle(); reply(2, GUARD_MARK + grown); await settle();
   assert.match(toClient.find(m => m.id === 2).result.content[0].text, /59 other elements kept their text/);
+  // Claude saw Story 8 as 10; it is 11 now. The click goes out naming Story 8 by its line.
   js(3, 'await app.click(10)'); await settle();
-  assert.match(toClient.find(m => m.id === 3).result.content[0].text, /Input lease: element 10 may be stale/);
-  assert.ok(!toServer.some(m => m.id === 3), 'the stale click never reached the engine');
+  assert.match(toServer.find(m => m.id === 3).params.arguments.code, /app\.click\(\{"line":"link Story 8"\}\)/);
+  reply(3, GUARD_MARK + grown); await settle();
+  assert.match(JSON.stringify(toClient.find(m => m.id === 3)), /10 was found by its line \\"link Story 8\\"/);
+  // A number Claude never saw for an element is still refused.
+  js(5, 'await app.click(99)'); await settle();
+  assert.match(toClient.find(m => m.id === 5).result.content[0].text, /Input lease: element 99 may be stale/);
+  assert.ok(!toServer.some(m => m.id === 5), 'the stale click never reached the engine');
   js(4, 'await app.click(3)'); await settle();
   assert.ok(toServer.some(m => m.id === 4), 'a number from a + line goes through');
 });
@@ -155,4 +161,31 @@ test('a read Claude asked to see whole comes back whole, and later diffs start f
   assert.equal(whole, tree(sidebar));
   const [next] = apply(c, GUARD_MARK + tree([...sidebar, '\t60 button OK']));
   assert.match(next, /\+ \t60 button OK$/);
+});
+
+test('a stale number names the element Claude saw by its line, when that line is unique now', () => {
+  const c = createReadCompactor();
+  const window = { title: 'news', app: 'TextEdit', url: 'file:///tmp/news' };
+  apply(c, page(60));
+  const grown = tree(['\t2 link Story 0', '\t3 link Breaking story', ...Array.from({ length: 59 }, (_, i) => `\t${i + 4} link Story ${i + 1}`)], 'news');
+  apply(c, GUARD_MARK + grown);
+  // Claude saw Story 8 as 10; it is 11 now.
+  assert.deepEqual(c.remapStale(window, 'await app.click(3); await app.click(10, { clickCount: 2 })'), {
+    code: 'await app.click(3); await app.click({"line":"link Story 8"}, { clickCount: 2 })',
+    remapped: [{ number: 10, line: 'link Story 8' }] });
+  assert.equal(c.remapStale(window, 'await app.click(3)'), undefined, 'nothing stale, nothing to rewrite');
+  assert.equal(c.remapStale(window, 'await app.click(i)'), undefined);
+  apply(c, grown);
+  assert.equal(c.remapStale(window, 'await app.click(10)'), undefined, 'after a full read the number is current');
+});
+
+test('a stale number is never remapped to a removed element or to one of several alike', () => {
+  const c = createReadCompactor();
+  const window = { title: 'news', app: 'TextEdit', url: 'file:///tmp/news' };
+  apply(c, tree(['\t2 link Story 0', '\t3 link Same', '\t4 link Gone', ...Array.from({ length: 120 }, (_, i) => `\t${i + 5} link Story ${i + 1}`)], 'news'));
+  apply(c, GUARD_MARK + tree(['\t2 link New', '\t3 link Story 0', '\t4 link Same', '\t5 link Same', ...Array.from({ length: 120 }, (_, i) => `\t${i + 6} link Story ${i + 1}`)], 'news'));
+  assert.equal(c.remapStale(window, 'await app.click(4)'), undefined, 'Gone was removed');
+  assert.equal(c.remapStale(window, 'await app.click(3)'), undefined, 'two lines read "link Same" now');
+  assert.deepEqual(c.remapStale(window, 'await app.click(6)').remapped, [{ number: 6, line: 'link Story 2' }]);
+  assert.equal(c.remapStale(window, 'await app.click(6); await app.click(4)'), undefined, 'one unresolved number keeps the refusal');
 });
