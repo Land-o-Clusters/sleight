@@ -30,6 +30,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BENCH_APPS, REAL_APPS, closeBenchTextEdit, quitChess, quitSimApp, getTasks } from './tasks.mjs';
 import { approveOnly, codexReady, runCodex } from './codex-arm.mjs';
+import { startFootprint } from './footprint.mjs';
 import { watchAppWindows } from './app-windows.mjs';
 import { runTiming, traceTiming } from './timing.mjs';
 import { executeRealTask } from './real-run.mjs';
@@ -193,7 +194,13 @@ function benchKeyboardTaps() {
 // skill (2026-10-09). sleight's skill reaches Claude with the engine's first result instead.
 const OUTSIDE_TOOLS = ['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Glob', 'Grep', 'Read', 'Skill'];
 
-function runClaude(prompt, arm, env = {}, { signal, evidenceDir, onPermissionRefusal, privateMail = false } = {}) {
+// CPU a run costs the Mac (footprint.mjs), sampled from when the driver starts until it exits.
+function footprint(apps) {
+  let stop;
+  return { onSpawn: pgid => { stop = startFootprint({ pgid, apps: apps.filter(Boolean) }); }, finish: async () => stop?.() };
+}
+
+function runClaude(prompt, arm, env = {}, { signal, evidenceDir, onPermissionRefusal, privateMail = false, onSpawn } = {}) {
   if (privateMail) assertPrivateClaudePolicy();
   const args = [
     '-p', prompt,
@@ -207,7 +214,7 @@ function runClaude(prompt, arm, env = {}, { signal, evidenceDir, onPermissionRef
     '--model', model,
     '--effort', effort,
   ];
-  return runDriver(claudeBin, args, { cwd: arm.cwd, env: armEnv(arm, env), timeoutMs: TIMEOUT_MS,
+  return runDriver(claudeBin, args, { cwd: arm.cwd, env: armEnv(arm, env), timeoutMs: TIMEOUT_MS, onSpawn,
     signal: signal ?? controller.signal, evidenceDir, privateMail, privatePolicyCheck: privateMail ? assertPrivateClaudePolicy : undefined,
     onPermissionRefusal, format: suite === 'real' ? 'stream-json' : 'json' });
 }
@@ -299,13 +306,16 @@ pass: for (let run = 1; run <= runs; run++) {
           stop: () => controller.abort(new Error('macOS permission prompt')),
           permissionCheck: observePermission,
           drive: async (prompt, _ctx, callbacks) => {
+            const cpu = footprint(task.privateMail ? [] : [task.app]);
             if (ARMS[armName].codex) {
-              const response = await runCodex(prompt, { cwd: ARMS[armName].cwd, model: codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS, signal: controller.signal });
+              const response = await runCodex(prompt, { cwd: ARMS[armName].cwd, model: codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS, signal: controller.signal, onSpawn: cpu.onSpawn });
               response.timing = runTiming(response.out);
+              response.footprint = await cpu.finish();
               return response;
             }
             const response = await runClaude(prompt, ARMS[armName], !task.privateMail && armName === 'sleight' ? { SLEIGHT_TRACE: evidenceDir } : {},
-              { signal: controller.signal, evidenceDir, ...callbacks, privateMail: task.privateMail });
+              { signal: controller.signal, evidenceDir, ...callbacks, privateMail: task.privateMail, onSpawn: task.privateMail ? undefined : cpu.onSpawn });
+            if (!task.privateMail) response.footprint = await cpu.finish();
             if (!task.privateMail) response.timing = runTiming(response.out, armName === 'sleight' ? traceTiming(evidenceDir) : undefined);
             return response;
           },
@@ -359,8 +369,10 @@ pass: for (let run = 1; run <= runs; run++) {
       const stopWatching = watchAppWindows(ctx.sim?.app ?? task.app);
       // sleight traces into the run's scratch folder, so its timing comes from this run alone.
       const arm = ARMS[armName];
-      const codexRun = arm.codex ? await runCodex(prompt, { cwd: arm.cwd, model: codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS, signal: controller.signal }) : undefined;
-      const { code, out, stderr, groupClean = true, cancelled } = codexRun ?? await runClaude(prompt, arm, armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {});
+      const cpu = footprint([ctx.sim?.app ?? task.app]);
+      const codexRun = arm.codex ? await runCodex(prompt, { cwd: arm.cwd, model: codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS, signal: controller.signal, onSpawn: cpu.onSpawn }) : undefined;
+      const { code, out, stderr, groupClean = true, cancelled } = codexRun ?? await runClaude(prompt, arm, armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {}, { onSpawn: cpu.onSpawn });
+      const cpuUsed = await cpu.finish();
       const appWindows = await stopWatching();
       const answer = out?.result ?? '';
       let verdict;
@@ -382,6 +394,7 @@ pass: for (let run = 1; run <= runs; run++) {
         usage: out?.usage && { input: out.usage.input_tokens, cacheRead: out.usage.cache_read_input_tokens,
           cacheWrite: out.usage.cache_creation_input_tokens, output: out.usage.output_tokens },
         timing: runTiming(out, armName === 'sleight' ? traceTiming(dir) : undefined),
+        footprint: cpuUsed,
         // Samples every 5 s of the app's windows: on the current Space, only off it, or none.
         appWindows,
         exitCode: code,
@@ -430,15 +443,15 @@ if (!isDryRun && privatePass) {
   for (const row of results) console.log(`| ${row.arm} | ${row.task} | ${row.run} | ${row.passed} | ${row.seconds} | ${row.turns ?? '–'} | ${row.expectedHash ?? '–'} | ${row.actualHash ?? '–'} |`);
 }
 if (!isDryRun && !privatePass) {
-  console.log('\n| Arm | Task | Passed | Median s | Model s | Engine s | Local tools s | Relay ms | Median turns | API-price cost |');
-  console.log('|---|---|---|---|---|---|---|---|---|---|');
+  console.log('\n| Arm | Task | Passed | Median s | Model s | Engine s | Local tools s | Relay ms | Median turns | CPU s | API-price cost |');
+  console.log('|---|---|---|---|---|---|---|---|---|---|---|');
   const median = xs => { const s = xs.filter(x => x != null).sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : '–'; };
   for (const task of selected) {
     for (const armName of armNames) {
       const rs = results.filter(r => r.task === task.id && r.arm === armName && !r.skipped);
       const cost = rs.reduce((sum, r) => sum + (r.costUsd ?? 0), 0);
       const ms = (key, scale) => { const m = median(rs.map(r => r.timing?.[key])); return m === '–' ? m : Math.round(m / scale * 10) / 10; };
-      console.log(`| ${armName} | ${task.id} | ${rs.filter(r => r.passed).length}/${rs.length} | ${median(rs.map(r => r.seconds))} | ${ms('modelMs', 1000)} | ${ms('engineMs', 1000)} | ${ms('localMs', 1000)} | ${ms('relayMs', 1)} | ${median(rs.map(r => r.turns))} | $${cost.toFixed(2)} |`);
+      console.log(`| ${armName} | ${task.id} | ${rs.filter(r => r.passed).length}/${rs.length} | ${median(rs.map(r => r.seconds))} | ${ms('modelMs', 1000)} | ${ms('engineMs', 1000)} | ${ms('localMs', 1000)} | ${ms('relayMs', 1)} | ${median(rs.map(r => r.turns))} | ${median(rs.map(r => r.footprint?.cpuSeconds))} | $${cost.toFixed(2)} |`);
     }
   }
 }

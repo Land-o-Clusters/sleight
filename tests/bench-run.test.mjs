@@ -36,6 +36,7 @@ async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = []
     quitChess: options => { calls.push('Chess tail'); tailScopes.push(options); },
     quitSimApp: options => { calls.push('Simulator tail'); tailScopes.push(options); },
     approveOnly: ids => { calls.push(['approve', ...ids]); return () => {}; }, codexReady: () => true,
+    startFootprint: () => async () => ({ cpuSeconds: 0, group: {}, outside: {} }),
     runCodex: async (prompt, options) => { codexRuns.push({ prompt, options }); return { code: 0, out: {}, forbidden: [] }; }, watchAppWindows: () => async () => [],
     acquireLiveLock: async () => { calls.push('lock'); return async () => calls.push('unlock'); },
     runTiming: () => ({}), traceTiming: () => ({}), observePermission: () => false,

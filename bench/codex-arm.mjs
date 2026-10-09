@@ -56,7 +56,7 @@ function findNumber(value, key) {
 
 // The process group is owned (runOwned): an abort or the timeout stops Codex and the engine server
 // it started, and the result says whether the whole group is gone, as the real suite requires.
-export async function runCodex(prompt, { cwd, model, effort, timeoutMs, signal }) {
+export async function runCodex(prompt, { cwd, model, effort, timeoutMs, signal, onSpawn }) {
   // No shell and a read-only sandbox: the checks read files and a form server, so a shell could
   // pass them without touching the apps. The Claude arm has no Bash either.
   const args = ['exec', '--json', '-s', 'read-only', '--disable', 'shell_tool', '-m', model,
@@ -79,7 +79,7 @@ export async function runCodex(prompt, { cwd, model, effort, timeoutMs, signal }
       if (['command_execution', 'file_change'].includes(item.type)) forbidden.push(item.type);
     }
   };
-  const run = await runOwned('codex', args, { cwd, env: { ...process.env, CODEX_HOME }, timeoutMs, signal, onStdout });
+  const run = await runOwned('codex', args, { cwd, env: { ...process.env, CODEX_HOME }, timeoutMs, signal, onStdout, onSpawn });
   return {
     code: run.exit.code ?? (run.spawnError ? 127 : 1), stderr: (run.spawnError ?? run.stderr).slice(-2000), forbidden,
     groupClean: run.groupClean, cancelled: run.cancelled, timedOut: run.timedOut,
