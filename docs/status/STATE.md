@@ -3,47 +3,49 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-09 14:55 UTC)
+## Banner (2026-10-09 16:10 UTC)
 
-The owner is away from the Mac for a few hours from about 14:00 UTC, 2026-10-09, and asked the next
-session to work through the roadmap. Live runs are fine while they're away (LAWS). Amphetamine keeps
-the Mac awake, so don't add caffeinate. The Mac's load average was about 100 at 14:40 UTC from other
-projects' Python processes, which slows Accessibility answers (see known-problems).
+The owner is away from the Mac, working from another machine, and asked the next session to work
+through the roadmap. Live runs are fine while they're away (LAWS). Amphetamine keeps the Mac awake.
+Other projects (Puddle, SignalCraft) run timed tests here: check for their quiet windows before a
+run that adds load (memory `shared-mac-quiet-windows`). Load swung from 5 to 100 today without ours.
 
-Released: `v1.1.0` (`0b6a1c0`, 2026-10-09 13:12 UTC), `main` at `0b6a1c0`, CI green, the owner's install
-1.1.0 at `0b6a1c0`. Unreleased on `pane/auto-mode` (`bc223c1`, pushed): full screen and Split View
-detection, checked live with a scratch full-screen fixture and published as `full-screen-first` and
-`full-screen-every-read`. Also unreleased are the benchmark disallowing Skill and the published
-screenshot A/B.
+Released: `v1.1.0` (`0b6a1c0`), `main` at `0b6a1c0`, CI green, the owner's install 1.1.0. Unreleased
+on `pane/auto-mode` (pushed): full screen and Split View detection (`278ed1e`, `bc223c1`, live-checked
+with a scratch fixture), `bench/load-cost.mjs` and its first results (`c6b3e3f`), and the guard
+matching a bare element line read under load (`7d63e48`, unit-tested). Also the benchmark disallowing
+Skill and the published screenshot A/B.
 
-In flight. Sol finished brief 8 (`4323a41` on `codex/real-use-tasks`, pushed). sleight-arch reviews it,
-then reruns real-use qualification with the owner away.
+Owner's new priorities (2026-10-09, in ROADMAP track 3) are speed under load, which the owner sees
+as a gap against Codex, and batching as Claude's own computer use does it. First finding: the guard's full read
+before every action turns eight Calculator clicks from 593 ms into 3,609 ms without load, and under
+load it stopped 5 of 5 such calls because degraded reads dropped element attributes. In flight: an
+interleaved rerun of `load-cost` (background) to check the fix live.
+
+Real-use qualification of Sol's brief 8 (`4323a41` plus sleight-arch's Safari fix `b284b05`, both on
+`codex/real-use-tasks`): all 11 web tasks passed 1/1. word-edit failed in the checker's ZIP reader,
+excel-edit in a cold-launch setup, and the pass stopped before powerpoint-edit. Brief 9
+(`.dev/prompts/sol-real-use-tasks-9.md`) covers those. The owner pastes it.
 
 Branches and worktrees:
 - `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it.
-- `perf/screenshot-scale` (`1aa574b`, pushed, `~/Projects/sleight-wt/shots`): parked. 9/9 against
-  1.1.0's 9/9 but 92 turns against 85 (`docs/benchmark.md`). Don't merge without a new reason.
-- `fix/drag-chess` (`08f69a7`, `~/Projects/sleight-wt/drag-chess`): merged into `pane/auto-mode`, safe
-  to remove with its worktree.
-- `codex/real-use-tasks` (`4323a41`, pushed, `~/Projects/sleight-wt/real-use-tasks`, Sol, idle).
-  Earlier qualification: helium-form, preview-pdf, finder-files and textedit-calculator 3/3 each;
-  safari-form, helium-dense and word-edit blocked by harness problems that brief 8 addresses.
-- Older `codex/*` worktrees (browser-enforcement, engine-time, guard-reads, reliability) are earlier
-  rounds. Leave them.
+- `perf/screenshot-scale` (`1aa574b`, `~/Projects/sleight-wt/shots`): parked. Don't merge without a
+  new reason.
+- `fix/drag-chess` (`08f69a7`, `~/Projects/sleight-wt/drag-chess`): merged, safe to remove.
+- `codex/real-use-tasks` (`b284b05`, pushed, `~/Projects/sleight-wt/real-use-tasks`, Sol, idle).
+- Older `codex/*` worktrees are earlier rounds. Leave them.
 
-Next, in order (ROADMAP tracks 2, 3 and 5):
-- Review `4323a41`, then requalify the real suite with the owner away.
-- A Codex arm for the real suite (`bench/codex-arm.mjs` refuses `--suite real` today), built on
-  `codex/real-use-tasks` once it's merged.
-- A cheaper window-identity check for guard reads on coordinate, key and text actions. The engine's
-  inventory answers in 11 to 30 ms, against about 410 ms for a read after an action.
-- The AX check's 0.5 s deadline misses on a loaded Mac and can call an app that answers in 0.3 s hung.
-- Live checks of the three unit-tested 1.1.0 changes, then replay's next steps.
+Next, in order:
+- Read the interleaved `load-cost` results, publish them, and fix what they show.
+- The inventory check in place of the guard's full read before key, text and coordinate actions,
+  measured with `load-cost` and the affected benchmark tasks.
+- After brief 9, rerun word-edit, excel-edit and powerpoint-edit, then merge `codex/real-use-tasks`.
+- A Codex arm for the real suite, then the real-use pass and the Codex head-to-head.
 
-Waiting on the owner: watching the Mail and Mimestream tasks (about 10 minutes). Qualification left
-about six blank Safari Start Page windows, two Helium fixture windows, six Preview `Pages-*.pdf`
-windows and Word with an unsaved fixture document (Report-5bc037d2) on their screen. TextEdit was
-relaunched by today's runs and has no windows. The scratch `FullScreenFixture` app is quit.
+Waiting on the owner: pasting brief 9 to Sol, and watching the Mail and Mimestream tasks (about 10
+minutes). Qualification left windows on their screen. Safari has about seven
+fixture windows (Start Pages and one form), Helium two and Preview six (`Pages-*.pdf`), and Word and
+Excel are running with fixture documents.
 
 Owner's plan after 1.0 (2026-10-09), run in order without check-ins: (1) the real-use suite, then the
 Codex head-to-head on it, (2) the launch post (`~/Desktop/sleight-launch/thread-1.0.md`, where only
@@ -96,7 +98,7 @@ Read first: `docs/known-problems.md` (grouped by area), `docs/benchmark.md` (eve
 
 ## Waiting on the owner
 
-- Being at the Mac to watch the Mail and Mimestream tasks.
+- Pasting brief 9 to Sol, and being at the Mac to watch the Mail and Mimestream tasks.
 - The OpenAI key note is theirs to handle. Don't raise it again (owner, 2026-10-09).
 
 ## Reading list
