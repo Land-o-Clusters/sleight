@@ -128,7 +128,7 @@ export const BENCH_APPS = ['Calculator', 'TextEdit', 'Chess', 'Simulator', 'Devi
   'com.apple.TextEdit', 'com.apple.Chess', 'com.apple.iphonesimulator', 'com.apple.dt.Devices'];
 export const REAL_APPS = ['Safari', 'com.apple.Safari', 'Preview', 'com.apple.Preview', 'Finder', 'com.apple.finder', 'Helium', 'net.imput.helium',
   'Microsoft Word', 'Word', 'com.microsoft.Word', 'Microsoft Excel', 'Excel', 'com.microsoft.Excel',
-  'Microsoft PowerPoint', 'PowerPoint', 'com.microsoft.Powerpoint', 'Mail', 'com.apple.mail'];
+  'Microsoft PowerPoint', 'PowerPoint', 'com.microsoft.Powerpoint', 'Mail', 'com.apple.mail', 'Mimestream', 'com.mimestream.Mimestream'];
 
 // simctl from Xcode, even when xcode-select points at the Command Line Tools.
 const XCODE = '/Applications/Xcode.app/Contents/Developer';

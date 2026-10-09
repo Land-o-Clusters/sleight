@@ -49,3 +49,22 @@ stops, and require complete mailbox topology. The initial full check exposed san
 one missing inert test binding. Those were resolved. Final `npm run check` exited 0: 849 unit tests,
 two plugin validations and 11 mod tests passed. `npm run lint:prose` exited 0.
 Qualification remains incomplete.
+
+Brief 7b adds five Mimestream tasks on the owner's signed-in Gmail: label, message, thread, scroll
+and search. Each requests one Sonnet 5.5 medium trial. All five remain unstarted, awaiting owner-away
+confirmation. Mimestream stays running. Only a window created by the task can be closed.
+
+Targets and expected answers come from Accessibility and stay in memory. Setup requires explicit
+already-read targets and mailbox counts before any window or selection action. Checkers require
+unchanged unread and folder message counts, plus the requested navigation. Private runs use isolated
+Claude settings, disable session, transcript, trace and content logging, and refuse conflicting
+policy. The [dry results](2026-10-09-real-use-tasks-7b-dry.json) record failed preparations with null
+hashes because this path doesn't read mail or establish targets.
+Quiet literal grep checks addresses, the owner's name and every observed label before publication.
+
+Sandbox read-only probes stopped at Accessibility unavailable, and the host retry couldn't find a
+running Mimestream process for its confirmed bundle ID. These attempts collected their helpers
+without reading mail or sending input, and the dedicated results passed the required grep before commit. Live navigation remains
+unqualified. A cancelled review test lacks a detached compiler cleanup receipt and is recorded as
+failed evidence. Final `npm run check` exited 0 with 883 unit tests, two plugin validations and
+11 mod tests. `npm run lint:prose` exited 0.

@@ -8,6 +8,7 @@ import { openFixture, closeFixtures } from './real-fixture.mjs';
 import { webTasks } from './tasks-web.mjs';
 import { officeTasks } from './tasks-office.mjs';
 import { mailTasks } from './tasks-mail.mjs';
+import { mimestreamTasks } from './tasks-mimestream.mjs';
 
 async function closePage(ctx) {
   try {
@@ -139,4 +140,5 @@ export const realTasks = [
   ...webTasks,
   ...officeTasks,
   ...mailTasks,
+  ...mimestreamTasks,
 ];

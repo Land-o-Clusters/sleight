@@ -4,23 +4,31 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { BENCH_APPS, REAL_APPS } from '../bench/tasks.mjs';
+import { privateMailResult, publicPrivateMailRow } from '../bench/private-mail.mjs';
+import { privateDriverEnvironment } from '../bench/driver.mjs';
 
 // Execute the actual runner body with inert dependencies. No app, CLI, approval
 // file, live lock, compiler or filesystem operation reaches the host.
-async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false } = {}) {
+async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false } = {}) {
   const calls = [], saved = [], envs = [], tailScopes = [], directories = [];
+  const logs = [], driverOptions = [];
   const source = readFileSync(new URL('../bench/run.mjs', import.meta.url), 'utf8')
     .replace(/^#!.*\n/, '').replace(/^import .*;\n/gm, '').replaceAll('import.meta.url', '"file:///fixture/bench/run.mjs"');
   const task = { id: 'fixture', app: 'Safari', setup() {}, prompt: () => 'task', check: () => true, cleanup: () => calls.push('task cleanup') };
+  if (privateMail) Object.assign(task, { id: 'mimestream-label', app: 'Mimestream', privateMail: true,
+    privateExpected: () => 'private answer', privateTerms: () => ['private label'] });
   const sandbox = {
     process: { argv: ['node', 'run', '--suite', suite, '--arm', arm, '--runs', '3', ...(setupOnly ? ['--setup-only'] : [])], env: base, on() {}, once() {} },
-    console: { log() {}, error() {} }, AbortController, AbortSignal, setTimeout, clearTimeout,
+    console: { log: text => logs.push(text), error: text => logs.push(text) }, AbortController, AbortSignal, setTimeout, clearTimeout,
     dirname, join, fileURLToPath: () => '/fixture/bench/run.mjs', homedir: () => '/owner', tmpdir: () => '/private/tmp/unit',
     existsSync: () => true, realpathSync: path => path, mkdirSync: path => directories.push(path), rmdirSync() {}, statSync: () => ({ dev: 1, ino: 1 }),
     writeFileSync: (_path, value) => saved.push(JSON.parse(value)), randomBytes: () => ({ toString: () => 'nonce' }),
+    privateMailResult, publicPrivateMailRow,
+    privateDriverEnvironment, assertPrivateClaudePolicy: () => calls.push('policy audit'),
+    publishPrivateMailResults: (_path, value, options) => { calls.push('private audit'); assert.ok(options.terms.every(term => term === 'private label')); saved.push(JSON.parse(value)); },
     execFileSync(command, args) {
       if (command === '/usr/bin/git') throw new Error('outside repo');
-      if (command === 'id') return '';
+      if (command === 'id') return privateMail ? 'Owner Example' : '';
       calls.push('tap check'); return JSON.stringify(taps);
     },
     getTasks: () => [task], BENCH_APPS, REAL_APPS,
@@ -35,7 +43,7 @@ async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = []
       envs.push(options.env); options.onStdout('{"type":"system","subtype":"init","mcp_servers":[{"name":"plugin:sleight:computer","status":"connected"}]}\n');
       return { groupClean: true };
     },
-    runDriver: async (_command, args, options) => { calls.push(['driver', ...args]); envs.push(options.env); return { code: 0, out: {}, groupClean: true }; },
+    runDriver: async (_command, args, options) => { calls.push(['driver', ...args]); envs.push(options.env); driverOptions.push(options); return { code: 0, out: {}, groupClean: true }; },
     executeRealTask: async (_task, ctx, options) => {
       ctx.windowLeases = leases;
       if (setupOnly) assert.equal(options.setupOnly, true);
@@ -46,8 +54,37 @@ async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = []
   };
   let error;
   try { await runInNewContext(`(async () => { ${source}\n})()`, sandbox); } catch (caught) { error = caught; }
-  return { calls, saved, envs, tailScopes, directories, error };
+  return { calls, saved, envs, tailScopes, directories, error, logs, driverOptions };
 }
+
+test('private mail runner publishes only hashed rows and keeps the driver ephemeral', async () => {
+  const result = await runner({ privateMail: true, drive: true, base: { SLEIGHT_TRACE: '/private/trace' },
+    outcome: { passed: true, prompt: 'private subject', reason: 'private label', stderr: 'private@example.test',
+      out: { result: '{"answer":"private answer"}', num_turns: 2 } } });
+  assert.equal(result.error, undefined);
+  assert.equal(result.saved.at(-1).results.length, 3);
+  for (const row of result.saved.at(-1).results) assert.deepEqual(Object.keys(row), ['arm', 'task', 'run', 'passed', 'seconds', 'turns', 'expectedHash', 'actualHash']);
+  assert.equal(JSON.stringify(result.saved).includes('private answer'), false);
+  assert.equal(result.logs.join().includes('private label'), false);
+  for (const options of result.driverOptions) { assert.equal(options.privateMail, true); assert.equal(options.evidenceDir, undefined); }
+  for (const args of result.calls.filter(call => Array.isArray(call) && call[0] === 'driver')) {
+    assert.ok(args.includes('--no-session-persistence'));
+    assert.equal(args[args.indexOf('--setting-sources') + 1], '');
+    assert.equal(args[args.indexOf('--settings') + 1], '/fixture/bench/private-settings.json');
+  }
+  assert.equal(result.directories.some(dir => dir.includes('sleight-real-evidence')), false);
+});
+
+test('private mail safety and keyboard stops suppress raw diagnostics', async () => {
+  for (const extras of [{ outcome: { cleanupError: 'private label' } }, { taps: [{ app: 'Mimestream', pid: 123, error: 'private label' }] }, { throws: true }]) {
+    const result = await runner({ privateMail: true, ...extras });
+    assert.equal(result.error, undefined);
+    assert.equal(result.saved.at(-1).results.length, 1);
+    assert.equal(result.saved.at(-1).results[0].passed, false);
+    assert.equal(JSON.stringify(result.saved).includes('private label'), false);
+    assert.equal(result.logs.join().includes('private label'), false);
+  }
+});
 
 test('fixture-only runner skips Claude initialization and retains the live pass lock', async () => {
   const result = await runner({ setupOnly: true, outcome: { passed: true } });
@@ -139,7 +176,7 @@ test('a real Safari keyboard tap stops further runs after recording the tap', as
 });
 
 test('Office and Mail keyboard taps stop the real pass after cleanup', async () => {
-  for (const app of ['Word', 'Microsoft Word', 'Excel', 'Microsoft Excel', 'PowerPoint', 'Microsoft PowerPoint', 'Mail']) {
+  for (const app of ['Word', 'Microsoft Word', 'Excel', 'Microsoft Excel', 'PowerPoint', 'Microsoft PowerPoint', 'Mail', 'Mimestream']) {
     const result = await runner({ outcome: { passed: true }, taps: [{ app, pid: 123 }] });
     assert.equal(result.calls.filter(c => c === 'real run').length, 1, app);
     assert.equal(result.saved.at(-1).results[0].keyboardTaps[0].app, app);

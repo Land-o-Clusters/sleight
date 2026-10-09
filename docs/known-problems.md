@@ -9,6 +9,10 @@ our own runs. Dates and engine versions are given where they matter.
   unavailable. Its native export path lacks an independent current flag/read receipt and stops
   before a model task. Import controls and folder topology remain unmeasured.
   [Round-7 results](benchmarks/2026-10-09-real-use-tasks-7.json) retain both dry attempts.
+  Brief 7b adds five Mimestream navigation slots on the owner's Gmail. They require explicit AX
+  read-state, count and window ownership proof. Their desktop qualification is also unstarted.
+  Sandbox probes lacked Accessibility access, and a host retry couldn't find a running Mimestream process.
+  They stopped before mailbox reads or input. Native app behavior remains unqualified.
 
 - Real-use round 6 has 15 desktop slots unstarted while it awaits owner-away time (2026-10-09).
   Safari's profile menu names and the document path-normalization mismatch explain round 5's setup
