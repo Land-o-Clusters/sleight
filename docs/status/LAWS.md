@@ -99,6 +99,13 @@ belong in [STATE.md](STATE.md).
   Mac (owner, 2026-10-09). Chess drags and the simulator can, and so can any foreground fallback.
 - A benchmark run quits every app it launched, so no keyboard event tap is still installed after it. When the owner
   reports a dead keyboard or pointer, stop every live run first, then look (2026-10-09).
+- Claude arms run without tools that reach outside the app or search files (Bash, Write, Edit, Glob,
+  Grep, Read, Skill, the web tools). The user's own plugins and settings load in a run, and each of
+  these has once changed or stalled a run (Glob never returned, 2026-10-09).
+- Benchmark cleanup closes only windows it holds a reference to, never one found by title. It leaves any
+  other window open and names it to the owner.
+- A skill or prompt change that alters what Claude does is released only after the affected tasks ran with
+  it: a hint that read well (press a 3D piece at its head) cost Chess runs (2026-10-09).
 - Benchmark arms run from folders outside any git repo. Claude Code loads CLAUDE.md from parent
   folders and keys project memory by the git root, so a folder inside this repo leaks both.
 - The marketplace installs from the default branch, so `main` is what new users get. Keep it releasable:

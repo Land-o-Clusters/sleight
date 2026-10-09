@@ -3,37 +3,49 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-09 13:15 UTC, owner awake)
+## Banner (2026-10-09 14:00 UTC, flushed before the owner's clear)
 
-Released: `v1.1.0` (`0b6a1c0`) at 13:12 UTC, `main` fast-forwarded, GitHub release made, the
-owner's install updated to 1.1.0 at `0b6a1c0`. Check CI on `0b6a1c0`. Its pass went 20/21
-(`docs/benchmarks/2026-10-09-release-1.1.0.json`); two chess-drag runs hit the 5-minute limit after
-saving the game, because Claude's Glob never returned. The benchmark now disallows Glob, Grep and
-Read, and with a neutral skill hint chess-drag passed 3/3 in 52 to 60 s. 1.1.0 holds replay,
-session-safe un-awaited failures, the drag fixes, the helper-restart resend, stale-number remapping
-and the keyboard-tap notice (the last three unit-tested only). `v1.0.0` (`ca4d017`) was released at 04:33 UTC.
+The owner is away from the Mac for a few hours from about 14:00 UTC, 2026-10-09, and asked the next
+session to work through the roadmap. Live runs are fine while they're away (LAWS). Amphetamine keeps
+the Mac awake, so don't add caffeinate. No background jobs are running, the live lock is free, there are
+no open PRs, and the checkout is clean with every commit pushed.
 
-Open branch: `perf/screenshot-scale` (`~/Projects/sleight-wt/shots`, unit-tested, not committed or
-measured): the relay shrinks screenshots over 1,568 px and the guard scales coordinates back. Every
-simulator-form failure and every Chess first drag on 2026-10-09 came from Claude reading coordinates
-off a screenshot Claude Code had shrunk. Measure chess-drag, simulator-form and textedit-drag (3 each)
-with the owner away before merging.
+Released: `v1.1.0` (`0b6a1c0`, 2026-10-09 13:12 UTC), `main` at `0b6a1c0`, CI green, the owner's install
+1.1.0 at `0b6a1c0`. Its pass went 20/21 (`docs/benchmarks/2026-10-09-release-1.1.0.json`). `v1.0.0`
+(`ca4d017`) was released at 04:33 UTC the same day. Unreleased on `pane/auto-mode` (`67ff71c`): the
+benchmark disallows Skill too, the parked screenshot A/B is published, ROADMAP and STATE updates.
 
-Sol (`codex/real-use-tasks`, head `3ac2a33`): sleight-arch ran qualification with the owner away
-(2026-10-09, results in that worktree's `bench/results/`). Round 6: helium-form, preview-pdf,
-finder-files and textedit-calculator 3/3 each, safari-form 0/3 in setup. sleight-arch's `3ac2a33`
-fixed the check for Safari's profile Start Page title, and setup then failed on the address field. Round 7:
-helium-grid 1/2 (one real miss), helium-editor 1/1, helium-dense opened the right article and then a
-cleanup stop ended the suite (the task's own navigation changed the window's URL), word-edit stopped
-on Word's own Replace All dialog. Brief 8 (`.dev/prompts/sol-real-use-tasks-8.md`, ready to paste)
-covers those. Left on the owner's screen were about six blank Safari Start Page windows and two Helium
-fixture windows. Word is open with an unsaved fixture document. The screenshot-scale branch is parked
-(no measured gain, `docs/benchmark.md`).
+Branches and worktrees:
+- `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it.
+- `perf/screenshot-scale` (`1aa574b`, pushed, `~/Projects/sleight-wt/shots`): parked. 9/9 against
+  1.1.0's 9/9 but 92 turns against 85 (`docs/benchmark.md`). Don't merge without a new reason.
+- `fix/drag-chess` (`08f69a7`, `~/Projects/sleight-wt/drag-chess`): merged into `pane/auto-mode`, safe
+  to remove with its worktree.
+- `codex/real-use-tasks` (`3ac2a33`, pushed, `~/Projects/sleight-wt/real-use-tasks`, Sol, idle).
+  Qualification sleight-arch ran with the owner away (results in that worktree's `bench/results/`):
+  helium-form, preview-pdf, finder-files and textedit-calculator 3/3 each. safari-form failed in setup
+  every time: `3ac2a33` (sleight-arch's) fixed the profile Start Page title check, then setup failed on
+  the address field. helium-grid 1/2 (one real miss), helium-editor 1/1, helium-dense opened the right
+  article and then a cleanup stop ended the suite, word-edit stopped on Word's own Replace All dialog.
+  Brief 8 (`.dev/prompts/sol-real-use-tasks-8.md`) covers those, and the owner hasn't pasted it yet.
+- Older `codex/*` worktrees (browser-enforcement, engine-time, guard-reads, reliability) are earlier
+  rounds. Leave them.
 
-Owner's plan after 1.0 (2026-10-09), run in order without check-ins: (1) the real-use suite (Sol),
-then the Codex head-to-head on it; (2) the launch post, draft at `~/Desktop/sleight-launch/thread-1.0.md`
-with [PENDING] lines to fill from (1) and the 1.0 pass, and (3) replay. The full plan is
-`docs/status/ROADMAP.md`.
+Next, in order (ROADMAP tracks 2, 3 and 5):
+- A Codex arm for the real suite (`bench/codex-arm.mjs` refuses `--suite real` today).
+- Full screen and Split View detection.
+- A cheaper window-identity check for guard reads on coordinate, key and text actions. The engine's
+  inventory answers in 11 to 30 ms, against about 410 ms for a read after an action.
+- Live checks of the three unit-tested 1.1.0 changes, then replay's next steps.
+- Requalify the real suite after Sol finishes brief 8.
+
+Waiting on the owner: pasting brief 8 to Sol, and watching the Mail and Mimestream tasks (about 10
+minutes). Qualification left about six blank Safari Start Page windows and two Helium fixture
+windows on their screen. Word is open with an unsaved fixture document (Report-5bc037d2).
+
+Owner's plan after 1.0 (2026-10-09), run in order without check-ins: (1) the real-use suite, then the
+Codex head-to-head on it, (2) the launch post (`~/Desktop/sleight-launch/thread-1.0.md`, where only
+the real-use line is still [PENDING]), and (3) replay's next steps. The full plan is `docs/status/ROADMAP.md`.
 
 Read first: `docs/known-problems.md` (grouped by area), `docs/benchmark.md` (every pass with caveats),
 `.dev/research/` (the Codex head-to-head protocol, the TextEdit save lock).
@@ -82,8 +94,8 @@ Read first: `docs/known-problems.md` (grouped by area), `docs/benchmark.md` (eve
 
 ## Waiting on the owner
 
-- Being at the Mac to watch the Mail and Mimestream tasks. The OpenAI key note is theirs to handle:
-  don't raise it again (owner, 2026-10-09).
+- Pasting brief 8 to Sol, and being at the Mac to watch the Mail and Mimestream tasks.
+- The OpenAI key note is theirs to handle. Don't raise it again (owner, 2026-10-09).
 
 ## Reading list
 
