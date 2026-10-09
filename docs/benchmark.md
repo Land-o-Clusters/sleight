@@ -53,57 +53,8 @@ and an iOS runtime (`xcodebuild -downloadPlatform iOS`, 8 GB). Without them its 
 
 ## Real-use tasks
 
-`node bench/run.mjs --arm sleight --suite real --tasks safari-form --runs 3` selects the new suite.
-Without `--suite real`, the same seven tasks and prompts run as before.
-The runner sets `SLEIGHT_SURFACES=computer` for every real task and its arm preflight, and records
-`surfaces: "computer"` in the results. This keeps Helium on the native app path.
-
-Tasks submit a form in Safari and Helium, rotate and save page 2 of a PDF in Preview, rename and
-move files in Finder, copy a number from TextEdit through Calculator and save its result, and go
-through a profile form in the iOS simulator. Checks read the submitted fields, saved PDF rotation,
-folder contents, saved text, or the server's screen sequence and value. An agent's answer cannot
-pass a task. Each check has a passing case and cases that must fail in the unit tests.
-
-Each live invocation waits for `/tmp/sleight-live.lock` and holds it through all its trials and cleanup.
-Tasks reuse the runner's lock. Run the runner directly, without a separate lock wrapper.
-Only the newly opened
-browser window is used and closed, including on Helium's existing profile. Fixture files and servers
-are removed after the check. A cleanup failure stops the pass and preserves its fixture for recovery.
-The runner releases the cooperative lock on exit, including a failed run.
-Raw transcripts and traces stay in the private temporary evidence folder, outside the repo.
-Safari, Preview, Finder and Helium join the benchmark approval list by name and exact bundle ID
-(owner, 2026-10-08). macOS permission prompts stop a run.
-Setup opens pages and files with `open`. A task-owned native Accessibility helper retains its window
-reference until cleanup, without Apple Events or normal browser window inventories. Helium uses a Swift
-window-created callback, since JXA cannot supply AXObserver's C callback. It reads only the newly
-created reference and refuses multiple creation events. Helium must already be running on its real
-profile. Other apps use JXA with ObjC. Safari launches in the background with `open -g -a Safari`.
-The helper waits up to ten seconds for it to finish launching before creating a new window.
-Fresh native setup retries AX errors `-25204` and `-25205` for up to fifteen seconds, recording each
-retry and elapsed wait. Reads after an action on an existing fixture don't retry. Failed setup
-compares only exact nonce fixture titles in that app. A unique match is closed and verified gone;
-no match records “nothing created.” It continues only if no action preceded the failure.
-Inherited Calculator and Simulator windows aren't claimed or closed. Document cleanup
-refuses changed focus or identity. Ordinary cancellation keeps the helper alive through cleanup;
-a permission stop ends its AX activity immediately. Unconfirmed cleanup or a failure after an
-action stops the pass. If helper collection fails, the required release on exit permits another holder
-while that process may still be running.
-The host needs existing Accessibility access and `codex-macos-inspect` for permission observation.
-Permission reports contain only the process and window title. An unavailable observer stops
-the run before it opens a fixture. A streamed engine refusal for browser-access permission also
-stops further trials, even if the system observer didn't see its window. The runner collects the
-driver and closes only the retained fixture. It doesn't retry browser access or switch methods.
-The [round-4 report](benchmarks/2026-10-08-real-use-tasks-4.md) records one Safari setup failure:
-the File menu opened, but the requested “New Window” item was unavailable or ambiguous. Cleanup
-confirmed “nothing created,” and the required stop after an action left 17 slots unstarted.
-No model trial began. Startup retries weren't exercised live because Safari was already running.
-The [round-3 report](benchmarks/2026-10-08-real-use-tasks-3.md) records one Safari setup failure,
-before a model trial. Safari launched, but an AX read failed with `-25204` and window cleanup
-was unconfirmed. Further live attempts stopped. `SLEIGHT_SURFACES=computer` is recorded, but
-Helium wasn't requalified. The [round-2 report](benchmarks/2026-10-08-real-use-tasks-2.md) retains
-3 completed model trials against 18 requested, with 1 pass, and the dismissed browser permission
-requests. The [initial report](benchmarks/2026-10-08-real-use-tasks.md) retains the earlier setup
-failure and permission stop. Live qualification remains pending.
+The [initial report](benchmarks/2026-10-08-real-use-tasks.md) and
+[Known problems](known-problems.md) retain the earlier failed qualification passes.
 
 ## Time per run
 

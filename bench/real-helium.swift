@@ -21,15 +21,22 @@ final class CreatedWindow<Element> {
     }
 }
 
+func fixtureCandidate<Element>(_ state: CreatedWindow<Element>, matches: (Element) throws -> Bool) throws -> Element? {
+    guard let candidate = try state.unique(), try matches(candidate) else { return nil }
+    return candidate
+}
+
 func emit(_ object: [String: Any]) throws {
     let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
     FileHandle.standardOutput.write(data + Data([10]))
 }
 
-func exactMatches<Element>(_ windows: [Element], title: String, readTitle: (Element) throws -> String) throws -> [Element] {
-    let matches = try windows.filter { try readTitle($0) == title }
-    guard matches.count <= 1 else { throw FixtureError("Exact Helium fixture title is ambiguous") }
-    return matches
+func recoverRetained<Element>(_ window: Element?, present: (Element) throws -> Bool, close: (Element) throws -> Void, wait: () -> Void) throws -> String {
+    guard let window else { return "unconfirmed" }
+    if try !present(window) { return "closed retained fixture" }
+    try close(window)
+    for _ in 0..<30 { wait(); if try !present(window) { return "closed retained fixture" } }
+    throw FixtureError("Retained Helium fixture cleanup unconfirmed")
 }
 
 // Pure regression: switching between two pre-existing windows cannot grant
@@ -45,15 +52,20 @@ func selfTest() throws {
     var refused = false
     do { _ = try state.unique() } catch { refused = true }
     guard refused else { throw FixtureError("Ambiguous creation admitted") }
-    let titles = ["owner": "private title", "prefix": "Form abc extra", "own": "Form abc"]
-    guard try exactMatches(["owner", "prefix", "own"], title: "Form abc", readTitle: { titles[$0]! }) == ["own"],
-          try exactMatches(["owner", "prefix"], title: "Form abc", readTitle: { titles[$0]! }).isEmpty else {
-        throw FixtureError("Exact-title recovery admitted another window")
-    }
-    var recoveryRefused = false
-    do { _ = try exactMatches(["own", "own"], title: "Form abc", readTitle: { titles[$0]! }) } catch { recoveryRefused = true }
-    guard recoveryRefused else { throw FixtureError("Ambiguous recovery admitted") }
-    try emit(["delayedFixture": true, "ambiguousCreationRefused": true, "existingWindowsRead": 0, "exactTitleRecovery": true])
+    let unrelated = CreatedWindow<String>(equal: ==)
+    unrelated.created("owner-created-window")
+    var retained: String?
+    retained = try fixtureCandidate(unrelated, matches: { _ in false })
+    guard retained == nil else { throw FixtureError("Unmatched window acquired") }
+    do { retained = try fixtureCandidate(unrelated, matches: { _ in throw FixtureError("Read failed") }) } catch {}
+    guard retained == nil else { throw FixtureError("Unreadable window acquired") }
+    var open = true
+    let recovery = try recoverRetained("fixture", present: { _ in open }, close: { value in
+        guard value == "fixture" else { throw FixtureError("Another window closed") }; open = false
+    }, wait: {})
+    guard recovery == "closed retained fixture", try recoverRetained(nil as String?, present: { _ in true },
+        close: { _ in throw FixtureError("Missing reference closed") }, wait: {}) == "unconfirmed" else { throw FixtureError("Retained recovery failed") }
+    try emit(["delayedFixture": true, "ambiguousCreationRefused": true, "existingWindowsRead": 0, "retainedRecovery": true, "unmatchedCreationUnowned": true])
 }
 
 func read(_ element: AXUIElement, _ name: String) throws -> CFTypeRef? {
@@ -80,22 +92,13 @@ func matches(_ window: AXUIElement, target: String, token: String) throws -> Boo
 }
 func wait() { CFRunLoopRunInMode(.defaultMode, 0.1, false) }
 
-func recoverSetup(_ app: AXUIElement, title: String) throws -> String {
-    func ownWindows() throws -> [AXUIElement] {
-        guard let windows = try read(app, kAXWindowsAttribute) as? [AXUIElement] else {
-            throw FixtureError("Helium windows unavailable for exact-title recovery")
+func recoverSetup(_ owned: AXUIElement?) throws -> String {
+    try recoverRetained(owned, present: present, close: { window in
+        guard let button = try read(window, kAXCloseButtonAttribute), CFGetTypeID(button) == AXUIElementGetTypeID(),
+              AXUIElementPerformAction(button as! AXUIElement, kAXPressAction as CFString) == .success else {
+            throw FixtureError("Retained Helium fixture close failed")
         }
-        return try exactMatches(windows, title: title, readTitle: { try text($0, kAXTitleAttribute) })
-    }
-    let windows = try ownWindows()
-    guard windows.count <= 1 else { throw FixtureError("Exact Helium fixture title is ambiguous") }
-    guard let owned = windows.first else { return "nothing created" }
-    guard let button = try read(owned, kAXCloseButtonAttribute), CFGetTypeID(button) == AXUIElementGetTypeID(),
-          AXUIElementPerformAction(button as! AXUIElement, kAXPressAction as CFString) == .success else {
-        throw FixtureError("Exact Helium fixture close failed")
-    }
-    for _ in 0..<30 { wait(); if try ownWindows().isEmpty { return "closed own fixture" } }
-    throw FixtureError("Exact Helium fixture cleanup unconfirmed")
+    }, wait: wait)
 }
 
 func fixture(_ argument: String) throws {
@@ -116,6 +119,7 @@ func fixture(_ argument: String) throws {
     let app = AXUIElementCreateApplication(pid)
     AXUIElementSetMessagingTimeout(app, 0.5)
     var setup = true
+    var owned: AXUIElement?
     do {
     let created = CreatedWindow<AXUIElement>(equal: { CFEqual($0, $1) })
     var observer: AXObserver?
@@ -147,22 +151,23 @@ func fixture(_ argument: String) throws {
         guard current.bundleIdentifier == "net.imput.helium" else { throw FixtureError("Helium fixture process changed") }
         return !current.isTerminated
     }
-    try emit(["stage": "armed", "running": true])
+    try emit(["stage": "armed", "running": true, "pid": pid])
     while command() != "opened" {
         if command() == "close" { throw FixtureError("Helium opening cancelled before identity recorded") }
         wait()
     }
-    var owned: AXUIElement?
+    var ready = false
     for _ in 0..<200 {
         if command() == "close" { throw FixtureError("Helium opening cancelled before identity recorded") }
         guard try sameProcess() else { throw FixtureError("Helium exited during fixture setup") }
         // Pump first so all queued creation events are checked for ambiguity.
         wait()
-        if let candidate = try created.unique(), try matches(candidate, target: target, token: token) {
-            owned = candidate; break
+        owned = nil
+        if let candidate = try fixtureCandidate(created, matches: { try matches($0, target: target, token: token) }) {
+            owned = candidate; ready = true; break
         }
     }
-    guard let owned else { throw FixtureError("New Helium fixture identity unconfirmed") }
+    guard ready, let owned else { throw FixtureError("New Helium fixture identity unconfirmed") }
     AXObserverRemoveNotification(observer, app, kAXWindowCreatedNotification as CFString)
     try emit(["stage": "ready", "pid": pid])
     setup = false
@@ -184,11 +189,10 @@ func fixture(_ argument: String) throws {
         if setup {
             var event: [String: Any] = ["stage": "setup-failure", "fresh": false, "actionTaken": false, "totalWaitMs": 0]
             do {
-                guard request["fixtureTitle"] as? String == "Form \(token)" else { throw FixtureError("No exact Helium fixture title") }
                 if let current = NSRunningApplication(processIdentifier: pid), !current.isTerminated {
                     guard current.bundleIdentifier == "net.imput.helium" else { throw FixtureError("Helium process changed before recovery") }
-                    event["cleanup"] = try recoverSetup(app, title: "Form \(token)")
-                } else { event["cleanup"] = "nothing created" }
+                    event["cleanup"] = try recoverSetup(owned)
+                } else { event["cleanup"] = owned == nil ? "unconfirmed" : "closed retained fixture" }
             } catch { event["cleanupError"] = String(describing: error) }
             try emit(event)
         }

@@ -15,15 +15,27 @@ function fixture(t) {
   return { dir: join(bank, 'fixture'), nonce: 'abc123', lockPath: join(bank, 'lock') };
 }
 
-test('a failure after a setup action stops even when exact-title recovery confirms cleanup', async t => {
+test('a failed setup action is recorded without forcing a stop after confirmed cleanup', async t => {
   const execute = await runner(), ctx = fixture(t);
   const result = await execute({ setup(context) {
     context.fixtureDiagnostics = [{ actionTaken: true, cleanup: 'nothing created', retries: [], totalWaitMs: 0 }];
     throw new Error('read failed after action');
   }, cleanup() {} }, ctx);
-  assert.equal(result.stopAfterAction, true);
+  assert.equal(result.stopAfterAction, undefined);
   assert.equal(result.cleanupError, undefined);
   assert.equal(result.fixtureDiagnostics[0].cleanup, 'nothing created');
+  assert.equal(existsSync(ctx.lockPath), false);
+});
+
+test('unconfirmed setup without an owned reference preserves evidence without a cleanup error', async t => {
+  const execute = await runner(), ctx = fixture(t);
+  const result = await execute({ setup(context) {
+    context.fixtureDiagnostics = [{ cleanup: 'unconfirmed', retries: [], totalWaitMs: 0 }];
+    throw new Error('no owned window reference');
+  }, cleanup() {} }, ctx);
+  assert.equal(result.cleanupUnconfirmed, true);
+  assert.equal(result.cleanupError, undefined);
+  assert.equal(existsSync(ctx.dir), true);
   assert.equal(existsSync(ctx.lockPath), false);
 });
 
@@ -51,7 +63,7 @@ test('a browser permission refusal records the stop and still closes the retaine
   });
   assert.equal(result.permissionRefusal, true);
   assert.equal(result.passed, false);
-  assert.match(result.reason, /browser-access permission/);
+  assert.match(result.reason, /computer-use permission/);
   assert.equal(cleaned, true);
   assert.equal(existsSync(ctx.lockPath), false);
   assert.equal(existsSync(ctx.dir), false);
