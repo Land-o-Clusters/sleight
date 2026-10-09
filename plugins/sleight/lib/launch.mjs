@@ -25,6 +25,7 @@ import { createGrantAudit } from './preapproved-audit.mjs';
 import { BLOCKED_APP_TOOL, callBlockedApp, forbiddenTargetsAllowed } from './blocked-apps.mjs';
 import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
 import { probeHelper, staleHelperJobs } from './helper-health.mjs';
+import { replayBridge } from './replay.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
 const SERVER_KEY = 'cua_repl';
@@ -458,13 +459,14 @@ export async function run({ leaseDirectory } = {}) {
 
   const appHealth = createAppHealthHelper();
   process.once('exit', () => appHealth.close());
+  const replayClient = replayBridge({ input: process.stdin, output: process.stdout });
   const relay = createRelay({
     diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, { readControl, probeApp: appHealth.probe }),
     spaceProbe: appHealth.probe,
     guardMode: process.env.SLEIGHT_GUARD,
     firstCallBatch: process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
-    clientIn: process.stdin,
-    clientOut: process.stdout,
+    clientIn: replayClient.clientIn,
+    clientOut: replayClient.clientOut,
     serverIn: child.stdin,
     serverOut: child.stdout,
     sessionId,
@@ -526,9 +528,9 @@ export async function run({ leaseDirectory } = {}) {
 // `record` and `replay` (replay.mjs): a finished run, run again with no model. Approvals go to the
 // terminal; without one, only apps the user pre-approved can run.
 async function replayCommand(args) {
-  const { record, replay, relayServer } = await import('./replay.mjs');
+  const { record, replay, relayServer, replayOptions } = await import('./replay.mjs');
   const [command, source, out] = args;
-  if (!source) { process.stderr.write('usage: sleight-mcp record <transcript.jsonl | session id> [out.json]\n       sleight-mcp replay <script.json> [--allow-positions]\n'); return 2; }
+  if (!source) { process.stderr.write('usage: sleight-mcp record <transcript.jsonl | session id> [out.json]\n       sleight-mcp replay <script.json> [--allow-positions] [--wait-ms 5000]\n'); return 2; }
   if (command === 'record') {
     const script = record(source);
     const text = JSON.stringify(script, null, 1) + '\n';
@@ -547,7 +549,7 @@ async function replayCommand(args) {
     rl.once('line', answer => { rl.close(); resolve(/^y(es)?$/i.test(answer.trim())); });
   });
   const result = await replay(JSON.parse(readFileSync(source, 'utf8')), {
-    server: relayServer(), ask, allowPositions: args.includes('--allow-positions'),
+    server: relayServer, ask, ...replayOptions(args.slice(2)),
     log: line => process.stderr.write(`sleight: ${line}\n`),
   });
   tty?.destroy();
