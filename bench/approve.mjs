@@ -3,7 +3,7 @@
 // `claude -p` can't show sleight's app approval prompts, so this accepts
 // them for the benchmark's own apps (BENCH_APPS in tasks.mjs), on either arm's
 // server, and nothing else. Any other request falls through to Claude Code's default.
-import { BENCH_APPS } from './tasks.mjs';
+import { BENCH_APPS, REAL_APPS } from './tasks.mjs';
 
 let input = '';
 for await (const chunk of process.stdin) input += chunk;
@@ -20,7 +20,8 @@ const app = /^Allow Computer Use to use "(.+)"\?$/.exec(e.message ?? '')?.[1] ??
   /^Allow Claude to select a window in (.+?)\? /.exec(e.message ?? '')?.[1];
 // The computer-use server of each benchmark arm (see run.mjs).
 const SERVERS = ['plugin:sleight:computer', 'lcu'];
-if (SERVERS.includes(e.mcp_server_name) && BENCH_APPS.includes(app)) {
+const apps = [...BENCH_APPS, ...(process.env.BENCH_SUITE === 'real' ? REAL_APPS : [])];
+if (SERVERS.includes(e.mcp_server_name) && apps.includes(app)) {
   // LCU turns the approval into a form with a required `choice` (once,
   // session, always, decline). Answer "session" where offered, as sleight
   // scopes approvals, else "once". Never "always".

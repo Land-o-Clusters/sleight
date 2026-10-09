@@ -48,3 +48,26 @@ test('a streamed browser permission refusal stops before another driver action',
   assert.equal(response.groupClean, true);
   assert.equal(existsSync(marker), false);
 });
+
+test('explicit native and local approval refusals stop, while ordinary tool errors continue', async () => {
+  const { runDriver } = await import('../bench/driver.mjs');
+  for (const content of ["Computer Use is not allowed to use the app 'Terminal' for safety reasons.",
+    'Computer Use was not approved to use Safari',
+    "The user didn't allow dragging in Safari. Stop and tell them; don't work around it.",
+    'The user did not approve this document', 'approval declined', 'permission denied',
+    'AX fixture read failed: -25204']) {
+    const controller = new AbortController();
+    let refusals = 0;
+    const frame = { message: { content: [{ type: 'tool_result', is_error: true, content: [{ type: 'text', text: content }] }] } };
+    const response = await runDriver(process.execPath, ['-e', `
+      console.log(${JSON.stringify(JSON.stringify(frame))});
+      setTimeout(() => console.log(JSON.stringify({type:'result', result:'continued'})), 150);
+    `], { format: 'stream-json', signal: controller.signal, timeoutMs: 2000, graceMs: 500,
+      onPermissionRefusal: () => { refusals++; controller.abort(); } });
+    const ordinary = content.startsWith('AX fixture');
+    assert.equal(refusals, ordinary ? 0 : 1, content);
+    assert.equal(response.cancelled, !ordinary, content);
+    assert.equal(response.groupClean, true);
+    if (ordinary) assert.equal(response.out.result, 'continued');
+  }
+});

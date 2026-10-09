@@ -17,7 +17,11 @@ export async function runDriver(command, args, { format = 'json', evidenceDir, o
         if (item.type !== 'tool_result' || item.is_error !== true) continue;
         const text = typeof item.content === 'string' ? item.content :
           (Array.isArray(item.content) ? item.content.map(block => block.text ?? '').join('\n') : '');
-        if (text.includes('Browser Use could not complete this action') && /permission request[^\n]*(dismissed|denied)/i.test(text)) {
+        const browserRefusal = text.includes('Browser Use could not complete this action') && /permission request[^\n]*(dismissed|denied)/i.test(text);
+        if (browserRefusal || /Computer Use is not allowed to use the app '[^']+' for safety reasons/.test(text) ||
+          /Computer Use was not approved to use [^\n]+/.test(text) ||
+          /The user (?:didn't allow|did not allow|did not approve)\b/.test(text) ||
+          /^\s*(?:approval declined|permission denied|not approved)\s*$/i.test(text)) {
           refused = true; onPermissionRefusal(); return;
         }
       }

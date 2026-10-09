@@ -28,7 +28,7 @@ import { existsSync, mkdirSync, realpathSync, rmdirSync, statSync, writeFileSync
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BENCH_APPS, closeBenchTextEdit, quitChess, quitSimApp, getTasks } from './tasks.mjs';
+import { BENCH_APPS, REAL_APPS, closeBenchTextEdit, quitChess, quitSimApp, getTasks } from './tasks.mjs';
 import { approveOnly, codexReady, runCodex } from './codex-arm.mjs';
 import { watchAppWindows } from './app-windows.mjs';
 import { runTiming, traceTiming } from './timing.mjs';
@@ -37,7 +37,6 @@ import { observePermission } from './real-permission.mjs';
 import { runOwned } from './preapproved-process.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
 import { runDriver } from './driver.mjs';
-import { benchmarkArm } from './arm-env.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TIMEOUT_MS = 5 * 60 * 1000;
@@ -58,6 +57,7 @@ const controller = new AbortController();
 process.on('SIGINT', () => controller.abort(new Error('run interrupted')));
 process.on('SIGTERM', () => controller.abort(new Error('run interrupted')));
 const armOption = option('arm', 'sleight');
+if (suite === 'real' && armOption.split(',').includes('codex')) throw new Error('Codex arm does not yet support the real suite');
 const ARM_HOME = join(homedir(), 'Library', 'Caches', 'sleight-bench');
 const ARMS = {
   // Each arm runs from its own empty folder outside any git repo, so neither
@@ -116,7 +116,8 @@ if (wanted?.some(id => !suiteTasks.some(task => task.id === id))) throw new Erro
 
 // SLEIGHT_APPROVAL_PROMPT=client keeps approvals going to approve.mjs, even
 // when the benchmark runs from a desktop app session.
-const armEnv = (arm, extra = {}) => benchmarkArm(suite, arm, { root: ROOT, extra }).env;
+const armEnv = (arm, extra = {}) => ({ ...process.env, BENCH_ROOT: ROOT, SLEIGHT_APPROVAL_PROMPT: 'client',
+  ...arm.env, ...extra, BENCH_SUITE: suite, ...(suite === 'real' ? { SLEIGHT_SURFACES: 'computer' } : {}) });
 
 // The MCP servers an arm's Claude Code starts, read from its init event and
 // stopped before any model call.
@@ -164,7 +165,7 @@ const TAPS_BIN = join(ARM_HOME, 'keyboard-taps');
 function benchKeyboardTaps() {
   try {
     if (!existsSync(TAPS_BIN)) execFileSync('swiftc', ['-O', join(ROOT, 'bench', 'keyboard-taps.swift'), '-o', TAPS_BIN], { stdio: 'ignore', timeout: 180000 });
-    const names = new Set(['Calculator', 'TextEdit', 'Chess', 'Simulator', 'DeviceHub', 'Device Hub']);
+    const names = new Set(['Calculator', 'TextEdit', 'Chess', 'Simulator', 'DeviceHub', 'Device Hub', 'Safari', 'Preview', 'Finder', 'Helium']);
     return JSON.parse(execFileSync(TAPS_BIN, { encoding: 'utf8', timeout: 10000 })).filter(t => names.has(t.app));
   } catch (err) { return [{ app: 'unknown', error: `keyboard tap check failed: ${err.message}` }]; }
 }
@@ -206,13 +207,24 @@ mkdirSync(resultsDir, { recursive: true });
 const file = join(resultsDir, `${stamp}${isDryRun ? '-dry' : ''}.json`);
 // Written after every run, so a run cut short keeps what it finished.
 const save = () => {
-  const json = JSON.stringify({ stamp, ...benchmarkArm(suite, ARMS.sleight, { root: ROOT }).resultMetadata,
+  const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite, surfaces: 'computer' } : {}),
     arms: armNames, model, effort, claude: claudeBin, results }, null, 2);
   writeFileSync(file, (suite === 'real' ? scrub(json) : json) + '\n');
 };
 // The runner owns the pass lock. Real tasks reuse it, so they cannot wait on
 // themselves. This extends main's pass lock through driver collection.
 let unlock, lockIdentity;
+function finishRun(result) {
+  if (isDryRun) return;
+  const taps = benchKeyboardTaps();
+  if (!taps.length) return;
+  result.keyboardTaps = taps;
+  result.passed = false;
+  controller.abort(new Error('benchmark app holds a keyboard event tap'));
+  process.exitCode = 1;
+  console.error(`STOP: ${taps.map(t => t.app).join(', ')} holds a keyboard event tap after cleanup.`);
+}
+try {
 if (!isDryRun) {
   save();
   console.error('Waiting for /tmp/sleight-live.lock if another live run holds it.');
@@ -223,7 +235,8 @@ if (!isDryRun) {
   if (armNames.some(n => ARMS[n].codex)) {
     const backup = join(homedir(), 'Library', 'Logs', 'sleight', `ComputerUseAppApprovals.before-${stamp}.json`);
     mkdirSync(dirname(backup), { recursive: true });
-    const restore = approveOnly(BENCH_APPS.filter(a => /^com\./.test(a)), backup);
+    const apps = [...BENCH_APPS, ...(suite === 'real' ? REAL_APPS : [])];
+    const restore = approveOnly(apps.filter(a => /^(com\.|net\.)/.test(a)), backup);
     process.once('exit', () => { try { restore(); } catch (err) { console.error(`Restore the app approvals from ${backup}: ${err.message}`); } });
     console.error(`App approvals set to the benchmark apps; saved the previous list to ${backup}.`);
   }
@@ -266,9 +279,11 @@ pass: for (let run = 1; run <= runs; run++) {
             cacheWrite: out.usage.cache_creation_input_tokens, output: out.usage.output_tokens },
           exitCode: code, answer: scrub(out?.result?.slice(0, 300)), stderr: code === 0 ? undefined : scrub(rest.stderr),
         });
+        finishRun(results.at(-1));
         save();
-        console.error(`${result.passed ? 'PASS' : isDryRun ? 'DRY' : 'FAIL'} ${armName} ${task.id} #${run} ${result.seconds ?? 0}s${result.reason ? ` (${scrub(result.reason)})` : ''}`);
-        if (result.cleanupError || result.permissionPrompt || result.permissionRefusal || result.observerError || result.stopAfterAction) {
+        const recorded = results.at(-1);
+        console.error(`${recorded.passed ? 'PASS' : isDryRun ? 'DRY' : 'FAIL'} ${armName} ${task.id} #${run} ${recorded.seconds ?? 0}s${recorded.reason ? ` (${recorded.reason})` : ''}`);
+        if (result.cleanupError || result.permissionPrompt || result.permissionRefusal || result.observerError || result.groupClean === false) {
           console.error(`STOP: ${scrub(result.cleanupError ?? result.reason ?? 'permission stop')}`);
           controller.abort(new Error('live safety stop'));
           process.exitCode = 1;
@@ -280,6 +295,7 @@ pass: for (let run = 1; run <= runs; run++) {
       // the run rather than ending the pass; skipped runs stay out of the table.
       try { await task.setup?.(ctx); } catch (err) {
         results.push({ arm: armName, task: task.id, run, skipped: true, reason: `setup: ${err.message}` });
+        finishRun(results.at(-1));
         save();
         console.error(`SKIP ${armName} ${task.id} #${run} (setup: ${err.message})`);
         continue;
@@ -305,7 +321,6 @@ pass: for (let run = 1; run <= runs; run++) {
       if (codexRun?.forbidden.length) verdict = `used ${[...new Set(codexRun.forbidden)].join(' and ')}`;
       if (groupClean) try { await task.cleanup?.(ctx); } catch {} // leaving an app open doesn't change the verdict
       else { controller.abort(new Error('Driver cleanup unconfirmed')); process.exitCode = 1; }
-      const heldTaps = isDryRun ? [] : benchKeyboardTaps();
       results.push({
         arm: armName,
         task: task.id,
@@ -327,32 +342,25 @@ pass: for (let run = 1; run <= runs; run++) {
         // What Claude Code reports it used, to catch a model setting that didn't apply.
         models: Object.keys(out?.modelUsage ?? {}),
         ...(codexRun && { toolCalls: codexRun.toolCalls, engineMs: codexRun.engineMs }),
-        ...(heldTaps.length && { keyboardTaps: heldTaps }),
         stderr: code === 0 ? undefined : scrub(stderr),
       });
+      finishRun(results.at(-1));
       save();
       const r = results.at(-1);
       console.error(`${r.passed ? 'PASS' : 'FAIL'} ${armName} ${task.id} #${run} ${r.seconds}s${r.reason ? ` (${r.reason})` : ''}`);
-      if (heldTaps.length) {
-        quitSimApp(); quitChess();
-        console.error(`STOP: ${heldTaps.map(t => t.app).join(', ')} still holds a keyboard event tap after cleanup, which can stall every key on the Mac. The pass stopped.`);
-        process.exitCode = 1; break pass;
-      }
     }
   }
 }
 
-save();
-
-// Leave the desktop as we found it: close the TextEdit documents the runs
-// made (under the scratch folder, or untitled ones this pass opened) and quit Chess cleanly.
-if (!isDryRun) {
-  closeBenchTextEdit();
-  quitChess();
-  quitSimApp();
+} finally {
+  try {
+    if (!isDryRun && unlock) for (const cleanup of [closeBenchTextEdit, quitChess, quitSimApp]) {
+      try { await cleanup(suite === 'real' ? { ownedOnly: true } : undefined); }
+      catch (error) { console.error(`Pass cleanup failed: ${error.message}`); process.exitCode = 1; }
+    }
+    save();
+  } finally { await unlock?.(); unlock = undefined; }
 }
-await unlock?.();
-unlock = undefined;
 if (controller.signal.aborted && !process.exitCode) process.exitCode = 130;
 
 if (!isDryRun) {

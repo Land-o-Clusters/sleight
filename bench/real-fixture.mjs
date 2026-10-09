@@ -15,16 +15,12 @@ async function fixtureHelper(request, signal) {
 }
 
 // The child retains its AX window reference through cleanup. It never needs a
-// normal window inventory or an Apple Event. Failed setup can recover by the
-// run's exact nonce title, under the owner's round-four instruction.
+// window inventory or an Apple Event. Only a retained reference permits closing
+// a window; a missing reference leaves cleanup unconfirmed.
 export async function openFixture(ctx, request, { run = runOwned, open = execute, launch, helper = fixtureHelper } = {}) {
   ctx.signal?.throwIfAborted();
   ctx.cleanupSignal?.throwIfAborted();
   const startedAtMs = Date.now();
-  if (request.bundle === 'com.apple.Safari') {
-    await open('/usr/bin/open', ['-g', '-a', 'Safari'], { signal: ctx.signal, timeout: 15000 });
-    ctx.signal?.throwIfAborted();
-  }
   ctx.windowLeases ??= [];
   const control = join(ctx.dir, `window-${ctx.windowLeases.length}-control.json`);
   const signal = ctx.signal;
@@ -44,10 +40,25 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
     try {
       const event = JSON.parse(line);
       return event.stage === 'untouched' || (event.stage === 'setup-failure' &&
-        ['nothing created', 'closed own fixture'].includes(event.cleanup) && !event.cleanupError);
+        ['nothing created', 'closed retained fixture', 'unconfirmed'].includes(event.cleanup) && !event.cleanupError);
     } catch { return false; }
   });
   const lease = {
+    app: request.app,
+    launched: false,
+    async quit() {
+      if (lease.running !== false || !lease.launched || request.app === 'Finder') return;
+      if (!await lease.dispose()) throw new Error('Fixture helper collection unconfirmed; app quit refused');
+      await ctx.beforeFixtureCleanup?.();
+      ctx.cleanupSignal?.throwIfAborted();
+      if (!lease.pid) throw new Error('Launched app identity unconfirmed; quit refused');
+      const result = await run('/usr/bin/osascript', ['-l', 'JavaScript', script,
+        JSON.stringify({ bundle: request.bundle, mode: 'quit', pid: lease.pid })], {
+        signal: ctx.cleanupSignal, timeoutMs: 15000,
+      });
+      if (!result.groupClean || result.exit?.code !== 0) throw new Error(`Launched ${request.app} quit unconfirmed`);
+      diagnostics.appQuit = true;
+    },
     async close() {
       if (completed && untouched(completed)) return;
       if (ctx.cleanupSignal?.aborted) { await lease.dispose(); throw new Error('Fixture cleanup stopped by a permission window'); }
@@ -76,8 +87,10 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
       while ((index = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, index); buffer = buffer.slice(index + 1);
         let event; try { event = JSON.parse(line); } catch { continue; }
+        if (typeof event.running === 'boolean') { lease.running = event.running; diagnostics.running = event.running; }
+        if (event.pid) lease.pid = event.pid;
         if (event.stage === 'retry') diagnostics.retries.push({ code: event.code, waitMs: event.waitMs, totalWaitMs: event.totalWaitMs });
-        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError']) {
+        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod']) {
           if (event[key] !== undefined) diagnostics[key] = event[key];
         }
         if (event.stage) stage(event.stage).resolve(event);
@@ -94,8 +107,14 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
     } finally { clearTimeout(timer); }
   };
   try {
+  if (request.bundle === 'com.apple.Safari') {
+    await waitStage('launch');
+    lease.launched = true;
+    await open('/usr/bin/open', ['-g', '-a', 'Safari'], { signal, timeout: 15000 });
+  }
   await waitStage('armed');
   signal?.throwIfAborted();
+  lease.launched = true;
   if (launch) await launch();
   else {
     const args = request.app === 'Helium'
@@ -118,6 +137,12 @@ export async function closeFixtures(ctx) {
   const errors = [];
   for (const lease of [...ctx.windowLeases ?? []].reverse()) {
     try { await lease.close(); } catch (error) { errors.push(error.message); }
+    try {
+      if (lease.running === false && lease.launched) {
+        if (!await lease.dispose()) throw new Error('Fixture helper collection unconfirmed; app quit refused');
+        await lease.quit();
+      }
+    } catch (error) { errors.push(error.message); }
   }
   if (errors.length) throw new Error(errors.join('; '));
 }

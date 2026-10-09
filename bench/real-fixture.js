@@ -1,8 +1,8 @@
 // JXA uses only native AppKit and AX calls. The window reference stays in this
-// process until cleanup. Failed setup may compare exact fixture titles in that
-// app only; it never publishes another window's title or reads its contents.
+// process until cleanup. Recovery uses only that retained reference.
 ObjC.import('AppKit');
 ObjC.import('ApplicationServices');
+ObjC.import('CoreGraphics');
 
 function waitForLaunch(seconds) {
   var deadline = $.NSDate.dateWithTimeIntervalSinceNow(seconds === undefined ? 0.1 : seconds);
@@ -18,6 +18,18 @@ function waitForApplication(application, wait) {
     wait();
   }
   return null;
+}
+
+function quitFixtureApplication(pid, bundle, application, wait) {
+  var target = application();
+  if (!target) return true;
+  if (Number(target.processIdentifier) !== pid || String(target.bundleIdentifier) !== bundle) throw new Error('Launched app identity changed; quit refused');
+  if (!target.terminate) throw new Error('Launched app refused quit');
+  for (var attempt = 0; attempt < 50; attempt++) {
+    wait();
+    if (!application()) return true;
+  }
+  throw new Error('Launched app quit unconfirmed');
 }
 
 function setupRead(operation, state, clock) {
@@ -42,23 +54,33 @@ function setupRead(operation, state, clock) {
   }
 }
 
-function recoverSetup(app, request, api) {
-  // These helpers only borrow an app. They create no named fixture window and
-  // perform no setup AX actions, so its windows are never ours to close.
-  if (request.mode === 'inherit') return 'nothing created';
-  if (!request.fixtureTitle) throw new Error('No exact fixture title for setup recovery');
-  function ownWindows() {
-    return api.windows(app).filter(function (window) { return api.text(window, 'AXTitle') === request.fixtureTitle; });
-  }
-  var matches = ownWindows();
-  if (matches.length > 1) throw new Error('Exact fixture title is ambiguous');
-  if (!matches.length) return 'nothing created';
-  api.closeButton(matches[0]);
+function recoverSetup(window, request, api) {
+  if (!window) return 'unconfirmed';
+  if (!api.exists(window)) return 'closed retained fixture';
+  api.closeButton(window);
   for (var attempt = 0; attempt < 30; attempt++) {
     api.wait();
-    if (!ownWindows().length) return 'closed own fixture';
+    if (!api.exists(window)) return 'closed retained fixture';
   }
-  throw new Error('Exact fixture window cleanup unconfirmed');
+  throw new Error('Retained fixture window cleanup unconfirmed');
+}
+
+function chooseFileMenu(file, titles, api) {
+  var menus = [];
+  try {
+    api.press(file);
+    menus = api.children(file).filter(function (child) { return api.text(child, 'AXRole') === 'AXMenu'; });
+    var items = [];
+    menus.forEach(function (menu) {
+      items = items.concat(api.children(menu).filter(function (item) { return titles.indexOf(api.text(item, 'AXTitle')) !== -1; }));
+    });
+    if (items.length !== 1) throw new Error('Fixture menu item unavailable or ambiguous');
+    api.press(items[0]);
+  } catch (error) {
+    try { api.cancel(menus.length === 1 ? menus[0] : file); }
+    catch (failure) { error.menuCleanupError = failure.message; }
+    throw error;
+  }
 }
 
 function closeOwnedWindow(window, request, app, api) {
@@ -112,14 +134,18 @@ function nativeAX(state, clock) {
     var bar = read(app, 'AXMenuBar');
     var files = children(bar).filter(function (item) { return text(item, 'AXTitle') === 'File'; });
     if (files.length !== 1) throw new Error('Fixture needs the File menu');
-    press(files[0]);
-    var menus = children(files[0]).filter(function (child) { return text(child, 'AXRole') === 'AXMenu'; });
-    var items = [];
-    menus.forEach(function (menu) {
-      items = items.concat(children(menu).filter(function (item) { return titles.indexOf(text(item, 'AXTitle')) !== -1; }));
-    });
-    if (items.length !== 1) throw new Error('Fixture menu item unavailable or ambiguous');
-    press(items[0]);
+    chooseFileMenu(files[0], titles, { press: press, children: children, text: text, cancel: function (menu) {
+      var method = 'AXCancel';
+      if (Number($.AXUIElementPerformAction(menu, $('AXCancel'))) !== 0) {
+        var pidRef = Ref();
+        if (Number($.AXUIElementGetPid(app, pidRef)) !== 0) throw new Error('File-menu cancellation lost the app identity');
+        var down = $.CGEventCreateKeyboardEvent(null, 53, true), up = $.CGEventCreateKeyboardEvent(null, 53, false);
+        if (!down || down.isNil() || !up || up.isNil()) throw new Error('File-menu Escape could not be created');
+        $.CGEventPostToPid(Number(pidRef[0]), down); $.CGEventPostToPid(Number(pidRef[0]), up);
+        method = 'Escape';
+      }
+      clock.emit({ stage: 'menu-cancel', menuCancelled: true, menuCancelMethod: method });
+    } });
   }
   function path(value) {
     if (!value || value.indexOf('file://') !== 0) return null;
@@ -144,12 +170,6 @@ function nativeAX(state, clock) {
     wait: function () { $.NSThread.sleepForTimeInterval(0.1); },
     equal: function (a, b) { return !!a && !!b && !!$.CFEqual(a, b); },
     focused: function (app) { return read(app, 'AXFocusedWindow'); },
-    windows: function (app) {
-      var values = read(app, 'AXWindows'), result = [];
-      if (!values) throw new Error('App window inventory unavailable for exact-title recovery');
-      for (var index = 0; index < Number(values.count); index++) result.push(values.objectAtIndex(index));
-      return result;
-    },
     exists: function (window) {
       try { return text(window, 'AXRole') === 'AXWindow'; }
       catch (error) { if (error.code === -25202) return false; throw error; }
@@ -171,7 +191,14 @@ function nativeAX(state, clock) {
 function run(argv) {
   var request = JSON.parse(argv[0]);
   var allowed = ['com.apple.Safari', 'com.apple.Preview', 'com.apple.finder',
-    'com.apple.TextEdit', 'com.apple.calculator', 'com.apple.dt.Devices', 'com.apple.iphonesimulator'];
+    'com.apple.TextEdit', 'com.apple.calculator', 'com.apple.dt.Devices', 'com.apple.iphonesimulator', 'net.imput.helium'];
+  if (request.mode === 'quit') {
+    if (allowed.indexOf(request.bundle) === -1 || request.bundle === 'com.apple.finder' || !(request.pid > 0)) throw new Error('Invalid launched app quit request');
+    return quitFixtureApplication(request.pid, request.bundle, function () {
+      var value = $.NSRunningApplication.runningApplicationWithProcessIdentifier(request.pid);
+      return value.isNil() || value.isTerminated ? null : value;
+    }, waitForLaunch);
+  }
   if (allowed.indexOf(request.bundle) === -1 || !request.control || !request.mode) throw new Error('Invalid fixture request');
   if (!$.AXIsProcessTrusted()) throw new Error('Accessibility is unavailable; fixture not opened');
   function emit(value) {
@@ -193,11 +220,14 @@ function run(argv) {
   var api = nativeAX(state, clock);
   var target, running, pid, app, previous, owned;
   try {
-  target = request.bundle === 'com.apple.Safari'
-    ? waitForApplication(application, waitForLaunch) : application();
+  target = application();
   running = !!target;
   state.fresh = !target || !!(target.launchDate && !target.launchDate.isNil() &&
     Number(target.launchDate.timeIntervalSince1970) * 1000 >= request.startedAtMs);
+  if (request.bundle === 'com.apple.Safari') {
+    emit({ stage: 'launch', running: running });
+    target = waitForApplication(application, waitForLaunch);
+  }
   if (target) {
     pid = Number(target.processIdentifier); app = $.AXUIElementCreateApplication(pid);
     $.AXUIElementSetMessagingTimeout(app, 0.5);
@@ -216,7 +246,7 @@ function run(argv) {
     }
     if (!owned) throw new Error('New Safari fixture window unconfirmed');
   }
-  emit({ stage: 'armed', running: running });
+  emit({ stage: 'armed', running: running, pid: pid });
   var inherited = request.mode === 'inherit';
   while (command() !== 'opened') {
     if (command() === 'close') throw new Error('Fixture opening interrupted before identity was recorded');
@@ -252,18 +282,11 @@ function run(argv) {
   } catch (error) {
     if (state.setup) {
       state.setup = false;
-      var cleanup, cleanupError;
+      var cleanup, cleanupError = error.menuCleanupError;
       try {
-        var currentTarget = application();
-        if (currentTarget && pid && Number(currentTarget.processIdentifier) !== pid) throw new Error('Fixture process changed before recovery');
-        if (!currentTarget) cleanup = 'nothing created';
-        else {
-          app = $.AXUIElementCreateApplication(Number(currentTarget.processIdentifier));
-          $.AXUIElementSetMessagingTimeout(app, 0.5);
-          cleanup = recoverSetup(app, request, api);
-        }
-      } catch (failure) { cleanupError = failure.message; }
-      emit({ stage: 'setup-failure', fresh: state.fresh, actionTaken: state.actionTaken,
+        cleanup = recoverSetup(owned, request, api);
+      } catch (failure) { cleanupError = [cleanupError, failure.message].filter(Boolean).join('; '); }
+      emit({ stage: 'setup-failure', fresh: state.fresh, actionTaken: state.actionTaken, pid: pid,
         cleanup: cleanup, cleanupError: cleanupError, totalWaitMs: state.retryWaitMs });
     }
     throw error;

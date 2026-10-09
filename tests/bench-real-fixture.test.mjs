@@ -61,26 +61,22 @@ test('existing apps, cleanup and acted-on fixtures never retry an AX read', () =
   }
 });
 
-test('failed setup recovery reads only app-scoped titles and closes one exact nonce match', () => {
+test('failed setup recovery closes only a retained reference, never a title match', () => {
   const { recoverSetup } = nativeSource();
   assert.equal(typeof recoverSetup, 'function');
-  const app = {}, owner = {}, prefix = {}, owned = {}, actions = [];
+  const owned = {}, actions = [];
   const request = { fixtureTitle: 'Form abc', mode: 'window' };
-  let windows = [owner, prefix, owned];
+  let exists = true;
   const api = {
-    windows: actual => { assert.equal(actual, app); return windows; },
-    text: (window, attribute) => {
-      assert.equal(attribute, 'AXTitle');
-      return window === owned ? 'Form abc' : window === prefix ? 'Form abc extra' : 'private owner title';
-    },
-    closeButton: window => { assert.equal(window, owned); actions.push('close'); windows = [owner, prefix]; },
+    windows: () => assert.fail('never inventory windows for recovery'),
+    text: () => assert.fail('a matching title never grants ownership'),
+    exists: window => { assert.equal(window, owned); return exists; },
+    closeButton: window => { assert.equal(window, owned); actions.push('close'); exists = false; },
     wait() {},
   };
-  assert.equal(recoverSetup(app, request, api), 'closed own fixture');
+  assert.equal(recoverSetup(owned, request, api), 'closed retained fixture');
   assert.deepEqual(actions, ['close']);
-  assert.equal(recoverSetup(app, request, api), 'nothing created');
-  windows = [owned, owned];
-  assert.throws(() => recoverSetup(app, request, api), /ambiguous/);
+  assert.equal(recoverSetup(undefined, request, api), 'unconfirmed');
   assert.deepEqual(actions, ['close']);
 });
 
@@ -131,12 +127,34 @@ test('a launch exception waits for recovery before clearing the pending acquisit
   assert.equal(ctx.fixtureDiagnostics[0].cleanup, 'nothing created');
 });
 
+test('a partially successful launch is quit by its recorded PID after the launch command rejects', async t => {
+  const { openFixture, closeFixtures } = await import('../bench/real-fixture.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'real-partial-launch-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ctx = { dir }, quits = [];
+  let finish;
+  await assert.rejects(openFixture(ctx, { app: 'Preview', bundle: 'com.apple.Preview', mode: 'document' }, {
+    run: async (_command, args, options) => {
+      const request = JSON.parse(args.at(-1));
+      if (request.mode === 'quit') { quits.push(request.pid); return { exit: { code: 0 }, groupClean: true }; }
+      options.onStdout('{"stage":"armed","running":false}\n');
+      return new Promise(resolve => { finish = () => {
+        const stdout = '{"stage":"setup-failure","cleanup":"unconfirmed","pid":42}\n';
+        options.onStdout(stdout); resolve({ exit: { code: 1 }, stdout, groupClean: true });
+      }; });
+    },
+    open: async () => { finish(); throw new Error('launch command failed after starting app'); },
+  }), /launch command failed/);
+  await closeFixtures(ctx);
+  assert.deepEqual(quits, [42]);
+});
+
 test('inherit helpers never claim or close an application window during setup recovery', () => {
   const { recoverSetup } = nativeSource();
-  assert.equal(recoverSetup({}, { mode: 'inherit' }, {
+  assert.equal(recoverSetup(undefined, { mode: 'inherit' }, {
     windows: () => assert.fail('no task-owned window exists to inventory'),
     closeButton: () => assert.fail('inherited app windows stay open'),
-  }), 'nothing created');
+  }), 'unconfirmed');
 });
 
 test('an inherited app that never launches fails setup before reporting readiness', () => {
@@ -155,7 +173,7 @@ test('an inherited app that never launches fails setup before reporting readines
   runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), sandbox);
   assert.throws(() => sandbox.run([JSON.stringify({ bundle: 'com.apple.calculator', mode: 'inherit', control: '/fake/control' })]), /readiness/);
   assert.equal(events.some(e => e.stage === 'ready'), false);
-  assert.equal(events.at(-1).cleanup, 'nothing created');
+  assert.equal(events.at(-1).cleanup, 'unconfirmed');
 });
 
 test('Helium opens a new window on its real profile and closes through its retained helper', async t => {
@@ -206,7 +224,7 @@ test('AX cleanup closes the retained fixture without reading any other window', 
   assert.deepEqual(actions, ['close']);
 });
 
-test('Safari launches in the background before acquiring a new fixture window', async t => {
+test('Safari records launch ownership before acquiring a new fixture window', async t => {
   const { openFixture } = await import('../bench/real-fixture.mjs');
   const dir = mkdtempSync(join(tmpdir(), 'real-safari-launch-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -220,14 +238,17 @@ test('Safari launches in the background before acquiring a new fixture window', 
       actions.push(args);
     },
     run: async (_command, _args, options) => {
-      assert.deepEqual(actions, [['-g', '-a', 'Safari']], 'launch must precede native acquisition');
-      options.onStdout('{"stage":"armed"}\n{"stage":"ready"}\n');
+      assert.deepEqual(actions, [], 'running state must be observed before launching');
+      options.onStdout('{"stage":"launch","running":false}\n');
+      setTimeout(() => options.onStdout('{"stage":"armed","running":false}\n{"stage":"ready","pid":123}\n'), 5);
       return new Promise(resolve => { finish = resolve; });
     },
   });
   assert.deepEqual(actions, [
     ['-g', '-a', 'Safari'], ['-g', '-a', 'Safari', 'http://127.0.0.1/test'],
   ]);
+  assert.equal(lease.running, false);
+  assert.equal(lease.pid, 123);
   const closed = lease.close();
   finish({ exit: { code: 0 }, stdout: '{"stage":"closed"}\n', groupClean: true });
   await closed;
@@ -303,7 +324,7 @@ test('ordinary cancellation retains the helper until its owned window is closed'
     { app: 'Safari', bundle: 'com.apple.Safari', target: 'http://127.0.0.1/test', mode: 'window' }, {
       run: async (_command, _args, options) => {
         helperSignal = options.signal;
-        options.onStdout('{"stage":"armed"}\n{"stage":"ready"}\n');
+        options.onStdout('{"stage":"launch","running":true}\n{"stage":"armed","running":true}\n{"stage":"ready"}\n');
         return new Promise(resolve => { finish = resolve; });
       }, open: async () => {},
     });
@@ -314,6 +335,76 @@ test('ordinary cancellation retains the helper until its owned window is closed'
   await closed;
   cleanup.abort();
   assert.equal(helperSignal.aborted, true, 'permission cancellation must stop the helper immediately');
+});
+
+test('fixture cleanup quits only apps this lease launched, after closing its window', async () => {
+  const { closeFixtures } = await import('../bench/real-fixture.mjs');
+  const events = [];
+  for (const running of [true, false]) {
+    const ctx = { windowLeases: [{ running, launched: true, app: 'Safari',
+      close: async () => events.push(`close:${running}`), dispose: async () => true, quit: async () => events.push(`quit:${running}`) }] };
+    await closeFixtures(ctx);
+  }
+  assert.deepEqual(events, ['close:true', 'close:false', 'quit:false']);
+});
+
+test('a failed window close collects its helper before quitting a launched app', async () => {
+  const { closeFixtures } = await import('../bench/real-fixture.mjs');
+  for (const collected of [true, false]) {
+    const events = [];
+    await assert.rejects(closeFixtures({ windowLeases: [{ running: false, launched: true,
+      close: async () => { events.push('close'); throw new Error('close failed'); },
+      dispose: async () => { events.push('collect'); return collected; },
+      quit: async () => events.push('quit'),
+    }] }), /close failed/);
+    assert.deepEqual(events, collected ? ['close', 'collect', 'quit'] : ['close', 'collect']);
+  }
+});
+
+test('permission cancellation during helper collection prevents a new app quit command', async t => {
+  const { openFixture } = await import('../bench/real-fixture.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'real-quit-cancel-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const cleanup = new AbortController();
+  const lease = await openFixture({ dir, cleanupSignal: cleanup.signal },
+    { app: 'Preview', bundle: 'com.apple.Preview', mode: 'document' }, {
+      open: async () => {},
+      run: async (_command, args, options) => {
+        assert.notEqual(JSON.parse(args.at(-1)).mode, 'quit', 'never launch a quit after cancellation during collection');
+        options.onStdout('{"stage":"armed","running":false,"pid":42}\n{"stage":"ready"}\n');
+        return new Promise(resolve => options.signal.addEventListener('abort', () => {
+          cleanup.abort(new Error('permission appeared during collection'));
+          resolve({ exit: { code: 0 }, stdout: '{"stage":"closed"}\n', groupClean: true });
+        }, { once: true }));
+      },
+    });
+  await assert.rejects(lease.quit(), /permission appeared during collection/);
+});
+
+test('native quit refuses a replacement process and confirms only the launched app exits', () => {
+  const { quitFixtureApplication } = nativeSource();
+  assert.equal(typeof quitFixtureApplication, 'function');
+  const app = { processIdentifier: 42, bundleIdentifier: 'com.apple.Safari', terminate: () => true };
+  let observations = 0;
+  assert.equal(quitFixtureApplication(42, 'com.apple.Safari', () => ++observations < 3 ? app : null, () => {}), true);
+  assert.throws(() => quitFixtureApplication(42, 'com.apple.Safari', () => ({ ...app, processIdentifier: 43 }),
+    () => assert.fail('no quit of replacement')), /identity/);
+});
+
+test('a failed Safari File-menu lookup cancels that menu before propagating the failure', () => {
+  const { chooseFileMenu } = nativeSource();
+  assert.equal(typeof chooseFileMenu, 'function');
+  const file = {}, menu = {}, unrelated = {}, events = [];
+  const api = {
+    press: element => { assert.equal(element, file); events.push('open'); },
+    children: element => element === file ? [menu] : [unrelated],
+    text: (_element, attribute) => attribute === 'AXRole' ? 'AXMenu' : 'Another item',
+    cancel: element => { assert.equal(element, menu); events.push('cancel'); },
+  };
+  assert.throws(() => chooseFileMenu(file, ['New Window'], api), /unavailable/);
+  assert.deepEqual(events, ['open', 'cancel']);
+  api.cancel = () => { throw new Error('cancel failed'); };
+  assert.throws(() => chooseFileMenu(file, ['New Window'], api), error => error.menuCleanupError === 'cancel failed');
 });
 
 test('a collected helper refusal before any mutation confirms cleanup without an AX action', async t => {
