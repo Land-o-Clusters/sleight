@@ -195,6 +195,14 @@ our own runs. Dates and engine versions are given where they matter.
   saving no`. It still answered AppleScript, but its only window was an orphan "Save Panel Accessory
   View" that Accessibility didn't list. The relay's message again named a stuck helper, while
   `--doctor` passed. Quitting TextEdit fixed it.
+- On 2026-10-09 the owner's keyboard stopped working, while the trackpad still did, after a
+  head-to-head pass ran the simulator task on both arms. Device Hub, left open after those runs,
+  held a keyboard event filter tap whose last key had taken 40 s, and a filter tap holds up every
+  key on the Mac. Quitting Device Hub fixed it at once. We don't know what stalled it. Codex's
+  simulator run had sent it 24 tool calls in 123 s, sleight's 7 turns in 35 s. The benchmark now
+  quits the simulator app after each simulator run, and stops a pass if any benchmark app still
+  holds a keyboard filter tap after a run. A user driving a simulator through sleight could hit the
+  same stall; if keys stop working, quit Device Hub or Simulator.
 - In the iPhone simulator (2026-10-07), Claude's first `typeText` into a Safari field once came out
   garbled and uppercased, and its paste fallback inserted other text: the simulator shares the
   Mac's clipboard. Claude cleared the field both times and typed it right, so 3/3 runs passed, but a

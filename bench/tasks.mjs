@@ -132,6 +132,21 @@ function simctl(...args) {
   return execFileSync('xcrun', ['simctl', ...args], { encoding: 'utf8', env, timeout: 180000 });
 }
 
+// Quits the app showing the simulator, leaving the simulator booted. Left open after a
+// head-to-head's simulator runs, Device Hub held a keyboard event tap that stalled every key on
+// the Mac until it quit (2026-10-09).
+export function quitSimApp() {
+  for (const [app, path] of SIM_APPS) {
+    try { execFileSync('pgrep', ['-f', `${path}/Contents/MacOS/`]); } catch { continue; } // not running
+    try { execFileSync('osascript', ['-e', `tell application "${path}" to quit`], { timeout: 10000, stdio: 'ignore' }); } catch {}
+    for (let i = 0; i < 20; i++) {
+      try { execFileSync('pgrep', ['-f', `${path}/Contents/MacOS/`]); } catch { break; }
+      execFileSync('sleep', ['0.25']);
+    }
+    try { execFileSync('pkill', ['-f', `${path}/Contents/MacOS/`]); } catch {}
+  }
+}
+
 // A booted iPhone simulator with the app showing it open behind the other
 // windows. Boots the first available iPhone when none is running.
 function bootedIPhone() {
@@ -254,6 +269,7 @@ export const tasks = [
       ctx.url = await serveForm(ctx.nonce);
       simctl('openurl', ctx.sim.udid, ctx.url);
     },
+    cleanup: quitSimApp,
     prompt: ({ nonce, sim }) =>
       `Using computer use in the background, go to the ${sim.name} simulator in the ${sim.app} app, where Safari ` +
       `shows a form. Type exactly "sleight bench ${nonce}" into its Message field and tap Submit. Reply when the page says Sent.`,

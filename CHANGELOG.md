@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The benchmark quits Device Hub or Simulator after each simulator run, and stops a pass when a
+  benchmark app still holds a keyboard event tap afterwards. On 2026-10-09 Device Hub's tap stalled
+  every key on the owner's Mac until it quit.
+
 - `drag` scales Claude's points by the screenshot of the window it drags in, not only the app's latest
   screenshot. In a 0.16.0 pass, Chess had a second, untitled window, and 3 of 13 drags went in
   unconverted because the latest screenshot was of the other window.

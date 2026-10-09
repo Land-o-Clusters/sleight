@@ -28,7 +28,7 @@ import { existsSync, mkdirSync, rmdirSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BENCH_APPS, closeBenchTextEdit, quitChess, tasks } from './tasks.mjs';
+import { BENCH_APPS, closeBenchTextEdit, quitChess, quitSimApp, tasks } from './tasks.mjs';
 import { approveOnly, codexReady, runCodex } from './codex-arm.mjs';
 import { watchAppWindows } from './app-windows.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
@@ -146,6 +146,17 @@ for (const name of armNames.filter(n => !ARMS[n].codex)) {
   if (leaked.length) throw new Error(`${name} arm also loads ${leaked.map(s => s.name).join(', ')}`);
 }
 
+// Keyboard filter taps held by benchmark apps after a run's cleanup. Device Hub kept one after the
+// simulator runs and every key on the Mac stalled (2026-10-09), so a pass stops on any.
+const TAPS_BIN = join(ARM_HOME, 'keyboard-taps');
+function benchKeyboardTaps() {
+  try {
+    if (!existsSync(TAPS_BIN)) execFileSync('swiftc', ['-O', join(ROOT, 'bench', 'keyboard-taps.swift'), '-o', TAPS_BIN], { stdio: 'ignore', timeout: 180000 });
+    const names = new Set(['Calculator', 'TextEdit', 'Chess', 'Simulator', 'DeviceHub', 'Device Hub']);
+    return JSON.parse(execFileSync(TAPS_BIN, { encoding: 'utf8', timeout: 10000 })).filter(t => names.has(t.app));
+  } catch (err) { return [{ app: 'unknown', error: `keyboard tap check failed: ${err.message}` }]; }
+}
+
 function runClaude(prompt, arm, env = {}) {
   const args = [
     '-p', prompt,
@@ -204,7 +215,8 @@ if (!isDryRun) {
   process.once('exit', () => { if (unlock) try { rmdirSync('/tmp/sleight-live.lock'); } catch {} });
 }
 // Arms alternate task by task, so both see the same conditions over time.
-for (let run = 1; run <= runs; run++) {
+let stopped = false;
+passes: for (let run = 1; run <= runs; run++) {
   for (const task of selected) {
     for (const armName of armNames) {
       const nonce = randomBytes(4).toString('hex');
@@ -239,6 +251,7 @@ for (let run = 1; run <= runs; run++) {
       // A shell or file edit could pass a check without the app, so it fails the run.
       if (codexRun?.forbidden.length) verdict = `used ${[...new Set(codexRun.forbidden)].join(' and ')}`;
       try { task.cleanup?.(ctx); } catch {} // leaving an app open doesn't change the verdict
+      const heldTaps = isDryRun ? [] : benchKeyboardTaps();
       results.push({
         arm: armName,
         task: task.id,
@@ -259,11 +272,17 @@ for (let run = 1; run <= runs; run++) {
         // What Claude Code reports it used, to catch a model setting that didn't apply.
         models: Object.keys(out?.modelUsage ?? {}),
         ...(codexRun && { toolCalls: codexRun.toolCalls, engineMs: codexRun.engineMs }),
+        ...(heldTaps.length && { keyboardTaps: heldTaps }),
         stderr: code === 0 ? undefined : scrub(stderr),
       });
       save();
       const r = results.at(-1);
       console.error(`${r.passed ? 'PASS' : 'FAIL'} ${armName} ${task.id} #${run} ${r.seconds}s${r.reason ? ` (${r.reason})` : ''}`);
+      if (heldTaps.length) {
+        quitSimApp(); quitChess();
+        console.error(`STOP: ${heldTaps.map(t => t.app).join(', ')} still holds a keyboard event tap after cleanup, which can stall every key on the Mac. The pass stopped.`);
+        stopped = true; break passes;
+      }
     }
   }
 }
@@ -275,6 +294,7 @@ save();
 if (!isDryRun) {
   closeBenchTextEdit();
   quitChess();
+  quitSimApp();
 }
 await unlock?.();
 unlock = undefined;

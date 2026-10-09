@@ -182,6 +182,12 @@ Passes on the way to 0.16.0, before its drag change:
   throughout. One chess-drag run hit the runner's 5-minute limit after saving a correct game, so it
   passed without a turn count.
 
+The first core head-to-head with native Codex computer use
+([`h2h-core-stopped`](benchmarks/2026-10-09-h2h-core-stopped.json), Sonnet 5.5 against gpt-6.1-sol,
+both at medium) was stopped after 19 of 42 runs, when the owner's keyboard stopped working (see
+[Known problems](known-problems.md)). sleight passed 10/10 in 82 turns and 319 s; Codex passed 8/9
+in 87 model requests and 406 s, failing its first textedit-drag. That's too few runs to compare.
+
 0.16.0's pass ([`release-0.16.0`](benchmarks/2026-10-09-release-0.16.0.json)) passed 20/21 in 178
 turns and 1,355 s, at 2.34 s of model time per turn. textedit-drag passed 3/3, with `drag` reading
 Claude's screenshot pixels at the screenshot's scale. chess-drag passed 2/3. Its failed run hit the

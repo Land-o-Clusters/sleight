@@ -11,12 +11,13 @@ LAWS now has the owner's rule to reread the README whole every release.
 
 Unreleased on `pane/auto-mode`: `drag` scales by its own window's screenshot (`2f3b512`).
 
-Running: the core head-to-head, `--arm sleight,codex --runs 3` (42 runs, log
-`.dev/passes/pass-h2h-core.log`). Its sleight arm ran `2f3b512`'s plugin code from 19 s in (the plugin
-loads from the working tree), so every drag run used per-window scaling. The Codex pilot passed
-1/1 each (`bench/results/2026-10-09T01-19-41-352Z.json`), so headless Codex computer use works. Its
-run took 4 model requests and 2 tool calls. The runner restored the owner's "Always allow"
-list byte for byte.
+The core head-to-head stopped at 19 of 42 runs (about 01:30 UTC) when the owner's keyboard stopped
+working. Device Hub, left open after both arms' simulator runs, had a keyboard filter tap whose last
+key took 40 s. Quitting it fixed the keyboard. Published as
+`docs/benchmarks/2026-10-09-h2h-core-stopped.json`: sleight 10/10, Codex 8/9. The runner now quits the
+simulator app after each simulator run, and stops a pass when a benchmark app still has a keyboard tap
+installed (`bench/keyboard-taps.swift`, compiled to `~/Library/Caches/sleight-bench/keyboard-taps`).
+Rerun the head-to-head with those guards, and only when the owner is away from the Mac.
 
 Benchmark side, not in the plugin: the Codex arm (`bench/codex-arm.mjs`, `a8f2010`), dry runs only.
 `~/.codex-bench` holds the owner's bench login (done 2026-10-08) and a config with only the engine

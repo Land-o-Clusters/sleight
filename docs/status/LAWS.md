@@ -85,6 +85,8 @@ belong in [STATE.md](STATE.md).
 - A Codex report is a claim until sleight-arch reproduces it under normal use: the owner at the Mac,
   other apps open. Results measured while the owner was away say so.
 - Live checks that drive apps hold `/tmp/sleight-live.lock`, taken with `mkdir`, released on exit.
+- A benchmark run quits every app it launched, so no keyboard event tap is still installed after it. When the owner
+  reports a dead keyboard or pointer, stop every live run first, then look (2026-10-09).
 - Benchmark arms run from folders outside any git repo. Claude Code loads CLAUDE.md from parent
   folders and keys project memory by the git root, so a folder inside this repo leaks both.
 - The marketplace installs from the default branch, so `main` is what new users get. Keep it releasable:
