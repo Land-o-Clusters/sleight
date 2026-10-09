@@ -2,7 +2,7 @@
 // Codex home (~/.codex-bench) with only the engine server configured, so the owner's AGENTS.md,
 // memories, plugins and hooks stay out. Research: .dev/research/2026-10-08-codex-head-to-head.md.
 
-import { spawn } from 'node:child_process';
+import { runOwned } from './preapproved-process.mjs';
 import { copyFileSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -54,44 +54,40 @@ function findNumber(value, key) {
   return undefined;
 }
 
-export function runCodex(prompt, { cwd, model, effort, timeoutMs }) {
+// The process group is owned (runOwned): an abort or the timeout stops Codex and the engine server
+// it started, and the result says whether the whole group is gone, as the real suite requires.
+export async function runCodex(prompt, { cwd, model, effort, timeoutMs, signal }) {
   // No shell and a read-only sandbox: the checks read files and a form server, so a shell could
   // pass them without touching the apps. The Claude arm has no Bash either.
   const args = ['exec', '--json', '-s', 'read-only', '--disable', 'shell_tool', '-m', model,
     '-c', `model_reasoning_effort="${effort}"`, '--skip-git-repo-check', '-C', cwd, prompt];
-  return new Promise(resolve => {
-    const child = spawn('codex', args, { cwd, env: { ...process.env, CODEX_HOME }, stdio: ['ignore', 'pipe', 'pipe'] });
-    let buffer = '', stderr = '', threadId, answer = '', usage, toolCalls = 0, engineMs = 0;
-    const forbidden = [];
-    child.stdout.on('data', chunk => {
-      buffer += chunk;
-      let i;
-      while ((i = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, i); buffer = buffer.slice(i + 1);
-        let event;
-        try { event = JSON.parse(line); } catch { continue; }
-        if (event.type === 'thread.started') threadId = event.thread_id;
-        if (event.type === 'turn.completed') usage = event.usage;
-        if (event.type !== 'item.completed') continue;
-        const item = event.item ?? {};
-        if (item.type === 'agent_message') answer = item.text ?? answer;
-        if (item.type === 'mcp_tool_call') { toolCalls++; engineMs += findNumber(item, 'codex/nodeReplExecutionDurationMs') ?? 0; }
-        if (['command_execution', 'file_change'].includes(item.type)) forbidden.push(item.type);
-      }
-    });
-    child.stderr.on('data', d => (stderr += d));
-    const timer = setTimeout(() => child.kill('SIGTERM'), timeoutMs);
-    child.on('close', code => {
-      clearTimeout(timer);
-      resolve({
-        code, stderr: stderr.slice(-2000), forbidden,
-        // Shaped like Claude Code's JSON result, so the runner records both arms the same way.
-        out: { result: answer, num_turns: threadId ? modelRequests(threadId) : undefined,
-          usage: usage && { input_tokens: usage.input_tokens, cache_read_input_tokens: usage.cached_input_tokens,
-            cache_creation_input_tokens: usage.cache_write_input_tokens, output_tokens: usage.output_tokens },
-          modelUsage: { [model]: {} } },
-        toolCalls, engineMs,
-      });
-    });
-  });
+  let buffer = '', threadId, answer = '', usage, toolCalls = 0, engineMs = 0;
+  const forbidden = [];
+  const onStdout = chunk => {
+    buffer += chunk;
+    let i;
+    while ((i = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, i); buffer = buffer.slice(i + 1);
+      let event;
+      try { event = JSON.parse(line); } catch { continue; }
+      if (event.type === 'thread.started') threadId = event.thread_id;
+      if (event.type === 'turn.completed') usage = event.usage;
+      if (event.type !== 'item.completed') continue;
+      const item = event.item ?? {};
+      if (item.type === 'agent_message') answer = item.text ?? answer;
+      if (item.type === 'mcp_tool_call') { toolCalls++; engineMs += findNumber(item, 'codex/nodeReplExecutionDurationMs') ?? 0; }
+      if (['command_execution', 'file_change'].includes(item.type)) forbidden.push(item.type);
+    }
+  };
+  const run = await runOwned('codex', args, { cwd, env: { ...process.env, CODEX_HOME }, timeoutMs, signal, onStdout });
+  return {
+    code: run.exit.code ?? (run.spawnError ? 127 : 1), stderr: (run.spawnError ?? run.stderr).slice(-2000), forbidden,
+    groupClean: run.groupClean, cancelled: run.cancelled, timedOut: run.timedOut,
+    // Shaped like Claude Code's JSON result, so the runner records both arms the same way.
+    out: { result: answer, num_turns: threadId ? modelRequests(threadId) : undefined,
+      usage: usage && { input_tokens: usage.input_tokens, cache_read_input_tokens: usage.cached_input_tokens,
+        cache_creation_input_tokens: usage.cache_write_input_tokens, output_tokens: usage.output_tokens },
+      modelUsage: { [model]: {} } },
+    toolCalls, engineMs,
+  };
 }

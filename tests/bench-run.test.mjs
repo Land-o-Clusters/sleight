@@ -11,7 +11,7 @@ import { privateDriverEnvironment } from '../bench/driver.mjs';
 // file, live lock, compiler or filesystem operation reaches the host.
 async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false } = {}) {
   const calls = [], saved = [], envs = [], tailScopes = [], directories = [];
-  const logs = [], driverOptions = [];
+  const logs = [], driverOptions = [], codexRuns = [];
   const source = readFileSync(new URL('../bench/run.mjs', import.meta.url), 'utf8')
     .replace(/^#!.*\n/, '').replace(/^import .*;\n/gm, '').replaceAll('import.meta.url', '"file:///fixture/bench/run.mjs"');
   const task = { id: 'fixture', app: 'Safari', setup() {}, prompt: () => 'task', check: () => true, cleanup: () => calls.push('task cleanup') };
@@ -36,7 +36,7 @@ async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = []
     quitChess: options => { calls.push('Chess tail'); tailScopes.push(options); },
     quitSimApp: options => { calls.push('Simulator tail'); tailScopes.push(options); },
     approveOnly: ids => { calls.push(['approve', ...ids]); return () => {}; }, codexReady: () => true,
-    runCodex: async () => ({ code: 0, out: {}, forbidden: [] }), watchAppWindows: () => async () => [],
+    runCodex: async (prompt, options) => { codexRuns.push({ prompt, options }); return { code: 0, out: {}, forbidden: [] }; }, watchAppWindows: () => async () => [],
     acquireLiveLock: async () => { calls.push('lock'); return async () => calls.push('unlock'); },
     runTiming: () => ({}), traceTiming: () => ({}), observePermission: () => false,
     runOwned: async (_command, _args, options) => {
@@ -54,7 +54,7 @@ async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = []
   };
   let error;
   try { await runInNewContext(`(async () => { ${source}\n})()`, sandbox); } catch (caught) { error = caught; }
-  return { calls, saved, envs, tailScopes, directories, error, logs, driverOptions };
+  return { calls, saved, envs, tailScopes, directories, error, logs, driverOptions, codexRuns };
 }
 
 test('private mail runner publishes only hashed rows and keeps the driver ephemeral', async () => {
@@ -159,13 +159,26 @@ test('Codex default approvals contain only the five core benchmark bundle IDs', 
   assert.deepEqual(result.tailScopes, [undefined, undefined, undefined]);
 });
 
-test('Codex real runs are rejected before approvals, preflight or live app work', async () => {
-  for (const arm of ['codex', 'sleight,codex']) {
-    const result = await runner({ arm, drive: true });
-    assert.match(result.error?.message ?? '', /Codex arm does not yet support the real suite/);
-    assert.deepEqual(result.calls, []);
-    assert.deepEqual(result.envs, []);
-  }
+test('a Codex real run drives through Codex with the real apps approved and the pass signal', async () => {
+  const result = await runner({ arm: 'codex', drive: true });
+  assert.equal(result.error, undefined);
+  const approved = result.calls.find(c => Array.isArray(c) && c[0] === 'approve');
+  assert.ok(approved.includes('com.apple.Safari') && approved.includes('com.apple.calculator'));
+  assert.ok(result.codexRuns.length > 0);
+  for (const run of result.codexRuns) { assert.equal(run.prompt, 'task'); assert.ok(run.options.signal, 'an abort reaches Codex'); }
+  assert.ok(!result.calls.some(c => Array.isArray(c) && c[0] === 'driver'), 'Claude never runs for the Codex arm');
+});
+
+test('a real run where Codex used a shell or edited a file fails even when its check passed', async () => {
+  const result = await runner({ arm: 'codex', outcome: { passed: true, forbidden: ['command_execution', 'command_execution'] } });
+  const row = result.saved.at(-1).results[0];
+  assert.equal(row.passed, false); assert.equal(row.reason, 'used command_execution');
+  assert.equal('forbidden' in row, false);
+});
+
+test('a private mail pass still refuses the Codex arm', async () => {
+  const result = await runner({ arm: 'sleight,codex', privateMail: true });
+  assert.match(result.error?.message ?? '', /Mimestream requires a separate sleight-only pass/);
 });
 
 test('a real Safari keyboard tap stops further runs after recording the tap', async () => {

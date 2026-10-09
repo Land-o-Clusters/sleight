@@ -62,7 +62,6 @@ const controller = new AbortController();
 process.on('SIGINT', () => controller.abort(new Error('run interrupted')));
 process.on('SIGTERM', () => controller.abort(new Error('run interrupted')));
 const armOption = option('arm', 'sleight');
-if (suite === 'real' && armOption.split(',').includes('codex')) throw new Error('Codex arm does not yet support the real suite');
 const ARM_HOME = join(homedir(), 'Library', 'Caches', 'sleight-bench');
 const ARMS = {
   // Each arm runs from its own empty folder outside any git repo, so neither
@@ -296,6 +295,11 @@ pass: for (let run = 1; run <= runs; run++) {
           stop: () => controller.abort(new Error('macOS permission prompt')),
           permissionCheck: observePermission,
           drive: async (prompt, _ctx, callbacks) => {
+            if (ARMS[armName].codex) {
+              const response = await runCodex(prompt, { cwd: ARMS[armName].cwd, model: codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS, signal: controller.signal });
+              response.timing = runTiming(response.out);
+              return response;
+            }
             const response = await runClaude(prompt, ARMS[armName], !task.privateMail && armName === 'sleight' ? { SLEIGHT_TRACE: evidenceDir } : {},
               { signal: controller.signal, evidenceDir, ...callbacks, privateMail: task.privateMail });
             if (!task.privateMail) response.timing = runTiming(response.out, armName === 'sleight' ? traceTiming(evidenceDir) : undefined);
@@ -308,7 +312,9 @@ pass: for (let run = 1; run <= runs; run++) {
           for (const lease of ctx.windowLeases ?? []) try { await lease.dispose(); } catch {}
           result = { passed: false, groupClean: false, reason: 'PRIVATE_MAIL_UNEXPECTED_STOP' };
         }
-        const { out, code, ...rest } = result;
+        // A shell or file edit could pass a check without the app, so it fails the run.
+        if (result.forbidden?.length) { result.passed = false; result.reason = `used ${[...new Set(result.forbidden)].join(' and ')}`; }
+        const { out, code, forbidden: _forbidden, ...rest } = result;
         results.push(task.privateMail ? privateMailResult(task, ctx, result, { arm: armName, run }) : { arm: armName, task: task.id, run, ...rest,
           reason: scrub(result.reason), cleanupError: scrub(result.cleanupError), prompt: scrub(result.prompt),
           turns: out?.num_turns, costUsd: out?.total_cost_usd, models: Object.keys(out?.modelUsage ?? {}),
@@ -349,7 +355,7 @@ pass: for (let run = 1; run <= runs; run++) {
       const stopWatching = watchAppWindows(ctx.sim?.app ?? task.app);
       // sleight traces into the run's scratch folder, so its timing comes from this run alone.
       const arm = ARMS[armName];
-      const codexRun = arm.codex ? await runCodex(prompt, { cwd: arm.cwd, model: codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS }) : undefined;
+      const codexRun = arm.codex ? await runCodex(prompt, { cwd: arm.cwd, model: codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS, signal: controller.signal }) : undefined;
       const { code, out, stderr, groupClean = true, cancelled } = codexRun ?? await runClaude(prompt, arm, armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {});
       const appWindows = await stopWatching();
       const answer = out?.result ?? '';
