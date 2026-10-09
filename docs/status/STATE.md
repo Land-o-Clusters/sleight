@@ -18,6 +18,12 @@ to pass a check (716 transcripts checked).
 desktop pane's picture, comparisons with LCU and Codex). The owner approved 1.0.0 (2026-10-09) once the Chess and simulator
 head-to-head and a release pass on the current code have run with the owner away, with no new
 failure that's sleight's fault. Then tag, release, README, LAWS ("launches at 0.x"), install.
+Owner's plan after 1.0 (2026-10-09), run in order without check-ins: (1) qualify the real-use suite
+(Sol, brief 5), then the Codex head-to-head on it; (2) an honest launch post from those numbers,
+files in `~/Desktop/sleight-launch/` for the owner's Grok bot; (3) replay, a successful run turned into
+a script that replays through the engine with no model. Known-problems work fills the time the owner
+is at the Mac: the cursor-free text move for other apps' text fields first, then rich-text
+formatting, first-read speed, Chess's second window, `/sleight stop` in the desktop app.
 Head-to-head on Calculator and TextEdit (`docs/benchmarks/2026-10-09-h2h-background.json`): sleight
 15/15 (446 s), Codex 12/15 (732 s), Codex 0/3 on textedit-drag. Chess and the simulator still need a
 run with the owner away. `main` has one README commit (`dcad210`, the release badge) that the branch
