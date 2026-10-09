@@ -55,6 +55,7 @@ test('the direct probe sends one request per call and rotates turn metadata', as
   const meta = result => JSON.parse(params(result)._meta['x-codex-turn-metadata']);
   const before = await client.call('js', { code: 'await app.typeText("A1|")' });
   const ended = await client.call('turn_ended', {});
+  assert.equal(params(ended).arguments.hook_event_name, 'Stop');
   const after = await client.call('js', { code: 'await app.typeText("A2|")' });
   assert.equal(meta(before).session_id, meta(after).session_id);
   assert.equal(meta(before).turn_id, params(ended).arguments.turn_id);

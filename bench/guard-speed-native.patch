@@ -1,0 +1,168 @@
+diff --git a/plugins/sleight/lib/document-scope.mjs b/plugins/sleight/lib/document-scope.mjs
+index 829f2be..a6ca3ae 100644
+--- a/plugins/sleight/lib/document-scope.mjs
++++ b/plugins/sleight/lib/document-scope.mjs
+@@ -1,4 +1,5 @@
+ // Header identity is a cooperative runtime observation, not an OS capability.
++import { treeFreeAction, requestNativeWindow, nativeWindowMatches, sameNativeWindow } from '../../../bench/window-observer-client.mjs';
+ // Mark full trees the guard writes, which the relay compacts (compact-reads.mjs).
+ export const GUARD_MARK = '[sleight:guard-read]\n';
+ export const GUARD_END = '\n[/sleight:guard-read]\n';
+@@ -132,6 +133,9 @@ function guardSetup(update) {
+     state.adoptUrl = ${!!update.adoptUrl};` : ''}
+     state.nativeDenied = ${JSON.stringify(update?.nativeDenied) ?? 'undefined'};
+     state.timing = ${!!update?.timing};
++    state.nativeWindow = ${JSON.stringify(update?.nativeWindow) ?? 'undefined'};
++    state.nativeBaselines = new WeakMap(); state.acted = new WeakSet();
++    state.selectors ||= new WeakMap();
+     // The previous call's read, when the relay judged it reusable for this call's first action.
+     state.prior = ${JSON.stringify(update?.prior) ?? 'undefined'};
+     const clock = () => globalThis.performance?.now() ?? Date.now();
+@@ -156,6 +160,18 @@ function guardSetup(update) {
+     const hasIdentifier = ${hasIdentifier.toString()};
+     const hasLabel = ${hasLabel.toString()};
+     const sameElement = ${sameElement.toString()};
++    const treeFreeAction = ${treeFreeAction.toString()};
++    const requestNativeWindow = ${requestNativeWindow.toString()};
++    const nativeWindowMatches = ${nativeWindowMatches.toString()};
++    const sameNativeWindow = ${sameNativeWindow.toString()};
++    const nativeRead = async () => {
++      const start = clock();
++      const result = await requestNativeWindow(state.nativeWindow);
++      if (state.timing) nodeRepl.write('[sleight:guard-timing]' + JSON.stringify({ phase: 'native-window',
++        ms: clock() - start, chars: 0, failed: result.status !== 'ok' }) + '\\n');
++      return result;
++    };
++    const nativeStop = () => new Error('Native window check stopped this action: the window, document or dialog changed, or a fresh observation was unavailable. Read the intended window again before acting.');
+     const checkNative = () => { if (state.nativeDenied) throw new Error(state.nativeDenied); };
+     const checkLease = async () => {
+       if (!state.lease) return;
+@@ -232,6 +248,18 @@ function guardSetup(update) {
+             return value.apply(raw, args);
+           }
+           let text = state.reads.get(proxy)?.text;
++          const baseline = state.nativeBaselines.get(proxy);
++          const nativeEnabled = state.nativeWindow && !state.fileOnly && !state.cancelOnly;
++          const selector = state.selectors.get(proxy);
++          let nativeBefore;
++          if (text === undefined && nativeEnabled && state.acted.has(proxy) && baseline && treeFreeAction(name, args)) {
++            const current = await nativeRead();
++            if (!sameNativeWindow(baseline.sample, current) || !nativeWindowMatches(current, state.expected, state.nativeWindow.appId)) throw nativeStop();
++            // Only tree-free actions take this path. Selector numbers still come from a fresh tree.
++            text = baseline.text;
++          } else if (nativeEnabled && !state.acted.has(proxy) && typeof selector === 'string') {
++            nativeBefore = await nativeRead();
++          }
+           // The acquisition just before this call read the whole tree. A launching app can take 15 s
+           // per read under load (2026-10-09), so reuse it when the app's windows, as the inventory
+           // lists them, are exactly what they were then.
+@@ -293,11 +321,18 @@ function guardSetup(update) {
+             // relay can lease that window for Claude's retry (Chess retitles itself on each move).
+             throw (state.adoptUrl ? stop : message => new Error(message))(state.reason + ' Observed ' + JSON.stringify(observed));
+           }
++          if (nativeBefore && nativeWindowMatches(nativeBefore, observed, state.nativeWindow.appId) &&
++            [nativeBefore.appId, nativeBefore.app, nativeBefore.path].includes(selector)) {
++            const current = await nativeRead();
++            if (!sameNativeWindow(nativeBefore, current) || !nativeWindowMatches(current, observed, state.nativeWindow.appId)) throw nativeStop();
++            state.nativeBaselines.set(proxy, { sample: current, text });
++          }
+           await checkLease();
+           state.activeApp = proxy;
+           // A second handle may refer to this same app/window. Every input
+           // invalidates the call's observations, including reads on that alias.
+           state.reads = new WeakMap();
++          state.acted.add(proxy);
+           return value.apply(raw, args);
+         };
+         // An action Claude didn't await that fails would reject with no handler, and that ends the
+@@ -312,7 +347,12 @@ function guardSetup(update) {
+       state.proxies.add(proxy); state.wrapped.set(target, proxy); state.raws.set(proxy, target);
+       return proxy;
+     };
+-    cua.getApp = async (...args) => { checkNative(); return state.activeApp = wrap(await state.getApp(...args)); };
++    cua.getApp = async (...args) => {
++      checkNative();
++      const proxy = wrap(await state.getApp(...args));
++      state.selectors.set(proxy, args[0]);
++      return state.activeApp = proxy;
++    };
+     ${update && !update.skipAppWrap ? "if (typeof app !== 'undefined' && app && typeof app.getAXState === 'function' && !state.proxies.has(app)) { app = wrap(app); state.activeApp ||= app; }" : ''}
+   })();`;
+ }
+diff --git a/tests/guard-native.test.mjs b/tests/guard-native.test.mjs
+new file mode 100644
+index 0000000..0dc8d6a
+--- /dev/null
++++ b/tests/guard-native.test.mjs
+@@ -0,0 +1,71 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { constants, runInNewContext } from 'node:vm';
++import { createServer } from 'node:net';
++import { mkdtemp, rm } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { guardedCode, readCode } from '../plugins/sleight/lib/document-scope.mjs';
++
++const expected = { title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' };
++const initial = { status: 'ok', epoch: 'one', pid: 12, processStart: 100, window: 3,
++  appId: 'com.apple.TextEdit', app: 'TextEdit', title: 'a.txt', document: 'file:///tmp/a.txt',
++  overlay: false, matchingWindows: 1 };
++async function fixture(t, action = () => {}, options = {}) {
++  const directory = await mkdtemp(join(tmpdir(), 'sleight-native-test-'));
++  const endpoint = { path: join(directory, 'n.sock'), token: 'test', appId: 'com.apple.TextEdit', timeoutMs: 1000 };
++  let native = { ...initial }, rows = '\t1 button Save, ID: Save';
++  const calls = [], output = [];
++  const server = createServer(socket => {
++    socket.on('error', () => {});
++    socket.once('data', () => { calls.push('native'); socket.end(JSON.stringify(native) + '\n'); });
++  });
++  await new Promise(resolve => server.listen(endpoint.path, resolve));
++  t.after(async () => { await new Promise(resolve => server.close(resolve)); await rm(directory, { recursive: true, force: true }); });
++  const raw = { getAXState: async () => { calls.push('tree'); return `Window: "a.txt", App: TextEdit.\n0 standard window, URL: file:///tmp/a.txt\n${rows}`; } };
++  for (const name of ['click', 'drag', 'scroll', 'typeText', 'pressKey', 'paste', 'setValue', 'selectText', 'performSecondaryAction']) {
++    raw[name] = async (...args) => { calls.push([name, ...args]); action({ setNative: patch => { native = { ...native, ...patch }; }, setRows: value => { rows = value; } }); };
++  }
++  const context = { cua: { getApp: async () => raw }, nodeRepl: { write: value => output.push(value) }, setTimeout, clearTimeout };
++  const run = code => runInNewContext(`(async () => {${code}})()`, context, { importModuleDynamically: constants.USE_MAIN_CONTEXT_DEFAULT_LOADER });
++  await run(readCode('globalThis.app = await cua.getApp("com.apple.TextEdit")'));
++  return { calls, output, run: code => run(guardedCode(code, expected, 'window changed', undefined, { nativeWindow: endpoint, ...options })) };
++}
++test('later keys, text, paste and coordinates use fresh native observations with one final tree', async t => {
++  const f = await fixture(t);
++  await f.run('await app.click(1); await app.pressKey("a"); await app.typeText("x"); await app.paste("x"); await app.click([1,2]); await app.scroll([1,2], "down"); await app.drag([1,2],[2,3]);');
++  assert.equal(f.calls.filter(x => x === 'tree').length, 2);
++  assert.equal(f.calls.filter(x => Array.isArray(x)).length, 7);
++  assert.ok(f.calls.filter(x => x === 'native').length >= 8);
++});
++test('new calls require a full tree and cannot reuse an earlier native baseline', async t => {
++  const f = await fixture(t);
++  await f.run('await app.pressKey("a"); await app.pressKey("b");');
++  f.calls.length = 0;
++  await f.run('await app.pressKey("c");');
++  assert.equal(f.calls.filter(x => x === 'tree').length, 2);
++});
++test('every changed or unavailable native identity stops the later action before input', async t => {
++  for (const patch of [{ window: 4 }, { processStart: 200 }, { pid: 13 }, { epoch: 'two' }, { title: 'b.txt' },
++    { document: 'file:///tmp/b.txt' }, { appId: 'other' }, { overlay: true }, { matchingWindows: 2 },
++    { status: 'expired' }, { status: 'unknown' }]) {
++    const f = await fixture(t, ({ setNative }) => setNative(patch));
++    await assert.rejects(f.run('await app.click(1); await app.pressKey("blocked");'), /Native window check stopped/);
++    assert.equal(f.calls.filter(x => Array.isArray(x)).length, 1);
++  }
++});
++test('element numbers, IDs, labels and lines still read the tree after native-checked input', async t => {
++  for (const selector of ['1', '{id:"Save"}', '{label:"Save"}', '{line:"button Save, ID: Save"}']) {
++    const f = await fixture(t);
++    await f.run(`await app.pressKey("a"); await app.pressKey("b"); await app.click(${selector});`);
++    assert.equal(f.calls.filter(x => x === 'tree').length, 3);
++  }
++  const f = await fixture(t, ({ setRows }) => setRows('\t1 button Delete\n\t2 button Save, ID: Save'));
++  await assert.rejects(f.run('await app.pressKey("a"); await app.pressKey("b"); await app.click(1);'), /changed what element 1 is/);
++  assert.equal(f.calls.filter(x => Array.isArray(x) && x[0] === 'click').length, 0);
++});
++test('strict document and change-review modes retain their full-read behavior', async t => {
++  const f = await fixture(t, () => {}, { fileOnly: true });
++  await f.run('await app.pressKey("a"); await app.typeText("b");');
++  assert.equal(f.calls.filter(x => x === 'tree').length, 3);
++});

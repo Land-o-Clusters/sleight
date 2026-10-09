@@ -1,0 +1,563 @@
+{
+  "generated": "2026-10-09T18:07:23.094Z",
+  "modelTurns": 0,
+  "modelMs": 0,
+  "runs": [
+    {
+      "file": "2026-10-09-guard-native-2026-10-09T17-30-29-161Z.json",
+      "started": "2026-10-09T17:30:29.161Z",
+      "finished": "2026-10-09T17:30:31.913Z",
+      "error": null,
+      "workers": 0,
+      "modes": [
+        {
+          "mode": "cold",
+          "count": 3,
+          "ok": 0,
+          "medianMs": 57.902874999999995
+        },
+        {
+          "mode": "startup",
+          "count": 1,
+          "ok": 0,
+          "medianMs": 61.403125000000045
+        },
+        {
+          "mode": "warm",
+          "count": 19,
+          "ok": 0,
+          "medianMs": 0.3138329999999314
+        }
+      ],
+      "native": {
+        "count": 0,
+        "statuses": {},
+        "ms": [],
+        "loads": []
+      },
+      "helperStarved": [],
+      "readProbe": [],
+      "calculatorExit": null,
+      "cleanupError": null
+    },
+    {
+      "file": "2026-10-09-guard-native-2026-10-09T17-31-10-106Z.json",
+      "started": "2026-10-09T17:31:10.106Z",
+      "finished": "2026-10-09T17:31:13.411Z",
+      "error": null,
+      "workers": 0,
+      "modes": [
+        {
+          "mode": "cold",
+          "count": 3,
+          "ok": 3,
+          "medianMs": 78.39049999999997
+        },
+        {
+          "mode": "startup",
+          "count": 1,
+          "ok": 1,
+          "medianMs": 81.35125000000016
+        },
+        {
+          "mode": "warm",
+          "count": 19,
+          "ok": 19,
+          "medianMs": 2.061583000000155
+        }
+      ],
+      "native": {
+        "count": 0,
+        "statuses": {},
+        "ms": [],
+        "loads": []
+      },
+      "helperStarved": [],
+      "readProbe": [],
+      "calculatorExit": null,
+      "cleanupError": null
+    },
+    {
+      "file": "2026-10-09-guard-preflight-2026-10-09T17-28-47-297Z.json",
+      "started": "2026-10-09T17:28:47.297Z",
+      "finished": "2026-10-09T17:28:47.354Z",
+      "error": null,
+      "workers": 0,
+      "modes": [],
+      "calculatorExit": null,
+      "cleanupError": null
+    },
+    {
+      "file": "2026-10-09-guard-probe-2026-10-09T17-38-55-176Z.json",
+      "started": "2026-10-09T17:38:55.176Z",
+      "finished": "2026-10-09T17:39:00.251Z",
+      "error": null,
+      "workers": 0,
+      "loadStarted": "2026-10-09T17:38:57.513Z",
+      "loadEnded": "2026-10-09T17:39:00.020Z",
+      "modes": [],
+      "native": {
+        "count": 20,
+        "statuses": {
+          "ok": 20
+        },
+        "medianMs": 12.969124999999622,
+        "minMs": 4.28125,
+        "maxMs": 34.769374999999854,
+        "minLoad": 5.83544921875,
+        "maxLoad": 5.83544921875
+      },
+      "helperStarved": [
+        {
+          "label": "helper-starved",
+          "load": 5.83544921875,
+          "response": {
+            "status": "expired"
+          },
+          "ms": 251.4337499999997
+        }
+      ],
+      "readProbe": [
+        {
+          "label": "abandon-read",
+          "ms": 523.013958,
+          "text": "read still pending at 100ms"
+        },
+        {
+          "label": "next-pure-call",
+          "ms": 1.2172920000002705,
+          "text": "{ lateReadDone: true }"
+        },
+        {
+          "label": "next-input-call",
+          "ms": 69.35666599999968,
+          "text": "{ lateReadDone: true }"
+        }
+      ],
+      "calculatorExit": "absent",
+      "cleanupError": null
+    },
+    {
+      "file": "2026-10-09-guard-probe-2026-10-09T17-39-21-309Z.json",
+      "started": "2026-10-09T17:39:21.309Z",
+      "finished": "2026-10-09T17:39:25.912Z",
+      "error": null,
+      "workers": 0,
+      "loadStarted": "2026-10-09T17:39:23.331Z",
+      "loadEnded": "2026-10-09T17:39:25.694Z",
+      "modes": [],
+      "native": {
+        "count": 20,
+        "statuses": {
+          "ok": 20
+        },
+        "medianMs": 3.851208999999926,
+        "minMs": 2.547375000000102,
+        "maxMs": 27.514666000000034,
+        "minLoad": 6.390625,
+        "maxLoad": 6.390625
+      },
+      "helperStarved": [
+        {
+          "label": "helper-starved",
+          "load": 6.390625,
+          "response": {
+            "status": "expired"
+          },
+          "ms": 251.459292
+        }
+      ],
+      "readProbe": [
+        {
+          "label": "abandon-read",
+          "ms": 516.3231250000003,
+          "text": "read still pending at 100ms"
+        },
+        {
+          "label": "next-pure-call",
+          "ms": 1.1370830000000751,
+          "text": "{ lateReadDone: true }"
+        },
+        {
+          "label": "next-input-call",
+          "ms": 69.08958299999995,
+          "text": "{ lateReadDone: true }"
+        }
+      ],
+      "calculatorExit": "absent",
+      "cleanupError": null
+    },
+    {
+      "file": "2026-10-09-guard-probe-2026-10-09T17-43-42-401Z.json",
+      "started": "2026-10-09T17:43:42.401Z",
+      "finished": "2026-10-09T17:44:50.303Z",
+      "error": null,
+      "workers": 20,
+      "loadStarted": "2026-10-09T17:43:45.169Z",
+      "loadEnded": "2026-10-09T17:44:50.043Z",
+      "modes": [],
+      "native": {
+        "count": 20,
+        "statuses": {
+          "unknown": 14,
+          "ok": 6
+        },
+        "medianMs": 104.28483299999789,
+        "minMs": 16.91729199999827,
+        "maxMs": 206.75841599999694,
+        "minLoad": 61.72021484375,
+        "maxLoad": 66.70703125
+      },
+      "helperStarved": [
+        {
+          "label": "helper-starved",
+          "load": 66.70703125,
+          "response": {
+            "status": "expired"
+          },
+          "ms": 250.47483300000022
+        }
+      ],
+      "readProbe": [
+        {
+          "label": "abandon-read",
+          "ms": 562.9199999999983,
+          "text": "read still pending at 100ms"
+        },
+        {
+          "label": "next-pure-call",
+          "ms": 1.3077080000075512,
+          "text": "{ lateReadDone: true }"
+        },
+        {
+          "label": "next-input-call",
+          "ms": 79.17129199999908,
+          "text": "{ lateReadDone: true }"
+        }
+      ],
+      "calculatorExit": "absent",
+      "cleanupError": null
+    },
+    {
+      "file": "2026-10-09-guard-probe-2026-10-09T18-03-11-406Z.json",
+      "started": "2026-10-09T18:03:11.406Z",
+      "finished": "2026-10-09T18:03:11.408Z",
+      "error": "Another live run holds /tmp/sleight-live.lock. Wait for it to finish.",
+      "workers": 20,
+      "loadEnded": "2026-10-09T18:03:11.408Z",
+      "modes": [],
+      "native": {
+        "count": 0,
+        "statuses": {},
+        "ms": [],
+        "loads": []
+      },
+      "helperStarved": [],
+      "readProbe": [],
+      "calculatorExit": null,
+      "cleanupError": null
+    },
+    {
+      "file": "2026-10-09-guard-probe-2026-10-09T18-05-27-618Z.json",
+      "started": "2026-10-09T18:05:27.618Z",
+      "finished": "2026-10-09T18:06:32.646Z",
+      "error": null,
+      "workers": 20,
+      "loadStarted": "2026-10-09T18:05:29.511Z",
+      "loadEnded": "2026-10-09T18:06:32.448Z",
+      "modes": [],
+      "native": {
+        "count": 20,
+        "statuses": {
+          "unknown": 2,
+          "expired": 1,
+          "busy": 17
+        },
+        "medianMs": 0.17779200000222772,
+        "minMs": 0.13749999999708962,
+        "maxMs": 252.2520829999994,
+        "minLoad": 42.61865234375,
+        "maxLoad": 42.61865234375
+      },
+      "helperStarved": [
+        {
+          "label": "helper-starved",
+          "load": 42.61865234375,
+          "response": {
+            "status": "busy"
+          },
+          "ms": 0.14325000000098953
+        }
+      ],
+      "readProbe": [
+        {
+          "label": "abandon-read",
+          "ms": 522.8833339999983,
+          "text": "read still pending at 100ms"
+        },
+        {
+          "label": "next-pure-call",
+          "ms": 1.2743750000008731,
+          "text": "{ lateReadDone: true }"
+        },
+        {
+          "label": "next-input-call",
+          "ms": 58.98958300000231,
+          "text": "{ lateReadDone: true }"
+        }
+      ],
+      "calculatorExit": "absent",
+      "cleanupError": null
+    },
+    {
+      "file": "2026-10-09-load-cost-guard-speed-2026-10-09T17-46-10-378Z.json",
+      "started": "2026-10-09T17:46:10.378Z",
+      "finished": "2026-10-09T18:02:37.250Z",
+      "error": null,
+      "workers": null,
+      "modes": [],
+      "levels": [
+        {
+          "workers": 0,
+          "loadStarted": "2026-10-09T17:46:13.210Z",
+          "loadEnded": "2026-10-09T17:47:22.317Z",
+          "workersCollected": 0,
+          "calls": [
+            {
+              "call": "eight-clicks",
+              "arms": [
+                {
+                  "arm": "direct",
+                  "count": 5,
+                  "timedCount": 5,
+                  "errors": 0,
+                  "medianMs": 684.161583000001,
+                  "verifiedMedianMs": 684.161583000001,
+                  "minLoad": 16.80908203125,
+                  "maxLoad": 20.24560546875
+                },
+                {
+                  "arm": "sleight",
+                  "count": 5,
+                  "timedCount": 5,
+                  "errors": 0,
+                  "medianMs": 3422.091458000001,
+                  "verifiedMedianMs": 3422.091458000001,
+                  "minLoad": 16.80908203125,
+                  "maxLoad": 19.4248046875
+                }
+              ]
+            },
+            {
+              "call": "one-click",
+              "arms": [
+                {
+                  "arm": "direct",
+                  "count": 5,
+                  "timedCount": 5,
+                  "errors": 0,
+                  "medianMs": 94.87712499999907,
+                  "verifiedMedianMs": 94.87712499999907,
+                  "minLoad": 14.955078125,
+                  "maxLoad": 15.86328125
+                },
+                {
+                  "arm": "sleight",
+                  "count": 5,
+                  "timedCount": 5,
+                  "errors": 0,
+                  "medianMs": 487.4292920000007,
+                  "verifiedMedianMs": 487.4292920000007,
+                  "minLoad": 14.955078125,
+                  "maxLoad": 15.86328125
+                }
+              ]
+            },
+            {
+              "call": "click-then-keys",
+              "arms": [
+                {
+                  "arm": "direct",
+                  "count": 5,
+                  "timedCount": 5,
+                  "errors": 0,
+                  "medianMs": 295.4425420000043,
+                  "verifiedMedianMs": 295.4425420000043,
+                  "minLoad": 13.505859375,
+                  "maxLoad": 14.955078125
+                },
+                {
+                  "arm": "sleight",
+                  "count": 5,
+                  "timedCount": 5,
+                  "errors": 0,
+                  "medianMs": 1727.9194169999973,
+                  "verifiedMedianMs": 1727.9194169999973,
+                  "minLoad": 13.62548828125,
+                  "maxLoad": 14.23779296875
+                }
+              ]
+            },
+            {
+              "call": "read",
+              "arms": [
+                {
+                  "arm": "direct",
+                  "count": 5,
+                  "timedCount": 5,
+                  "errors": 0,
+                  "medianMs": 133.64737500000047,
+                  "verifiedMedianMs": 133.64737500000047,
+                  "minLoad": 13.62548828125,
+                  "maxLoad": 15.3369140625
+                },
+                {
+                  "arm": "sleight",
+                  "count": 5,
+                  "timedCount": 5,
+                  "errors": 0,
+                  "medianMs": 54.427624999996624,
+                  "verifiedMedianMs": 54.427624999996624,
+                  "minLoad": 14.5888671875,
+                  "maxLoad": 15.3369140625
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "workers": 20,
+          "loadStarted": "2026-10-09T17:47:22.385Z",
+          "loadEnded": "2026-10-09T18:02:36.963Z",
+          "workersCollected": 20,
+          "calls": [
+            {
+              "call": "eight-clicks",
+              "arms": [
+                {
+                  "arm": "direct",
+                  "count": 5,
+                  "timedCount": 4,
+                  "errors": 2,
+                  "medianMs": 4959.249833000009,
+                  "verifiedMedianMs": 3864.053833999991,
+                  "minLoad": 41.35595703125,
+                  "maxLoad": 94.2724609375
+                },
+                {
+                  "arm": "sleight",
+                  "count": 5,
+                  "timedCount": 5,
+                  "errors": 2,
+                  "medianMs": 42599.989,
+                  "verifiedMedianMs": 42599.989,
+                  "minLoad": 41.6474609375,
+                  "maxLoad": 101.2490234375
+                }
+              ]
+            },
+            {
+              "call": "one-click",
+              "arms": [
+                {
+                  "arm": "direct",
+                  "count": 5,
+                  "timedCount": 4,
+                  "errors": 2,
+                  "medianMs": 99.02362500003073,
+                  "verifiedMedianMs": 93.90200000000186,
+                  "minLoad": 94.86181640625,
+                  "maxLoad": 99.9501953125
+                },
+                {
+                  "arm": "sleight",
+                  "count": 5,
+                  "timedCount": 4,
+                  "errors": 2,
+                  "medianMs": 19418.156959000044,
+                  "verifiedMedianMs": 1932.607042000047,
+                  "minLoad": 86.96484375,
+                  "maxLoad": 106.00927734375
+                }
+              ]
+            },
+            {
+              "call": "click-then-keys",
+              "arms": [
+                {
+                  "arm": "direct",
+                  "count": 5,
+                  "timedCount": 5,
+                  "errors": 0,
+                  "medianMs": 265.9575000000186,
+                  "verifiedMedianMs": 265.9575000000186,
+                  "minLoad": 85.8408203125,
+                  "maxLoad": 125.1787109375
+                },
+                {
+                  "arm": "sleight",
+                  "count": 5,
+                  "timedCount": 5,
+                  "errors": 0,
+                  "medianMs": 5574.765583000029,
+                  "verifiedMedianMs": 5574.765583000029,
+                  "minLoad": 85.212890625,
+                  "maxLoad": 125.1787109375
+                }
+              ]
+            },
+            {
+              "call": "read",
+              "arms": [
+                {
+                  "arm": "direct",
+                  "count": 5,
+                  "timedCount": 4,
+                  "errors": 1,
+                  "medianMs": 118.02775000000838,
+                  "verifiedMedianMs": 118.02775000000838,
+                  "minLoad": 123.40234375,
+                  "maxLoad": 125.56689453125
+                },
+                {
+                  "arm": "sleight",
+                  "count": 5,
+                  "timedCount": 4,
+                  "errors": 1,
+                  "medianMs": 59.27937500004191,
+                  "verifiedMedianMs": 59.27937500004191,
+                  "minLoad": 122.6494140625,
+                  "maxLoad": 125.56689453125
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "calculatorExit": "absent",
+      "cleanupError": null
+    }
+  ],
+  "compactor": {
+    "kind": "constructed degradation replay, not a new live degraded read",
+    "source": "2026-10-09-guard-probe-2026-10-09T17-38-55-176Z.json",
+    "form": "button Description: 2, ID: Two -> button Two (documented 2026-10-09 engine form)",
+    "fullChars": 1560,
+    "degradedChars": 1380,
+    "before": {
+      "ms": 0.3334159999999997,
+      "chars": 742,
+      "output": "Window: \"Calculator\", App: Calculator.\n0 standard window Calculator, ID: main, Secondary Actions: Raise\nsleight: lines changed since the last full tree you saw for this window (- removed, + added; numbers on + lines are current):\n- \t\t\tbutton Description: 7, ID: Seven\n- \t\t\tbutton Description: 8, ID: Eight\n- \t\t\tbutton Description: 9, ID: Nine\n+ \t\t\t10 button Seven\n+ \t\t\t11 button Eight\n+ \t\t\t12 button Nine\n- \t\t\tbutton Description: 4, ID: Four\n- \t\t\tbutton Description: 5, ID: Five\n- \t\t\tbutton Description: 6, ID: Six\n+ \t\t\t14 button Four\n+ \t\t\t15 button Five\n+ \t\t\t16 button Six\n- \t\t\tbutton Description: 1, ID: One\n- \t\t\tbutton Description: 2, ID: Two\n- \t\t\tbutton Description: 3, ID: Three\n+ \t\t\t18 button One\n+ \t\t\t19 button Two\n+ \t\t\t20 button Three",
+      "medianMs": 0.025374999999996817
+    },
+    "after": {
+      "ms": 0.5516250000000014,
+      "chars": 313,
+      "output": "Window: \"Calculator\", App: Calculator.\n0 standard window Calculator, ID: main, Secondary Actions: Raise\nsleight: no change since the last full tree you saw for this window.\nsleight: 9 button lines returned fewer attributes. Their unique IDs still match; missing descriptions and help are unavailable in this read.",
+      "medianMs": 0.09854099999999733
+    },
+    "fullTree": "Window: \"Calculator\", App: Calculator.\n0 standard window Calculator, ID: main, Secondary Actions: Raise\n\t1 split group main, SidebarNavigationSplitView\n\t\t2 splitter (disabled, settable, float) -1\n\t\t3 container CalculatorKeypadView\n\t\t\t4 scroll area ID: StandardInputView;value:0, Secondary Actions: Copy\n\t\t\t\t5 text Description: Edit field, Value: 0\n\t\t\t6 button Description: Delete, Help: Delete the last digit or operation entered (long press to delete all)\n\t\t\t7 button Description: All Clear, ID: AllClear\n\t\t\t8 button Percent\n\t\t\t9 button Divide\n\t\t\t10 button Description: 7, ID: Seven\n\t\t\t11 button Description: 8, ID: Eight\n\t\t\t12 button Description: 9, ID: Nine\n\t\t\t13 button Multiply\n\t\t\t14 button Description: 4, ID: Four\n\t\t\t15 button Description: 5, ID: Five\n\t\t\t16 button Description: 6, ID: Six\n\t\t\t17 button Subtract\n\t\t\t18 button Description: 1, ID: One\n\t\t\t19 button Description: 2, ID: Two\n\t\t\t20 button Description: 3, ID: Three\n\t\t\t21 button Add\n\t\t\t22 button Description: Change Sign, Help: Change sign of a value, ID: Negate\n\t\t\t23 button Description: 0, ID: Zero\n\t\t\t24 button Description: Point, ID: Decimal\n\t\t\t25 button Equals\n\t26 toolbar\n\t\t27 button Description: Show Sidebar, Secondary Actions: Increment, Decrement, Delete, Cancel\n\t\t28 button Description: Mode, Help: Change Calculator mode, ID: Mode: basic; unitConversion: false, Secondary Actions: Increment, Decrement, Delete, Cancel, Move previous, Remove from toolbar\n\t29 close button\n\t30 zoom button (disabled)\n\t31 minimize button\n32 menu bar\n\t33 Calculator\n\t34 Edit\n\t35 View\n\t36 Window\n\t37 Help\n",
+    "degradedTree": "Window: \"Calculator\", App: Calculator.\n0 standard window Calculator, ID: main, Secondary Actions: Raise\n\t1 split group main, SidebarNavigationSplitView\n\t\t2 splitter (disabled, settable, float) -1\n\t\t3 container CalculatorKeypadView\n\t\t\t4 scroll area ID: StandardInputView;value:0, Secondary Actions: Copy\n\t\t\t\t5 text Description: Edit field, Value: 0\n\t\t\t6 button Description: Delete, Help: Delete the last digit or operation entered (long press to delete all)\n\t\t\t7 button Description: All Clear, ID: AllClear\n\t\t\t8 button Percent\n\t\t\t9 button Divide\n\t\t\t10 button Seven\n\t\t\t11 button Eight\n\t\t\t12 button Nine\n\t\t\t13 button Multiply\n\t\t\t14 button Four\n\t\t\t15 button Five\n\t\t\t16 button Six\n\t\t\t17 button Subtract\n\t\t\t18 button One\n\t\t\t19 button Two\n\t\t\t20 button Three\n\t\t\t21 button Add\n\t\t\t22 button Description: Change Sign, Help: Change sign of a value, ID: Negate\n\t\t\t23 button Description: 0, ID: Zero\n\t\t\t24 button Description: Point, ID: Decimal\n\t\t\t25 button Equals\n\t26 toolbar\n\t\t27 button Description: Show Sidebar, Secondary Actions: Increment, Decrement, Delete, Cancel\n\t\t28 button Description: Mode, Help: Change Calculator mode, ID: Mode: basic; unitConversion: false, Secondary Actions: Increment, Decrement, Delete, Cancel, Move previous, Remove from toolbar\n\t29 close button\n\t30 zoom button (disabled)\n\t31 minimize button\n32 menu bar\n\t33 Calculator\n\t34 Edit\n\t35 View\n\t36 Window\n\t37 Help\n"
+  },
+  "compactorSourceSHA256": "41290cbb052a5dd9d45858e449abdc51846912b05b804d47e881dc55fccf36dd"
+}
