@@ -8,7 +8,7 @@
   <a href="https://github.com/Land-o-Clusters/sleight/releases/latest"><img alt="latest release" src="https://img.shields.io/github/v/release/Land-o-Clusters/sleight?label=release&color=E8622C"></a>
   <img alt="license MIT" src="https://img.shields.io/badge/license-MIT-E8622C">
   <img alt="platform macOS Apple Silicon" src="https://img.shields.io/badge/platform-macOS%20Apple%20Silicon-3E4A56">
-  <img alt="status unofficial, early" src="https://img.shields.io/badge/status-unofficial%2C%20early-3E4A56">
+  <img alt="status unofficial" src="https://img.shields.io/badge/status-unofficial-3E4A56">
 </p>
 
 <p align="center">
@@ -87,8 +87,9 @@ then start a new session. A running session keeps the version it started with.
   OpenAI's apps stay off until you opt in, and sleight shows you each terminal command first unless
   you turn that off too.
 - The benchmark results are published with their failures. Its tasks in Calculator, TextEdit, Chess
-  and an iPhone simulator run three times each, and the 0.16.0 release pass passed 20/21. Every
-  pass on the way is published too, including one at 13/21 run while the apps were on another Space.
+  and an iPhone simulator run three times each, and the 1.0.0 release pass passed 19/21. Every
+  pass on the way is published too, including one at 13/21 run while the apps were on another Space,
+  and head-to-heads with native Codex computer use, including the Chess one sleight lost 0/3 to 2/3.
 
 sleight also does what the engine can't. It drags text, which the engine's own drag fails to move,
 and reaches menu bar icons and notification banners. Each of these needs its own approval.
@@ -139,7 +140,8 @@ before relying on a diff.
   session ([approval scope](docs/settings.md#approval-scope)).
 - Foreground `drag` fallback, `hover` and the `menu_bar` fallback for SwiftUI icons move your pointer
   briefly, and each waits until you've stopped typing and using the mouse for 2 s. `drag` moves text
-  in a TextEdit window you've covered through Accessibility instead, without the pointer. `drag` refuses points outside
+  in an app's text field or a TextEdit window you've covered through Accessibility first, without
+  the pointer. `drag` refuses points outside
   the chosen window's visible content; foreground also refuses covered endpoints, after bringing the
   app forward.
   `hover` refuses points another window covers, including

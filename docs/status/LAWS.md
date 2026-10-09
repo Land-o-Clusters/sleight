@@ -13,9 +13,11 @@ belong in [STATE.md](STATE.md).
   of depending on the ChatGPT app's engine (2026-10-05). LCU gets a link and credit in the README, no heads-up, and
   the desktop app's declined prompts aren't reported to Anthropic.
 - The project's name is sleight, and its icon is the two-hands image from ChatGPT (2026-10-03).
-- sleight launches at 0.x (owner, 2026-10-03). 1.0 waits until it has survived two or three ChatGPT
-  engine updates, someone else has installed it from the marketplace, the desktop pane's picture is
-  verified, and the benchmark compares it with another tool.
+- sleight launched at 0.x (owner, 2026-10-03) and reached 1.0.0 on 2026-10-09, after it survived
+  two ChatGPT engine updates, someone else installed it from the marketplace, the desktop pane's
+  picture was verified, and the benchmark compared it with LCU and Codex. The owner approved 1.0 on
+  the condition that its head-to-head and release pass ran with them away, with no new failure that's
+  sleight's fault.
 - The owner's rule for every open-source project of theirs, sleight included (2026-10-03), in order:
   do what competitors do, but better. Improve on them where they haven't. Then build what nobody has.
 - No benchmark against Claude's own computer use (owner, 2026-10-04): its shortcomings are why sleight

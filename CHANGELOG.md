@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 (2026-10-09)
+
+sleight's first stable release. Its release pass passed 19/21 in 165 turns and 912 s, at 2.59 s of
+model time per turn ([results](docs/benchmarks/2026-10-09-release-1.0.0.json)). 0.16.0's passed 20/21 in
+178 turns and 1,355 s.
 
 - The first action after an acquisition no longer reads the app's whole tree again. The guard reuses
   the acquisition's read when the app's windows are unchanged, checked through the engine's inventory

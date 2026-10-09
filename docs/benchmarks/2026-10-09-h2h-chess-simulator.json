@@ -1,0 +1,418 @@
+{
+  "stamp": "2026-10-09T03-49-50-773Z",
+  "arms": [
+    "sleight",
+    "codex"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 1,
+      "passed": false,
+      "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T03-49-50-773Z/sleight-chess-drag-1/9807b237.game was not saved",
+      "seconds": 158.3,
+      "turns": 16,
+      "costUsd": 0.5409446,
+      "usage": {
+        "input": 28,
+        "cacheRead": 1019663,
+        "cacheWrite": 72149,
+        "output": 4836
+      },
+      "timing": {
+        "totalMs": 155025,
+        "modelMs": 56692,
+        "calls": 15,
+        "refused": 0,
+        "toolMs": 95477,
+        "engineMs": 11016,
+        "relayMs": 275,
+        "localMs": 84186,
+        "guardReads": 6,
+        "guardReadMs": 367.61237499999606,
+        "guardReadFailures": 0,
+        "otherMs": 2856
+      },
+      "appWindows": {
+        "samples": 32,
+        "onScreen": 32,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "I couldn't complete this: the e2→e4 drag never registered, so nothing was saved and I didn't close the window.\n\n- **Done:** Chess has a new game open (\"Game 2\", White to move). Another window, \"Game 1\", was already open and I left it alone.\n- **What failed:** `app.drag` ran without error, but the pa",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "chess-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 83.9,
+      "turns": 15,
+      "usage": {
+        "input": 613905,
+        "cacheRead": 570880,
+        "cacheWrite": 0,
+        "output": 1582
+      },
+      "appWindows": {
+        "samples": 17,
+        "onScreen": 17,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "Started a new game, dragged White’s pawn from e2 to e4, saved it as `74e85bda.game` at the requested path, and closed the game window.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 12,
+      "engineMs": 11104
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 1,
+      "passed": true,
+      "seconds": 52,
+      "turns": 6,
+      "costUsd": 0.3764386,
+      "usage": {
+        "input": 12,
+        "cacheRead": 306943,
+        "cacheWrite": 76739,
+        "output": 807
+      },
+      "timing": {
+        "totalMs": 32421,
+        "modelMs": 15657,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 6609,
+        "engineMs": 6583,
+        "relayMs": 26,
+        "localMs": 0,
+        "guardReads": 4,
+        "guardReadMs": 1553.2462510000014,
+        "guardReadFailures": 0,
+        "otherMs": 10155
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 10,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "The page now says \"Sent\". I typed \"sleight bench 4ab1b7f4\" into the Message field in Safari on the iPhone 18 Pro simulator and tapped Submit.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "simulator-form",
+      "run": 1,
+      "passed": true,
+      "seconds": 51.3,
+      "turns": 7,
+      "usage": {
+        "input": 214188,
+        "cacheRead": 183936,
+        "cacheWrite": 0,
+        "output": 602
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 9,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "answer": "Submitted exactly “sleight bench 94a2d48b”. The page says “Sent”.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 5,
+      "engineMs": 6417
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 2,
+      "passed": false,
+      "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T03-49-50-773Z/sleight-chess-drag-2/0b25c45d.game was not saved",
+      "seconds": 250.6,
+      "turns": 19,
+      "costUsd": 0.6813212,
+      "usage": {
+        "input": 34,
+        "cacheRead": 1379266,
+        "cacheWrite": 87150,
+        "output": 5680
+      },
+      "timing": {
+        "totalMs": 210998,
+        "modelMs": 72818,
+        "calls": 18,
+        "refused": 1,
+        "toolMs": 131694,
+        "engineMs": 17424,
+        "relayMs": 295,
+        "localMs": 113975,
+        "guardReads": 7,
+        "guardReadMs": 1885.3688770000117,
+        "guardReadFailures": 0,
+        "otherMs": 6486
+      },
+      "appWindows": {
+        "samples": 43,
+        "onScreen": 43,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "I couldn't complete this. The e2→e4 drag never moved the pawn, so I didn't save the game or close the window.\n\n- **Done:** Chess is open with a new game (\"Game 2\", Human vs. Computer, White to move).\n- **Not done:** I tried the drag from e2 to e4 several times, with both the in-session `app.drag` an",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "chess-drag",
+      "run": 2,
+      "passed": true,
+      "seconds": 158.1,
+      "turns": 26,
+      "usage": {
+        "input": 971680,
+        "cacheRead": 927872,
+        "cacheWrite": 0,
+        "output": 3169
+      },
+      "appWindows": {
+        "samples": 32,
+        "onScreen": 32,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "Moved White’s pawn from e2 to e4 by dragging, saved the game as `c3501e84.game` at the requested path, and closed its window.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 24,
+      "engineMs": 16977
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 2,
+      "passed": true,
+      "seconds": 45.9,
+      "turns": 7,
+      "costUsd": 0.2968054,
+      "usage": {
+        "input": 14,
+        "cacheRead": 399227,
+        "cacheWrite": 51703,
+        "output": 1012
+      },
+      "timing": {
+        "totalMs": 26996,
+        "modelMs": 14429,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 6581,
+        "engineMs": 6553,
+        "relayMs": 28,
+        "localMs": 0,
+        "guardReads": 4,
+        "guardReadMs": 1254.7830399999984,
+        "guardReadFailures": 0,
+        "otherMs": 5986
+      },
+      "appWindows": {
+        "samples": 9,
+        "onScreen": 9,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "The page in the iPhone 18 Pro simulator now says \"Sent\". I typed \"sleight bench d2cf02a3\" into the Message field and tapped Submit.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "simulator-form",
+      "run": 2,
+      "passed": true,
+      "seconds": 44.2,
+      "turns": 6,
+      "usage": {
+        "input": 202316,
+        "cacheRead": 171648,
+        "cacheWrite": 0,
+        "output": 464
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 8,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "Submitted “sleight bench 05ea46b7”. The page says “Sent”.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 4,
+      "engineMs": 4723
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 3,
+      "passed": false,
+      "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T03-49-50-773Z/sleight-chess-drag-3/5cf012cf.game was not saved",
+      "seconds": 124.3,
+      "turns": 13,
+      "costUsd": 0.48275260000000003,
+      "usage": {
+        "input": 26,
+        "cacheRead": 889323,
+        "cacheWrite": 64624,
+        "output": 4634
+      },
+      "timing": {
+        "totalMs": 120295,
+        "modelMs": 58339,
+        "calls": 11,
+        "refused": 0,
+        "toolMs": 58836,
+        "engineMs": 5318,
+        "relayMs": 1280,
+        "localMs": 52238,
+        "guardReads": 8,
+        "guardReadMs": 613.6529170000013,
+        "guardReadFailures": 0,
+        "otherMs": 3120
+      },
+      "appWindows": {
+        "samples": 25,
+        "onScreen": 25,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "Chess is open with a new game (Game 2), but I haven't made the move, saved the game or closed the window. The e2→e4 drag isn't registering.\n\n- **In-app drag:** Four attempts with `app.drag`, using different coordinate frames and start points, left White still to move. The pawn didn't move.\n- **Dedic",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "chess-drag",
+      "run": 3,
+      "passed": false,
+      "reason": "/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T03-49-50-773Z/codex-chess-drag-3/2871ecb6.game was not saved",
+      "seconds": 265.4,
+      "turns": 28,
+      "usage": {
+        "input": 1524329,
+        "cacheRead": 1436160,
+        "cacheWrite": 0,
+        "output": 5292
+      },
+      "appWindows": {
+        "samples": 53,
+        "onScreen": 47,
+        "offScreenOnly": 6,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "Opened a new game, but the mouse drag failed repeatedly; the pawn remained on e2. I closed the new game window without saving. The requested file was not created.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 25,
+      "engineMs": 14600
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 3,
+      "passed": true,
+      "seconds": 52.2,
+      "turns": 7,
+      "costUsd": 0.2976612,
+      "usage": {
+        "input": 14,
+        "cacheRead": 398176,
+        "cacheWrite": 51452,
+        "output": 1219
+      },
+      "timing": {
+        "totalMs": 33162,
+        "modelMs": 18738,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 8879,
+        "engineMs": 8855,
+        "relayMs": 24,
+        "localMs": 0,
+        "guardReads": 5,
+        "guardReadMs": 2523.2026259999984,
+        "guardReadFailures": 0,
+        "otherMs": 5545
+      },
+      "appWindows": {
+        "samples": 9,
+        "onScreen": 9,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "The page now says \"Sent\". In the iPhone 18 Pro simulator I typed \"sleight bench 22385ecf\" into the Message field and tapped Submit. The screenshot shows the text in the field before I submitted it.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "simulator-form",
+      "run": 3,
+      "passed": true,
+      "seconds": 42.7,
+      "turns": 8,
+      "usage": {
+        "input": 243585,
+        "cacheRead": 217472,
+        "cacheWrite": 0,
+        "output": 450
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 8,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "Submitted exactly “sleight bench 70800deb”. The page says “Sent”.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 6,
+      "engineMs": 5138
+    }
+  ]
+}

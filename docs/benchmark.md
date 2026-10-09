@@ -206,6 +206,23 @@ Claude's screenshot pixels at the screenshot's scale. chess-drag passed 2/3. Its
 Claude's 13 drags were refused as covered. The first calculator-click run took 99.5 s, 71 s of it in
 the engine, right after Calculator launched. The owner was using the Mac during the pass.
 
+The 1.0.0 head-to-head on Chess and the simulator
+([`h2h-chess-simulator`](benchmarks/2026-10-09-h2h-chess-simulator.json), 3 runs each, Sonnet 5.5
+against gpt-6.1-sol, both at medium) ran with the owner away. simulator-form passed 3/3 for both.
+chess-drag went 0/3 for sleight and 2/3 for Codex. In every run of both arms, a drag that pressed
+the pawn low on its body or on its square left it on e2. Codex's two passes came after it pressed on
+the pawn's head, on its fourth try in one. The Claude app's window covered the Chess board, so
+sleight's `drag` fell back to the foreground. The engine's own drag through the same covered window
+moved the pawn for Codex. Once, `drag.js` ran past its 30 s limit and returned only "Command failed".
+The relay times in these files are too high: the parser charged a split acquisition's engine time to
+the relay (fixed after this pass).
+
+1.0.0's pass ([`release-1.0.0`](benchmarks/2026-10-09-release-1.0.0.json)) passed 19/21 in 165 turns
+and 912 s, at 2.59 s of model time per turn, with the owner away and the Claude app's window on
+screen. chess-drag passed 2/3. Its failed run pressed only below the pawn's head. simulator-form passed
+2/3: in its failed run Claude's first tap missed the field, and none of its four later taps and
+typing put text in it.
+
 | Task | Median turns, 0.13.4 | 0.14.0 |
 |---|---:|---:|
 | calculator-click | 5 | 4 |
