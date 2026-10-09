@@ -19,8 +19,10 @@ Skill and the published screenshot A/B.
 Owner's new priorities (2026-10-09, in ROADMAP track 3) are speed under load, which the owner sees
 as a gap against Codex, and batching as Claude's own computer use does it. First finding: the guard's full read
 before every action turns eight Calculator clicks from 593 ms into 3,609 ms without load, and under
-load it stopped 5 of 5 such calls because degraded reads dropped element attributes. In flight: an
-interleaved rerun of `load-cost` (background) to check the fix live.
+load it stopped 5 of 5 such calls because degraded reads dropped element attributes. In the interleaved
+rerun the guard stopped 0 of 5 calls. The cost left is the settle wait, about 400 ms for a read right
+after an action and tens of seconds under load. The guard's reuse check never checked anything,
+because the inventory doesn't list windows, so `e66791a` reads instead.
 
 Real-use qualification of Sol's brief 8 (`4323a41` plus sleight-arch's Safari fix `b284b05`, both on
 `codex/real-use-tasks`): all 11 web tasks passed 1/1. word-edit failed in the checker's ZIP reader,
@@ -36,13 +38,13 @@ Branches and worktrees:
 - Older `codex/*` worktrees are earlier rounds. Leave them.
 
 Next, in order:
-- Read the interleaved `load-cost` results, publish them, and fix what they show.
-- The inventory check in place of the guard's full read before key, text and coordinate actions,
-  measured with `load-cost` and the affected benchmark tasks.
+- Astra's guard-speed brief (`.dev/prompts/astra-guard-speed.md`, worktree
+  `~/Projects/sleight-wt/guard-speed` on `codex/guard-speed`, cut at `1bdfd39`): a native window
+  check in place of the settle-bound full read. The owner pastes it.
 - After brief 9, rerun word-edit, excel-edit and powerpoint-edit, then merge `codex/real-use-tasks`.
 - A Codex arm for the real suite, then the real-use pass and the Codex head-to-head.
 
-Waiting on the owner: pasting brief 9 to Sol, and watching the Mail and Mimestream tasks (about 10
+Waiting on the owner: pasting brief 9 to Sol and the guard-speed brief to Astra, and watching the Mail and Mimestream tasks (about 10
 minutes). Qualification left windows on their screen. Safari has about seven
 fixture windows (Start Pages and one form), Helium two and Preview six (`Pages-*.pdf`), and Word and
 Excel are running with fixture documents.
