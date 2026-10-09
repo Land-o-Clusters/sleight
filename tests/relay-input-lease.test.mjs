@@ -892,3 +892,18 @@ test('a lease stop for a retitled window keeps the lease on the window it saw, s
   assert.match(a.forwarded[2].params.arguments.code, /"b\.txt"/, 'the guard now expects the window it saw');
   a.reply(result(2, 'Window: "b.txt", App: TextEdit'));
 });
+
+test('acquire and act in one call: the split acquisition\'s read reaches the actions\' guard', async t => {
+  const { harness } = setup(t);
+  const h = harness('reuse', { changeReview: false, fresh: true });
+  h.send(rpc(1, 'js', { code: 'let app = await cua.getApp("com.apple.calculator"); await app.click({ id: "AllClear" });' }));
+  await new Promise(resolve => setImmediate(resolve));
+  const acquisition = h.forwarded.at(-1);
+  assert.match(acquisition.params.arguments.code, /\[sleight:windows\]/);
+  h.reply({ jsonrpc: '2.0', id: acquisition.id, result: { content: [{ type: 'text', text: '[sleight:windows][]\nWindow: "Calculator", App: Calculator.\n0 standard window Calculator, ID: main' }],
+    _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.calculator', kind: 'appId' }, kind: 'computerUse' } } } });
+  await new Promise(resolve => setImmediate(resolve));
+  const action = h.forwarded.at(-1);
+  assert.equal(action.id, 1);
+  assert.match(action.params.arguments.code, /state\.prior = \{"text":"Window: \\"Calculator\\"/);
+});

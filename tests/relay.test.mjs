@@ -1630,3 +1630,41 @@ test('drag gets the size of the app\'s latest engine screenshot, so it can conve
   assert.deepEqual(calls[0].screenshots, { 'a.txt': [1312, 844] });
   assert.equal(calls[1].screenshot, undefined, 'no screenshot of Chess, and Claude can\'t supply one');
 });
+
+test('an acquisition\'s read stands in for the guard\'s first read in the next call only, and its window list stays hidden', async () => {
+  const h = harness();
+  const inventory = [{ id: 'com.apple.TextEdit', windows: [{ id: 5, app: 'TextEdit', title: 'a.txt' }] }];
+  const state = 'Window: "a.txt", App: TextEdit\n0 standard window a.txt\n1 text entry area Value: hi';
+  flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); await tick();
+  assert.match(h.toServer.find(m => m.id === 1).params.arguments.code, /\[sleight:windows\]/);
+  // The inventory is written before getApp's own output; the bundle ID comes from the result's metadata.
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: '[sleight:windows]' + JSON.stringify(inventory) + '\n' + state }],
+    _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit', kind: 'appId' }, kind: 'computerUse' } } } }); await tick();
+  assert.doesNotMatch(JSON.stringify(h.toClient.find(m => m.id === 1)), /sleight:windows/);
+  flowCall(h, 2, 'await app.typeText("x")'); await tick();
+  const second = h.toServer.find(m => m.id === 2).params.arguments.code;
+  assert.match(second, /state\.prior = \{"text":"Window: \\"a\.txt\\"/); assert.match(second, /"id":"com\.apple\.TextEdit","title":"a\.txt"/);
+  assert.match(second, /"windows":\[\{"id":5,"app":"TextEdit","title":"a\.txt"\}\]/);
+  flowAnswer(h, 2, state); await tick();
+  flowCall(h, 3, 'await app.typeText("y")'); await tick();
+  assert.match(h.toServer.find(m => m.id === 3).params.arguments.code, /state\.prior = undefined/);
+});
+
+test('the guard reuses a passed read only while the app\'s windows are unchanged', async () => {
+  const windows = [{ id: 5, app: 'TextEdit', title: 'a.txt' }];
+  const state = 'Window: "a.txt", App: TextEdit\n0 standard window a.txt\n1 text entry area Value: hi';
+  // [windows before the acquisition, windows at the action, full reads before the action]
+  for (const [before, now, reads] of [[windows, windows, 0], [windows, [...windows, { id: 6, app: 'TextEdit', title: 'b.txt' }], 1],
+    [[], windows, 0], [[], [{ id: 7, app: 'TextEdit', title: 'Untitled' }], 1]]) {
+    let fullReads = 0;
+    const raw = { getAXState: async () => { fullReads++; return state; }, typeText: async () => {} };
+    const context = createContext({ app: undefined, cua: { getApp: async () => raw, listApps: async () => [{ id: 'com.apple.TextEdit', displayName: 'TextEdit', windows: now }] }, nodeRepl: { write() {} } });
+    const run = code => runInContext(`(async () => { ${code} })()`, context);
+    await run(readCode('app = await cua.getApp("TextEdit")'));
+    fullReads = 0;
+    await run(guardedCode('await app.typeText("x")', { title: 'a.txt', app: 'TextEdit', url: null }, 'Stopped.', undefined,
+      { adoptUrl: true, prior: { text: state, id: 'com.apple.TextEdit', title: 'a.txt', windows: before } }));
+    // One full read always follows the action, for the lease header; the question is the one before it.
+    assert.equal(fullReads - 1, reads, `before ${before.length}, now ${JSON.stringify(now)}`);
+  }
+});

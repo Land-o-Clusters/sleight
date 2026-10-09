@@ -29,7 +29,12 @@ for (const [mode, code, message] of [
       command: process.execPath, args: [script, mode], env: { CUA_REPL_NODE_REPL_PATH: script, SKY_CUA_SERVICE_PATH: script },
     } } }));
     const lines = [];
-    assert.equal(await doctor({ env: { CODEX_HOME: bank, SLEIGHT_SURFACES: 'computer' }, log: line => lines.push(line), timeoutMs: 100, startupTimeoutMs: 200,
+    // Tight limits only where the mode tests that limit: a node fixture can take longer than 200 ms
+    // to start, or 100 ms to answer, under load, and then fails with the wrong message (3 times on
+    // 2026-10-09, while benchmark runs went on).
+    const timeoutMs = ['timeout', 'js-timeout', 'read-hang'].includes(mode) ? 100 : 2000;
+    const startupTimeoutMs = mode === 'startup-hang' ? 200 : 5000;
+    assert.equal(await doctor({ env: { CODEX_HOME: bank, SLEIGHT_SURFACES: 'computer' }, log: line => lines.push(line), timeoutMs, startupTimeoutMs,
       launchctlList: async () => STALE_LISTING }), code);
     assert.match(lines.join('\n'), message);
   });

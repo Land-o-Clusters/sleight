@@ -293,9 +293,12 @@ our own runs. Dates and engine versions are given where they matter.
   full pass that evening, all 6 Calculator runs took 3 or 4 turns. In the 0.16.0 pass, the first run
   after Calculator launched took 10 turns and 99.5 s, 31 s of it in guard reads. Its trace shows
   where: the acquisition launched Calculator and its first read took 15.3 s, then the guard's read
-  before the next call's first action took 16.7 s more. Later guard reads took about 0.4 s. The guard
-  reads again at the start of every call on purpose, since the window may have changed between calls,
-  so we kept it.
+  before the next call's first action took 16.7 s more. Later guard reads took about 0.4 s. Since then
+  the guard reuses an acquisition's read for the next call's first action when the app's windows, as
+  the engine's inventory lists them (about 11 ms), are exactly what they were before the acquisition,
+  or the acquisition launched the app and its one window is the read's. That check took 11 to 30 ms in
+  3 live runs, where the full read took about 450 ms. It can't tell if a window of the app changed its
+  contents in the seconds between, which the full read couldn't either.
 - Calculator button indices changed during a [preapproval trial](benchmarks/2026-10-04-preapproved-apps.md),
   producing the wrong expression. A filtered read then lost the window header, and the input lease
   stopped the retry. Use current indices from full UI reads, and preserve their window headers.

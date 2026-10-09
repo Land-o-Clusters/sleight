@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The first action after an acquisition no longer reads the app's whole tree again. The guard reuses
+  the acquisition's read when the app's windows are unchanged, checked through the engine's inventory
+  in 11 to 30 ms. Right after Calculator launched under load, that second read had taken 16.7 s.
 - When a drag point is covered, `drag` says by which window. A window of the same app with no title is
   named as a likely dialog to finish or close first. Chess's New Game dialog stopped 9 drags in one
   run.

@@ -70,11 +70,19 @@ export function isDocumentRead(code = '') {
     /^await\s+cua\.(?:getState|listApps|listWindows)\(\s*\)\s*;?$/.test(code.trim());
 }
 
+// Marks the window inventory an acquisition writes, which the relay keeps and strips.
+export const WINDOWS_MARK = '[sleight:windows]';
+const ACQUISITION = /^(?:(?:let|const|var)\s+)?(?:[A-Za-z_$][\w$]*\s*=\s*)?await\s+cua\.getApp\([^;]*\)\s*;?$/;
+
 export function readCode(code) {
   // Every acquired handle, including const bindings, must receive the proxy
   // before it escapes. A bare acquisition also restores the conventional handle.
   const read = /^await\s+cua\.getApp\(/.test(code.trim()) ? 'globalThis.app = ' + code.trim() : code;
-  return guardSetup() + '\n' + read;
+  // Before an acquisition, the windows of every app as the inventory lists them (about 11 ms), so
+  // the next call's guard can reuse this read if they haven't changed. It goes first: listApps after
+  // getApp drops the app from the result's metadata, where the relay finds its bundle ID.
+  const inventory = ACQUISITION.test(code.trim()) ? `try { nodeRepl.write(${JSON.stringify(WINDOWS_MARK)} + JSON.stringify((await cua.listApps({ emit: false })).filter(a => a.windows?.length).map(a => ({ id: a.id, windows: a.windows }))) + '\\n'); } catch {}\n` : '';
+  return guardSetup() + '\n' + inventory + read;
 }
 
 // Advisory only: all of this runs in the same mutable JS realm as Claude's code.
@@ -105,6 +113,8 @@ function guardSetup(update) {
     state.adoptUrl = ${!!update.adoptUrl};` : ''}
     state.nativeDenied = ${JSON.stringify(update?.nativeDenied) ?? 'undefined'};
     state.timing = ${!!update?.timing};
+    // The previous call's read, when the relay judged it reusable for this call's first action.
+    state.prior = ${JSON.stringify(update?.prior) ?? 'undefined'};
     const clock = () => globalThis.performance?.now() ?? Date.now();
     const timedRead = async (raw, phase) => {
       const start = clock();
@@ -200,7 +210,21 @@ function guardSetup(update) {
             state.reads = new WeakMap();
             return value.apply(raw, args);
           }
-          const text = state.reads.get(proxy)?.text ?? await timedRead(raw, 'before-action');
+          let text = state.reads.get(proxy)?.text;
+          // The acquisition just before this call read the whole tree. A launching app can take 15 s
+          // per read under load (2026-10-09), so reuse it when the app's windows, as the inventory
+          // lists them, are exactly what they were then.
+          if (text === undefined && state.prior) {
+            const prior = state.prior; state.prior = undefined;
+            const start = clock();
+            const now = await cua.listApps({ emit: false }).then(apps => apps.filter(a => a.id === prior.id).map(a => a.windows ?? []), () => null);
+            // Unchanged windows, or an app the acquisition launched whose one window is the read's.
+            const same = now?.length === 1 && (JSON.stringify(now[0]) === JSON.stringify(prior.windows) ||
+              (prior.windows.length === 0 && now[0].length === 1 && now[0][0].title === prior.title));
+            if (state.timing) nodeRepl.write('[sleight:guard-timing]' + JSON.stringify({ phase: same ? 'reused' : 'reuse-refused', ms: clock() - start, chars: same ? prior.text.length : 0, failed: false }) + '\\n');
+            if (same) text = prior.text;
+          }
+          text ??= await timedRead(raw, 'before-action');
           const observed = parse(text);
           // A stop carries the window header from this fresh read, so the relay keeps
           // the lease and Claude can retry without acquiring the app again.

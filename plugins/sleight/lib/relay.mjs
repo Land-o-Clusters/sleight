@@ -59,7 +59,7 @@
 // `trace`, when given, receives every message as it passes, for debugging.
 
 import { randomUUID } from 'node:crypto';
-import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRead, readCode, guardedCode } from './document-scope.mjs';
+import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRead, readCode, guardedCode, WINDOWS_MARK } from './document-scope.mjs';
 import { ChangeReview, REVIEW_TOOL, isChangeCancel } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
 import { browserCall, browserReply } from './browser-call.mjs';
@@ -261,6 +261,10 @@ export function createRelay({
   // docs again without a js_reset mean the session restarted and every handle is gone.
   const jsCalls = new Map();
   const screenshots = new Map(); // lowercased app name -> { latest, byTitle } pixel sizes of its engine screenshots
+  // Every tools/call gets the next number. An acquisition's read can stand in for the guard's
+  // first read only in the call right after it (priorRead.seq + 1).
+  let callSeq = 0, priorRead;
+  const callSeqs = new Map();
   let docsShown = false;
   // Once per session: Claude keeps them in context across engine restarts.
   let rulesShown = false;
@@ -952,7 +956,7 @@ export function createRelay({
       return;
     }
     // When each tool call arrived, so a trace can time the relay's own work on it.
-    if (msg.method === 'tools/call') trace('call-received', { id: msg.id, method: msg.method, params: { name: msg.params?.name } });
+    if (msg.method === 'tools/call') { trace('call-received', { id: msg.id, method: msg.method, params: { name: msg.params?.name } }); callSeqs.set(msg.id, ++callSeq); }
     // Claude sometimes sends js the Bash tool's parameter name (6 of 437 calls, 2026-10-07).
     const jsArgs = msg.method === 'tools/call' && msg.params?.name === 'js' ? msg.params.arguments : undefined;
     if (jsArgs && jsArgs.code === undefined && typeof jsArgs.command === 'string') {
@@ -989,6 +993,9 @@ export function createRelay({
       handleClient({ ...msg, params: { ...msg.params, arguments: { ...msg.params.arguments, code: rest } } });
     });
     trace('acquisition-split', { id: msg.id, acquisition: prefixId });
+    // The acquisition takes this call's place in the sequence and the actions the next, so the
+    // guard can reuse the acquisition's read for the first action as it does across two calls.
+    callSeqs.set(prefixId, callSeqs.get(msg.id)); callSeqs.set(msg.id, ++callSeq);
     handleClient({ ...msg, id: prefixId, params: { ...msg.params, arguments: { ...msg.params.arguments, code: m[1] } } });
     return true;
   }
@@ -1180,10 +1187,15 @@ export function createRelay({
             }
             msg.params.arguments.code = readCode(code);
           }
-          else if (documentMode || inputLease || (changeReview && target)) msg.params.arguments.code = guardedCode(originalCode, target, reason,
-            inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
-            { timing: guardTiming, fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
-              adoptUrl: !documentMode && !changeReview, skipAppWrap: browserHandles.has('app') });
+          else if (documentMode || inputLease || (changeReview && target)) {
+            // The acquisition just before this call, if it read this same app less than 10 s ago.
+            const prior = priorRead && priorRead.seq + 1 === callSeqs.get(msg.id) && Date.now() - priorRead.at < 10000 &&
+              target?.app === priorRead.app ? { text: priorRead.text, id: priorRead.id, title: priorRead.title, windows: priorRead.windows } : undefined;
+            msg.params.arguments.code = guardedCode(originalCode, target, reason,
+              inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
+              { timing: guardTiming, fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
+                adoptUrl: !documentMode && !changeReview, skipAppWrap: browserHandles.has('app'), prior });
+          }
           if (clipboard) msg.params.arguments.code = clipboardCode(msg.params.arguments.code, clipboardAction);
         }
       }
@@ -1307,8 +1319,26 @@ export function createRelay({
     if (msg.method === undefined && changeCalls.has(msg.id)) {
       const call = changeCalls.get(msg.id);
       changeCalls.delete(msg.id);
+      // An acquisition's window inventory: kept for the next call's guard, never shown to Claude.
+      let inventory;
+      for (const c of msg.result?.content ?? []) {
+        if (c.type !== 'text' || !c.text?.includes(WINDOWS_MARK)) continue;
+        c.text = c.text.split('\n').filter(line => {
+          if (!line.startsWith(WINDOWS_MARK)) return true;
+          try { inventory = JSON.parse(line.slice(WINDOWS_MARK.length)); } catch {}
+          return false;
+        }).join('\n');
+      }
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
       if (call.observe && !automatic && !confirmedBrowser) { lastWindowText = text; lastWindow = windowFromText(text); }
+      // The app's windows before the acquisition; none when the acquisition launched it.
+      const appId = msg.result?._meta?.['codex/toolSurface']?.app?.appId;
+      const before = inventory && typeof appId === 'string' && inventory.filter(a => a.id === appId);
+      priorRead = call.read && !msg.result?.isError && before && before.length <= 1 && lastWindow && text.includes('Window: ')
+        ? { seq: callSeqs.get(msg.id), at: Date.now(), app: lastWindow.app, title: lastWindow.title, id: appId,
+          windows: before[0]?.windows ?? [], text: text.slice(text.indexOf('Window: ')) }
+        : undefined;
+      callSeqs.delete(msg.id);
       if (!confirmedBrowser && selectedWindow && !call.read && call.target && msg.result &&
           (!lastWindow || ['title', 'app', 'url'].some(key => lastWindow[key] !== call.target[key]))) {
         windowNote = `Sleight: outcome unconfirmed. Intended ${documentLabel(call.target)}. ` +
