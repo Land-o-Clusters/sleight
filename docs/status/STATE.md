@@ -24,6 +24,12 @@ files in `~/Desktop/sleight-launch/` for the owner's Grok bot; (3) replay, a suc
 a script that replays through the engine with no model. Known-problems work fills the time the owner
 is at the Mac: the cursor-free text move for other apps' text fields first, then rich-text
 formatting, first-read speed, Chess's second window, `/sleight stop` in the desktop app.
+Progress on that plan by 03:15 UTC on 2026-10-09. Sol's real-use runs so far (`~/Projects/sleight-wt/real-use-tasks/bench/results/`)
+show helium-form 3/3, finder-files 3/3 and preview-pdf failing in fixture setup; Safari, TextEdit with
+Calculator and the simulator not run yet. Launch draft: `~/Desktop/sleight-launch/thread-1.0.md`,
+with [PENDING] lines for results still to come. Known problems done tonight: cross-app text fields
+(Safari ignores Accessibility writes), the covering window named in drag's errors (Chess's New Game
+dialog), and the slow first Calculator read explained.
 Head-to-head on Calculator and TextEdit (`docs/benchmarks/2026-10-09-h2h-background.json`): sleight
 15/15 (446 s), Codex 12/15 (732 s), Codex 0/3 on textedit-drag. Chess and the simulator still need a
 run with the owner away. `main` has one README commit (`dcad210`, the release badge) that the branch
