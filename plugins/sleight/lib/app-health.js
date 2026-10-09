@@ -51,27 +51,47 @@ function minimizedCount(windows) {
   return count;
 }
 
+// With an argument, one probe. Without, a long-lived helper: one JSON line in ({ id, app }), one out,
+// so a session spawns osascript once instead of on every app read (about 150 ms of CPU each).
 function run(argv) {
-  if (!$.AXIsProcessTrusted()) return JSON.stringify({ status: 'denied' });
-  const selector = JSON.parse(argv[0]);
-  if (typeof selector !== 'string' || !selector) return JSON.stringify({ status: 'unknown' });
+  if (argv.length) return JSON.stringify(probe(JSON.parse(argv[0])));
+  const stdin = $.NSFileHandle.fileHandleWithStandardInput, stdout = $.NSFileHandle.fileHandleWithStandardOutput;
+  let buffer = '';
+  for (;;) {
+    const data = stdin.availableData;
+    if (Number(data.length) === 0) return '';
+    buffer += ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding));
+    if (buffer.length > 4096) return '';
+    let at;
+    while ((at = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, at); buffer = buffer.slice(at + 1);
+      let reply;
+      try { const request = JSON.parse(line); reply = { id: request.id, ...probe(request.app) }; } catch { reply = { status: 'unknown' }; }
+      stdout.writeData($(JSON.stringify(reply) + '\n').dataUsingEncoding($.NSUTF8StringEncoding));
+    }
+  }
+}
+
+function probe(selector) {
+  if (!$.AXIsProcessTrusted()) return { status: 'denied' };
+  if (typeof selector !== 'string' || !selector) return { status: 'unknown' };
   const apps = $.NSWorkspace.sharedWorkspace.runningApplications;
   let target;
   for (let i = 0; i < apps.count; i++) {
     const app = apps.objectAtIndex(i);
     if ([ObjC.unwrap(app.localizedName), ObjC.unwrap(app.bundleIdentifier), ObjC.unwrap(app.bundleURL.path)]
       .some(value => typeof value === 'string' && value.toLowerCase() === selector.toLowerCase())) {
-      if (target) return JSON.stringify({ status: 'unknown' });
+      if (target) return { status: 'unknown' };
       target = app;
     }
   }
-  if (!target) return JSON.stringify({ status: 'absent' });
+  if (!target) return { status: 'absent' };
   const pid = Number(target.processIdentifier), app = $.AXUIElementCreateApplication(pid);
   const space = { hidden: target.hidden === true, ...spaces(pid) };
-  if (Number($.AXUIElementSetMessagingTimeout(app, 0.5)) !== 0) return JSON.stringify({ status: 'unknown', ...space });
+  if (Number($.AXUIElementSetMessagingTimeout(app, 0.5)) !== 0) return { status: 'unknown', ...space };
   const value = Ref();
   const error = Number($.AXUIElementCopyAttributeValue(app, $('AXWindows'), value));
-  if (error !== 0) return JSON.stringify({ status: error === -25204 ? 'timeout' : error === -25211 ? 'denied' : 'unknown', error, pid, ...space });
+  if (error !== 0) return { status: error === -25204 ? 'timeout' : error === -25211 ? 'denied' : 'unknown', error, pid, ...space };
   const windows = ObjC.castRefToObject(value[0]);
-  return JSON.stringify({ status: 'responding', pid, windows: Number(windows.count), minimized: minimizedCount(windows), ...space });
+  return { status: 'responding', pid, windows: Number(windows.count), minimized: minimizedCount(windows), ...space };
 }

@@ -58,3 +58,20 @@ test('an app whose windows are all on another Space is diagnosed without a contr
   assert.match(advice, /none of TextEdit's windows are on it/); assert.match(advice, /full-screen or Split View/);
   assert.doesNotMatch(advice, /quit|restart ChatGPT/i);
 });
+test('one app-health helper answers many probes, and a stuck probe resolves unknown and restarts it', async () => {
+  const { spawn } = await import('node:child_process');
+  let spawned = 0;
+  // A stand-in helper: answers each line with its app, except "stuck", which it never answers.
+  const script = `require('readline').createInterface({ input: process.stdin }).on('line', l => { const r = JSON.parse(l);
+    if (r.app !== 'stuck') process.stdout.write(JSON.stringify({ id: r.id, status: 'responding', app: r.app }) + '\\n'); });`;
+  const helper = module.createAppHealthHelper({ timeoutMs: 200, spawnHelper: () => { spawned++; return spawn(process.execPath, ['-e', script], { stdio: ['pipe', 'pipe', 'ignore'] }); } });
+  try {
+    assert.deepEqual(await helper.probe('TextEdit'), { status: 'responding', app: 'TextEdit' });
+    assert.deepEqual(await Promise.all([helper.probe('A'), helper.probe('B')]), [{ status: 'responding', app: 'A' }, { status: 'responding', app: 'B' }]);
+    assert.equal(spawned, 1, 'one process for every probe');
+    assert.deepEqual(await helper.probe('stuck'), { status: 'unknown' });
+    assert.deepEqual(await helper.probe('Calculator'), { status: 'responding', app: 'Calculator' });
+    assert.equal(spawned, 2, 'the stuck helper was replaced');
+  } finally { helper.close(); }
+  assert.deepEqual(await helper.probe('TextEdit'), { status: 'unknown' }, 'closed');
+});

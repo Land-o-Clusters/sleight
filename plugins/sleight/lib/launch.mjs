@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { discoverExtensions } from './browser-discovery.mjs';
 import { createRelay } from './relay.mjs';
-import { diagnoseReadFailure, probeAppHealth } from './read-failure.mjs';
+import { createAppHealthHelper, diagnoseReadFailure } from './read-failure.mjs';
 import { loadFlowRules } from './flow-rules.mjs';
 import { InputLease } from './input-lease.mjs';
 import { loadPreapproved } from './preapproved.mjs';
@@ -456,9 +456,11 @@ export async function run({ leaseDirectory } = {}) {
   }
   const sessionId = randomUUID();
 
+  const appHealth = createAppHealthHelper();
+  process.once('exit', () => appHealth.close());
   const relay = createRelay({
-    diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, { readControl }),
-    spaceProbe: probeAppHealth,
+    diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, { readControl, probeApp: appHealth.probe }),
+    spaceProbe: appHealth.probe,
     guardMode: process.env.SLEIGHT_GUARD,
     clientIn: process.stdin,
     clientOut: process.stdout,

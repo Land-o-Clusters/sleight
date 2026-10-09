@@ -1,9 +1,49 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
+
+const HEALTH_SCRIPT = fileURLToPath(new URL('./app-health.js', import.meta.url));
+
+// One long-lived app-health helper per session, started on first use. A probe that doesn't answer
+// in time resolves 'unknown' and stops the helper, so a stuck Accessibility call can't hold up the
+// next one, which starts a fresh helper.
+export function createAppHealthHelper({ timeoutMs = 2000,
+  spawnHelper = () => spawn('/usr/bin/osascript', ['-l', 'JavaScript', HEALTH_SCRIPT], { stdio: ['pipe', 'pipe', 'ignore'] }) } = {}) {
+  let child, nextId = 0, closed = false;
+  const pending = new Map();
+  const settleAll = () => { for (const finish of pending.values()) finish({ status: 'unknown' }); pending.clear(); };
+  function stop() { if (!child) return; const old = child; child = undefined; old.stdin.end(); old.kill(); settleAll(); }
+  function start() {
+    const current = child = spawnHelper();
+    current.once('error', () => { if (child === current) stop(); });
+    current.once('exit', () => { if (child === current) { child = undefined; settleAll(); } });
+    current.stdin.on('error', () => {});
+    current.unref?.(); current.stdin.unref?.(); current.stdout.unref?.();
+    createInterface({ input: current.stdout }).on('line', line => {
+      let reply;
+      try { reply = JSON.parse(line); } catch { return; }
+      const finish = pending.get(reply?.id);
+      if (!finish) return;
+      pending.delete(reply.id); delete reply.id; finish(reply);
+    });
+  }
+  function probe(app) {
+    if (closed) return Promise.resolve({ status: 'unknown' });
+    if (!child) start();
+    return new Promise(resolve => {
+      const id = nextId++;
+      // A pending probe keeps the process alive until its reply or deadline; the idle helper doesn't.
+      const timer = setTimeout(() => { if (pending.delete(id)) { resolve({ status: 'unknown' }); stop(); } }, timeoutMs);
+      pending.set(id, reply => { clearTimeout(timer); resolve(reply); });
+      child.stdin.write(JSON.stringify({ id, app }) + '\n');
+    });
+  }
+  return { probe, close() { closed = true; stop(); } };
+}
 
 export function probeAppHealth(app) {
   return new Promise(resolve => {
-    execFile('/usr/bin/osascript', ['-l', 'JavaScript', fileURLToPath(new URL('./app-health.js', import.meta.url)), JSON.stringify(app)],
+    execFile('/usr/bin/osascript', ['-l', 'JavaScript', HEALTH_SCRIPT, JSON.stringify(app)],
       { timeout: 2000, maxBuffer: 4096 }, (error, stdout) => {
         // A process deadline alone cannot attribute a hang to the target app.
         if (error) { resolve({ status: 'unknown' }); return; }
