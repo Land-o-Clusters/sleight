@@ -1,0 +1,298 @@
+{
+  "engine": "26.1002.52244",
+  "started": "2026-10-09T15:43:46.643Z",
+  "reps": 5,
+  "levels": [
+    {
+      "workers": 0,
+      "loadBefore": 10.49072265625,
+      "arms": {
+        "direct": {
+          "eight-clicks": [
+            {
+              "ms": 573,
+              "isError": false
+            },
+            {
+              "ms": 593,
+              "isError": false
+            },
+            {
+              "ms": 641,
+              "isError": false
+            },
+            {
+              "ms": 593,
+              "isError": false
+            },
+            {
+              "ms": 581,
+              "isError": false
+            }
+          ],
+          "one-click": [
+            {
+              "ms": 75,
+              "isError": false
+            },
+            {
+              "ms": 79,
+              "isError": false
+            },
+            {
+              "ms": 72,
+              "isError": false
+            },
+            {
+              "ms": 74,
+              "isError": false
+            },
+            {
+              "ms": 75,
+              "isError": false
+            }
+          ],
+          "read": [
+            {
+              "ms": 446,
+              "isError": false
+            },
+            {
+              "ms": 119,
+              "isError": false
+            },
+            {
+              "ms": 97,
+              "isError": false
+            },
+            {
+              "ms": 95,
+              "isError": false
+            },
+            {
+              "ms": 88,
+              "isError": false
+            }
+          ]
+        },
+        "sleight": {
+          "eight-clicks": [
+            {
+              "ms": 3712,
+              "isError": false
+            },
+            {
+              "ms": 3609,
+              "isError": false
+            },
+            {
+              "ms": 3635,
+              "isError": false
+            },
+            {
+              "ms": 3606,
+              "isError": false
+            },
+            {
+              "ms": 3559,
+              "isError": false
+            }
+          ],
+          "one-click": [
+            {
+              "ms": 497,
+              "isError": false
+            },
+            {
+              "ms": 511,
+              "isError": false
+            },
+            {
+              "ms": 501,
+              "isError": false
+            },
+            {
+              "ms": 503,
+              "isError": false
+            },
+            {
+              "ms": 496,
+              "isError": false
+            }
+          ],
+          "read": [
+            {
+              "ms": 57,
+              "isError": false
+            },
+            {
+              "ms": 50,
+              "isError": false
+            },
+            {
+              "ms": 45,
+              "isError": false
+            },
+            {
+              "ms": 42,
+              "isError": false
+            },
+            {
+              "ms": 44,
+              "isError": false
+            }
+          ]
+        }
+      },
+      "loadAfter": 8.56103515625
+    },
+    {
+      "workers": 20,
+      "loadBefore": 10.1171875,
+      "arms": {
+        "direct": {
+          "eight-clicks": [
+            {
+              "ms": 36735,
+              "isError": false
+            },
+            {
+              "ms": 30531,
+              "isError": false
+            },
+            {
+              "ms": 6441,
+              "isError": false
+            },
+            {
+              "ms": 1648,
+              "isError": false
+            },
+            {
+              "ms": 1376,
+              "isError": false
+            }
+          ],
+          "one-click": [
+            {
+              "ms": 224,
+              "isError": false
+            },
+            {
+              "ms": 2471,
+              "isError": false
+            },
+            {
+              "ms": 4680,
+              "isError": false
+            },
+            {
+              "ms": 5036,
+              "isError": false
+            },
+            {
+              "ms": 503,
+              "isError": false
+            }
+          ],
+          "read": [
+            {
+              "ms": 14447,
+              "isError": false
+            },
+            {
+              "ms": 2926,
+              "isError": false
+            },
+            {
+              "ms": 115,
+              "isError": false
+            },
+            {
+              "ms": 119,
+              "isError": false
+            },
+            {
+              "ms": 119,
+              "isError": false
+            }
+          ]
+        },
+        "sleight": {
+          "eight-clicks": [
+            {
+              "ms": 17583,
+              "isError": true,
+              "error": "sleight stopped before click(19): an earlier action in this call changed what element 19 is (was \"button Description: 2, ID: Two\", now \"button Two\"). Read the window again and use its current numbers.\nWindow: \"Calculator\", App: Calculator.\n0 unknown Secondary Actions: Raise"
+            },
+            {
+              "ms": 8977,
+              "isError": true,
+              "error": "sleight stopped before click(15): an earlier action in this call changed what element 15 is (was \"button Description: 5, ID: Five\", now \"button Five\"). Read the window again and use its current numbers.\nWindow: \"Calculator\", App: Calculator.\n0 standard window Calculator, ID: main, Secondary Actions:"
+            },
+            {
+              "ms": 14309,
+              "isError": true,
+              "error": "sleight stopped before click(14): an earlier action in this call changed what element 14 is (was \"button Description: 4, ID: Four\", now \"button Four\"). Read the window again and use its current numbers.\nWindow: \"Calculator\", App: Calculator.\n0 unknown Secondary Actions: Raise"
+            },
+            {
+              "ms": 12412,
+              "isError": true,
+              "error": "sleight stopped before click(19): an earlier action in this call changed what element 19 is (was \"button Description: 2, ID: Two\", now \"button Two\"). Read the window again and use its current numbers.\nWindow: \"Calculator\", App: Calculator.\n0 standard window Calculator, ID: main, Secondary Actions: R"
+            },
+            {
+              "ms": 10551,
+              "isError": true,
+              "error": "sleight stopped before click(20): an earlier action in this call changed what element 20 is (was \"button Description: 3, ID: Three\", now \"button Three\"). Read the window again and use its current numbers.\nWindow: \"Calculator\", App: Calculator.\n0 unknown Secondary Actions: Raise"
+            }
+          ],
+          "one-click": [
+            {
+              "ms": 23104,
+              "isError": false
+            },
+            {
+              "ms": 16972,
+              "isError": false
+            },
+            {
+              "ms": 7943,
+              "isError": false
+            },
+            {
+              "ms": 1292,
+              "isError": false
+            },
+            {
+              "ms": 1415,
+              "isError": false
+            }
+          ],
+          "read": [
+            {
+              "ms": 7538,
+              "isError": false
+            },
+            {
+              "ms": 10075,
+              "isError": false
+            },
+            {
+              "ms": 3814,
+              "isError": false
+            },
+            {
+              "ms": 206,
+              "isError": false
+            },
+            {
+              "ms": 274,
+              "isError": false
+            }
+          ]
+        }
+      },
+      "loadAfter": 44.82421875
+    }
+  ]
+}

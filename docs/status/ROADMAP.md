@@ -48,7 +48,11 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
   sleight must hold up there as Codex does. Run the same tasks through sleight and Codex, unloaded
   and under load, and find where sleight's extra time goes: its guard reads, its own Accessibility
   checks (0.5 s deadline) and the relay. On 2026-10-09, at a load average of about 100, one engine
-  read took 17 s, and that engine is the one Codex uses too.
+  read took 17 s, and that engine is the one Codex uses too. First measurement (`load-cost`, no
+  model): without load the guard turns eight clicks from 593 ms into 3,609 ms, and under load it
+  stopped 5 of 5 such calls on a renumbering check, against 0 of 5 without load. Next, find what
+  the check saw and stop its false refusals under load. After that, the inventory check replaces the full
+  read before key, text and coordinate actions.
 - Batching (owner, 2026-10-09). Claude's own computer use groups more actions into one call. In 887 benchmark
   transcripts, 62% of `js` calls that act send one action, and 35% of all calls only read. Find
   what keeps Claude from batching (the guard's per-action reads, the skill, the tool description)

@@ -254,6 +254,12 @@ our own runs. Dates and engine versions are given where they matter.
   Doctor probes inventory, which does not prove that every app's accessibility read works. Before
   0.7.0 it also reported "ok" when the helper couldn't start at all.
   [The investigation](benchmarks/2026-10-04-helper-health.md) records each live attempt.
+- On a busy Mac the guard can stop a call that clicks several element numbers. With 20 CPU-bound
+  workers running, it stopped 5 of 5 calls of eight Calculator clicks, saying an earlier click had
+  changed what the next number was, against 0 of 5 without them. Without load the guard's reads
+  took 3.0 s of those eight clicks' 3.6 s, against 0.6 s for the clicks alone
+  ([load-cost](benchmarks/2026-10-09-load-cost.json)). We haven't yet found which change in the tree
+  set it off.
 - The AX check of the target app waits 0.5 s, which a busy Mac can miss. On 2026-10-09, with a load
   average of 101 from other processes, TextEdit, Safari and Calculator missed it in 5 of 5 probes and
   answered in 0.27 to 0.52 s with a 6 s deadline. A read failure then can be diagnosed as a hung app,

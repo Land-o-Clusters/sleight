@@ -249,6 +249,16 @@ textedit-edit and textedit-save, 3 runs each, with the owner away). 8 of 12 runs
 `cua.getState()`, against 30 of 36 before, and the 12 runs took 80 turns against 68 in the 1.0.0 pass.
 It's reverted.
 
+`bench/load-cost.mjs` times the same Calculator calls with no model, once sent straight to
+the engine (which is what Codex does) and once through sleight. Each ran 5 times
+([`load-cost`](benchmarks/2026-10-09-load-cost.json), 2026-10-09, with the owner away). At the Mac's own
+load (about 10), eight clicks by number in one call took a median of 593 ms straight and 3,609 ms
+through sleight, and one click took 75 ms against 501 ms. The guard's full read before each action
+is that difference. With 20 CPU-bound workers added (load 10 to 45, overlapping another project's
+timed tests), times swung too widely to compare medians: eight clicks went from 1,376 to 36,735 ms
+straight to the engine. sleight's guard stopped all 5 eight-click calls under load, because a read
+between clicks showed a different element at the next number, and none without load.
+
 textedit-drag ran once with a fixture app in full screen in front of TextEdit, after the relay
 learned to say so, with the owner away. Both runs failed, as they should: a drag fails on
 another Space. In the first, the check ran once per turn and caught TextEdit's Open panel, which
