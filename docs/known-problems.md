@@ -39,9 +39,16 @@ our own runs. Dates and engine versions are given where they matter.
   organization sets. To stop Codex asking for approvals, change Codex's own approval setting. With
   your opt-in, sleight can drive these apps through its own Accessibility path (see
   [Driving apps the engine refuses](settings.md#driving-apps-the-engine-refuses)); the engine's refusal itself
-  stays. On that path, settings refusal checks the window title and the window's toolbar (Terminal
-  titles its settings window after the open pane, like "General"), so a localized title and a pane
-  name can pass it. Background scroll reaches the app's focused view. System Events' keystroke
+  stays. On that path, settings refusal keeps the title and toolbar filters and now inspects
+  `AXIdentifier` on window containers, `AXModal`, dialog subroles and nested toolbars, independent
+  of the displayed language. Unreadable trees and scans over 300 nodes or 12 levels refuse.
+  Unit tests passed 7/7 on recorded ChatGPT content-window roles and constructed attribute cases
+  (2026-10-10), including the old title, toolbar collection and direct-child toolbar rules.
+  The recording lacks settings attributes, so localized settings still need live
+  qualification. An app that exposes neither a recognized identifier nor dialog or toolbar metadata
+  can still pass with an unknown title. The engine path used when the user disables its refusal
+  still has only title checks. Changing its guard needs a separate relay change.
+  Background scroll reaches the app's focused view. System Events' keystroke
   doesn't act on
   an embedded newline in Terminal, so blocked_app sends one Return key press per newline instead.
   The window screenshot needs Screen Recording for the app that runs Claude Code, on top of the
