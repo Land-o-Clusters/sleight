@@ -336,7 +336,14 @@ our own runs. Dates and engine versions are given where they matter.
   the engine's inventory lists them (about 11 ms), are exactly what they were before the acquisition,
   or the acquisition launched the app and its one window is the read's. That check took 11 to 30 ms in
   3 live runs, where the full read took about 450 ms. It can't tell if a window of the app changed its
-  contents in the seconds between, which the full read couldn't either.
+  contents in the seconds between, which the full read couldn't either. On 2026-10-09 we found that
+  engine 26.1002.52244 doesn't list windows for any app, before or after an acquisition, so in 1.0.0 and
+  1.1.0 the check compared two empty lists and always passed: the first action after an acquisition
+  ran on that read, up to 10 s old, unchecked. After 1.1.0 (unreleased) the guard reuses the read only
+  when the inventory lists the app's windows, which on this engine means never. A settled full read
+  before an action took about 50 ms in 10 trials at loads of 42 to 53, so this adds about 50 ms except
+  right after a launch. Within a call, the engine has no faster way to check the window, since `listWindows`
+  doesn't exist on macOS.
 - Calculator button indices changed during a [preapproval trial](benchmarks/2026-10-04-preapproved-apps.md),
   producing the wrong expression. A filtered read then lost the window header, and the input lease
   stopped the retry. Use current indices from full UI reads, and preserve their window headers.

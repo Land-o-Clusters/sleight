@@ -259,6 +259,23 @@ timed tests), times swung too widely to compare medians: eight clicks went from 
 straight to the engine. sleight's guard stopped all 5 eight-click calls under load, because a read
 between clicks showed a different element at the next number, and none without load.
 
+After the guard learned to match those degraded lines, a rerun sent each call through both paths in
+turn, so both saw the same load ([`load-cost-interleaved`](benchmarks/2026-10-09-load-cost-interleaved.json)).
+Other projects' tests kept the load near 20 before workers were added.
+
+| Workers | Load | Call | Engine only, median | sleight, median | sleight stops |
+|---:|---:|---|---:|---:|---:|
+| 0 | 20 to 24 | eight clicks | 839 ms | 3,965 ms | 0/5 |
+| 0 | 20 | one click | 87 ms | 841 ms | 0/5 |
+| 20 | 22 to 79 | eight clicks | 23.3 s | 58.2 s | 0/5 |
+| 20 | 96 to 121 | one click | 159 ms | 38.0 s | 0/5 |
+| 20 | 135 | full read | 111 ms | 48 ms | 0/5 |
+
+A read right after an action is what grows. With the guard's timing on, at loads of 42 to 53, its
+read before a click took 38 to 83 ms and its read after took 389 to 427 ms, the same with a 2 s
+pause between calls. The engine waits for the UI to settle after input, and on a loaded Mac that wait
+ran to tens of seconds. A read with no input before it stayed near 100 ms even at load 135.
+
 textedit-drag ran once with a fixture app in full screen in front of TextEdit, after the relay
 learned to say so, with the owner away. Both runs failed, as they should: a drag fails on
 another Space. In the first, the check ran once per turn and caught TextEdit's Open panel, which

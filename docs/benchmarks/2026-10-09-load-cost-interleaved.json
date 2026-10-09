@@ -1,0 +1,498 @@
+{
+  "engine": "26.1002.52244",
+  "started": "2026-10-09T16:00:16.485Z",
+  "reps": 5,
+  "interleaved": true,
+  "levels": [
+    {
+      "workers": 0,
+      "rows": [
+        {
+          "arm": "direct",
+          "call": "eight-clicks",
+          "rep": 0,
+          "load": 24.3,
+          "ms": 811,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "eight-clicks",
+          "rep": 0,
+          "load": 24.3,
+          "ms": 4140,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "eight-clicks",
+          "rep": 1,
+          "load": 23.3,
+          "ms": 3819,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "eight-clicks",
+          "rep": 1,
+          "load": 22.4,
+          "ms": 956,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "eight-clicks",
+          "rep": 2,
+          "load": 22.4,
+          "ms": 780,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "eight-clicks",
+          "rep": 2,
+          "load": 22.4,
+          "ms": 3965,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "eight-clicks",
+          "rep": 3,
+          "load": 21.4,
+          "ms": 3726,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "eight-clicks",
+          "rep": 3,
+          "load": 20.8,
+          "ms": 839,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "eight-clicks",
+          "rep": 4,
+          "load": 20.8,
+          "ms": 874,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "eight-clicks",
+          "rep": 4,
+          "load": 20.8,
+          "ms": 4021,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "one-click",
+          "rep": 0,
+          "load": 20.2,
+          "ms": 115,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "one-click",
+          "rep": 0,
+          "load": 20.2,
+          "ms": 860,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "one-click",
+          "rep": 1,
+          "load": 20.2,
+          "ms": 481,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "one-click",
+          "rep": 1,
+          "load": 20.2,
+          "ms": 88,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "one-click",
+          "rep": 2,
+          "load": 20.2,
+          "ms": 73,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "one-click",
+          "rep": 2,
+          "load": 20.2,
+          "ms": 904,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "one-click",
+          "rep": 3,
+          "load": 20.2,
+          "ms": 724,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "one-click",
+          "rep": 3,
+          "load": 20.2,
+          "ms": 87,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "one-click",
+          "rep": 4,
+          "load": 20.2,
+          "ms": 83,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "one-click",
+          "rep": 4,
+          "load": 20.2,
+          "ms": 841,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "read",
+          "rep": 0,
+          "load": 19.5,
+          "ms": 123,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "read",
+          "rep": 0,
+          "load": 19.5,
+          "ms": 51,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "read",
+          "rep": 1,
+          "load": 19.5,
+          "ms": 49,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "read",
+          "rep": 1,
+          "load": 19.5,
+          "ms": 96,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "read",
+          "rep": 2,
+          "load": 19.5,
+          "ms": 91,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "read",
+          "rep": 2,
+          "load": 19.5,
+          "ms": 54,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "read",
+          "rep": 3,
+          "load": 19.5,
+          "ms": 50,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "read",
+          "rep": 3,
+          "load": 19.5,
+          "ms": 100,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "read",
+          "rep": 4,
+          "load": 19.5,
+          "ms": 105,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "read",
+          "rep": 4,
+          "load": 19.5,
+          "ms": 52,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "workers": 20,
+      "rows": [
+        {
+          "arm": "direct",
+          "call": "eight-clicks",
+          "rep": 0,
+          "load": 21.5,
+          "ms": 23325,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "eight-clicks",
+          "rep": 0,
+          "load": 36.1,
+          "ms": 58177,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "eight-clicks",
+          "rep": 1,
+          "load": 55.9,
+          "ms": 61377,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "eight-clicks",
+          "rep": 1,
+          "load": 55.6,
+          "ms": 16397,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "eight-clicks",
+          "rep": 2,
+          "load": 51.8,
+          "ms": 19926,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "eight-clicks",
+          "rep": 2,
+          "load": 52.2,
+          "ms": 28568,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "eight-clicks",
+          "rep": 3,
+          "load": 47.8,
+          "ms": 48845,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "eight-clicks",
+          "rep": 3,
+          "load": 48.2,
+          "ms": 30765,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "eight-clicks",
+          "rep": 4,
+          "load": 59.2,
+          "ms": 34270,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "eight-clicks",
+          "rep": 4,
+          "load": 79.4,
+          "ms": 75832,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "one-click",
+          "rep": 0,
+          "load": 95.6,
+          "ms": 101,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "one-click",
+          "rep": 0,
+          "load": 95.6,
+          "ms": 56813,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "one-click",
+          "rep": 1,
+          "load": 116.1,
+          "ms": 18929,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "one-click",
+          "rep": 1,
+          "load": 116.8,
+          "ms": 159,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "one-click",
+          "rep": 2,
+          "load": 116.8,
+          "ms": 146,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "one-click",
+          "rep": 2,
+          "load": 116.8,
+          "ms": 18567,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "one-click",
+          "rep": 3,
+          "load": 117.5,
+          "ms": 37954,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "one-click",
+          "rep": 3,
+          "load": 120.8,
+          "ms": 2425,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "one-click",
+          "rep": 4,
+          "load": 120.8,
+          "ms": 1296,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "one-click",
+          "rep": 4,
+          "load": 118.8,
+          "ms": 117695,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "read",
+          "rep": 0,
+          "load": 134.6,
+          "ms": 169,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "read",
+          "rep": 0,
+          "load": 134.6,
+          "ms": 49,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "read",
+          "rep": 1,
+          "load": 134.6,
+          "ms": 42,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "read",
+          "rep": 1,
+          "load": 134.6,
+          "ms": 108,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "read",
+          "rep": 2,
+          "load": 134.6,
+          "ms": 102,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "read",
+          "rep": 2,
+          "load": 134.6,
+          "ms": 48,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "read",
+          "rep": 3,
+          "load": 134.6,
+          "ms": 51,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "read",
+          "rep": 3,
+          "load": 134.6,
+          "ms": 111,
+          "isError": false
+        },
+        {
+          "arm": "direct",
+          "call": "read",
+          "rep": 4,
+          "load": 134.6,
+          "ms": 121,
+          "isError": false
+        },
+        {
+          "arm": "sleight",
+          "call": "read",
+          "rep": 4,
+          "load": 134.6,
+          "ms": 46,
+          "isError": false
+        }
+      ]
+    }
+  ]
+}

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The guard's check before reusing an acquisition's read never checked anything: engine
+  26.1002.52244 doesn't list windows, and two empty lists matched. Since 1.0.0 the first action after an
+  acquisition ran on that read unchecked. Now the guard reads instead, about 50 ms on a settled app.
 - On a busy Mac the engine can read an element without its attributes (`button Two` for
   `button Description: 2, ID: Two`). The guard took that as a renumbered window and stopped 5 of 5
   batched Calculator calls under load. It now matches such a bare line to the element by role and

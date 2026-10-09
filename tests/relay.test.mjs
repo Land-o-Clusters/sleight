@@ -1695,7 +1695,9 @@ test('the guard reuses a passed read only while the app\'s windows are unchanged
   const state = 'Window: "a.txt", App: TextEdit\n0 standard window a.txt\n1 text entry area Value: hi';
   // [windows before the acquisition, windows at the action, full reads before the action]
   for (const [before, now, reads] of [[windows, windows, 0], [windows, [...windows, { id: 6, app: 'TextEdit', title: 'b.txt' }], 1],
-    [[], windows, 0], [[], [{ id: 7, app: 'TextEdit', title: 'Untitled' }], 1]]) {
+    [[], windows, 0], [[], [{ id: 7, app: 'TextEdit', title: 'Untitled' }], 1],
+    // Engine 26.1002.52244 lists no windows: two empty lists prove nothing, so the guard reads.
+    [[], [], 1]]) {
     let fullReads = 0;
     const raw = { getAXState: async () => { fullReads++; return state; }, typeText: async () => {} };
     const context = createContext({ app: undefined, cua: { getApp: async () => raw, listApps: async () => [{ id: 'com.apple.TextEdit', displayName: 'TextEdit', windows: now }] }, nodeRepl: { write() {} } });

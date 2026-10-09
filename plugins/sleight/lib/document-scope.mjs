@@ -240,7 +240,9 @@ function guardSetup(update) {
             const start = clock();
             const now = await cua.listApps({ emit: false }).then(apps => apps.filter(a => a.id === prior.id).map(a => a.windows ?? []), () => null);
             // Unchanged windows, or an app the acquisition launched whose one window is the read's.
-            const same = now?.length === 1 && (JSON.stringify(now[0]) === JSON.stringify(prior.windows) ||
+            // Engine 26.1002.52244 lists no windows at all, and two empty lists prove nothing, so
+            // then the guard reads (2026-10-09).
+            const same = now?.length === 1 && now[0].length > 0 && (JSON.stringify(now[0]) === JSON.stringify(prior.windows) ||
               (prior.windows.length === 0 && now[0].length === 1 && now[0][0].title === prior.title));
             if (state.timing) nodeRepl.write('[sleight:guard-timing]' + JSON.stringify({ phase: same ? 'reused' : 'reuse-refused', ms: clock() - start, chars: same ? prior.text.length : 0, failed: false }) + '\\n');
             if (same) text = prior.text;
