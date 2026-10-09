@@ -56,20 +56,21 @@ and an iOS runtime (`xcodebuild -downloadPlatform iOS`, 8 GB). Without them its 
 The [initial report](benchmarks/2026-10-08-real-use-tasks.md) and
 [Known problems](known-problems.md) retain the earlier failed qualification passes.
 
-The round-5 [report](benchmarks/2026-10-08-real-use-tasks-5.md) records 16 of 18 slots, 6 passes,
-10 setup failures and 2 unstarted Simulator slots. All 6 model trials passed.
+The round-6 [report](benchmarks/2026-10-09-real-use-tasks-6.md) retains the fixture-only diagnostics.
+Its 15 desktop slots await owner-away time. No model has run in round 6. Simulator is excluded.
+Safari's blank-window setup requires `--owner-away`, as does activation when background document
+Close commands are disabled. Use that flag only after the owner confirms they are away.
 
 | Task | Passed | Setup failures | Unstarted | Median s |
 |---|---|---|---|---|
-| safari-form | 0 | 3 | 0 | n/a |
-| helium-form | 3 | 0 | 0 | 18.2 |
-| preview-pdf | 0 | 3 | 0 | n/a |
-| finder-files | 3 | 0 | 0 | 52.2 |
-| textedit-calculator | 0 | 3 | 0 | n/a |
-| simulator-flow | 0 | 1 | 2 | n/a |
+| safari-form | 0 | 0 | 3 | n/a |
+| helium-form | 0 | 0 | 3 | n/a |
+| preview-pdf | 0 | 0 | 3 | n/a |
+| finder-files | 0 | 0 | 3 | n/a |
+| textedit-calculator | 0 | 0 | 3 | n/a |
 
-The Simulator cleanup stop left qualification incomplete. The final launch-identity fix has no
-live result yet.
+The round-5 [report](benchmarks/2026-10-08-real-use-tasks-5.md) records 16 of 18 slots, 6 passes,
+10 setup failures and 2 unstarted Simulator slots. All 6 model trials passed.
 
 ## Time per run
 

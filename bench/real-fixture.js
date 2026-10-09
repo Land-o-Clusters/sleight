@@ -71,13 +71,18 @@ function chooseFileMenu(file, titles, api) {
   try {
     api.press(file);
     menus = api.children(file).filter(function (child) { return api.text(child, 'AXRole') === 'AXMenu'; });
-    var items = [];
+    var items = [], allItems = [];
     menus.forEach(function (menu) {
       var children = api.children(menu);
       api.inspect && api.inspect(children);
-      items = items.concat(children.filter(function (item) { return titles.indexOf(api.text(item, 'AXTitle')) !== -1; }));
+      allItems = allItems.concat(children);
     });
+    for (var index = 0; index < titles.length; index++) {
+      items = allItems.filter(function (item) { return api.text(item, 'AXTitle') === titles[index] && (!api.enabled || api.enabled(item)); });
+      if (items.length) break;
+    }
     if (items.length !== 1) throw new Error('Fixture menu item unavailable or ambiguous');
+    if (api.beforePress) api.beforePress();
     api.press(items[0]);
   } catch (error) {
     try { api.cancel(menus.length === 1 ? menus[0] : file); }
@@ -90,16 +95,31 @@ function closeOwnedWindow(window, request, app, api) {
   if (!window || !api.exists(window)) return;
   if (!api.matches(window, request, true)) throw new Error('Owned fixture document identity changed');
   if (request.mode === 'document') {
-    if (!api.equal(api.focused(app), window)) throw new Error('Owned document lost focus; cleanup refused');
-    api.closeDocument(app);
+    var validate = function () {
+      if (!api.exists(window) || !api.matches(window, request, true)) throw new Error('Owned fixture document identity changed');
+      if (!api.equal(api.focused(app), window)) throw new Error('Owned document lost focus; cleanup refused');
+    };
+    validate();
+    api.closeDocument(app, validate, request);
   } else api.closeButton(window);
   for (var attempt = 0; attempt < 30; attempt++) {
     api.wait();
     if (!api.exists(window)) return;
-    api.discard(window);
     if (request.mode === 'document' && !api.matches(window, request, true)) return;
+    api.discard(window);
   }
   throw new Error('Owned fixture window is still open');
+}
+
+function closeDocumentSafely(app, request, validate, api) {
+  try { api.menu(app, validate); }
+  catch (error) {
+    if (request.ownerAway !== true || error.menuCleanupError || error.message !== 'Fixture menu item unavailable or ambiguous') throw error;
+    validate();
+    api.activate(app);
+    validate();
+    api.menu(app, validate);
+  }
 }
 
 function nativeAX(state, clock) {
@@ -133,11 +153,12 @@ function nativeAX(state, clock) {
     });
     return result;
   }
-  function fileMenu(app, titles) {
+  function fileMenu(app, titles, beforePress) {
     var bar = read(app, 'AXMenuBar');
     var files = children(bar).filter(function (item) { return text(item, 'AXTitle') === 'File'; });
     if (files.length !== 1) throw new Error('Fixture needs the File menu');
-    chooseFileMenu(files[0], titles, { press: press, children: children, text: text, cancel: function (menu) {
+    chooseFileMenu(files[0], titles, { press: press, children: children, text: text, beforePress: beforePress,
+      enabled: function (item) { return Number(ObjC.unwrap(read(item, 'AXEnabled'))) === 1; }, cancel: function (menu) {
       var method = 'AXCancel';
       if (Number($.AXUIElementPerformAction(menu, $('AXCancel'))) !== 0) {
         var pidRef = Ref();
@@ -149,7 +170,10 @@ function nativeAX(state, clock) {
       }
       clock.emit({ stage: 'menu-cancel', menuCancelled: true, menuCancelMethod: method });
     }, inspect: function (items) {
-      clock.emit({ stage: 'menu-items', menuItems: items.map(function (item) { return text(item, 'AXTitle'); }) });
+      clock.emit({ stage: 'menu-items', menuItems: items.map(function (item) {
+        var title = text(item, 'AXTitle');
+        return /^New .+ Window$/.test(title) && title !== 'New Private Window' ? 'New <profile> Window' : title;
+      }), menuCommands: items.map(function (item) { return { title: text(item, 'AXTitle'), enabled: Number(ObjC.unwrap(read(item, 'AXEnabled'))) === 1 }; }) });
     } });
   }
   function path(value) {
@@ -161,9 +185,10 @@ function nativeAX(state, clock) {
     var document = text(window, 'AXDocument');
     if (document) {
       if (request.target && request.target.indexOf('http://') === 0) return document.indexOf(request.target) === 0;
-      var current = path(document);
-      if (current && request.target) return current === request.target ||
-        (request.mode === 'folder' && current.indexOf(request.target + '/') === 0);
+      var current = path(document), expected = request.target && request.target[0] === '/' ?
+        path(String(ObjC.unwrap($.NSURL.fileURLWithPath(request.target).absoluteString))) : null;
+      if (current && expected) return current === expected ||
+        (request.mode === 'folder' && current.indexOf(expected + '/') === 0);
       return false;
     }
     var title = text(window, 'AXTitle');
@@ -184,14 +209,29 @@ function nativeAX(state, clock) {
       function describe(window) {
         if (!window) return { present: false };
         var document = text(window, 'AXDocument');
+        var current = path(document), normalizedTarget = request.target && request.target[0] === '/' ?
+          path(String(ObjC.unwrap($.NSURL.fileURLWithPath(request.target).absoluteString))) : null;
         return { present: true, matches: matches(window, request),
           documentKind: document.indexOf('file://') === 0 ? 'file-url' : document.indexOf('http') === 0 ? 'web-url' : document ? 'other' : 'absent',
-          titleMatches: text(window, 'AXTitle').indexOf(request.token) !== -1 };
+          titleMatches: text(window, 'AXTitle').indexOf(request.token) !== -1,
+          pathAvailable: !!current, pathMatchesNormalizedTarget: !!current && current === normalizedTarget };
       }
       return { focused: describe(read(app, 'AXFocusedWindow')), main: describe(read(app, 'AXMainWindow')) };
     },
     closeButton: function (window) { var button = read(window, 'AXCloseButton'); if (!button) throw new Error('Owned window has no close button'); press(button); },
-    closeDocument: function (app) { fileMenu(app, ['Close Window', 'Close']); },
+    closeDocument: function (app, validate, request) {
+      closeDocumentSafely(app, request, validate, {
+        menu: function (target, beforePress) { fileMenu(target, ['Close Selected PDF Document', 'Close'], beforePress); },
+        activate: function (target) {
+          var pidRef = Ref();
+          if (Number($.AXUIElementGetPid(target, pidRef)) !== 0) throw new Error('Document activation lost the app identity');
+          var running = $.NSRunningApplication.runningApplicationWithProcessIdentifier(Number(pidRef[0]));
+          if (running.isNil() || !running.activateWithOptions(0)) throw new Error('Owned document app activation failed');
+          clock.emit({ stage: 'foreground-fallback', foregroundFallback: true });
+          waitForLaunch();
+        },
+      });
+    },
     discard: function (window) {
       var sheets = children(window, 'AXSheets');
       if (!sheets.length) return;
@@ -211,7 +251,7 @@ function run(argv) {
       get terminate() { terminated = true; return true; } };
     return JSON.stringify({ quit: quitFixtureApplication(42, 'com.apple.Preview', function () {
       return terminated ? null : fake;
-    }, function () {}) });
+    }, function () {}), path: request.path ? String(ObjC.unwrap($.NSURL.fileURLWithPath(request.path).URLByResolvingSymlinksInPath.path)) : undefined });
   }
   var allowed = ['com.apple.Safari', 'com.apple.Preview', 'com.apple.finder',
     'com.apple.TextEdit', 'com.apple.calculator', 'com.apple.dt.Devices', 'com.apple.iphonesimulator', 'net.imput.helium'];
