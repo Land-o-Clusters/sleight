@@ -53,6 +53,45 @@ test('two timeouts from one app do not advise restarting ChatGPT without indepen
   assert.match(advice, /could not distinguish/);
 });
 
+test('the first read of an app each turn says when its windows are on another Space', async () => {
+  const probed = [];
+  const away = { status: 'responding', windows: 0, minimized: 0, hidden: false, onScreen: 0, allWindows: 1, fullScreenSpace: true };
+  const h = harness({ spaceProbe: async app => { probed.push(app); return away; } });
+  helperRead(h, 1, 'let app = await cua.getApp("TextEdit")');
+  helperReply(h, 1, 'Window: "a.txt", App: TextEdit', false);
+  await tick(); await tick();
+  assert.deepEqual(probed, ['textedit']);
+  assert.match(h.toClient.find(msg => msg.id === 1).result.content.at(-1).text, /full-screen or Split View Space, and none of TextEdit's windows are on it/);
+  helperRead(h, 2, 'let app = await cua.getApp("TextEdit")');
+  helperReply(h, 2, 'Window: "a.txt", App: TextEdit', false);
+  await tick(); await tick();
+  assert.deepEqual(probed, ['textedit'], 'one check per app per turn');
+  h.fromClient({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'turn_ended', arguments: {} } });
+  helperRead(h, 4, 'let app = await cua.getApp("TextEdit")');
+  helperReply(h, 4, 'Window: "a.txt", App: TextEdit', false);
+  await tick(); await tick();
+  assert.deepEqual(probed, ['textedit', 'textedit'], 'checked again next turn');
+});
+
+test('a read is not held up or annotated when the Space check finds the window on screen, fails or is slow', async t => {
+  for (const spaceProbe of [async () => ({ status: 'responding', windows: 1, minimized: 0, hidden: false, onScreen: 1, allWindows: 1, fullScreenSpace: true }),
+    async () => { throw new Error('osascript failed'); }]) {
+    const h = harness({ spaceProbe });
+    helperRead(h, 1, 'let app = await cua.getApp("TextEdit")');
+    helperReply(h, 1, 'Window: "a.txt", App: TextEdit', false);
+    await tick(); await tick();
+    assert.equal(h.toClient.find(msg => msg.id === 1).result.content.length, 1);
+  }
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = harness({ spaceProbe: () => new Promise(() => {}) });
+  helperRead(h, 1, 'let app = await cua.getApp("TextEdit")');
+  helperReply(h, 1, 'Window: "a.txt", App: TextEdit', false);
+  await tick();
+  assert.ok(!h.toClient.some(msg => msg.id === 1), 'waits for the check');
+  t.mock.timers.tick(600); await tick(); await tick();
+  assert.equal(h.toClient.find(msg => msg.id === 1).result.content.length, 1, 'answers after 600 ms without a note');
+});
+
 test('an app hang is diagnosed before its second failed reply and uses a fresh guarded control read', async () => {
   const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');
   const h = harness({ diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, {

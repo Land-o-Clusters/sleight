@@ -153,7 +153,14 @@ our own runs. Dates and engine versions are given where they matter.
   `noWindowsAvailable`, sleight's `drag` refuses the off-screen window, and TextEdit's reads timed
   out. A pass with the Claude app in Split View failed 8 of 21 runs, all in TextEdit, Chess and the
   simulator (`docs/benchmarks/2026-10-08-await-split-view.json`). Moving a window into a full-screen
-  Space needs private macOS APIs, so leave full screen while sleight drags.
+  Space needs private macOS APIs, so leave full screen while sleight drags. After 1.1.0 (unreleased)
+  the first read of each app in a turn tells Claude when the front window is in full screen and none
+  of the app's windows are on screen, and a read that times out twice gets the same advice instead of
+  "cause unknown". This was checked live once, with a fixture app in full screen and Calculator
+  behind it (the note arrived with a 1,063 ms read). On another Space an app's windows drop out of
+  its Accessibility window list. The check counts them through CGWindowList instead. It can't tell a
+  window on another Space from one that's ordered out, so an app with only hidden panels left would
+  get the note too, but only while the user is in full screen.
 
 ## Clipboard
 
@@ -246,6 +253,10 @@ our own runs. Dates and engine versions are given where they matter.
   Doctor probes inventory, which does not prove that every app's accessibility read works. Before
   0.7.0 it also reported "ok" when the helper couldn't start at all.
   [The investigation](benchmarks/2026-10-04-helper-health.md) records each live attempt.
+- The AX check of the target app waits 0.5 s, which a busy Mac can miss. On 2026-10-09, with a load
+  average of 101 from other processes, TextEdit, Safari and Calculator missed it in 5 of 5 probes and
+  answered in 0.27 to 0.52 s with a 6 s deadline. A read failure then can be diagnosed as a hung app,
+  with advice to quit and reopen it. Not fixed yet.
 - The helper quits about 20 seconds after it goes idle and relaunches on the next call. A call
   during that restart can fail with "native pipe startup failed" before it reaches any app; another
   session hit it three times in a row on 2026-10-05 while doctor passed, and we don't know why it

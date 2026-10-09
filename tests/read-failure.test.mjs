@@ -43,3 +43,18 @@ test('independent probe failures and absent control apps stay unknown', async ()
   });
   assert.equal(absent.kind, 'unknown');
 });
+test('an app whose windows are all on another Space is diagnosed without a control app', async () => {
+  // On another Space an app's windows leave AXWindows, so only CGWindowList counts them.
+  const away = { status: 'responding', windows: 0, minimized: 0, hidden: false, onScreen: 0, allWindows: 2, fullScreenSpace: true };
+  assert.equal(module.offSpace(away), true);
+  assert.equal(module.offSpace({ status: 'timeout', hidden: false, onScreen: 0, allWindows: 1, fullScreenSpace: true }), true);
+  for (const health of [{ ...away, onScreen: 1 }, { ...away, hidden: true }, { ...away, minimized: 2 }, { ...away, allWindows: 0 },
+    { ...away, fullScreenSpace: false }, { ...away, fullScreenSpace: undefined }, { status: 'absent' }]) {
+    assert.equal(module.offSpace(health), false, JSON.stringify(health));
+  }
+  const diagnosis = await module.diagnoseReadFailure('TextEdit', undefined, { probeApp: async () => away });
+  assert.equal(diagnosis.kind, 'app-off-space');
+  const advice = module.readFailureAdvice('TextEdit', diagnosis);
+  assert.match(advice, /none of TextEdit's windows are on it/); assert.match(advice, /full-screen or Split View/);
+  assert.doesNotMatch(advice, /quit|restart ChatGPT/i);
+});

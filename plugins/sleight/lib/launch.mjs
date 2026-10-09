@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { discoverExtensions } from './browser-discovery.mjs';
 import { createRelay } from './relay.mjs';
-import { diagnoseReadFailure } from './read-failure.mjs';
+import { diagnoseReadFailure, probeAppHealth } from './read-failure.mjs';
 import { loadFlowRules } from './flow-rules.mjs';
 import { InputLease } from './input-lease.mjs';
 import { loadPreapproved } from './preapproved.mjs';
@@ -458,6 +458,7 @@ export async function run({ leaseDirectory } = {}) {
 
   const relay = createRelay({
     diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, { readControl }),
+    spaceProbe: probeAppHealth,
     clientIn: process.stdin,
     clientOut: process.stdout,
     serverIn: child.stdin,

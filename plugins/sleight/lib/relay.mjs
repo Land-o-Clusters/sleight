@@ -69,7 +69,7 @@ import { isInventoryRead } from './inventory-read.mjs';
 import { createReadCompactor } from './compact-reads.mjs';
 import { forbiddenTargetWarning, isForbiddenSettingsWindow, refusedApp } from './blocked-apps.mjs';
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
-import { readFailureAdvice } from './read-failure.mjs';
+import { offSpace, offSpaceNote, readFailureAdvice } from './read-failure.mjs';
 
 // `app.click(3); …` with no await and more code after it: the call goes on without the action,
 // and a failure then ends the session. A last statement is fine, since the call returns its promise.
@@ -208,6 +208,8 @@ export function createRelay({
   guardTiming = false,
   firstCallRules,
   diagnoseRead,
+  // Probes an app's windows outside the engine ({ status, windows, minimized, hidden, onScreen }).
+  spaceProbe,
   trace: writeTrace = () => {},
 }) {
   const compactor = createReadCompactor();
@@ -285,6 +287,9 @@ export function createRelay({
   const lateDiagnosticControls = new Map();
   let diagnosisGeneration = 0;
   const helperAdvice = key => readFailureAdvice(key, helperStates.get(key)?.diagnosis);
+  // Apps whose windows were checked against the current Space this turn, and the reads that wait
+  // on that check: call id -> { app, health }.
+  const spaceChecked = new Set(), spaceChecks = new Map();
 
   function invalidateDiagnostics() {
     diagnosisGeneration++;
@@ -950,6 +955,7 @@ export function createRelay({
     releaseLeases();
     turnId = randomUUID();
     turnUsed = false;
+    spaceChecked.clear();
   }
 
   lines(clientIn, line => {
@@ -1174,6 +1180,12 @@ export function createRelay({
           if (!helperProbes.has(msg.id)) {
             helperActive = healthPlan.key;
             if (healthPlan.handle) helperHandles.set(healthPlan.handle, healthPlan);
+            // The first read of an app each turn also checks, alongside the engine, whether the
+            // app's windows are on the current Space, so Claude hears it before a drag fails.
+            if (spaceProbe && healthPlan.selector && !healthPlan.key.startsWith('window:') && !spaceChecked.has(healthPlan.key)) {
+              spaceChecked.add(healthPlan.key);
+              spaceChecks.set(msg.id, { app: healthPlan.key, health: Promise.resolve().then(() => spaceProbe(healthPlan.key)).catch(() => undefined) });
+            }
           }
         }
         changeCalls.set(msg.id, { read, safe, entry, window: lastWindow, expected: documentKey(lastWindow), target: leaseWindow ?? lastWindow,
@@ -1291,6 +1303,21 @@ export function createRelay({
     observeServerMessage(msg);
   });
   function observeServerMessage(msg) {
+    if (msg.method === undefined && spaceChecks.has(msg.id)) {
+      // The probe takes about 150 ms against the engine's 400 ms or more, so this rarely waits.
+      const check = spaceChecks.get(msg.id); spaceChecks.delete(msg.id);
+      const deadline = new Promise(resolve => setTimeout(resolve, 600).unref?.());
+      Promise.race([check.health, deadline]).then(health => {
+        if (offSpace(health) && Array.isArray(msg.result?.content)) {
+          const text = msg.result.content.filter(c => c.type === 'text').map(c => c.text).join('\n');
+          const app = windowFromText(text)?.app ?? check.app;
+          msg.result.content.push({ type: 'text', text: offSpaceNote(app) });
+          trace('off-space', { id: msg.id, app, health });
+        }
+        observeServerMessage(msg);
+      });
+      return;
+    }
     if (msg.method === undefined && Array.isArray(msg.result?.content)) {
       msg.result.content = stripGuardTiming(msg.result.content, metric => trace('guard-read', { id: msg.id, ...metric }));
     }
