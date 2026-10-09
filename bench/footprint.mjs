@@ -4,7 +4,7 @@
 // exits between samples loses at most its last second.
 import { execFile } from 'node:child_process';
 
-const defaultPs = () => new Promise(resolve => execFile('/bin/ps', ['-A', '-o', 'pid=,pgid=,time=,comm='],
+const defaultPs = () => new Promise(resolve => execFile('/bin/ps', ['-A', '-o', 'pid=,ppid=,pgid=,time=,comm='],
   { maxBuffer: 16 << 20 }, (error, out) => resolve(error ? '' : out)));
 
 // ps TIME is [[dd-]hh:]mm:ss.ss.
@@ -24,12 +24,22 @@ export function label(command) {
 export function startFootprint({ pgid, apps = [], intervalMs = 1000, ps = defaultPs }) {
   const seen = new Map(); // pid -> { label, group, first, last }
   let sampling = Promise.resolve(), firstSample = true;
+  // Descendants of the group count as the group: Codex starts its engine server in a process group
+  // of its own (2026-10-09), which a group-only sample missed.
+  const members = new Set();
   const sample = () => sampling = sampling.then(async () => {
+    const rows = [];
     for (const line of (await ps()).split('\n')) {
-      const m = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/.exec(line);
-      if (!m) continue;
-      const [, pid, group, time, command] = m;
-      const inGroup = Number(group) === pgid;
+      const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/.exec(line);
+      if (m) rows.push({ pid: m[1], ppid: m[2], group: Number(m[3]), time: m[4], command: m[5] });
+    }
+    for (const row of rows) if (row.group === pgid) members.add(row.pid);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const row of rows) if (!members.has(row.pid) && members.has(row.ppid)) { members.add(row.pid); grew = true; }
+    }
+    for (const { pid, time, command } of rows) {
+      const inGroup = members.has(pid);
       const name = label(command);
       const outside = name === 'engine helper' || apps.some(app => command.endsWith(`/${app}`));
       if (!inGroup && !outside) continue;
