@@ -44,6 +44,15 @@ Done: the relay "spike" was a timing bug (real relay time is about 0.4 s a pass)
 dropped: a first-call hint (8/12 runs still called `getState` first), trimming the engine's docs
 (about 0.1 s a run), and screenshot scaling (`perf/screenshot-scale`, 92 turns against 85 in 9 runs each).
 
+- Speed under load (owner, 2026-10-09). The owner's dev Mac always runs big local tests, and
+  sleight must hold up there as Codex does. Run the same tasks through sleight and Codex, unloaded
+  and under load, and find where sleight's extra time goes: its guard reads, its own Accessibility
+  checks (0.5 s deadline) and the relay. On 2026-10-09, at a load average of about 100, one engine
+  read took 17 s, and that engine is the one Codex uses too.
+- Batching (owner, 2026-10-09). Claude's own computer use groups more actions into one call. In 887 benchmark
+  transcripts, 62% of `js` calls that act send one action, and 35% of all calls only read. Find
+  what keeps Claude from batching (the guard's per-action reads, the skill, the tool description)
+  and measure fewer turns before releasing a change.
 - Model time is about two thirds of every run, so turns are the lever: each costs 2 to 2.7 s.
 - Guard reads after an action wait about 410 ms each for the UI to settle. A cheaper identity check
   (the engine's app inventory answers in 11 to 30 ms) for actions on coordinates, keys or text would keep
