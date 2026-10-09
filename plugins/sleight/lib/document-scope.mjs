@@ -51,6 +51,23 @@ export function hasLabel(line, label) {
   return false;
 }
 
+// Whether two lines for one element number are the same element. A read on a busy Mac can drop an
+// element's attributes and keep only its role and a name: "button Two" for "button Description: 2,
+// ID: Two" (5 of 5 batched calls under load, 2026-10-09). A bare line matches a fuller one when the
+// role is the same and the name is the fuller line's ID or label.
+export function sameElement(was, now) {
+  if (was === now) return true;
+  if (typeof was !== 'string' || typeof now !== 'string') return false;
+  const [full, bare] = was.length > now.length ? [was, now] : [now, was];
+  const role = /^[a-z][a-z ]*/.exec(bare)?.[0] ?? '';
+  for (let at = role.indexOf(' '); at >= 0; at = role.indexOf(' ', at + 1)) {
+    const name = bare.slice(at + 1);
+    if (!name || /,|: /.test(name) || !full.startsWith(bare.slice(0, at + 1))) continue;
+    if (hasIdentifier(full, name) || hasLabel(full, name)) return true;
+  }
+  return false;
+}
+
 export const documentKey = window => window && JSON.stringify(window);
 export const documentLabel = window => `${JSON.stringify(window.title)} in ${window.app}${window.url ? ` (${window.url})` : ''}`;
 
@@ -138,6 +155,7 @@ function guardSetup(update) {
     const elements = ${elementLines.toString()};
     const hasIdentifier = ${hasIdentifier.toString()};
     const hasLabel = ${hasLabel.toString()};
+    const sameElement = ${sameElement.toString()};
     const checkNative = () => { if (state.nativeDenied) throw new Error(state.nativeDenied); };
     const checkLease = async () => {
       if (!state.lease) return;
@@ -251,7 +269,7 @@ function guardSetup(update) {
           if (!state.callElements.has(proxy)) state.callElements.set(proxy, elements(text));
           else if (typeof args[0] === 'number' && !byId) {
             const was = state.callElements.get(proxy).get(args[0]), now = elements(text).get(args[0]);
-            if (was !== now) throw stop('sleight stopped before ' + name + '(' + args[0] + '): an earlier action in this call changed what element ' + args[0] + ' is (was ' + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + '). Read the window again and use its current numbers.');
+            if (!sameElement(was, now)) throw stop('sleight stopped before ' + name + '(' + args[0] + '): an earlier action in this call changed what element ' + args[0] + ' is (was ' + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + '). Read the window again and use its current numbers.');
           }
           const cancel = state.fileOnly && isCancel(name, args, text);
           if (state.cancelOnly && !cancel) throw new Error('Change review: Cancel target changed. Read the current window before retrying.');

@@ -258,8 +258,12 @@ our own runs. Dates and engine versions are given where they matter.
   workers running, it stopped 5 of 5 calls of eight Calculator clicks, saying an earlier click had
   changed what the next number was, against 0 of 5 without them. Without load the guard's reads
   took 3.0 s of those eight clicks' 3.6 s, against 0.6 s for the clicks alone
-  ([load-cost](benchmarks/2026-10-09-load-cost.json)). We haven't yet found which change in the tree
-  set it off.
+  ([load-cost](benchmarks/2026-10-09-load-cost.json)). Each stop came from a read that dropped the
+  element's attributes, `button Two` where the first read had `button Description: 2, ID: Two`, at
+  the same number. After 1.1.0 (unreleased) the guard takes such a bare line as the same element when
+  its role matches and its name is the fuller line's ID or label. That fix has unit tests and no
+  live run under load yet. The read compactor compares lines too, so a degraded read may also show
+  Claude a large diff or a stale-number stop. We haven't measured that.
 - The AX check of the target app waits 0.5 s, which a busy Mac can miss. On 2026-10-09, with a load
   average of 101 from other processes, TextEdit, Safari and Calculator missed it in 5 of 5 probes and
   answered in 0.27 to 0.52 s with a 6 s deadline. A read failure then can be diagnosed as a hung app,

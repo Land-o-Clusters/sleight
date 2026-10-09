@@ -4,7 +4,7 @@ import { runInNewContext } from 'node:vm';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { guardedCode, GUARD_MARK, GUARD_END } from '../plugins/sleight/lib/document-scope.mjs';
+import { guardedCode, GUARD_MARK, GUARD_END, sameElement } from '../plugins/sleight/lib/document-scope.mjs';
 
 const expected = { title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' };
 const tree = (window = expected, rows = '\t1 button Save, ID: Save') =>
@@ -88,6 +88,30 @@ test('a combined snapshot cannot preserve a stale number, ID or label after an a
       assert.deepEqual(f.calls.filter(c => c[0] === 'click'), [['click', 2], ['click', 3]]);
     }
   }
+});
+
+test('a read that drops an element\'s attributes under load still matches that element', async () => {
+  // Under load the engine read "button Two" where it had read "button Description: 2, ID: Two".
+  const full = '\t2 button Description: 1, ID: One\n\t3 button Description: 2, ID: Two';
+  const bare = '\t2 button One\n\t3 button Two';
+  let clicks = 0;
+  const f = fixture({ current: () => tree(expected, clicks ? bare : full), action: () => { clicks++; } });
+  await f.run('await app.click(2); await app.click(3);');
+  assert.deepEqual(f.calls.filter(c => c[0] === 'click'), [['click', 2], ['click', 3]]);
+  let moved = 0;
+  const g = fixture({ current: () => tree(expected, moved ? '\t2 button One\n\t3 button Three' : full), action: () => { moved++; } });
+  await assert.rejects(g.run('await app.click(2); await app.click(3);'), /changed what element 3 is/);
+});
+
+test('sameElement accepts only a bare line named by the fuller line\'s ID or label', () => {
+  assert.equal(sameElement('button Description: 2, ID: Two', 'button Two'), true);
+  assert.equal(sameElement('button Two', 'button Description: 2, ID: Two'), true);
+  assert.equal(sameElement('button Description: 2, ID: Two', 'button 2'), true, 'by description');
+  assert.equal(sameElement('toggle button Description: Bold, ID: bold', 'toggle button Bold'), true);
+  for (const now of ['button Three', 'checkbox Two', 'button Two, ID: Other', 'button', 'button Tw', undefined]) {
+    assert.equal(sameElement('button Description: 2, ID: Two', now), false, String(now));
+  }
+  assert.equal(sameElement(undefined, undefined), true);
 });
 
 test('new calls expire a combined snapshot; screenshots replace it with a fresh combined capture', async () => {

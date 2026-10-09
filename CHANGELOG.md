@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- On a busy Mac the engine can read an element without its attributes (`button Two` for
+  `button Description: 2, ID: Two`). The guard took that as a renumbered window and stopped 5 of 5
+  batched Calculator calls under load. It now matches such a bare line to the element by role and
+  ID or label. Unit-tested only.
 - When the user is in a full-screen or Split View Space and the app Claude reads has no window on
   it, the read says so, once per app per turn: clicks and typing still work there, and
   drags and some reads don't. A second read timeout in a row on such an app gets the same advice instead
