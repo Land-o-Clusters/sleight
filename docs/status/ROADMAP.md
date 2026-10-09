@@ -14,27 +14,23 @@ they're away. Sol works track 4, and sleight-arch works tracks 2 and 3 while the
    `pane/auto-mode`, to tell where the model aims from a regression.
 3. If no new failure is sleight's fault, the 1.0.0 steps in STATE, then the owner's install.
 
-## 2. Next release: fixes
+## 2. Fixes
 
-Chess and drag (owner, 2026-10-09: fix even though it isn't a regression):
+Done in 1.1.0 (2026-10-09): `drag` says when it timed out and releases a stuck button, refuses a
+covered drag with no text and points to `app.drag`; an un-awaited failed action keeps the session; a
+call that meets a restarting helper is resent once; a stale element number goes out as its line; an
+app sleight acted on that holds a keyboard tap is named at turn end. Measured and dropped: the 3D
+"press the head" hint, which backfired in a small Chess window.
 
-- `drag` tries the background first on covered non-text apps. Codex's engine drag moved a covered
-  Chess pawn (2026-10-09). Measure before changing the default.
-- `drag` reports when nothing changed, and the skill says 3D boards take a piece at its visible top
-  (every passing Chess run grabbed at y 1175 to 1202, every miss lower).
-- `drag.js` once exited "Command failed" with no message (chess-drag run 2, 2026-10-09).
+Open, in order of user impact (full list in [known-problems.md](../known-problems.md)):
 
-Known problems, in order of user impact (full list in [known-problems.md](../known-problems.md)):
-
-- Device Hub's keyboard tap froze the whole keyboard. The product, not only the benchmark, should
-  detect a stalled tap and say which app holds it.
 - Full screen and Split View failed 8 of 21 runs. Detect it before acting and say so.
-- A failing un-awaited action kills the JS session and every handle (3/3). Parse the code instead
-  of matching statement shapes.
-- The helper quits after about 20 s idle and the next call can fail. Keep it warm.
+- In the simulator, Claude's first tap on a Safari field often doesn't focus it (6 of 6 runs with shrunk
+  screenshots), and Claude second-guesses the screenshot's scale there.
 - `typeText` after select-all wrote `Engine01engine01`. Send exact text by paste and verify it.
 - The TextEdit save lock: the Shift-event fix measured 0/10 hangs, but we don't know why it works.
-- Diff reads refuse actions when a page renumbers its elements (8 refusals on CNN).
+- Live checks for the unit-tested 1.1.0 changes: the helper resend, the stale-number remap and the
+  keyboard-tap notice.
 - Smaller ones: a moved word in rich text should keep the formatting it had, `/sleight stop` in the
   desktop app, TextEdit's orphan Save Panel diagnosis, the doctor probing a per-app read, removing a
   stale launchd job without help, per-site flow rules, the `blocked_app` check missing a localized
@@ -43,25 +39,25 @@ Known problems, in order of user impact (full list in [known-problems.md](../kno
 
 ## 3. Performance (owner's goal: lightning fast)
 
-- Find the relay spikes: 0.37 s across 21 runs earlier, 9.98 s across 15 in the 2026-10-09
-  head-to-head, with 9 runs at 955 to 2,481 ms.
-- Stable-controls mode from `docs/design/engine-time.md` cut Calculator's sequence from 3,775 ms
-  to 801 ms. Guard reads were 78 of 150 s of engine time in that head-to-head.
-- Fewer turns: the skill shows acquiring and acting in one call (each turn costs 2 to 2.7 s of model
-  time).
-- A warm-up read right after launch, and measure the acquisition-read reuse (`03d9af7`), since one
-  cold Calculator read took 16.7 s.
-- Measure what the engine's 21,000-character first-call docs cost, then shrink or cache them.
+Done: the relay "spike" was a timing bug (real relay time is about 0.4 s a pass). Measured and
+dropped: a first-call hint (8/12 runs still called `getState` first), trimming the engine's docs
+(about 0.1 s a run), and screenshot scaling (`perf/screenshot-scale`, 92 turns against 85 in 9 runs each).
+
+- Model time is about two thirds of every run, so turns are the lever: each costs 2 to 2.7 s.
+- Guard reads after an action wait about 410 ms each for the UI to settle. A cheaper identity check
+  (the engine's app inventory answers in 11 to 30 ms) for actions on coordinates, keys or text would keep
+  the window check without the full read. Stable-controls mode (3,775 ms to 801 ms on Calculator)
+  gives up checks, so it stays out unless the owner chooses it.
+- A warm-up read right after launch (one cold Calculator read took 16.7 s).
 - textedit-save spent 7 to 17.5 s per run in guard reads. Fold the last read into Claude's own.
 
 ## 4. Realistic apps (Sol)
 
-- Brief 6 closes two safety gaps and the 10 setup failures, then qualifies five tasks.
-- Brief 7 adds localhost web pages of six kinds, Word, Excel and PowerPoint, and Mail on a fixture
-  mailbox.
-- Brief 7b adds Mimestream on the owner's Gmail. It only reads, and results leave out all mail.
-- sleight-arch reviews each round, reruns its checks and merges. simulator-flow runs with the owner
-  away.
+- Briefs 6, 7 and 7b are built. Qualification on 2026-10-09 went 3/3 each for Helium, Preview, Finder and TextEdit with
+  Calculator. Safari, helium-dense and word-edit blocked by harness problems.
+- Brief 8 fixes those. sleight-arch then reruns qualification with the owner away.
+- Mail and Mimestream run while the owner watches. simulator-flow runs with the owner away.
+- sleight-arch reviews, rebases onto `pane/auto-mode` and merges.
 
 ## 5. After 1.0, in the owner's order
 
