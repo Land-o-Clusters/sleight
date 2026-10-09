@@ -3,15 +3,20 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-09 01:30 UTC, releasing 0.16.0)
+## Banner (2026-10-09 01:25 UTC, 0.16.0 released; core head-to-head running)
 
-0.16.0 is the batch on `pane/auto-mode`: the desktop pane in Auto mode, the `await` check, pause
-guards for the foreground drag, `hover` and `menu_bar`, `drag` reading screenshot pixels, the
-`noWindowsAvailable` hint, the guard fix for lease-free clients, and the docs on ChatGPT's "Always
-allow" list. The Accessibility text move is in the code but off (TextEdit save deadlock, see
-known-problems). Release pass `docs/benchmarks/2026-10-09-release-0.16.0.json`: 20/21, textedit-drag
-3/3, chess-drag 2/3 (a second untitled Chess window covered the game). Release steps: fast-forward
-`main`, tag `v0.16.0`, GitHub release from the changelog, then update the owner's install.
+Released: `v0.16.0` (`fa23007` on `main`, README fix `9952faa` after it), CI green, GitHub release
+up. The owner's install is 0.16.0 at `9952faa`. Release pass 20/21 (`docs/benchmarks/2026-10-09-release-0.16.0.json`).
+LAWS now has the owner's rule to reread the README whole every release.
+
+Unreleased on `pane/auto-mode`: `drag` scales by its own window's screenshot (`2f3b512`).
+
+Running: the core head-to-head, `--arm sleight,codex --runs 3` (42 runs, log
+`.dev/passes/pass-h2h-core.log`). Its sleight arm ran `2f3b512`'s plugin code from 19 s in (the plugin
+loads from the working tree), so every drag run used per-window scaling. The Codex pilot passed
+1/1 each (`bench/results/2026-10-09T01-19-41-352Z.json`), so headless Codex computer use works. Its
+run took 4 model requests and 2 tool calls. The runner restored the owner's "Always allow"
+list byte for byte.
 
 Benchmark side, not in the plugin: the Codex arm (`bench/codex-arm.mjs`, `a8f2010`), dry runs only.
 `~/.codex-bench` holds the owner's bench login (done 2026-10-08) and a config with only the engine
