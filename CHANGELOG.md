@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- An action Claude didn't await that fails no longer ends the engine's JavaScript session. The guard
+  handles each action's promise and tells Claude which action failed. 1.0.0 lost the session and
+  its handles (1/1), and the fix kept them (3/3).
+- A `drag` that runs past its 30 s limit says it timed out, instead of returning only "Command
+  failed", and a mouse button it left pressed is released. It won't start a press after 20 s, and it
+  reads the window's elements once instead of twice. Chess took 9.4 s per read.
+- A covered drag with no selected text presses nothing and tells Claude to use the engine's
+  `app.drag`, which moved a covered Chess pawn where `drag`'s posts didn't.
+- The skill says to press a 3D Chess piece at its head. In the 1.0.0 head-to-head, sleight's three
+  Chess runs pressed lower and missed, and Codex's two passes pressed the head.
+- The benchmark counts an acquisition the relay sends ahead of a call's actions as engine time. It
+  had counted as relay time: 9.6 of the 9.98 s of relay time in the background head-to-head.
+
 ## 1.0.0 (2026-10-09)
 
 sleight's first stable release. Its release pass passed 19/21 in 165 turns and 912 s, at 2.59 s of

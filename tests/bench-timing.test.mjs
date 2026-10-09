@@ -26,6 +26,21 @@ test('splits tool time into engine, relay and local tools; a refusal is relay ti
     { totalMs: 10000, modelMs: 7000, calls: 3, refused: 1, toolMs: 2415, engineMs: 295, relayMs: 120, localMs: 2000, otherMs: 585 });
 });
 
+test('an acquisition sent ahead of its actions counts as engine time, not relay time', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'sleight-timing-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'trace-1.jsonl'), [
+    line(0, 'call-received', call(1, 'js')),
+    line(2, 'acquisition-split', { id: 1, acquisition: 'sleight-acquire-1' }),
+    line(3, 'to-server', call('sleight-acquire-1', 'js')), line(953, 'from-server', { id: 'sleight-acquire-1' }),
+    line(958, 'to-server', call(1, 'js')), line(1258, 'from-server', { id: 1 }),
+    line(1262, 'to-client', { jsonrpc: '2.0', id: 1, result: {} }),
+  ].join('\n') + '\n');
+  const timing = traceTiming(dir);
+  assert.equal(timing.engineMs, 950 + 300);
+  assert.equal(timing.relayMs, 1262 - 950 - 300);
+});
+
 test('no trace leaves only the model split', () => {
   assert.equal(traceTiming('/no/such/dir'), undefined);
   assert.deepEqual(runTiming({ duration_ms: 5000, duration_api_ms: 4000 }), { totalMs: 5000, modelMs: 4000 });

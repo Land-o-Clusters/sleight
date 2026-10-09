@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 // Only the native AX/CG boundary is replaced. run() does the real selection,
 // validation, coordinate conversion, mouse sequence and post-drop check.
-function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', setterFails = false, readFails = false, postFails = false, releaseFails = false, changeOnActivate = false, second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection, repairDeletesText = false, movedOnActivate = false, coveredEnd = false, coveredPid = 7, splitAreas = false, missingContent = false, extraElements = 0, stacked = false, raiseWorks = true, raiseActivates = false, offSpace = false, noWindows = false, appId = 'com.apple.TextEdit', busyChecks = 0, typesAt = null, ax = null, coverTitle = 'cover.txt' } = {}) {
+function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', setterFails = false, readFails = false, postFails = false, releaseFails = false, changeOnActivate = false, second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection, repairDeletesText = false, movedOnActivate = false, coveredEnd = false, coveredPid = 7, splitAreas = false, missingContent = false, extraElements = 0, stacked = false, raiseWorks = true, raiseActivates = false, offSpace = false, noWindows = false, appId = 'com.apple.TextEdit', busyChecks = 0, typesAt = null, ax = null, coverTitle = 'cover.txt', slowDelays = false } = {}) {
   // Other apps have no selected text unless a test says so: Chess has no text area at all.
   selection ??= appId === 'com.apple.TextEdit' ? 'alpha' : '';
   const events = [], restored = [], activations = [], pidEvents = [], mainWrites = [];
@@ -86,7 +86,10 @@ function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', se
     },
   };
   const delays = [];
-  const context = vm.createContext({ SLEIGHT_ACCESSIBILITY_MOVE: ax !== null, $, ObjC: { import() {}, unwrap: v => v, bindFunction() { if (!background) throw new Error('private API missing'); } }, delay: s => delays.push(s),
+  // slowDelays: every wait takes 30 s on the script's clock, as slow window reads would.
+  let clock = 0;
+  const context = vm.createContext({ SLEIGHT_ACCESSIBILITY_MOVE: ax !== null, $, ObjC: { import() {}, unwrap: v => v, bindFunction() { if (!background) throw new Error('private API missing'); } }, delay: s => { delays.push(s); if (slowDelays) clock += 30000; },
+    Date: { now: () => clock },
     Application: () => ({ processes: { whose: () => [proc] } }) });
   vm.runInContext(readFileSync(new URL('../plugins/sleight/lib/drag.js', import.meta.url), 'utf8'), context);
   context.findApp = () => target;
@@ -435,4 +438,17 @@ test('an untitled window of the same app over a drag point is named as a likely 
   assert.equal(dialog.ok, false); assert.match(dialog.error, /no title \(windowId 33\), likely a dialog or sheet: finish or close it/);
   const titled = harness({ coveredEnd: true }).run({ windowId: 11 });
   assert.match(titled.error, /covered by another window of TextEdit \(windowId 33, "cover.txt"\)/);
+});
+
+test('a drag that spent its time budget before pressing presses nothing', () => {
+  for (const background of [true, false]) {
+    const h = harness({ background, slowDelays: true }); const r = h.run({ windowId: 11 });
+    assert.equal(r.ok, false); assert.match(r.error, /over 20 s.*nothing was pressed/);
+    assert.equal(h.events.length, 0); assert.equal(h.pidEvents.length, 0);
+  }
+});
+test('a covered drag with no selected text presses nothing and points to the engine drag', () => {
+  const h = harness({ background: true, appId: 'com.apple.Chess', coveredEnd: true, coveredPid: 9 }); const r = h.run({ windowId: 11 });
+  assert.equal(r.ok, false); assert.match(r.error, /Use the engine's app\.drag.*nothing was pressed/);
+  assert.equal(h.pidEvents.length, 0); assert.equal(h.events.length, 0); assert.equal(h.activations.length, 0);
 });

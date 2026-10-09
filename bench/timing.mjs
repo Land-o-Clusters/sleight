@@ -18,6 +18,9 @@ export function traceTiming(dir) {
   try { files = readdirSync(dir).filter(f => /^trace-\d+\.jsonl$/.test(f)); } catch { return undefined; }
   if (!files.length) return undefined;
   const calls = new Map();
+  // An acquisition the relay sends ahead of the call's actions travels under its own id
+  // (`acquisition-split`). Its engine round trip belongs to the call, as engine time.
+  const acquisitions = new Map();
   for (const file of files) {
     for (const line of readFileSync(join(dir, file), 'utf8').split('\n')) {
       if (!line) continue;
@@ -26,6 +29,13 @@ export function traceTiming(dir) {
       const t = Date.parse(e.t), id = e.msg?.id;
       if (id === undefined) continue;
       const key = `${file}:${id}`;
+      if (e.direction === 'acquisition-split') { acquisitions.set(`${file}:${e.msg.acquisition}`, key); continue; }
+      const owner = calls.get(acquisitions.get(key));
+      if (owner) {
+        if (e.direction === 'to-server' && owner.acquireSent === undefined) owner.acquireSent = t;
+        if (e.direction === 'from-server' && e.msg.method === undefined && owner.acquireSent !== undefined && owner.acquireDone === undefined) owner.acquireDone = t;
+        continue;
+      }
       if (e.direction === 'call-received' && TOOLS.has(e.msg.params?.name) && !calls.has(key)) {
         calls.set(key, { tool: e.msg.params.name, received: t });
       }
@@ -43,13 +53,14 @@ export function traceTiming(dir) {
   const local = done.filter(c => LOCAL.has(c.tool)), relayed = done.filter(c => !LOCAL.has(c.tool));
   const sum = (list, f) => list.reduce((total, c) => total + f(c), 0);
   const guardReads = done.flatMap(c => c.guardReads ?? []);
+  const acquireMs = c => c.acquireSent !== undefined && c.acquireDone !== undefined ? c.acquireDone - c.acquireSent : 0;
   return {
     calls: done.length,
     refused: relayed.filter(c => c.sent === undefined).length,
     toolMs: sum(done, c => c.answered - c.received),
-    engineMs: sum(relayed, c => c.sent !== undefined && c.engineDone !== undefined ? c.engineDone - c.sent : 0),
-    relayMs: sum(relayed, c => c.sent === undefined || c.engineDone === undefined ? c.answered - c.received
-      : (c.sent - c.received) + (c.answered - c.engineDone)),
+    engineMs: sum(relayed, c => (c.sent !== undefined && c.engineDone !== undefined ? c.engineDone - c.sent : 0) + acquireMs(c)),
+    relayMs: sum(relayed, c => (c.sent === undefined || c.engineDone === undefined ? c.answered - c.received
+      : (c.sent - c.received) + (c.answered - c.engineDone)) - acquireMs(c)),
     localMs: sum(local, c => c.answered - c.received),
     ...(guardReads.length ? { guardReads: guardReads.length,
       guardReadMs: sum(guardReads, r => r.ms), guardReadFailures: guardReads.filter(r => r.failed).length } : {}),

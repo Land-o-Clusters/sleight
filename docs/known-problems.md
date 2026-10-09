@@ -114,6 +114,10 @@ our own runs. Dates and engine versions are given where they matter.
   at those points left e2 unchanged. Screenshot coordinates moved e2 to e4 through the product's
   background path. Pointer and front app varied during that trial, so quiet Chess delivery remains
   unmeasured. Use the engine's `app.drag` first for Chess, and read the board after any local post.
+  With the Claude app's window over the board (2026-10-09), the engine's `app.drag` moved a pawn
+  (1/1) where `drag`'s background posts at the same points didn't (0/2). `drag` now refuses a covered
+  drag that has no selected text and points to `app.drag`. On that board `drag` took 11 to 14 s, 9.4 s
+  of it reading the window's elements through System Events before it could press anything.
   Chess save/close recovery selected another session's game even after the owned window's
   `AXMain` and `AXRaise`. It refused further engine input. The last native read still found the
   product fixture (window 240864) open on e4. Its save and close remain unverified.
@@ -207,12 +211,13 @@ our own runs. Dates and engine versions are given where they matter.
   Claude reads them again (8 refusals, 6 correct passes and none wrong in CNN trials). Literal
   numbers only: a call that computes an element number is refused in that state. If Claude Code summarizes the conversation, Claude can lose the tree a diff refers
   to, as with the engine's own diffs. A read with `disableDiffing: true` comes through whole.
-- An action called without `await` that fails can end the engine's JavaScript session, and every
-  handle with it (`app.click(1); "x"` on a disabled Calculator element, 3/3 on 2026-10-07). sleight
-  notices when the engine's first-call docs come back without a `js_reset` and tells Claude, but the
-  call that restarted it may have done nothing. Since 0.16.0 the relay refuses a call whose action is
-  a statement without `await` with more code after it. It doesn't see an un-awaited action inside an
-  expression or a callback, and a last statement is left alone because the call returns its promise.
+- An action called without `await` that fails used to end the engine's JavaScript session, and every
+  handle with it (`app.click(1); "x"` on a disabled Calculator element, 3/3 on 2026-10-07). The guard
+  now attaches a handler to each action's promise and tells Claude which action failed. With
+  `const p = app.click(99999)` and more code after it, 1.0.0 reset the session (1/1) and the fix
+  kept it with the failure reported (3/3, Chess, 2026-10-09). A promise chained off an action
+  (`app.click(1).then(f)` assigned and not awaited) still rejects unhandled. The relay also refuses
+  a call whose action is a statement without `await` with more code after it.
 - The engine's helper can stop answering. On 2026-10-04 every `cua.getApp` timed out
   (`-10005 timeoutReached`) for about 25 minutes, with the Mac unlocked and in use, until ChatGPT was
   restarted. We don't know the cause. It started right after a test that kills engine processes.
@@ -281,6 +286,9 @@ our own runs. Dates and engine versions are given where they matter.
   saving no`. It still answered AppleScript, but its only window was an orphan "Save Panel Accessory
   View" that Accessibility didn't list. The relay's message again named a stuck helper, while
   `--doctor` passed. Quitting TextEdit fixed it.
+- In the 1.0.0 pass, Claude's first tap in the simulator missed the Message field, and four later
+  taps on the field followed by `typeText`, one with Device Hub's Capture Keyboard on, left it empty
+  (1 of 3 runs). We don't know why the later taps didn't focus it.
 - In the iPhone simulator (2026-10-07), Claude's first `typeText` into a Safari field once came out
   garbled and uppercased, and its paste fallback inserted other text: the simulator shares the
   Mac's clipboard. Claude cleared the field both times and typed it right, so 3/3 runs passed, but a

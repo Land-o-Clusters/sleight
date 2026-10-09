@@ -17,7 +17,7 @@ ObjC.import('CoreGraphics');
 // space the owner typed into Claude went into TextEdit's selection mid-drag
 // (2026-10-08). So it starts only after IDLE_S without any input, waits up to
 // WAIT_S for that, and checks for keys typed once it has taken focus.
-const IDLE_S = 2, WAIT_S = 10;
+const IDLE_S = 2, WAIT_S = 10, PRESS_BUDGET_MS = 20000;
 const sinceInput = type => $.CGEventSourceSecondsSinceLastEventType(1, type); // HID system state
 function waitForIdle() {
   for (let waited = 0; ;) {
@@ -418,7 +418,12 @@ function coveringApp(list, main, points) {
 function run(argv) {
   let previous = null, saved = null, pid = null, pressed = false, didPress = false, post = null, current = null;
   let path = 'none', fallbackReason = null, units = {};
-  let backgroundSnapshot = null;
+  let backgroundSnapshot = null, scanned = null;
+  // The launcher stops this process at 30 s, maybe mid-press. Never start a press late.
+  const startedAt = Date.now();
+  const withinBudget = () => {
+    if (Date.now() - startedAt > PRESS_BUDGET_MS) throw new Error(`reading the window took over ${PRESS_BUDGET_MS / 1000} s, too close to the 30 s limit to start a drag; nothing was pressed. Read the window again, then retry once`);
+  };
   const unchangedText = () => {
     if (backgroundSnapshot && (backgroundSnapshot.el.value() !== backgroundSnapshot.text ||
         backgroundSnapshot.el.attributes.byName('AXSelectedText').value() !== backgroundSnapshot.selected)) {
@@ -456,7 +461,8 @@ function run(argv) {
       delay(settleMs / 1000);
       checkWindow(main, pid, win);
       const isTextEdit = ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit';
-      const points = validatePoints(content(win, main.bounds), main.bounds, pointFrom, pointTo, isTextEdit, app);
+      scanned = { info: content(win, main.bounds), bounds: main.bounds };
+      const points = validatePoints(scanned.info, main.bounds, pointFrom, pointTo, isTextEdit, app);
       if (points.text) points.text.pid = pid;
       // Another document of this app must not receive the press: check fresh
       // own-app order at both ends, then other apps' coverage below.
@@ -464,8 +470,13 @@ function run(argv) {
       exposedEndpoints(ordered, main, points, true);
       // The window server picks the drop target from what is on screen at the
       // drop point, so a window another app covers never receives a background
-      // drop (0/3 covered, 3/3 uncovered, 2026-10-05). Go straight to foreground.
+      // drop (0/3 covered, 3/3 uncovered, 2026-10-05). Chess ignored our covered
+      // posts too (0/2, 2026-10-09), though the engine's app.drag moved the same
+      // pawn there. Go straight to foreground.
       const cover = coveringApp(ordered, main, points);
+      // Without selected text this tool has no hold to offer, and its foreground path missed Chess
+      // in every covered run of the 2026-10-09 head-to-head. Keep the pointer and say what works.
+      if (cover && !points.text) throw new Error(`${cover} covers the window at the drag points, and this drag has no selected text. Use the engine's app.drag in js instead: it reaches a covered window (it moved a covered Chess pawn where this tool's posts didn't); nothing was pressed`);
       if (cover) fallbackReason = `background skipped: ${cover} covers the window at the drag points`;
       // A text move can be done without any pointer at all: the foreground
       // path took the owner's pointer and focus mid-sentence (2026-10-08). The write
@@ -512,6 +523,7 @@ function run(argv) {
           $.CGEventPostToPid(pid, item.event);
         };
         let postingError, releaseError;
+        withinBudget();
         try {
           post(sequence[0]); delay(0.05);
           // Mark down before posting, so a posting exception still releases.
@@ -568,7 +580,10 @@ function run(argv) {
     delay(settleMs / 1000);
     main = windows(true).find(w => w.id === main.id && w.pid === pid && w.layer === 0);
     if (!main || !sameBounds(frame(win), main.bounds)) throw new Error('the chosen window changed or disappeared; read it again');
-    const { start, end, text } = validatePoints(content(win, main.bounds), main.bounds, pointFrom, pointTo, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit', app);
+    // Each content scan is hundreds of Apple Events. Reuse the background path's scan while the
+    // window hasn't moved: two scans of Chess ran past the launcher's 30 s limit (2026-10-09).
+    const info = scanned && sameBounds(scanned.bounds, main.bounds) ? scanned.info : content(win, main.bounds);
+    const { start, end, text } = validatePoints(info, main.bounds, pointFrom, pointTo, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit', app);
     if (text) text.pid = pid;
     // Match the exact window at both endpoints, even for another window of
     // the same app. The engine cursor overlay lets events through.
@@ -576,6 +591,7 @@ function run(argv) {
     const unchanged = currentWindows.find(w => w.id === main.id && w.pid === pid);
     if (!unchanged || !sameBounds(unchanged.bounds, main.bounds)) throw new Error('the chosen window moved during validation; read it again');
     exposedEndpoints(currentWindows, main, { start, end }, false);
+    withinBudget();
     post = (type, p) => {
       const e = $.CGEventCreateMouseEvent(null, type, $.CGPointMake(p.x, p.y), $.kCGMouseButtonLeft);
       $.CGEventSetIntegerValueField(e, 1, 1); // click state

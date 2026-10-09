@@ -225,3 +225,21 @@ test('a lease stop for a retitled window carries the header it read, except unde
   await assert.rejects(run(guardedCode('await app.click(1); await app.click(1);', window, undefined, undefined, {})),
     error => /Document scope stopped/.test(error.message) && !/\nWindow: /.test(error.message), 'document scope keeps the plain stop');
 });
+
+test('an un-awaited action that fails leaves no unhandled rejection, and the call says it failed', async () => {
+  const output = [], unhandled = [];
+  const onUnhandled = reason => unhandled.push(reason);
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const app = { getAXState: async () => 'Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt',
+      click: async () => { throw new Error('element 9 is gone'); }, pressKey: async () => {} };
+    const code = guardedCode('app.click(9); await new Promise(r => setTimeout(r, 5)); await app.pressKey("a");', { title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' });
+    await runInNewContext(`(async () => { ${code} })()`, { app, cua: { getApp: async () => app }, setTimeout, nodeRepl: { write: text => output.push(text) } });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.deepEqual(unhandled, []);
+    assert.match(output.join(''), /an action in this call failed.*click: element 9 is gone/);
+    // An awaited failure still throws to the caller.
+    const awaited = guardedCode('await app.click(9);', { title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' });
+    await assert.rejects(runInNewContext(`(async () => { ${awaited} })()`, { app, cua: { getApp: async () => app }, nodeRepl: { write() {} } }), /element 9 is gone/);
+  } finally { process.off('unhandledRejection', onUnhandled); }
+});

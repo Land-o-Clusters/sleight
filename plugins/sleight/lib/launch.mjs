@@ -315,7 +315,12 @@ export function runScript(script, request, options = {}) {
       try {
         resolve(JSON.parse(stdout));
       } catch {
-        resolve({ ok: false, error: stderr.trim() || err?.message || 'no output' });
+        // A killed child prints nothing, and execFile's message is only the command line
+        // (chess-drag, 2026-10-09). Say what happened instead.
+        const timedOut = err?.killed && !stderr.trim();
+        resolve({ ok: false, timedOut: !!timedOut, error: timedOut
+          ? `${script} timed out after ${execOptions.timeout / 1000} s and was stopped; whether it pressed anything is unknown. Read the window again before acting`
+          : stderr.trim() || err?.message || 'no output' });
       }
     }));
   });
@@ -337,6 +342,13 @@ async function performDrag(args, runLocal) {
     // A completed background or Accessibility attempt never owned focus, including lost text.
     // Unknown child termination retains the existing guarded timeout cleanup.
     if (!['background', 'accessibility', 'none'].includes(result?.path)) {
+      if (!result?.path) {
+        // The child ended without reporting (a timeout or a crash), maybe mid-press.
+        try {
+          const released = await runLocal('drag-focus.js', { op: 'release' }, { cleanup: true });
+          if (released?.released) result = { ...result, ok: false, error: [result?.error, 'a posted mouse button was still down, so sleight released it'].filter(Boolean).join('; ') };
+        } catch {}
+      }
       try {
         const restored = await runLocal('drag-focus.js', { ...focus, op: 'restore' }, { cleanup: true });
         if (!restored.ok) throw new Error(restored.error);

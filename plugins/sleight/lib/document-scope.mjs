@@ -93,6 +93,8 @@ export function guardedCode(code, window, reason = 'Document scope stopped this 
     (options.browserCandidate ? '\nglobalThis.__sleightDocumentGuard.activeApp = undefined;' : '') + `\n${code}
 {
   const guard = globalThis.__sleightDocumentGuard, last = guard.activeApp && guard.reads.get(guard.activeApp);
+  // The call finished, so any failed action was one it didn't await or caught itself.
+  if (guard.failures?.length) nodeRepl.write('sleight: an action in this call failed, and the call went on without it: ' + guard.failures.join('; ') + '. Read the window, then redo it with await.\\n');
   if (guard.activeApp && !last?.emitted) {
     const text = last?.text ?? await guard.readAfter(guard.activeApp);
     nodeRepl.write(${JSON.stringify(GUARD_MARK)} + text + ${JSON.stringify(GUARD_END)});
@@ -130,6 +132,7 @@ function guardSetup(update) {
     // Full reads taken in this call since the handle's last action. A new call
     // always reads again, because the user may have changed the window between.
     state.reads = new WeakMap();
+    state.failures = [];
     // Element lines at this call's first action, which Claude's numbers refer to.
     state.callElements = new WeakMap();
     const elements = ${elementLines.toString()};
@@ -202,7 +205,7 @@ function guardSetup(update) {
         };
         if (!['click', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction',
           'paste', 'pressKey', 'typeText'].includes(name)) return (...args) => { checkNative(); return value.apply(raw, args); };
-        return async (...args) => {
+        const act = async (...args) => {
           checkNative();
           await checkLease();
           if (state.fileOnly && name === 'pressKey' && isCancel(name, args)) {
@@ -273,6 +276,14 @@ function guardSetup(update) {
           // invalidates the call's observations, including reads on that alias.
           state.reads = new WeakMap();
           return value.apply(raw, args);
+        };
+        // An action Claude didn't await that fails would reject with no handler, and that ends the
+        // engine's JavaScript session with every handle (3/3, 2026-10-07). Handle every action's
+        // promise here, still returning it, so an await sees the error and nothing is unhandled.
+        return (...args) => {
+          const pending = act(...args);
+          pending.catch(error => state.failures.push(name + ': ' + (error?.message ?? error)));
+          return pending;
         };
       } });
       state.proxies.add(proxy); state.wrapped.set(target, proxy); state.raws.set(proxy, target);
