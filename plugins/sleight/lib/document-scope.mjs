@@ -153,6 +153,8 @@ function guardSetup(update) {
     // Each handle's latest window header in this call. It survives actions, so a later key, text
     // or coordinate action can go ahead on it without a read.
     state.callHeaders = new WeakMap();
+    // Each handle's previous action in this call, which decides whether the next may skip its read.
+    state.previous = new WeakMap();
     state.failures = [];
     // Element lines at this call's first action, which Claude's numbers refer to.
     state.callElements = new WeakMap();
@@ -259,8 +261,15 @@ function guardSetup(update) {
           // SLEIGHT_GUARD=careful reads before every action.
           const treeFree = ['pressKey', 'typeText', 'paste'].includes(name) ||
             (['click', 'drag', 'scroll'].includes(name) && Array.isArray(args[0]));
+          // The read also waits for the UI to settle. After a click, a shortcut, Return, Escape, Tab or
+          // Space, which can open a panel or sheet, the next action needs that wait: Cmd+O, then
+          // Cmd+Shift+G, then typing a path outran the Open panel without it (textedit-drag, 2026-10-09).
+          // Typing, pasting and plain keys change no window, so the action after them goes ahead.
+          const before = state.previous.get(proxy);
+          const quiet = before && (['typeText', 'paste'].includes(before.name) || (before.name === 'pressKey' &&
+            typeof before.key === 'string' && !before.key.includes('+') && !/^(?:return|enter|escape|esc|tab|space)$/i.test(before.key)));
           let observed;
-          if (text === undefined && treeFree && !state.careful && state.callHeaders.has(proxy)) {
+          if (text === undefined && treeFree && quiet && !state.careful && state.callHeaders.has(proxy)) {
             observed = state.callHeaders.get(proxy);
             if (state.timing) nodeRepl.write('[sleight:guard-timing]' + JSON.stringify({ phase: 'skipped', ms: 0, chars: 0, failed: false }) + '\\n');
           } else {
@@ -314,6 +323,7 @@ function guardSetup(update) {
           }
           await checkLease();
           state.activeApp = proxy;
+          state.previous.set(proxy, { name, key: name === 'pressKey' ? args[0] : undefined });
           // A second handle may refer to this same app/window. Every input
           // invalidates the call's observations, including reads on that alias.
           state.reads = new WeakMap();

@@ -98,8 +98,9 @@ must reopen it in the app. Snapshots last until the session ends.
 Before an action, sleight reads the app's window to check it's the one Claude saw. A read right
 after an action waits for the app to settle, about 400 ms and much longer on a busy Mac, and Codex
 doesn't make that read. So by default, keys, typing, paste and clicks or drags at coordinates that come
-after another action in the same call go straight to the engine. The first action of each call is
-checked, and so is every action on an element number, ID or label, which is what catches a window
+after typing, pasting or a plain key in the same call go straight to the engine. After a click, a
+shortcut, Return, Escape, Tab or Space, the next action still reads, since that read also waits for
+a panel or sheet the action opened. The first action of each call is checked, and so is every action on an element number, ID or label, which is what catches a window
 that renumbered mid-call. Set `SLEIGHT_GUARD=careful` to read before every action. Document scope
 (`SLEIGHT_APPROVAL_SCOPE=document`) always reads.
 

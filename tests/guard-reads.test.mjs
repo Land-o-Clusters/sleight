@@ -114,11 +114,15 @@ test('sameElement accepts only a bare line named by the fuller line\'s ID or lab
   assert.equal(sameElement(undefined, undefined), true);
 });
 
-test('keys, text, paste and coordinates after the first action go ahead without a read; careful mode reads', async () => {
+test('keys, text, paste and coordinates go ahead without a read only after typing, pasting or a plain key', async () => {
+  // After a click, Return or a shortcut the next action reads, which also waits for a panel to open.
   const sequence = 'await app.click(1); await app.typeText("x"); await app.pressKey("Return"); await app.paste("y"); await app.click([5, 5]); await app.drag([1, 1], [2, 2]);';
   const f = fixture();
   await f.run(sequence);
-  assert.deepEqual(f.calls.map(c => c[0]), ['read', 'click', 'typeText', 'pressKey', 'paste', 'click', 'drag', 'read']);
+  assert.deepEqual(f.calls.map(c => c[0]), ['read', 'click', 'read', 'typeText', 'pressKey', 'read', 'paste', 'click', 'read', 'drag', 'read']);
+  const keys = fixture();
+  await keys.run('await app.typeText("a"); await app.pressKey("b"); await app.pressKey("Left"); await app.pressKey("super+shift+g"); await app.typeText("/tmp"); await app.pressKey("Return");');
+  assert.deepEqual(keys.calls.map(c => c[0]), ['read', 'typeText', 'pressKey', 'pressKey', 'pressKey', 'read', 'typeText', 'pressKey', 'read']);
   const careful = fixture();
   await careful.run(sequence, { careful: true });
   assert.deepEqual(careful.calls.map(c => c[0]), ['read', 'click', 'read', 'typeText', 'read', 'pressKey', 'read', 'paste', 'read', 'click', 'read', 'drag', 'read']);
@@ -129,8 +133,9 @@ test('keys, text, paste and coordinates after the first action go ahead without 
 });
 
 test('a window change mid-batch stops the next numbered action, and careful mode stops keys too', async () => {
-  for (const [code, options, stopped] of [['await app.click(1); await app.typeText("x");', {}, false],
-    ['await app.click(1); await app.typeText("x");', { careful: true }, true], ['await app.click(1); await app.click(1);', {}, true]]) {
+  for (const [code, options, stopped] of [['await app.typeText("a"); await app.typeText("x");', {}, false],
+    ['await app.typeText("a"); await app.typeText("x");', { careful: true }, true], ['await app.click(1); await app.typeText("x");', {}, true],
+    ['await app.click(1); await app.click(1);', {}, true]]) {
     let changed = false;
     const f = fixture({ current: () => tree(changed ? { ...expected, title: 'b.txt' } : expected), action: () => { changed = true; } });
     const done = f.run(code, options);

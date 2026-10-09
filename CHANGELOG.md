@@ -8,8 +8,10 @@
   probe, since otherwise it never saw an app launched after it started, and an app the acquisition
   launched is probed again after the engine answers. Both were found and checked live with a
   full-screen fixture.
-- Keys, typing, paste and coordinate actions after the first action in a call no longer wait for a
-  window read first. That read waited about 400 ms for the UI to settle, and tens of seconds on a
+- Keys, typing, paste and coordinate actions after typing, pasting or a plain key in the same call
+  no longer wait for a window read first. After a click, a shortcut, Return, Escape, Tab or Space
+  the read stays: it also waits for a panel the action opened, and without it Cmd+O, Cmd+Shift+G and
+  a typed path outran TextEdit's Open panel in a head-to-head run. That read waited about 400 ms for the UI to settle, and tens of seconds on a
   loaded Mac, where Codex doesn't make that read (owner's call). The first action and actions on
   element numbers, IDs or labels are still checked. `SLEIGHT_GUARD=careful` keeps every read.
 - The guard's check before reusing an acquisition's read never checked anything: engine

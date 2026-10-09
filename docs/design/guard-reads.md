@@ -6,8 +6,11 @@ since the last action in the same call. It checks the window's title, app and UR
 `{ id }` and `{ label }`, and stops a numbered action that an earlier one renumbered. After the call
 it reads once more if nothing gave the relay a window header.
 
-Since 2026-10-09 (owner's call), keys, typing, paste and coordinate actions after the call's first
-action go ahead on the header the guard last checked, without a read. A read right after input
+Since 2026-10-09 (owner's call), keys, typing, paste and coordinate actions that follow typing,
+pasting or a plain key in the same call go ahead on the header the guard last checked, without a
+read. After a click, a shortcut, Return, Escape, Tab or Space the next action still reads: the read
+also waits for the panel or sheet that action opened, and a batch of Cmd+O, Cmd+Shift+G and a typed
+path outran TextEdit's Open panel without it (textedit-drag, 2026-10-09). A read right after input
 waits for the UI to settle: 389 to 427 ms against 38 to 83 ms for one before it at load 42 to 53,
 and up to 118 s with 20 CPU workers added (`load-cost`). Codex doesn't make that read.
 `SLEIGHT_GUARD=careful` and document scope keep every read.
