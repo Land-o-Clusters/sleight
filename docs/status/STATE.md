@@ -85,7 +85,7 @@ merged. Their worktrees in `~/Projects/sleight-wt/` can go once Codex is done wi
 
 Public: `Land-o-Clusters/sleight`, latest release `v0.15.2`. The owner's install is a
 version-keyed copy in `~/.claude/plugins/cache/sleight/sleight/`, refreshed only by
-`claude plugin update` (now `0.15.3-pane.2`). Open PRs: none. The first outside user (the owner's friend) runs their iOS simulator tests
+`claude plugin update` (now 0.16.0). Open PRs: none. The first outside user (the owner's friend) runs their iOS simulator tests
 through sleight and finds it faster than Maestro. `~/.claude.json` marks
 `~/Library/Caches/sleight-bench/sleight-arm` trusted (set for the interactive pane session,
 2026-10-06). Launch files for the owner's Grok bot are in `~/Desktop/sleight-launch/`, including

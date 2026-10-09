@@ -19,4 +19,4 @@ Docs, skills, commit messages and anything else people read go through the same 
 - Put limitations in `docs/known-problems.md` as soon as we find them, and say plainly what we don't know.
 - Use commas, periods and parentheses where an em dash would go. Start list items with the point
   itself, without a bold label. State a claim directly, without first denying something nobody said.
-- Write less. The repo has a few hundred lines of code, and the docs shouldn't outweigh it.
+- Write less. The plugin is about 5,700 lines of code (2026-10-09), and the docs shouldn't outweigh it.
