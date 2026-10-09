@@ -75,6 +75,16 @@ later failures in Safari, browser navigation and Word. The
 tasks passed once each after the Safari correction. Word saved but failed ZIP validation; Excel
 failed cold setup and quit confirmation. Their latest harness changes await another architect rerun.
 
+After brief 9, the Office rerun ([`real-use-office-10`](benchmarks/2026-10-09-real-use-office-10.json),
+one run each, the owner away) failed before any model call. Word, left running by the earlier pass,
+didn't answer its first focused-window read (-25204) with the Mac's load near 124. Excel showed its
+first-run screen ("Start Using Excel"), which the harness classed as activation and stopped on
+without touching. PowerPoint didn't run.
+
+The Codex arm now runs the real suite. Its first run, helium-form on gpt-6.1-sol at medium, passed in
+36.5 s and 8 model requests with 6 engine calls, and the engine's "Always allow" list was restored
+byte for byte afterwards ([`codex-real-first`](benchmarks/2026-10-09-codex-real-first.json)).
+
 The round-5 [report](benchmarks/2026-10-08-real-use-tasks-5.md) records 16 of 18 slots, 6 passes,
 10 setup failures and 2 unstarted Simulator slots. All 6 model trials passed.
 
