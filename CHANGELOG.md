@@ -30,7 +30,10 @@
   2026-10-07).
 - The benchmark closes the documents a failed run left in TextEdit before the next run, and records
   whether each task's app had a window on the current Space.
-PASS_LINE
+- The release pass ([`release-0.16.0`](docs/benchmarks/2026-10-09-release-0.16.0.json)) passed 20/21
+  in 178 turns and 1,355 s, at 2.34 s of model time per turn. textedit-drag passed 3/3. One
+  chess-drag run hit the 5-minute limit with its game unsaved. A second, untitled Chess window sat over
+  the game, so 6 of its drags were refused as covered.
 
 ## 0.15.2 (2026-10-08)
 

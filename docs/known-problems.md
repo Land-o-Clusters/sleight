@@ -210,7 +210,8 @@ our own runs. Dates and engine versions are given where they matter.
   back, and one button's line changed from `Description: 7, ID: Seven` to `Seven` between reads.
   Each change stopped an action and cost Claude a turn. The Mac was under heavy load from other
   processes that day. We don't know whether the load or Calculator's launch caused it. In the next
-  full pass that evening, all 6 Calculator runs took 3 or 4 turns.
+  full pass that evening, all 6 Calculator runs took 3 or 4 turns. In the 0.16.0 pass, the first run
+  after Calculator launched took 10 turns and 99.5 s, 31 s of it in guard reads.
 - On 2026-10-07 `drag` once refused a Chess window launched in the background seconds earlier,
   because it couldn't find that window among Chess's accessibility windows. It matches by the window's AX number, or by bounds and
   title, and neither matched. The same kind of window matched in another run. Why is unknown.

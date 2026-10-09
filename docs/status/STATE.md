@@ -3,42 +3,32 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-09 00:00 UTC, building 0.16.0)
+## Banner (2026-10-09 01:30 UTC, releasing 0.16.0)
 
-Released: `main` and `v0.15.2` at `2d2eb60`, CI green. The owner's desktop pane check on
-`0.15.3-pane.2` passed (screenshot, about 23:03 UTC), with Calculator's picture, 6 actions and the
-status line.
+0.16.0 is the batch on `pane/auto-mode`: the desktop pane in Auto mode, the `await` check, pause
+guards for the foreground drag, `hover` and `menu_bar`, `drag` reading screenshot pixels, the
+`noWindowsAvailable` hint, the guard fix for lease-free clients, and the docs on ChatGPT's "Always
+allow" list. The Accessibility text move is in the code but off (TextEdit save deadlock, see
+known-problems). Release pass `docs/benchmarks/2026-10-09-release-0.16.0.json`: 20/21, textedit-drag
+3/3, chess-drag 2/3 (a second untitled Chess window covered the game). Release steps: fast-forward
+`main`, tag `v0.16.0`, GitHub release from the changelog, then update the owner's install.
 
-Owner's call (2026-10-08): batch several fixes and features per release, one full pass per release,
-and only the affected tasks during development. So 0.15.3 became 0.16.0 and holds more.
+Benchmark side, not in the plugin: the Codex arm (`bench/codex-arm.mjs`, `a8f2010`), dry runs only.
+`~/.codex-bench` holds the owner's bench login (done 2026-10-08) and a config with only the engine
+server. The owner allowed setting the engine's "Always allow" list to the benchmark apps during
+passes with the Codex arm; the runner saves the list to `~/Library/Logs/sleight/` and restores it on
+exit (a killed runner leaves it changed: restore from the newest `ComputerUseAppApprovals.before-*`).
 
-Checkout: `~/Projects/sleight` is on `pane/auto-mode` (`2085955`, pushed). 0.16.0 so far, on top of
-0.15.2, with 677/677 unit tests:
-
-- The relay refuses an action written without `await` when more code follows it (`49604cf`).
-- The desktop pane works in Auto mode (`0bfc4e9`, `e14f0cd`, `dc5a016`). LAWS has the `tool.check` rule.
-- Benchmark runner: closes a failed run's TextEdit documents between runs, and samples whether the
-  task's app has a window on the current Space (`d7f7833`, live-tested).
-- `drag` into a covered TextEdit window: the Accessibility move (`cc24eb2`) is off (`SLEIGHT_ACCESSIBILITY_MOVE`
-  in tests only). Probe `.dev/tools/ax-save-probe.mjs`: after an Accessibility text write, TextEdit's
-  next engine Cmd+S deadlocked in 10 of 13 trials (file opened through the Open panel), 0 of 3 with
-  `open -g`. Posted keystrokes didn't hang but auto-capitalize. The existing spacing repair writes text
-  the same way. Open: what holds the save lock, and whether an AppleScript save right after the
-  write avoids it (that probe broke when the Open panel stopped opening files).
-- The foreground drag, `hover` and the `menu_bar` real click wait for 2 s without input (up to 10 s);
-  the relay explains `noWindowsAvailable` (`97fcdd6`). Neither guard has had a live run.
-- `drag` reads `from` and `to` in the engine screenshot's pixels, scaled by the size the relay saw
-  (`310f6e0`). This was the main textedit-drag failure: on a Retina display Claude's points were 2×.
-  A second targeted check (textedit-drag ×3) is running: `.dev/passes/pass-drag-check2.log`.
-- Published: `covered-drags` (18/21) and `await-stopped` (2/5).
-- `plugin.json` still says `0.15.3-pane.2`. Set it to 0.16.0 at release. CHANGELOG still has a
-  `PASS_LINE` placeholder, and the targeted checks' results aren't published yet.
+Research in `.dev/research/`: the Codex head-to-head protocol and the TextEdit save lock (next
+experiment: launch TextEdit with `-NSDocumentDebugSerialization YES
+-NSDocumentSerializationLoggingDelay 3` and read AppKit's log of the task holding the lock; candidate
+fix: post one Shift event after an Accessibility edit).
 
 Next:
 
-1. When drag-check2 ends: publish both targeted checks, then the Helium native probe (Next 2). Then
-   one full pass (best while the owner is away), release 0.16.0 and update the owner's install
-   (`claude plugin marketplace update sleight`, `claude plugin update sleight@sleight`).
+1. Next batch: per-window screenshot sizes for `drag` (3 of 13 Chess drags went unscaled); the TextEdit
+   save-lock experiments, then turn the Accessibility move back on if one fix shows 0 hangs in 10;
+   a Codex pilot (one calculator-click per arm), then the core-task head-to-head.
 2. Owner's plan, step 3 (better). Sol's `codex/real-use-tasks` (`7420d18`, round two) completed 3 of 18
    trials, 1 passed. Cause found 2026-10-08: `selectSurfaces` turns on the engine's browser surface
    when it finds the browser extension (this Mac's Helium has it), so Claude drove Helium as a

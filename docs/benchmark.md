@@ -182,6 +182,13 @@ Passes on the way to 0.16.0, before its drag change:
   throughout. One chess-drag run hit the runner's 5-minute limit after saving a correct game, so it
   passed without a turn count.
 
+0.16.0's pass ([`release-0.16.0`](benchmarks/2026-10-09-release-0.16.0.json)) passed 20/21 in 178
+turns and 1,355 s, at 2.34 s of model time per turn. textedit-drag passed 3/3, with `drag` reading
+Claude's screenshot pixels at the screenshot's scale. chess-drag passed 2/3. Its failed run hit the
+5-minute limit with the game unsaved. A second, untitled Chess window sat over the game, so 6 of
+Claude's 13 drags were refused as covered. The first calculator-click run took 99.5 s, 71 s of it in
+the engine, right after Calculator launched. The owner was using the Mac during the pass.
+
 | Task | Median turns, 0.13.4 | 0.14.0 |
 |---|---:|---:|
 | calculator-click | 5 | 4 |
