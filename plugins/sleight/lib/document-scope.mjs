@@ -99,7 +99,7 @@ function guardSetup(update) {
     const state = globalThis.__sleightDocumentGuard ||= {
       getApp: cua.getApp.bind(cua), proxies: new WeakSet(), wrapped: new WeakMap()
     };
-    ${update ? `state.expected = ${JSON.stringify(update.window)}; state.reason = ${JSON.stringify(update.reason)};
+    ${update ? `state.guarded = true; state.expected = ${JSON.stringify(update.window)}; state.reason = ${JSON.stringify(update.reason)};
     state.lease = ${JSON.stringify(update.lease) ?? 'undefined'};
     state.fileOnly = ${!!update.fileOnly}; state.cancelOnly = ${!!update.cancelOnly};
     state.adoptUrl = ${!!update.adoptUrl};` : ''}
@@ -236,8 +236,9 @@ function guardSetup(update) {
           const panel = state.adoptUrl && observed?.app === state.expected?.app && observed.title === '' && !observed.url;
           // A relay without a lease, document scope or change review forwards actions
           // unguarded, yet handles a read acquired are still proxies. No guarded call
-          // has set a window then, so there is nothing to compare.
-          if (state.expected && !cancel && !dialog && !panel && (!observed ||['title', 'app', 'url'].some(key => observed[key] !== state.expected[key]))) {
+          // has configured the guard then, so there is nothing to compare. A guarded
+          // call with no expected window still stops.
+          if (state.guarded && !cancel && !dialog && !panel && (!observed || ['title', 'app', 'url'].some(key => observed[key] !== state.expected?.[key]))) {
             // Without document scope or change review, the stop carries the window it saw, so the
             // relay can lease that window for Claude's retry (Chess retitles itself on each move).
             throw (state.adoptUrl ? stop : message => new Error(message))(state.reason + ' Observed ' + JSON.stringify(observed));

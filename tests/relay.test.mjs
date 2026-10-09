@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createContext, runInContext } from 'node:vm';
 import { GUARD_MARK, GUARD_END } from '../plugins/sleight/lib/compact-reads.mjs';
+import { readCode, guardedCode } from '../plugins/sleight/lib/document-scope.mjs';
 
 const fixtureRoot = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-relay-review-')));
 const fixturePath = join(fixtureRoot, 'a.txt');
@@ -1372,6 +1373,16 @@ test('without a lease, document scope or change review, actions on a handle a re
   await run(2, 'app = await cua.getApp("TextEdit")');
   await run(3, 'await app.pressKey("super+s"); return "saved"');
   assert.deepEqual(keys, ['super+s']);
+});
+
+test('a guarded call with no expected window still stops before acting', async () => {
+  const keys = [];
+  const raw = { getAXState: async () => 'Window: "x.txt", App: TextEdit\n0 standard window x.txt', pressKey: async key => keys.push(key) };
+  const context = createContext({ app: undefined, cua: { getApp: async () => raw }, nodeRepl: { write() {} } });
+  const run = code => runInContext(`(async () => { ${code} })()`, context);
+  await run(readCode('app = await cua.getApp("TextEdit")'));
+  await assert.rejects(run(guardedCode('await app.pressKey("super+s")', undefined, 'Stopped: no window.')), /Stopped: no window/);
+  assert.deepEqual(keys, []);
 });
 
 test('a concurrent read cannot disable the guard of an in-flight mutation', async () => {

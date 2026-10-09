@@ -157,7 +157,7 @@ test('actions carry both guards and retain the original saved snapshot across tu
   assert.ok(existsSync(bank), 'snapshot exists before forwarding');
   const code = a.forwarded[0].params.arguments.code;
   assert.match(code, /record.token !== state.lease.token/);
-  assert.match(code, /observed\[key\] !== state.expected\[key\]/);
+  assert.match(code, /observed\[key\] !== state\.expected\?\.\[key\]/);
   writeFileSync(path, 'first\n'); a.reply(result(1));
   a.send(rpc(2, 'turn_ended'));
   assert.ok(existsSync(bank), 'turn end retains review snapshots');
