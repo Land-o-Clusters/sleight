@@ -3,7 +3,14 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-09 03:45 UTC, rechecked by sleight-arch after the clear)
+## Banner (2026-10-09 04:30 UTC, overnight run)
+
+Overnight (owner asleep from about 04:25 UTC, 2026-10-09, said "keep going until I wake up", work the
+whole ROADMAP without stopping). Amphetamine keeps the Mac awake, so don't add caffeinate. Order: finish
+the 1.0 pass, `npm run check`, the controlled Chess check, and release 1.0.0 if the gate holds. Then
+ROADMAP tracks 2 and 3 on worktree branches (`~/Projects/sleight-wt/drag-chess` on `fix/drag-chess`
+first), a release pass and 1.1. Then replay. Live runs are fine all night (owner away). Review Sol's
+rounds as they land.
 
 Released: `v0.16.0` (`fa23007`), `main` at `dcad210` (the release badge on top), CI green. The
 owner's install is 0.16.0 at `9952faa`. sleight-arch's background jobs have all ended, the live lock
