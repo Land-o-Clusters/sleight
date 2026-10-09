@@ -23,7 +23,7 @@ function waitForApplication(application, wait) {
 function quitFixtureApplication(pid, bundle, application, wait) {
   var target = application();
   if (!target) return true;
-  if (Number(target.processIdentifier) !== pid || String(target.bundleIdentifier) !== bundle) throw new Error('Launched app identity changed; quit refused');
+  if (Number(target.processIdentifier) !== pid || String(ObjC.unwrap(target.bundleIdentifier)) !== bundle) throw new Error('Launched app identity changed; quit refused');
   if (!target.terminate) throw new Error('Launched app refused quit');
   for (var attempt = 0; attempt < 50; attempt++) {
     wait();
@@ -190,6 +190,14 @@ function nativeAX(state, clock) {
 
 function run(argv) {
   var request = JSON.parse(argv[0]);
+  if (request.mode === 'self-test') {
+    var terminated = false;
+    var fake = { processIdentifier: 42, bundleIdentifier: $('com.apple.Preview'),
+      get terminate() { terminated = true; return true; } };
+    return JSON.stringify({ quit: quitFixtureApplication(42, 'com.apple.Preview', function () {
+      return terminated ? null : fake;
+    }, function () {}) });
+  }
   var allowed = ['com.apple.Safari', 'com.apple.Preview', 'com.apple.finder',
     'com.apple.TextEdit', 'com.apple.calculator', 'com.apple.dt.Devices', 'com.apple.iphonesimulator', 'net.imput.helium'];
   if (request.mode === 'quit') {

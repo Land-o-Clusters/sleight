@@ -56,7 +56,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
         JSON.stringify({ bundle: request.bundle, mode: 'quit', pid: lease.pid })], {
         signal: ctx.cleanupSignal, timeoutMs: 15000,
       });
-      if (!result.groupClean || result.exit?.code !== 0) throw new Error(`Launched ${request.app} quit unconfirmed`);
+      if (!result.groupClean || result.exit?.code !== 0) throw new Error(`Launched ${request.app} quit unconfirmed${result.stderr?.trim() ? ': ' + result.stderr.trim() : ''}`);
       diagnostics.appQuit = true;
     },
     async close() {
@@ -88,7 +88,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
         const line = buffer.slice(0, index); buffer = buffer.slice(index + 1);
         let event; try { event = JSON.parse(line); } catch { continue; }
         if (typeof event.running === 'boolean') { lease.running = event.running; diagnostics.running = event.running; }
-        if (event.pid) lease.pid = event.pid;
+        if (event.pid) { lease.pid = event.pid; diagnostics.pid = event.pid; }
         if (event.stage === 'retry') diagnostics.retries.push({ code: event.code, waitMs: event.waitMs, totalWaitMs: event.totalWaitMs });
         for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod']) {
           if (event[key] !== undefined) diagnostics[key] = event[key];
