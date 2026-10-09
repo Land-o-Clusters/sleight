@@ -3,63 +3,36 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-09 04:30 UTC, overnight run)
+## Banner (2026-10-09 04:40 UTC, overnight run)
 
 Overnight (owner asleep from about 04:25 UTC, 2026-10-09, said "keep going until I wake up", work the
-whole ROADMAP without stopping). Amphetamine keeps the Mac awake, so don't add caffeinate. Order: finish
-the 1.0 pass, `npm run check`, the controlled Chess check, and release 1.0.0 if the gate holds. Then
-ROADMAP tracks 2 and 3 on worktree branches (`~/Projects/sleight-wt/drag-chess` on `fix/drag-chess`
-first), a release pass and 1.1. Then replay. Live runs are fine all night (owner away). Review Sol's
-rounds as they land.
+whole ROADMAP without stopping). Amphetamine keeps the Mac awake, so don't add caffeinate. Live runs
+are fine all night (owner away). Review Sol's rounds as they land.
 
-Released: `v0.16.0` (`fa23007`), `main` at `dcad210` (the release badge on top), CI green. The
-owner's install is 0.16.0 at `9952faa`. sleight-arch's background jobs have all ended, the live lock
-is free, and the working tree is clean with every commit pushed. There are no open PRs.
+Released: `v1.0.0` (`ca4d017`) at 04:33 UTC, `main` fast-forwarded to it, GitHub release made. The
+owner's install is 1.0.0 at `ca4d017`. CI on `ca4d017` was still running at release time, so check it.
+Gate evidence: the release pass passed 19/21 in 165 turns and 912 s at 2.59 s of model time per turn
+(`docs/benchmarks/2026-10-09-release-1.0.0.json`). The Chess and simulator head-to-head went
+chess-drag sleight 0/3, Codex 2/3, simulator-form 3/3 each
+(`docs/benchmarks/2026-10-09-h2h-chess-simulator.json`). Every failure was where the model pressed
+(below the pawn's head) or a simulator tap that missed. The engine drag through sleight moved the pawn
+in 2 of 3 release-pass runs, so no regression. One sleight bug showed: `drag.js` ran past its 30 s
+limit and returned only "Command failed".
 
-Checkout: `~/Projects/sleight` on `pane/auto-mode` at `03d9af7`, pushed. Unreleased on it, all with
-unit tests and live checks, 688/688 tests:
-
-- The Accessibility text move for covered TextEdit windows, settled with a Shift event posted to the
-  app (`8947b12`): 10 edits and 10 `drag` moves saved with no hang, against 5 hangs in 8 without.
-- Text moves in any app's text field try Accessibility first; Safari's web fields ignore the writes,
-  so `drag` falls back there (`011aec4`).
-- `drag` scales by its own window's screenshot (`2f3b512`) and names the window covering a point,
-  flagging an untitled same-app window as a dialog (`a6c0632`).
-- The guard reuses an acquisition's read for the next first action when the app's windows are
-  unchanged (`03d9af7`): 11 to 30 ms instead of a full read (16.7 s once under load).
-- In the benchmark, Claude arms run without Bash, Write, Edit or web tools, the simulator app quits
-  after its runs, and a pass stops when a benchmark app still has a keyboard tap. There's a Codex arm.
-- `main`'s badge commit is already merged into the branch (`01a6217`), so a release fast-forwards.
-
-1.0 runs started 03:49 UTC with the owner away (`.dev/passes/one-oh.sh` under `nohup`, both in
-order, progress in `.dev/passes/passes.log`). The head-to-head ended 04:13 UTC
-(`bench/results/2026-10-09T03-49-50-773Z.json`): chess-drag sleight 0/3, Codex 2/3;
-simulator-form 3/3 each. Every Chess miss grabbed the pawn below y 1202 and every pass at or above
-it, for both arms. The controlled check in ROADMAP track 1 decides whether any of it is sleight's.
-The release pass started 04:13 UTC on `f6a8c07`. simulator-flow's real-use slots wait for brief 6's
-cleanup fix, since its branch can still leave a launched Device Hub open.
-
-1.0. The owner approved 1.0.0 (2026-10-09) once these have run with the owner away from the Mac,
-without a new failure that's sleight's fault: (1) the Chess and simulator head-to-head,
-`node bench/run.mjs --arm sleight,codex --tasks chess-drag,simulator-form --runs 3`; (2) a release
-pass, `node bench/run.mjs --arm sleight --runs 3`. Then set `plugin.json` to 1.0.0, turn CHANGELOG's
-"Unreleased" into 1.0.0, drop "early" from the README status badge, update the LAWS line "sleight
-launches at 0.x", reread the README whole (LAWS), fast-forward `main`, tag, GitHub release, and run
-`claude plugin marketplace update sleight` and `claude plugin update sleight@sleight`. All four 1.0
-conditions in LAWS are met (two engine updates, the friend's install from GitHub, the desktop pane's
-picture, comparisons with LCU and Codex).
-
-Head-to-head so far, Sonnet 5.5 against gpt-6.1-sol at medium. On Calculator and TextEdit sleight
-passed 15/15 in 446 s and Codex 12/15 in 732 s, with Codex 0/3 on textedit-drag
-(`docs/benchmarks/2026-10-09-h2h-background.json`). The earlier core run stopped at 19/42 when Device
-Hub's keyboard tap stalled the owner's keyboard (`2026-10-09-h2h-core-stopped.json`).
+Next (on `fix/drag-chess`, `~/Projects/sleight-wt/drag-chess`, unit-tested, not live-checked yet):
+a timed-out local tool says so and a stuck posted mouse button gets released; `drag` reuses its
+content scan and won't start a press after 20 s; a covered non-text drag posts in the background
+first; the skill says to press a 3D piece at its head; an un-awaited failed action no longer ends the
+engine session (the guard attaches a handler to each action's promise and reports the failure); the benchmark's
+timing parser counts a split acquisition as engine time (relay time was 9.98 s, about 0.36 s is real).
+Measured and dropped: trimming the engine's 21,000-character first-call docs. They are about 8,100
+tokens and 11.7% of input tokens per run, at an estimated 0.17 s per request, so cutting their
+Linux, Windows and browser parts would save about 0.1 s per run.
 
 Owner's plan after 1.0 (2026-10-09), run in order without check-ins: (1) the real-use suite (Sol),
 then the Codex head-to-head on it; (2) the launch post, draft at `~/Desktop/sleight-launch/thread-1.0.md`
-with [PENDING] lines to fill from (1) and the 1.0 pass; (3) replay: a successful run turned into a
-script that replays through the engine with no model. Known-problems work fills the time the owner
-is at the Mac. Left there: keeping a moved word's own formatting in rich text, `/sleight stop` in the
-desktop app, TextEdit's orphan Save Panel window, the engine's 21,000-character first-call docs.
+with [PENDING] lines to fill from (1) and the 1.0 pass, and (3) replay. The full plan is
+`docs/status/ROADMAP.md`.
 
 Sol (`codex/real-use-tasks`, `~/Projects/sleight-wt/real-use-tasks`, head `1731df9`, not running):
 brief 5 (`.dev/prompts/sol-real-use-tasks-5.md`) round 5 stopped at 16/18 slots
