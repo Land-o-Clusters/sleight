@@ -24,6 +24,10 @@ unit tests and live checks, 688/688 tests:
   after its runs, and a pass stops when a benchmark app still has a keyboard tap. There's a Codex arm.
 - `main`'s badge commit is already merged into the branch (`01a6217`), so a release fast-forwards.
 
+1.0 runs started 03:49 UTC with the owner away (`.dev/passes/one-oh.sh` under `nohup`, both in
+order, progress in `.dev/passes/passes.log`). simulator-flow's real-use slots wait for brief 6's
+cleanup fix, since its branch can still leave a launched Device Hub open.
+
 1.0. The owner approved 1.0.0 (2026-10-09) once these have run with the owner away from the Mac,
 without a new failure that's sleight's fault: (1) the Chess and simulator head-to-head,
 `node bench/run.mjs --arm sleight,codex --tasks chess-drag,simulator-form --runs 3`; (2) a release
