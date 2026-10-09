@@ -1322,7 +1322,11 @@ export function createRelay({
       // The probe takes about 150 ms against the engine's 400 ms or more, so this rarely waits.
       const check = spaceChecks.get(msg.id); spaceChecks.delete(msg.id);
       const deadline = new Promise(resolve => setTimeout(resolve, 600).unref?.());
-      Promise.race([check.health, deadline]).then(health => {
+      // An acquisition that launches the app is still launching when the first probe runs, so an
+      // absent app is probed once more now that the engine has answered.
+      Promise.race([check.health, deadline]).then(health => health?.status === 'absent'
+        ? Promise.race([Promise.resolve().then(() => spaceProbe(check.key)).catch(() => undefined), new Promise(resolve => setTimeout(resolve, 600).unref?.())])
+        : health).then(health => {
         if (health && !offSpace(health)) spaceNoted.delete(check.key);
         if (offSpace(health) && !spaceNoted.has(check.key) && Array.isArray(msg.result?.content)) {
           spaceNoted.add(check.key);

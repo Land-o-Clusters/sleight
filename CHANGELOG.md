@@ -4,7 +4,10 @@
 
 - App probes (the full-screen check on each app read, and read-failure diagnosis) go to one
   long-lived helper per session instead of starting `osascript` each time: about 33 ms a probe after
-  a 190 ms start, against about 180 ms for each spawn.
+  a 190 ms start, against about 180 ms for each spawn. The helper runs its run loop before each
+  probe, since otherwise it never saw an app launched after it started, and an app the acquisition
+  launched is probed again after the engine answers. Both were found and checked live with a
+  full-screen fixture.
 - Keys, typing, paste and coordinate actions after the first action in a call no longer wait for a
   window read first. That read waited about 400 ms for the UI to settle, and tens of seconds on a
   loaded Mac, where Codex doesn't make that read (owner's call). The first action and actions on

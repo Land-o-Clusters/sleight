@@ -74,6 +74,18 @@ test('an app read says once a turn when the app\'s windows are on another Space'
   assert.deepEqual(probed, Array(6).fill('textedit'));
 });
 
+test('an app the acquisition launched is probed again after the engine answers', async () => {
+  const away = { status: 'responding', windows: 0, minimized: 0, hidden: false, onScreen: 0, allWindows: 1, fullScreenSpace: true };
+  const answers = [{ status: 'absent' }, away];
+  let probes = 0;
+  const h = harness({ spaceProbe: async () => answers[probes++] });
+  helperRead(h, 1, 'let app = await cua.getApp("Calculator")');
+  helperReply(h, 1, 'Window: "Calculator", App: Calculator', false);
+  for (let i = 0; i < 4; i++) await tick();
+  assert.equal(probes, 2);
+  assert.match(h.toClient.find(msg => msg.id === 1).result.content.at(-1).text, /none of Calculator's windows are on it/);
+});
+
 test('a read is not held up or annotated when the Space check finds the window on screen, fails or is slow', async t => {
   for (const spaceProbe of [async () => ({ status: 'responding', windows: 1, minimized: 0, hidden: false, onScreen: 1, allWindows: 1, fullScreenSpace: true }),
     async () => { throw new Error('osascript failed'); }]) {

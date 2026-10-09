@@ -65,6 +65,9 @@ function run(argv) {
     let at;
     while ((at = buffer.indexOf('\n')) >= 0) {
       const line = buffer.slice(0, at); buffer = buffer.slice(at + 1);
+      // NSWorkspace learns of launched and quit apps through notifications that only a running run
+      // loop delivers. Blocked on stdin, the helper saw Calculator as absent 3 s after it launched.
+      $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.005));
       let reply;
       try { const request = JSON.parse(line); reply = { id: request.id, ...probe(request.app) }; } catch { reply = { status: 'unknown' }; }
       stdout.writeData($(JSON.stringify(reply) + '\n').dataUsingEncoding($.NSUTF8StringEncoding));

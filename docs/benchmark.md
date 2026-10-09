@@ -333,6 +333,14 @@ read before a click took 38 to 83 ms and its read after took 389 to 427 ms, the 
 pause between calls. The engine waits for the UI to settle after input, and on a loaded Mac that wait
 ran to tens of seconds. A read with no input before it stayed near 100 ms even at load 135.
 
+After `44700ee` (no read before keys, text, paste and coordinates after a call's first action),
+a click followed by three keys took a median of 515 ms through sleight against 355 ms straight to the
+engine, at load 8 to 9 with 5 runs each ([`load-cost-after-skip`](benchmarks/2026-10-09-load-cost-after-skip.json)).
+Astra's run before the change measured 1,728 ms against 295 ms. One click (490 against 107 ms) and
+eight numbered clicks (3,364 against 753 ms) still read, as numbered actions should. Three of five
+sleight reads failed the script's own value check, because a read through sleight returns a diff
+without the input field.
+
 With the guard reading before the first action after an acquisition again, since the inventory it
 relied on doesn't list windows, calculator-click passed in 3 turns and 14.1 s and textedit-edit in 6 turns and
 23.5 s, one run each ([`reuse-smoke`](benchmarks/2026-10-09-reuse-smoke.json)).
