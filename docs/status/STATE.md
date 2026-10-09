@@ -3,27 +3,30 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-09 18:40 UTC)
+## Banner (2026-10-09 20:45 UTC)
 
 The owner is away from the Mac. Their bar (ROADMAP track 3): lightning quick, quick under any load,
 no noticeable load on the Mac, measured against Codex on the same engine. Other projects (Puddle,
-SignalCraft) run timed tests here. Puddle's quiet window 1009m runs from about 18:35 UTC for up to
-2 h: no sleight live or load runs until puddle arch says it closed.
+SignalCraft) run timed tests here: ask puddle arch before any run that adds load.
 
-Released: `v1.1.0` (`0b6a1c0`), `main` at `0b6a1c0`. Unreleased on `pane/auto-mode` (`2cf4394`,
-pushed): full screen and Split View detection; the guard matching degraded reads (`7d63e48`) and no
-longer trusting an empty inventory (`e66791a`); no read before keys, text, paste and coordinates
-after a call's first action (`44700ee`, owner's call, `SLEIGHT_GUARD=careful` keeps it); one
-long-lived app-health helper instead of an `osascript` per read (`818f7e7`); Astra's compactor fold
-for degraded lines (`674502d`); the real-use suite with a Codex arm (`768cbcd`); per-run CPU
-footprint in the benchmark (`2cf4394`). The guard change and the helper still need a live run.
+Released: `v1.1.0` (`0b6a1c0`). Unreleased on `pane/auto-mode` (`09ea082`, pushed), all live-checked
+unless noted: full screen and Split View detection; the guard skipping its read after typing,
+pasting or a plain key (`44700ee`, refined in `db45c94` after a head-to-head failure); the first
+action reusing Claude's read from the call before (`c2bd713`, early live runs only); one app-health
+helper per session (`818f7e7`, fixed live in `025460d`); Sol's real-use suite through brief 10 and a
+Codex arm for it; a per-run CPU footprint (`2cf4394`, `2c30446`).
 
-Next, once Puddle's window closes:
-- A live check of `44700ee` and `818f7e7` (`load-cost` click-then-keys, a full-screen note).
-- The head-to-head, sleight against Codex, at the owner's normal load and with added load, with
-  time, turns and CPU footprint per arm. Then cut what it shows.
-- Office qualification after brief 10 and the owner's Excel click, then Mail and Mimestream with
-  the owner watching.
+Head-to-head at normal load (published): sleight 20/21 and 904 s against Codex 16/21 and 1,292 s on
+the default tasks, 12/12 and 396 s against 11/11 and 429 s on six real-use tasks. Under 20 CPU
+workers (stopped early, 9 runs): both timed out on Calculator; sleight's reads before clicks by ID
+cost tens of seconds each, where Codex makes none.
+
+Next:
+- Rerun the CPU footprint with `2c30446` so Codex's engine counts, on a few tasks at normal load.
+- The batching A/B (`SLEIGHT_FIRST_CALL_BATCH=1`) on the default tasks' turns.
+- Office: brief 11 (cleanup reads retry), then excel-edit and powerpoint-edit; Mail and Mimestream
+  with the owner watching.
+- A release once a full pass confirms these numbers, with the README reread whole (LAWS).
 
 Branches and worktrees:
 - `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it.
@@ -34,8 +37,8 @@ Branches and worktrees:
 - `perf/screenshot-scale` (`1aa574b`, `~/Projects/sleight-wt/shots`): parked.
 - `fix/drag-chess` and older `codex/*` worktrees: earlier rounds. Leave them.
 
-Waiting on the owner: a click on "Start Using Excel" in Excel and brief 10 for Sol
-(`.dev/prompts/sol-real-use-tasks-10.md`). Mail and Mimestream need them watching for about 10 minutes.
+Waiting on the owner: brief 11 for Sol (`.dev/prompts/sol-real-use-tasks-11.md`). Mail and
+Mimestream need them watching for about 10 minutes.
 Qualification left fixture windows on their screen: about seven in Safari, two in Helium, six
 Preview `Pages-*.pdf`, and Word and Excel running with fixture documents.
 
