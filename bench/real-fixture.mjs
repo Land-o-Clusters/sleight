@@ -102,6 +102,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
         let event; try { event = JSON.parse(line); } catch { continue; }
         if (typeof event.running === 'boolean') { lease.running = event.running; diagnostics.running = event.running; }
         if (event.pid) { lease.pid = event.pid; diagnostics.pid = event.pid; }
+        if (event.appDialog) { diagnostics.appDialog = event.appDialog; ctx.onAppDialog?.(event.appDialog); }
         if (event.stage === 'retry') diagnostics.retries.push({ code: event.code, waitMs: event.waitMs, totalWaitMs: event.totalWaitMs });
         for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback']) {
           if (event[key] !== undefined) diagnostics[key] = event[key];

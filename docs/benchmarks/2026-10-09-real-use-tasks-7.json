@@ -1,0 +1,426 @@
+{
+  "round": 7,
+  "date": "2026-10-09",
+  "branch": "codex/real-use-tasks",
+  "base": "39108e455a1a3ed43644b024caa5ede87090d948",
+  "status": "Implementation checked and reviewed; 20 live qualification slots await explicit owner-away confirmation",
+  "scope": {
+    "tasks": [
+      "safari-grid",
+      "helium-grid",
+      "safari-editor",
+      "helium-editor",
+      "safari-dense",
+      "helium-dense",
+      "safari-spa",
+      "helium-spa",
+      "safari-nested",
+      "helium-nested",
+      "safari-infinite",
+      "helium-infinite",
+      "word-edit",
+      "excel-edit",
+      "powerpoint-edit",
+      "mail-folder",
+      "mail-message",
+      "mail-thread",
+      "mail-attachment",
+      "mail-search"
+    ],
+    "runsPerTask": 1,
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "surface": "computer",
+    "simulator": "excluded",
+    "mimestream": "excluded pending owner-provided test account"
+  },
+  "qualificationSlots": [
+    {
+      "task": "safari-grid",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "helium-grid",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "safari-editor",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "helium-editor",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "safari-dense",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "helium-dense",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "safari-spa",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "helium-spa",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "safari-nested",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "helium-nested",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "safari-infinite",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "helium-infinite",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "word-edit",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "excel-edit",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "powerpoint-edit",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "mail-folder",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "mail-message",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "mail-thread",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "mail-attachment",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "mail-search",
+      "run": 1,
+      "status": "unstarted"
+    }
+  ],
+  "confirmedNewAppQuits": 0,
+  "appPromptsAndDialogs": [],
+  "attempts": [
+    {
+      "kind": "dry-run",
+      "stamp": "2026-10-09T05-09-52-402Z",
+      "exitCode": 1,
+      "source": "39108e4 plus uncommitted round-7 implementation",
+      "error": "EPERM writing ~/Projects/sleight-wt/real-use-tasks/bench/results/2026-10-09T05-09-52-402Z-dry.json; no results file created. The first per-task outcome could not be retained.",
+      "targetAppsLaunched": 0,
+      "modelTrials": 0
+    },
+    {
+      "kind": "dry-run",
+      "exitCode": 0,
+      "source": "39108e4 plus round-7 implementation before editor full-structure, PowerPoint media, and Mail lifecycle review fixes",
+      "targetAppsLaunched": 0,
+      "modelTrials": 0,
+      "results": {
+        "stamp": "2026-10-09T05-10-18-348Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "ownerAway": false,
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "safari-grid",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use, work only in the new Safari window showing http://127.0.0.1:54904/c73b379f/. Find the row whose Project is Orchid, change only its Budget from 275 to 125, then sort Budget ascending. Keep every other row and value unchanged. Use the page controls and editing surface for this task. Leave this window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+            "check": "page state does not match the grid task",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-grid",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use, work only in the new Helium window showing http://127.0.0.1:54905/72513de1/. Find the row whose Project is Orchid, change only its Budget from 275 to 125, then sort Budget ascending. Keep every other row and value unchanged. Use the page controls and editing surface for this task. Leave this window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+            "check": "page state does not match the grid task",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-editor",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use, work only in the new Safari window showing http://127.0.0.1:54906/5d3b1d75/. In the editable planning document, find the Release checklist heading. Bold only the phrase \"ship carefully\" in its paragraph, then append a third bullet \"Archive notes 5d3b1d75\". Keep the title, heading, paragraph text and existing two bullets unchanged. Use the page controls and editing surface for this task. Leave this window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+            "check": "page state does not match the editor task",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-editor",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use, work only in the new Helium window showing http://127.0.0.1:54907/3ef7b2f0/. In the editable planning document, find the Release checklist heading. Bold only the phrase \"ship carefully\" in its paragraph, then append a third bullet \"Archive notes 3ef7b2f0\". Keep the title, heading, paragraph text and existing two bullets unchanged. Use the page controls and editing surface for this task. Leave this window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+            "check": "page state does not match the editor task",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-dense",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use, work only in the new Safari window showing http://127.0.0.1:54908/a7e2c028/. In the research archive, open the link named \"Tidal observatory field notes\" and leave that article visible. Use the page controls and editing surface for this task. Leave this window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+            "check": "page state does not match the dense task",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-dense",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use, work only in the new Helium window showing http://127.0.0.1:54909/9a62f390/. In the research archive, open the link named \"Tidal observatory field notes\" and leave that article visible. Use the page controls and editing surface for this task. Leave this window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+            "check": "page state does not match the dense task",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-spa",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use, work only in the new Safari window showing http://127.0.0.1:54910/79f3ebe8/. Choose Requests, then New request. Select Research for Category, enter Orchid for Project, choose Continue, enter \"79f3ebe8\" for Code, then Submit request. Leave the Request submitted screen visible. Use the page controls and editing surface for this task. Leave this window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+            "check": "page state does not match the spa task",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-spa",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use, work only in the new Helium window showing http://127.0.0.1:54911/b9da2446/. Choose Requests, then New request. Select Research for Category, enter Orchid for Project, choose Continue, enter \"b9da2446\" for Code, then Submit request. Leave the Request submitted screen visible. Use the page controls and editing surface for this task. Leave this window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+            "check": "page state does not match the spa task",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-nested",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use, work only in the new Safari window showing http://127.0.0.1:54912/75621382/. Expand Collections, then Science, Marine, Station and Reports. Select \"Coral report 75621382\". Leave the whole path expanded and that selection visible. Use the page controls and editing surface for this task. Leave this window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+            "check": "page state does not match the nested task",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-nested",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use, work only in the new Helium window showing http://127.0.0.1:54913/d0e0b057/. Expand Collections, then Science, Marine, Station and Reports. Select \"Coral report d0e0b057\". Leave the whole path expanded and that selection visible. Use the page controls and editing surface for this task. Leave this window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+            "check": "page state does not match the nested task",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-infinite",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use, work only in the new Safari window showing http://127.0.0.1:54914/bb04291d/. Scroll through the inspection records until Record 87 is loaded. Open Record 87, enter \"Reviewed bb04291d\" for Review note and Confirm review. Leave the dialog closed and the reviewed result visible. Use the page controls and editing surface for this task. Leave this window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+            "check": "page state does not match the infinite task",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-infinite",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use, work only in the new Helium window showing http://127.0.0.1:54915/4a0b1b09/. Scroll through the inspection records until Record 87 is loaded. Open Record 87, enter \"Reviewed 4a0b1b09\" for Review note and Confirm review. Leave the dialog closed and the reviewed result visible. Use the page controls and editing surface for this task. Leave this window open for cleanup. Do not read, list, switch to or close any other tabs or windows.",
+            "check": "page state does not match the infinite task",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "word-edit",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use in Microsoft Word, edit only <temp>/sleight-bench/2026-10-09T05-10-18-348Z/sleight-word-edit-1/Report-c5d95f0e.docx. Apply the built-in Heading 1 paragraph style to \"Report c5d95f0e\". Use Find and Replace to replace amber with violet. Keep all other existing text unchanged. At the end of the document insert one 2-row, 2-column table. Its first row is Item | Count, and its second row is Crates | 7. Do not add any other text. Work only in that fixture document. Save the same file and leave it open for cleanup. Do not open, read, modify or close other documents or windows. If a sign-in, activation, licensing, first-run or permission dialog appears, stop and report its visible text. Do not sign in or dismiss it.",
+            "check": "saved Office file: unexpected Word paragraphs",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "excel-edit",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use in Microsoft Excel, edit only <temp>/sleight-bench/2026-10-09T05-10-18-348Z/sleight-excel-edit-1/Inventory-f277b064.xlsx. On Inventory, sort only A2:B4 by the Item column in ascending alphabetical order, keeping each quantity with its item. Enter Budget in D1, 11 in D2, 4 in D3, and the formula =SUM(D2:D3) in D4. Add one empty worksheet named \"Review f277b064\" after Inventory. Keep all other existing cells unchanged. Calculate and save, so D4 is 15 in the saved workbook. Work only in that fixture document. Save the same file and leave it open for cleanup. Do not open, read, modify or close other documents or windows. If a sign-in, activation, licensing, first-run or permission dialog appears, stop and report its visible text. Do not sign in or dismiss it.",
+            "check": "saved Office file: unexpected worksheet names or order",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "powerpoint-edit",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use in Microsoft PowerPoint, edit only <temp>/sleight-bench/2026-10-09T05-10-18-348Z/sleight-powerpoint-edit-1/Slides-b5ec82f7.pptx. Add one Title Only slide with the title \"Middle b5ec82f7\". Reorder slides so their titles are \"Finish b5ec82f7\", \"Start b5ec82f7\", \"Middle b5ec82f7\", in that order. Keep the existing slide titles unchanged and add no other content. Work only in that fixture document. Save the same file and leave it open for cleanup. Do not open, read, modify or close other documents or windows. If a sign-in, activation, licensing, first-run or permission dialog appears, stop and report its visible text. Do not sign in or dismiss it.",
+            "check": "saved Office file: unexpected slide count or IDs",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "mail-folder",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use in the run-owned Mail viewer, navigate only the local On My Mac imported mailbox \"Sleight-Mail-8b784b9f\". Open Projects > Orchard > Design. Open the message \"Design folder marker\" and report its folder code. Return JSON with exactly one field, {\"answer\":\"the exact requested value\"}. Do not compose, reply, forward, send, move, copy, flag, delete, mark read or unread, rename, create mailboxes, or change any mail or settings. Do not access the owner's accounts or real mail, or read, list, switch to or close any other windows or account mailboxes. Keep the owned viewer open for cleanup. Stop at any permission, sign-in, activation or first-run dialog and report it without dismissing it.",
+            "check": "Mail imported-data baseline is unavailable",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "mail-message",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use in the run-owned Mail viewer, navigate only the local On My Mac imported mailbox \"Sleight-Mail-4480d096\". Find the message from mira.cole@example.test with subject \"Orchard route note\" and report its route code. Return JSON with exactly one field, {\"answer\":\"the exact requested value\"}. Do not compose, reply, forward, send, move, copy, flag, delete, mark read or unread, rename, create mailboxes, or change any mail or settings. Do not access the owner's accounts or real mail, or read, list, switch to or close any other windows or account mailboxes. Keep the owned viewer open for cleanup. Stop at any permission, sign-in, activation or first-run dialog and report it without dismissing it.",
+            "check": "Mail imported-data baseline is unavailable",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "mail-thread",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use in the run-owned Mail viewer, navigate only the local On My Mac imported mailbox \"Sleight-Mail-ff370ee6\". In Projects > Orchard > Review, open the \"Orchard handoff\" conversation. Report the exact instruction after \"Third reply:\" in its third reply, counting from the oldest opening message. Return JSON with exactly one field, {\"answer\":\"the exact requested value\"}. Do not compose, reply, forward, send, move, copy, flag, delete, mark read or unread, rename, create mailboxes, or change any mail or settings. Do not access the owner's accounts or real mail, or read, list, switch to or close any other windows or account mailboxes. Keep the owned viewer open for cleanup. Stop at any permission, sign-in, activation or first-run dialog and report it without dismissing it.",
+            "check": "Mail imported-data baseline is unavailable",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "mail-attachment",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use in the run-owned Mail viewer, navigate only the local On My Mac imported mailbox \"Sleight-Mail-f66dbf6a\". In Projects > Orchard > Design, find \"Orchard map attachment\" and report its attachment filename. Do not open or save the attachment. Return JSON with exactly one field, {\"answer\":\"the exact requested value\"}. Do not compose, reply, forward, send, move, copy, flag, delete, mark read or unread, rename, create mailboxes, or change any mail or settings. Do not access the owner's accounts or real mail, or read, list, switch to or close any other windows or account mailboxes. Keep the owned viewer open for cleanup. Stop at any permission, sign-in, activation or first-run dialog and report it without dismissing it.",
+            "check": "Mail imported-data baseline is unavailable",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "mail-search",
+            "run": 1,
+            "dryRun": true,
+            "prompt": "Using computer use in the run-owned Mail viewer, navigate only the local On My Mac imported mailbox \"Sleight-Mail-f13fb225\". Search only this imported fixture mailbox for \"blue lantern\". Find \"Blue lantern invoice\" and report its invoice code. Never search All Mailboxes. Return JSON with exactly one field, {\"answer\":\"the exact requested value\"}. Do not compose, reply, forward, send, move, copy, flag, delete, mark read or unread, rename, create mailboxes, or change any mail or settings. Do not access the owner's accounts or real mail, or read, list, switch to or close any other windows or account mailboxes. Keep the owned viewer open for cleanup. Stop at any permission, sign-in, activation or first-run dialog and report it without dismissing it.",
+            "check": "Mail imported-data baseline is unavailable",
+            "models": []
+          }
+        ]
+      }
+    }
+  ],
+  "validation": {
+    "check": {
+      "command": "npm run check",
+      "exitCode": 0,
+      "unitTests": 849,
+      "modTests": 11,
+      "pluginValidations": 2,
+      "runs": [
+        {
+          "exitCode": 1,
+          "unitTests": 848,
+          "passed": 805,
+          "failed": 43,
+          "reason": "41 localhost bind EPERM failures, 1 worktree fixture-linker output denial, and 1 missing webTasks/officeTasks/mailTasks binding in an inert Simulator cleanup test. No live Simulator ran."
+        },
+        {
+          "exitCode": 0,
+          "unitTests": 848,
+          "modTests": 11,
+          "pluginValidations": 2,
+          "source": "before final PowerPoint background and picture-fill regression fix"
+        },
+        {
+          "exitCode": 0,
+          "unitTests": 849,
+          "modTests": 11,
+          "pluginValidations": 2,
+          "source": "final code"
+        }
+      ]
+    },
+    "lintProse": {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "status": "final report prose checked",
+      "files": 51,
+      "runs": [
+        {
+          "exitCode": 1,
+          "errors": 2,
+          "reason": "Two semicolons in newly added prose"
+        },
+        {
+          "exitCode": 0,
+          "files": 51
+        },
+        {
+          "exitCode": 0,
+          "files": 51,
+          "source": "final report prose"
+        }
+      ]
+    },
+    "focusedTests": {
+      "web": 34,
+      "office": 17,
+      "mail": 25,
+      "fixtureAndRunner": 70
+    }
+  },
+  "limitations": [
+    "No live model, browser layout, Office opening, Mail import/export, or newly launched app quit has been qualified in round 7.",
+    "Mail requires an already-running app and refuses unsupported ownership or complete topology. The native export path lacks an independent current flag/read receipt and stops before a model task; native capabilities remain unmeasured."
+  ],
+  "review": {
+    "status": "No remaining Critical or Important defects found in re-reviewed scope",
+    "fixes": [
+      "Editor snapshots include full document structure and bold ranges, so additional content fails.",
+      "PowerPoint rejects extra shapes, background changes and picture fills.",
+      "Mail dialog stops suppress AX cleanup, helper collection stays under the lock, and complete topology is required.",
+      "Mail refuses incomplete current flag/read proof rather than accepting exported headers as proof."
+    ]
+  }
+}

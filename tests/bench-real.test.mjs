@@ -22,7 +22,16 @@ test('suite selection preserves the default tasks and rejects an unknown suite',
   assert.equal(benchmark.tasks.length, 7);
   assert.deepEqual(benchmark.getTasks('real').map(t => t.id), [
     'safari-form', 'helium-form', 'preview-pdf', 'finder-files', 'textedit-calculator', 'simulator-flow',
+    'safari-grid', 'helium-grid', 'safari-editor', 'helium-editor', 'safari-dense', 'helium-dense',
+    'safari-spa', 'helium-spa', 'safari-nested', 'helium-nested', 'safari-infinite', 'helium-infinite',
+    'word-edit', 'excel-edit', 'powerpoint-edit',
+    'mail-folder', 'mail-message', 'mail-thread', 'mail-attachment', 'mail-search',
   ]);
+  for (const task of benchmark.getTasks('real')) {
+    for (const method of ['prepare', 'setup', 'prompt', 'check', 'cleanup']) {
+      assert.equal(typeof task[method], 'function', `${task.id} needs ${method}`);
+    }
+  }
   assert.throws(() => benchmark.getTasks('other'), /unknown suite/);
 });
 

@@ -222,6 +222,27 @@ test('Helium opens a new window on its real profile and closes through its retai
   await closed;
 });
 
+test('a streamed helper dialog records the original process before aborting setup', async t => {
+  const { openFixture } = await import('../bench/real-fixture.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'real-fixture-test-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const dialog = { app: 'Microsoft Word', category: 'activation' };
+  const ctx = { dir, onAppDialog: value => assert.deepEqual(value, dialog) };
+  await assert.rejects(openFixture(ctx, { app: 'Microsoft Word', bundle: 'com.microsoft.Word', mode: 'document' }, {
+    helper: async () => ({ command: 'inert-helper', args: [] }),
+    run: async (_command, _args, options) => {
+      options.onStdout('{"stage":"identified","running":false,"pid":812}\n');
+      options.onStdout(JSON.stringify({ stage: 'app-dialog', appDialog: dialog }) + '\n');
+      return { exit: { code: 1 }, groupClean: true, stderr: 'application dialog',
+        stdout: '{"stage":"setup-failure","cleanup":"unconfirmed"}\n' };
+    },
+    open: () => assert.fail('no document open before armed'),
+  }), /application dialog/);
+  assert.equal(ctx.windowLeases[0].pid, 812);
+  assert.equal(ctx.windowLeases[0].running, false);
+  assert.deepEqual(ctx.fixtureDiagnostics[0].appDialog, dialog);
+});
+
 test('AX cleanup closes the retained fixture without reading any other window', () => {
   const source = readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8');
   const sandbox = { ObjC: { import() {} } };
@@ -612,6 +633,19 @@ test('disabled document close activates only with an explicit owner-away boundar
   events.length = 0;
   closeDocumentSafely({}, { ownerAway: true }, () => events.push('validate'), api);
   assert.deepEqual(events, ['menu', 'validate', 'activate', 'validate', 'menu', 'validate', 'close']);
+});
+
+test('application dialog classification stops licensing and first-run UI without exposing document titles', () => {
+  const { appDialogCategory } = nativeSource();
+  assert.equal(typeof appDialogCategory, 'function');
+  assert.equal(appDialogCategory({ title: 'Activate Office', document: '' }), 'activation');
+  assert.equal(appDialogCategory({ title: 'Microsoft Word', document: '', buttons: ['Sign In'] }), 'sign-in');
+  assert.equal(appDialogCategory({ title: 'Welcome to Microsoft Excel', document: '' }), 'first-run');
+  assert.equal(appDialogCategory({ title: 'Grant Access', subrole: 'AXDialog', document: '' }), 'permission');
+  assert.equal(appDialogCategory({ title: 'Welcome.docx', document: 'file:///owner/Welcome.docx' }), null);
+  assert.equal(appDialogCategory({ title: 'Document1', document: '', buttons: ['Sign In'] }), null);
+  assert.equal(appDialogCategory({ title: 'Word', document: '', buttons: ['Open'] }), null);
+  assert.equal(appDialogCategory({ title: 'Unexpected sheet', subrole: 'AXDialog', document: '' }), 'unexpected-dialog');
 });
 
 test('a collected helper refusal before any mutation confirms cleanup without an AX action', async t => {

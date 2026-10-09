@@ -28,6 +28,48 @@ test('fixture-only diagnostics run setup and cleanup under the lock without a mo
   assert.equal(existsSync(ctx.lockPath), false);
 });
 
+test('an Office activation dialog stops before a model and suppresses AX cleanup', async t => {
+  const execute = await runner(), ctx = fixture(t), controller = new AbortController();
+  const dialog = { app: 'Microsoft Word', category: 'activation', description: 'activation application dialog' };
+  let disposed = false;
+  const result = await execute({ setup(context) {
+    context.windowLeases = [{ dispose: async () => { disposed = true; return true; } }];
+    context.onAppDialog(dialog);
+    throw new Error('activation');
+  }, cleanup: () => assert.fail('never press a close or licensing button after an app-dialog stop') }, ctx, {
+    signal: controller.signal, stop: () => controller.abort(), drive: () => assert.fail('no model before licensing is resolved'),
+    permissionCheck: async () => false,
+  });
+  assert.deepEqual(result.appDialog, dialog);
+  assert.match(result.reason, /activation.*stopped/);
+  assert.equal(disposed, true);
+  assert.equal(result.passed, false);
+});
+
+test('an app dialog during the model stops before an app-data checker or AX cleanup', async t => {
+  const execute = await runner(), ctx = fixture(t), controller = new AbortController();
+  const dialog = { app: 'Microsoft Excel', category: 'sign-in', description: 'sign-in application dialog' };
+  let disposed = false, serverClosed = false;
+  const result = await execute({ setup(context) {
+    context.windowLeases = [{ dispose: async () => { disposed = true; return true; } }];
+    context.closeServer = async () => { serverClosed = true; };
+  }, prompt: () => 'fixture', check: () => assert.fail('checker must not export app data after a dialog'),
+  cleanup: () => assert.fail('no AX action after a dialog') }, ctx, {
+    signal: controller.signal, stop: () => controller.abort(), permissionCheck: async () => false,
+    drive: async (_prompt, context) => {
+      context.onAppDialog(dialog);
+      return { code: 0, groupClean: true, out: { result: 'done' } };
+    },
+  });
+  assert.equal(result.passed, false);
+  assert.deepEqual(result.appDialogs, [dialog]);
+  assert.match(result.reason, /sign-in.*stopped/);
+  assert.equal(disposed, true);
+  assert.equal(serverClosed, true);
+  assert.equal(existsSync(ctx.dir), true);
+  assert.equal(existsSync(ctx.lockPath), false);
+});
+
 test('a failed setup action is recorded without forcing a stop after confirmed cleanup', async t => {
   const execute = await runner(), ctx = fixture(t);
   const result = await execute({ setup(context) {

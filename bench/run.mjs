@@ -168,7 +168,8 @@ const TAPS_BIN = join(ARM_HOME, 'keyboard-taps');
 function benchKeyboardTaps() {
   try {
     if (!existsSync(TAPS_BIN)) execFileSync('swiftc', ['-O', join(ROOT, 'bench', 'keyboard-taps.swift'), '-o', TAPS_BIN], { stdio: 'ignore', timeout: 180000 });
-    const names = new Set(['Calculator', 'TextEdit', 'Chess', 'Simulator', 'DeviceHub', 'Device Hub', 'Safari', 'Preview', 'Finder', 'Helium']);
+    const names = new Set(['Calculator', 'TextEdit', 'Chess', 'Simulator', 'DeviceHub', 'Device Hub', 'Safari', 'Preview', 'Finder', 'Helium',
+      'Microsoft Word', 'Word', 'Microsoft Excel', 'Excel', 'Microsoft PowerPoint', 'PowerPoint', 'Mail']);
     return JSON.parse(execFileSync(TAPS_BIN, { encoding: 'utf8', timeout: 10000 })).filter(t => names.has(t.app));
   } catch (err) { return [{ app: 'unknown', error: `keyboard tap check failed: ${err.message}` }]; }
 }
@@ -290,7 +291,7 @@ pass: for (let run = 1; run <= runs; run++) {
         save();
         const recorded = results.at(-1);
         console.error(`${recorded.passed ? 'PASS' : isDryRun ? 'DRY' : 'FAIL'} ${armName} ${task.id} #${run} ${recorded.seconds ?? 0}s${recorded.reason ? ` (${recorded.reason})` : ''}`);
-        if (result.cleanupError || result.permissionPrompt || result.permissionRefusal || result.observerError || result.groupClean === false) {
+        if (result.cleanupError || result.permissionPrompt || result.permissionRefusal || result.observerError || result.appDialog || result.groupClean === false) {
           console.error(`STOP: ${scrub(result.cleanupError ?? result.reason ?? 'permission stop')}`);
           controller.abort(new Error('live safety stop'));
           process.exitCode = 1;

@@ -72,6 +72,14 @@ Close commands are disabled. Use that flag only after the owner confirms they ar
 The round-5 [report](benchmarks/2026-10-08-real-use-tasks-5.md) records 16 of 18 slots, 6 passes,
 10 setup failures and 2 unstarted Simulator slots. All 6 model trials passed.
 
+### Round 7
+
+The [report](benchmarks/2026-10-09-real-use-tasks-7.md) lists 20 new tasks, each with one requested
+Sonnet 5.5 medium trial. The browser IDs pair `safari-` and `helium-` with `grid`, `editor`, `dense`,
+`spa`, `nested` and `infinite`. Office adds `word-edit`, `excel-edit` and `powerpoint-edit`.
+Mail adds `mail-folder`, `mail-message`, `mail-thread`, `mail-attachment` and `mail-search` in a
+local invented mailbox. All 20 dry fixtures ran. Desktop qualification awaits owner-away time.
+
 ## Time per run
 
 Each run's result now splits its time. Claude Code reports the time spent in the model API, and
