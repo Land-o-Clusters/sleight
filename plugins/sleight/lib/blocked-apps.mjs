@@ -42,8 +42,9 @@ export function refusedApp(text) {
 // Settings and preferences windows of the refused apps are never driven, so
 // Claude cannot change the apps' own approval or safety settings. Terminal
 // titles its settings window after the open pane ("General", "Profiles"), so
-// the driver also refuses windows with a toolbar, and builds this pattern with
-// its flags (blocked-app.js), which these checks mirror.
+// the driver also inspects AX identifiers, dialog/modal metadata and nested
+// toolbars (blocked-app.js). These title checks are its first filter; engine
+// window headers do not supply that native metadata.
 export const SETTINGS_TITLE = /^(?:settings|preferences|réglages|einstellungen|impostazioni|configuración|ajustes|preferencias|設定|设置|偏好设置)(?:…|\.{3})?$/i;
 export const isSettingsTitle = title => typeof title === 'string' && SETTINGS_TITLE.test(title.trim());
 // The exact RegExp construction the driver performs with the relay's request.
