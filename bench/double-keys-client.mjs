@@ -101,7 +101,7 @@ export async function probeClient(server, { relay: throughRelay, record, timeout
   });
   const call = async (name, args) => {
     const result = await request('tools/call', { name,
-      arguments: !throughRelay && name === 'turn_ended' ? { ...args, session_id: sessionId, turn_id: turnId } : args,
+      arguments: !throughRelay && name === 'turn_ended' ? { ...args, hook_event_name: 'Stop', session_id: sessionId, turn_id: turnId } : args,
       ...(throughRelay ? {} : { _meta: { 'x-codex-turn-metadata': JSON.stringify({ session_id: sessionId, turn_id: turnId }) } }) });
     if (!throughRelay && name === 'turn_ended') turnId = randomUUID();
     return result;

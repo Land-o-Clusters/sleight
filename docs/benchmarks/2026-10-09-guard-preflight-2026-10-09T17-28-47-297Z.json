@@ -1,0 +1,19 @@
+{
+  "started": "2026-10-09T17:28:47.297Z",
+  "load": [
+    4.52197265625,
+    5.3115234375,
+    5.34716796875
+  ],
+  "addedWorkers": 0,
+  "kind": "native-window-preflight",
+  "permissionRequested": false,
+  "exitCode": 0,
+  "signal": null,
+  "ms": 56.559958,
+  "result": {
+    "status": "absent",
+    "permissionRequested": false
+  },
+  "finished": "2026-10-09T17:28:47.354Z"
+}

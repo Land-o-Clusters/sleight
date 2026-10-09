@@ -1,0 +1,11 @@
+{
+  "started": "2026-10-09T18:03:11.406Z",
+  "engine": "26.1002.52244",
+  "workers": 20,
+  "rows": [],
+  "events": [],
+  "error": "Another live run holds /tmp/sleight-live.lock. Wait for it to finish.",
+  "workerCleanup": [],
+  "loadEnded": "2026-10-09T18:03:11.408Z",
+  "finished": "2026-10-09T18:03:11.408Z"
+}

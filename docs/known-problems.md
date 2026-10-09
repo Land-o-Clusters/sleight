@@ -208,6 +208,13 @@ our own runs. Dates and engine versions are given where they matter.
   the AX observation captured with the image. Each of two Chess sequences saved one read.
   Click-only and typing batches keep their existing read counts. The product retains every
   intermediate identity and selector check.
+- The 2026-10-09 [guard speed experiment](benchmarks/2026-10-09-guard-speed.md) did not replace
+  per-action reads. The engine refused the native observer socket with `connect EPERM`; at load
+  62 to 67, 14/20 native observations also failed after the AX messaging deadline. Another run
+  at load 43 produced 0/20 usable observations, including 17 busy refusals. A 100 ms read
+  race still took 516 to 563 ms to return, with the read complete by the next call. No bounded
+  post-call read or fast native guard is enabled. The compactor emits less text for degraded
+  buttons with unique IDs. The engine's settling wait remains.
 - After every `js` action without a later reusable observation, sleight's window guard reads the whole tree again so the input lease can
   check the window header. Since 0.9.0 Claude gets only the lines that changed since the last full
   tree it saw for that window ([measurements](benchmarks/2026-10-05-compact-reads.md)). A first

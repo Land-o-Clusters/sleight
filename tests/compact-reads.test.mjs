@@ -71,7 +71,7 @@ test('loaded content renumbers later elements: they are left out and counted, an
   const grown = tree(['\t2 link Story 0', '\t3 link Breaking story', ...Array.from({ length: 59 }, (_, i) => `\t${i + 4} link Story ${i + 1}`)], 'news');
   const [out] = apply(c, GUARD_MARK + grown);
   assert.match(out, /\+ \t3 link Breaking story/);
-  assert.match(out, /59 other elements kept their text but have new numbers/);
+  assert.match(out, /59 other elements have new numbers/);
   assert.doesNotMatch(out, /Story 30/);
   assert.equal(c.staleIndex(window, 'await app.click(2)'), undefined, 'a number before the insert is unchanged');
   assert.equal(c.staleIndex(window, 'await app.click(3)'), undefined, 'a number from a + line is current');
@@ -122,7 +122,7 @@ test('the relay remaps a stale number Claude saw, refuses one it never saw, and 
   const grown = tree(['\t2 link Story 0', '\t3 link Breaking story', ...Array.from({ length: 59 }, (_, i) => `\t${i + 4} link Story ${i + 1}`)], 'news');
   js(1, 'let app = await cua.getApp("com.apple.TextEdit")'); await settle(); reply(1, page(60)); await settle();
   js(2, 'await app.click(5)'); await settle(); reply(2, GUARD_MARK + grown); await settle();
-  assert.match(toClient.find(m => m.id === 2).result.content[0].text, /59 other elements kept their text/);
+  assert.match(toClient.find(m => m.id === 2).result.content[0].text, /59 other elements have new numbers/);
   // Claude saw Story 8 as 10; it is 11 now. The click goes out naming Story 8 by its line.
   js(3, 'await app.click(10)'); await settle();
   assert.match(toServer.find(m => m.id === 3).params.arguments.code, /app\.click\(\{"line":"link Story 8"\}\)/);
@@ -188,4 +188,48 @@ test('a stale number is never remapped to a removed element or to one of several
   assert.equal(c.remapStale(window, 'await app.click(3)'), undefined, 'two lines read "link Same" now');
   assert.deepEqual(c.remapStale(window, 'await app.click(6)').remapped, [{ number: 6, line: 'link Story 2' }]);
   assert.equal(c.remapStale(window, 'await app.click(6); await app.click(4)'), undefined, 'one unresolved number keeps the refusal');
+});
+
+const fullButtons = Array.from({ length: 40 }, (_, i) => `\t${i + 1} button Description: ${i}, ID: Button${i}`);
+const bareButtons = offset => Array.from({ length: 40 }, (_, i) => `\t${i + 1 + offset} button Button${i}`);
+const buttonWindow = { title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' };
+test('degraded button attributes produce a short notice without invalidating unchanged numbers', () => {
+  const c = createReadCompactor(); apply(c, tree(fullButtons));
+  const [out] = apply(c, GUARD_MARK + tree(bareButtons(0)));
+  assert.ok(out.length < tree(bareButtons(0)).length / 2);
+  assert.match(out, /40 button lines returned fewer attributes/);
+  assert.equal(c.staleIndex(buttonWindow, 'app.click(20)'), undefined);
+  // Fresh attributes are shown again; no old description is silently treated as current.
+  assert.match(apply(c, GUARD_MARK + tree(fullButtons.map(l => l.replace('Description: 19,', 'Description: Changed,'))))[0], /Description: Changed/);
+});
+test('degradation with renumbering stays stale and remaps only to a unique current line', () => {
+  const unchanged = Array.from({length:40}, (_, i) => `\t${i + 100} link Sidebar ${i}`);
+  const c = createReadCompactor(); apply(c, tree([...fullButtons, ...unchanged]));
+  apply(c, GUARD_MARK + tree(['\t1 button New', ...bareButtons(1), ...unchanged]));
+  assert.deepEqual(c.staleIndex(buttonWindow, 'app.click(20)'), { number: 20 });
+  assert.deepEqual(c.remapStale(buttonWindow, 'app.click(20)').remapped, [{number:20, line:'button Button19'}]);
+});
+test('ambiguous bare names and lost values never count as a harmless attribute degradation', () => {
+  const c = createReadCompactor();
+  apply(c, tree([...sidebar, '\t90 button Description: Left, ID: Same', '\t91 button Description: Right, ID: Same', '\t92 button Value: On, ID: Toggle']));
+  const [out] = apply(c, GUARD_MARK + tree([...sidebar, '\t90 button Same', '\t91 button Same', '\t92 button Toggle']));
+  assert.doesNotMatch(out, /button lines returned fewer attributes/);
+  assert.match(out, /\+ \t92 button Toggle/);
+});
+
+test('a richer line with the same ID prevents folding and stale remapping to a bare button', () => {
+  const c = createReadCompactor();
+  apply(c, tree([...sidebar, '\t90 button Description: Save, ID: Action']));
+  const [out] = apply(c, GUARD_MARK + tree([...sidebar, '\t91 button Action',
+    '\t92 button Description: Save, ID: Action, Help: new']));
+  assert.doesNotMatch(out, /button lines returned fewer attributes/);
+  assert.equal(c.remapStale(buttonWindow, 'app.click(90)'), undefined);
+});
+
+test('an old bare button sharing the ID also prevents folding a richer button', () => {
+  const c = createReadCompactor();
+  apply(c, tree([...sidebar, '\t90 button Description: Save, ID: Action', '\t91 button Action']));
+  const [out] = apply(c, GUARD_MARK + tree([...sidebar, '\t92 button Action']));
+  assert.doesNotMatch(out, /button lines returned fewer attributes/);
+  assert.equal(c.remapStale(buttonWindow, 'app.click(90)'), undefined);
 });
