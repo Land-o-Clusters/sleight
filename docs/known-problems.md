@@ -202,14 +202,15 @@ our own runs. Dates and engine versions are given where they matter.
 - An action called without `await` that fails can end the engine's JavaScript session, and every
   handle with it (`app.click(1); "x"` on a disabled Calculator element, 3/3 on 2026-10-07). sleight
   notices when the engine's first-call docs come back without a `js_reset` and tells Claude, but the
-  call that restarted it may have done nothing. Since 0.15.3 the relay refuses a call whose action is
+  call that restarted it may have done nothing. Since 0.16.0 the relay refuses a call whose action is
   a statement without `await` with more code after it. It doesn't see an un-awaited action inside an
   expression or a callback, and a last statement is left alone because the call returns its promise.
 - On 2026-10-08 two calculator-click runs took 16 and 10 turns instead of 5. Right after Calculator
   launched, its first read took 7.1 s, the IDs `AllClear` and `Seven` were missing and then came
   back, and one button's line changed from `Description: 7, ID: Seven` to `Seven` between reads.
   Each change stopped an action and cost Claude a turn. The Mac was under heavy load from other
-  processes that day. We don't know whether the load or Calculator's launch caused it.
+  processes that day. We don't know whether the load or Calculator's launch caused it. In the next
+  full pass that evening, all 6 Calculator runs took 3 or 4 turns.
 - On 2026-10-07 `drag` once refused a Chess window launched in the background seconds earlier,
   because it couldn't find that window among Chess's accessibility windows. It matches by the window's AX number, or by bounds and
   title, and neither matched. The same kind of window matched in another run. Why is unknown.
@@ -223,6 +224,7 @@ our own runs. Dates and engine versions are given where they matter.
   with 3/10 moves independently verified. One local call refused a covered source point without
   input. Another ended in a command failure near its 30 s deadline. Native AX omitted e4 in nine
   further move checks, leaving their outcomes unconfirmed. The historical availability refusals occurred 0/20 times.
+  In the covered-drags pass that evening, chess-drag passed 3/3 with no window refusal.
   Every selected window was on screen at layer 0 with matching CG/AX bounds. All twenty launches
   succeeded after confirmed process absence, without a -600 retry. Space, the historical window
   state and the native command failure's cause remain unknown. Some window captures returned black
