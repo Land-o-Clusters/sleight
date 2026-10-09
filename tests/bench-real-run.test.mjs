@@ -46,6 +46,24 @@ test('an Office activation dialog stops before a model and suppresses AX cleanup
   assert.equal(result.passed, false);
 });
 
+test('an application result dialog is recorded while the driver checker and cleanup continue', async t => {
+  const execute = await runner(), ctx = fixture(t), calls = [];
+  const dialog = { app: 'Microsoft Word', category: 'application-result', title: 'Microsoft Word', buttons: ['OK'], stop: false };
+  const result = await execute({ setup() {}, prompt: () => 'fixture', check: () => { calls.push('check'); return true; },
+    cleanup: () => calls.push('cleanup') }, ctx, {
+    drive: async (_prompt, context) => {
+      context.onAppDialog(dialog); context.onAppDialog(dialog);
+      assert.equal(context.cleanupSignal.aborted, false);
+      calls.push('driver');
+      return { code: 0, groupClean: true, out: { result: 'done' } };
+    }, stop: () => assert.fail('a result dialog must remain available to the model'),
+  });
+  assert.equal(result.passed, true);
+  assert.equal(result.appDialog, undefined);
+  assert.deepEqual(result.appDialogs, [dialog]);
+  assert.deepEqual(calls, ['driver', 'check', 'cleanup']);
+});
+
 test('an app dialog during the model stops before an app-data checker or AX cleanup', async t => {
   const execute = await runner(), ctx = fixture(t), controller = new AbortController();
   const dialog = { app: 'Microsoft Excel', category: 'sign-in', description: 'sign-in application dialog' };

@@ -1,0 +1,2685 @@
+{
+  "dateLocal": "2026-10-09",
+  "branch": "codex/real-use-tasks",
+  "base": "3ac2a33",
+  "liveRunsBySol": 0,
+  "qualification": "Pending architect rerun; no live app use in this revision.",
+  "attempts": [
+    {
+      "source": "bench/results/2026-10-09T13-32-30-068Z.json",
+      "code": "00d9d62",
+      "ownerAway": true,
+      "exitCode": null,
+      "exitCodeNote": "Architect terminal exit code was not retained in the supplied result.",
+      "payload": {
+        "stamp": "2026-10-09T13-32-30-068Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "ownerAway": true,
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "safari-form",
+            "run": 1,
+            "passed": false,
+            "reason": "Fixture setup failed: New blank browser window unconfirmed",
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": false,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "other"
+                },
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T13-32-30-068Z/sleight-safari-form-1",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-form",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 36488,
+              "modelMs": 27475,
+              "calls": 7,
+              "refused": 0,
+              "toolMs": 7131,
+              "engineMs": 7109,
+              "relayMs": 22,
+              "localMs": 0,
+              "guardReads": 8,
+              "guardReadMs": 1787.5521669999944,
+              "guardReadFailures": 0,
+              "otherMs": 1882
+            },
+            "passed": true,
+            "seconds": 38,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 24996,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "turns": 8,
+            "costUsd": 0.3583642000000001,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 16,
+              "cacheRead": 412121,
+              "cacheWrite": 65782,
+              "output": 1278
+            },
+            "exitCode": 0,
+            "answer": "The form is submitted, and the page now shows \"Submitted\". I filled Name with \"Morgan Reed\", Email with \"morgan@example.test\" and Code with \"04daa723\". I also selected Design for Team and checked \"Send updates\".\n\nMy first Submit click didn't appear to register (the page didn't change), so I clicked "
+          },
+          {
+            "arm": "sleight",
+            "task": "preview-pdf",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 17932,
+              "modelMs": 13535,
+              "calls": 3,
+              "refused": 0,
+              "toolMs": 2859,
+              "engineMs": 2850,
+              "relayMs": 9,
+              "localMs": 0,
+              "guardReads": 3,
+              "guardReadMs": 586.4260829999985,
+              "guardReadFailures": 0,
+              "otherMs": 1538
+            },
+            "passed": true,
+            "seconds": 19.7,
+            "fixtureDiagnostics": [
+              {
+                "app": "Preview",
+                "bundle": "com.apple.Preview",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 65127,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  }
+                },
+                "fresh": false,
+                "menuItems": [
+                  "New from Clipboard",
+                  "Open…",
+                  "Open Recent",
+                  "",
+                  "Close Window",
+                  "Close All",
+                  "Close Selected PDF Document",
+                  "Save",
+                  "Save As…",
+                  "Duplicate",
+                  "Rename…",
+                  "Move To…",
+                  "Revert To",
+                  "",
+                  "Enter Password…",
+                  "Edit Permissions…",
+                  "",
+                  "Import from iPhone or iPad",
+                  "",
+                  "Import from Camera…",
+                  "Import from Scanner…",
+                  "Take Screenshot",
+                  "",
+                  "Export…",
+                  "Export as PDF…",
+                  "",
+                  "Share",
+                  "",
+                  "Print…"
+                ],
+                "menuCommands": [
+                  {
+                    "title": "New from Clipboard",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Open…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open Recent",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Close Window",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Close All",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Close Selected PDF Document",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save As…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Duplicate",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Rename…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Move To…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Revert To",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Enter Password…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Edit Permissions…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Import from iPhone or iPad",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Import from Camera…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Import from Scanner…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Take Screenshot",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Export…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Export as PDF…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Share",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Print…",
+                    "enabled": true
+                  }
+                ]
+              }
+            ],
+            "turns": 4,
+            "costUsd": 0.19356319999999996,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 8,
+              "cacheRead": 195216,
+              "cacheWrite": 37456,
+              "output": 468
+            },
+            "exitCode": 0,
+            "answer": "I rotated page 2 clockwise by 90° and saved it to the same PDF. Preview's title bar no longer shows \"Edited\", and the file is still open. Page 1 is unchanged."
+          },
+          {
+            "arm": "sleight",
+            "task": "finder-files",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 119998,
+              "modelMs": 80846,
+              "calls": 28,
+              "refused": 0,
+              "toolMs": 36159,
+              "engineMs": 16861,
+              "relayMs": 62,
+              "localMs": 19236,
+              "guardReads": 31,
+              "guardReadMs": 6275.218669000006,
+              "guardReadFailures": 0,
+              "otherMs": 2993
+            },
+            "passed": true,
+            "seconds": 121.5,
+            "fixtureDiagnostics": [
+              {
+                "app": "Finder",
+                "bundle": "com.apple.finder",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 1306,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "absent",
+                    "titleMatches": true,
+                    "pathAvailable": false,
+                    "pathMatchesNormalizedTarget": false
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "absent",
+                    "titleMatches": true,
+                    "pathAvailable": false,
+                    "pathMatchesNormalizedTarget": false
+                  }
+                },
+                "fresh": false
+              }
+            ],
+            "turns": 29,
+            "costUsd": 0.7481112,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 58,
+              "cacheRead": 2141696,
+              "cacheWrite": 67249,
+              "output": 5066
+            },
+            "exitCode": 0,
+            "answer": "Both changes are done in Finder, and the window is still open on the folder.\n\n- **Rename:** alpha.txt is now renamed.txt. My first attempt produced `renamed.txt.txt`, so I renamed it again to fix that.\n- **Move:** bravo.txt is now in Archive. I confirmed it shows there as the only item. The top-leve"
+          },
+          {
+            "arm": "sleight",
+            "task": "textedit-calculator",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 41240,
+              "modelMs": 30834,
+              "calls": 7,
+              "refused": 0,
+              "toolMs": 8200,
+              "engineMs": 8172,
+              "relayMs": 28,
+              "localMs": 0,
+              "guardReads": 16,
+              "guardReadMs": 4704.476918000007,
+              "guardReadFailures": 0,
+              "otherMs": 2206
+            },
+            "passed": true,
+            "seconds": 42.8,
+            "fixtureDiagnostics": [
+              {
+                "app": "TextEdit",
+                "bundle": "com.apple.TextEdit",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 34398,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  }
+                },
+                "fresh": false,
+                "menuItems": [
+                  "New",
+                  "Open…",
+                  "Open Recent",
+                  "",
+                  "Close",
+                  "Close All",
+                  "Save",
+                  "Save As…",
+                  "Duplicate",
+                  "Rename…",
+                  "Move To…",
+                  "Revert To",
+                  "Export as PDF…",
+                  "",
+                  "Show Properties",
+                  "",
+                  "Insert from iPhone or iPad",
+                  "",
+                  "Share",
+                  "",
+                  "Page Setup…",
+                  "Print…"
+                ],
+                "menuCommands": [
+                  {
+                    "title": "New",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open Recent",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Close",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Close All",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save As…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Duplicate",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Rename…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Move To…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Revert To",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Export as PDF…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Show Properties",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Insert from iPhone or iPad",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Share",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Page Setup…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Print…",
+                    "enabled": true
+                  }
+                ]
+              },
+              {
+                "app": "Calculator",
+                "bundle": "com.apple.calculator",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 66955,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "turns": 8,
+            "costUsd": 0.24484160000000002,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 16,
+              "cacheRead": 434848,
+              "cacheWrite": 36605,
+              "output": 1142
+            },
+            "exitCode": 0,
+            "answer": "The document now contains 391 and I saved it. The title shows no unsaved marker, and the document is still open in TextEdit.\n\nThe original number was 17. I copied it from TextEdit and switched Calculator from Scientific to Basic mode. I pressed Escape to clear Calculator, pasted 17, and multiplied b"
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-form",
+            "run": 2,
+            "passed": false,
+            "reason": "Fixture setup failed: New blank browser window unconfirmed",
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": false,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "other"
+                },
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T13-32-30-068Z/sleight-safari-form-2",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-form",
+            "run": 2,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 28956,
+              "modelMs": 20852,
+              "calls": 5,
+              "refused": 0,
+              "toolMs": 6401,
+              "engineMs": 6378,
+              "relayMs": 23,
+              "localMs": 0,
+              "guardReads": 8,
+              "guardReadMs": 1805.169332999999,
+              "guardReadFailures": 0,
+              "otherMs": 1703
+            },
+            "passed": true,
+            "seconds": 30.4,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 24996,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "turns": 6,
+            "costUsd": 0.2049936,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 12,
+              "cacheRead": 309368,
+              "cacheWrite": 34144,
+              "output": 652
+            },
+            "exitCode": 0,
+            "answer": "The form is submitted. The page now shows \"Submitted\". I filled in Name \"Morgan Reed\", Email \"morgan@example.test\", Team \"Design\", checked \"Send updates\", and entered Code \"10cd4c50\".\n\nMy first click on Submit only closed the Team dropdown, so I clicked Submit a second time. That click is the one th"
+          },
+          {
+            "arm": "sleight",
+            "task": "preview-pdf",
+            "run": 2,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 13547,
+              "modelMs": 9073,
+              "calls": 3,
+              "refused": 0,
+              "toolMs": 2858,
+              "engineMs": 2844,
+              "relayMs": 14,
+              "localMs": 0,
+              "guardReads": 3,
+              "guardReadMs": 613.3582919999994,
+              "guardReadFailures": 0,
+              "otherMs": 1616
+            },
+            "passed": true,
+            "seconds": 15.1,
+            "fixtureDiagnostics": [
+              {
+                "app": "Preview",
+                "bundle": "com.apple.Preview",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 65127,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  }
+                },
+                "fresh": false,
+                "menuItems": [
+                  "New from Clipboard",
+                  "Open…",
+                  "Open Recent",
+                  "",
+                  "Close Window",
+                  "Close All",
+                  "Close Selected PDF Document",
+                  "Save",
+                  "Save As…",
+                  "Duplicate",
+                  "Rename…",
+                  "Move To…",
+                  "Revert To",
+                  "",
+                  "Enter Password…",
+                  "Edit Permissions…",
+                  "",
+                  "Import from iPhone or iPad",
+                  "",
+                  "Import from Camera…",
+                  "Import from Scanner…",
+                  "Take Screenshot",
+                  "",
+                  "Export…",
+                  "Export as PDF…",
+                  "",
+                  "Share",
+                  "",
+                  "Print…"
+                ],
+                "menuCommands": [
+                  {
+                    "title": "New from Clipboard",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Open…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open Recent",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Close Window",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Close All",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Close Selected PDF Document",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save As…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Duplicate",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Rename…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Move To…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Revert To",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Enter Password…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Edit Permissions…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Import from iPhone or iPad",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Import from Camera…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Import from Scanner…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Take Screenshot",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Export…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Export as PDF…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Share",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Print…",
+                    "enabled": true
+                  }
+                ]
+              }
+            ],
+            "turns": 4,
+            "costUsd": 0.195224,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 8,
+              "cacheRead": 195270,
+              "cacheWrite": 37541,
+              "output": 599
+            },
+            "exitCode": 0,
+            "answer": "I rotated page 2 of `Pages-aaaad673.pdf` clockwise by 90 degrees and saved it to the same file. Page 1 is unchanged, and the PDF is still open in Preview. After the save, the title bar no longer shows \"Edited\". I checked the rotation on screen before saving. I didn't reopen the saved file to check i"
+          },
+          {
+            "arm": "sleight",
+            "task": "finder-files",
+            "run": 2,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 127168,
+              "modelMs": 70683,
+              "calls": 24,
+              "refused": 0,
+              "toolMs": 53826,
+              "engineMs": 14757,
+              "relayMs": 50,
+              "localMs": 39019,
+              "guardReads": 23,
+              "guardReadMs": 6069.364582999997,
+              "guardReadFailures": 0,
+              "otherMs": 2659
+            },
+            "passed": true,
+            "seconds": 128.6,
+            "fixtureDiagnostics": [
+              {
+                "app": "Finder",
+                "bundle": "com.apple.finder",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 1306,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "absent",
+                    "titleMatches": true,
+                    "pathAvailable": false,
+                    "pathMatchesNormalizedTarget": false
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "absent",
+                    "titleMatches": true,
+                    "pathAvailable": false,
+                    "pathMatchesNormalizedTarget": false
+                  }
+                },
+                "fresh": false
+              }
+            ],
+            "turns": 25,
+            "costUsd": 0.6683551999999998,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 48,
+              "cacheRead": 1724746,
+              "cacheWrite": 66595,
+              "output": 5693
+            },
+            "exitCode": 0,
+            "answer": "Both changes are made, and the Finder window is still open. In the folder, `renamed.txt` and `charlie.txt` are left, and `Archive`'s modified time changed to 9:40 AM. I didn't open `Archive` afterward to look at `bravo.txt` inside it.\n\n- **Rename:** `alpha.txt` is now `renamed.txt`, done by editing "
+          },
+          {
+            "arm": "sleight",
+            "task": "textedit-calculator",
+            "run": 2,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 74901,
+              "modelMs": 59881,
+              "calls": 18,
+              "refused": 0,
+              "toolMs": 10892,
+              "engineMs": 10851,
+              "relayMs": 41,
+              "localMs": 0,
+              "guardReads": 23,
+              "guardReadMs": 4857.855662999997,
+              "guardReadFailures": 0,
+              "otherMs": 4128
+            },
+            "passed": true,
+            "seconds": 76.5,
+            "fixtureDiagnostics": [
+              {
+                "app": "TextEdit",
+                "bundle": "com.apple.TextEdit",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 34398,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  }
+                },
+                "fresh": false,
+                "menuItems": [
+                  "New",
+                  "Open…",
+                  "Open Recent",
+                  "",
+                  "Close",
+                  "Close All",
+                  "Save",
+                  "Save As…",
+                  "Duplicate",
+                  "Rename…",
+                  "Move To…",
+                  "Revert To",
+                  "Export as PDF…",
+                  "",
+                  "Show Properties",
+                  "",
+                  "Insert from iPhone or iPad",
+                  "",
+                  "Share",
+                  "",
+                  "Page Setup…",
+                  "Print…"
+                ],
+                "menuCommands": [
+                  {
+                    "title": "New",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open Recent",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Close",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Close All",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save As…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Duplicate",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Rename…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Move To…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Revert To",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Export as PDF…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Show Properties",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Insert from iPhone or iPad",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Share",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Page Setup…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Print…",
+                    "enabled": true
+                  }
+                ]
+              },
+              {
+                "app": "Calculator",
+                "bundle": "com.apple.calculator",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 66955,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "turns": 19,
+            "costUsd": 0.455277,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 38,
+              "cacheRead": 1186835,
+              "cacheWrite": 48356,
+              "output": 2441
+            },
+            "exitCode": 0,
+            "answer": "I replaced the 17 in `Calculation-a8d6f191.txt` with 391 (17 × 23) and saved it. The document is still open in TextEdit.\n\nI read the 17 in TextEdit and copied it, then checked that Calculator was in Basic mode. I cleared Calculator, pasted the 17, multiplied by 23, and copied the 391. I then pasted "
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-form",
+            "run": 3,
+            "passed": false,
+            "reason": "Fixture setup failed: New blank browser window unconfirmed",
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": false,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "other"
+                },
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T13-32-30-068Z/sleight-safari-form-3",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-form",
+            "run": 3,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 21909,
+              "modelMs": 13677,
+              "calls": 5,
+              "refused": 0,
+              "toolMs": 6368,
+              "engineMs": 6352,
+              "relayMs": 16,
+              "localMs": 0,
+              "guardReads": 8,
+              "guardReadMs": 1678.7174170000003,
+              "guardReadFailures": 0,
+              "otherMs": 1864
+            },
+            "passed": true,
+            "seconds": 23.6,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 24996,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "turns": 6,
+            "costUsd": 0.20829639999999996,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 12,
+              "cacheRead": 310042,
+              "cacheWrite": 34366,
+              "output": 880
+            },
+            "exitCode": 0,
+            "answer": "The form is submitted, and the page now shows \"Submitted\". I filled Name, Email and Code, set Team to Design and checked \"Send updates\". The window is still open for cleanup, and I didn't touch any other tabs or windows.\n\nMy first click on Submit didn't seem to register, so I clicked it a second tim"
+          },
+          {
+            "arm": "sleight",
+            "task": "preview-pdf",
+            "run": 3,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 23644,
+              "modelMs": 19099,
+              "calls": 3,
+              "refused": 0,
+              "toolMs": 2837,
+              "engineMs": 2747,
+              "relayMs": 90,
+              "localMs": 0,
+              "guardReads": 3,
+              "guardReadMs": 502.7364579999985,
+              "guardReadFailures": 0,
+              "otherMs": 1708
+            },
+            "passed": true,
+            "seconds": 25.2,
+            "fixtureDiagnostics": [
+              {
+                "app": "Preview",
+                "bundle": "com.apple.Preview",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 65127,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  }
+                },
+                "fresh": false,
+                "menuItems": [
+                  "New from Clipboard",
+                  "Open…",
+                  "Open Recent",
+                  "",
+                  "Close Window",
+                  "Close All",
+                  "Close Selected PDF Document",
+                  "Save",
+                  "Save As…",
+                  "Duplicate",
+                  "Rename…",
+                  "Move To…",
+                  "Revert To",
+                  "",
+                  "Enter Password…",
+                  "Edit Permissions…",
+                  "",
+                  "Import from iPhone or iPad",
+                  "",
+                  "Import from Camera…",
+                  "Import from Scanner…",
+                  "Take Screenshot",
+                  "",
+                  "Export…",
+                  "Export as PDF…",
+                  "",
+                  "Share",
+                  "",
+                  "Print…"
+                ],
+                "menuCommands": [
+                  {
+                    "title": "New from Clipboard",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Open…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open Recent",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Close Window",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Close All",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Close Selected PDF Document",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save As…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Duplicate",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Rename…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Move To…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Revert To",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Enter Password…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Edit Permissions…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Import from iPhone or iPad",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Import from Camera…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Import from Scanner…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Take Screenshot",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Export…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Export as PDF…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Share",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Print…",
+                    "enabled": true
+                  }
+                ]
+              }
+            ],
+            "turns": 4,
+            "costUsd": 0.1981962,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 8,
+              "cacheRead": 191761,
+              "cacheWrite": 38587,
+              "output": 548
+            },
+            "exitCode": 0,
+            "answer": "Page 2 of `Pages-e7767229.pdf` is now rotated 90° clockwise, with its text reading top-to-bottom down the right side. I saved it over the same file and left it open in Preview. Page 1 is unchanged, and the \"Edited\" marker cleared from the title after the save."
+          },
+          {
+            "arm": "sleight",
+            "task": "finder-files",
+            "run": 3,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 85684,
+              "modelMs": 31574,
+              "calls": 10,
+              "refused": 0,
+              "toolMs": 52210,
+              "engineMs": 11255,
+              "relayMs": 24,
+              "localMs": 40931,
+              "guardReads": 8,
+              "guardReadMs": 2743.9599169999965,
+              "guardReadFailures": 0,
+              "otherMs": 1900
+            },
+            "passed": true,
+            "seconds": 87.4,
+            "fixtureDiagnostics": [
+              {
+                "app": "Finder",
+                "bundle": "com.apple.finder",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 1306,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "absent",
+                    "titleMatches": true,
+                    "pathAvailable": false,
+                    "pathMatchesNormalizedTarget": false
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "absent",
+                    "titleMatches": true,
+                    "pathAvailable": false,
+                    "pathMatchesNormalizedTarget": false
+                  }
+                },
+                "fresh": false
+              }
+            ],
+            "turns": 11,
+            "costUsd": 0.31818840000000004,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 20,
+              "cacheRead": 591452,
+              "cacheWrite": 45192,
+              "output": 1909
+            },
+            "exitCode": 0,
+            "answer": "Both operations are done in Finder, and the Files-6d626929 window is still open.\n\n- **Rename:** `alpha.txt` is now `renamed.txt`.\n- **Move:** `bravo.txt` is now in `Archive`. I dragged it onto the folder, then expanded Archive and confirmed it shows `Archive/bravo.txt`.\n- **Unchanged:** `charlie.txt"
+          },
+          {
+            "arm": "sleight",
+            "task": "textedit-calculator",
+            "run": 3,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 42094,
+              "modelMs": 31060,
+              "calls": 9,
+              "refused": 0,
+              "toolMs": 9045,
+              "engineMs": 9012,
+              "relayMs": 33,
+              "localMs": 0,
+              "guardReads": 18,
+              "guardReadMs": 5488.683787,
+              "guardReadFailures": 0,
+              "otherMs": 1989
+            },
+            "passed": true,
+            "seconds": 43.6,
+            "fixtureDiagnostics": [
+              {
+                "app": "TextEdit",
+                "bundle": "com.apple.TextEdit",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 34398,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  }
+                },
+                "fresh": false,
+                "menuItems": [
+                  "New",
+                  "Open…",
+                  "Open Recent",
+                  "",
+                  "Close",
+                  "Close All",
+                  "Save",
+                  "Save As…",
+                  "Duplicate",
+                  "Rename…",
+                  "Move To…",
+                  "Revert To",
+                  "Export as PDF…",
+                  "",
+                  "Show Properties",
+                  "",
+                  "Insert from iPhone or iPad",
+                  "",
+                  "Share",
+                  "",
+                  "Page Setup…",
+                  "Print…"
+                ],
+                "menuCommands": [
+                  {
+                    "title": "New",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open Recent",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Close",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Close All",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save As…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Duplicate",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Rename…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Move To…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Revert To",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Export as PDF…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Show Properties",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Insert from iPhone or iPad",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Share",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Page Setup…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Print…",
+                    "enabled": true
+                  }
+                ]
+              },
+              {
+                "app": "Calculator",
+                "bundle": "com.apple.calculator",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 66955,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "turns": 10,
+            "costUsd": 0.273018,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 20,
+              "cacheRead": 555340,
+              "cacheWrite": 36535,
+              "output": 1577
+            },
+            "exitCode": 0,
+            "answer": "The document `Calculation-cbd26d15.txt` now contains 391 in place of 17, and it's saved and still open in TextEdit.\n\nI copied 17 from TextEdit and put it into Calculator with Paste. Calculator was in Basic mode, which I picked from the View menu. I cleared it first, then multiplied by 23, which gave"
+          }
+        ]
+      }
+    },
+    {
+      "source": "bench/results/2026-10-09T13-44-50-823Z.json",
+      "code": "00d9d62",
+      "ownerAway": true,
+      "exitCode": null,
+      "exitCodeNote": "Architect terminal exit code was not retained in the supplied result.",
+      "payload": {
+        "stamp": "2026-10-09T13-44-50-823Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "ownerAway": true,
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "safari-grid",
+            "run": 1,
+            "passed": false,
+            "reason": "Fixture setup failed: New blank browser window unconfirmed",
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": false,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "other"
+                },
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T13-44-50-823Z/sleight-safari-grid-1",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-grid",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 35581,
+              "modelMs": 27271,
+              "calls": 7,
+              "refused": 0,
+              "toolMs": 5749,
+              "engineMs": 5730,
+              "relayMs": 19,
+              "localMs": 0,
+              "guardReads": 8,
+              "guardReadMs": 2190.883417,
+              "guardReadFailures": 0,
+              "otherMs": 2561
+            },
+            "passed": false,
+            "reason": "page state does not match the grid task",
+            "seconds": 37.2,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 24996,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "turns": 8,
+            "costUsd": 0.24406080000000002,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 16,
+              "cacheRead": 432394,
+              "cacheWrite": 36855,
+              "output": 1013
+            },
+            "exitCode": 0,
+            "answer": "Orchid's Budget is now 125, down from 275. I changed no other value, and the table is sorted by Budget ascending: Orchid 125, Cedar 90, Harbor 140, and so on up to Oak 510.\n\nOrchid sits above Cedar (90) because I sorted before the edit was in place. My first edit left Orchid at 0, and 125 landed onl"
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-editor",
+            "run": 1,
+            "passed": false,
+            "reason": "Fixture setup failed: New blank browser window unconfirmed",
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": false,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "other"
+                },
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T13-44-50-823Z/sleight-safari-editor-1",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-editor",
+            "run": 1,
+            "stderr": "",
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": true,
+            "passed": false,
+            "reason": "run interrupted",
+            "seconds": 5.3,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 24996,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "models": [],
+            "exitCode": 143
+          }
+        ]
+      }
+    },
+    {
+      "source": "bench/results/2026-10-09T13-47-02-467Z.json",
+      "code": "3ac2a33",
+      "ownerAway": true,
+      "exitCode": null,
+      "exitCodeNote": "Architect terminal exit code was not retained in the supplied result.",
+      "payload": {
+        "stamp": "2026-10-09T13-47-02-467Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "ownerAway": true,
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "safari-form",
+            "run": 1,
+            "passed": false,
+            "reason": "Fixture setup failed: Retained Safari address field unavailable or ambiguous",
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": true,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "start-page"
+                },
+                "navigation": {
+                  "addressFieldCount": 0
+                },
+                "fresh": false,
+                "cleanup": "closed retained fixture"
+              }
+            ],
+            "models": []
+          }
+        ]
+      }
+    },
+    {
+      "source": "bench/results/2026-10-09T13-47-35-400Z.json",
+      "code": "3ac2a33",
+      "ownerAway": true,
+      "exitCode": null,
+      "exitCodeNote": "Architect terminal exit code was not retained in the supplied result.",
+      "payload": {
+        "stamp": "2026-10-09T13-47-35-400Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "ownerAway": true,
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "helium-grid",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 19782,
+              "modelMs": 12540,
+              "calls": 4,
+              "refused": 0,
+              "toolMs": 5316,
+              "engineMs": 5299,
+              "relayMs": 17,
+              "localMs": 0,
+              "guardReads": 7,
+              "guardReadMs": 2052.7619999999997,
+              "guardReadFailures": 0,
+              "otherMs": 1926
+            },
+            "passed": true,
+            "seconds": 21.3,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 24996,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "turns": 5,
+            "costUsd": 0.1967974,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 10,
+              "cacheRead": 251607,
+              "cacheWrite": 34889,
+              "output": 690
+            },
+            "exitCode": 0,
+            "answer": "Orchid's Budget is now 125 instead of 275, and the table is sorted by Budget ascending. The order is Cedar 90, Orchid 125, Harbor 140, Maple 180, Willow 220, Juniper 260, Birch 310, Elm 350, Aspen 390, Pine 430, Spruce 470, Oak 510. I read this from the page state after the final sort. I didn't take"
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-editor",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 18850,
+              "modelMs": 12508,
+              "calls": 4,
+              "refused": 0,
+              "toolMs": 4749,
+              "engineMs": 4734,
+              "relayMs": 15,
+              "localMs": 0,
+              "guardReads": 5,
+              "guardReadMs": 1264.4991250000003,
+              "guardReadFailures": 0,
+              "otherMs": 1593
+            },
+            "passed": true,
+            "seconds": 20.7,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 24996,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "turns": 5,
+            "costUsd": 0.19370339999999997,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 10,
+              "cacheRead": 249627,
+              "cacheWrite": 33947,
+              "output": 797
+            },
+            "exitCode": 0,
+            "answer": "I bolded \"ship carefully\" in the Release checklist paragraph and added a third bullet, \"Archive notes d34a34f8\", after the two existing ones. The updated tree shows the new bullet in the list. It also shows \"ship carefully\" split into its own text run, but it doesn't say which style it carries, so I"
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-dense",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 15404,
+              "modelMs": 10223,
+              "calls": 4,
+              "refused": 0,
+              "toolMs": 3536,
+              "engineMs": 3523,
+              "relayMs": 13,
+              "localMs": 0,
+              "guardReads": 2,
+              "guardReadMs": 230.246083,
+              "guardReadFailures": 0,
+              "otherMs": 1645
+            },
+            "passed": false,
+            "seconds": 16.8,
+            "cleanupError": "Owned fixture window cleanup unconfirmed: Owned Helium document identity changed",
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 24996,
+                "launched": true,
+                "fresh": false,
+                "closeFailure": "Owned Helium document identity changed"
+              }
+            ],
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T13-47-35-400Z/sleight-helium-dense-1",
+            "turns": 5,
+            "costUsd": 0.2405588,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 10,
+              "cacheRead": 266444,
+              "cacheWrite": 45490,
+              "output": 529
+            },
+            "exitCode": 0,
+            "answer": "The \"Tidal observatory field notes\" article is open and visible in the Helium window (127.0.0.1:59576/928ca91c/article/link-173). I found the link in the list's second page (items 140–240), after scrolling down. I left the window open and didn't touch any other tabs or windows."
+          }
+        ]
+      }
+    },
+    {
+      "source": "bench/results/2026-10-09T13-49-41-452Z.json",
+      "code": "3ac2a33",
+      "ownerAway": true,
+      "exitCode": null,
+      "exitCodeNote": "Architect terminal exit code was not retained in the supplied result.",
+      "payload": {
+        "stamp": "2026-10-09T13-49-41-452Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "ownerAway": true,
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "word-edit",
+            "run": 1,
+            "appDialog": {
+              "app": "Microsoft Word",
+              "category": "unexpected-dialog",
+              "description": "Unrecognized application dialog"
+            },
+            "stderr": "",
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": true,
+            "passed": false,
+            "reason": "Microsoft Word unexpected-dialog dialog: stopped",
+            "seconds": 21.4,
+            "cleanupError": "Fixture cleanup stopped by application dialog; Launched Microsoft Word quit unconfirmed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "Microsoft Word",
+                "bundle": "com.microsoft.Word",
+                "retries": [
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 101
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 206
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 310
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 411
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 517
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 619
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 725
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 830
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 933
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 1035
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 1141
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 1245
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 106,
+                    "totalWaitMs": 1351
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 1455
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 1558
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 1664
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 1770
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 1876
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 1980
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 2086
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 2192
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 106,
+                    "totalWaitMs": 2299
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 2402
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 2507
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 2612
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 2715
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 2818
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 2922
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 3024
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 3127
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 3232
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 3333
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 3434
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 3536
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 3637
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 3739
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 3842
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 3947
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 4051
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 4155
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 106,
+                    "totalWaitMs": 4261
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 5305
+                  }
+                ],
+                "totalWaitMs": 5305,
+                "actionTaken": false,
+                "running": false,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": false,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": false,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  }
+                },
+                "pid": 72606,
+                "fresh": true,
+                "appDialog": {
+                  "app": "Microsoft Word",
+                  "category": "unexpected-dialog",
+                  "description": "Unrecognized application dialog"
+                },
+                "helperCollectionConfirmed": true
+              }
+            ],
+            "appDialogs": [
+              {
+                "app": "Microsoft Word",
+                "category": "unexpected-dialog",
+                "description": "Unrecognized application dialog"
+              }
+            ],
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T13-49-41-452Z/sleight-word-edit-1",
+            "models": [],
+            "exitCode": 143
+          }
+        ],
+        "passCleanupErrors": [
+          {
+            "app": "Microsoft Word",
+            "error": "Launched Microsoft Word quit unconfirmed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed (-2700)"
+          }
+        ]
+      }
+    }
+  ],
+  "finder": {
+    "round5": [
+      {
+        "run": 1,
+        "seconds": 47.7,
+        "turns": 7,
+        "timing": {
+          "totalMs": 45730,
+          "modelMs": 15367,
+          "calls": 6,
+          "refused": 0,
+          "toolMs": 29535,
+          "engineMs": 5202,
+          "relayMs": 2578,
+          "localMs": 21755,
+          "guardReads": 6,
+          "guardReadMs": 2210.3562920000068,
+          "guardReadFailures": 0,
+          "otherMs": 828
+        }
+      },
+      {
+        "run": 2,
+        "seconds": 52.2,
+        "turns": 10,
+        "timing": {
+          "totalMs": 50467,
+          "modelMs": 22469,
+          "calls": 9,
+          "refused": 0,
+          "toolMs": 27038,
+          "engineMs": 7629,
+          "relayMs": 702,
+          "localMs": 18707,
+          "guardReads": 12,
+          "guardReadMs": 3732.5371670000163,
+          "guardReadFailures": 0,
+          "otherMs": 960
+        }
+      },
+      {
+        "run": 3,
+        "seconds": 71.6,
+        "turns": 11,
+        "timing": {
+          "totalMs": 69460,
+          "modelMs": 26729,
+          "calls": 10,
+          "refused": 0,
+          "toolMs": 41461,
+          "engineMs": 6442,
+          "relayMs": 2825,
+          "localMs": 32194,
+          "guardReads": 10,
+          "guardReadMs": 2808.8054179999936,
+          "guardReadFailures": 0,
+          "otherMs": 1270
+        }
+      }
+    ],
+    "round6": [
+      {
+        "run": 1,
+        "seconds": 121.5,
+        "turns": 29,
+        "timing": {
+          "totalMs": 119998,
+          "modelMs": 80846,
+          "calls": 28,
+          "refused": 0,
+          "toolMs": 36159,
+          "engineMs": 16861,
+          "relayMs": 62,
+          "localMs": 19236,
+          "guardReads": 31,
+          "guardReadMs": 6275.218669000006,
+          "guardReadFailures": 0,
+          "otherMs": 2993
+        }
+      },
+      {
+        "run": 2,
+        "seconds": 128.6,
+        "turns": 25,
+        "timing": {
+          "totalMs": 127168,
+          "modelMs": 70683,
+          "calls": 24,
+          "refused": 0,
+          "toolMs": 53826,
+          "engineMs": 14757,
+          "relayMs": 50,
+          "localMs": 39019,
+          "guardReads": 23,
+          "guardReadMs": 6069.364582999997,
+          "guardReadFailures": 0,
+          "otherMs": 2659
+        }
+      },
+      {
+        "run": 3,
+        "seconds": 87.4,
+        "turns": 11,
+        "timing": {
+          "totalMs": 85684,
+          "modelMs": 31574,
+          "calls": 10,
+          "refused": 0,
+          "toolMs": 52210,
+          "engineMs": 11255,
+          "relayMs": 24,
+          "localMs": 40931,
+          "guardReads": 8,
+          "guardReadMs": 2743.9599169999965,
+          "guardReadFailures": 0,
+          "otherMs": 1900
+        }
+      }
+    ],
+    "conclusion": "Extra model turns and local drag attempts dominate; no harness delay identified.",
+    "transcriptOperations": [
+      {
+        "run": 1,
+        "getAXState": 22,
+        "getScreenshot": 2,
+        "localDrags": 3,
+        "coveredRefusals": 2
+      },
+      {
+        "run": 2,
+        "getAXState": 14,
+        "getScreenshot": 5,
+        "localDrags": 4,
+        "coveredRefusals": 2
+      },
+      {
+        "run": 3,
+        "getAXState": 2,
+        "getScreenshot": 3,
+        "localDrags": 3,
+        "foregroundDrags": 2
+      }
+    ],
+    "notes": [
+      "Each run first tried a local drag without windowId and was refused as ambiguous.",
+      "Repeated window-point drags encountered covering windows; later trials used foreground fallback.",
+      "Per-read guard time averaged 313 ms in round 5 and 243 ms in round 6.",
+      "The old pass retains result timing; its raw transcripts are absent from the current evidence bank.",
+      "No raw transcripts or screenshots are published."
+    ]
+  },
+  "verification": {
+    "check": {
+      "command": "npm run check",
+      "exitCode": 0,
+      "unitTestsPassed": 890,
+      "pluginValidationsPassed": 2,
+      "modTestsPassed": 11
+    },
+    "lintProse": {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "files": 52
+    },
+    "nativeBrowserRegressions": {
+      "exitCode": 0,
+      "testsPassed": 4,
+      "usesLiveApps": false
+    },
+    "privacyAudit": {
+      "exitCode": 0,
+      "checks": [
+        "owner full name absent",
+        "home paths scrubbed",
+        "no absolute user-home paths",
+        "JSON parses"
+      ],
+      "rawTranscriptsPublished": false,
+      "imagesPublished": false
+    },
+    "review": {
+      "critical": 0,
+      "important": 0,
+      "status": "Two initial Important findings corrected and reviewed; final focused-dialog change reviewed clear."
+    }
+  },
+  "developmentAttempts": [
+    {
+      "command": "browser regression tests before implementation",
+      "exitCode": 1,
+      "failed": 3,
+      "reason": "Regression command not implemented"
+    },
+    {
+      "command": "fixture-navigation regression",
+      "exitCode": 0,
+      "passed": 1
+    },
+    {
+      "command": "safari-address regression first compile",
+      "exitCode": 1,
+      "reason": "Missing AXWebArea constant and throwing boolean expression; corrected"
+    },
+    {
+      "command": "safari-address regression",
+      "exitCode": 0,
+      "passed": 1
+    },
+    {
+      "command": "browser regression suite",
+      "exitCode": 0,
+      "passed": 4
+    },
+    {
+      "command": "dialog regressions before implementation",
+      "exitCode": 1,
+      "failed": 3,
+      "passed": 1
+    },
+    {
+      "command": "fixture and lifecycle tests",
+      "exitCode": 0,
+      "passed": 59
+    },
+    {
+      "command": "native browser regressions after late-ambiguity correction",
+      "exitCode": 0,
+      "passed": 4
+    },
+    {
+      "command": "dialog permission priority regression before correction",
+      "exitCode": 1,
+      "failed": 1
+    },
+    {
+      "command": "fixture and lifecycle tests after static text and priority correction",
+      "exitCode": 0,
+      "passed": 60
+    },
+    {
+      "command": "npm run check",
+      "environment": "ordinary workspace sandbox",
+      "exitCode": 1,
+      "reason": "Localhost listener EPERM and hover fixture linker output denied"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "errors": 10
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "files": 52
+    },
+    {
+      "command": "npm run check",
+      "environment": "scoped host permission after sandbox denial",
+      "exitCode": 0,
+      "unitTestsPassed": 889,
+      "modTestsPassed": 11,
+      "pluginValidationsPassed": 2
+    },
+    {
+      "command": "focused document-associated permission dialog regression before correction",
+      "exitCode": 1,
+      "failed": 1,
+      "reason": "Native observation returned zero candidates"
+    },
+    {
+      "command": "focused document-associated permission dialog regression after correction",
+      "exitCode": 0,
+      "passed": 1
+    },
+    {
+      "command": "npm run check",
+      "environment": "scoped host permission after sandbox denial",
+      "exitCode": 0,
+      "unitTestsPassed": 890,
+      "modTestsPassed": 11,
+      "pluginValidationsPassed": 2
+    },
+    {
+      "command": "final result privacy and payload audit",
+      "exitCode": 1,
+      "reason": "The forbidden path-prefix pattern matched the audit-description string itself; replaced that description before retrying."
+    },
+    {
+      "command": "npm run lint:prose after final report update",
+      "exitCode": 0,
+      "files": 52
+    }
+  ]
+}
