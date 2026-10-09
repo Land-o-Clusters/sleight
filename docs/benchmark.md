@@ -51,6 +51,60 @@ the allowlist lacked it. Both passes are in
 [`2026-10-07-simulator-form.json`](benchmarks/2026-10-07-simulator-form.json). The task needs Xcode
 and an iOS runtime (`xcodebuild -downloadPlatform iOS`, 8 GB). Without them its runs are skipped.
 
+## Real-use tasks
+
+The [initial report](benchmarks/2026-10-08-real-use-tasks.md) and
+[Known problems](known-problems.md) retain the earlier failed qualification passes.
+
+The round-6 [report](benchmarks/2026-10-09-real-use-tasks-6.md) retains the fixture-only diagnostics.
+sleight-arch later ran its 15 slots with the owner away. Simulator is excluded.
+Safari's blank-window setup requires `--owner-away`, as does activation when background document
+Close commands are disabled. Use that flag only after the owner confirms they are away.
+
+| Task | Passed | Setup failures | Unstarted | Median s |
+|---|---|---|---|---|
+| safari-form | 0 | 3 | 0 | n/a |
+| helium-form | 3 | 0 | 0 | 30.4 |
+| preview-pdf | 3 | 0 | 0 | 19.7 |
+| finder-files | 3 | 0 | 0 | 121.5 |
+| textedit-calculator | 3 | 0 | 0 | 43.6 |
+
+The [brief-8 report](benchmarks/2026-10-09-real-use-tasks-8.md) records that qualification and the
+later failures in Safari, browser navigation and Word. The
+[brief-9 report](benchmarks/2026-10-09-real-use-tasks-9.md) records the architect's rerun: all 11 web
+tasks passed once each after the Safari correction. Word saved but failed ZIP validation; Excel
+failed cold setup and quit confirmation. Their latest harness changes await another architect rerun.
+
+After brief 9, the Office rerun ([`real-use-office-10`](benchmarks/2026-10-09-real-use-office-10.json),
+one run each, the owner away) failed before any model call. Word, left running by the earlier pass,
+didn't answer its first focused-window read (-25204) with the Mac's load near 124. Excel showed its
+first-run screen ("Start Using Excel"), which the harness classed as activation and stopped on
+without touching. PowerPoint didn't run.
+
+The Codex arm now runs the real suite. Its first run, helium-form on gpt-6.1-sol at medium, passed in
+36.5 s and 8 model requests with 6 engine calls, and the engine's "Always allow" list was restored
+byte for byte afterwards ([`codex-real-first`](benchmarks/2026-10-09-codex-real-first.json)).
+
+The round-5 [report](benchmarks/2026-10-08-real-use-tasks-5.md) records 16 of 18 slots, 6 passes,
+10 setup failures and 2 unstarted Simulator slots. All 6 model trials passed.
+
+### Round 7
+
+The [report](benchmarks/2026-10-09-real-use-tasks-7.md) lists 20 new tasks, each with one requested
+Sonnet 5.5 medium trial. The browser IDs pair `safari-` and `helium-` with `grid`, `editor`, `dense`,
+`spa`, `nested` and `infinite`. Office adds `word-edit`, `excel-edit` and `powerpoint-edit`.
+Mail adds `mail-folder`, `mail-message`, `mail-thread`, `mail-attachment` and `mail-search` in a
+local invented mailbox. All 20 dry fixtures ran. The architect's later desktop pass passed 11 web
+tasks once each. Word continued past its Replace All result dialog and saved; its checker then
+rejected a ZIP entry. Excel stopped during cold setup, and PowerPoint did not run. Office remains
+unqualified. Mail waits until the owner can watch it.
+
+Brief 7b adds `mimestream-label`, `mimestream-message`, `mimestream-thread`, `mimestream-scroll`
+and `mimestream-search` on the owner's signed-in Gmail. Select those IDs in a separate sleight pass.
+Their results retain only verdicts, seconds, turns and salted answer hashes. The adapter requires
+explicit read state and unchanged mailbox counts, preserves Mimestream, and closes only its new
+window. Live qualification waits until the owner can watch it.
+
 ## Time per run
 
 Each run's result now splits its time. Claude Code reports the time spent in the model API, and
@@ -334,4 +388,5 @@ else drives apps during a pass. `--dry-run` doesn't take it.
 > Headless runs can't show approval prompts, so a benchmark run auto-approves Calculator, TextEdit,
 > Chess and the iOS Simulator (Simulator, or DeviceHub from Xcode 27) for either arm, and sleight's `drag` and `hover` in those apps (`bench/approve.mjs`, loaded only through
 > `bench/settings.json`). Only run it when you're fine with Claude driving those four apps unattended. `--dry-run` checks the setup without
-> launching Claude.
+> launching Claude. The real suite also drives Safari, Preview, Finder and Helium, and the same
+> hook accepts those apps by name and bundle ID (owner, 2026-10-08).

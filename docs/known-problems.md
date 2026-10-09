@@ -397,6 +397,44 @@ our own runs. Dates and engine versions are given where they matter.
   tests, and its tap listing matched the benchmark's on this Mac, but no live session has shown the
   notice yet.
 
+## The real-use benchmark harness
+
+- sleight-arch's owner-away pass at `b284b05` passed 11 web tasks once each (2026-10-09).
+  Word made its edits and saved, but its ZIP entry was rejected without identifying it. The file
+  was removed during cleanup. Its rejection remains unexplained. Excel setup ended on `-25205` after
+  15,002 ms of AX retries, then normal quit remained unconfirmed after five seconds. PowerPoint
+  did not run. The [brief-9 report](benchmarks/2026-10-09-real-use-tasks-9.md) retains both passes.
+  ZIP compatibility, startup polling and longer quit waits have unit proof and await live qualification.
+- sleight-arch's earlier owner-away qualification passed round 6's Helium, Preview, Finder and TextEdit tasks
+  3/3 each (2026-10-09). Safari failed setup 3/3, then failed address selection after a Start Page fix.
+  Round 7 reached the correct dense article but stopped when cleanup rejected its navigation.
+  Word stopped mid-task on an unrecognized dialog, leaving its unsaved fixture open. Excel and
+  PowerPoint did not run. The later brief-9 pass supplies browser and Word result-dialog proof.
+  The [brief-8 report](benchmarks/2026-10-09-real-use-tasks-8.md) retains all five architect result files.
+  Finder averaged 112.5 s versus round 5's 57.2 s, chiefly from extra Claude turns and drag attempts.
+- Saved Office files, Mail import and export, and app closure
+  still need live proof. Mail and Mimestream wait until the owner can watch them.
+  Mail requires an already-running app and stops when local ownership or mutation coverage is
+  unavailable. Its native export path lacks an independent current flag/read receipt and stops
+  before a model task. Import controls and folder topology remain unmeasured.
+  [Round-7 results](benchmarks/2026-10-09-real-use-tasks-7.json) retain both dry attempts.
+  Brief 7b adds five Mimestream navigation slots on the owner's Gmail. They require explicit AX
+  read-state, count and window ownership proof. Their desktop qualification is also unstarted.
+  Sandbox probes lacked Accessibility access, and a host retry couldn't find a running Mimestream process.
+  They stopped before mailbox reads or input. Native app behavior remains unqualified.
+- The earlier [round-6 diagnostics](benchmarks/2026-10-09-real-use-tasks-6.json) retain the setup
+  failures preceding the architect's qualification. Newly launched Office app quit remains unproved.
+- Real-use round 2 completed 3 of 18 requested model trials, with 1 pass (2026-10-08).
+  Helium failed twice after dismissed browser permission requests that the system observer missed.
+  [Round-2 results](benchmarks/2026-10-08-real-use-tasks-2.json) retain every attempt.
+- Real-use round 3 stopped before a model trial when Safari launched, but an AX read failed with
+  `-25204` and cleanup was unconfirmed (2026-10-08). sleight-arch later found only its start page.
+  [Round-3 results](benchmarks/2026-10-08-real-use-tasks-3.json) retain the failed setup.
+- Real-use round 4 opened Safari's File menu, then failed to find “New Window” (2026-10-08).
+  Its title-based recovery claimed nothing was created, and the pass stopped with 17 slots unstarted.
+  [Round-4 results](benchmarks/2026-10-08-real-use-tasks-4.json) retain that attempt. Title-based
+  recovery has since been removed. A missing owned reference leaves cleanup unconfirmed.
+
 ## Hosts and platform
 
 - The desktop app's Code tab runs Claude Code 2.1.293 (2026-10-08), new enough for the mod. The owner

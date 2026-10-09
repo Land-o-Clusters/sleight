@@ -2,8 +2,8 @@ import { spawn } from 'node:child_process';
 
 // A fresh process group contains only this driver's Claude and its descendants.
 // Return after close, which also collects inherited output pipes.
-export async function runOwned(command, args, { cwd, timeoutMs = 180000, graceMs = 7000, signal, onStdout } = {}) {
-  const child = spawn(command, args, { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+export async function runOwned(command, args, { cwd, env, timeoutMs = 180000, graceMs = 7000, signal, onStdout } = {}) {
+  const child = spawn(command, args, { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let leaderExited = false, groupCollected = false;
   child.once('exit', () => { leaderExited = true; });
   let stdout = '', stderr = '', spawnError, timedOut = false, cancelled = false, stopping = false, force;

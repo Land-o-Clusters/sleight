@@ -1,0 +1,1827 @@
+{
+  "dateLocal": "2026-10-09",
+  "branch": "codex/real-use-tasks",
+  "base": "b284b05",
+  "liveRunsBySol": 0,
+  "qualification": "Eleven web tasks passed once each in the architect owner-away pass. Office changes await an architect rerun; Mail and Mimestream await owner supervision.",
+  "attempts": [
+    {
+      "source": "bench/results/2026-10-09T14-55-07-407Z.json",
+      "code": "4323a41",
+      "ownerAway": true,
+      "exitCode": null,
+      "exitCodeNote": "Architect terminal exit code was not supplied.",
+      "payload": {
+        "stamp": "2026-10-09T14-55-07-407Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "ownerAway": true,
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "safari-form",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 40677,
+              "modelMs": 30572,
+              "calls": 13,
+              "refused": 1,
+              "toolMs": 7341,
+              "engineMs": 7306,
+              "relayMs": 35,
+              "localMs": 0,
+              "guardReads": 10,
+              "guardReadMs": 933.7841260000032,
+              "guardReadFailures": 0,
+              "otherMs": 2764
+            },
+            "passed": false,
+            "seconds": 42.6,
+            "cleanupError": "Owned fixture window cleanup unconfirmed: Owned browser left the fixture origin or nonce",
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": true,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "start-page"
+                },
+                "navigation": {
+                  "addressFieldCount": 1
+                },
+                "fresh": false,
+                "closeFailure": "Owned browser left the fixture origin or nonce"
+              }
+            ],
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T14-55-07-407Z/sleight-safari-form-1",
+            "turns": 14,
+            "costUsd": 0.45309519999999986,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 26,
+              "cacheRead": 739606,
+              "cacheWrite": 72353,
+              "output": 1571
+            },
+            "exitCode": 0,
+            "answer": "I submitted the form, and the page now shows a \"Submitted\" heading. I filled in these values first:\n\n- **Name:** Morgan Reed\n- **Email:** morgan@example.test\n- **Team:** Design\n- **Send updates:** checked\n- **Code:** 7677904d\n\nThe Safari window is still open for cleanup. I only worked in that window"
+          }
+        ]
+      }
+    },
+    {
+      "source": "bench/results/2026-10-09T15-31-51-708Z.json",
+      "code": "b284b05",
+      "ownerAway": true,
+      "exitCode": null,
+      "exitCodeNote": "Architect terminal exit code was not supplied.",
+      "payload": {
+        "stamp": "2026-10-09T15-31-51-708Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "ownerAway": true,
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "safari-form",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 49994,
+              "modelMs": 40559,
+              "calls": 15,
+              "refused": 0,
+              "toolMs": 7225,
+              "engineMs": 7110,
+              "relayMs": 29,
+              "localMs": 86,
+              "guardReads": 11,
+              "guardReadMs": 1308.0070009999945,
+              "guardReadFailures": 0,
+              "otherMs": 2210
+            },
+            "passed": true,
+            "seconds": 51.7,
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": true,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "start-page"
+                },
+                "navigation": {
+                  "addressFieldCount": 1
+                },
+                "fresh": false
+              }
+            ],
+            "turns": 16,
+            "costUsd": 0.3904884,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 32,
+              "cacheRead": 964362,
+              "cacheWrite": 44618,
+              "output": 1908
+            },
+            "exitCode": 0,
+            "answer": "I submitted the form, and the page now shows \"Submitted\".\n\nI filled Name with \"Morgan Reed\", Email with \"morgan@example.test\", and Code with \"e9be0fc0\". I chose \"Design\" for Team and checked \"Send updates\". I worked only in that Safari window and left it open."
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-grid",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 13864,
+              "modelMs": 8758,
+              "calls": 2,
+              "refused": 0,
+              "toolMs": 3209,
+              "engineMs": 3200,
+              "relayMs": 9,
+              "localMs": 0,
+              "guardReads": 3,
+              "guardReadMs": 821.2328339999995,
+              "guardReadFailures": 0,
+              "otherMs": 1897
+            },
+            "passed": true,
+            "seconds": 15.4,
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": true,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "start-page"
+                },
+                "navigation": {
+                  "addressFieldCount": 1
+                },
+                "fresh": false
+              }
+            ],
+            "turns": 3,
+            "costUsd": 0.16381400000000002,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 6,
+              "cacheRead": 132320,
+              "cacheWrite": 33197,
+              "output": 455
+            },
+            "exitCode": 0,
+            "answer": "Orchid's Budget is now 125 (it was 275), and the table is sorted by Budget ascending. I only checked the accessibility tree, not a screenshot. It shows Cedar 90, Orchid 125, Harbor 140, Willow 220, Juniper 260, Birch 310, Aspen 390, Pine 430, Spruce 470, Oak 510. The Elm and Maple rows were outside "
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-editor",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 28136,
+              "modelMs": 20889,
+              "calls": 7,
+              "refused": 0,
+              "toolMs": 4606,
+              "engineMs": 4591,
+              "relayMs": 15,
+              "localMs": 0,
+              "guardReads": 6,
+              "guardReadMs": 1322.122374999998,
+              "guardReadFailures": 0,
+              "otherMs": 2641
+            },
+            "passed": true,
+            "seconds": 29.7,
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": true,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "start-page"
+                },
+                "navigation": {
+                  "addressFieldCount": 1
+                },
+                "fresh": false
+              }
+            ],
+            "turns": 8,
+            "costUsd": 0.2526234,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 16,
+              "cacheRead": 431237,
+              "cacheWrite": 38746,
+              "output": 1136
+            },
+            "exitCode": 0,
+            "answer": "I made both edits in the Safari window, and a screenshot of the page confirms them:\n\n- **Bold:** only \"ship carefully\" in the Release checklist paragraph is bold. The sentence still reads \"We ship carefully every Friday.\"\n- **New bullet:** a third bullet, \"Archive notes ba19f76c\", follows \"Review dr"
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-dense",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 10468,
+              "modelMs": 6215,
+              "calls": 2,
+              "refused": 0,
+              "toolMs": 2650,
+              "engineMs": 2641,
+              "relayMs": 9,
+              "localMs": 0,
+              "guardReads": 1,
+              "guardReadMs": 216.9487079999999,
+              "guardReadFailures": 0,
+              "otherMs": 1603
+            },
+            "passed": true,
+            "seconds": 12.1,
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": true,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "start-page"
+                },
+                "navigation": {
+                  "addressFieldCount": 1
+                },
+                "fresh": false
+              }
+            ],
+            "turns": 3,
+            "costUsd": 0.1881932,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 6,
+              "cacheRead": 138526,
+              "cacheWrite": 39524,
+              "output": 238
+            },
+            "exitCode": 0,
+            "answer": "I opened \"Tidal observatory field notes\" from the research archive. It's now showing in the Safari window (`/f8bd9538/article/link-173`), with the heading and its one-line description visible. I made no edits and left the window open. I didn't touch any other tabs or windows."
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-dense",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 16326,
+              "modelMs": 10438,
+              "calls": 4,
+              "refused": 0,
+              "toolMs": 3957,
+              "engineMs": 3942,
+              "relayMs": 15,
+              "localMs": 0,
+              "guardReads": 2,
+              "guardReadMs": 246.8458330000003,
+              "guardReadFailures": 0,
+              "otherMs": 1931
+            },
+            "passed": true,
+            "seconds": 18.1,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 24996,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "turns": 5,
+            "costUsd": 0.226836,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 10,
+              "cacheRead": 263190,
+              "cacheWrite": 42132,
+              "output": 565
+            },
+            "exitCode": 0,
+            "answer": "The \"Tidal observatory field notes\" article is now open in the Helium window and visible. The page shows its heading and the line \"Field notes for the coastal research archive.\" The window is still open for cleanup.\n\nThe link was the 173rd of 240 archive entries, so I scrolled down the list to find "
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-spa",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 32424,
+              "modelMs": 24314,
+              "calls": 7,
+              "refused": 0,
+              "toolMs": 6375,
+              "engineMs": 6358,
+              "relayMs": 17,
+              "localMs": 0,
+              "guardReads": 10,
+              "guardReadMs": 1840.070375000002,
+              "guardReadFailures": 0,
+              "otherMs": 1735
+            },
+            "passed": true,
+            "seconds": 33.9,
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": true,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "start-page"
+                },
+                "navigation": {
+                  "addressFieldCount": 1
+                },
+                "fresh": false
+              }
+            ],
+            "turns": 8,
+            "costUsd": 0.24695960000000003,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 16,
+              "cacheRead": 436608,
+              "cacheWrite": 37634,
+              "output": 907
+            },
+            "exitCode": 0,
+            "answer": "The request went through, and the \"Request submitted\" screen is now showing in the Safari window. I left that window open and didn't touch any other tabs or windows.\n\nI picked Requests, then New request. I set Category to Research and entered Orchid for Project, then chose Continue. I entered 8b2b95"
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-spa",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 31884,
+              "modelMs": 23077,
+              "calls": 9,
+              "refused": 0,
+              "toolMs": 6746,
+              "engineMs": 6255,
+              "relayMs": 491,
+              "localMs": 0,
+              "guardReads": 10,
+              "guardReadMs": 1696.8334189999969,
+              "guardReadFailures": 0,
+              "otherMs": 2061
+            },
+            "passed": true,
+            "seconds": 33.3,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 24996,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "turns": 10,
+            "costUsd": 0.295877,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 20,
+              "cacheRead": 571815,
+              "cacheWrite": 42236,
+              "output": 1253
+            },
+            "exitCode": 0,
+            "answer": "The request went through, and the Helium window now shows the \"Request submitted\" screen. I set Category to Research, entered Orchid for Project and f650d749 for Code, and left the window open. I didn't touch any other tabs or windows."
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-nested",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 50953,
+              "modelMs": 42330,
+              "calls": 12,
+              "refused": 0,
+              "toolMs": 6356,
+              "engineMs": 6328,
+              "relayMs": 28,
+              "localMs": 0,
+              "guardReads": 8,
+              "guardReadMs": 580.1947099999907,
+              "guardReadFailures": 0,
+              "otherMs": 2267
+            },
+            "passed": true,
+            "seconds": 52.3,
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": true,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "start-page"
+                },
+                "navigation": {
+                  "addressFieldCount": 1
+                },
+                "fresh": false
+              }
+            ],
+            "turns": 13,
+            "costUsd": 0.3573394,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 26,
+              "cacheRead": 754847,
+              "cacheWrite": 47792,
+              "output": 1515
+            },
+            "exitCode": 0,
+            "answer": "In the new Safari window, I expanded Collections, Science, Marine, Station and Reports, then selected \"Coral report 1b6b6032\". The whole path is still expanded. The page now shows \"Coral report 1b6b6032\" below the tree as the selected item. The window is still open, and I didn't touch any other tabs"
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-nested",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 25865,
+              "modelMs": 19567,
+              "calls": 9,
+              "refused": 0,
+              "toolMs": 4784,
+              "engineMs": 4750,
+              "relayMs": 34,
+              "localMs": 0,
+              "guardReads": 6,
+              "guardReadMs": 393.775333999999,
+              "guardReadFailures": 0,
+              "otherMs": 1514
+            },
+            "passed": true,
+            "seconds": 27.3,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 24996,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "turns": 10,
+            "costUsd": 0.2583024,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 18,
+              "cacheRead": 499512,
+              "cacheWrite": 37406,
+              "output": 874
+            },
+            "exitCode": 0,
+            "answer": "In the Helium window at 127.0.0.1:57312/03abcbdb/, I expanded Collections, then Science, Marine, Station and Reports. \"Coral report 03abcbdb\" is selected, and its title now shows below the tree. I confirmed this from the page's accessibility tree and didn't take a screenshot.\n\nThe whole path is stil"
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-infinite",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 36389,
+              "modelMs": 22866,
+              "calls": 8,
+              "refused": 0,
+              "toolMs": 11623,
+              "engineMs": 11596,
+              "relayMs": 27,
+              "localMs": 0,
+              "guardReads": 15,
+              "guardReadMs": 3724.7699600000033,
+              "guardReadFailures": 0,
+              "otherMs": 1900
+            },
+            "passed": true,
+            "seconds": 37.7,
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "creation": {
+                  "blank": true,
+                  "count": 1,
+                  "documentScheme": "absent",
+                  "titleKind": "start-page"
+                },
+                "navigation": {
+                  "addressFieldCount": 1
+                },
+                "fresh": false
+              }
+            ],
+            "turns": 9,
+            "costUsd": 0.2891756,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 18,
+              "cacheRead": 517388,
+              "cacheWrite": 44033,
+              "output": 953
+            },
+            "exitCode": 0,
+            "answer": "Record 87 is reviewed. I scrolled until all 100 records had loaded, opened Record 87, and entered \"Reviewed 3bcc0792\" as the Review note. After I clicked Confirm review, the dialog closed and the page showed \"Record 87 reviewed\". I used only that Safari window and left it open."
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-infinite",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 20068,
+              "modelMs": 11993,
+              "calls": 5,
+              "refused": 0,
+              "toolMs": 6454,
+              "engineMs": 6442,
+              "relayMs": 12,
+              "localMs": 0,
+              "guardReads": 10,
+              "guardReadMs": 2734.003834000001,
+              "guardReadFailures": 0,
+              "otherMs": 1621
+            },
+            "passed": true,
+            "seconds": 21.5,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 24996,
+                "launched": true,
+                "fresh": false
+              }
+            ],
+            "turns": 6,
+            "costUsd": 0.21644219999999997,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 12,
+              "cacheRead": 314961,
+              "cacheWrite": 36994,
+              "output": 545
+            },
+            "exitCode": 0,
+            "answer": "Record 87 is reviewed. I scrolled until all 100 records had loaded and opened Record 87. I entered \"Reviewed cfc49c4e\" as the Review note and clicked Confirm review. The dialog is closed, and the page now shows \"Record 87 reviewed\". The Helium window is still open."
+          },
+          {
+            "arm": "sleight",
+            "task": "word-edit",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 104768,
+              "modelMs": 72219,
+              "calls": 25,
+              "refused": 0,
+              "toolMs": 29422,
+              "engineMs": 29355,
+              "relayMs": 67,
+              "localMs": 0,
+              "guardReads": 53,
+              "guardReadMs": 17748.695248999997,
+              "guardReadFailures": 0,
+              "otherMs": 3127
+            },
+            "passed": false,
+            "reason": "saved Office file: unsupported or oversized ZIP entry",
+            "seconds": 106.4,
+            "fixtureDiagnostics": [
+              {
+                "app": "Microsoft Word",
+                "bundle": "com.microsoft.Word",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 72606,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": false,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": false,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  }
+                },
+                "fresh": false,
+                "appDialogs": [
+                  {
+                    "app": "Microsoft Word",
+                    "category": "application-result",
+                    "title": "",
+                    "buttons": [
+                      "OK"
+                    ],
+                    "stop": false,
+                    "description": "application-result application dialog"
+                  },
+                  {
+                    "app": "Microsoft Word",
+                    "category": "application-result",
+                    "title": "Insert Table",
+                    "buttons": [
+                      "",
+                      "",
+                      "",
+                      "",
+                      "",
+                      "",
+                      "OK",
+                      "Cancel"
+                    ],
+                    "stop": false,
+                    "description": "application-result application dialog"
+                  }
+                ],
+                "menuItems": [
+                  "New Document",
+                  "New from Template...",
+                  "Open...",
+                  "Open Recent",
+                  "",
+                  "Close",
+                  "Save",
+                  "Save As...",
+                  "Save as Template...",
+                  "Convert Document",
+                  "Move...",
+                  "Rename...",
+                  "",
+                  "Browse Version History",
+                  "",
+                  "Share",
+                  "",
+                  "Always Open Read-Only",
+                  "",
+                  "Reduce File Size...",
+                  "",
+                  "Page Setup...",
+                  "Print...",
+                  "",
+                  "Properties..."
+                ],
+                "menuCommands": [
+                  {
+                    "title": "New Document",
+                    "enabled": true
+                  },
+                  {
+                    "title": "New from Template...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open Recent",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Close",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save As...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save as Template...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Convert Document",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Move...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Rename...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Browse Version History",
+                    "enabled": false
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Share",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Always Open Read-Only",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Reduce File Size...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Page Setup...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Print...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Properties...",
+                    "enabled": true
+                  }
+                ]
+              }
+            ],
+            "appDialogs": [
+              {
+                "app": "Microsoft Word",
+                "category": "application-result",
+                "title": "",
+                "buttons": [
+                  "OK"
+                ],
+                "stop": false,
+                "description": "application-result application dialog"
+              },
+              {
+                "app": "Microsoft Word",
+                "category": "application-result",
+                "title": "Insert Table",
+                "buttons": [
+                  "",
+                  "",
+                  "",
+                  "",
+                  "",
+                  "",
+                  "OK",
+                  "Cancel"
+                ],
+                "stop": false,
+                "description": "application-result application dialog"
+              }
+            ],
+            "turns": 26,
+            "costUsd": 0.8499564000000001,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 52,
+              "cacheRead": 2159342,
+              "cacheWrite": 94786,
+              "output": 3884
+            },
+            "exitCode": 0,
+            "answer": "All three edits are made in `Report-8ac41da5.docx`, and it's saved with the title bar reading \"Saved to my Mac\". The file is still open in Word.\n\n- **Heading:** \"Report 8ac41da5\" now has the Heading 1 style.\n- **Replace:** Find and Replace changed amber to violet. Word reported 1 replacement, and th"
+          },
+          {
+            "arm": "sleight",
+            "task": "excel-edit",
+            "run": 1,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25205 (-2700)",
+            "cleanupError": "Launched Microsoft Excel quit unconfirmed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "Microsoft Excel",
+                "bundle": "com.microsoft.Excel",
+                "retries": [
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 102
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 208
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 309
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 414
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 517
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 106,
+                    "totalWaitMs": 624
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 726
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 832
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 934
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 1040
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 1142
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 1248
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 1350
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 1455
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 1557
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 1663
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 106,
+                    "totalWaitMs": 1770
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 1872
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 1975
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 2079
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 106,
+                    "totalWaitMs": 2186
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 2290
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 2394
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 2501
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 100,
+                    "totalWaitMs": 2602
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 2705
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 2810
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 2911
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 3013
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 3117
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 3221
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 3324
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 3428
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 3530
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 3631
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 100,
+                    "totalWaitMs": 3732
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 3834
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 3936
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 104,
+                    "totalWaitMs": 4041
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 4144
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 4250
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 101,
+                    "totalWaitMs": 4352
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 103,
+                    "totalWaitMs": 4455
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 5066
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 5515
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 5621
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 5726
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 5830
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 5934
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 6038
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 6142
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 6247
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 6350
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 6455
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 6559
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 6663
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 6768
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 6874
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 6980
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 102,
+                    "totalWaitMs": 7082
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 118,
+                    "totalWaitMs": 7201
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 7306
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 7410
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 7514
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 101,
+                    "totalWaitMs": 7616
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 106,
+                    "totalWaitMs": 7723
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 7829
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 7934
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 8039
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 8144
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 102,
+                    "totalWaitMs": 8247
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 8352
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 102,
+                    "totalWaitMs": 8455
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 8559
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 8663
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 8768
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 8871
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 8975
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 102,
+                    "totalWaitMs": 9077
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 102,
+                    "totalWaitMs": 9179
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 101,
+                    "totalWaitMs": 9280
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 101,
+                    "totalWaitMs": 9381
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 101,
+                    "totalWaitMs": 9482
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 100,
+                    "totalWaitMs": 9583
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 9688
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 9792
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 9898
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 102,
+                    "totalWaitMs": 10001
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 10106
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 10210
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 10314
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 101,
+                    "totalWaitMs": 10417
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 10522
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 10626
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 10730
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 10834
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 10939
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 101,
+                    "totalWaitMs": 11040
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 11145
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 101,
+                    "totalWaitMs": 11247
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 101,
+                    "totalWaitMs": 11349
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 100,
+                    "totalWaitMs": 11450
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 101,
+                    "totalWaitMs": 11552
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 11657
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 102,
+                    "totalWaitMs": 11760
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 11864
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 102,
+                    "totalWaitMs": 11967
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 12071
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 12176
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 12281
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 12384
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 12489
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 102,
+                    "totalWaitMs": 12592
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 12696
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 12801
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 12906
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 13010
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 13114
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 13221
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 101,
+                    "totalWaitMs": 13322
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 13428
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 101,
+                    "totalWaitMs": 13530
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 101,
+                    "totalWaitMs": 13632
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 13738
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 106,
+                    "totalWaitMs": 13845
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 105,
+                    "totalWaitMs": 13951
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 14055
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 14159
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 14263
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 14367
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 14471
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 14575
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 14680
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 14784
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 103,
+                    "totalWaitMs": 14888
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 104,
+                    "totalWaitMs": 14992
+                  },
+                  {
+                    "code": -25205,
+                    "waitMs": 10,
+                    "totalWaitMs": 15002
+                  }
+                ],
+                "totalWaitMs": 15002,
+                "actionTaken": false,
+                "running": false,
+                "launched": true,
+                "pid": 69926,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": false,
+                    "documentKind": "absent",
+                    "titleMatches": false,
+                    "pathAvailable": false,
+                    "pathMatchesNormalizedTarget": false
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": false,
+                    "documentKind": "absent",
+                    "titleMatches": false,
+                    "pathAvailable": false,
+                    "pathMatchesNormalizedTarget": false
+                  }
+                },
+                "fresh": true,
+                "cleanup": "unconfirmed",
+                "helperCollectionConfirmed": true
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T15-31-51-708Z/sleight-excel-edit-1",
+            "models": []
+          }
+        ],
+        "passCleanupErrors": [
+          {
+            "app": "Microsoft Excel",
+            "error": "Launched Microsoft Excel quit unconfirmed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed (-2700)"
+          }
+        ]
+      }
+    }
+  ],
+  "observations": {
+    "word": {
+      "checkerFailure": "saved Office file: unsupported or oversized ZIP entry",
+      "offendingEntryRetained": false,
+      "originalCauseConfirmed": false,
+      "appInitiallyRunning": true,
+      "appPreservedByDesign": true
+    },
+    "excel": {
+      "lastAXError": -25205,
+      "retryElapsedMs": 15002,
+      "appInitiallyRunning": false,
+      "actionTaken": false,
+      "originalQuitWaitSeconds": 5,
+      "normalQuitAccepted": true,
+      "exitConfirmed": false,
+      "nonExitCauseKnown": false
+    }
+  },
+  "developmentAttempts": [
+    {
+      "command": "node --test --test-name-pattern='Office ZIP' tests/bench-real-office.test.mjs",
+      "exitCode": 1,
+      "result": "RED: two failures, one pass before production ZIP change."
+    },
+    {
+      "command": "node --test --test-name-pattern='Office ZIP' tests/bench-real-office.test.mjs",
+      "exitCode": 0,
+      "result": "Three passed, including retained size and inflation limits."
+    },
+    {
+      "command": "node --test --test-name-pattern='cold Office|Office launch|normal quit' tests/bench-real-fixture.test.mjs",
+      "exitCode": 1,
+      "result": "RED: six failures before startup and quit implementation."
+    },
+    {
+      "command": "node --test --test-name-pattern='cold Office|Office launch|normal quit|native quit' tests/bench-real-fixture.test.mjs",
+      "exitCode": 1,
+      "result": "Six passed, one failed because the replacement-process test spread an object containing a deliberately failing forceTerminate getter. Test fixture corrected."
+    },
+    {
+      "command": "node --test tests/bench-real-fixture.test.mjs tests/bench-real-office.test.mjs",
+      "exitCode": 0,
+      "result": "67 passed; includes fake startup and quit clocks and an existing native JXA self-test that never accesses apps."
+    },
+    {
+      "command": "npm run check",
+      "permissions": "ordinary workspace sandbox",
+      "exitCode": 1,
+      "result": "Office regressions passed. The full suite failed on localhost listen EPERM and a denied hover-fixture linker output. Plugin validation and mod tests were not reached."
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "result": "Eight wording errors across the known-problems page and new brief-9 report."
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "result": "One remaining report wording error; corrected."
+    },
+    {
+      "command": "npm run check",
+      "permissions": "Scoped host permission after actual sandbox listener and linker-output denials.",
+      "exitCode": 0,
+      "result": "900 unit tests, two plugin validations and 11 mod tests passed. No live app use."
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "result": "Zero errors, warnings or suggestions in 53 files."
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "result": "Final verification paragraph introduced one wording error after the earlier clean prose pass. Corrected."
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "result": "Zero errors, warnings or suggestions in 53 files after the verification paragraph correction."
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "result": "Final prose pass after correcting sentence capitalization and clarifying the pending quit qualification: zero errors, warnings or suggestions in 53 files."
+    }
+  ],
+  "verification": {
+    "check": {
+      "command": "npm run check",
+      "exitCode": 0,
+      "unitTests": 900,
+      "pluginValidations": 2,
+      "modTests": 11
+    },
+    "prose": {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "files": 53
+    },
+    "codeReview": "No Critical or Important findings in the five code and test files.",
+    "evidenceReview": "No actionable accuracy or privacy findings.",
+    "payloadsMatchedAfterSanitization": 2,
+    "absoluteHomePathsOrOwnerNamesFound": false
+  },
+  "privacy": {
+    "sourcePayloads": "Full supplied JSON retained, with home and temporary paths and owner names sanitized. No transcripts or images published."
+  }
+}

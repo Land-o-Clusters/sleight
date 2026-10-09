@@ -1,0 +1,643 @@
+{
+  "round": 6,
+  "date": "2026-10-09",
+  "branch": "codex/real-use-tasks",
+  "base": "1731df91cf84f5edf5e71c9fb357056d1aa75f61",
+  "committedFixes": "43a93dc",
+  "status": "Awaiting explicit owner-away reply before remaining fixture diagnostics and desktop qualification",
+  "scope": {
+    "tasks": [
+      "safari-form",
+      "helium-form",
+      "preview-pdf",
+      "finder-files",
+      "textedit-calculator"
+    ],
+    "runsPerTask": 3,
+    "simulatorFlow": "excluded by round-6 brief",
+    "surface": "computer",
+    "model": "claude-sonnet-5-5",
+    "effort": "medium"
+  },
+  "qualificationSlots": [
+    {
+      "task": "safari-form",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "safari-form",
+      "run": 2,
+      "status": "unstarted"
+    },
+    {
+      "task": "safari-form",
+      "run": 3,
+      "status": "unstarted"
+    },
+    {
+      "task": "helium-form",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "helium-form",
+      "run": 2,
+      "status": "unstarted"
+    },
+    {
+      "task": "helium-form",
+      "run": 3,
+      "status": "unstarted"
+    },
+    {
+      "task": "preview-pdf",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "preview-pdf",
+      "run": 2,
+      "status": "unstarted"
+    },
+    {
+      "task": "preview-pdf",
+      "run": 3,
+      "status": "unstarted"
+    },
+    {
+      "task": "finder-files",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "finder-files",
+      "run": 2,
+      "status": "unstarted"
+    },
+    {
+      "task": "finder-files",
+      "run": 3,
+      "status": "unstarted"
+    },
+    {
+      "task": "textedit-calculator",
+      "run": 1,
+      "status": "unstarted"
+    },
+    {
+      "task": "textedit-calculator",
+      "run": 2,
+      "status": "unstarted"
+    },
+    {
+      "task": "textedit-calculator",
+      "run": 3,
+      "status": "unstarted"
+    }
+  ],
+  "confirmedNewAppQuits": 0,
+  "attempts": [
+    {
+      "kind": "fixture-only",
+      "stamp": "2026-10-09T03-59-20-514Z",
+      "command": "node bench/run.mjs --suite real --setup-only --tasks safari-form,preview-pdf,textedit-calculator --runs 1",
+      "exitCode": 1,
+      "phase": "before lock and app launch",
+      "error": "EPERM writing ~/Projects/sleight-wt/real-use-tasks/bench/results/2026-10-09T03-59-20-514Z-setup.json; no results file created"
+    },
+    {
+      "kind": "fixture-only",
+      "file": "2026-10-09T03-59-25-211Z-setup.json",
+      "exitCode": 1,
+      "codeState": "43a93dc; initial setup diagnostics",
+      "payload": {
+        "stamp": "2026-10-09T03-59-25-211Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "safari-form",
+            "run": 1,
+            "setupOnly": true,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "menuItems": [
+                  "New <profile> Window",
+                  "New <profile> Window",
+                  "New Private Window",
+                  "New Tab",
+                  "New Tab at End",
+                  "New Empty Tab Group",
+                  "Create Tab Group from This Window",
+                  "Open File…",
+                  "Open Location…",
+                  "",
+                  "Close Window",
+                  "Close Window",
+                  "Close All Windows",
+                  "Close All Windows",
+                  "Close Tab",
+                  "Close Other Tabs",
+                  "Delete Tab Group",
+                  "Save As…",
+                  "Save As…",
+                  "",
+                  "Share…",
+                  "",
+                  "Export as PDF…",
+                  "Add to Dock…",
+                  "",
+                  "Import Browsing Data from File or Folder…",
+                  "Export Browsing Data to File…",
+                  "",
+                  "",
+                  "",
+                  "",
+                  "",
+                  "Print…"
+                ],
+                "menuCancelled": true,
+                "menuCancelMethod": "AXCancel",
+                "pid": 16819,
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T03-59-25-211Z/sleight-safari-form-1",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "preview-pdf",
+            "run": 1,
+            "setupOnly": true,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "Preview",
+                "bundle": "com.apple.Preview",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 65127,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": false,
+                    "documentKind": "file-url",
+                    "titleMatches": true
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": false,
+                    "documentKind": "file-url",
+                    "titleMatches": true
+                  }
+                },
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T03-59-25-211Z/sleight-preview-pdf-1",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "textedit-calculator",
+            "run": 1,
+            "setupOnly": true,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "TextEdit",
+                "bundle": "com.apple.TextEdit",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 12618,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": false,
+                    "documentKind": "file-url",
+                    "titleMatches": true
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": false,
+                    "documentKind": "file-url",
+                    "titleMatches": true
+                  }
+                },
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T03-59-25-211Z/sleight-textedit-calculator-1",
+            "models": []
+          }
+        ]
+      }
+    },
+    {
+      "kind": "fixture-only",
+      "file": "2026-10-09T04-16-38-630Z-setup.json",
+      "exitCode": 1,
+      "codeState": "43a93dc parent; uncommitted native path normalization loaded after lock wait",
+      "payload": {
+        "stamp": "2026-10-09T04-16-38-630Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "preview-pdf",
+            "run": 1,
+            "setupOnly": true,
+            "passed": false,
+            "cleanupError": "Owned fixture window cleanup unconfirmed",
+            "fixtureDiagnostics": [
+              {
+                "app": "Preview",
+                "bundle": "com.apple.Preview",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 65127,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  }
+                },
+                "fresh": false,
+                "menuItems": [
+                  "New from Clipboard",
+                  "Open…",
+                  "Open Recent",
+                  "",
+                  "Close Window",
+                  "Close All",
+                  "Close Selected PDF Document",
+                  "Save",
+                  "Save As…",
+                  "Duplicate",
+                  "Rename…",
+                  "Move To…",
+                  "Revert To",
+                  "",
+                  "Enter Password…",
+                  "Edit Permissions…",
+                  "",
+                  "Import from iPhone or iPad",
+                  "",
+                  "Import from Camera…",
+                  "Import from Scanner…",
+                  "Take Screenshot",
+                  "",
+                  "Export…",
+                  "Export as PDF…",
+                  "",
+                  "Share",
+                  "",
+                  "Print…"
+                ]
+              }
+            ],
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T04-16-38-630Z/sleight-preview-pdf-1",
+            "models": []
+          }
+        ]
+      }
+    },
+    {
+      "kind": "fixture-only",
+      "file": "2026-10-09T04-37-51-405Z-setup.json",
+      "exitCode": 1,
+      "codeState": "43a93dc plus uncommitted native Safari helper and document menu diagnostics",
+      "payload": {
+        "stamp": "2026-10-09T04-37-51-405Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "safari-form",
+            "run": 1,
+            "setupOnly": true,
+            "passed": false,
+            "reason": "Fixture setup failed: New blank browser window unconfirmed",
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "launched": true,
+                "pid": 16819,
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T04-37-51-405Z/sleight-safari-form-1",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "preview-pdf",
+            "run": 1,
+            "setupOnly": true,
+            "passed": false,
+            "cleanupError": "Owned fixture window cleanup unconfirmed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "Preview",
+                "bundle": "com.apple.Preview",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 65127,
+                "launched": true,
+                "readiness": {
+                  "focused": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  },
+                  "main": {
+                    "present": true,
+                    "matches": true,
+                    "documentKind": "file-url",
+                    "titleMatches": true,
+                    "pathAvailable": true,
+                    "pathMatchesNormalizedTarget": true
+                  }
+                },
+                "fresh": false,
+                "menuItems": [
+                  "New from Clipboard",
+                  "Open…",
+                  "Open Recent",
+                  "",
+                  "Close Window",
+                  "Close All",
+                  "Close Selected PDF Document",
+                  "Save",
+                  "Save As…",
+                  "Duplicate",
+                  "Rename…",
+                  "Move To…",
+                  "Revert To",
+                  "",
+                  "Enter Password…",
+                  "Edit Permissions…",
+                  "",
+                  "Import from iPhone or iPad",
+                  "",
+                  "Import from Camera…",
+                  "Import from Scanner…",
+                  "Take Screenshot",
+                  "",
+                  "Export…",
+                  "Export as PDF…",
+                  "",
+                  "Share",
+                  "",
+                  "Print…"
+                ],
+                "menuCommands": [
+                  {
+                    "title": "New from Clipboard",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Open…",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open Recent",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Close Window",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Close All",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Close Selected PDF Document",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Save",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Save As…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Duplicate",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Rename…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Move To…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Revert To",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Enter Password…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Edit Permissions…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Import from iPhone or iPad",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Import from Camera…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Import from Scanner…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Take Screenshot",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Export…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Export as PDF…",
+                    "enabled": false
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Share",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Print…",
+                    "enabled": false
+                  }
+                ],
+                "menuCancelled": true,
+                "menuCancelMethod": "AXCancel",
+                "closeFailure": "~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)"
+              }
+            ],
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T04-37-51-405Z/sleight-preview-pdf-1",
+            "models": []
+          }
+        ]
+      }
+    },
+    {
+      "kind": "native-inert-self-test",
+      "command": "osascript -l JavaScript bench/real-fixture.js '{\"mode\":\"self-test\",\"path\":\"/private/tmp\"}'",
+      "exitCode": 0,
+      "payload": {
+        "quit": true,
+        "path": "/tmp"
+      },
+      "appAccess": false
+    }
+  ],
+  "verification": [
+    {
+      "command": "npm run check",
+      "exitCode": 0,
+      "unitTests": 768,
+      "modTests": 11,
+      "validations": 2,
+      "codeState": "current reviewed round-6 source"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "files": 49,
+      "codeState": "before round-6 report added"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "files": 50,
+      "errors": 8,
+      "codeState": "initial round-6 report; corrected before publication"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "files": 50,
+      "codeState": "corrected round-6 report and current source"
+    }
+  ],
+  "safety": {
+    "ownerAwayRequiredForSafariBlankNavigation": true,
+    "foregroundDocumentCloseFallbackRequiresOwnerAway": true,
+    "existingAppsPreserved": true,
+    "sharedHelperUnchanged": true,
+    "newSystemPromptsAnswered": false
+  }
+}

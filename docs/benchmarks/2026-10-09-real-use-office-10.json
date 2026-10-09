@@ -1,0 +1,115 @@
+{
+  "stamp": "2026-10-09T17-54-17-610Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "word-edit",
+      "run": 1,
+      "passed": false,
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/codex-real/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25204 (AXFocusedWindow) (-2700)",
+      "fixtureDiagnostics": [
+        {
+          "app": "Microsoft Word",
+          "bundle": "com.microsoft.Word",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 72606,
+          "launched": true,
+          "fresh": false,
+          "cleanup": "unconfirmed"
+        }
+      ],
+      "cleanupUnconfirmed": true,
+      "fixtureDir": "<temp>/sleight-bench/2026-10-09T17-54-17-610Z/sleight-word-edit-1",
+      "models": []
+    },
+    {
+      "arm": "sleight",
+      "task": "excel-edit",
+      "run": 1,
+      "appDialog": {
+        "app": "Microsoft Excel",
+        "category": "activation",
+        "title": "Excel",
+        "buttons": [
+          "Start Using Excel",
+          "",
+          "",
+          ""
+        ],
+        "stop": true,
+        "description": "activation application dialog"
+      },
+      "passed": false,
+      "reason": "Microsoft Excel activation dialog: stopped",
+      "cleanupError": "Fixture cleanup stopped by application dialog",
+      "fixtureDiagnostics": [
+        {
+          "app": "Microsoft Excel",
+          "bundle": "com.microsoft.Excel",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 69926,
+          "appDialogs": [
+            {
+              "app": "Microsoft Excel",
+              "category": "activation",
+              "title": "Excel",
+              "buttons": [
+                "Start Using Excel",
+                "",
+                "",
+                ""
+              ],
+              "stop": true,
+              "description": "activation application dialog"
+            }
+          ],
+          "appDialog": {
+            "app": "Microsoft Excel",
+            "category": "activation",
+            "title": "Excel",
+            "buttons": [
+              "Start Using Excel",
+              "",
+              "",
+              ""
+            ],
+            "stop": true,
+            "description": "activation application dialog"
+          }
+        }
+      ],
+      "appDialogs": [
+        {
+          "app": "Microsoft Excel",
+          "category": "activation",
+          "title": "Excel",
+          "buttons": [
+            "Start Using Excel",
+            "",
+            "",
+            ""
+          ],
+          "stop": true,
+          "description": "activation application dialog"
+        }
+      ],
+      "fixtureDir": "<temp>/sleight-bench/2026-10-09T17-54-17-610Z/sleight-excel-edit-1",
+      "models": []
+    }
+  ]
+}

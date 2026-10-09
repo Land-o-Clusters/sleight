@@ -1,0 +1,1019 @@
+{
+  "dateLocal": "2026-10-08",
+  "timezone": "America/New_York",
+  "suite": "real",
+  "arm": "sleight",
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "surfaces": "computer",
+  "branch": "codex/real-use-tasks",
+  "rebase": {
+    "ref": "origin/pane/auto-mode",
+    "sha": "ff3f406dbf10baf17d4d767804ef9326d04fede5"
+  },
+  "codeCommits": {
+    "initial": "65872cd021a81521526af79e5810e718871d47eb",
+    "remainingAfterPreviewRecovery": "d5fef3d5ddfa190e019735fdee99463153cb5c00",
+    "launchIdentityCorrection": "efafe9d5cd57274639a1e6d43d67ac7e9cda9502"
+  },
+  "requestedRunsPerTask": 3,
+  "qualification": "stopped; two Simulator slots await owner cleanup confirmation",
+  "changes": [
+    "Keep each fixture helper's initial running state; collect its helper before quitting only the exact PID and bundle that the run launched.",
+    "Check benchmark keyboard taps after every real run and invoke the common cleanup tail for every suite and outcome while preserving pre-existing apps.",
+    "Keep core benchmark approvals unchanged; add REAL_APPS only for BENCH_SUITE=real.",
+    "Recover only a retained, proven owned window reference; missing references record unconfirmed cleanup and ordinary failures continue.",
+    "Stop on cleanup, permission, observer, driver-group or keyboard-tap errors; cancel Safari's failed File-menu lookup.",
+    "Reject the unsupported Codex real arm before constructing it or touching approvals.",
+    "Inline arm-env.mjs and replace round-2, round-3 and round-4 Markdown reports with short Known problems entries while keeping their full JSON.",
+    "Unwrap the native Objective-C bundle identifier before comparing app identity; retain the PID and quit error for later diagnosis.",
+    "Capture a fresh PID during the actual app launch; preserve a viewer opened during simulator boot preparation by honoring viewerLaunchedByTask."
+  ],
+  "recovery": {
+    "app": "Preview",
+    "ownerConfirmation": "Preview is closed",
+    "nativeCorrection": "ObjC.unwrap converts the bridged bundle identifier before the exact PID and bundle quit guard.",
+    "proof": "native JXA self-test with a fake app reproduced refusal before the change and passed after it",
+    "resume": "two remaining Preview slots only; original failed trial retained",
+    "beforeCommit": "65872cd021a81521526af79e5810e718871d47eb",
+    "afterCommit": "d5fef3d5ddfa190e019735fdee99463153cb5c00"
+  },
+  "verification": {
+    "check": {
+      "command": "npm run check",
+      "exitCode": 0,
+      "unitTestsPassed": 754,
+      "modTestsPassed": 11,
+      "pluginValidationsPassed": 2,
+      "codeSha": "efafe9d5cd57274639a1e6d43d67ac7e9cda9502"
+    },
+    "lintProse": {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "files": 49
+    },
+    "regressions": {
+      "nativeFixtureTestsPassed": 27,
+      "launchPid": {
+        "redExitCode": 1,
+        "greenExitCode": 0
+      },
+      "preLaunchOwnership": {
+        "redExitCode": 1,
+        "greenExitCode": 0
+      },
+      "deniedProbe": {
+        "redExitCode": 1,
+        "greenExitCode": 0
+      },
+      "runLoopVisibility": {
+        "redExitCode": 1,
+        "greenExitCode": 0
+      }
+    },
+    "notes": [
+      "Earlier bare checks recorded sandbox denials for required local listeners/worktree writes, an interrupted pre-fix check, and a refusal-assertion mismatch before they passed.",
+      "The first launch-PID full check failed mock helper startup timeouts; the isolated helper-doctor tests then passed 11/11 without a production change.",
+      "Native launch PID, pre-launch preservation, denied ownership probe, and run-loop visibility regressions each failed before their correction and passed afterward."
+    ]
+  },
+  "attempts": [
+    {
+      "task": "safari-form",
+      "runsRequested": 3,
+      "stamp": "2026-10-09T02-56-48-571Z",
+      "exitCode": 1,
+      "status": "sandbox denied result-file write before lock or fixture setup",
+      "resultFile": null,
+      "command": "node bench/run.mjs --arm sleight --suite real --tasks safari-form --runs 3",
+      "codeSha": "65872cd021a81521526af79e5810e718871d47eb"
+    },
+    {
+      "task": "safari-form",
+      "runsRequested": 3,
+      "stamp": "2026-10-09T02-57-09-381Z",
+      "exitCode": 1,
+      "status": "three setup failures; menu cancellation recorded; no hard safety stop",
+      "resultFile": "bench/results/2026-10-09T02-57-09-381Z.json",
+      "command": "node bench/run.mjs --arm sleight --suite real --tasks safari-form --runs 3",
+      "codeSha": "65872cd021a81521526af79e5810e718871d47eb",
+      "payload": {
+        "stamp": "2026-10-09T02-57-09-381Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "safari-form",
+            "run": 1,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "menuCancelled": true,
+                "menuCancelMethod": "AXCancel",
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T02-57-09-381Z/sleight-safari-form-1",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-form",
+            "run": 2,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "menuCancelled": true,
+                "menuCancelMethod": "AXCancel",
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T02-57-09-381Z/sleight-safari-form-2",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "safari-form",
+            "run": 3,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "Safari",
+                "bundle": "com.apple.Safari",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": true,
+                "running": true,
+                "menuCancelled": true,
+                "menuCancelMethod": "AXCancel",
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T02-57-09-381Z/sleight-safari-form-3",
+            "models": []
+          }
+        ]
+      }
+    },
+    {
+      "task": "helium-form",
+      "runsRequested": 3,
+      "stamp": "2026-10-09T02-57-38-647Z",
+      "exitCode": 0,
+      "status": "three passed model trials",
+      "resultFile": "bench/results/2026-10-09T02-57-38-647Z.json",
+      "command": "node bench/run.mjs --arm sleight --suite real --tasks helium-form --runs 3",
+      "codeSha": "65872cd021a81521526af79e5810e718871d47eb",
+      "payload": {
+        "stamp": "2026-10-09T02-57-38-647Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "helium-form",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 16399,
+              "modelMs": 8836,
+              "calls": 4,
+              "refused": 0,
+              "toolMs": 6632,
+              "engineMs": 6615,
+              "relayMs": 17,
+              "localMs": 0,
+              "guardReads": 7,
+              "guardReadMs": 1579.4834999999998,
+              "guardReadFailures": 0,
+              "otherMs": 931
+            },
+            "passed": true,
+            "seconds": 18.2,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true
+              }
+            ],
+            "turns": 5,
+            "costUsd": 0.2332466,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 10,
+              "cacheRead": 174783,
+              "cacheWrite": 48385,
+              "output": 473
+            },
+            "exitCode": 0,
+            "answer": "I filled in and submitted the form, and the page now shows \"Submitted\". I used these values:\n\n- **Name:** Morgan Reed\n- **Email:** morgan@example.test\n- **Team:** Design\n- **Send updates:** checked\n- **Code:** 97154411\n\nI left the Helium window open and didn't touch any other tabs or windows."
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-form",
+            "run": 2,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 15986,
+              "modelMs": 8943,
+              "calls": 4,
+              "refused": 0,
+              "toolMs": 6227,
+              "engineMs": 6212,
+              "relayMs": 15,
+              "localMs": 0,
+              "guardReads": 7,
+              "guardReadMs": 1565.267042,
+              "guardReadFailures": 0,
+              "otherMs": 816
+            },
+            "passed": true,
+            "seconds": 17.6,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true
+              }
+            ],
+            "turns": 5,
+            "costUsd": 0.1748216,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 10,
+              "cacheRead": 190508,
+              "cacheWrite": 32985,
+              "output": 476
+            },
+            "exitCode": 0,
+            "answer": "I filled in and submitted the form, and the page now shows \"Submitted\". The values were:\n\n- **Name:** Morgan Reed\n- **Email:** morgan@example.test\n- **Team:** Design\n- **Send updates:** checked\n- **Code:** 2f4d529f\n\nThe Helium window is still open, and I didn't touch any other tabs or windows."
+          },
+          {
+            "arm": "sleight",
+            "task": "helium-form",
+            "run": 3,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 17754,
+              "modelMs": 10371,
+              "calls": 5,
+              "refused": 0,
+              "toolMs": 6626,
+              "engineMs": 6607,
+              "relayMs": 19,
+              "localMs": 0,
+              "guardReads": 8,
+              "guardReadMs": 1621.6232910000012,
+              "guardReadFailures": 0,
+              "otherMs": 757
+            },
+            "passed": true,
+            "seconds": 19.4,
+            "fixtureDiagnostics": [
+              {
+                "app": "Helium",
+                "bundle": "net.imput.helium",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true
+              }
+            ],
+            "turns": 6,
+            "costUsd": 0.1885574,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 12,
+              "cacheRead": 238447,
+              "cacheWrite": 33646,
+              "output": 626
+            },
+            "exitCode": 0,
+            "answer": "The form is submitted and the page now shows \"Submitted\". I filled Name, Email, Team (Design), the Send updates checkbox and Code (9b75fa9c) before submitting. I left the window open and didn't touch any other tabs or windows."
+          }
+        ]
+      }
+    },
+    {
+      "task": "preview-pdf",
+      "runsRequested": 3,
+      "stamp": "2026-10-09T02-59-33-046Z",
+      "exitCode": 1,
+      "status": "stopped after first setup failure: launched Preview quit unconfirmed",
+      "resultFile": "bench/results/2026-10-09T02-59-33-046Z.json",
+      "command": "node bench/run.mjs --arm sleight --suite real --tasks preview-pdf --runs 3",
+      "codeSha": "65872cd021a81521526af79e5810e718871d47eb",
+      "payload": {
+        "stamp": "2026-10-09T02-59-33-046Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "preview-pdf",
+            "run": 1,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "cleanupError": "Launched Preview quit unconfirmed",
+            "fixtureDiagnostics": [
+              {
+                "app": "Preview",
+                "bundle": "com.apple.Preview",
+                "retries": [
+                  {
+                    "code": -25204,
+                    "waitMs": 102,
+                    "totalWaitMs": 102
+                  },
+                  {
+                    "code": -25204,
+                    "waitMs": 105,
+                    "totalWaitMs": 208
+                  }
+                ],
+                "totalWaitMs": 208,
+                "actionTaken": false,
+                "running": false,
+                "fresh": true,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T02-59-33-046Z/sleight-preview-pdf-1",
+            "models": []
+          }
+        ]
+      }
+    },
+    {
+      "task": "preview-pdf",
+      "runsRequested": 2,
+      "stamp": "2026-10-09T03-07-33-250Z",
+      "exitCode": 1,
+      "status": "two remaining setup failures; Preview was already running and left running; cleanup unconfirmed without an owned reference, no hard safety stop",
+      "resultFile": "bench/results/2026-10-09T03-07-33-250Z.json",
+      "requestedRunOffset": 1,
+      "command": "node bench/run.mjs --arm sleight --suite real --tasks preview-pdf --runs 2",
+      "codeSha": "d5fef3d5ddfa190e019735fdee99463153cb5c00",
+      "payload": {
+        "stamp": "2026-10-09T03-07-33-250Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "preview-pdf",
+            "run": 1,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "Preview",
+                "bundle": "com.apple.Preview",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 65127,
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T03-07-33-250Z/sleight-preview-pdf-1",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "preview-pdf",
+            "run": 2,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "Preview",
+                "bundle": "com.apple.Preview",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 65127,
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T03-07-33-250Z/sleight-preview-pdf-2",
+            "models": []
+          }
+        ]
+      }
+    },
+    {
+      "task": "finder-files",
+      "runsRequested": 3,
+      "stamp": "2026-10-09T03-09-08-120Z",
+      "exitCode": 0,
+      "status": "three passed model trials",
+      "resultFile": "bench/results/2026-10-09T03-09-08-120Z.json",
+      "command": "node bench/run.mjs --arm sleight --suite real --tasks finder-files --runs 3",
+      "codeSha": "d5fef3d5ddfa190e019735fdee99463153cb5c00",
+      "payload": {
+        "stamp": "2026-10-09T03-09-08-120Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "finder-files",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 45730,
+              "modelMs": 15367,
+              "calls": 6,
+              "refused": 0,
+              "toolMs": 29535,
+              "engineMs": 5202,
+              "relayMs": 2578,
+              "localMs": 21755,
+              "guardReads": 6,
+              "guardReadMs": 2210.3562920000068,
+              "guardReadFailures": 0,
+              "otherMs": 828
+            },
+            "passed": true,
+            "seconds": 47.7,
+            "fixtureDiagnostics": [
+              {
+                "app": "Finder",
+                "bundle": "com.apple.finder",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 1306,
+                "fresh": false
+              }
+            ],
+            "turns": 7,
+            "costUsd": 0.300472,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 14,
+              "cacheRead": 336410,
+              "cacheWrite": 55393,
+              "output": 1159
+            },
+            "exitCode": 0,
+            "answer": "Both changes are done in Finder, and the window is still open.\n\n- **Rename:** `alpha.txt` is now `renamed.txt`.\n- **Move:** I dragged `bravo.txt` onto the Archive folder. Expanding Archive shows `Archive/bravo.txt`, and it's gone from the top level.\n- **Unchanged:** `charlie.txt` was not touched.\n\nI"
+          },
+          {
+            "arm": "sleight",
+            "task": "finder-files",
+            "run": 2,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 50467,
+              "modelMs": 22469,
+              "calls": 9,
+              "refused": 0,
+              "toolMs": 27038,
+              "engineMs": 7629,
+              "relayMs": 702,
+              "localMs": 18707,
+              "guardReads": 12,
+              "guardReadMs": 3732.5371670000163,
+              "guardReadFailures": 0,
+              "otherMs": 960
+            },
+            "passed": true,
+            "seconds": 52.2,
+            "fixtureDiagnostics": [
+              {
+                "app": "Finder",
+                "bundle": "com.apple.finder",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 1306,
+                "fresh": false
+              }
+            ],
+            "turns": 10,
+            "costUsd": 0.38528679999999993,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 20,
+              "cacheRead": 557804,
+              "cacheWrite": 63869,
+              "output": 1821
+            },
+            "exitCode": 0,
+            "answer": "Both changes are done in Finder, and I confirmed them in the folder listings.\n\n- **Rename:** alpha.txt is now renamed.txt.\n- **Move:** bravo.txt is now inside Archive. The parent folder no longer lists it.\n- **charlie.txt:** unchanged.\n\nThe parent folder now shows 3 items: Archive, charlie.txt and r"
+          },
+          {
+            "arm": "sleight",
+            "task": "finder-files",
+            "run": 3,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "timing": {
+              "totalMs": 69460,
+              "modelMs": 26729,
+              "calls": 10,
+              "refused": 0,
+              "toolMs": 41461,
+              "engineMs": 6442,
+              "relayMs": 2825,
+              "localMs": 32194,
+              "guardReads": 10,
+              "guardReadMs": 2808.8054179999936,
+              "guardReadFailures": 0,
+              "otherMs": 1270
+            },
+            "passed": true,
+            "seconds": 71.6,
+            "fixtureDiagnostics": [
+              {
+                "app": "Finder",
+                "bundle": "com.apple.finder",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 1306,
+                "fresh": false
+              }
+            ],
+            "turns": 11,
+            "costUsd": 0.4021892,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 22,
+              "cacheRead": 629996,
+              "cacheWrite": 64164,
+              "output": 1949
+            },
+            "exitCode": 0,
+            "answer": "Both changes are done in Finder, and the window is still open:\n\n- **Rename:** `alpha.txt` is now `renamed.txt`.\n- **Move:** `bravo.txt` is gone from the main folder, and Archive's modified time updated to 11:11 PM. I didn't expand Archive to look inside, so its contents are unchecked.\n- **Unchanged:"
+          }
+        ]
+      }
+    },
+    {
+      "task": "textedit-calculator",
+      "runsRequested": 3,
+      "stamp": "2026-10-09T03-13-33-102Z",
+      "exitCode": 1,
+      "status": "three setup failures; no hard safety stop",
+      "resultFile": "bench/results/2026-10-09T03-13-33-102Z.json",
+      "command": "node bench/run.mjs --arm sleight --suite real --tasks textedit-calculator --runs 3",
+      "codeSha": "d5fef3d5ddfa190e019735fdee99463153cb5c00",
+      "payload": {
+        "stamp": "2026-10-09T03-13-33-102Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "textedit-calculator",
+            "run": 1,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "TextEdit",
+                "bundle": "com.apple.TextEdit",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 12618,
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T03-13-33-102Z/sleight-textedit-calculator-1",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "textedit-calculator",
+            "run": 2,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "TextEdit",
+                "bundle": "com.apple.TextEdit",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 12618,
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T03-13-33-102Z/sleight-textedit-calculator-2",
+            "models": []
+          },
+          {
+            "arm": "sleight",
+            "task": "textedit-calculator",
+            "run": 3,
+            "passed": false,
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "TextEdit",
+                "bundle": "com.apple.TextEdit",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 12618,
+                "fresh": false,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T03-13-33-102Z/sleight-textedit-calculator-3",
+            "models": []
+          }
+        ]
+      }
+    },
+    {
+      "task": "simulator-flow",
+      "runsRequested": 3,
+      "stamp": "2026-10-09T03-15-07-407Z",
+      "exitCode": 1,
+      "status": "stopped after first setup failure: Simulator openurl timed out and launched app identity unconfirmed; two remaining slots unstarted",
+      "resultFile": "bench/results/2026-10-09T03-15-07-407Z.json",
+      "command": "node bench/run.mjs --arm sleight --suite real --tasks simulator-flow --runs 3",
+      "codeSha": "d5fef3d5ddfa190e019735fdee99463153cb5c00",
+      "payload": {
+        "stamp": "2026-10-09T03-15-07-407Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "simulator-flow",
+            "run": 1,
+            "passed": false,
+            "reason": "Command failed: xcrun simctl openurl E9DC4DDF-59C5-4D34-9A91-BFC0DBD47A6F http://127.0.0.1:61219/18cb3c18/\nAn error was encountered processing the command (domain=NSPOSIXErrorDomain, code=60):\nSimulator device failed to open http://127.0.0.1:61219/18cb3c18/.\nOperation timed out\nUnderlying error (domain=NSPOSIXErrorDomain, code=60):\n\tThe operation couldn’t be completed. Operation timed out\n\tOperation timed out\n",
+            "cleanupError": "Launched app identity unconfirmed; quit refused",
+            "fixtureDiagnostics": [
+              {
+                "app": "DeviceHub",
+                "bundle": "com.apple.dt.Devices",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": false,
+                "fresh": true,
+                "cleanup": "unconfirmed"
+              }
+            ],
+            "cleanupUnconfirmed": true,
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T03-15-07-407Z/sleight-simulator-flow-1",
+            "models": []
+          }
+        ]
+      }
+    }
+  ],
+  "qualifyingCodeNote": "Safari, Helium and the first Preview slot used 65872cd; remaining observed slots used d5fef3d. The later launch-PID/ownership correction has unit proof only; no post-correction live trial has started.",
+  "metrics": {
+    "requestedSlots": 18,
+    "attemptedSlots": 16,
+    "modelTrialsStarted": 6,
+    "modelTrialsCompleted": 6,
+    "passed": 6,
+    "setupFailures": 10,
+    "unstarted": 2,
+    "costUsd": 1.6845735999999998,
+    "liveAppQuitsConfirmed": 0
+  },
+  "slots": [
+    {
+      "task": "safari-form",
+      "requestedRun": 1,
+      "sourceFile": "bench/results/2026-10-09T02-57-09-381Z.json",
+      "sourceRun": 1,
+      "passed": false,
+      "modelStarted": false,
+      "seconds": null,
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+      "cleanupError": null
+    },
+    {
+      "task": "safari-form",
+      "requestedRun": 2,
+      "sourceFile": "bench/results/2026-10-09T02-57-09-381Z.json",
+      "sourceRun": 2,
+      "passed": false,
+      "modelStarted": false,
+      "seconds": null,
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+      "cleanupError": null
+    },
+    {
+      "task": "safari-form",
+      "requestedRun": 3,
+      "sourceFile": "bench/results/2026-10-09T02-57-09-381Z.json",
+      "sourceRun": 3,
+      "passed": false,
+      "modelStarted": false,
+      "seconds": null,
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+      "cleanupError": null
+    },
+    {
+      "task": "helium-form",
+      "requestedRun": 1,
+      "sourceFile": "bench/results/2026-10-09T02-57-38-647Z.json",
+      "sourceRun": 1,
+      "passed": true,
+      "modelStarted": true,
+      "seconds": 18.2,
+      "reason": null,
+      "cleanupError": null
+    },
+    {
+      "task": "helium-form",
+      "requestedRun": 2,
+      "sourceFile": "bench/results/2026-10-09T02-57-38-647Z.json",
+      "sourceRun": 2,
+      "passed": true,
+      "modelStarted": true,
+      "seconds": 17.6,
+      "reason": null,
+      "cleanupError": null
+    },
+    {
+      "task": "helium-form",
+      "requestedRun": 3,
+      "sourceFile": "bench/results/2026-10-09T02-57-38-647Z.json",
+      "sourceRun": 3,
+      "passed": true,
+      "modelStarted": true,
+      "seconds": 19.4,
+      "reason": null,
+      "cleanupError": null
+    },
+    {
+      "task": "preview-pdf",
+      "requestedRun": 1,
+      "sourceFile": "bench/results/2026-10-09T02-59-33-046Z.json",
+      "sourceRun": 1,
+      "passed": false,
+      "modelStarted": false,
+      "seconds": null,
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "cleanupError": "Launched Preview quit unconfirmed"
+    },
+    {
+      "task": "preview-pdf",
+      "requestedRun": 2,
+      "sourceFile": "bench/results/2026-10-09T03-07-33-250Z.json",
+      "sourceRun": 1,
+      "passed": false,
+      "modelStarted": false,
+      "seconds": null,
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "cleanupError": null
+    },
+    {
+      "task": "preview-pdf",
+      "requestedRun": 3,
+      "sourceFile": "bench/results/2026-10-09T03-07-33-250Z.json",
+      "sourceRun": 2,
+      "passed": false,
+      "modelStarted": false,
+      "seconds": null,
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "cleanupError": null
+    },
+    {
+      "task": "finder-files",
+      "requestedRun": 1,
+      "sourceFile": "bench/results/2026-10-09T03-09-08-120Z.json",
+      "sourceRun": 1,
+      "passed": true,
+      "modelStarted": true,
+      "seconds": 47.7,
+      "reason": null,
+      "cleanupError": null
+    },
+    {
+      "task": "finder-files",
+      "requestedRun": 2,
+      "sourceFile": "bench/results/2026-10-09T03-09-08-120Z.json",
+      "sourceRun": 2,
+      "passed": true,
+      "modelStarted": true,
+      "seconds": 52.2,
+      "reason": null,
+      "cleanupError": null
+    },
+    {
+      "task": "finder-files",
+      "requestedRun": 3,
+      "sourceFile": "bench/results/2026-10-09T03-09-08-120Z.json",
+      "sourceRun": 3,
+      "passed": true,
+      "modelStarted": true,
+      "seconds": 71.6,
+      "reason": null,
+      "cleanupError": null
+    },
+    {
+      "task": "textedit-calculator",
+      "requestedRun": 1,
+      "sourceFile": "bench/results/2026-10-09T03-13-33-102Z.json",
+      "sourceRun": 1,
+      "passed": false,
+      "modelStarted": false,
+      "seconds": null,
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "cleanupError": null
+    },
+    {
+      "task": "textedit-calculator",
+      "requestedRun": 2,
+      "sourceFile": "bench/results/2026-10-09T03-13-33-102Z.json",
+      "sourceRun": 2,
+      "passed": false,
+      "modelStarted": false,
+      "seconds": null,
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "cleanupError": null
+    },
+    {
+      "task": "textedit-calculator",
+      "requestedRun": 3,
+      "sourceFile": "bench/results/2026-10-09T03-13-33-102Z.json",
+      "sourceRun": 3,
+      "passed": false,
+      "modelStarted": false,
+      "seconds": null,
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "cleanupError": null
+    },
+    {
+      "task": "simulator-flow",
+      "requestedRun": 1,
+      "sourceFile": "bench/results/2026-10-09T03-15-07-407Z.json",
+      "sourceRun": 1,
+      "passed": false,
+      "modelStarted": false,
+      "seconds": null,
+      "reason": "Command failed: xcrun simctl openurl E9DC4DDF-59C5-4D34-9A91-BFC0DBD47A6F http://127.0.0.1:61219/18cb3c18/\nAn error was encountered processing the command (domain=NSPOSIXErrorDomain, code=60):\nSimulator device failed to open http://127.0.0.1:61219/18cb3c18/.\nOperation timed out\nUnderlying error (domain=NSPOSIXErrorDomain, code=60):\n\tThe operation couldn’t be completed. Operation timed out\n\tOperation timed out\n",
+      "cleanupError": "Launched app identity unconfirmed; quit refused"
+    },
+    {
+      "task": "simulator-flow",
+      "requestedRun": 2,
+      "sourceFile": null,
+      "status": "unstarted after Simulator cleanup stop",
+      "passed": false,
+      "modelStarted": false
+    },
+    {
+      "task": "simulator-flow",
+      "requestedRun": 3,
+      "sourceFile": null,
+      "status": "unstarted after Simulator cleanup stop",
+      "passed": false,
+      "modelStarted": false
+    }
+  ],
+  "simulatorRecovery": {
+    "app": "DeviceHub",
+    "ownerStatus": "Device Hub is still open",
+    "ownerCleanupPending": true,
+    "cause": "The helper waited for the custom launch to finish before observing a new PID; simctl openurl timed out after the viewer had launched.",
+    "regression": {
+      "command": "node --test tests/bench-real-fixture.test.mjs",
+      "redExitCode": 1,
+      "redFailure": "failed launch keeps the original PID for exact app cleanup: undefined !== 42",
+      "greenExitCode": 0,
+      "testsPassed": 25
+    },
+    "fix": "Begin PID discovery only at the actual viewer launch; record the first exact PID while launch is pending, pump the AppKit run loop, honor viewerLaunchedByTask=false, and reject ownership probes unless pgrep confirms absence with status 1 and no signal."
+  },
+  "review": {
+    "critical": 0,
+    "important": 0,
+    "status": "closed on final code; live cleanup and qualification not yet proven"
+  },
+  "limits": [
+    "Safari failed File-menu lookup in all three slots; AXCancel was recorded in all three, with cleanup unconfirmed because no owned window reference existed.",
+    "Preview readiness failed in all three slots. The original launched app quit was unconfirmed; the owner subsequently said Preview was closed. Both resumed leases reported already running, so no native app quit was exercised.",
+    "TextEdit readiness failed in all three slots; Calculator was never reached.",
+    "Simulator openurl timed out in its first slot. The helper retained no PID, so exact app quit was refused and the pass stopped. The owner reported Device Hub still open; two slots remain unstarted.",
+    "No successful native app quit was recorded. The final PID, probe and run-loop changes have regression-test proof, but no live proof yet.",
+    "The desktop Space, system-dialog state and owner presence were not independently recorded, so these attempts do not establish qualification under normal use."
+  ]
+}

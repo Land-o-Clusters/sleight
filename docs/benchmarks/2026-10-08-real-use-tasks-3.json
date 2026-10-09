@@ -1,0 +1,242 @@
+{
+  "date": "2026-10-08",
+  "round": 3,
+  "branch": "codex/real-use-tasks",
+  "implementationCommit": "f425373a8b2f3600a7aba5dcb7bef2aa9a86aa36",
+  "parentCommit": "7420d18d5f390b332060ef720822bf22362e20c4",
+  "baseCommit": "2d2eb60855e30d916c731cfb6d703607b7bf980f",
+  "surfaces": "computer",
+  "changes": [
+    "The runner forces SLEIGHT_SURFACES=computer after inherited, arm and per-run settings, for real arm preflight and every driver call. It records the setting in result JSON.",
+    "Safari starts with open -g -a Safari before native acquisition. Its helper waits up to ten seconds for the process to finish launching, advancing the main run loop so AppKit cached properties update.",
+    "Default surface behavior and the original seven task prompts are unchanged. Existing permission stops, retained-window cleanup and live-lock handling remain."
+  ],
+  "qualification": {
+    "requestedModelTrials": 18,
+    "completedModelTrials": 0,
+    "passedModelTrials": 0,
+    "attemptedSetups": 1,
+    "unstartedTrialSlots": 17,
+    "status": "stopped on unconfirmed Safari fixture cleanup"
+  },
+  "trials": [
+    {
+      "task": "safari-form",
+      "run": 1,
+      "status": "setup failed, model not started"
+    },
+    {
+      "task": "safari-form",
+      "run": 2,
+      "status": "not started"
+    },
+    {
+      "task": "safari-form",
+      "run": 3,
+      "status": "not started"
+    },
+    {
+      "task": "helium-form",
+      "run": 1,
+      "status": "not started"
+    },
+    {
+      "task": "helium-form",
+      "run": 2,
+      "status": "not started"
+    },
+    {
+      "task": "helium-form",
+      "run": 3,
+      "status": "not started"
+    },
+    {
+      "task": "preview-pdf",
+      "run": 1,
+      "status": "not started"
+    },
+    {
+      "task": "preview-pdf",
+      "run": 2,
+      "status": "not started"
+    },
+    {
+      "task": "preview-pdf",
+      "run": 3,
+      "status": "not started"
+    },
+    {
+      "task": "finder-files",
+      "run": 1,
+      "status": "not started"
+    },
+    {
+      "task": "finder-files",
+      "run": 2,
+      "status": "not started"
+    },
+    {
+      "task": "finder-files",
+      "run": 3,
+      "status": "not started"
+    },
+    {
+      "task": "textedit-calculator",
+      "run": 1,
+      "status": "not started"
+    },
+    {
+      "task": "textedit-calculator",
+      "run": 2,
+      "status": "not started"
+    },
+    {
+      "task": "textedit-calculator",
+      "run": 3,
+      "status": "not started"
+    },
+    {
+      "task": "simulator-flow",
+      "run": 1,
+      "status": "not started"
+    },
+    {
+      "task": "simulator-flow",
+      "run": 2,
+      "status": "not started"
+    },
+    {
+      "task": "simulator-flow",
+      "run": 3,
+      "status": "not started"
+    }
+  ],
+  "attempts": [
+    {
+      "source": "2026-10-09T00-59-54-312Z.json",
+      "stamp": "2026-10-09T00-59-54-312Z",
+      "suite": "real",
+      "surfaces": "computer",
+      "arms": [
+        "sleight"
+      ],
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "claude",
+      "results": [
+        {
+          "arm": "sleight",
+          "task": "safari-form",
+          "run": 1,
+          "passed": false,
+          "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25204 (-2700)",
+          "cleanupError": "Owned fixture window cleanup unconfirmed",
+          "fixtureDir": "<temp>/sleight-bench/2026-10-09T00-59-54-312Z/sleight-safari-form-1",
+          "models": []
+        }
+      ],
+      "terminalExitCode": 1,
+      "command": "node bench/run.mjs --arm sleight --suite real --tasks safari-form --runs 3"
+    }
+  ],
+  "verification": [
+    {
+      "command": "npm run check",
+      "exitCode": 1,
+      "tests": 702,
+      "passed": 694,
+      "failed": 8,
+      "failures": [
+        "safari-form checks submitted fields, select and checkbox, ignoring the agent's answer",
+        "safari-form rejects missing checkbox, changed select and a nonce from another run",
+        "helium-form checks submitted fields, select and checkbox, ignoring the agent's answer",
+        "helium-form rejects missing checkbox, changed select and a nonce from another run",
+        "simulator-flow checks the saved value and the required screen sequence",
+        "simulator-flow rejects wrong saved text and an unordered or incomplete flow",
+        "the simulator form passes only on the exact text, then closes its server",
+        "hover fixture refuses other apps, unknown operations and unnamed Chess windows before access"
+      ],
+      "reason": "Seven loopback listen EPERM failures and one linker output-write refusal."
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 1,
+      "tests": 703,
+      "passed": 702,
+      "failed": 1,
+      "failures": [
+        "doctor collects a descendant that retains pipes after its parent exits"
+      ],
+      "reason": "Assertion at tests/helper-doctor.test.mjs:50 expected stuck true, got false."
+    },
+    {
+      "command": "node --test --test-name-pattern 'descendant that retains pipes' tests/helper-doctor.test.mjs",
+      "exitCode": 0,
+      "tests": 1
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 0,
+      "unitTests": 703,
+      "modTests": 9,
+      "validation": true
+    },
+    {
+      "command": "focused environment, fixture, driver and runner tests",
+      "exitCode": 0,
+      "tests": 28
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "files": 50
+    },
+    {
+      "command": "node --check bench/run.mjs",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    }
+  ],
+  "limitations": [
+    "One existing descendant-doctor test failed in the first full host check and passed in isolation and in the following full check. The cause was not established. No doctor code changed.",
+    "Safari's LaunchServices step succeeded and the process reached native acquisition, but an AX read failed. Setup and cleanup remain unqualified.",
+    "Helium's forced computer surface and the other five tasks were not requalified live because the first Safari cleanup was unconfirmed.",
+    "The cooperative lock was released on exit as required, while Safari window cleanup remains unconfirmed."
+  ],
+  "ownerUse": "Whether the owner was using the Mac during qualification was not recorded.",
+  "privacy": "Public results scrub the owner's name and home paths. Raw traces and transcripts remain private. No screenshots are published.",
+  "auxiliaryPermissionObservations": [
+    {
+      "environment": "ordinary sandbox",
+      "exitCode": 1,
+      "reason": "sysmon request failed; sysmond service not found; process list unavailable",
+      "uiRead": false
+    },
+    {
+      "environment": "scoped host access",
+      "exitCode": 0,
+      "observation": false
+    }
+  ],
+  "stop": {
+    "reason": "Owned fixture window cleanup unconfirmed",
+    "setupError": "AX fixture read failed: -25204",
+    "permissionWindowObserved": false,
+    "process": null,
+    "windowTitle": null,
+    "stage": "Native setup failed before the helper reported armed. The model driver was not started.",
+    "uncertainty": "The record does not identify which AX attribute failed or whether a new window had already been created. Its window reference was not returned, so cleanup cannot be confirmed."
+  },
+  "cleanup": {
+    "fixtureDir": "<temp>/sleight-bench/2026-10-09T00-59-54-312Z/sleight-safari-form-1",
+    "fixturePreserved": true,
+    "serverClosed": true,
+    "helperProcessGroupCollected": true,
+    "ownedWindowClosed": null,
+    "liveLockReleased": true,
+    "recovery": "Verify only any window created by this failed attempt before another live run. Do not close other Safari windows. The helper did not return ownership, so this run cannot supply a safe window identifier."
+  }
+}

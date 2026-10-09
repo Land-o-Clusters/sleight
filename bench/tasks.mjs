@@ -9,6 +9,8 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { restartChess } from './chess-launch.mjs';
+import { realTasks } from './tasks-real.mjs';
+export { writeTestPDF } from './real-pdf.mjs';
 
 // Calculator shows digit grouping ("1,024"), and Claude reports what it shows.
 const hasNumber = (answer, n) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(answer.replace(/(?<=\d)[,\u202f\u00a0 ](?=\d{3})/g, ''));
@@ -43,7 +45,8 @@ const isBenchDoc = d => d.path?.startsWith(SCRATCH) || d.path?.startsWith(SCRATC
 
 // Closes this pass's documents without saving, and with quit, quits TextEdit
 // too when nothing else is open. Returns whether TextEdit ended up quit.
-export function closeBenchTextEdit({ quit = false } = {}) {
+export function closeBenchTextEdit({ quit = false, ownedOnly = false } = {}) {
+  if (ownedOnly) return false; // Real tasks close their retained references in closeFixtures.
   const docs = textEditDocs();
   if (!docs) return false; // hung: the run goes ahead and its check records it (2026-10-05)
   const bench = docs.filter(isBenchDoc);
@@ -88,7 +91,8 @@ function freshTextEdit() {
 // game windows for the owner (9 restored on 2026-10-07). Closing its windows
 // first (Don't Save) and quitting normally leaves a clean state; a Chess that
 // won't quit is terminated.
-export function quitChess() {
+export function quitChess({ ownedOnly = false } = {}) {
+  if (ownedOnly) return; // The real suite never launches Chess.
   try { execFileSync('pgrep', ['-x', 'Chess']); } catch { return; } // not running
   const close = `tell application "System Events" to tell process "Chess"
     repeat 40 times
@@ -122,12 +126,15 @@ export function quitChess() {
 // replaces Simulator.app in Xcode 27 (the engine asks for it as "Device Hub").
 export const BENCH_APPS = ['Calculator', 'TextEdit', 'Chess', 'Simulator', 'DeviceHub', 'Device Hub', 'com.apple.calculator',
   'com.apple.TextEdit', 'com.apple.Chess', 'com.apple.iphonesimulator', 'com.apple.dt.Devices'];
+export const REAL_APPS = ['Safari', 'com.apple.Safari', 'Preview', 'com.apple.Preview', 'Finder', 'com.apple.finder', 'Helium', 'net.imput.helium',
+  'Microsoft Word', 'Word', 'com.microsoft.Word', 'Microsoft Excel', 'Excel', 'com.microsoft.Excel',
+  'Microsoft PowerPoint', 'PowerPoint', 'com.microsoft.Powerpoint', 'Mail', 'com.apple.mail', 'Mimestream', 'com.mimestream.Mimestream'];
 
 // simctl from Xcode, even when xcode-select points at the Command Line Tools.
 const XCODE = '/Applications/Xcode.app/Contents/Developer';
 // The app that shows simulators: DeviceHub from Xcode 27, Simulator before it.
 const SIM_APPS = [['DeviceHub', join(XCODE, '../Applications/DeviceHub.app')], ['Simulator', join(XCODE, 'Applications/Simulator.app')]];
-function simctl(...args) {
+export function simctl(...args) {
   const env = existsSync(XCODE) ? { ...process.env, DEVELOPER_DIR: XCODE } : process.env;
   return execFileSync('xcrun', ['simctl', ...args], { encoding: 'utf8', env, timeout: 180000 });
 }
@@ -135,7 +142,8 @@ function simctl(...args) {
 // Quits the app showing the simulator, leaving the simulator booted. Left open after a
 // head-to-head's simulator runs, Device Hub held a keyboard event tap that stalled every key on
 // the Mac until it quit (2026-10-09).
-export function quitSimApp() {
+export function quitSimApp({ ownedOnly = false, lease } = {}) {
+  if (ownedOnly) return lease?.quit();
   for (const [app, path] of SIM_APPS) {
     try { execFileSync('pgrep', ['-f', `${path}/Contents/MacOS/`]); } catch { continue; } // not running
     try { execFileSync('osascript', ['-e', `tell application "${path}" to quit`], { timeout: 10000, stdio: 'ignore' }); } catch {}
@@ -149,18 +157,28 @@ export function quitSimApp() {
 
 // A booted iPhone simulator with the app showing it open behind the other
 // windows. Boots the first available iPhone when none is running.
-function bootedIPhone() {
+export function bootedIPhone({ trackOwnership = false, beforeViewerLaunch } = {}) {
   const devices = Object.values(JSON.parse(simctl('list', 'devices', 'available', '--json')).devices).flat()
     .filter(d => d.name.startsWith('iPhone'));
   if (!devices.length) {
     throw new Error('no iPhone simulator: install an iOS runtime (xcodebuild -downloadPlatform iOS) first');
   }
   const device = devices.find(d => d.state === 'Booted') ?? devices[0];
+  const bootedByTask = device.state !== 'Booted';
   if (device.state !== 'Booted') simctl('boot', device.udid);
   simctl('bootstatus', device.udid, '-b');
   const [app, path] = SIM_APPS.find(([, path]) => existsSync(path)) ?? ['Simulator'];
+  let viewerLaunchedByTask = false;
+  if (trackOwnership) {
+    try { execFileSync('/usr/bin/pgrep', ['-x', app], { stdio: 'ignore' }); }
+    catch (error) {
+      if (error.status !== 1 || error.signal) throw new Error('Simulator viewer ownership unconfirmed', { cause: error });
+      viewerLaunchedByTask = true;
+    }
+  }
+  beforeViewerLaunch?.(viewerLaunchedByTask);
   execFileSync('open', ['-g', ...(path ? [path] : ['-a', app])]);
-  return { udid: device.udid, name: device.name, app };
+  return { udid: device.udid, name: device.name, app, ...(trackOwnership ? { bootedByTask, viewerLaunchedByTask } : {}) };
 }
 
 // A one-field form on 127.0.0.1, which the simulator reaches through the
@@ -282,3 +300,9 @@ export const tasks = [
     },
   },
 ];
+
+export function getTasks(suite = 'default') {
+  if (suite === 'default') return tasks;
+  if (suite === 'real') return realTasks;
+  throw new Error(`unknown suite ${suite}`);
+}
