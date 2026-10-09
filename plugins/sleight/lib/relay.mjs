@@ -224,8 +224,8 @@ export function createRelay({
   // 'careful' reads the window before every action, including keys, text and coordinates later in
   // a call, which skip it by default (owner, 2026-10-09). Document scope is always careful.
   guardMode,
-  // Rewrites the engine's first-call rule in the js tool description (SLEIGHT_FIRST_CALL_BATCH=1),
-  // an experiment until the affected benchmark tasks have run with it.
+  // Rewrites the engine's first-call rule in the js tool description. The launcher turns it on unless
+  // SLEIGHT_FIRST_CALL_BATCH=0: in 24 runs a side it cut turns 208 to 168 (2026-10-09).
   firstCallBatch = false,
   firstCallRules,
   diagnoseRead,

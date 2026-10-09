@@ -3,46 +3,45 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-09 21:50 UTC, rebooted after the owner's clear)
+## Banner (2026-10-09 22:40 UTC)
 
 The owner is away from the Mac and working from their phone. Their bar (ROADMAP track 3, 2026-10-09):
 lightning quick, quick under any load, no noticeable load on the Mac, measured against Codex on the
-same engine. The checkout is clean with every commit pushed, and there are no open PRs. Engine
-26.1002.52244, doctor ok (21:42 UTC).
+same engine. `pane/auto-mode` matches origin, and there are no open PRs. Engine 26.1002.52244, doctor ok
+(21:42 UTC). Nothing is running and the live lock is free.
 
-**Puddle's windows.** 1009n released the Mac at 21:47 UTC. 1009o (train 86's pairs) starts no earlier
-than about 23:00 UTC and ends about 23:45 UTC. Puddle arch messages this session (sleight arch,
-`local_314380cf`) with a firm start at least 15 minutes ahead, and sleight stops app driving by 22:55
-UTC either way. No app driving during a window. Ask before any run that adds load (memory `shared-mac-quiet-windows`). At 21:49 UTC the load average was 54,
-none of it ours: five `floati-codex-wait` Python processes from `~/.codex/floati-wake` at a full core
-each (one 26 minutes old), Puddle's CI `swift-test`, and Finder at 68%.
+**Puddle's window 1009o** (train 86's pairs) starts no earlier than about 23:00 UTC and ends about
+23:45 UTC. Puddle arch messages this session (sleight arch, `local_314380cf`) with a firm start at
+least 15 minutes ahead. sleight finished app driving at 22:32 UTC and told them. No app driving
+during a window. Ask before any run that adds load (memory `shared-mac-quiet-windows`). At 21:49 UTC
+the load average was 54, none of it ours: five `floati-codex-wait` Python processes from
+`~/.codex/floati-wake` at a full core each (one 26 minutes old), Puddle's CI `swift-test`, and Finder
+at 68%.
 
-Step 1 passed live (21:48 to 21:49 UTC, Calculator, repo relay at `76cf880`). With the View menu open,
-element 0 read as the bar item and element 1 as `menu Secondary Actions: Cancel`. The relay's note
-named element 1, and `performSecondaryAction(1, "Cancel")` closed the menu in 445 ms. Both guard stops
-(unknown ID, and a number an earlier action in the call renumbered) returned the full tree. The first
-stop took 16.3 s at that load, and four repeats took 0.16 to 0.86 s. A menu left open had closed by
-the time a new client acquired the app. A popup menu at element 0 wasn't tried.
+Tonight's quiet stretch (21:47 to 22:32 UTC, the owner away), all published:
+- The open-menu note and guard stops passed live in Calculator. With the View menu open, element 0
+  read as the bar item and element 1 as `menu Secondary Actions: Cancel`. The note pointed at
+  element 1, and `performSecondaryAction(1, "Cancel")` closed the menu in 445 ms. Both guard stops
+  returned the full tree. A popup menu at element 0 wasn't tried.
+- Office passed with Excel 1/1 (100.4 s, 29 turns) and PowerPoint 1/1 on a second try (51.7 s, 16 turns) after a
+  Microsoft 365 first-launch notice failed the first try's setup (`docs/known-problems.md`).
+- Footprint against Codex, 6/6 per arm: sleight 51.9 CPU seconds (47.5 without the owner's plugins),
+  Codex 37.1. The gap is in the engine's node process (guard reads), Claude Code and `osascript`.
+- First-call batching, 24 runs a side in two rounds: on 24/24 in 168 turns and 780 s, off 23/24 in 208
+  turns and 835 s. It's now the default (`SLEIGHT_FIRST_CALL_BATCH=0` turns it off).
 
-Step 2 passed with Excel 1/1 (100.4 s, 29 turns) and PowerPoint 1/1 on a second try (51.7 s, 16 turns),
-after a Microsoft 365 first-launch notice failed the first try's setup (`docs/known-problems.md`).
-Step 3 ran 6/6 per arm. sleight used 51.9 CPU seconds (47.5 without the owner's plugins) against
-Codex's 37.1, with the gap in the engine's node process, Claude Code and `osascript`
-(`docs/benchmark.md`). The approvals list is restored. Step 4 started at 22:04 UTC
-(`.dev/passes/pass-batch-off.log`, then `pass-batch-on.log`).
-
-Released: `v1.1.0` (`0b6a1c0`, 2026-10-09), on `main`. Unreleased on `pane/auto-mode` at `874a280`:
+Released: `v1.1.0` (`0b6a1c0`, 2026-10-09), on `main`. Unreleased on `pane/auto-mode`:
 - Live-checked: full screen and Split View detection; one app-health helper per session
   (`818f7e7`, `025460d`); the guard's read skipped after typing, pasting or a plain key (`44700ee`,
   `db45c94`, owner's call); the reuse check that never checked now reads (`e66791a`); degraded reads
   under load (`7d63e48`, `674502d`); Sol's real-use suite through brief 11 (`874a280`) and the Codex
   arm for it (`768cbcd`); per-run CPU footprint (`2cf4394`, `2c30446`); a guard stop includes the
-  current window (`94db208`); the open-menu note's call works (`202b184`, not yet run with Claude).
+  current window (`94db208`); the open-menu note's call works (`202b184`, not yet run with Claude);
+  first-call batching on by default (24/24 on four tasks).
 - Unit-tested only, from a study of the slowest head-to-head runs. `drag` refuses an uncoverable drag
   before scanning (`94db208`). The first action checks its numbers against what Claude last saw, and
   Claude's read stands in only when it took over 2 s (`f76ee76`). Labels match settable fields and
-  menu items named alone (`acf4b8d`). Off by default, an experiment: `SLEIGHT_FIRST_CALL_BATCH=1`
-  (`6cd41ba`).
+  menu items named alone (`acf4b8d`).
 
 Head-to-head (published in `docs/benchmark.md`): at normal load sleight 20/21 in 904 s against Codex
 16/21 in 1,292 s on the default tasks, and 12/12 in 396 s against 11/11 in 429 s on six real-use
@@ -50,13 +49,12 @@ tasks. Under 20 CPU workers (9 runs, stopped early) both timed out on Calculator
 reads before clicks by ID cost tens of seconds each.
 
 Next, in order:
-1. Done (see above).
-2. Done (see above). Word passed 1/1 at `6f88fb3`.
-3. Done (see above). Next for footprint: find what the engine's node process does more of for
-   sleight (guard reads are the likely source) and what `osascript` runs per call.
-4. Batching A/B: sleight only, textedit-save, textedit-edit, calculator-menu, chess-drag, 3 runs each,
-   with `SLEIGHT_FIRST_CALL_BATCH` unset, then `=1`. Compare turns.
-5. A full release pass with the owner away, then reread README whole and release (LAWS).
+1. A full release pass with the owner away, in a quiet stretch after 1009o, then reread README whole
+   and release (LAWS). It covers the batching default and the menu note with Claude driving.
+2. Footprint: cut guard reads. Each call made about two (7 to 15 a run), the read after a call when
+   nothing returned a header and the reads before each numbered action in a batch. Then find what
+   `osascript` runs per call (0.15 to 0.59 s a run).
+3. The relay's first acquisition took 29.5 s in one calculator-menu run at load 21. Find out why.
 
 Branches and worktrees:
 - `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it.

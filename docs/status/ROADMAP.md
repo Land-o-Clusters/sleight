@@ -64,8 +64,9 @@ only with a measured reason. In order:
    is the largest lever left once the reads are cheap. A transcript study (2026-10-09) found 13 to
    20% of calls could have merged with the one before, mostly save-then-close and keys after a
    click. The engine's description says to send only an acquisition first, and 798 of 799 sessions
-   did. `SLEIGHT_FIRST_CALL_BATCH=1` (`6cd41ba`) rewrites that sentence; A/B it on the default suite's
-   turns, then make it the default or drop it.
+   did. Rewriting that sentence is the default since 2026-10-09, after an A/B cut turns from 208 to
+   168 in 24 runs a side (`docs/benchmark.md`). Merging later calls (save-then-close, keys after a
+   click) is still open, and so is the cost of guard reads before each numbered action in a batch.
 5. A release only when the head-to-head shows sleight at Codex's speed and footprint, with the numbers
    published.
 

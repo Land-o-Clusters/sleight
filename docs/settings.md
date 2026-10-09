@@ -108,6 +108,13 @@ Claude read the window.
 Set `SLEIGHT_GUARD=careful` to read before every action. Document scope
 (`SLEIGHT_APPROVAL_SCOPE=document`) always reads.
 
+## First-call batching
+
+The engine's tool description tells Claude to send only the app's acquisition in its first call.
+sleight rewrites that sentence so Claude can put the first actions after the acquisition in the
+same call, since the guard checks the window before they run. Set `SLEIGHT_FIRST_CALL_BATCH=0` to
+keep the engine's wording.
+
 ## Flow rules
 
 Write `~/Library/Application Support/sleight/flow-rules.json` yourself, outside the project, then set

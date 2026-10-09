@@ -2,10 +2,17 @@
 
 ## Unreleased
 
-- A result whose window shows an open menu (`0 menu Secondary Actions: Cancel`) says how to close it.
+- Claude may put its first actions in the same call as the app's acquisition. The engine's
+  description asks for the acquisition alone, and sleight now rewrites that sentence by default
+  (`SLEIGHT_FIRST_CALL_BATCH=0` keeps it). On calculator-menu, textedit-save, textedit-edit and
+  chess-drag, 3 runs each in two rounds, it passed 24/24 in 168 turns, 366 s of model time and 780 s,
+  against 23/24 in 208 turns, 464 s and 835 s without it. Chess gained most (91 turns to 56), and
+  textedit-save went from 41 turns to 46.
+- A result whose window shows an open menu (`menu Secondary Actions: Cancel`) says how to close it.
   Escape left such menus open in 3 of 3 tries in the head-to-head, and their Cancel action closed
-  one in Finder. Not yet checked live on a menu at element 0, and this changes what Claude does, so
-  the affected tasks run with it before release.
+  one in Finder. Checked live on Calculator's View menu, where the note pointed at the menu (element 1)
+  and its Cancel closed it in 445 ms. This changes what Claude does. The affected tasks run with it
+  before release.
 - `{ label }` matches a field whose line has states before its title (`text field (settable) Email`)
   and a menu bar item named alone (`Edit`). Both stopped calls in the head-to-head.
 - A guard stop (a renumbered element, or no element with an ID or label) carries the window as it is

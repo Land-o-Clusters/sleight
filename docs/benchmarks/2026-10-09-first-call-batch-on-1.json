@@ -1,0 +1,737 @@
+{
+  "stamp": "2026-10-09T22-11-00-141Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 1,
+      "passed": true,
+      "seconds": 81.6,
+      "turns": 4,
+      "costUsd": 0.2887526,
+      "usage": {
+        "input": 8,
+        "cacheRead": 157093,
+        "cacheWrite": 63097,
+        "output": 493
+      },
+      "timing": {
+        "totalMs": 77321,
+        "modelMs": 21737,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 53716,
+        "engineMs": 53693,
+        "relayMs": 23,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 19000.827999,
+        "guardReadFailures": 0,
+        "otherMs": 1868
+      },
+      "footprint": {
+        "cpuSeconds": 9.13,
+        "group": {
+          "claude": 1.87,
+          "<defunct>": 0,
+          "engine node": 1.66,
+          "mcp@latest": 0.7,
+          "codex": 0.6,
+          "Python": 0.01,
+          "(bash)": 0.01,
+          "(Python)": 0.1,
+          "node": 0.29,
+          "(git)": 0.01,
+          "osascript": 0.26,
+          "(vibe-island-brid)": 0.01
+        },
+        "outside": {
+          "Calculator": 1.25,
+          "engine helper": 2.36
+        }
+      },
+      "appWindows": {
+        "samples": 17,
+        "onScreen": 17,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 54.4,
+      "turns": 9,
+      "costUsd": 0.34251000000000004,
+      "usage": {
+        "input": 18,
+        "cacheRead": 552450,
+        "cacheWrite": 53781,
+        "output": 1686
+      },
+      "timing": {
+        "totalMs": 52424,
+        "modelMs": 25247,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 23296,
+        "engineMs": 21611,
+        "relayMs": 1685,
+        "localMs": 0,
+        "guardReads": 17,
+        "guardReadMs": 7903.580710999992,
+        "guardReadFailures": 0,
+        "otherMs": 3881
+      },
+      "footprint": {
+        "cpuSeconds": 10.63,
+        "group": {
+          "claude": 2.19,
+          "engine node": 1.47,
+          "mcp@latest": 0.66,
+          "(node)": 0.36,
+          "(node_repl)": 0.14,
+          "(codex)": 0.15,
+          "node": 0.28,
+          "osascript": 1.63,
+          "codex": 0.4
+        },
+        "outside": {
+          "engine helper": 0,
+          "TextEdit": 3.35
+        }
+      },
+      "appWindows": {
+        "samples": 11,
+        "onScreen": 9,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I created a new plain-text TextEdit document containing \"sleight bench 573ab3f6\". I saved it as `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T22-11-00-141Z/sleight-textedit-save-1/573ab3f6.txt`, then closed it.\n\nAfter the save, the window title and URL showed `573ab3f6.t",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 34.7,
+      "turns": 7,
+      "costUsd": 0.22542200000000007,
+      "usage": {
+        "input": 14,
+        "cacheRead": 382180,
+        "cacheWrite": 34397,
+        "output": 1137
+      },
+      "timing": {
+        "totalMs": 30132,
+        "modelMs": 11936,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 14740,
+        "engineMs": 11791,
+        "relayMs": 2949,
+        "localMs": 0,
+        "guardReads": 13,
+        "guardReadMs": 1918.6640829999992,
+        "guardReadFailures": 0,
+        "otherMs": 3456
+      },
+      "footprint": {
+        "cpuSeconds": 10.08,
+        "group": {
+          "claude": 1.98,
+          "<defunct>": 0,
+          "engine node": 1.76,
+          "mcp@latest": 0.71,
+          "codex": 0.54,
+          "(bash)": 0,
+          "node": 0.3,
+          "sh": 0.01,
+          "vibe-island-bridge": 0.02,
+          "bash": 0.02,
+          "(python3.9)": 0.01,
+          "(git)": 0.01,
+          "osascript": 1.32,
+          "(AgentPeekBridge)": 0
+        },
+        "outside": {
+          "engine helper": 2.03,
+          "TextEdit": 1.37
+        }
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I opened `99aadf02-edit.txt` in TextEdit, changed \"beta\" to \"delta\", saved it and closed it. The text read \"alpha delta gamma\" after the replacement, and the document closed without a save prompt. I didn't reopen the file afterward to check it on disk.\n\nThe \"Untitled 6\" window that was already open ",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 41.3,
+      "turns": 9,
+      "costUsd": 0.24188539999999997,
+      "usage": {
+        "input": 18,
+        "cacheRead": 490557,
+        "cacheWrite": 32452,
+        "output": 1393
+      },
+      "timing": {
+        "totalMs": 34470,
+        "modelMs": 19398,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 11354,
+        "engineMs": 11306,
+        "relayMs": 48,
+        "localMs": 0,
+        "guardReads": 9,
+        "guardReadMs": 2374.841583000003,
+        "guardReadFailures": 0,
+        "otherMs": 3718
+      },
+      "footprint": {
+        "cpuSeconds": 10.41,
+        "group": {
+          "claude": 2.24,
+          "<defunct>": 0,
+          "engine node": 2.13,
+          "mcp@latest": 0.67,
+          "codex": 0.46,
+          "(codex)": 0.19,
+          "node": 0.3,
+          "(bash)": 0.04,
+          "Python": 0.09,
+          "(git)": 0.01,
+          "(grep)": 0,
+          "osascript": 0.14,
+          "sh": 0.01,
+          "AgentPeekBridge": 0
+        },
+        "outside": {
+          "Chess": 1.79,
+          "engine helper": 2.34
+        }
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 8,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I played e2–e4 by dragging the pawn, saved the game to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T22-11-00-141Z/sleight-chess-drag-1/01cbe031.game`, and closed that window. Chess then showed a second window, \"Game 1\", in the starting position with White to move.\n\n- **",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 2,
+      "passed": true,
+      "seconds": 25.9,
+      "turns": 4,
+      "costUsd": 0.1472662,
+      "usage": {
+        "input": 8,
+        "cacheRead": 187471,
+        "cacheWrite": 25999,
+        "output": 576
+      },
+      "timing": {
+        "totalMs": 22283,
+        "modelMs": 13815,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 6721,
+        "engineMs": 6698,
+        "relayMs": 23,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 3020.7697079999984,
+        "guardReadFailures": 0,
+        "otherMs": 1747
+      },
+      "footprint": {
+        "cpuSeconds": 6.74,
+        "group": {
+          "claude": 1.63,
+          "<defunct>": 0,
+          "engine node": 1.23,
+          "mcp@latest": 0.7,
+          "node": 0.32,
+          "osascript": 0.22,
+          "codex": 0.39
+        },
+        "outside": {
+          "Calculator": 0.85,
+          "engine helper": 1.4
+        }
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 26.5,
+      "turns": 7,
+      "costUsd": 0.1882892,
+      "usage": {
+        "input": 14,
+        "cacheRead": 358576,
+        "cacheWrite": 26559,
+        "output": 1031
+      },
+      "timing": {
+        "totalMs": 24834,
+        "modelMs": 11212,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 11194,
+        "engineMs": 10994,
+        "relayMs": 200,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 5899.193957999999,
+        "guardReadFailures": 0,
+        "otherMs": 2428
+      },
+      "footprint": {
+        "cpuSeconds": 7.64,
+        "group": {
+          "claude": 1.65,
+          "engine node": 1.03,
+          "mcp@latest": 0.61,
+          "(node)": 0.04,
+          "node": 0.26,
+          "osascript": 0.16,
+          "codex": 0.35,
+          "(Python)": 0.08,
+          "(git)": 0.01
+        },
+        "outside": {
+          "engine helper": 1.76,
+          "TextEdit": 1.69
+        }
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I created a new TextEdit document, made it plain text, typed `sleight bench 0d782c3a` and saved it to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T22-11-00-141Z/sleight-textedit-save-2/0d782c3a.txt`. Then I closed the document.\n\nAfter the save, the window title and file",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 2,
+      "passed": true,
+      "seconds": 27.3,
+      "turns": 7,
+      "costUsd": 0.2218708,
+      "usage": {
+        "input": 14,
+        "cacheRead": 377284,
+        "cacheWrite": 33324,
+        "output": 1309
+      },
+      "timing": {
+        "totalMs": 25515,
+        "modelMs": 14389,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 9064,
+        "engineMs": 8620,
+        "relayMs": 444,
+        "localMs": 0,
+        "guardReads": 14,
+        "guardReadMs": 2200.2657079999963,
+        "guardReadFailures": 0,
+        "otherMs": 2062
+      },
+      "footprint": {
+        "cpuSeconds": 7.53,
+        "group": {
+          "claude": 1.72,
+          "engine node": 1.25,
+          "mcp@latest": 0.64,
+          "node": 0.24,
+          "osascript": 0.53,
+          "codex": 0.38
+        },
+        "outside": {
+          "engine helper": 1.64,
+          "TextEdit": 1.13
+        }
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I opened `655272a9-edit.txt` in TextEdit and changed \"alpha beta gamma\" to \"alpha delta gamma\". I then saved it and closed the document. The window title showed no unsaved-changes marker when I closed it. I didn't reopen the file afterward to re-read it from disk.\n\nTextEdit's existing \"Untitled 6\" w",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 2,
+      "passed": true,
+      "seconds": 32.7,
+      "turns": 9,
+      "costUsd": 0.22976480000000002,
+      "usage": {
+        "input": 18,
+        "cacheRead": 492024,
+        "cacheWrite": 29261,
+        "output": 1428
+      },
+      "timing": {
+        "totalMs": 29786,
+        "modelMs": 17843,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 9898,
+        "engineMs": 9859,
+        "relayMs": 39,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 2192.3296660000005,
+        "guardReadFailures": 0,
+        "otherMs": 2045
+      },
+      "footprint": {
+        "cpuSeconds": 8.78,
+        "group": {
+          "claude": 1.82,
+          "engine node": 1.92,
+          "mcp@latest": 0.6,
+          "codex": 0.55,
+          "node": 0.25,
+          "osascript": 0.2,
+          "sh": 0.01,
+          "<defunct>": 0,
+          "(security)": 0.01,
+          "uv": 0.01,
+          "bash": 0.01,
+          "vibe-island-bridge": 0,
+          "(bash)": 0
+        },
+        "outside": {
+          "Chess": 1.55,
+          "engine helper": 1.85
+        }
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 7,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I opened Chess and played e2 to e4 as White by dragging the pawn. I saved the game to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T22-11-00-141Z/sleight-chess-drag-2/4450a847.game` and closed that window.\n\n- **New game:** Chess already had a fresh \"Game 1\" open at the s",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 3,
+      "passed": true,
+      "seconds": 16.6,
+      "turns": 4,
+      "costUsd": 0.1588608,
+      "usage": {
+        "input": 8,
+        "cacheRead": 187924,
+        "cacheWrite": 28905,
+        "output": 564
+      },
+      "timing": {
+        "totalMs": 14653,
+        "modelMs": 7372,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 5681,
+        "engineMs": 5644,
+        "relayMs": 37,
+        "localMs": 0,
+        "guardReads": 11,
+        "guardReadMs": 3051.8196240000007,
+        "guardReadFailures": 0,
+        "otherMs": 1600
+      },
+      "footprint": {
+        "cpuSeconds": 6.64,
+        "group": {
+          "claude": 1.46,
+          "engine node": 1.6,
+          "mcp@latest": 0.66,
+          "codex": 0.39,
+          "node": 0.28,
+          "osascript": 0.26,
+          "(bash)": 0.01,
+          "(vibe-island-brid)": 0.01,
+          "(Python)": 0.07,
+          "(git)": 0
+        },
+        "outside": {
+          "Calculator": 0.82,
+          "engine helper": 1.08
+        }
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 3,
+      "passed": true,
+      "seconds": 46.1,
+      "turns": 9,
+      "costUsd": 0.2315064,
+      "usage": {
+        "input": 18,
+        "cacheRead": 480922,
+        "cacheWrite": 29564,
+        "output": 1703
+      },
+      "timing": {
+        "totalMs": 44452,
+        "modelMs": 22444,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 19274,
+        "engineMs": 19009,
+        "relayMs": 265,
+        "localMs": 0,
+        "guardReads": 15,
+        "guardReadMs": 6034.037668999998,
+        "guardReadFailures": 0,
+        "otherMs": 2734
+      },
+      "footprint": {
+        "cpuSeconds": 11.54,
+        "group": {
+          "claude": 1.98,
+          "engine node": 1.51,
+          "mcp@latest": 0.63,
+          "node": 0.29,
+          "osascript": 0.67,
+          "codex": 0.38
+        },
+        "outside": {
+          "engine helper": 3.29,
+          "TextEdit": 2.79
+        }
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 9,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I created the TextEdit document, made it plain text, and typed \"sleight bench e9b5ee5e\". I saved it as `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T22-11-00-141Z/sleight-textedit-save-3/e9b5ee5e.txt`, then closed it.\n\nThe window title and path after the save showed `e9b",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 3,
+      "passed": true,
+      "seconds": 25.6,
+      "turns": 7,
+      "costUsd": 0.223417,
+      "usage": {
+        "input": 14,
+        "cacheRead": 377845,
+        "cacheWrite": 33440,
+        "output": 1406
+      },
+      "timing": {
+        "totalMs": 23672,
+        "modelMs": 12814,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 8905,
+        "engineMs": 8576,
+        "relayMs": 329,
+        "localMs": 0,
+        "guardReads": 14,
+        "guardReadMs": 2180.4422099999974,
+        "guardReadFailures": 0,
+        "otherMs": 1953
+      },
+      "footprint": {
+        "cpuSeconds": 8.35,
+        "group": {
+          "claude": 1.76,
+          "engine node": 1.7,
+          "mcp@latest": 0.64,
+          "codex": 0.49,
+          "node": 0.3,
+          "osascript": 0.51,
+          "Python": 0.08,
+          "(git)": 0.01
+        },
+        "outside": {
+          "engine helper": 1.68,
+          "TextEdit": 1.18
+        }
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I opened `af19f509-edit.txt` in TextEdit, changed \"alpha beta gamma\" to \"alpha delta gamma\", saved it, and closed the document. I didn't re-read the file after saving. TextEdit closed the window without a save prompt, which suggests the save went through.\n\nAn empty \"Untitled 6\" window was already op",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 3,
+      "passed": true,
+      "seconds": 32.3,
+      "turns": 7,
+      "costUsd": 0.21297380000000002,
+      "usage": {
+        "input": 14,
+        "cacheRead": 372459,
+        "cacheWrite": 31711,
+        "output": 1161
+      },
+      "timing": {
+        "totalMs": 29322,
+        "modelMs": 15351,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 10654,
+        "engineMs": 10001,
+        "relayMs": 653,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 2041.3086660000013,
+        "guardReadFailures": 0,
+        "otherMs": 3317
+      },
+      "footprint": {
+        "cpuSeconds": 8.56,
+        "group": {
+          "claude": 1.83,
+          "engine node": 1.34,
+          "mcp@latest": 0.61,
+          "node": 0.28,
+          "osascript": 0.51,
+          "codex": 0.38
+        },
+        "outside": {
+          "Chess": 1.64,
+          "engine helper": 1.97
+        }
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 7,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I dragged the e2 pawn to e4 and saved the game to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T22-11-00-141Z/sleight-chess-drag-3/a929a377.game`. The saved game's window is now closed.\n\nThe Chess app was already open on a fresh \"Game 1\" at the starting position, so I pl",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

@@ -314,6 +314,23 @@ textedit-edit and textedit-save, 3 runs each, with the owner away). 8 of 12 runs
 `cua.getState()`, against 30 of 36 before, and the 12 runs took 80 turns against 68 in the 1.0.0 pass.
 It's reverted.
 
+Rewriting the engine's sentence itself (`SLEIGHT_FIRST_CALL_BATCH`, `6cd41ba`) did change it. Two
+rounds on calculator-menu, textedit-save, textedit-edit and chess-drag, 3 runs each per side, ran off
+then on and then on then off (2026-10-09, 22:03 to 22:32 UTC, the owner away, load 5 to 23 from
+other projects). Raw results are in `docs/benchmarks/2026-10-09-first-call-batch-*.json`, one
+file per side and round.
+
+| Side | Passed | Total s | Turns | Model s | Model s a turn | Engine s |
+|---|---:|---:|---:|---:|---:|---:|
+| Off | 23/24 | 835 | 208 | 464 | 2.23 | 259 |
+| On | 24/24 | 780 | 168 | 366 | 2.18 | 289 |
+
+Turns fell on calculator-menu (34 to 24) and chess-drag (91 to 56), stayed at 42 on textedit-edit,
+and rose on textedit-save (41 to 46). The off side's failure was a Chess game left unsaved. One
+calculator-menu run on took 81.6 s: the relay's first acquisition of Calculator took 29.5 s, and a
+call of seven numbered actions spent 18.6 s in the guard's reads before them. It's the default
+since this pass.
+
 The head-to-head at the owner's normal load (2026-10-09, the owner away, load 6 to 24, Sonnet 5.5 at
 medium against gpt-6.1-sol at medium) alternated sleight and Codex task by task. The default tasks
 ran 3 times per arm ([`h2h-normal-default`](benchmarks/2026-10-09-h2h-normal-default.json)) and six
