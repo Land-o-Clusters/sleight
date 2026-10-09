@@ -21,7 +21,17 @@ the default tasks, 12/12 and 396 s against 11/11 and 429 s on six real-use tasks
 workers (stopped early, 9 runs): both timed out on Calculator; sleight's reads before clicks by ID
 cost tens of seconds each, where Codex makes none.
 
+Since 21:15 UTC, Puddle's window 1009n means no app driving until puddle arch says it closed. A study
+of the slowest head-to-head runs gave five fixes, unit-tested and waiting for live checks:
+- A guard stop includes the current window (`94db208`).
+- `drag` refuses an uncoverable drag before scanning (`94db208`).
+- The first action checks its numbers against what Claude last saw, and Claude's read stands in
+  for a fresh one only when reads are slow (`f76ee76`).
+- Labels match settable fields and menu items named alone (`acf4b8d`).
+- A note on how to close an open menu (`202b184`, which changes what Claude does).
+
 Next:
+- Live: a menu closed by `performSecondaryAction(0, "Cancel")`, a guard stop with its tree.
 - Rerun the CPU footprint with `2c30446` so Codex's engine counts, on a few tasks at normal load.
 - The batching A/B (`SLEIGHT_FIRST_CALL_BATCH=1`) on the default tasks' turns.
 - Office: brief 11 (cleanup reads retry), then excel-edit and powerpoint-edit; Mail and Mimestream
