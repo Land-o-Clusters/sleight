@@ -1,0 +1,51 @@
+{
+  "stamp": "2026-10-09T17-54-05-899Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "arms": [
+    "codex"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "codex",
+      "task": "helium-form",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 6,
+      "engineMs": 4889,
+      "passed": true,
+      "seconds": 36.5,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 24996,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 8,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 221806,
+        "cacheRead": 200704,
+        "cacheWrite": 0,
+        "output": 442
+      },
+      "exitCode": 0,
+      "answer": "Submitted the form with all requested values. The Helium window remains open for cleanup."
+    }
+  ]
+}
