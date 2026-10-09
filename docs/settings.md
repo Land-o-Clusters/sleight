@@ -7,7 +7,7 @@ You don't need any of these. Each one changes how approvals or guards behave.
 Saying yes to an app approval allows that app for the rest of the Claude Code session. Claude Code's
 prompt doesn't mention that, but sleight's own panel does.
 
-The engine asks before every action on an app and doesn't remember your answers. In Codex, the app
+The engine asks before every action on an app and doesn't remember a session's answers. In Codex, the app
 around the engine remembers "Allow for this session" and answers the repeats. Claude Code's prompt only
 has accept and decline, so without help you'd get asked on every click. The relay does the remembering:
 
@@ -16,6 +16,12 @@ has accept and decline, so without help you'd get asked on every click. The rela
 - A different app, a riskier request for the same app, or a new Claude Code session asks you again.
 - It never remembers a decline or a cancel.
 - Approval memory stays in the relay and ends with the session.
+
+Apps you marked "Always allow" in Codex or ChatGPT are the exception. The engine keeps that list in
+`~/Library/Group Containers/2DC432GLL2.com.openai.sky.CUAService/Library/Application Support/Software/ComputerUseAppApprovals.json`
+and approves those apps itself, so sleight never sees a prompt for them: TextEdit, listed there,
+opened with no prompt, while Calculator asked (2026-10-08). sleight doesn't change that file. To be
+asked again, remove the app from "Always allow" in ChatGPT's computer-use settings.
 
 To get asked on every action instead, set `SLEIGHT_APPROVAL_SCOPE=once` in Claude Code's environment.
 The `env` block of `~/.claude/settings.json` works.

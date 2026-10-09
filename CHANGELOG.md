@@ -11,6 +11,9 @@
   once it has taken focus. macOS drops a background drag on whatever is on screen at the drop point, so
   a TextEdit window you've covered still needs the real pointer. In a pass on 2026-10-08 that caught
   the owner typing, and a space went into TextEdit. `hover` and the `menu_bar` real click wait the same way.
+- The docs say that apps marked "Always allow" in Codex or ChatGPT are approved by the engine itself,
+  with no prompt in sleight. They used to say every app asks once per session; TextEdit, on that list
+  here, never asked (2026-10-08).
 - `noWindowsAvailable` from the engine now comes with what it means: the app's window is on another
   Space (full screen or Split View), minimized or hidden. Claude asks you to show it instead of retrying.
 - The pane shows the app's picture in the desktop app's Code tab, Auto mode included. Auto mode

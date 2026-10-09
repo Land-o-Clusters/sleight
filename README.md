@@ -62,7 +62,8 @@ Use sleight to open Calculator in the background and work out 12 × 12 by clicki
 ```
 
 The first time Claude touches an app, you get a prompt like *Allow Computer Use to use "Calculator"?*
-A yes covers that app for the rest of the session.
+A yes covers that app for the rest of the session. Apps you marked "Always allow" in Codex or ChatGPT
+don't ask, because the engine approves them itself ([settings](docs/settings.md#approval-scope)).
 
 To update, run `claude plugin marketplace update sleight` and `claude plugin update sleight@sleight`,
 then start a new session. A running session keeps the version it started with.

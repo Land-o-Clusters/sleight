@@ -46,7 +46,12 @@ Next:
    (`.dev/tools/helium-native-probe.mjs`) got only Helium's app approval and typed into the form (1/1).
    Brief for round three: `.dev/prompts/sol-real-use-tasks-3.md` (runner sets `SLEIGHT_SURFACES=computer`,
    Safari setup launches Safari, rerun 18 trials). The owner pastes it to Sol. Then review, merge, and
-   the Codex head-to-head (feasibility research running, notes to `.dev/research/`).
+   the Codex head-to-head. Research (`.dev/research/2026-10-08-codex-head-to-head.md`): `codex exec`
+   should load the same engine, but no headless run has used it yet. Headless Codex can't limit approvals to an
+   app list except through the engine's "Always allow" file. A fair run needs (owner) a separate
+   `CODEX_HOME=~/.codex-bench codex login` with only computer use enabled, and (owner) that file set
+   to the benchmark apps for the run, with a backup. Codex must run with `--disable shell_tool`, or it
+   can pass the checks without touching the apps.
 3. Owner's plan, step 4, known problems. Done in 0.16.0: the `noWindowsAvailable` message, pause guards,
    drag coordinates. Open: (a) TextEdit's save lock after Accessibility text writes (research running);
    (b) Calculator's AX churn after launch; (c) `drag` refusing a fresh Chess window; (d) TextEdit's
@@ -131,6 +136,9 @@ prompts are in `.dev/prompts/`, market research in `.dev/research/2026-10-04-com
 ## Waiting on the owner
 
 - Rotating the OpenAI API key kept in plain text in an iCloud TextEdit note (told 2026-10-08).
+- Codex head-to-head setup. It needs a separate Codex login for the bench. The engine's "Always allow"
+  file lists 6 apps (TextEdit among them, written 2026-07-26). Whether it may hold
+  only the benchmark apps during runs is the owner's call.
 
 ## Reading list
 

@@ -63,7 +63,9 @@ belong in [STATE.md](STATE.md).
   ChatGPT app. Restarting ChatGPT ends every Codex thread, so it's the owner's call, never a test step.
 - macOS picks a drag's drop target from what's on screen at the drop point. A drag posted to an app in
   the background never drops into a window another app covers there.
-- The engine doesn't remember approvals. In Codex the host does, so here the relay does.
+- The engine doesn't remember a session's approvals. In Codex the host does, so here the relay does. It
+  does honor the "Always allow" list ChatGPT keeps (`ComputerUseAppApprovals.json`), with no prompt to
+  sleight. That file is the user's ChatGPT setting: sleight reads it at most, and the owner decides any change.
 
 ## Method
 
