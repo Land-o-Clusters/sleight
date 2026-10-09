@@ -236,9 +236,12 @@ function guardSetup(update) {
           // that AX identifier or label in this read, so numbers an earlier action in
           // the call shifted don't matter.
           const spec = args[0] && typeof args[0] === 'object' && !Array.isArray(args[0]) ? args[0] : undefined;
-          const byId = typeof spec?.id === 'string' || typeof spec?.label === 'string';
+          // ({ line: "Scientific, ID: menuAction:" }) is the element whose whole line, after its number,
+          // is exactly that: a replayed step names an element this way when no ID or label is unique.
+          const byId = typeof spec?.id === 'string' || typeof spec?.label === 'string' || typeof spec?.line === 'string';
           if (byId) {
-            const [kind, value, match] = typeof spec.id === 'string' ? ['ID', spec.id, hasIdentifier] : ['label', spec.label, hasLabel];
+            const [kind, value, match] = typeof spec.id === 'string' ? ['ID', spec.id, hasIdentifier]
+              : typeof spec.label === 'string' ? ['label', spec.label, hasLabel] : ['line', spec.line, (line, value) => line === value];
             const found = [...elements(text)].filter(([, line]) => match(line, value));
             if (found.length !== 1) throw stop('sleight stopped before ' + name + ': ' + (found.length ? found.length + ' elements' : 'no element') + ' with ' + kind + ' ' + JSON.stringify(value) + ' in this window. Read it and use an element number or another ID.');
             args = [found[0][0], ...args.slice(1)];

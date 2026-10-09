@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Replay: `sleight-mcp record <transcript or session id> task.json` turns a finished run into a
+  script, and `sleight-mcp replay task.json` runs it again through sleight with no model. Element
+  numbers become IDs, labels or whole lines the guard finds again, and a script that depends on
+  screen positions needs `--allow-positions`. A 3-call Calculator run replayed in 5.5 s against 17 s,
+  and stopped without clicking when Calculator wasn't in the recorded state
+  ([design](docs/design/replay.md)).
 - An action Claude didn't await that fails no longer ends the engine's JavaScript session. The guard
   handles each action's promise and tells Claude which action failed. 1.0.0 lost the session and
   its handles (1/1), and the fix kept them (3/3).

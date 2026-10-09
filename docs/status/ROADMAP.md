@@ -7,7 +7,7 @@ sleight-arch writes it here in the same turn. When asked for the plan, answer fr
 The tracks run in parallel. Live runs that can take the owner's pointer or keyboard wait until
 they're away. Sol works track 4, and sleight-arch works tracks 2 and 3 while the owner is at the Mac.
 
-## 1. Release 1.0
+## 1. Release 1.0 (done: v1.0.0, 2026-10-09)
 
 1. The Chess and simulator head-to-head and a release pass, with the owner away (running 2026-10-09).
 2. A controlled Chess check: the same engine drag from the pawn's base and its head on
@@ -68,7 +68,10 @@ Known problems, in order of user impact (full list in [known-problems.md](../kno
 1. A real-use pass, then the Codex head-to-head on it (needs a Codex arm for the real suite).
 2. Fill the [PENDING] lines of the launch post in `~/Desktop/sleight-launch/thread-1.0.md`.
 3. Replay: a successful run turns into a script that replays through the engine with no model,
-   keeping sleight's guards, so it stops when the app isn't in the state the script expects.
+   keeping sleight's guards, so it stops when the app isn't in the state the script expects. First
+   version built 2026-10-09 (`sleight-mcp record` and `replay`, `docs/design/replay.md`). Next: replay
+   from the desktop app, steps that wait for the app instead of failing, and Claude taking over at
+   the step that stopped.
 
 ## 6. Features after replay
 

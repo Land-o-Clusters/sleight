@@ -7,6 +7,7 @@
 //
 //   launch.mjs           run the server over stdio, through relay.mjs
 //   launch.mjs --doctor  print what would run, and check it exists
+//   launch.mjs record|replay …  turn a finished run into a script, and run it again (replay.mjs)
 
 import { execFile, execFileSync, spawn } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
@@ -516,7 +517,42 @@ export async function run({ leaseDirectory } = {}) {
   }
 }
 
+// `record` and `replay` (replay.mjs): a finished run, run again with no model. Approvals go to the
+// terminal; without one, only apps the user pre-approved can run.
+async function replayCommand(args) {
+  const { record, replay, relayServer } = await import('./replay.mjs');
+  const [command, source, out] = args;
+  if (!source) { process.stderr.write('usage: sleight-mcp record <transcript.jsonl | session id> [out.json]\n       sleight-mcp replay <script.json> [--allow-positions]\n'); return 2; }
+  if (command === 'record') {
+    const script = record(source);
+    const text = JSON.stringify(script, null, 1) + '\n';
+    if (out && !out.startsWith('--')) { (await import('node:fs')).writeFileSync(out, text); process.stderr.write(`sleight: ${script.steps.length} steps written to ${out}\n`); }
+    else process.stdout.write(text);
+    return 0;
+  }
+  const { createReadStream, openSync } = await import('node:fs');
+  const { createInterface: lines } = await import('node:readline');
+  let tty;
+  try { tty = createReadStream(null, { fd: openSync('/dev/tty', 'r') }); } catch {}
+  const ask = message => new Promise(resolve => {
+    if (!tty) return resolve(false);
+    process.stderr.write(`${message} [y/N] `);
+    const rl = lines({ input: tty });
+    rl.once('line', answer => { rl.close(); resolve(/^y(es)?$/i.test(answer.trim())); });
+  });
+  const result = await replay(JSON.parse(readFileSync(source, 'utf8')), {
+    server: relayServer(), ask, allowPositions: args.includes('--allow-positions'),
+    log: line => process.stderr.write(`sleight: ${line}\n`),
+  });
+  tty?.destroy();
+  process.stderr.write(result.ok ? `sleight: replayed ${result.steps} steps\n` : `sleight: stopped at step ${result.step}: ${result.error}\n`);
+  return result.ok ? 0 : 1;
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--doctor')) process.exitCode = await doctor();
-  else run();
+  else if (['record', 'replay'].includes(process.argv[2])) {
+    try { process.exitCode = await replayCommand(process.argv.slice(2)); }
+    catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
+  } else run();
 }

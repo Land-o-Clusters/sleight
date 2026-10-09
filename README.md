@@ -132,6 +132,22 @@ against the latest read of an app, no matter who made that read, so a snapshot m
 change from Claude. When the pane does read an app, your next message tells Claude to take a full read
 before relying on a diff.
 
+## Replay a run
+
+A run Claude finished can run again with no model, through the same guards:
+
+```bash
+~/.claude/plugins/marketplaces/sleight/plugins/sleight/bin/sleight-mcp record <session id> task.json
+```
+
+```bash
+~/.claude/plugins/marketplaces/sleight/plugins/sleight/bin/sleight-mcp replay task.json
+```
+
+The session id is the transcript's file name under `~/.claude/projects`. Replay stops at the first
+step the app isn't ready for, and asks in the terminal before using an app you haven't pre-approved.
+[How it works](docs/design/replay.md).
+
 ## Safety
 
 - `js` runs JavaScript as you, so treat it like Bash. Claude Code asks before each call unless you allow
