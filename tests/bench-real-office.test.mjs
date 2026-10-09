@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
+import { deflateRawSync } from 'node:zlib';
 
 const office = await import('../bench/real-office.mjs').catch(() => ({}));
 const tasks = await import('../bench/tasks-office.mjs').catch(() => ({}));
@@ -28,6 +29,36 @@ function save(ctx, parts) {
     writeFileSync(join(stage, name), data);
   }
   execFileSync('/usr/bin/zip', ['-q', ctx.officePath, ...Object.keys(parts)], { cwd: stage });
+}
+
+// Construct the transport here, independently of the production ZIP writer.
+function builtZip(ctx, parts, { flags = 0, method = 8, declaredSize, corrupt = false } = {}) {
+  const local = [], central = [];
+  let offset = 0;
+  for (const [name, value] of Object.entries(parts)) {
+    const data = Buffer.from(value), encoded = Buffer.from(name), packed = method === 0 ? data : deflateRawSync(data);
+    let crc = 0xffffffff;
+    for (const byte of data) {
+      crc ^= byte;
+      for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+    }
+    crc = (crc ^ 0xffffffff) >>> 0;
+    const size = (typeof declaredSize === 'object' ? declaredSize[name] : declaredSize) ?? data.length, header = Buffer.alloc(30), entry = Buffer.alloc(46);
+    header.writeUInt32LE(0x04034b50); header.writeUInt16LE(20, 4); header.writeUInt16LE(flags, 6); header.writeUInt16LE(method, 8);
+    if (!(flags & 8)) { header.writeUInt32LE(crc, 14); header.writeUInt32LE(packed.length, 18); header.writeUInt32LE(size, 22); }
+    header.writeUInt16LE(encoded.length, 26);
+    const descriptor = Buffer.alloc(flags & 8 ? 16 : 0);
+    if (descriptor.length) { descriptor.writeUInt32LE(0x08074b50); descriptor.writeUInt32LE(crc, 4); descriptor.writeUInt32LE(packed.length, 8); descriptor.writeUInt32LE(size, 12); }
+    entry.writeUInt32LE(0x02014b50); entry.writeUInt16LE(20, 4); entry.writeUInt16LE(20, 6);
+    entry.writeUInt16LE(flags, 8); entry.writeUInt16LE(method, 10); entry.writeUInt32LE(corrupt ? 0 : crc, 16);
+    entry.writeUInt32LE(packed.length, 20); entry.writeUInt32LE(size, 24); entry.writeUInt16LE(encoded.length, 28); entry.writeUInt32LE(offset, 42);
+    local.push(header, encoded, packed, descriptor); central.push(entry, encoded);
+    offset += header.length + encoded.length + packed.length + descriptor.length;
+  }
+  const directory = Buffer.concat(central), end = Buffer.alloc(22), count = Object.keys(parts).length;
+  end.writeUInt32LE(0x06054b50); end.writeUInt16LE(count, 8); end.writeUInt16LE(count, 10);
+  end.writeUInt32LE(directory.length, 12); end.writeUInt32LE(offset, 16);
+  writeFileSync(ctx.officePath, Buffer.concat([...local, directory, end]));
 }
 const rels = entries => `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${entries.map(([id, type, target]) => `<Relationship Id="${id}" Type="${ns.r}/${type}" Target="${target}"/>`).join('')}</Relationships>`;
 const base = (kind, main) => ({
@@ -241,6 +272,45 @@ test('ZIP reader rejects corrupt CRC, oversized entry, unsupported compression a
     mutate(archive, central); writeFileSync(ctx.officePath, archive);
     assert.notEqual(office.checkExcel(ctx), true);
   }
+});
+
+test('Office ZIP reader accepts deflate option bits and data descriptors from valid saves', t => {
+  const ctx = ctxFor(t);
+  for (const [parts, check] of [[word(), office.checkWord], [excel(), office.checkExcel], [powerpoint(), office.checkPowerPoint]]) {
+    for (const flags of [0x0002, 0x0004, 0x0006, 0x080e]) {
+      builtZip(ctx, parts, { flags });
+      assert.equal(check(ctx), true, `flags 0x${flags.toString(16)}`);
+    }
+  }
+});
+
+test('Office ZIP rejection identifies the entry flags method and compressed and uncompressed sizes', t => {
+  const ctx = ctxFor(t), parts = word(), name = '[Content_Types].xml';
+  const packed = deflateRawSync(Buffer.from(parts[name])).length, unpacked = Buffer.byteLength(parts[name]);
+  for (const options of [{ flags: 1 }, { flags: 0x40 }, { method: 99 }, { declaredSize: 3 * 1024 * 1024 }, { corrupt: true }]) {
+    builtZip(ctx, parts, options);
+    const result = office.checkWord(ctx);
+    assert.notEqual(result, true);
+    assert.ok(result.includes(JSON.stringify(name)), result);
+    assert.ok(result.includes(`flags=0x${(options.flags ?? 0).toString(16).padStart(4, '0')}`), result);
+    assert.ok(result.includes(`method=${options.method ?? 8}`), result);
+    assert.ok(result.includes(`compressed=${packed}`), result);
+    assert.ok(result.includes(`uncompressed=${options.declaredSize ?? unpacked}`), result);
+  }
+});
+
+test('Office ZIP reader keeps per-entry total and decompression bounds and rejects deflate bits on stored entries', t => {
+  const ctx = ctxFor(t), parts = word();
+  for (const [extra, options] of [
+    [{}, { flags: 2, method: 0 }],
+    [{ 'word/media/large.bin': Buffer.alloc(2 * 1024 * 1024 + 1) }, {}],
+    [Object.fromEntries([1, 2, 3, 4].map(n => [`word/media/${n}.bin`, Buffer.alloc(2 * 1024 * 1024)])), {}],
+    [{ 'word/media/large.bin': Buffer.alloc(2 * 1024 * 1024 + 1) }, { declaredSize: { 'word/media/large.bin': 1 } }],
+  ]) {
+    builtZip(ctx, { ...parts, ...extra }, options);
+    assert.notEqual(office.checkWord(ctx), true);
+  }
+  assert.match(office.checkWord(ctx), /larger than 2097152 bytes.*word\/media\/large.bin/);
 });
 
 test('Word and PowerPoint reject extra saved story content outside their main edited bodies', t => {

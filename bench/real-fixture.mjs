@@ -61,8 +61,11 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
       if (!lease.pid) throw new Error('Launched app identity unconfirmed; quit refused');
       const result = await run('/usr/bin/osascript', ['-l', 'JavaScript', script,
         JSON.stringify({ bundle: request.bundle, mode: 'quit', pid: lease.pid })], {
-        signal: final ? undefined : ctx.cleanupSignal, timeoutMs: 15000,
+        signal: final ? undefined : ctx.cleanupSignal, timeoutMs: 35000,
       });
+      for (const line of result.stdout?.split('\n') ?? []) {
+        try { const event = JSON.parse(line); if (event.stage === 'quit' && event.quitWait) diagnostics.quitWait = event.quitWait; } catch {}
+      }
       if (!result.groupClean || result.exit?.code !== 0) throw new Error(`Launched ${request.app} quit unconfirmed${result.stderr?.trim() ? ': ' + result.stderr.trim() : ''}`);
       diagnostics.appQuit = true;
     },
@@ -108,7 +111,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
           ctx.onAppDialog?.(event.appDialog);
         }
         if (event.stage === 'retry') diagnostics.retries.push({ code: event.code, waitMs: event.waitMs, totalWaitMs: event.totalWaitMs });
-        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback']) {
+        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback', 'launchWait']) {
           if (event[key] !== undefined) diagnostics[key] = event[key];
         }
         if (event.stage) stage(event.stage).resolve(event);
