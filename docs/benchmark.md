@@ -342,6 +342,16 @@ used 50.7 CPU seconds for sleight and 64.8 for Codex, and the host CLI 44.1 (Cla
 23.8 (Codex CLI). sleight's own processes used 47.5, and the owner's other Claude Code plugins, which
 load in every run, 21.7.
 
+With `2c30446` counting Codex's engine server, calculator-click, textedit-save and textedit-edit ran
+twice per arm at `76cf880` ([`footprint`](benchmarks/2026-10-09-footprint.json), the owner away,
+load 20 to 55 from other projects). Both arms passed 6/6. sleight took 206 s and 37 turns, Codex
+232 s and 55. sleight used 51.9 CPU seconds, 4.4 of them in the owner's own plugins and hooks (an
+`mcp@latest` server, `npm`, Python), and Codex 37.1. Of the 10.4 s left between them, the engine's
+node process took 3.8 (9.3 against 5.4), the host CLIs 5.2 (Claude Code 11.3 plus the engine's
+`codex sandbox` wrapper 2.4, against 8.5 for Codex CLI and its wrapper, which the sampler doesn't
+separate), and `osascript` 1.9. The helper and the apps together used 0.6 less for sleight (20.8
+against 21.3). The gap per run was largest on calculator-click (4.7 and 6.6 s against 3.3 and 3.3).
+
 A loaded pass added 20 CPU-bound workers (load 12 at the start, 137 at the end) and ran four
 default tasks, alternating the arms, until it was stopped at 20:38 UTC to leave the Mac quiet for
 another project ([`h2h-loaded`](benchmarks/2026-10-09-h2h-loaded.json)). It ran 9 of the planned 16 runs.

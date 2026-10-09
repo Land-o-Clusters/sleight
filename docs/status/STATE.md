@@ -26,8 +26,10 @@ the time a new client acquired the app. A popup menu at element 0 wasn't tried.
 
 Step 2 passed with Excel 1/1 (100.4 s, 29 turns) and PowerPoint 1/1 on a second try (51.7 s, 16 turns),
 after a Microsoft 365 first-launch notice failed the first try's setup (`docs/known-problems.md`).
-Step 3 started at 21:55 UTC (`.dev/passes/pass-footprint.log`), with Codex's Always-allow list set by
-the runner. A killed runner leaves it changed (see Machine state).
+Step 3 ran 6/6 per arm. sleight used 51.9 CPU seconds (47.5 without the owner's plugins) against
+Codex's 37.1, with the gap in the engine's node process, Claude Code and `osascript`
+(`docs/benchmark.md`). The approvals list is restored. Step 4 started at 22:04 UTC
+(`.dev/passes/pass-batch-off.log`, then `pass-batch-on.log`).
 
 Released: `v1.1.0` (`0b6a1c0`, 2026-10-09), on `main`. Unreleased on `pane/auto-mode` at `874a280`:
 - Live-checked: full screen and Split View detection; one app-health helper per session
@@ -50,8 +52,8 @@ reads before clicks by ID cost tens of seconds each.
 Next, in order:
 1. Done (see above).
 2. Done (see above). Word passed 1/1 at `6f88fb3`.
-3. CPU footprint rerun with `2c30446` (Codex's engine now counts): calculator-click, textedit-edit,
-   textedit-save, `--arm sleight,codex --runs 2`.
+3. Done (see above). Next for footprint: find what the engine's node process does more of for
+   sleight (guard reads are the likely source) and what `osascript` runs per call.
 4. Batching A/B: sleight only, textedit-save, textedit-edit, calculator-menu, chess-drag, 3 runs each,
    with `SLEIGHT_FIRST_CALL_BATCH` unset, then `=1`. Compare turns.
 5. A full release pass with the owner away, then reread README whole and release (LAWS).
