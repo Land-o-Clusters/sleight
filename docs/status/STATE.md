@@ -29,6 +29,14 @@ Real-use qualification of Sol's brief 8 (`4323a41` plus sleight-arch's Safari fi
 excel-edit in a cold-launch setup, and the pass stopped before powerpoint-edit. Brief 9
 (`.dev/prompts/sol-real-use-tasks-9.md`) covers those, and Sol is on it.
 
+Since 17:50 UTC, Sol finished brief 9 (`b8f4b3f`). The Codex arm runs the real suite
+(`arch/codex-real-arm`, `dc232f9` and `edaf82b`, cut from `b8f4b3f`, worktree
+`~/Projects/sleight-wt/codex-real`): helium-form passed 1/1 on Codex, and the approval list was
+restored byte for byte. The Office rerun failed before any model call. Word didn't answer its first
+read under load. Excel shows its first-run "Start Using Excel" screen, which the owner clicks.
+Brief 10 (`.dev/prompts/sol-real-use-tasks-10.md`) covers Word. Puddle's quiet window 1009m runs from
+about 18:35 UTC for up to 2 h: no sleight live or load runs until puddle arch says it closed.
+
 Branches and worktrees:
 - `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it.
 - `perf/screenshot-scale` (`1aa574b`, `~/Projects/sleight-wt/shots`): parked. Don't merge without a
@@ -100,7 +108,8 @@ Read first: `docs/known-problems.md` (grouped by area), `docs/benchmark.md` (eve
 
 ## Waiting on the owner
 
-- Being at the Mac to watch the Mail and Mimestream tasks.
+- Clicking "Start Using Excel" in Excel and pasting brief 10 to Sol.
+- Watching the Mail and Mimestream tasks.
 - The OpenAI key note is theirs to handle. Don't raise it again (owner, 2026-10-09).
 
 ## Reading list
