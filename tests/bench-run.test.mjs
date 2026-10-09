@@ -76,7 +76,7 @@ test('failed real runs continue through keyboard checks and the common cleanup t
 
 test('real safety errors stop after one run but still execute the common cleanup tail', async () => {
   for (const outcome of [{ cleanupError: 'close failed' }, { permissionPrompt: true }, { permissionRefusal: true },
-    { observerError: 'observer failed' }, { groupClean: false }]) {
+    { observerError: 'observer failed' }, { groupClean: false }, { appDialog: { app: 'Mail', category: 'first-run' } }]) {
     const result = await runner({ outcome });
     assert.equal(result.calls.filter(c => c === 'real run').length, 1);
     assert.deepEqual(result.calls.slice(-4), ['TextEdit tail', 'Chess tail', 'Simulator tail', 'unlock']);
@@ -136,6 +136,14 @@ test('a real Safari keyboard tap stops further runs after recording the tap', as
   assert.equal(result.calls.filter(c => c === 'real run').length, 1);
   assert.equal(result.saved.at(-1).results[0].keyboardTaps[0].app, 'Safari');
   assert.deepEqual(result.calls.slice(-4), ['TextEdit tail', 'Chess tail', 'Simulator tail', 'unlock']);
+});
+
+test('Office and Mail keyboard taps stop the real pass after cleanup', async () => {
+  for (const app of ['Word', 'Microsoft Word', 'Excel', 'Microsoft Excel', 'PowerPoint', 'Microsoft PowerPoint', 'Mail']) {
+    const result = await runner({ outcome: { passed: true }, taps: [{ app, pid: 123 }] });
+    assert.equal(result.calls.filter(c => c === 'real run').length, 1, app);
+    assert.equal(result.saved.at(-1).results[0].keyboardTaps[0].app, app);
+  }
 });
 
 test('an unexpected real run exception still runs the cleanup tail and releases the lock', async () => {

@@ -122,6 +122,18 @@ function closeDocumentSafely(app, request, validate, api) {
   }
 }
 
+function appDialogCategory(info) {
+  if (info.document) return null;
+  var modal = ['AXDialog', 'AXSystemDialog'].indexOf(info.subrole) !== -1;
+  var startup = /^(?:Microsoft )?(?:Word|Excel|PowerPoint|Mail)$/.test(info.title || '');
+  var text = [info.title || ''].concat(modal || startup ? info.buttons || [] : []).join('\n');
+  if (/(?:activate|activation|licen[cs][ei]|subscription|product key)/i.test(text)) return 'activation';
+  if (/\b(?:sign[ -]?in|log[ -]?in)\b/i.test(text)) return 'sign-in';
+  if (/\b(?:welcome|what.s new|getting started|first run|get started)\b/i.test(text)) return 'first-run';
+  if (/\b(?:grant access|allow access|permission)\b/i.test(text)) return 'permission';
+  return modal ? 'unexpected-dialog' : null;
+}
+
 function nativeAX(state, clock) {
   function read(element, attribute) {
     return setupRead(function () {
@@ -152,6 +164,37 @@ function nativeAX(state, clock) {
       if (['AXGroup', 'AXSheet'].indexOf(role) !== -1) result = result.concat(buttons(child, wanted, depth - 1));
     });
     return result;
+  }
+  function dialog(app, owned, request) {
+    if (!request.stopOnAppDialog) return null;
+    var focused = read(app, 'AXFocusedWindow');
+    var candidates = [];
+    if (owned) candidates = candidates.concat(children(owned, 'AXSheets'));
+    if (focused && (!owned || !$.CFEqual(focused, owned))) {
+      if (matches(focused, request)) candidates = candidates.concat(children(focused, 'AXSheets'));
+      else if (!text(focused, 'AXDocument')) candidates.push(focused);
+    }
+    for (var index = 0; index < candidates.length; index++) {
+      var candidate = candidates[index];
+      function labels(element, depth) {
+        if (depth < 0) return [];
+        var result = [];
+        children(element).forEach(function (child) {
+          var role = text(child, 'AXRole');
+          if (role === 'AXButton') result.push(text(child, 'AXTitle'));
+          if (['AXGroup', 'AXSheet', 'AXSplitGroup'].indexOf(role) !== -1) result = result.concat(labels(child, depth - 1));
+        });
+        return result;
+      }
+      var info = { title: text(candidate, 'AXTitle'), subrole: text(candidate, 'AXSubrole'),
+        document: text(candidate, 'AXDocument') };
+      if (text(candidate, 'AXRole') === 'AXSheet') info.subrole = 'AXDialog';
+      if (['AXDialog', 'AXSystemDialog'].indexOf(info.subrole) !== -1 || /^(?:Microsoft )?(?:Word|Excel|PowerPoint|Mail)$/.test(info.title)) info.buttons = labels(candidate, 4);
+      var category = appDialogCategory(info);
+      if (category) return { app: request.app, category: category,
+        description: category === 'unexpected-dialog' ? 'Unrecognized application dialog' : category + ' application dialog' };
+    }
+    return null;
   }
   function fileMenu(app, titles, beforePress) {
     var bar = read(app, 'AXMenuBar');
@@ -204,7 +247,7 @@ function nativeAX(state, clock) {
       try { return text(window, 'AXRole') === 'AXWindow'; }
       catch (error) { if (error.code === -25202) return false; throw error; }
     },
-    matches: matches,
+    matches: matches, dialog: dialog,
     readiness: function (app, request) {
       function describe(window) {
         if (!window) return { present: false };
@@ -254,7 +297,8 @@ function run(argv) {
     }, function () {}), path: request.path ? String(ObjC.unwrap($.NSURL.fileURLWithPath(request.path).URLByResolvingSymlinksInPath.path)) : undefined });
   }
   var allowed = ['com.apple.Safari', 'com.apple.Preview', 'com.apple.finder',
-    'com.apple.TextEdit', 'com.apple.calculator', 'com.apple.dt.Devices', 'com.apple.iphonesimulator', 'net.imput.helium'];
+    'com.apple.TextEdit', 'com.apple.calculator', 'com.apple.dt.Devices', 'com.apple.iphonesimulator', 'net.imput.helium',
+    'com.microsoft.Word', 'com.microsoft.Excel', 'com.microsoft.Powerpoint', 'com.apple.mail'];
   if (request.mode === 'quit') {
     if (allowed.indexOf(request.bundle) === -1 || request.bundle === 'com.apple.finder' || !(request.pid > 0)) throw new Error('Invalid launched app quit request');
     return quitFixtureApplication(request.pid, request.bundle, function () {
@@ -282,6 +326,12 @@ function run(argv) {
   var clock = { now: function () { return Date.now(); }, wait: function (ms) { waitForLaunch(ms / 1000); }, emit: emit };
   var api = nativeAX(state, clock);
   var target, running, pid, app, previous, owned;
+  function checkAppDialog() {
+    var found = app && api.dialog(app, owned, request);
+    if (!found) return;
+    emit({ stage: 'app-dialog', appDialog: found, pid: pid, running: running });
+    throw Object.assign(new Error(found.app + ' ' + found.category + ' dialog: stopped'), { appDialog: found });
+  }
   try {
   target = application();
   running = !!target;
@@ -296,6 +346,8 @@ function run(argv) {
     $.AXUIElementSetMessagingTimeout(app, 0.5);
     previous = api.focused(app);
   }
+  emit({ stage: 'identified', running: running, pid: pid });
+  checkAppDialog();
   if (request.bundle === 'com.apple.Safari') {
     if (!target) {
       emit({ stage: 'untouched' });
@@ -332,6 +384,7 @@ function run(argv) {
     if (pid && Number(target.processIdentifier) !== pid) throw new Error('Fixture process changed');
     pid = Number(target.processIdentifier); app = $.AXUIElementCreateApplication(pid);
     $.AXUIElementSetMessagingTimeout(app, 0.5);
+    checkAppDialog();
     if (inherited) { api.focused(app); applicationReady = true; break; }
     if (attempt === 0 || attempt === 199) emit({ stage: 'readiness', readiness: api.readiness(app, request) });
     var current = owned || api.focused(app);
@@ -347,7 +400,8 @@ function run(argv) {
   if (!inherited && !api.matches(owned, request)) throw new Error('Fixture document identity unconfirmed');
   emit({ stage: 'ready', pid: pid, fresh: state.fresh, totalWaitMs: state.retryWaitMs });
   state.setup = false;
-  while (command() !== 'close') api.wait();
+  while (command() !== 'close') { checkAppDialog(); api.wait(); }
+  checkAppDialog();
   target = application();
   if (target && Number(target.processIdentifier) !== pid) throw new Error('Fixture process changed before cleanup');
   if (target && !inherited) closeOwnedWindow(owned, request, app, api);
@@ -357,7 +411,7 @@ function run(argv) {
       state.setup = false;
       var cleanup, cleanupError = error.menuCleanupError;
       try {
-        cleanup = recoverSetup(owned, request, api);
+        cleanup = error.appDialog ? 'unconfirmed' : recoverSetup(owned, request, api);
       } catch (failure) { cleanupError = [cleanupError, failure.message].filter(Boolean).join('; '); }
       emit({ stage: 'setup-failure', fresh: state.fresh, actionTaken: state.actionTaken, pid: pid,
         cleanup: cleanup, cleanupError: cleanupError, totalWaitMs: state.retryWaitMs });

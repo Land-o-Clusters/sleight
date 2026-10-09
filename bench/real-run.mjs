@@ -11,6 +11,12 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, setupO
   const result = setupOnly ? { setupOnly: true } : {};
   ctx.signal = signal;
   ctx.cleanupSignal = cleanupController.signal;
+  ctx.onAppDialog = dialog => {
+    result.appDialog = dialog;
+    (ctx.appDialogs ??= []).push(dialog);
+    stop?.(); cleanupController.abort();
+  };
+  const dialogReason = () => result.appDialog && `${result.appDialog.app} ${result.appDialog.category} dialog: stopped`;
   const observe = async () => {
     try {
       const permission = await permissionCheck();
@@ -52,16 +58,17 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, setupO
         stop?.();
       } });
       Object.assign(result, response);
-      const verdict = await task.check({ ...ctx, answer: response.out?.result ?? '' });
+      const verdict = signal?.aborted || cleanupController.signal.aborted ? dialogReason() || 'run interrupted' :
+        await task.check({ ...ctx, answer: response.out?.result ?? '' });
       result.passed = response.code === 0 && verdict === true && !signal?.aborted && !result.permissionPrompt && !result.permissionRefusal && !result.observerError;
-      result.reason = result.permissionPrompt ? 'macOS permission prompt: stopped' : result.permissionRefusal ? 'computer-use permission refused: stopped' : signal?.aborted ? 'run interrupted' :
-        verdict !== true ? verdict : response.code !== 0 ? `driver exited ${response.code}` : undefined;
+      result.reason = dialogReason() || (result.permissionPrompt ? 'macOS permission prompt: stopped' : result.permissionRefusal ? 'computer-use permission refused: stopped' : signal?.aborted ? 'run interrupted' :
+        verdict !== true ? verdict : response.code !== 0 ? `driver exited ${response.code}` : undefined);
       result.seconds = Math.round((Date.now() - started) / 100) / 10;
     }
   } catch (error) {
     result.passed = false;
     if (driverStarted && result.groupClean !== true) result.groupClean = false;
-    result.reason = result.permissionPrompt ? 'macOS permission prompt: stopped' : result.permissionRefusal ? 'computer-use permission refused: stopped' : error.message;
+    result.reason = dialogReason() || (result.permissionPrompt ? 'macOS permission prompt: stopped' : result.permissionRefusal ? 'computer-use permission refused: stopped' : error.message);
   } finally {
     try {
       if (result.groupClean === false) throw new Error('Owned driver process group cleanup unconfirmed');
@@ -70,7 +77,7 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, setupO
       if (monitor) { await observation; await observe().catch(() => {}); }
       if (cleanupController.signal.aborted) {
         if (ctx.closeServer) { await ctx.closeServer(); ctx.closeServer = undefined; }
-        throw new Error('Fixture cleanup stopped by permission observation');
+        throw new Error(result.appDialog ? 'Fixture cleanup stopped by application dialog' : 'Fixture cleanup stopped by permission observation');
       }
       await task.cleanup?.(ctx);
       if (ctx.pendingAcquisitions?.size) throw new Error(`Fixture acquisition unconfirmed: ${[...ctx.pendingAcquisitions].join(', ')}`);
@@ -85,6 +92,7 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, setupO
     clearInterval(monitor);
     await observation;
     if (ctx.fixtureDiagnostics) result.fixtureDiagnostics = ctx.fixtureDiagnostics;
+    if (ctx.appDialogs) result.appDialogs = ctx.appDialogs;
     if (ctx.fixtureDiagnostics?.some(item => item.cleanup === 'unconfirmed')) result.cleanupUnconfirmed = true;
     if (result.permissionPrompt) { result.passed = false; result.reason = 'macOS permission prompt: stopped'; }
     if (result.observerError) { result.passed = false; result.reason = `macOS permission observer failed: ${result.observerError}`; }

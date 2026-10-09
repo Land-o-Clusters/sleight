@@ -5,6 +5,9 @@ import { serveRealPage, checkForm, checkFlow } from './real-server.mjs';
 import { writeTestPDF, checkPDF } from './real-pdf.mjs';
 import { acquireFixture } from './real-run.mjs';
 import { openFixture, closeFixtures } from './real-fixture.mjs';
+import { webTasks } from './tasks-web.mjs';
+import { officeTasks } from './tasks-office.mjs';
+import { mailTasks } from './tasks-mail.mjs';
 
 async function closePage(ctx) {
   try {
@@ -133,4 +136,7 @@ export const realTasks = [
       }
     },
   },
+  ...webTasks,
+  ...officeTasks,
+  ...mailTasks,
 ];

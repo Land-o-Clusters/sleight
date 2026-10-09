@@ -3,6 +3,13 @@
 What doesn't work, or works only partly, with the measurements behind it. We found all of these in
 our own runs. Dates and engine versions are given where they matter.
 
+- Real-use round 7 has 20 desktop slots unstarted while it awaits owner-away time (2026-10-09).
+  Browser layout, saved Office files, Mail import and export, and app closure still need live proof.
+  Mail requires an already-running app and stops when local ownership or mutation coverage is
+  unavailable. Its native export path lacks an independent current flag/read receipt and stops
+  before a model task. Import controls and folder topology remain unmeasured.
+  [Round-7 results](benchmarks/2026-10-09-real-use-tasks-7.json) retain both dry attempts.
+
 - Real-use round 6 has 15 desktop slots unstarted while it awaits owner-away time (2026-10-09).
   Safari's profile menu names and the document path-normalization mismatch explain round 5's setup
   failures. Preview now reaches readiness, but its background document Close commands were disabled.
