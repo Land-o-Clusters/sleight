@@ -118,7 +118,8 @@ export function guardedCode(code, window, reason = 'Document scope stopped this 
   // The call finished, so any failed action was one it didn't await or caught itself.
   if (guard.failures?.length) nodeRepl.write('sleight: an action in this call failed, and the call went on without it: ' + guard.failures.join('; ') + '. Read the window, then redo it with await.\\n');
   if (guard.activeApp && !last?.emitted) {
-    const text = last?.text ?? await guard.readAfter(guard.activeApp);
+    const split = !guard.acted && guard.activeApp === guard.startApp && guard.prior?.split;
+    const text = last?.text ?? (split ? guard.prior.text : await guard.readAfter(guard.activeApp));
     nodeRepl.write(${JSON.stringify(GUARD_MARK)} + text + ${JSON.stringify(GUARD_END)});
   }
 }`;
@@ -140,6 +141,10 @@ function guardSetup(update) {
     state.careful = ${!!update?.careful};
     // The previous call's read, when the relay judged it reusable for this call's first action.
     state.prior = ${JSON.stringify(update?.prior) ?? 'undefined'};
+    // Whether this call has acted, and the handle it started on. A call that took no action after the
+    // relay split off its acquisition takes that read as its header instead of reading again: 53
+    // such reads cost 27 s across the benchmark runs of 2026-10-09.
+    state.acted = false; state.startApp = state.activeApp;
     // What Claude was last shown for the numbers this call acts on (number -> line).
     state.seenLines = ${JSON.stringify(update?.seenLines) ?? 'undefined'};
     const clock = () => globalThis.performance?.now() ?? Date.now();
@@ -238,6 +243,7 @@ function guardSetup(update) {
           'paste', 'pressKey', 'typeText'].includes(name)) return (...args) => { checkNative(); return value.apply(raw, args); };
         const act = async (...args) => {
           checkNative();
+          state.acted = true;
           await checkLease();
           if (state.fileOnly && name === 'pressKey' && isCancel(name, args)) {
             state.activeApp = proxy;

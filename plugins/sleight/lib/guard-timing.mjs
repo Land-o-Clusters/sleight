@@ -7,7 +7,7 @@ export function stripGuardTiming(content, record) {
     const text = block.text.replace(/\[sleight:guard-timing\]([^\r\n]*)(?:\r?\n|$)/g, (_, json) => {
       try {
         const { phase, ms, chars, failed } = JSON.parse(json);
-        if (['before-action', 'after-call', 'reused', 'reuse-refused'].includes(phase) && Number.isFinite(ms) && ms >= 0 &&
+        if (['before-action', 'after-call', 'reused', 'reuse-refused', 'skipped'].includes(phase) && Number.isFinite(ms) && ms >= 0 &&
             Number.isSafeInteger(chars) && chars >= 0 && typeof failed === 'boolean') record({ phase, ms, chars, failed });
       } catch { /* A malformed diagnostic must not affect the result. */ }
       return '';

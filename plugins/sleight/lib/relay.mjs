@@ -1245,7 +1245,7 @@ export function createRelay({
             // that renumbered after Claude's read went unnoticed (textedit-save, the same day). Document
             // scope, change review and careful reads always read before acting.
             const prior = !documentMode && !changeReview && guardMode !== 'careful' && priorRead && (priorRead.split || priorRead.ms > 2000) && priorRead.seq + 1 === callSeqs.get(msg.id) && Date.now() - priorRead.at < 10000 &&
-              target?.app === priorRead.app ? { text: priorRead.text, id: priorRead.id, title: priorRead.title, windows: priorRead.windows } : undefined;
+              target?.app === priorRead.app ? { text: priorRead.text, id: priorRead.id, title: priorRead.title, windows: priorRead.windows, split: priorRead.split } : undefined;
             msg.params.arguments.code = guardedCode(originalCode, target, reason,
               inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
               { timing: guardTiming, careful: guardMode === 'careful' || documentMode, fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,

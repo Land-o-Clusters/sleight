@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A call that only acquires an app, with no action after it, takes the acquisition's read as the
+  window header the lease needs instead of reading the window again. Across the benchmark runs of
+  2026-10-09, 53 such reads cost 27 s, each milliseconds after the acquisition read the same tree.
+  Guard traces now include reads the guard skipped, which the relay used to drop. Unit-tested only.
 - Claude may put its first actions in the same call as the app's acquisition. The engine's
   description asks for the acquisition alone, and sleight now rewrites that sentence by default
   (`SLEIGHT_FIRST_CALL_BATCH=0` keeps it). On calculator-menu, textedit-save, textedit-edit and

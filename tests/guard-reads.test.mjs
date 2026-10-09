@@ -273,3 +273,24 @@ for (const method of ['getAXState', 'getAXStateAndScreenshot']) {
     assert.equal(f.calls.filter(c => c[0] === 'click').length, 0);
   });
 }
+
+test('a call that took no action after a split acquisition takes that read as its header', async () => {
+  const f = fixture();
+  f.context.cua.listApps = async () => [];
+  await f.run('globalThis.app = await cua.getApp("TextEdit");');
+  const prior = split => ({ text: tree(), id: 'com.apple.TextEdit', title: 'a.txt', windows: [], split });
+  for (const [code, options, reads] of [['app;', { prior: prior(true) }, 0], ['app;', { prior: prior(false) }, 1], ['app;', {}, 1],
+    // Any action reads after as before.
+    ['await app.click(1);', { prior: prior(true) }, 2]]) {
+    f.calls.length = 0; f.output.length = 0;
+    await f.run(code, options);
+    assert.equal(f.calls.filter(c => c[0] === 'read').length, reads, `${code} ${JSON.stringify(options.prior?.split)}`);
+    assert.equal(f.output.at(-1), GUARD_MARK + tree() + GUARD_END, 'the lease still gets a full header');
+  }
+  // Another app acquired in the call is read for its own header, never given the split's.
+  const notes = 'Window: "n", App: Notes.\n0 standard window n';
+  f.output.length = 0;
+  await f.run(`globalThis.__sleightDocumentGuard.getApp = async () => ({ async getAXState() { return ${JSON.stringify(notes)}; } });
+    globalThis.other = await cua.getApp("Notes");`, { prior: prior(true) });
+  assert.equal(f.output.at(-1), GUARD_MARK + notes + GUARD_END);
+});

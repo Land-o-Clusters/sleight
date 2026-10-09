@@ -32,11 +32,13 @@ test('timing is removed from mixed results and malformed metrics cannot enter a 
   const metrics = [];
   const mark = '[sleight:guard-timing]';
   const good = JSON.stringify({ phase: 'after-call', ms: 12.5, chars: 30, failed: false });
-  const content = [{ type: 'text', text: `before\n${mark}${good}\nafter` },
+  // A skipped read is traced too: the parser dropped it until 2026-10-09, so no trace showed a skip.
+  const skipped = JSON.stringify({ phase: 'skipped', ms: 0, chars: 0, failed: false });
+  const content = [{ type: 'text', text: `before\n${mark}${good}\n${mark}${skipped}\nafter` },
     { type: 'text', text: `${mark}{"phase":"secret","ms":-1}` }, { type: 'image', data: 'unchanged' }];
   assert.deepEqual(stripGuardTiming(content, metric => metrics.push(metric)),
     [{ type: 'text', text: 'before\nafter' }, { type: 'image', data: 'unchanged' }]);
-  assert.deepEqual(metrics, [{ phase: 'after-call', ms: 12.5, chars: 30, failed: false }]);
+  assert.deepEqual(metrics, [{ phase: 'after-call', ms: 12.5, chars: 30, failed: false }, { phase: 'skipped', ms: 0, chars: 0, failed: false }]);
 });
 
 test('the relay traces metrics by call ID before delivering a clean full header', t => {
