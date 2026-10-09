@@ -64,9 +64,11 @@ in `.dev/prompts/`, for Sol threads the owner starts:
 
 Guard reads (sleight-arch): `565f369` lets a call with no action after a split acquisition use that
 read as its header (53 reads, 27 s in tonight's traces) and traces skipped reads, which the relay's
-parser used to drop. Unit-tested, live check after 1009o. Asked the owner (23:10 UTC): reuse a
-split acquisition's read for the first action when the acquisition didn't launch the app (173
-refusals, 98 s since `e66791a`)? The trace study (227 runs) found reads before later numbered
+parser used to drop. Unit-tested, live check after 1009o. The owner agreed (23:20 UTC) to reuse a
+split acquisition's read for the first action when the app was already running with a window:
+`08abe24` (173 refusals, 98 s since `e66791a`), unit-tested, live check after 1009o.
+Sol's `codex/replay-next` (`de4db37`) landed and was reviewed: the logic is right, but its bridge parses
+and re-serializes every message of every session. Follow-up `.dev/prompts/sol-replay-next-2.md`, then merge. The trace study (227 runs) found reads before later numbered
 actions caught 12 renumbers and 23 window changes in 924 reads (572 s). sleight-arch recommends
 keeping them.
 
