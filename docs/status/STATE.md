@@ -57,6 +57,11 @@ in `.dev/prompts/`, for Sol threads the owner starts:
   over at the step that stopped.
 - `sol-small-fixes.md` (`codex/small-fixes`): exact `typeText` after select-all, clipboard
   preservation's 205 to 236 ms, localized settings titles in `blocked_app`, `menu_bar` guard tests.
+- `sol-doctor-flow.md` (`codex/doctor-flow`): doctor probes a per-app read, and per-site flow rules.
+- `sol-other-hosts.md` (`codex/other-hosts`): sleight from Cursor, Codex CLI and plain MCP clients.
+- Follow-ups after review: `sol-replay-next-2.md` (the bridge parses every message) and
+  `sol-footprint-spawns-2.md` (browser surface always on, one 2 s helper for slow operations).
+- The launch post's real-use line is filled (`~/Desktop/sleight-launch/thread-1.0.md`, 23:58 UTC).
 - sleight-arch: the guard's reads (`document-scope.mjs`, guard code in `relay.mjs`), with a
   background subagent studying guard-read phases across tonight's traces.
 - `/tmp/sleight-hold` exists while another project's window runs. Every brief stops live probes

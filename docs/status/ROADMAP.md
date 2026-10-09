@@ -98,7 +98,8 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
 
 1. A real-use pass, then the Codex head-to-head on it. The Codex arm runs the real suite
    (`768cbcd`, helium-form 1/1), so this is the head-to-head in track 3, step 1.
-2. Fill the [PENDING] lines of the launch post in `~/Desktop/sleight-launch/thread-1.0.md`.
+2. Fill the [PENDING] lines of the launch post in `~/Desktop/sleight-launch/thread-1.0.md` (done
+   2026-10-09 with the real-use head-to-head).
 3. Replay: a successful run turns into a script that replays through the engine with no model,
    keeping sleight's guards, so it stops when the app isn't in the state the script expects. First
    version built 2026-10-09 (`sleight-mcp record` and `replay`, `docs/design/replay.md`). Next: replay
