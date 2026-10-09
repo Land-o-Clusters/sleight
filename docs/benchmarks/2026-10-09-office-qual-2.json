@@ -1,0 +1,236 @@
+{
+  "stamp": "2026-10-09T21-54-09-243Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "powerpoint-edit",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 14.33,
+        "group": {
+          "claude": 2.95,
+          "engine node": 1.28,
+          "mcp@latest": 0.68,
+          "node": 0.29,
+          "osascript": 0.15,
+          "codex": 0.42,
+          "(bash)": 0.01,
+          "(vibe-island-brid)": 0.01
+        },
+        "outside": {
+          "Microsoft PowerPoint": 4.74,
+          "engine helper": 3.8
+        }
+      },
+      "timing": {
+        "totalMs": 49515,
+        "modelMs": 33642,
+        "calls": 15,
+        "refused": 1,
+        "toolMs": 12721,
+        "engineMs": 12672,
+        "relayMs": 49,
+        "localMs": 0,
+        "guardReads": 17,
+        "guardReadMs": 4346.972498999998,
+        "guardReadFailures": 0,
+        "otherMs": 3152
+      },
+      "passed": true,
+      "seconds": 51.7,
+      "fixtureDiagnostics": [
+        {
+          "app": "Microsoft PowerPoint",
+          "bundle": "com.microsoft.Powerpoint",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": false,
+          "setupCase": "cold-launch",
+          "launched": true,
+          "launchWait": {
+            "reason": "ready",
+            "setupCase": "cold-launch",
+            "elapsedMs": 840,
+            "code": -25205,
+            "attribute": "AXSheets"
+          },
+          "pid": 50646,
+          "fresh": true,
+          "menuItems": [
+            "New Presentation",
+            "New from Template...",
+            "Open...",
+            "Open Recent",
+            "",
+            "Close",
+            "Save",
+            "Save As...",
+            "Save as Template...",
+            "Export...",
+            "Move...",
+            "Rename...",
+            "",
+            "Browse Version History",
+            "",
+            "Share",
+            "",
+            "Always Open Read-Only",
+            "Restrict Permissions",
+            "Passwords...",
+            "",
+            "Compress Pictures...",
+            "",
+            "Page Setup...",
+            "Print...",
+            "",
+            "Properties"
+          ],
+          "menuCommands": [
+            {
+              "title": "New Presentation",
+              "enabled": true
+            },
+            {
+              "title": "New from Template...",
+              "enabled": true
+            },
+            {
+              "title": "Open...",
+              "enabled": true
+            },
+            {
+              "title": "Open Recent",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Close",
+              "enabled": true
+            },
+            {
+              "title": "Save",
+              "enabled": true
+            },
+            {
+              "title": "Save As...",
+              "enabled": true
+            },
+            {
+              "title": "Save as Template...",
+              "enabled": true
+            },
+            {
+              "title": "Export...",
+              "enabled": true
+            },
+            {
+              "title": "Move...",
+              "enabled": true
+            },
+            {
+              "title": "Rename...",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Browse Version History",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Share",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Always Open Read-Only",
+              "enabled": true
+            },
+            {
+              "title": "Restrict Permissions",
+              "enabled": true
+            },
+            {
+              "title": "Passwords...",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Compress Pictures...",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Page Setup...",
+              "enabled": true
+            },
+            {
+              "title": "Print...",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Properties",
+              "enabled": true
+            }
+          ],
+          "helperCollectionConfirmed": true,
+          "quitWait": {
+            "reason": "exited",
+            "accepted": true,
+            "elapsedMs": 346,
+            "finishedLaunching": true
+          },
+          "appQuit": true
+        }
+      ],
+      "turns": 16,
+      "costUsd": 0.524174,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 32,
+        "cacheRead": 1098400,
+        "cacheWrite": 68385,
+        "output": 3089
+      },
+      "exitCode": 0,
+      "answer": "The deck in `Slides-8c8bcac1.pptx` now has three slides in the order \"Finish 8c8bcac1\", \"Start 8c8bcac1\", \"Middle 8c8bcac1\". I added the middle slide with the Title Only layout and the title \"Middle 8c8bcac1\", and no other content. I checked the thumbnail order afterward. I saved with Cmd+S and Powe"
+    }
+  ]
+}

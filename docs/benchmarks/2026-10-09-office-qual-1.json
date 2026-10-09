@@ -1,0 +1,324 @@
+{
+  "stamp": "2026-10-09T21-49-56-085Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "excel-edit",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 28.25,
+        "group": {
+          "claude": 3.53,
+          "engine node": 1.85,
+          "mcp@latest": 0.65,
+          "node": 0.29,
+          "osascript": 0.34,
+          "codex": 0.39,
+          "sh": 0.01,
+          "vibe-island-bridge": 0.01,
+          "(bash)": 0.03,
+          "(AgentPeekBridge)": 0.02,
+          "(vibe-island-brid)": 0.01
+        },
+        "outside": {
+          "Microsoft Excel": 9.63,
+          "engine helper": 11.49
+        }
+      },
+      "timing": {
+        "totalMs": 98515,
+        "modelMs": 73909,
+        "calls": 25,
+        "refused": 2,
+        "toolMs": 20252,
+        "engineMs": 19908,
+        "relayMs": 344,
+        "localMs": 0,
+        "guardReads": 20,
+        "guardReadMs": 12426.293415000024,
+        "guardReadFailures": 0,
+        "otherMs": 4354
+      },
+      "passed": true,
+      "seconds": 100.4,
+      "fixtureDiagnostics": [
+        {
+          "app": "Microsoft Excel",
+          "bundle": "com.microsoft.Excel",
+          "retries": [
+            {
+              "code": -25204,
+              "waitMs": 106,
+              "totalWaitMs": 106,
+              "setupCase": "already-running"
+            }
+          ],
+          "totalWaitMs": 106,
+          "actionTaken": false,
+          "setupCase": "already-running",
+          "readWait": {
+            "reason": "ready",
+            "setupCase": "already-running",
+            "elapsedMs": 363,
+            "code": -25204,
+            "attribute": "AXFocusedWindow"
+          },
+          "running": true,
+          "pid": 69926,
+          "launched": true,
+          "readiness": {
+            "focused": {
+              "present": true,
+              "matches": true,
+              "documentKind": "file-url",
+              "titleMatches": false,
+              "pathAvailable": true,
+              "pathMatchesNormalizedTarget": true
+            },
+            "main": {
+              "present": true,
+              "matches": true,
+              "documentKind": "file-url",
+              "titleMatches": false,
+              "pathAvailable": true,
+              "pathMatchesNormalizedTarget": true
+            }
+          },
+          "launchWait": {
+            "reason": "ready",
+            "setupCase": "already-running",
+            "elapsedMs": 1105,
+            "code": -25205,
+            "attribute": "AXSheets"
+          },
+          "fresh": false,
+          "menuItems": [
+            "New",
+            "New from Template...",
+            "Open...",
+            "Open Recent",
+            "",
+            "Close",
+            "Save",
+            "Save As...",
+            "Save as Template...",
+            "Move...",
+            "Rename...",
+            "",
+            "Reset Changes Pane",
+            "",
+            "Browse Version History",
+            "",
+            "Import",
+            "",
+            "Reduce File Size...",
+            "",
+            "Share",
+            "",
+            "Always Open Read-Only",
+            "Passwords...",
+            "",
+            "Page Setup...",
+            "Print Area",
+            "Print...",
+            "",
+            "Properties..."
+          ],
+          "menuCommands": [
+            {
+              "title": "New",
+              "enabled": true
+            },
+            {
+              "title": "New from Template...",
+              "enabled": true
+            },
+            {
+              "title": "Open...",
+              "enabled": true
+            },
+            {
+              "title": "Open Recent",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Close",
+              "enabled": true
+            },
+            {
+              "title": "Save",
+              "enabled": true
+            },
+            {
+              "title": "Save As...",
+              "enabled": true
+            },
+            {
+              "title": "Save as Template...",
+              "enabled": true
+            },
+            {
+              "title": "Move...",
+              "enabled": true
+            },
+            {
+              "title": "Rename...",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Reset Changes Pane",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Browse Version History",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Import",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Reduce File Size...",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Share",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Always Open Read-Only",
+              "enabled": true
+            },
+            {
+              "title": "Passwords...",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Page Setup...",
+              "enabled": true
+            },
+            {
+              "title": "Print Area",
+              "enabled": true
+            },
+            {
+              "title": "Print...",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Properties...",
+              "enabled": true
+            }
+          ]
+        }
+      ],
+      "turns": 29,
+      "costUsd": 0.7100804,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 58,
+        "cacheRead": 1575136,
+        "cacheWrite": 76671,
+        "output": 5297
+      },
+      "exitCode": 0,
+      "answer": "I made all the edits in `Inventory-fb36a853.xlsx` and saved it. Excel shows \"Saved to my Mac\", and the file is still open. I didn't reopen the saved file to check it.\n\n- **Sort:** A2:B4 is now Apples 8, Bananas 5, Pears 3, with each quantity kept with its item. I typed the sorted rows in rather than"
+    },
+    {
+      "arm": "sleight",
+      "task": "powerpoint-edit",
+      "run": 1,
+      "passed": false,
+      "reason": "Fixture setup failed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Office fixture readiness timed out after thirty seconds; last AX error -25205 (AXTitle) (-2700)",
+      "cleanupError": "Launched Microsoft PowerPoint quit unconfirmed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed after thirty seconds (normal quit accepted; finishedLaunching=true) (-2700)",
+      "fixtureDiagnostics": [
+        {
+          "app": "Microsoft PowerPoint",
+          "bundle": "com.microsoft.Powerpoint",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": false,
+          "setupCase": "cold-launch",
+          "launched": true,
+          "launchWait": {
+            "reason": "deadline",
+            "setupCase": "cold-launch",
+            "elapsedMs": 30004,
+            "code": -25205,
+            "attribute": "AXTitle"
+          },
+          "pid": 46054,
+          "fresh": true,
+          "cleanup": "unconfirmed",
+          "helperCollectionConfirmed": true,
+          "quitWait": {
+            "reason": "deadline",
+            "accepted": true,
+            "elapsedMs": 30009,
+            "finishedLaunching": true
+          }
+        }
+      ],
+      "cleanupUnconfirmed": true,
+      "fixtureDir": "<temp>/sleight-bench/2026-10-09T21-49-56-085Z/sleight-powerpoint-edit-1",
+      "models": []
+    }
+  ],
+  "passCleanupErrors": [
+    {
+      "app": "Microsoft PowerPoint",
+      "error": "Launched Microsoft PowerPoint quit unconfirmed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed after thirty seconds (normal quit accepted; finishedLaunching=true) (-2700)"
+    }
+  ]
+}

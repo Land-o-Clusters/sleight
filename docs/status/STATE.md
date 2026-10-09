@@ -22,8 +22,12 @@ element 0 read as the bar item and element 1 as `menu Secondary Actions: Cancel`
 named element 1, and `performSecondaryAction(1, "Cancel")` closed the menu in 445 ms. Both guard stops
 (unknown ID, and a number an earlier action in the call renumbered) returned the full tree. The first
 stop took 16.3 s at that load, and four repeats took 0.16 to 0.86 s. A menu left open had closed by
-the time a new client acquired the app. A popup menu at element 0 wasn't tried. Step 2 started at 21:50
-UTC (`.dev/passes/pass-office-q.log`).
+the time a new client acquired the app. A popup menu at element 0 wasn't tried.
+
+Step 2 passed with Excel 1/1 (100.4 s, 29 turns) and PowerPoint 1/1 on a second try (51.7 s, 16 turns),
+after a Microsoft 365 first-launch notice failed the first try's setup (`docs/known-problems.md`).
+Step 3 started at 21:55 UTC (`.dev/passes/pass-footprint.log`), with Codex's Always-allow list set by
+the runner. A killed runner leaves it changed (see Machine state).
 
 Released: `v1.1.0` (`0b6a1c0`, 2026-10-09), on `main`. Unreleased on `pane/auto-mode` at `874a280`:
 - Live-checked: full screen and Split View detection; one app-health helper per session
@@ -45,8 +49,7 @@ reads before clicks by ID cost tens of seconds each.
 
 Next, in order:
 1. Done (see above).
-2. Office qualification: `node bench/run.mjs --suite real --arm sleight --owner-away --runs 1 --tasks
-   excel-edit,powerpoint-edit`. Word passed 1/1 at `6f88fb3`.
+2. Done (see above). Word passed 1/1 at `6f88fb3`.
 3. CPU footprint rerun with `2c30446` (Codex's engine now counts): calculator-click, textedit-edit,
    textedit-save, `--arm sleight,codex --runs 2`.
 4. Batching A/B: sleight only, textedit-save, textedit-edit, calculator-menu, chess-drag, 3 runs each,
