@@ -194,6 +194,9 @@ The benchmark task auto-approves Calculator, like any benchmark run.
 
 ## Roadmap
 
+The full plan, in order, is in [docs/status/ROADMAP.md](docs/status/ROADMAP.md). Features, done and
+open:
+
 - [x] MCP server that survives ChatGPT updates
 - [x] Session and turn ids, so the engine can scope approvals and cleanup
 - [x] Approvals that last for the session, as in Codex

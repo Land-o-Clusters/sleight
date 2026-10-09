@@ -25,7 +25,11 @@ unit tests and live checks, 688/688 tests:
 - `main`'s badge commit is already merged into the branch (`01a6217`), so a release fast-forwards.
 
 1.0 runs started 03:49 UTC with the owner away (`.dev/passes/one-oh.sh` under `nohup`, both in
-order, progress in `.dev/passes/passes.log`). simulator-flow's real-use slots wait for brief 6's
+order, progress in `.dev/passes/passes.log`). The head-to-head ended 04:13 UTC
+(`bench/results/2026-10-09T03-49-50-773Z.json`): chess-drag sleight 0/3, Codex 2/3;
+simulator-form 3/3 each. Every Chess miss grabbed the pawn below y 1202 and every pass at or above
+it, for both arms. The controlled check in ROADMAP track 1 decides whether any of it is sleight's.
+The release pass started 04:13 UTC on `f6a8c07`. simulator-flow's real-use slots wait for brief 6's
 cleanup fix, since its branch can still leave a launched Device Hub open.
 
 1.0. The owner approved 1.0.0 (2026-10-09) once these have run with the owner away from the Mac,
@@ -120,6 +124,8 @@ Read first: `docs/known-problems.md` (grouped by area), `docs/benchmark.md` (eve
 
 ## Reading list
 
+- `docs/status/ROADMAP.md`: everything we intend, in order. Any correction from the owner about the
+  plan is written there in the same turn, and a question about the plan is answered from it whole.
 - `README.md` for install and the pitch; `docs/how-it-works.md`, `docs/known-problems.md`,
   `docs/settings.md` and `docs/benchmark.md` for the rest.
 - `CLAUDE.md`: checks and writing rules.
