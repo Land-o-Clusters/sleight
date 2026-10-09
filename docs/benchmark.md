@@ -276,6 +276,10 @@ read before a click took 38 to 83 ms and its read after took 389 to 427 ms, the 
 pause between calls. The engine waits for the UI to settle after input, and on a loaded Mac that wait
 ran to tens of seconds. A read with no input before it stayed near 100 ms even at load 135.
 
+With the guard reading before the first action after an acquisition again, since the inventory it
+relied on doesn't list windows, calculator-click passed in 3 turns and 14.1 s and textedit-edit in 6 turns and
+23.5 s, one run each ([`reuse-smoke`](benchmarks/2026-10-09-reuse-smoke.json)).
+
 textedit-drag ran once with a fixture app in full screen in front of TextEdit, after the relay
 learned to say so, with the owner away. Both runs failed, as they should: a drag fails on
 another Space. In the first, the check ran once per turn and caught TextEdit's Open panel, which

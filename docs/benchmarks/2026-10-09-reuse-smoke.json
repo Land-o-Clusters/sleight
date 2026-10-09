@@ -1,0 +1,91 @@
+{
+  "stamp": "2026-10-09T16-20-09-629Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 14.1,
+      "turns": 3,
+      "costUsd": 0.2388878,
+      "usage": {
+        "input": 6,
+        "cacheRead": 95249,
+        "cacheWrite": 53914,
+        "output": 417
+      },
+      "timing": {
+        "totalMs": 12775,
+        "modelMs": 6634,
+        "calls": 2,
+        "refused": 0,
+        "toolMs": 4732,
+        "engineMs": 4716,
+        "relayMs": 16,
+        "localMs": 0,
+        "guardReads": 8,
+        "guardReadMs": 2659.2135420000013,
+        "guardReadFailures": 0,
+        "otherMs": 1409
+      },
+      "appWindows": {
+        "samples": 3,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 23.5,
+      "turns": 6,
+      "costUsd": 0.17257800000000004,
+      "usage": {
+        "input": 12,
+        "cacheRead": 300210,
+        "cacheWrite": 25898,
+        "output": 892
+      },
+      "timing": {
+        "totalMs": 22143,
+        "modelMs": 10505,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 9083,
+        "engineMs": 9065,
+        "relayMs": 18,
+        "localMs": 0,
+        "guardReads": 9,
+        "guardReadMs": 2105.5733750000004,
+        "guardReadFailures": 0,
+        "otherMs": 2555
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "answer": "I opened `9a27001a-edit.txt` in TextEdit and changed \"alpha beta gamma\" to \"alpha delta gamma\". I saved it with Cmd+S and closed the document with Cmd+W. The document closed with no save prompt, and the file's size and modified time in the Open panel are consistent with the save. I didn't reopen the",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}
