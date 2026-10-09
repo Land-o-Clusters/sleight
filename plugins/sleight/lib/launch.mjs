@@ -459,6 +459,7 @@ export async function run({ leaseDirectory } = {}) {
   const relay = createRelay({
     diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, { readControl }),
     spaceProbe: probeAppHealth,
+    guardMode: process.env.SLEIGHT_GUARD,
     clientIn: process.stdin,
     clientOut: process.stdout,
     serverIn: child.stdin,

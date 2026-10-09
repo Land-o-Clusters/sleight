@@ -206,6 +206,9 @@ export function createRelay({
   onLeaseFault = () => {},
   engineForbiddenTargets = false,
   guardTiming = false,
+  // 'careful' reads the window before every action, including keys, text and coordinates later in
+  // a call, which skip it by default (owner, 2026-10-09). Document scope is always careful.
+  guardMode,
   firstCallRules,
   diagnoseRead,
   // Probes an app's windows outside the engine ({ status, windows, minimized, hidden, onScreen }).
@@ -1199,7 +1202,7 @@ export function createRelay({
           if (browser && !documentMode) {
             msg.params.arguments.code = guardedCode(originalCode, target, reason,
               inputLease && leaseCalls.get(msg.id)?.key ? inputLease.grant(leaseCalls.get(msg.id).key) : undefined,
-              { timing: guardTiming, fileOnly: changeReview, browserCandidate: true,
+              { timing: guardTiming, careful: guardMode === 'careful', fileOnly: changeReview, browserCandidate: true,
                 skipAppWrap: browserHandles.has('app') || browser.handles.includes('app'),
                 nativeDenied: nativeDenied ?? (!target
                   ? 'Native access stopped: send a standalone native app read before acting. No confirmed native window.' : undefined) });
@@ -1222,7 +1225,7 @@ export function createRelay({
               target?.app === priorRead.app ? { text: priorRead.text, id: priorRead.id, title: priorRead.title, windows: priorRead.windows } : undefined;
             msg.params.arguments.code = guardedCode(originalCode, target, reason,
               inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
-              { timing: guardTiming, fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
+              { timing: guardTiming, careful: guardMode === 'careful' || documentMode, fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
                 adoptUrl: !documentMode && !changeReview, skipAppWrap: browserHandles.has('app'), prior });
           }
           if (clipboard) msg.params.arguments.code = clipboardCode(msg.params.arguments.code, clipboardAction);

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keys, typing, paste and coordinate actions after the first action in a call no longer wait for a
+  window read first. That read waited about 400 ms for the UI to settle, and tens of seconds on a
+  loaded Mac, where Codex doesn't make that read (owner's call). The first action and actions on
+  element numbers, IDs or labels are still checked. `SLEIGHT_GUARD=careful` keeps every read.
 - The guard's check before reusing an acquisition's read never checked anything: engine
   26.1002.52244 doesn't list windows, and two empty lists matched. Since 1.0.0 the first action after an
   acquisition ran on that read unchecked. Now the guard reads instead, about 50 ms on a settled app.

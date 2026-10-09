@@ -1690,6 +1690,19 @@ test('an acquisition\'s read stands in for the guard\'s first read in the next c
   assert.match(h.toServer.find(m => m.id === 3).params.arguments.code, /state\.prior = undefined/);
 });
 
+test('SLEIGHT_GUARD=careful reaches the guard sent to the engine; the default skips reads between tree-free actions', async () => {
+  for (const [guardMode, careful] of [[undefined, false], ['careful', true]]) {
+    const h = harness({ guardMode });
+    helperRead(h, 1, 'let app = await cua.getApp("TextEdit")');
+    h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: `Window: "a.txt", App: TextEdit, URL: ${fixtureURL}\n0 standard window a.txt` }] } });
+    await tick();
+    h.fromClient({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'js', arguments: { code: 'await app.click(1); await app.typeText("x")' } } });
+    await tick();
+    const sent = h.toServer.find(m => m.id === 2)?.params.arguments.code ?? '';
+    assert.match(sent, new RegExp(`state\\.careful = ${careful};`));
+  }
+});
+
 test('the guard reuses a passed read only while the app\'s windows are unchanged', async () => {
   const windows = [{ id: 5, app: 'TextEdit', title: 'a.txt' }];
   const state = 'Window: "a.txt", App: TextEdit\n0 standard window a.txt\n1 text entry area Value: hi';

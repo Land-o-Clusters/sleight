@@ -93,6 +93,16 @@ to choose Keep, Undo or Later for each document in sleight's prompt. Only your p
 decide. Undo restores the saved copy if the file still matches the last agent action, then you
 must reopen it in the app. Snapshots last until the session ends.
 
+## Careful guard
+
+Before an action, sleight reads the app's window to check it's the one Claude saw. A read right
+after an action waits for the app to settle, about 400 ms and much longer on a busy Mac, and Codex
+doesn't make that read. So by default, keys, typing, paste and clicks or drags at coordinates that come
+after another action in the same call go straight to the engine. The first action of each call is
+checked, and so is every action on an element number, ID or label, which is what catches a window
+that renumbered mid-call. Set `SLEIGHT_GUARD=careful` to read before every action. Document scope
+(`SLEIGHT_APPROVAL_SCOPE=document`) always reads.
+
 ## Flow rules
 
 Write `~/Library/Application Support/sleight/flow-rules.json` yourself, outside the project, then set

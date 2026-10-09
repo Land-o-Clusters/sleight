@@ -55,7 +55,7 @@ test('screenshot snapshots check title, app and URL before input and expire afte
   for (const key of ['title', 'app', 'url']) {
     const f = fixture();
     f.action = () => { f.current = tree({ ...expected, [key]: 'other' }); };
-    await assert.rejects(f.run('await app.getScreenshot(); await app.click(2); await app.typeText("blocked");'), /changed window/);
+    await assert.rejects(f.run('await app.getScreenshot(); await app.click(2); await app.click(2);'), /changed window/);
     assert.deepEqual(f.calls, ['both', ['click', 2], 'read']);
     const wrong = fixture(); wrong.current = f.current;
     await assert.rejects(wrong.run('await app.getScreenshot(); await app.click(2);'), /changed window/);

@@ -1,9 +1,16 @@
 # Guard reads
 
-Before every native action, sleight's window guard reads the whole accessibility tree, unless Claude
-read the window since the last action in the same call. It checks the window's title, app and URL,
-resolves `{ id }` and `{ label }`, and stops a numbered action that an earlier one renumbered. After
-the call it reads once more if nothing gave the relay a window header.
+Before the first native action of a call, and before every action on an element number, ID, label
+or line, sleight's window guard reads the whole accessibility tree, unless Claude read the window
+since the last action in the same call. It checks the window's title, app and URL, resolves
+`{ id }` and `{ label }`, and stops a numbered action that an earlier one renumbered. After the call
+it reads once more if nothing gave the relay a window header.
+
+Since 2026-10-09 (owner's call), keys, typing, paste and coordinate actions after the call's first
+action go ahead on the header the guard last checked, without a read. A read right after input
+waits for the UI to settle: 389 to 427 ms against 38 to 83 ms for one before it at load 42 to 53,
+and up to 118 s with 20 CPU workers added (`load-cost`). Codex doesn't make that read.
+`SLEIGHT_GUARD=careful` and document scope keep every read.
 
 ## What changed (2026-10-07, Codex on gpt-6-astra)
 

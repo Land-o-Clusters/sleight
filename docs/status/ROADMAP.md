@@ -50,8 +50,8 @@ only with a measured reason. In order:
    own processes (sleight's relay, mod, helper spawns and pane snapshots against Codex's).
 2. Cut the reads Codex doesn't make. A read right after an action waits for the UI to settle
    (about 400 ms, tens of seconds under load). The guard does one before each action after the
-   first in a call and one after the call. Keys, text and coordinates don't need the tree, so
-   skipping the read before them is the owner's safety call (below). Numbered actions keep it,
+   first in a call and one after the call. Keys, text and coordinates don't need the tree, and the
+   owner chose to skip the read before them by default (2026-10-09, `SLEIGHT_GUARD=careful` keeps it). Numbered actions keep it,
    since it catches renumbering. The read after the call saves Claude a turn, so it stays only if
    the head-to-head shows it pays.
 3. Stop spawning processes per call. The Space probe runs `osascript` on every app read

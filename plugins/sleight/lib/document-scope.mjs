@@ -132,6 +132,7 @@ function guardSetup(update) {
     state.adoptUrl = ${!!update.adoptUrl};` : ''}
     state.nativeDenied = ${JSON.stringify(update?.nativeDenied) ?? 'undefined'};
     state.timing = ${!!update?.timing};
+    state.careful = ${!!update?.careful};
     // The previous call's read, when the relay judged it reusable for this call's first action.
     state.prior = ${JSON.stringify(update?.prior) ?? 'undefined'};
     const clock = () => globalThis.performance?.now() ?? Date.now();
@@ -149,6 +150,9 @@ function guardSetup(update) {
     // Full reads taken in this call since the handle's last action. A new call
     // always reads again, because the user may have changed the window between.
     state.reads = new WeakMap();
+    // Each handle's latest window header in this call. It survives actions, so a later key, text
+    // or coordinate action can go ahead on it without a read.
+    state.callHeaders = new WeakMap();
     state.failures = [];
     // Element lines at this call's first action, which Claude's numbers refer to.
     state.callElements = new WeakMap();
@@ -247,11 +251,26 @@ function guardSetup(update) {
             if (state.timing) nodeRepl.write('[sleight:guard-timing]' + JSON.stringify({ phase: same ? 'reused' : 'reuse-refused', ms: clock() - start, chars: same ? prior.text.length : 0, failed: false }) + '\\n');
             if (same) text = prior.text;
           }
-          text ??= await timedRead(raw, 'before-action');
-          const observed = parse(text);
+          // A read right after an action waits for the UI to settle: about 400 ms against 50 ms
+          // for one before it, and tens of seconds on a loaded Mac (load-cost, 2026-10-09). Codex
+          // makes no such read, and the owner chose speed (2026-10-09): keys, text and coordinates
+          // after the call's first action go ahead on the header that action was checked against.
+          // Numbered and named actions still read, since that is what catches renumbering, and
+          // SLEIGHT_GUARD=careful reads before every action.
+          const treeFree = ['pressKey', 'typeText', 'paste'].includes(name) ||
+            (['click', 'drag', 'scroll'].includes(name) && Array.isArray(args[0]));
+          let observed;
+          if (text === undefined && treeFree && !state.careful && state.callHeaders.has(proxy)) {
+            observed = state.callHeaders.get(proxy);
+            if (state.timing) nodeRepl.write('[sleight:guard-timing]' + JSON.stringify({ phase: 'skipped', ms: 0, chars: 0, failed: false }) + '\\n');
+          } else {
+            text ??= await timedRead(raw, 'before-action');
+            observed = parse(text);
+          }
+          if (observed) state.callHeaders.set(proxy, observed);
           // A stop carries the window header from this fresh read, so the relay keeps
           // the lease and Claude can retry without acquiring the app again.
-          const stop = message => new Error(message + '\\n' + text.split('\\n').filter(l => /^(Window: |0 )/.test(l)).slice(0, 2).join('\\n'));
+          const stop = message => new Error(message + (text === undefined ? '' : '\\n' + text.split('\\n').filter(l => /^(Window: |0 )/.test(l)).slice(0, 2).join('\\n')));
           // app.click({ id: "Seven" }) or ({ label: "Multiply" }): the one element with
           // that AX identifier or label in this read, so numbers an earlier action in
           // the call shifted don't matter.
@@ -268,12 +287,12 @@ function guardSetup(update) {
           }
           // An earlier action in this call can renumber the window (Calculator closes
           // its history and every button shifts), so a batch of numbers goes stale.
-          if (!state.callElements.has(proxy)) state.callElements.set(proxy, elements(text));
+          if (!state.callElements.has(proxy)) state.callElements.set(proxy, elements(text ?? ''));
           else if (typeof args[0] === 'number' && !byId) {
             const was = state.callElements.get(proxy).get(args[0]), now = elements(text).get(args[0]);
             if (!sameElement(was, now)) throw stop('sleight stopped before ' + name + '(' + args[0] + '): an earlier action in this call changed what element ' + args[0] + ' is (was ' + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + '). Read the window again and use its current numbers.');
           }
-          const cancel = state.fileOnly && isCancel(name, args, text);
+          const cancel = state.fileOnly && isCancel(name, args, text ?? '');
           if (state.cancelOnly && !cancel) throw new Error('Change review: Cancel target changed. Read the current window before retrying.');
           const dialog = state.fileOnly && observed?.app === state.expected?.app && !observed.url?.startsWith('file://');
           // An untitled document that autosave gives a URL mid-call is the same

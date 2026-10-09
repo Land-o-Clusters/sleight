@@ -127,7 +127,8 @@ test('a window that only gains a URL mid-call stays the same window, unless docu
   const raw = { getAXState: async () => `Window: "Untitled 6", App: TextEdit.\n0 standard window Untitled 6${url ? `, URL: ${url}` : ''}`,
     setValue: async () => { url = 'file:///tmp/Untitled%206.txt'; }, pressKey: async () => {} };
   const window = { title: 'Untitled 6', app: 'TextEdit', url: null };
-  for (const [options, ok] of [[{ adoptUrl: true }, true], [{ adoptUrl: false }, false]]) {
+  // careful: these check the read before a key, which the default skips after the first action.
+  for (const [options, ok] of [[{ adoptUrl: true, careful: true }, true], [{ adoptUrl: false, careful: true }, false]]) {
     url = null;
     const context = { cua: { getApp: async () => raw }, nodeRepl: { write: () => {} } };
     const run = code => runInNewContext(`(async () => { ${code} })()`, context);
@@ -181,7 +182,7 @@ test('an untitled sheet the call opened in the same app passes the lease, but no
   const raw = { getAXState: async () => sheet ? 'Window: "", App: TextEdit.\n0 sheet Description: Go to Folder'
     : 'Window: "a.txt", App: TextEdit.\n0 standard window a.txt', pressKey: async () => { sheet = true; }, typeText: async t => typed.push(t) };
   const window = { title: 'a.txt', app: 'TextEdit', url: null };
-  for (const [options, ok] of [[{ adoptUrl: true }, true], [{ adoptUrl: false }, false]]) {
+  for (const [options, ok] of [[{ adoptUrl: true, careful: true }, true], [{ adoptUrl: false, careful: true }, false]]) {
     sheet = false; typed.length = 0;
     const context = { cua: { getApp: async () => raw }, nodeRepl: { write: () => {} } };
     const run = code => runInNewContext(`(async () => { ${code} })()`, context);
