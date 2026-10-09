@@ -56,8 +56,11 @@ function officeDeadlineError(state) {
 }
 
 function waitForOfficeFixture(probe, state, clock) {
-  if (!state.fresh || !state.setup || state.actionTaken) throw new Error('Office startup wait requires an untouched cold launch');
-  var started = clock.now(), reason = 'error';
+  if (!state.setup || state.actionTaken) throw new Error('Office startup wait requires untouched setup');
+  var started = state.retryStarted === undefined ? clock.now() : state.retryStarted, reason = 'error';
+  // Final identity validation uses setupRead after this waiter returns. Keep
+  // the same deadline even when only the Office window poll needed retries.
+  state.retryStarted = started;
   state.officeWaiting = true;
   state.officeDeadline = started + 30000;
   try {
@@ -80,29 +83,40 @@ function waitForOfficeFixture(probe, state, clock) {
     state.officeWaiting = false;
     delete state.officeDeadline;
     var last = state.officeLastError || {};
-    state.launchWait = { reason: reason, elapsedMs: clock.now() - started, code: last.code, attribute: last.attribute };
+    state.launchWait = { reason: reason, setupCase: state.setupCase, elapsedMs: clock.now() - started, code: last.code, attribute: last.attribute };
     clock.emit({ stage: 'office-wait', launchWait: state.launchWait });
   }
 }
 
 function setupRead(operation, state, clock) {
   var lastError;
+  function receipt(reason) {
+    if (!lastError) return;
+    state.readWait = { reason: reason, setupCase: state.setupCase, elapsedMs: clock.now() - state.retryStarted,
+      code: lastError.code, attribute: lastError.attribute };
+    clock.emit({ stage: 'read-wait', readWait: state.readWait });
+  }
   while (true) {
-    if (lastError && clock.now() - state.retryStarted >= 15000) throw lastError;
-    try { return operation(); }
+    if (state && state.setup && !state.actionTaken && state.retryStarted !== undefined && clock.now() - state.retryStarted >= 30000) {
+      lastError = state.retryError || officeDeadlineError(state); receipt('deadline'); throw lastError;
+    }
+    try { var value = operation(); receipt('ready'); return value; }
     catch (error) {
-      if (!state || !state.fresh || !state.setup || (state.fixtureExists && state.actionTaken) ||
-          [-25204, -25205].indexOf(error.code) === -1) throw error;
+      if (!state || !state.setup || state.actionTaken || [-25204, -25205].indexOf(error.code) === -1) {
+        if (lastError) lastError = error;
+        receipt('error'); throw error;
+      }
       if (state.retryStarted === undefined) state.retryStarted = clock.now();
+      lastError = state.retryError = error;
+      if (state.office) state.officeLastError = { code: error.code, attribute: error.attribute };
       state.retryWaitMs = clock.now() - state.retryStarted;
-      var remaining = 15000 - (clock.now() - state.retryStarted);
-      if (remaining <= 0) throw error;
-      lastError = error;
+      var remaining = 30000 - (clock.now() - state.retryStarted);
+      if (remaining <= 0) { receipt('deadline'); throw error; }
       var delay = Math.min(100, remaining), before = clock.now();
       clock.wait(delay);
       state.retryWaitMs = clock.now() - state.retryStarted;
       clock.emit({ stage: 'retry', code: error.code, waitMs: clock.now() - before,
-        totalWaitMs: state.retryWaitMs });
+        totalWaitMs: state.retryWaitMs, setupCase: state.setupCase });
     }
   }
 }
@@ -216,18 +230,18 @@ function nativeAX(state, clock) {
       if (state && state.officeWaiting && clock.now() >= state.officeDeadline) throw officeDeadlineError(state);
       var value = Ref();
       var code = Number($.AXUIElementCopyAttributeValue(element, $(attribute), value));
-      // These optional attributes can remain unsupported on a valid Office
+      // These optional attributes can remain unsupported on a valid app
       // window. Their absence allows the existing nonce-title identity fallback.
-      if (code === -25205 && state && state.office && state.setup &&
+      if (code === -25205 && state && state.setup &&
           ['AXDocument', 'AXSheets', 'AXSubrole', 'AXMainWindow', 'AXChildren', 'AXValue'].indexOf(attribute) !== -1) {
-        state.officeLastError = { code: code, attribute: attribute };
+        if (state.office) state.officeLastError = { code: code, attribute: attribute };
         return null;
       }
-      if (code === -25212 || (code === -25205 && !(state && state.fresh && state.setup))) return null;
+      if (code === -25212 || (code === -25205 && !(state && state.setup))) return null;
       if (code !== 0) throw Object.assign(new Error('AX fixture read failed: ' + code + ' (' + attribute + ')'), { code: code, attribute: attribute });
       return ObjC.castRefToObject(value[0]);
     };
-    return state && state.office && state.setup ? operation() : setupRead(operation, state, clock);
+    return state && state.officeWaiting ? operation() : setupRead(operation, state, clock);
   }
   function text(element, attribute) { var value = read(element, attribute); return value ? String(ObjC.unwrap(value)) : ''; }
   function children(element, attribute) {
@@ -423,7 +437,8 @@ function run(argv) {
   running = !!target;
   state.fresh = !target || !!(target.launchDate && !target.launchDate.isNil() &&
     Number(target.launchDate.timeIntervalSince1970) * 1000 >= request.startedAtMs);
-  state.office = state.fresh && ['com.microsoft.Word', 'com.microsoft.Excel', 'com.microsoft.Powerpoint'].indexOf(request.bundle) !== -1;
+  state.setupCase = running ? 'already-running' : 'cold-launch';
+  state.office = ['com.microsoft.Word', 'com.microsoft.Excel', 'com.microsoft.Powerpoint'].indexOf(request.bundle) !== -1;
   if (request.bundle === 'com.apple.Safari') {
     emit({ stage: 'launch', running: running });
     target = waitForApplication(application, waitForLaunch);
@@ -431,10 +446,10 @@ function run(argv) {
   if (target) {
     pid = Number(target.processIdentifier); app = $.AXUIElementCreateApplication(pid);
     $.AXUIElementSetMessagingTimeout(app, 0.5);
-    if (!state.office) previous = api.focused(app);
+    if (!state.office || running) previous = api.focused(app);
   }
-  emit({ stage: 'identified', running: running, pid: pid });
-  if (!state.office) checkAppDialog();
+  emit({ stage: 'identified', running: running, pid: pid, setupCase: state.setupCase });
+  if (!state.office || running) checkAppDialog();
   if (request.bundle === 'com.apple.Safari') {
     if (!target) {
       emit({ stage: 'untouched' });
@@ -494,7 +509,7 @@ function run(argv) {
   if (!applicationReady) throw new Error('Fixture application readiness unconfirmed');
   if (!inherited && !owned) throw new Error('Fixture identity could not be established without a window inventory');
   if (!inherited && !api.matches(owned, request)) throw new Error('Fixture document identity unconfirmed');
-  emit({ stage: 'ready', pid: pid, fresh: state.fresh, totalWaitMs: state.retryWaitMs });
+  emit({ stage: 'ready', pid: pid, fresh: state.fresh, totalWaitMs: state.retryWaitMs, setupCase: state.setupCase });
   state.setup = false;
   while (command() !== 'close') { checkAppDialog(); api.wait(); }
   checkAppDialog();
@@ -509,8 +524,8 @@ function run(argv) {
       try {
         cleanup = error.appDialog ? 'unconfirmed' : recoverSetup(owned, request, api);
       } catch (failure) { cleanupError = [cleanupError, failure.message].filter(Boolean).join('; '); }
-      emit({ stage: 'setup-failure', fresh: state.fresh, actionTaken: state.actionTaken, pid: pid,
-        cleanup: cleanup, cleanupError: cleanupError, totalWaitMs: state.retryWaitMs, launchWait: state.launchWait });
+      emit({ stage: 'setup-failure', fresh: state.fresh, running: running, setupCase: state.setupCase, actionTaken: state.actionTaken, pid: pid,
+        cleanup: cleanup, cleanupError: cleanupError, totalWaitMs: state.retryWaitMs, readWait: state.readWait, launchWait: state.launchWait });
     }
     throw error;
   }

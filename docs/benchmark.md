@@ -73,7 +73,10 @@ The [brief-8 report](benchmarks/2026-10-09-real-use-tasks-8.md) records that qua
 later failures in Safari, browser navigation and Word. The
 [brief-9 report](benchmarks/2026-10-09-real-use-tasks-9.md) records the architect's rerun: all 11 web
 tasks passed once each after the Safari correction. Word saved but failed ZIP validation; Excel
-failed cold setup and quit confirmation. Their latest harness changes await another architect rerun.
+failed cold setup and quit confirmation. The [brief-10 report](benchmarks/2026-10-09-real-use-tasks-10.md)
+records the next Office pass. Word's first AX read failed without retries because it was already
+running, and Excel stopped correctly on its activation screen. Initial-read retries now cover both
+running cases and await another architect rerun.
 
 After brief 9, the Office rerun ([`real-use-office-10`](benchmarks/2026-10-09-real-use-office-10.json),
 one run each, the owner away) failed before any model call. Word, left running by the earlier pass,

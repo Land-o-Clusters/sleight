@@ -399,6 +399,11 @@ our own runs. Dates and engine versions are given where they matter.
 
 ## The real-use benchmark harness
 
+- The Office rerun after `b8f4b3f` failed Word's first AXFocusedWindow read with `-25204` and zero
+  retries because Word was already running. It remained running after an earlier unconfirmed cleanup.
+  Excel correctly stopped on “Start Using Excel”. PowerPoint did not run. The
+  [brief-10 report](benchmarks/2026-10-09-real-use-tasks-10.md) traces Word's retained process and
+  records the fix: both running cases receive bounded initial-read retries. Live proof is pending.
 - sleight-arch's owner-away pass at `b284b05` passed 11 web tasks once each (2026-10-09).
   Word made its edits and saved, but its ZIP entry was rejected without identifying it. The file
   was removed during cleanup. Its rejection remains unexplained. Excel setup ended on `-25205` after

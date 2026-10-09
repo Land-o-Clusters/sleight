@@ -76,28 +76,33 @@ test('Office launch treats unsupported optional document attributes as absent wi
   assert.equal(reads, 3, 'no AX read starts after the deadline');
 });
 
-test('fresh setup retries only the two startup AX errors and records the bounded wait', () => {
+for (const fresh of [true, false]) test(`${fresh ? 'cold-launch' : 'already-running'} initial setup retries both AX errors within one thirty-second budget`, () => {
   const { setupRead } = nativeSource();
   assert.equal(typeof setupRead, 'function');
-  const state = { fresh: true, setup: true, retryWaitMs: 0 }, events = [];
+  const setupCase = fresh ? 'cold-launch' : 'already-running';
+  const state = { fresh, setupCase, setup: true, retryWaitMs: 0 }, events = [];
   let time = 0, attempts = 0;
   const clock = { now: () => time, wait: ms => { time += ms; }, emit: event => events.push(event) };
   const value = setupRead(() => {
     attempts++;
-    if (attempts <= 2) throw Object.assign(new Error('starting'), { code: attempts === 1 ? -25204 : -25205 });
+    if (attempts <= 2) throw Object.assign(new Error('starting'), { code: attempts === 1 ? -25204 : -25205, attribute: 'AXFocusedWindow' });
     return 'ready';
   }, state, clock);
   assert.equal(value, 'ready');
-  assert.equal(events.length, 2);
-  assert.deepEqual(events.map(e => e.code), [-25204, -25205]);
+  assert.deepEqual(events.filter(e => e.stage === 'retry').map(e => e.code), [-25204, -25205]);
   assert.equal(state.retryWaitMs, 200);
+  assert.ok(events.at(-1).readWait, 'the completed read must retain its startup case and last AX error');
+  assert.deepEqual(JSON.parse(JSON.stringify(events.at(-1).readWait)),
+    { reason: 'ready', setupCase, elapsedMs: 200, code: -25205, attribute: 'AXFocusedWindow' });
   attempts = 0;
   assert.throws(() => setupRead(() => { attempts++; throw Object.assign(new Error('still starting'), { code: -25204 }); }, state, clock), /still starting/);
-  assert.equal(time, 15000, 'all reads share one fifteen-second startup budget');
-  assert.equal(attempts, 148, 'no additional read begins after the deadline');
+  assert.equal(time, 30000, 'all reads share one thirty-second startup budget');
+  assert.equal(attempts, 298, 'no additional read begins after the deadline');
+  assert.equal(events.at(-1).readWait.reason, 'deadline');
+  assert.equal(events.at(-1).readWait.setupCase, setupCase);
 });
 
-test('retry elapsed time includes slow AX reads and stops before a read after fifteen seconds', () => {
+test('retry elapsed time includes slow AX reads and stops before a read after thirty seconds', () => {
   const { setupRead } = nativeSource();
   const state = { fresh: true, setup: true, retryWaitMs: 0 }, events = [];
   let time = 0, lastReadAt = 0;
@@ -105,25 +110,120 @@ test('retry elapsed time includes slow AX reads and stops before a read after fi
     lastReadAt = time; time += 500;
     throw Object.assign(new Error('slow AX'), { code: -25204 });
   }, state, { now: () => time, wait: ms => { time += ms; }, emit: event => events.push(event) }), /slow AX/);
-  assert.equal(time, 15500);
-  assert.equal(state.retryWaitMs, 15000);
-  assert.ok(lastReadAt < 15500);
-  assert.ok(events.at(-1).totalWaitMs <= 15000);
-  assert.ok(events.reduce((sum, e) => sum + e.waitMs, 0) < 3000);
+  assert.equal(time, 30500);
+  assert.equal(state.retryWaitMs, 30000);
+  assert.ok(lastReadAt < 30500);
+  assert.ok(events.filter(e => e.stage === 'retry').every(e => e.totalWaitMs <= 30000));
+  assert.ok(events.reduce((sum, e) => sum + (e.waitMs ?? 0), 0) < 6000);
 });
 
-test('existing apps, cleanup and acted-on fixtures never retry an AX read', () => {
+test('cleanup and acted-on fixtures never retry an AX read, and other errors stop immediately', () => {
   const { setupRead } = nativeSource();
   assert.equal(typeof setupRead, 'function');
   for (const state of [
-    { fresh: false, setup: true }, { fresh: true, setup: false },
+    { fresh: false, setup: false }, { fresh: true, setup: false },
     { fresh: true, setup: true, fixtureExists: true, actionTaken: true },
+    { fresh: false, setup: true, actionTaken: true },
   ]) {
     let attempts = 0;
     assert.throws(() => setupRead(() => { attempts++; throw Object.assign(new Error('refuse'), { code: -25204 }); }, state,
       { now: () => 0, wait: () => assert.fail('no backoff'), emit: () => assert.fail('no retry') }), /refuse/);
     assert.equal(attempts, 1);
   }
+  for (const fresh of [true, false]) for (const code of [-25211, -25202]) {
+    assert.throws(() => setupRead(() => { throw Object.assign(new Error('stop immediately'), { code }); },
+      { fresh, setup: true }, { now: () => 0, wait: () => assert.fail('no backoff'), emit: () => assert.fail('no retry') }), /stop immediately/);
+  }
+});
+
+test('already-running Office readiness shares the initial-read deadline and reports its case', () => {
+  const { setupRead, waitForOfficeFixture } = nativeSource(), events = [];
+  const state = { fresh: false, setup: true, setupCase: 'already-running', actionTaken: false };
+  let time = 0;
+  const clock = { now: () => time, wait: ms => { time += ms; }, emit: event => events.push(event) };
+  assert.equal(setupRead(() => {
+    if (time < 12000) throw Object.assign(new Error('slow running app'), { code: -25204, attribute: 'AXFocusedWindow' });
+    return true;
+  }, state, clock), true);
+  assert.throws(() => waitForOfficeFixture(() => {
+    throw Object.assign(new Error('not ready'), { code: -25205, attribute: 'AXFocusedWindow' });
+  }, state, clock), /timed out.*-25205.*AXFocusedWindow/);
+  assert.equal(time, 30000, 'readiness must not renew the first AX read budget');
+  assert.equal(events.at(-1).launchWait.setupCase, 'already-running');
+  assert.equal(events.at(-1).launchWait.elapsedMs, 30000);
+  assert.equal(state.actionTaken, false);
+});
+
+test('Office final identity validation cannot start another budget after late window readiness', () => {
+  const { setupRead, waitForOfficeFixture } = nativeSource(), events = [];
+  const state = { fresh: true, office: true, setup: true, setupCase: 'cold-launch', actionTaken: false };
+  let time = 0;
+  const clock = { now: () => time, wait: ms => { time += ms; }, emit: event => events.push(event) };
+  assert.equal(waitForOfficeFixture(() => {
+    if (time < 29000) throw Object.assign(new Error('starting'), { code: -25204, attribute: 'AXFocusedWindow' });
+    return true;
+  }, state, clock), true);
+  assert.throws(() => setupRead(() => {
+    throw Object.assign(new Error('identity read not ready'), { code: -25205, attribute: 'AXTitle' });
+  }, state, clock), /identity read not ready/);
+  assert.equal(time, 30000, 'the final identity read has only the remainder of the original deadline');
+  assert.equal(events.at(-1).readWait.reason, 'deadline');
+  assert.equal(events.at(-1).readWait.code, -25205);
+});
+
+test('a hard AX error after a setup retry is recorded as the error that ended the read wait', () => {
+  const { setupRead } = nativeSource(), events = [];
+  const state = { fresh: false, setup: true, setupCase: 'already-running' };
+  let time = 0;
+  assert.throws(() => setupRead(() => {
+    throw Object.assign(new Error('AX read'), { code: time ? -25211 : -25204, attribute: 'AXFocusedWindow' });
+  }, state, { now: () => time, wait: ms => { time += ms; }, emit: event => events.push(event) }), error => error.code === -25211);
+  assert.equal(time, 100);
+  assert.equal(events.at(-1).readWait.reason, 'error');
+  assert.equal(events.at(-1).readWait.code, -25211);
+});
+
+for (const fresh of [true, false]) test(`native first AX read waits for ${fresh ? 'a cold launch' : 'an already-running app'}`, () => {
+  const sandbox = nativeSource(), setupCase = fresh ? 'cold-launch' : 'already-running';
+  const state = { fresh, office: true, setup: true, setupCase, actionTaken: false }, owned = {};
+  let time = 0, reads = 0;
+  const native = value => value;
+  native.AXUIElementCopyAttributeValue = (_element, attribute, output) => {
+    assert.equal(attribute, 'AXFocusedWindow'); reads++;
+    if (time < 12000) return time < 5000 ? -25204 : -25205;
+    output[0] = owned; return 0;
+  };
+  native.AXUIElementPerformAction = () => assert.fail('waiting is read-only');
+  sandbox.$ = native; sandbox.Ref = () => []; sandbox.ObjC.castRefToObject = value => value;
+  const api = sandbox.nativeAX(state, { now: () => time, wait: ms => { time += ms; }, emit() {} });
+  assert.equal(api.focused({}), owned);
+  assert.equal(reads, 121);
+  assert.equal(time, 12000);
+  assert.equal(state.readWait.setupCase, setupCase);
+  assert.equal(state.readWait.code, -25205);
+  assert.equal(state.actionTaken, false);
+});
+
+test('a pre-existing Word setup failure retains the read deadline receipt and never quits that app', async t => {
+  const { openFixture, closeFixtures } = await import('../bench/real-fixture.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'real-existing-word-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ctx = { dir }, readWait = { reason: 'deadline', setupCase: 'already-running', elapsedMs: 30000,
+    code: -25204, attribute: 'AXFocusedWindow' };
+  await assert.rejects(openFixture(ctx, { app: 'Microsoft Word', bundle: 'com.microsoft.Word', mode: 'document' }, {
+    run: async (_command, args, options) => {
+      assert.notEqual(JSON.parse(args.at(-1)).mode, 'quit', 'the old Word process is not this lease\'s to quit');
+      const stdout = JSON.stringify({ stage: 'setup-failure', running: true, pid: 42, setupCase: 'already-running',
+        readWait, cleanup: 'unconfirmed', actionTaken: false }) + '\n';
+      options.onStdout(stdout);
+      return { stdout, groupClean: true, exit: { code: 1 }, stderr: 'read deadline reached' };
+    }, open: async () => assert.fail('unresponsive existing app must not be given a new fixture'),
+  }), /read deadline reached/);
+  await closeFixtures(ctx);
+  assert.deepEqual(ctx.fixtureDiagnostics[0].readWait, readWait);
+  assert.equal(ctx.fixtureDiagnostics[0].setupCase, 'already-running');
+  assert.equal(ctx.fixtureDiagnostics[0].running, true);
+  assert.equal(ctx.fixtureDiagnostics[0].appQuit, undefined);
 });
 
 test('failed setup recovery closes only a retained reference, never a title match', () => {
@@ -579,15 +679,15 @@ test('normal quit leaves an app that does not exit unconfirmed and refuses a rep
     { now: () => time, wait: ms => { time += ms; }, emit() {} }), /identity/);
 });
 
-test('native cold Office setup uses the launch wait before readiness and retains a failed launch PID without acting', () => {
-  for (const windowAt of [12000, Infinity]) {
+test('native Office setup waits in both running cases and retains a failed PID without acting', () => {
+  for (const initiallyRunning of [false, true]) for (const windowAt of [12000, Infinity]) {
     const sandbox = nativeSource(), events = [];
     let time = 0, closed = false, reads = 0;
     const target = { processIdentifier: 42 }, owned = {};
     const foundation = value => ({ dataUsingEncoding: () => value });
     foundation.AXIsProcessTrusted = () => true;
     foundation.NSRunningApplication = { runningApplicationsWithBundleIdentifier: () => {
-      const count = reads++ ? 1 : 0;
+      const count = initiallyRunning || reads++ ? 1 : 0;
       return { count, objectAtIndex: () => target };
     } };
     foundation.AXUIElementCreateApplication = () => ({});
@@ -599,27 +699,36 @@ test('native cold Office setup uses the launch wait before readiness and retains
     foundation.NSString = { alloc: { initWithDataEncoding: () => JSON.stringify({ command: closed ? 'close' : 'opened' }) } };
     sandbox.$ = foundation; sandbox.Date = { now: () => time };
     sandbox.waitForLaunch = seconds => { time += Math.round((seconds ?? 0.1) * 1000); };
-    sandbox.nativeAX = state => ({
+    sandbox.nativeAX = (state, clock) => ({
       dialog: () => [], readiness: () => ({}),
       focused: () => {
-        assert.equal(state.officeWaiting, true, 'no unbounded AX reads before the cold-launch wait');
-        if (time < windowAt) throw Object.assign(new Error('not ready'), { code: time < 5000 ? -25204 : -25205, attribute: 'AXFocusedWindow' });
-        return owned;
+        assert.equal(state.office, true, 'Office readiness covers existing apps as well as cold launches');
+        const read = () => {
+          if (time < windowAt) throw Object.assign(new Error('not ready'), { code: time < 5000 ? -25204 : -25205, attribute: 'AXFocusedWindow' });
+          return owned;
+        };
+        return state.officeWaiting ? read() : sandbox.setupRead(read, state, clock);
       },
       matches: () => true, exists: () => false,
       press: () => assert.fail('no fixture action while starting'), wait: () => assert.fail('use the launch run loop'),
     });
     const request = JSON.stringify({ app: 'Microsoft Excel', bundle: 'com.microsoft.Excel', mode: 'document', control: 'fake', token: 'fixture', target: '/fixture.xlsx' });
     if (windowAt === Infinity) {
-      assert.throws(() => sandbox.run([request]), /timed out.*-25205.*AXFocusedWindow/);
+      assert.throws(() => sandbox.run([request]), initiallyRunning
+        ? error => error.code === -25205 && error.attribute === 'AXFocusedWindow'
+        : /timed out.*-25205.*AXFocusedWindow/);
       const failed = events.at(-1);
       assert.equal(failed.stage, 'setup-failure');
       assert.equal(failed.pid, 42);
       assert.equal(failed.actionTaken, false);
-      assert.equal(failed.launchWait.reason, 'deadline');
+      assert.equal((failed.readWait || failed.launchWait).reason, 'deadline');
+      assert.equal(failed.running, initiallyRunning);
+      assert.equal(failed.setupCase, initiallyRunning ? 'already-running' : 'cold-launch');
     } else {
       sandbox.run([request]);
-      assert.equal(events.find(event => event.stage === 'office-wait').launchWait.elapsedMs, 12000);
+      const receipt = events.find(event => event.stage === 'office-wait').launchWait;
+      assert.equal(receipt.elapsedMs, 12000);
+      assert.equal(receipt.setupCase, initiallyRunning ? 'already-running' : 'cold-launch');
       assert.equal(events.some(event => event.stage === 'ready'), true);
       assert.equal(events.at(-1).stage, 'closed');
     }

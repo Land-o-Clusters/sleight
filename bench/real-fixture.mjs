@@ -110,8 +110,8 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
           if (event.appDialog.stop !== false) diagnostics.appDialog = event.appDialog;
           ctx.onAppDialog?.(event.appDialog);
         }
-        if (event.stage === 'retry') diagnostics.retries.push({ code: event.code, waitMs: event.waitMs, totalWaitMs: event.totalWaitMs });
-        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback', 'launchWait']) {
+        if (event.stage === 'retry') diagnostics.retries.push({ code: event.code, waitMs: event.waitMs, totalWaitMs: event.totalWaitMs, setupCase: event.setupCase });
+        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback', 'launchWait', 'readWait', 'setupCase']) {
           if (event[key] !== undefined) diagnostics[key] = event[key];
         }
         if (event.stage) stage(event.stage).resolve(event);
