@@ -3,59 +3,41 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-09 16:10 UTC)
+## Banner (2026-10-09 18:40 UTC)
 
-The owner is away from the Mac, working from another machine, and asked the next session to work
-through the roadmap. Live runs are fine while they're away (LAWS). Amphetamine keeps the Mac awake.
-Other projects (Puddle, SignalCraft) run timed tests here: check for their quiet windows before a
-run that adds load (memory `shared-mac-quiet-windows`). Load swung from 5 to 100 today without ours.
+The owner is away from the Mac. Their bar (ROADMAP track 3): lightning quick, quick under any load,
+no noticeable load on the Mac, measured against Codex on the same engine. Other projects (Puddle,
+SignalCraft) run timed tests here. Puddle's quiet window 1009m runs from about 18:35 UTC for up to
+2 h: no sleight live or load runs until puddle arch says it closed.
 
-Released: `v1.1.0` (`0b6a1c0`), `main` at `0b6a1c0`, CI green, the owner's install 1.1.0. Unreleased
-on `pane/auto-mode` (pushed): full screen and Split View detection (`278ed1e`, `bc223c1`, live-checked
-with a scratch fixture), `bench/load-cost.mjs` and its first results (`c6b3e3f`), and the guard
-matching a bare element line read under load (`7d63e48`, unit-tested). Also the benchmark disallowing
-Skill and the published screenshot A/B.
+Released: `v1.1.0` (`0b6a1c0`), `main` at `0b6a1c0`. Unreleased on `pane/auto-mode` (`2cf4394`,
+pushed): full screen and Split View detection; the guard matching degraded reads (`7d63e48`) and no
+longer trusting an empty inventory (`e66791a`); no read before keys, text, paste and coordinates
+after a call's first action (`44700ee`, owner's call, `SLEIGHT_GUARD=careful` keeps it); one
+long-lived app-health helper instead of an `osascript` per read (`818f7e7`); Astra's compactor fold
+for degraded lines (`674502d`); the real-use suite with a Codex arm (`768cbcd`); per-run CPU
+footprint in the benchmark (`2cf4394`). The guard change and the helper still need a live run.
 
-Owner's new priorities (2026-10-09, in ROADMAP track 3) are speed under load, which the owner sees
-as a gap against Codex, and batching as Claude's own computer use does it. First finding: the guard's full read
-before every action turns eight Calculator clicks from 593 ms into 3,609 ms without load, and under
-load it stopped 5 of 5 such calls because degraded reads dropped element attributes. In the interleaved
-rerun the guard stopped 0 of 5 calls. The cost left is the settle wait, about 400 ms for a read right
-after an action and tens of seconds under load. The guard's reuse check never checked anything,
-because the inventory doesn't list windows, so `e66791a` reads instead.
-
-Real-use qualification of Sol's brief 8 (`4323a41` plus sleight-arch's Safari fix `b284b05`, both on
-`codex/real-use-tasks`): all 11 web tasks passed 1/1. word-edit failed in the checker's ZIP reader,
-excel-edit in a cold-launch setup, and the pass stopped before powerpoint-edit. Brief 9
-(`.dev/prompts/sol-real-use-tasks-9.md`) covers those, and Sol is on it.
-
-Since 17:50 UTC, Sol finished brief 9 (`b8f4b3f`). The Codex arm runs the real suite
-(`arch/codex-real-arm`, `dc232f9` and `edaf82b`, cut from `b8f4b3f`, worktree
-`~/Projects/sleight-wt/codex-real`): helium-form passed 1/1 on Codex, and the approval list was
-restored byte for byte. The Office rerun failed before any model call. Word didn't answer its first
-read under load. Excel shows its first-run "Start Using Excel" screen, which the owner clicks.
-Brief 10 (`.dev/prompts/sol-real-use-tasks-10.md`) covers Word. Puddle's quiet window 1009m runs from
-about 18:35 UTC for up to 2 h: no sleight live or load runs until puddle arch says it closed.
+Next, once Puddle's window closes:
+- A live check of `44700ee` and `818f7e7` (`load-cost` click-then-keys, a full-screen note).
+- The head-to-head, sleight against Codex, at the owner's normal load and with added load, with
+  time, turns and CPU footprint per arm. Then cut what it shows.
+- Office qualification after brief 10 and the owner's Excel click, then Mail and Mimestream with
+  the owner watching.
 
 Branches and worktrees:
 - `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it.
-- `perf/screenshot-scale` (`1aa574b`, `~/Projects/sleight-wt/shots`): parked. Don't merge without a
-  new reason.
-- `fix/drag-chess` (`08f69a7`, `~/Projects/sleight-wt/drag-chess`): merged, safe to remove.
-- `codex/real-use-tasks` (`b284b05`, pushed, `~/Projects/sleight-wt/real-use-tasks`, Sol, idle).
-- Older `codex/*` worktrees are earlier rounds. Leave them.
+- `codex/real-use-tasks` (`~/Projects/sleight-wt/real-use-tasks`, Sol): squash-merged through
+  `b8f4b3f`. Sol works brief 10 there; squash its next commits the same way.
+- `arch/codex-real-arm` (`~/Projects/sleight-wt/codex-real`) and `codex/guard-speed`
+  (`~/Projects/sleight-wt/guard-speed`): merged, safe to remove with their worktrees.
+- `perf/screenshot-scale` (`1aa574b`, `~/Projects/sleight-wt/shots`): parked.
+- `fix/drag-chess` and older `codex/*` worktrees: earlier rounds. Leave them.
 
-Next, in order:
-- Astra's guard-speed work is squash-merged (`674502d`). The native check didn't work (socket
-  `connect EPERM` from the engine, AX observer failing under load). Next is the head-to-head under
-  normal load once Puddle's window closes.
-- After brief 9, rerun word-edit, excel-edit and powerpoint-edit, then merge `codex/real-use-tasks`.
-- A Codex arm for the real suite, then the real-use pass and the Codex head-to-head.
-
-Sol (brief 9) and Astra (guard-speed) have been running since about 16:30 UTC. Waiting on the owner: watching the Mail and Mimestream tasks (about 10
-minutes). Qualification left windows on their screen. Safari has about seven
-fixture windows (Start Pages and one form), Helium two and Preview six (`Pages-*.pdf`), and Word and
-Excel are running with fixture documents.
+Waiting on the owner: clicking "Start Using Excel" in Excel, pasting brief 10 to Sol
+(`.dev/prompts/sol-real-use-tasks-10.md`), and watching Mail and Mimestream (about 10 minutes).
+Qualification left fixture windows on their screen: about seven in Safari, two in Helium, six
+Preview `Pages-*.pdf`, and Word and Excel running with fixture documents.
 
 Owner's plan after 1.0 (2026-10-09), run in order without check-ins: (1) the real-use suite, then the
 Codex head-to-head on it, (2) the launch post (`~/Desktop/sleight-launch/thread-1.0.md`, where only
