@@ -8,6 +8,22 @@ import { runInNewContext } from 'node:vm';
 const task = tasks.find(t => t.id === 'simulator-form');
 const submit = (url, message) => fetch(url, { method: 'POST', body: new URLSearchParams({ message }) });
 
+test('real Simulator cleanup shuts down an owned boot after window failure and preserves an existing boot', async () => {
+  const source = readFileSync(new URL('../bench/tasks-real.mjs', import.meta.url), 'utf8')
+    .replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
+  for (const bootedByTask of [true, false]) {
+    const calls = [];
+    const cleanup = runInNewContext(`${source}\nrealTasks.find(task => task.id === 'simulator-flow').cleanup`, {
+      closeFixtures: async () => { calls.push('close'); throw new Error('close failed'); },
+      simctl: (action, udid) => { assert.equal(udid, 'owned-device'); calls.push(action); },
+      quitSimApp: async () => calls.push('quit'), checkForm() {}, checkFlow() {}, checkPDF() {},
+    });
+    await assert.rejects(cleanup({ sim: { udid: 'owned-device', bootedByTask }, simPageOpened: true,
+      closeServer: async () => calls.push('server') }), /close failed/);
+    assert.deepEqual(calls, bootedByTask ? ['terminate', 'close', 'shutdown', 'quit', 'server'] : ['close', 'quit', 'server']);
+  }
+});
+
 test('viewer ownership is checked after boot preparation and reported before the open call', () => {
   const source = readFileSync(new URL('../bench/tasks.mjs', import.meta.url), 'utf8')
     .replace(/^import .*;\n/gm, '').replace(/^export \{.*;\n/gm, '').replace(/^export /gm, '');

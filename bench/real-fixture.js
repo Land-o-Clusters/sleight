@@ -57,6 +57,7 @@ function setupRead(operation, state, clock) {
 function recoverSetup(window, request, api) {
   if (!window) return 'unconfirmed';
   if (!api.exists(window)) return 'closed retained fixture';
+  if (!api.matches(window, request, true)) return 'unconfirmed';
   api.closeButton(window);
   for (var attempt = 0; attempt < 30; attempt++) {
     api.wait();
@@ -72,7 +73,9 @@ function chooseFileMenu(file, titles, api) {
     menus = api.children(file).filter(function (child) { return api.text(child, 'AXRole') === 'AXMenu'; });
     var items = [];
     menus.forEach(function (menu) {
-      items = items.concat(api.children(menu).filter(function (item) { return titles.indexOf(api.text(item, 'AXTitle')) !== -1; }));
+      var children = api.children(menu);
+      api.inspect && api.inspect(children);
+      items = items.concat(children.filter(function (item) { return titles.indexOf(api.text(item, 'AXTitle')) !== -1; }));
     });
     if (items.length !== 1) throw new Error('Fixture menu item unavailable or ambiguous');
     api.press(items[0]);
@@ -145,6 +148,8 @@ function nativeAX(state, clock) {
         method = 'Escape';
       }
       clock.emit({ stage: 'menu-cancel', menuCancelled: true, menuCancelMethod: method });
+    }, inspect: function (items) {
+      clock.emit({ stage: 'menu-items', menuItems: items.map(function (item) { return text(item, 'AXTitle'); }) });
     } });
   }
   function path(value) {
@@ -175,6 +180,16 @@ function nativeAX(state, clock) {
       catch (error) { if (error.code === -25202) return false; throw error; }
     },
     matches: matches,
+    readiness: function (app, request) {
+      function describe(window) {
+        if (!window) return { present: false };
+        var document = text(window, 'AXDocument');
+        return { present: true, matches: matches(window, request),
+          documentKind: document.indexOf('file://') === 0 ? 'file-url' : document.indexOf('http') === 0 ? 'web-url' : document ? 'other' : 'absent',
+          titleMatches: text(window, 'AXTitle').indexOf(request.token) !== -1 };
+      }
+      return { focused: describe(read(app, 'AXFocusedWindow')), main: describe(read(app, 'AXMainWindow')) };
+    },
     closeButton: function (window) { var button = read(window, 'AXCloseButton'); if (!button) throw new Error('Owned window has no close button'); press(button); },
     closeDocument: function (app) { fileMenu(app, ['Close Window', 'Close']); },
     discard: function (window) {
@@ -278,6 +293,7 @@ function run(argv) {
     pid = Number(target.processIdentifier); app = $.AXUIElementCreateApplication(pid);
     $.AXUIElementSetMessagingTimeout(app, 0.5);
     if (inherited) { api.focused(app); applicationReady = true; break; }
+    if (attempt === 0 || attempt === 199) emit({ stage: 'readiness', readiness: api.readiness(app, request) });
     var current = owned || api.focused(app);
     if (!current) { api.wait(); continue; }
     if (request.mode === 'folder' && api.equal(current, previous)) {

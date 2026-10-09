@@ -4,7 +4,7 @@
 // and prints a table.
 //
 //   node bench/run.mjs [--arm sleight|lcu|codex|all|a,b] [--suite default|real] [--tasks id,id] [--runs N] [--model M] [--effort E]
-//     [--codex-model M] [--codex-effort E] [--dry-run]
+//     [--codex-model M] [--codex-effort E] [--dry-run] [--setup-only]
 //
 // Model and effort default to Sonnet 5.5 at medium (owner, 2026-10-03). Runs
 // before that used Claude Code's default, Opus 5.5.
@@ -51,7 +51,9 @@ function gitRoot(dir) {
   catch { return undefined; }
 }
 const isDryRun = process.argv.includes('--dry-run');
+const isSetupOnly = process.argv.includes('--setup-only');
 const suite = option('suite', 'default');
+if (isSetupOnly && (suite !== 'real' || isDryRun)) throw new Error('--setup-only requires --suite real without --dry-run');
 const suiteTasks = getTasks(suite);
 const controller = new AbortController();
 process.on('SIGINT', () => controller.abort(new Error('run interrupted')));
@@ -68,7 +70,7 @@ const ARMS = {
   sleight: {
     cwd: (() => {
       const dir = process.env.SLEIGHT_ARM_DIR || join(ARM_HOME, 'sleight-arm');
-      if (suite === 'default') mkdirSync(dir, { recursive: true });
+      mkdirSync(dir, { recursive: true });
       return dir;
     })(),
     args: ['--plugin-dir', join(ROOT, 'plugins', 'sleight'), // Every sleight tool, as a user who approves its prompts would have. Without
@@ -150,7 +152,7 @@ function armServers(arm) {
 // install of either would otherwise leak into both arms (it did, 2026-10-03,
 // until settings.json turned off the installed sleight).
 const otherServers = Object.values(ARMS).map(a => a.server).filter(Boolean);
-for (const name of armNames.filter(n => !ARMS[n].codex)) {
+for (const name of armNames.filter(n => !ARMS[n].codex && !isSetupOnly)) {
   const arm = ARMS[name];
   const servers = await armServers(arm);
   const own = servers.find(s => s.name === arm.server);
@@ -202,13 +204,15 @@ const scrub = text => {
 
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const results = [];
+const realContexts = [], passCleanupErrors = [];
 const resultsDir = join(ROOT, 'bench', 'results');
 mkdirSync(resultsDir, { recursive: true });
-const file = join(resultsDir, `${stamp}${isDryRun ? '-dry' : ''}.json`);
+const file = join(resultsDir, `${stamp}${isDryRun ? '-dry' : isSetupOnly ? '-setup' : ''}.json`);
 // Written after every run, so a run cut short keeps what it finished.
 const save = () => {
   const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite, surfaces: 'computer' } : {}),
-    arms: armNames, model, effort, claude: claudeBin, results }, null, 2);
+    arms: armNames, model, effort, claude: claudeBin, results,
+    ...(passCleanupErrors.length && { passCleanupErrors }) }, null, 2);
   writeFileSync(file, (suite === 'real' ? scrub(json) : json) + '\n');
 };
 // The runner owns the pass lock. Real tasks reuse it, so they cannot wait on
@@ -258,9 +262,10 @@ pass: for (let run = 1; run <= runs; run++) {
       mkdirSync(dir, { recursive: true });
       const ctx = { dir, nonce };
       if (suite === 'real') {
+        realContexts.push(ctx);
         const evidenceDir = join(tmpdir(), 'sleight-real-evidence', stamp, `${armName}-${task.id}-${run}`);
         mkdirSync(evidenceDir, { recursive: true, mode: 0o700 });
-        const result = await executeRealTask(task, ctx, { dryRun: isDryRun, signal: controller.signal,
+        const result = await executeRealTask(task, ctx, { dryRun: isDryRun, setupOnly: isSetupOnly, signal: controller.signal,
           lockHeld: !isDryRun,
           stop: () => controller.abort(new Error('macOS permission prompt')),
           permissionCheck: observePermission,
@@ -279,6 +284,7 @@ pass: for (let run = 1; run <= runs; run++) {
             cacheWrite: out.usage.cache_creation_input_tokens, output: out.usage.output_tokens },
           exitCode: code, answer: scrub(out?.result?.slice(0, 300)), stderr: code === 0 ? undefined : scrub(rest.stderr),
         });
+        ctx.result = results.at(-1);
         finishRun(results.at(-1));
         save();
         const recorded = results.at(-1);
@@ -354,6 +360,19 @@ pass: for (let run = 1; run <= runs; run++) {
 
 } finally {
   try {
+    if (!isDryRun) for (const ctx of realContexts) for (const lease of ctx.windowLeases ?? []) {
+      if (lease.running !== false || !lease.launched) continue;
+      try { await lease.quit({ final: true }); }
+      catch (error) {
+        const message = scrub(error.message);
+        passCleanupErrors.push({ app: lease.app, error: message });
+        if (ctx.result) {
+          ctx.result.passed = false;
+          ctx.result.cleanupError = [...new Set([ctx.result.cleanupError, message].filter(Boolean))].join('; ');
+        }
+        console.error(`Pass cleanup failed: ${message}`); process.exitCode = 1;
+      }
+    }
     if (!isDryRun && unlock) for (const cleanup of [closeBenchTextEdit, quitChess, quitSimApp]) {
       try { await cleanup(suite === 'real' ? { ownedOnly: true } : undefined); }
       catch (error) { console.error(`Pass cleanup failed: ${error.message}`); process.exitCode = 1; }

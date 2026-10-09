@@ -72,6 +72,7 @@ test('failed setup recovery closes only a retained reference, never a title matc
   const api = {
     windows: () => assert.fail('never inventory windows for recovery'),
     text: () => assert.fail('a matching title never grants ownership'),
+    matches: () => true,
     exists: window => { assert.equal(window, owned); return exists; },
     closeButton: window => { assert.equal(window, owned); actions.push('close'); exists = false; },
     wait() {},
@@ -80,6 +81,19 @@ test('failed setup recovery closes only a retained reference, never a title matc
   assert.deepEqual(actions, ['close']);
   assert.equal(recoverSetup(undefined, request, api), 'unconfirmed');
   assert.deepEqual(actions, ['close']);
+});
+
+test('setup recovery preserves a retained Safari window whose identity does not match', () => {
+  const { recoverSetup } = nativeSource();
+  const owned = {}, request = { bundle: 'com.apple.Safari', mode: 'window', target: 'http://127.0.0.1/nonce/' };
+  const api = {
+    exists: window => { assert.equal(window, owned); return true; },
+    matches: (window, expected, retained) => {
+      assert.equal(window, owned); assert.equal(expected, request); assert.equal(retained, true); return false;
+    },
+    closeButton: () => assert.fail('never close another focused Safari window'),
+  };
+  assert.equal(recoverSetup(owned, request, api), 'unconfirmed');
 });
 
 test('setup failure diagnostics confirm nothing-created cleanup and retain every retry', async t => {
@@ -381,6 +395,37 @@ test('permission cancellation during helper collection prevents a new app quit c
       },
     });
   await assert.rejects(lease.quit(), /permission appeared during collection/);
+});
+
+test('final pass cleanup quits the exact launched app after permission cancellation without AX', async t => {
+  const { openFixture } = await import('../bench/real-fixture.mjs');
+  for (const collected of [true, false]) {
+    const dir = mkdtempSync(join(tmpdir(), 'real-final-quit-'));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const cleanup = new AbortController(), quits = [];
+    const ctx = { dir, cleanupSignal: cleanup.signal, beforeFixtureCleanup: () => assert.fail('no AX observation or cleanup during a permission stop') };
+    const lease = await openFixture(ctx, { app: 'DeviceHub', bundle: 'com.apple.dt.Devices', mode: 'inherit' }, {
+      open: async () => {},
+      run: async (_command, args, options) => {
+        const request = JSON.parse(args.at(-1));
+        if (request.mode === 'quit') {
+          assert.equal(options.signal, undefined);
+          quits.push(request.pid);
+          return { exit: { code: 0 }, groupClean: true };
+        }
+        options.onStdout('{"stage":"armed","running":false,"pid":42}\n{"stage":"ready"}\n');
+        return new Promise(resolve => options.signal.addEventListener('abort', () => resolve({
+          exit: { code: 0 }, stdout: '', groupClean: collected,
+        }), { once: true }));
+      },
+    });
+    cleanup.abort(new Error('permission stop'));
+    await lease.quit({ final: true });
+    await lease.quit({ final: true });
+    assert.deepEqual(quits, [42], 'confirmed native quit is idempotent');
+    assert.equal(ctx.fixtureDiagnostics[0].appQuit, true);
+    assert.equal(ctx.fixtureDiagnostics[0].helperCollectionConfirmed, collected);
+  }
 });
 
 test('native quit refuses a replacement process and confirms only the launched app exits', () => {

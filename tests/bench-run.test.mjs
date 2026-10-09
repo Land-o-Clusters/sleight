@@ -7,16 +7,16 @@ import { BENCH_APPS, REAL_APPS } from '../bench/tasks.mjs';
 
 // Execute the actual runner body with inert dependencies. No app, CLI, approval
 // file, live lock, compiler or filesystem operation reaches the host.
-async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false } = {}) {
-  const calls = [], saved = [], envs = [], tailScopes = [];
+async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false } = {}) {
+  const calls = [], saved = [], envs = [], tailScopes = [], directories = [];
   const source = readFileSync(new URL('../bench/run.mjs', import.meta.url), 'utf8')
     .replace(/^#!.*\n/, '').replace(/^import .*;\n/gm, '').replaceAll('import.meta.url', '"file:///fixture/bench/run.mjs"');
   const task = { id: 'fixture', app: 'Safari', setup() {}, prompt: () => 'task', check: () => true, cleanup: () => calls.push('task cleanup') };
   const sandbox = {
-    process: { argv: ['node', 'run', '--suite', suite, '--arm', arm, '--runs', '3'], env: base, on() {}, once() {} },
+    process: { argv: ['node', 'run', '--suite', suite, '--arm', arm, '--runs', '3', ...(setupOnly ? ['--setup-only'] : [])], env: base, on() {}, once() {} },
     console: { log() {}, error() {} }, AbortController, AbortSignal, setTimeout, clearTimeout,
     dirname, join, fileURLToPath: () => '/fixture/bench/run.mjs', homedir: () => '/owner', tmpdir: () => '/private/tmp/unit',
-    existsSync: () => true, realpathSync: path => path, mkdirSync() {}, rmdirSync() {}, statSync: () => ({ dev: 1, ino: 1 }),
+    existsSync: () => true, realpathSync: path => path, mkdirSync: path => directories.push(path), rmdirSync() {}, statSync: () => ({ dev: 1, ino: 1 }),
     writeFileSync: (_path, value) => saved.push(JSON.parse(value)), randomBytes: () => ({ toString: () => 'nonce' }),
     execFileSync(command, args) {
       if (command === '/usr/bin/git') throw new Error('outside repo');
@@ -37,6 +37,8 @@ async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = []
     },
     runDriver: async (_command, args, options) => { calls.push(['driver', ...args]); envs.push(options.env); return { code: 0, out: {}, groupClean: true }; },
     executeRealTask: async (_task, ctx, options) => {
+      ctx.windowLeases = leases;
+      if (setupOnly) assert.equal(options.setupOnly, true);
       calls.push('real run'); if (throws) throw new Error('unexpected run failure');
       if (drive) await options.drive('task', ctx, {});
       return { passed: false, groupClean: true, ...outcome };
@@ -44,8 +46,24 @@ async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = []
   };
   let error;
   try { await runInNewContext(`(async () => { ${source}\n})()`, sandbox); } catch (caught) { error = caught; }
-  return { calls, saved, envs, tailScopes, error };
+  return { calls, saved, envs, tailScopes, directories, error };
 }
+
+test('fixture-only runner skips Claude initialization and retains the live pass lock', async () => {
+  const result = await runner({ setupOnly: true, outcome: { passed: true } });
+  assert.equal(result.error, undefined);
+  assert.equal(result.envs.length, 0);
+  assert.equal(result.calls.filter(call => call === 'lock').length, 1);
+  assert.equal(result.calls.at(-1), 'unlock');
+});
+
+test('real and default preflight create the sleight arm directory before spawning', async () => {
+  for (const suite of ['real', 'default']) {
+    const result = await runner({ suite, base: { SLEIGHT_ARM_DIR: '/private/tmp/new-sleight-arm' } });
+    assert.equal(result.error, undefined);
+    assert.ok(result.directories.includes('/private/tmp/new-sleight-arm'));
+  }
+});
 
 test('failed real runs continue through keyboard checks and the common cleanup tail', async () => {
   const result = await runner({ outcome: { stopAfterAction: true } });
@@ -63,6 +81,27 @@ test('real safety errors stop after one run but still execute the common cleanup
     assert.equal(result.calls.filter(c => c === 'real run').length, 1);
     assert.deepEqual(result.calls.slice(-4), ['TextEdit tail', 'Chess tail', 'Simulator tail', 'unlock']);
   }
+});
+
+test('permission and driver stops quit a launched Device Hub lease once before unlocking', async () => {
+  for (const outcome of [{ permissionPrompt: true }, { groupClean: false }]) {
+    let quits = 0;
+    const lease = { app: 'DeviceHub', running: false, launched: true, quit: async options => {
+      assert.equal(options.final, true); quits++;
+    } };
+    const result = await runner({ outcome, leases: [lease] });
+    assert.equal(result.error, undefined);
+    assert.equal(quits, 1);
+    assert.equal(result.calls.at(-1), 'unlock');
+  }
+});
+
+test('pass cleanup preserves pre-existing apps and publishes a failed owned-app quit', async () => {
+  const existing = { app: 'Safari', running: true, launched: true, quit: () => assert.fail('preserve pre-existing app') };
+  const launched = { app: 'Preview', running: false, launched: true, quit: async () => { throw new Error('quit unconfirmed'); } };
+  const result = await runner({ outcome: { permissionPrompt: true }, leases: [existing, launched] });
+  assert.match(result.saved.at(-1).results[0].cleanupError, /quit unconfirmed/);
+  assert.equal(result.saved.at(-1).results[0].passed, false);
 });
 
 test('runner binds suite approvals and forces real computer access in preflight and driver', async () => {

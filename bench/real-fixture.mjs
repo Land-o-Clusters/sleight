@@ -46,15 +46,18 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
   const lease = {
     app: request.app,
     launched: false,
-    async quit() {
-      if (lease.running !== false || !lease.launched || request.app === 'Finder') return;
-      if (!await lease.dispose()) throw new Error('Fixture helper collection unconfirmed; app quit refused');
-      await ctx.beforeFixtureCleanup?.();
-      ctx.cleanupSignal?.throwIfAborted();
+    async quit({ final = false } = {}) {
+      if (lease.running !== false || !lease.launched || request.app === 'Finder' || diagnostics.appQuit) return;
+      const collected = await lease.dispose();
+      diagnostics.helperCollectionConfirmed = collected;
+      if (!collected && !final) throw new Error('Fixture helper collection unconfirmed; app quit refused');
+      // Final native termination cannot answer a permission dialog or perform AX
+      // actions. It still requires the exact PID and bundle this run launched.
+      if (!final) { await ctx.beforeFixtureCleanup?.(); ctx.cleanupSignal?.throwIfAborted(); }
       if (!lease.pid) throw new Error('Launched app identity unconfirmed; quit refused');
       const result = await run('/usr/bin/osascript', ['-l', 'JavaScript', script,
         JSON.stringify({ bundle: request.bundle, mode: 'quit', pid: lease.pid })], {
-        signal: ctx.cleanupSignal, timeoutMs: 15000,
+        signal: final ? undefined : ctx.cleanupSignal, timeoutMs: 15000,
       });
       if (!result.groupClean || result.exit?.code !== 0) throw new Error(`Launched ${request.app} quit unconfirmed${result.stderr?.trim() ? ': ' + result.stderr.trim() : ''}`);
       diagnostics.appQuit = true;
@@ -95,7 +98,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
         if (typeof event.running === 'boolean') { lease.running = event.running; diagnostics.running = event.running; }
         if (event.pid) { lease.pid = event.pid; diagnostics.pid = event.pid; }
         if (event.stage === 'retry') diagnostics.retries.push({ code: event.code, waitMs: event.waitMs, totalWaitMs: event.totalWaitMs });
-        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod']) {
+        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'readiness']) {
           if (event[key] !== undefined) diagnostics[key] = event[key];
         }
         if (event.stage) stage(event.stage).resolve(event);
