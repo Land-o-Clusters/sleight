@@ -312,6 +312,34 @@ textedit-edit and textedit-save, 3 runs each, with the owner away). 8 of 12 runs
 `cua.getState()`, against 30 of 36 before, and the 12 runs took 80 turns against 68 in the 1.0.0 pass.
 It's reverted.
 
+The head-to-head at the owner's normal load (2026-10-09, the owner away, load 6 to 24, Sonnet 5.5 at
+medium against gpt-6.1-sol at medium) alternated sleight and Codex task by task. The default tasks
+ran 3 times per arm ([`h2h-normal-default`](benchmarks/2026-10-09-h2h-normal-default.json)) and six
+real-use tasks twice ([`h2h-normal-real`](benchmarks/2026-10-09-h2h-normal-real.json)).
+
+| Suite | Arm | Passed | Total s | Turns |
+|---|---|---:|---:|---:|
+| Default | sleight | 20/21 | 904 | 202 |
+| Default | Codex | 16/21 | 1,292 | 238 |
+| Real use | sleight | 12/12 | 396 | 119 |
+| Real use | Codex | 11/11 | 429 | 99 |
+
+Codex failed textedit-drag 3 of 3 and simulator-form 2 of 3. sleight's one failure was textedit-drag
+in round 2, where a batch of Cmd+O, Cmd+Shift+G and a typed path outran TextEdit's Open panel. That
+came from `44700ee`, and `db45c94` fixed it from 19:39:18 UTC: the default tasks before simulator-form
+in round 2 ran without the fix, and the rest with it. One Codex finder-files run failed in harness
+setup (a -25204 read of Finder) and is left out. By median, sleight was faster on calculator-menu,
+the TextEdit tasks, preview-pdf (18.5 s against 42.2 s), helium-grid, safari-spa and helium-form, and
+Codex on calculator-click (14.9 s against 20.6 s), chess-drag (52.4 s against 60.5 s) and
+safari-form (28.1 s against 33.9 s). Turns aren't the same unit, since Claude Code counts its turns
+and the Codex arm counts model requests.
+
+The CPU footprint in these files undercounts Codex: its engine server runs in a process group of its
+own, which the sampler missed until `2c30446`. Across the 21 default runs, the engine's shared helper
+used 50.7 CPU seconds for sleight and 64.8 for Codex, and the host CLI 44.1 (Claude Code) against
+23.8 (Codex CLI). sleight's own processes used 47.5, and the owner's other Claude Code plugins, which
+load in every run, 21.7.
+
 `bench/load-cost.mjs` times the same Calculator calls with no model, once sent straight to
 the engine (which is what Codex does) and once through sleight. Each ran 5 times
 ([`load-cost`](benchmarks/2026-10-09-load-cost.json), 2026-10-09, with the owner away). At the Mac's own

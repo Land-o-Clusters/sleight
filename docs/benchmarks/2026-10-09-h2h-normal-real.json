@@ -1,0 +1,2450 @@
+{
+  "stamp": "2026-10-09T19-54-15-573Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "arms": [
+    "sleight",
+    "codex"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "safari-form",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 7.72,
+        "group": {
+          "claude": 2.15,
+          "engine node": 0.99,
+          "mcp@latest": 0.62,
+          "node": 0.28,
+          "osascript": 0.13,
+          "codex": 0.39
+        },
+        "outside": {
+          "Safari": 0.82,
+          "engine helper": 2.34
+        }
+      },
+      "timing": {
+        "totalMs": 31819,
+        "modelMs": 22154,
+        "calls": 12,
+        "refused": 1,
+        "toolMs": 6946,
+        "engineMs": 6911,
+        "relayMs": 35,
+        "localMs": 0,
+        "guardReads": 11,
+        "guardReadMs": 1553.1337060000042,
+        "guardReadFailures": 0,
+        "otherMs": 2719
+      },
+      "passed": true,
+      "seconds": 33.8,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 13,
+      "costUsd": 0.2702548,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 24,
+        "cacheRead": 652994,
+        "cacheWrite": 31777,
+        "output": 1250
+      },
+      "exitCode": 0,
+      "answer": "I filled in and submitted the form in the Safari window, and the page now shows \"Submitted\".\n\n- **Name:** Morgan Reed\n- **Email:** morgan@example.test\n- **Team:** Design\n- **Send updates:** checked\n- **Code:** 643694bc\n\nThe window is still open for cleanup. I didn't touch any other tabs or windows."
+    },
+    {
+      "arm": "codex",
+      "task": "safari-form",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 4,
+      "engineMs": 4231,
+      "footprint": {
+        "cpuSeconds": 2.86,
+        "group": {
+          "codex": 0.98
+        },
+        "outside": {
+          "Safari": 0.45,
+          "engine helper": 1.43
+        }
+      },
+      "passed": true,
+      "seconds": 27.3,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 6,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 158628,
+        "cacheRead": 138368,
+        "cacheWrite": 0,
+        "output": 452
+      },
+      "exitCode": 0,
+      "answer": "Submitted successfully with all requested values. Left the Safari window open for cleanup."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-form",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 6.63,
+        "group": {
+          "claude": 1.81,
+          "engine node": 0.78,
+          "mcp@latest": 0.57,
+          "node": 0.25,
+          "osascript": 0.13,
+          "codex": 0.35
+        },
+        "outside": {
+          "Helium": 0.67,
+          "engine helper": 2.07
+        }
+      },
+      "timing": {
+        "totalMs": 32095,
+        "modelMs": 12767,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 7644,
+        "engineMs": 7624,
+        "relayMs": 20,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 2037.8785420000004,
+        "guardReadFailures": 0,
+        "otherMs": 11684
+      },
+      "passed": true,
+      "seconds": 34,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 24996,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 7,
+      "costUsd": 0.198163,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 14,
+        "cacheRead": 351195,
+        "cacheWrite": 30064,
+        "output": 764
+      },
+      "exitCode": 0,
+      "answer": "I filled in and submitted the form in the Helium window, and the page now shows \"Submitted\". I used Name \"Morgan Reed\", Email \"morgan@example.test\", Team \"Design\", Code \"78bfdb10\", and checked \"Send updates\".\n\nI checked the filled form in a screenshot before submitting. The window is still open, and"
+    },
+    {
+      "arm": "codex",
+      "task": "helium-form",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 5,
+      "engineMs": 4366,
+      "footprint": {
+        "cpuSeconds": 2.6,
+        "group": {
+          "codex": 0.85
+        },
+        "outside": {
+          "Helium": 0.41,
+          "engine helper": 1.34
+        }
+      },
+      "passed": true,
+      "seconds": 30.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 24996,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 7,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 206205,
+        "cacheRead": 177280,
+        "cacheWrite": 0,
+        "output": 417
+      },
+      "exitCode": 0,
+      "answer": "Submitted successfully with the requested details. The Helium window remains open for cleanup."
+    },
+    {
+      "arm": "sleight",
+      "task": "preview-pdf",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 9.45,
+        "group": {
+          "claude": 1.57,
+          "engine node": 0.72,
+          "mcp@latest": 0.6,
+          "node": 0.23,
+          "osascript": 0.12,
+          "codex": 0.24
+        },
+        "outside": {
+          "Preview": 4.65,
+          "engine helper": 1.32
+        }
+      },
+      "timing": {
+        "totalMs": 20041,
+        "modelMs": 14348,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 3961,
+        "engineMs": 3948,
+        "relayMs": 13,
+        "localMs": 0,
+        "guardReads": 6,
+        "guardReadMs": 1131.584583999998,
+        "guardReadFailures": 0,
+        "otherMs": 1732
+      },
+      "passed": true,
+      "seconds": 21.9,
+      "fixtureDiagnostics": [
+        {
+          "app": "Preview",
+          "bundle": "com.apple.Preview",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 65127,
+          "setupCase": "already-running",
+          "launched": true,
+          "readiness": {
+            "focused": {
+              "present": true,
+              "matches": true,
+              "documentKind": "file-url",
+              "titleMatches": true,
+              "pathAvailable": true,
+              "pathMatchesNormalizedTarget": true
+            },
+            "main": {
+              "present": true,
+              "matches": true,
+              "documentKind": "file-url",
+              "titleMatches": true,
+              "pathAvailable": true,
+              "pathMatchesNormalizedTarget": true
+            }
+          },
+          "fresh": false,
+          "menuItems": [
+            "New from Clipboard",
+            "Open…",
+            "Open Recent",
+            "",
+            "Close Window",
+            "Close All",
+            "Close Selected PDF Document",
+            "Save",
+            "Save As…",
+            "Duplicate",
+            "Rename…",
+            "Move To…",
+            "Revert To",
+            "",
+            "Enter Password…",
+            "Edit Permissions…",
+            "",
+            "Import from iPhone or iPad",
+            "",
+            "Import from Camera…",
+            "Import from Scanner…",
+            "Take Screenshot",
+            "",
+            "Export…",
+            "Export as PDF…",
+            "",
+            "Share",
+            "",
+            "Print…"
+          ],
+          "menuCommands": [
+            {
+              "title": "New from Clipboard",
+              "enabled": false
+            },
+            {
+              "title": "Open…",
+              "enabled": true
+            },
+            {
+              "title": "Open Recent",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Close Window",
+              "enabled": true
+            },
+            {
+              "title": "Close All",
+              "enabled": true
+            },
+            {
+              "title": "Close Selected PDF Document",
+              "enabled": true
+            },
+            {
+              "title": "Save",
+              "enabled": true
+            },
+            {
+              "title": "Save As…",
+              "enabled": true
+            },
+            {
+              "title": "Duplicate",
+              "enabled": true
+            },
+            {
+              "title": "Rename…",
+              "enabled": true
+            },
+            {
+              "title": "Move To…",
+              "enabled": true
+            },
+            {
+              "title": "Revert To",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Enter Password…",
+              "enabled": false
+            },
+            {
+              "title": "Edit Permissions…",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Import from iPhone or iPad",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Import from Camera…",
+              "enabled": false
+            },
+            {
+              "title": "Import from Scanner…",
+              "enabled": false
+            },
+            {
+              "title": "Take Screenshot",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Export…",
+              "enabled": true
+            },
+            {
+              "title": "Export as PDF…",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Share",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Print…",
+              "enabled": true
+            }
+          ]
+        }
+      ],
+      "turns": 6,
+      "costUsd": 0.19649420000000004,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 12,
+        "cacheRead": 306741,
+        "cacheWrite": 31628,
+        "output": 861
+      },
+      "exitCode": 0,
+      "answer": "Page 2 of `Pages-dc21337b.pdf` is now rotated 90° clockwise, and I saved the PDF in place. The file is still open in Preview, and the \"Edited\" label is gone.\n\nI checked the result on screen: \"Page 2\" now runs top to bottom along the right side of the page. Page 1 is unchanged.\n\nMy first rotation wen"
+    },
+    {
+      "arm": "codex",
+      "task": "preview-pdf",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 9,
+      "engineMs": 4127,
+      "footprint": {
+        "cpuSeconds": 3.99,
+        "group": {
+          "codex": 0.83
+        },
+        "outside": {
+          "Preview": 1.01,
+          "engine helper": 2.15
+        }
+      },
+      "passed": true,
+      "seconds": 42.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Preview",
+          "bundle": "com.apple.Preview",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 65127,
+          "setupCase": "already-running",
+          "launched": true,
+          "readiness": {
+            "focused": {
+              "present": true,
+              "matches": true,
+              "documentKind": "file-url",
+              "titleMatches": true,
+              "pathAvailable": true,
+              "pathMatchesNormalizedTarget": true
+            },
+            "main": {
+              "present": true,
+              "matches": true,
+              "documentKind": "file-url",
+              "titleMatches": true,
+              "pathAvailable": true,
+              "pathMatchesNormalizedTarget": true
+            }
+          },
+          "fresh": false,
+          "menuItems": [
+            "New from Clipboard",
+            "Open…",
+            "Open Recent",
+            "",
+            "Close Window",
+            "Close All",
+            "Close Selected PDF Document",
+            "Save",
+            "Save As…",
+            "Duplicate",
+            "Rename…",
+            "Move To…",
+            "Revert To",
+            "",
+            "Enter Password…",
+            "Edit Permissions…",
+            "",
+            "Import from iPhone or iPad",
+            "",
+            "Import from Camera…",
+            "Import from Scanner…",
+            "Take Screenshot",
+            "",
+            "Export…",
+            "Export as PDF…",
+            "",
+            "Share",
+            "",
+            "Print…"
+          ],
+          "menuCommands": [
+            {
+              "title": "New from Clipboard",
+              "enabled": false
+            },
+            {
+              "title": "Open…",
+              "enabled": true
+            },
+            {
+              "title": "Open Recent",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Close Window",
+              "enabled": true
+            },
+            {
+              "title": "Close All",
+              "enabled": true
+            },
+            {
+              "title": "Close Selected PDF Document",
+              "enabled": true
+            },
+            {
+              "title": "Save",
+              "enabled": true
+            },
+            {
+              "title": "Save As…",
+              "enabled": true
+            },
+            {
+              "title": "Duplicate",
+              "enabled": true
+            },
+            {
+              "title": "Rename…",
+              "enabled": true
+            },
+            {
+              "title": "Move To…",
+              "enabled": true
+            },
+            {
+              "title": "Revert To",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Enter Password…",
+              "enabled": false
+            },
+            {
+              "title": "Edit Permissions…",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Import from iPhone or iPad",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Import from Camera…",
+              "enabled": false
+            },
+            {
+              "title": "Import from Scanner…",
+              "enabled": false
+            },
+            {
+              "title": "Take Screenshot",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Export…",
+              "enabled": true
+            },
+            {
+              "title": "Export as PDF…",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Share",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Print…",
+              "enabled": true
+            }
+          ]
+        }
+      ],
+      "turns": 11,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 329270,
+        "cacheRead": 304384,
+        "cacheWrite": 0,
+        "output": 873
+      },
+      "exitCode": 0,
+      "answer": "Rotated only page 2 clockwise by 90°, saved the same PDF, and left it open in Preview. Page 1 is unchanged."
+    },
+    {
+      "arm": "sleight",
+      "task": "finder-files",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 42.69,
+        "group": {
+          "claude": 2.14,
+          "engine node": 0.83,
+          "mcp@latest": 0.56,
+          "node": 0.22,
+          "osascript": 0.09,
+          "codex": 0.35
+        },
+        "outside": {
+          "Finder": 36.05,
+          "engine helper": 2.45
+        }
+      },
+      "timing": {
+        "totalMs": 34670,
+        "modelMs": 24230,
+        "calls": 10,
+        "refused": 0,
+        "toolMs": 7810,
+        "engineMs": 7776,
+        "relayMs": 34,
+        "localMs": 0,
+        "guardReads": 14,
+        "guardReadMs": 4002.5841649999984,
+        "guardReadFailures": 0,
+        "otherMs": 2630
+      },
+      "passed": true,
+      "seconds": 36.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Finder",
+          "bundle": "com.apple.finder",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 1306,
+          "setupCase": "already-running",
+          "launched": true,
+          "readiness": {
+            "focused": {
+              "present": true,
+              "matches": true,
+              "documentKind": "absent",
+              "titleMatches": true,
+              "pathAvailable": false,
+              "pathMatchesNormalizedTarget": false
+            },
+            "main": {
+              "present": true,
+              "matches": true,
+              "documentKind": "absent",
+              "titleMatches": true,
+              "pathAvailable": false,
+              "pathMatchesNormalizedTarget": false
+            }
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 11,
+      "costUsd": 0.29018520000000003,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 22,
+        "cacheRead": 625766,
+        "cacheWrite": 36882,
+        "output": 1746
+      },
+      "exitCode": 0,
+      "answer": "I renamed `alpha.txt` to `renamed.txt` and moved `bravo.txt` into Archive, both in Finder. `charlie.txt` is unchanged.\n\nThe Finder window is still open on `Files-5faa1b0e`. It now lists Archive, `charlie.txt` and `renamed.txt`. I saw `bravo.txt` in Archive's listing right after the move. I didn't re"
+    },
+    {
+      "arm": "codex",
+      "task": "finder-files",
+      "run": 1,
+      "passed": false,
+      "reason": "Fixture setup failed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25204 (AXFocusedWindow) (-2700)",
+      "fixtureDiagnostics": [
+        {
+          "app": "Finder",
+          "bundle": "com.apple.finder",
+          "retries": [
+            {
+              "code": -25204,
+              "waitMs": 105,
+              "totalWaitMs": 105,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 102,
+              "totalWaitMs": 713,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 102,
+              "totalWaitMs": 1321,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 1929,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 102,
+              "totalWaitMs": 2537,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 3145,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 3753,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 104,
+              "totalWaitMs": 4362,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 4970,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 5574,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 101,
+              "totalWaitMs": 6181,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 102,
+              "totalWaitMs": 6788,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 7396,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 105,
+              "totalWaitMs": 8006,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 104,
+              "totalWaitMs": 8615,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 105,
+              "totalWaitMs": 9220,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 101,
+              "totalWaitMs": 9827,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 102,
+              "totalWaitMs": 10435,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 104,
+              "totalWaitMs": 11042,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 105,
+              "totalWaitMs": 11652,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 104,
+              "totalWaitMs": 12260,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 12868,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 13476,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 14084,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 102,
+              "totalWaitMs": 14691,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 15300,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 15907,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 104,
+              "totalWaitMs": 16516,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 102,
+              "totalWaitMs": 17119,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 101,
+              "totalWaitMs": 17721,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 101,
+              "totalWaitMs": 18324,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 18932,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 104,
+              "totalWaitMs": 19541,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 102,
+              "totalWaitMs": 20148,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 102,
+              "totalWaitMs": 20756,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 101,
+              "totalWaitMs": 21363,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 101,
+              "totalWaitMs": 21966,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 22570,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 102,
+              "totalWaitMs": 23177,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 104,
+              "totalWaitMs": 23787,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 104,
+              "totalWaitMs": 24399,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 102,
+              "totalWaitMs": 25001,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 104,
+              "totalWaitMs": 25609,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 105,
+              "totalWaitMs": 26217,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 105,
+              "totalWaitMs": 26828,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 105,
+              "totalWaitMs": 27439,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 105,
+              "totalWaitMs": 28049,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 104,
+              "totalWaitMs": 28659,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 103,
+              "totalWaitMs": 29265,
+              "setupCase": "already-running"
+            },
+            {
+              "code": -25204,
+              "waitMs": 102,
+              "totalWaitMs": 29871,
+              "setupCase": "already-running"
+            }
+          ],
+          "totalWaitMs": 30376,
+          "actionTaken": false,
+          "running": true,
+          "pid": 1306,
+          "setupCase": "already-running",
+          "launched": true,
+          "readWait": {
+            "reason": "deadline",
+            "setupCase": "already-running",
+            "elapsedMs": 30376,
+            "code": -25204,
+            "attribute": "AXFocusedWindow"
+          },
+          "fresh": false,
+          "cleanup": "unconfirmed"
+        }
+      ],
+      "cleanupUnconfirmed": true,
+      "fixtureDir": "<temp>/sleight-bench/2026-10-09T19-54-15-573Z/codex-finder-files-1",
+      "models": []
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-grid",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.36,
+        "group": {
+          "claude": 1.38,
+          "engine node": 0.69,
+          "mcp@latest": 0.63,
+          "node": 0.29,
+          "osascript": 0.14,
+          "codex": 0.26,
+          "(open)": 0.01
+        },
+        "outside": {
+          "Helium": 0.19,
+          "engine helper": 0.77
+        }
+      },
+      "timing": {
+        "totalMs": 9629,
+        "modelMs": 5056,
+        "calls": 2,
+        "refused": 0,
+        "toolMs": 2932,
+        "engineMs": 2922,
+        "relayMs": 10,
+        "localMs": 0,
+        "guardReads": 3,
+        "guardReadMs": 433.07374900000013,
+        "guardReadFailures": 0,
+        "otherMs": 1641
+      },
+      "passed": true,
+      "seconds": 11.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 24996,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 3,
+      "costUsd": 0.115402,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 6,
+        "cacheRead": 128570,
+        "cacheWrite": 21664,
+        "output": 302
+      },
+      "exitCode": 0,
+      "answer": "I changed Orchid's Budget from 275 to 125, then sorted the Budget column ascending. The table now runs from Cedar (90) and Orchid (125) at the top to Oak (510) at the bottom. I didn't change any other row's Budget. The Helium window is still open."
+    },
+    {
+      "arm": "codex",
+      "task": "helium-grid",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 4,
+      "engineMs": 2667,
+      "footprint": {
+        "cpuSeconds": 1.81,
+        "group": {
+          "codex": 0.8
+        },
+        "outside": {
+          "Helium": 0.21,
+          "engine helper": 0.8
+        }
+      },
+      "passed": true,
+      "seconds": 22.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 24996,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 6,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 158667,
+        "cacheRead": 138240,
+        "cacheWrite": 0,
+        "output": 466
+      },
+      "exitCode": 0,
+      "answer": "Changed Orchid’s Budget from 275 to 125 and sorted Budget ascending. Verified all other rows and values are unchanged. Left the Helium window open."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-spa",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 6.69,
+        "group": {
+          "claude": 1.87,
+          "engine node": 0.91,
+          "mcp@latest": 0.64,
+          "node": 0.29,
+          "osascript": 0.14,
+          "codex": 0.31,
+          "(open)": 0.01
+        },
+        "outside": {
+          "Safari": 0.75,
+          "engine helper": 1.77
+        }
+      },
+      "timing": {
+        "totalMs": 24281,
+        "modelMs": 15103,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 7349,
+        "engineMs": 7320,
+        "relayMs": 29,
+        "localMs": 0,
+        "guardReads": 11,
+        "guardReadMs": 2060.1089599999964,
+        "guardReadFailures": 0,
+        "otherMs": 1829
+      },
+      "passed": true,
+      "seconds": 26.3,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 8,
+      "costUsd": 0.19447940000000002,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 16,
+        "cacheRead": 409127,
+        "cacheWrite": 26328,
+        "output": 731
+      },
+      "exitCode": 0,
+      "answer": "The request went through. The Safari window now shows the \"Request submitted\" screen, and I've left the window open.\n\nI chose Requests, then New request. I set Category to Research, entered Orchid for Project and chose Continue. Then I entered e8b7e5da for Code and chose Submit request. I only used "
+    },
+    {
+      "arm": "codex",
+      "task": "safari-spa",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 8,
+      "engineMs": 9595,
+      "footprint": {
+        "cpuSeconds": 3.74,
+        "group": {
+          "codex": 1
+        },
+        "outside": {
+          "Safari": 0.54,
+          "engine helper": 2.2
+        }
+      },
+      "passed": true,
+      "seconds": 46.4,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 10,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 316571,
+        "cacheRead": 281728,
+        "cacheWrite": 0,
+        "output": 544
+      },
+      "exitCode": 0,
+      "answer": "Submitted the Research request for Orchid with code `d9174d46`. The Request submitted screen is visible, and the Safari window remains open."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-form",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 6.92,
+        "group": {
+          "claude": 1.86,
+          "engine node": 0.78,
+          "mcp@latest": 0.5,
+          "node": 0.19,
+          "osascript": 0.09,
+          "codex": 0.33,
+          "(open)": 0
+        },
+        "outside": {
+          "Safari": 0.92,
+          "engine helper": 2.25
+        }
+      },
+      "timing": {
+        "totalMs": 32236,
+        "modelMs": 22361,
+        "calls": 12,
+        "refused": 1,
+        "toolMs": 7007,
+        "engineMs": 6974,
+        "relayMs": 33,
+        "localMs": 0,
+        "guardReads": 11,
+        "guardReadMs": 1002.5838339999978,
+        "guardReadFailures": 0,
+        "otherMs": 2868
+      },
+      "passed": true,
+      "seconds": 34,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 13,
+      "costUsd": 0.266765,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 24,
+        "cacheRead": 654225,
+        "cacheWrite": 30708,
+        "output": 1304
+      },
+      "exitCode": 0,
+      "answer": "I filled in and submitted the form, and the page now shows \"Submitted\". I filled Name with \"Morgan Reed\", Email with \"morgan@example.test\" and Code with \"4d9adeb7\". I selected \"Design\" for Team and checked \"Send updates\". I confirmed those values on the page right before clicking Submit.\n\nI worked o"
+    },
+    {
+      "arm": "codex",
+      "task": "safari-form",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 4,
+      "engineMs": 7387,
+      "footprint": {
+        "cpuSeconds": 2.56,
+        "group": {
+          "codex": 0.73
+        },
+        "outside": {
+          "Safari": 0.48,
+          "engine helper": 1.35
+        }
+      },
+      "passed": true,
+      "seconds": 29,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 6,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 160178,
+        "cacheRead": 139776,
+        "cacheWrite": 0,
+        "output": 443
+      },
+      "exitCode": 0,
+      "answer": "Submitted successfully with the requested details. The Safari window remains open for cleanup."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-form",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 6.91,
+        "group": {
+          "claude": 1.94,
+          "engine node": 0.75,
+          "mcp@latest": 0.63,
+          "node": 0.24,
+          "osascript": 0.09,
+          "codex": 0.35,
+          "(osascript)": 0.06
+        },
+        "outside": {
+          "Helium": 0.74,
+          "engine helper": 2.11
+        }
+      },
+      "timing": {
+        "totalMs": 30562,
+        "modelMs": 20952,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 7495,
+        "engineMs": 7470,
+        "relayMs": 25,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 1746.7251239999996,
+        "guardReadFailures": 0,
+        "otherMs": 2115
+      },
+      "passed": true,
+      "seconds": 32.5,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 24996,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 9,
+      "costUsd": 0.23116960000000003,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 18,
+        "cacheRead": 467638,
+        "cacheWrite": 32024,
+        "output": 951
+      },
+      "exitCode": 0,
+      "answer": "I filled in and submitted the form in the Helium window, and the page now shows \"Submitted\". I left that window open and didn't touch any other tabs or windows.\n\nBefore I clicked Submit, a screenshot confirmed these values:\n- **Name:** Morgan Reed\n- **Email:** morgan@example.test\n- **Team:** Design\n"
+    },
+    {
+      "arm": "codex",
+      "task": "helium-form",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 8,
+      "engineMs": 5298,
+      "footprint": {
+        "cpuSeconds": 3.65,
+        "group": {
+          "codex": 1.11
+        },
+        "outside": {
+          "Helium": 0.55,
+          "engine helper": 1.99
+        }
+      },
+      "passed": true,
+      "seconds": 43.8,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 24996,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 10,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 308032,
+        "cacheRead": 264192,
+        "cacheWrite": 0,
+        "output": 581
+      },
+      "exitCode": 0,
+      "answer": "Submitted the form with all requested values and “Send updates” checked. The Helium window remains open for cleanup."
+    },
+    {
+      "arm": "sleight",
+      "task": "preview-pdf",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.58,
+        "group": {
+          "claude": 1.34,
+          "engine node": 0.55,
+          "mcp@latest": 0.52,
+          "node": 0.2,
+          "osascript": 0.09,
+          "codex": 0.23
+        },
+        "outside": {
+          "Preview": 0.7,
+          "engine helper": 0.95
+        }
+      },
+      "timing": {
+        "totalMs": 13298,
+        "modelMs": 8649,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 3024,
+        "engineMs": 3010,
+        "relayMs": 14,
+        "localMs": 0,
+        "guardReads": 5,
+        "guardReadMs": 966.9413329999998,
+        "guardReadFailures": 0,
+        "otherMs": 1625
+      },
+      "passed": true,
+      "seconds": 15.2,
+      "fixtureDiagnostics": [
+        {
+          "app": "Preview",
+          "bundle": "com.apple.Preview",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 65127,
+          "setupCase": "already-running",
+          "launched": true,
+          "readiness": {
+            "focused": {
+              "present": true,
+              "matches": true,
+              "documentKind": "file-url",
+              "titleMatches": true,
+              "pathAvailable": true,
+              "pathMatchesNormalizedTarget": true
+            },
+            "main": {
+              "present": true,
+              "matches": true,
+              "documentKind": "file-url",
+              "titleMatches": true,
+              "pathAvailable": true,
+              "pathMatchesNormalizedTarget": true
+            }
+          },
+          "fresh": false,
+          "menuItems": [
+            "New from Clipboard",
+            "Open…",
+            "Open Recent",
+            "",
+            "Close Window",
+            "Close All",
+            "Close Selected PDF Document",
+            "Save",
+            "Save As…",
+            "Duplicate",
+            "Rename…",
+            "Move To…",
+            "Revert To",
+            "",
+            "Enter Password…",
+            "Edit Permissions…",
+            "",
+            "Import from iPhone or iPad",
+            "",
+            "Import from Camera…",
+            "Import from Scanner…",
+            "Take Screenshot",
+            "",
+            "Export…",
+            "Export as PDF…",
+            "",
+            "Share",
+            "",
+            "Print…"
+          ],
+          "menuCommands": [
+            {
+              "title": "New from Clipboard",
+              "enabled": true
+            },
+            {
+              "title": "Open…",
+              "enabled": true
+            },
+            {
+              "title": "Open Recent",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Close Window",
+              "enabled": true
+            },
+            {
+              "title": "Close All",
+              "enabled": true
+            },
+            {
+              "title": "Close Selected PDF Document",
+              "enabled": true
+            },
+            {
+              "title": "Save",
+              "enabled": true
+            },
+            {
+              "title": "Save As…",
+              "enabled": true
+            },
+            {
+              "title": "Duplicate",
+              "enabled": true
+            },
+            {
+              "title": "Rename…",
+              "enabled": true
+            },
+            {
+              "title": "Move To…",
+              "enabled": true
+            },
+            {
+              "title": "Revert To",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Enter Password…",
+              "enabled": false
+            },
+            {
+              "title": "Edit Permissions…",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Import from iPhone or iPad",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Import from Camera…",
+              "enabled": false
+            },
+            {
+              "title": "Import from Scanner…",
+              "enabled": false
+            },
+            {
+              "title": "Take Screenshot",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Export…",
+              "enabled": true
+            },
+            {
+              "title": "Export as PDF…",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Share",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Print…",
+              "enabled": true
+            }
+          ]
+        }
+      ],
+      "turns": 4,
+      "costUsd": 0.1514666,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 8,
+        "cacheRead": 183253,
+        "cacheWrite": 27320,
+        "output": 552
+      },
+      "exitCode": 0,
+      "answer": "Page 2 is now rotated 90° clockwise, and page 1 is unchanged. I saved with Cmd+S, and no save dialog or \"Edited\" marker appeared. The PDF is still open in Preview."
+    },
+    {
+      "arm": "codex",
+      "task": "preview-pdf",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 8,
+      "engineMs": 4103,
+      "footprint": {
+        "cpuSeconds": 3.87,
+        "group": {
+          "codex": 0.98
+        },
+        "outside": {
+          "Preview": 0.87,
+          "engine helper": 2.02
+        }
+      },
+      "passed": true,
+      "seconds": 41.7,
+      "fixtureDiagnostics": [
+        {
+          "app": "Preview",
+          "bundle": "com.apple.Preview",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 65127,
+          "setupCase": "already-running",
+          "launched": true,
+          "readiness": {
+            "focused": {
+              "present": true,
+              "matches": true,
+              "documentKind": "file-url",
+              "titleMatches": true,
+              "pathAvailable": true,
+              "pathMatchesNormalizedTarget": true
+            },
+            "main": {
+              "present": true,
+              "matches": true,
+              "documentKind": "file-url",
+              "titleMatches": true,
+              "pathAvailable": true,
+              "pathMatchesNormalizedTarget": true
+            }
+          },
+          "fresh": false,
+          "menuItems": [
+            "New from Clipboard",
+            "Open…",
+            "Open Recent",
+            "",
+            "Close Window",
+            "Close All",
+            "Close Selected PDF Document",
+            "Save",
+            "Save As…",
+            "Duplicate",
+            "Rename…",
+            "Move To…",
+            "Revert To",
+            "",
+            "Enter Password…",
+            "Edit Permissions…",
+            "",
+            "Import from iPhone or iPad",
+            "",
+            "Import from Camera…",
+            "Import from Scanner…",
+            "Take Screenshot",
+            "",
+            "Export…",
+            "Export as PDF…",
+            "",
+            "Share",
+            "",
+            "Print…"
+          ],
+          "menuCommands": [
+            {
+              "title": "New from Clipboard",
+              "enabled": true
+            },
+            {
+              "title": "Open…",
+              "enabled": true
+            },
+            {
+              "title": "Open Recent",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Close Window",
+              "enabled": true
+            },
+            {
+              "title": "Close All",
+              "enabled": true
+            },
+            {
+              "title": "Close Selected PDF Document",
+              "enabled": true
+            },
+            {
+              "title": "Save",
+              "enabled": true
+            },
+            {
+              "title": "Save As…",
+              "enabled": true
+            },
+            {
+              "title": "Duplicate",
+              "enabled": true
+            },
+            {
+              "title": "Rename…",
+              "enabled": true
+            },
+            {
+              "title": "Move To…",
+              "enabled": true
+            },
+            {
+              "title": "Revert To",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Enter Password…",
+              "enabled": false
+            },
+            {
+              "title": "Edit Permissions…",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Import from iPhone or iPad",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Import from Camera…",
+              "enabled": false
+            },
+            {
+              "title": "Import from Scanner…",
+              "enabled": false
+            },
+            {
+              "title": "Take Screenshot",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Export…",
+              "enabled": true
+            },
+            {
+              "title": "Export as PDF…",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Share",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Print…",
+              "enabled": true
+            }
+          ]
+        }
+      ],
+      "turns": 10,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 297361,
+        "cacheRead": 272768,
+        "cacheWrite": 0,
+        "output": 783
+      },
+      "exitCode": 0,
+      "answer": "Rotated only page 2 clockwise by 90°, saved the same PDF, and left it open in Preview. Page 1 is unchanged."
+    },
+    {
+      "arm": "sleight",
+      "task": "finder-files",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 82.36,
+        "group": {
+          "claude": 3.09,
+          "engine node": 1.27,
+          "mcp@latest": 0.57,
+          "node": 0.25,
+          "osascript": 0.89,
+          "codex": 0.39
+        },
+        "outside": {
+          "Finder": 70.01,
+          "engine helper": 5.89
+        }
+      },
+      "timing": {
+        "totalMs": 108022,
+        "modelMs": 75996,
+        "calls": 28,
+        "refused": 2,
+        "toolMs": 29206,
+        "engineMs": 19035,
+        "relayMs": 103,
+        "localMs": 10068,
+        "guardReads": 37,
+        "guardReadMs": 7439.810786999978,
+        "guardReadFailures": 0,
+        "otherMs": 2820
+      },
+      "passed": true,
+      "seconds": 109.9,
+      "fixtureDiagnostics": [
+        {
+          "app": "Finder",
+          "bundle": "com.apple.finder",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 1306,
+          "setupCase": "already-running",
+          "launched": true,
+          "readiness": {
+            "focused": {
+              "present": true,
+              "matches": true,
+              "documentKind": "absent",
+              "titleMatches": true,
+              "pathAvailable": false,
+              "pathMatchesNormalizedTarget": false
+            },
+            "main": {
+              "present": true,
+              "matches": true,
+              "documentKind": "absent",
+              "titleMatches": true,
+              "pathAvailable": false,
+              "pathMatchesNormalizedTarget": false
+            }
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 29,
+      "costUsd": 0.8172615999999999,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 58,
+        "cacheRead": 2301618,
+        "cacheWrite": 74988,
+        "output": 5687
+      },
+      "exitCode": 0,
+      "answer": "Both operations are done in Finder, and the window is still open on the main folder (Files-3975aedb).\n\n- **Rename:** `alpha.txt` is now `renamed.txt`.\n- **Move:** `bravo.txt` is now in `Archive`. The final read shows the main folder with `Archive`, `charlie.txt` and `renamed.txt`, and Archive contai"
+    },
+    {
+      "arm": "codex",
+      "task": "finder-files",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 16,
+      "engineMs": 8622,
+      "footprint": {
+        "cpuSeconds": 68.27,
+        "group": {
+          "codex": 1.23
+        },
+        "outside": {
+          "Finder": 61.91,
+          "engine helper": 5.13
+        }
+      },
+      "passed": true,
+      "seconds": 87.8,
+      "fixtureDiagnostics": [
+        {
+          "app": "Finder",
+          "bundle": "com.apple.finder",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 1306,
+          "setupCase": "already-running",
+          "launched": true,
+          "readiness": {
+            "focused": {
+              "present": true,
+              "matches": true,
+              "documentKind": "absent",
+              "titleMatches": true,
+              "pathAvailable": false,
+              "pathMatchesNormalizedTarget": false
+            },
+            "main": {
+              "present": true,
+              "matches": true,
+              "documentKind": "absent",
+              "titleMatches": true,
+              "pathAvailable": false,
+              "pathMatchesNormalizedTarget": false
+            }
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 18,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 622635,
+        "cacheRead": 589440,
+        "cacheWrite": 0,
+        "output": 1665
+      },
+      "exitCode": 0,
+      "answer": "Done in Finder: alpha.txt is now renamed.txt, bravo.txt is in Archive, and charlie.txt is unchanged. The folder window remains open."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-grid",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.99,
+        "group": {
+          "claude": 1.75,
+          "engine node": 0.74,
+          "mcp@latest": 0.58,
+          "node": 0.25,
+          "osascript": 0.19,
+          "codex": 0.3
+        },
+        "outside": {
+          "Helium": 0.3,
+          "engine helper": 0.88
+        }
+      },
+      "timing": {
+        "totalMs": 15322,
+        "modelMs": 9881,
+        "calls": 6,
+        "refused": 1,
+        "toolMs": 3466,
+        "engineMs": 3444,
+        "relayMs": 22,
+        "localMs": 0,
+        "guardReads": 5,
+        "guardReadMs": 215.9729170000005,
+        "guardReadFailures": 0,
+        "otherMs": 1975
+      },
+      "passed": true,
+      "seconds": 17.4,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 24996,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 7,
+      "costUsd": 0.17120280000000002,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 14,
+        "cacheRead": 347154,
+        "cacheWrite": 23671,
+        "output": 706
+      },
+      "exitCode": 0,
+      "answer": "I changed Orchid's Budget from 275 to 125 and sorted the Budget column ascending. The table now reads Cedar 90, Orchid 125, Harbor 140, Maple 180, Willow 220, Juniper 260, Birch 310, Elm 350, Aspen 390, Pine 430, Spruce 470, Oak 510. No other row's value changed.\n\nI left the Helium window open and d"
+    },
+    {
+      "arm": "codex",
+      "task": "helium-grid",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 3,
+      "engineMs": 2652,
+      "footprint": {
+        "cpuSeconds": 1.96,
+        "group": {
+          "codex": 0.84
+        },
+        "outside": {
+          "Helium": 0.23,
+          "engine helper": 0.89
+        }
+      },
+      "passed": true,
+      "seconds": 21.5,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 24996,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 5,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 128501,
+        "cacheRead": 108288,
+        "cacheWrite": 0,
+        "output": 370
+      },
+      "exitCode": 0,
+      "answer": "Changed Orchid’s Budget from 275 to 125 and sorted Budget ascending. Verified all other rows and values are unchanged. Left the Helium window open."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-spa",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 6.26,
+        "group": {
+          "claude": 1.87,
+          "engine node": 0.87,
+          "mcp@latest": 0.6,
+          "node": 0.24,
+          "codex": 0.34,
+          "osascript": 0.12
+        },
+        "outside": {
+          "Safari": 0.7,
+          "engine helper": 1.52
+        }
+      },
+      "timing": {
+        "totalMs": 20755,
+        "modelMs": 11659,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 6768,
+        "engineMs": 6740,
+        "relayMs": 28,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 2425.0502070000002,
+        "guardReadFailures": 0,
+        "otherMs": 2328
+      },
+      "passed": true,
+      "seconds": 22.7,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 9,
+      "costUsd": 0.2144458,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "usage": {
+        "input": 18,
+        "cacheRead": 473529,
+        "cacheWrite": 27991,
+        "output": 774
+      },
+      "exitCode": 0,
+      "answer": "The request went through. The Safari window now shows the \"Request submitted\" screen, and I've left it open.\n\nI chose Requests, then New request. I set Category to Research, entered Orchid for Project, and chose Continue. Then I entered d8630915 for Code and chose Submit request. I didn't touch any "
+    },
+    {
+      "arm": "codex",
+      "task": "safari-spa",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 8,
+      "engineMs": 4943,
+      "footprint": {
+        "cpuSeconds": 3.32,
+        "group": {
+          "codex": 0.93
+        },
+        "outside": {
+          "Safari": 0.63,
+          "engine helper": 1.76
+        }
+      },
+      "passed": true,
+      "seconds": 35.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 10,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 285308,
+        "cacheRead": 263424,
+        "cacheWrite": 0,
+        "output": 734
+      },
+      "exitCode": 0,
+      "answer": "Submitted the Research request for Orchid with code `911911b2`. The “Request submitted” screen remains visible, and the Safari window is open."
+    }
+  ]
+}
