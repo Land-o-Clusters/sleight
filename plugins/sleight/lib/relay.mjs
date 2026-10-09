@@ -89,6 +89,14 @@ export function unawaitedAction(code) {
 const META_KEY = 'x-codex-turn-metadata';
 const HIDDEN_TOOLS = new Set(['js_add_node_module_dir']);
 const TURN_END_TOOL = 'turn_ended';
+// The engine tells the model to send only an acquisition first. In 798 of 799 benchmark sessions the
+// first call held no action, though sleight acquires and checks the window before any that follow
+// (batching study, 2026-10-09). Rewritten only while the engine's sentence is exactly this.
+const FIRST_CALL_RULE = 'execute exactly one of the API calls shown below, optionally assigning its result to a variable. Do not add other API calls, waits, or snapshots to that invocation.';
+const FIRST_CALL_BATCH = 'start with one of the API calls shown below, assigning the app to a variable. When you already know the first actions on that app, put them after it in the same call: sleight acquires the app and checks its window before they run. Chain every later action whose target you already know (keys, text, `{ id }` or `{ label }` clicks) in one call too.';
+export function batchingDescription(description) {
+  return typeof description === 'string' && description.includes(FIRST_CALL_RULE) ? description.replace(FIRST_CALL_RULE, FIRST_CALL_BATCH) : description;
+}
 const TURN_END_DESCRIPTION = 'Internal to sleight: its hooks call this when a Claude turn ends. Never call it yourself.';
 const SHUTDOWN_GRACE_MS = 3000;
 
@@ -209,6 +217,9 @@ export function createRelay({
   // 'careful' reads the window before every action, including keys, text and coordinates later in
   // a call, which skip it by default (owner, 2026-10-09). Document scope is always careful.
   guardMode,
+  // Rewrites the engine's first-call rule in the js tool description (SLEIGHT_FIRST_CALL_BATCH=1),
+  // an experiment until the affected benchmark tasks have run with it.
+  firstCallBatch = false,
   firstCallRules,
   diagnoseRead,
   // Probes an app's windows outside the engine ({ status, windows, minimized, hidden, onScreen }).
@@ -1604,6 +1615,7 @@ export function createRelay({
         .filter(t => !HIDDEN_TOOLS.has(t.name))
         .filter(t => !documentMode || t.name === 'js' || t.name === TURN_END_TOOL)
         .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t))
+        .map(t => (firstCallBatch && t.name === 'js' ? { ...t, description: batchingDescription(t.description) } : t))
         .concat(documentMode ? [DOCUMENT_TOOL, ...(localTools?.tools ?? []).filter(t => t.name === 'select_window')] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : [])
         // Claude Code defers MCP tools behind a search, which cost a turn before the first call, and
         // again before the first drag (3/3 textedit-drag runs, 2026-10-08). sleight's descriptions

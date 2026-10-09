@@ -462,6 +462,7 @@ export async function run({ leaseDirectory } = {}) {
     diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, { readControl, probeApp: appHealth.probe }),
     spaceProbe: appHealth.probe,
     guardMode: process.env.SLEIGHT_GUARD,
+    firstCallBatch: process.env.SLEIGHT_FIRST_CALL_BATCH === '1',
     clientIn: process.stdin,
     clientOut: process.stdout,
     serverIn: child.stdin,

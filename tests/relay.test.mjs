@@ -1690,6 +1690,23 @@ test('an acquisition\'s read stands in for the guard\'s first read in the next c
   assert.match(h.toServer.find(m => m.id === 3).params.arguments.code, /state\.prior = undefined/);
 });
 
+test('SLEIGHT_FIRST_CALL_BATCH rewrites only the engine\'s first-call rule, only when it matches exactly', async () => {
+  const { batchingDescription } = await import('../plugins/sleight/lib/relay.mjs');
+  const engine = 'Control apps.\n\nOn the first invocation of `cua_repl`, or after resetting it, execute exactly one of the API calls shown below, optionally assigning its result to a variable. Do not add other API calls, waits, or snapshots to that invocation.\nThe tool result will include documentation.';
+  const rewritten = batchingDescription(engine);
+  assert.match(rewritten, /put them after it in the same call/);
+  assert.doesNotMatch(rewritten, /exactly one of the API calls/);
+  assert.ok(rewritten.startsWith('Control apps.') && rewritten.endsWith('The tool result will include documentation.'));
+  assert.equal(batchingDescription('a changed engine sentence'), 'a changed engine sentence');
+  for (const [firstCallBatch, rewrites] of [[false, false], [true, true]]) {
+    const h = harness({ firstCallBatch });
+    h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }); await tick();
+    h.fromServer({ jsonrpc: '2.0', id: 1, result: { tools: [{ name: 'js', description: engine, inputSchema: { type: 'object' } }] } }); await tick();
+    const js = h.toClient.find(m => m.id === 1).result.tools.find(t => t.name === 'js');
+    assert.equal(js.description === engine, !rewrites);
+  }
+});
+
 test('SLEIGHT_GUARD=careful reaches the guard sent to the engine; the default skips reads between tree-free actions', async () => {
   for (const [guardMode, careful] of [[undefined, false], ['careful', true]]) {
     const h = harness({ guardMode });
