@@ -246,9 +246,10 @@ test('Safari records launch ownership before acquiring a new fixture window', as
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const actions = [];
   let finish;
-  const lease = await openFixture({ dir }, {
+  const lease = await openFixture({ dir, ownerAway: true }, {
     app: 'Safari', bundle: 'com.apple.Safari', target: 'http://127.0.0.1/test', mode: 'window',
   }, {
+    helper: async () => ({ command: 'native-browser-helper', args: [] }),
     open: async (command, args) => {
       assert.equal(command, '/usr/bin/open');
       actions.push(args);
@@ -261,7 +262,7 @@ test('Safari records launch ownership before acquiring a new fixture window', as
     },
   });
   assert.deepEqual(actions, [
-    ['-g', '-a', 'Safari'], ['-g', '-a', 'Safari', 'http://127.0.0.1/test'],
+    ['-g', '-a', 'Safari'],
   ]);
   assert.equal(lease.running, false);
   assert.equal(lease.pid, 123);
@@ -330,14 +331,32 @@ test('a generic Archive title cannot establish Finder ownership during setup', (
   assert.equal(api.matches({}, request, true), true, 'the retained owned reference can navigate into Archive');
 });
 
+test('document identity normalizes both Foundation file URLs and private fixture paths', () => {
+  const source = readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8');
+  const native = value => value;
+  native.AXUIElementCopyAttributeValue = (_window, name, output) => {
+    output[0] = name === 'AXDocument' ? 'file:///tmp/Pages-abc.pdf' : 'Pages-abc.pdf'; return 0;
+  };
+  const url = value => ({ isNil: () => false, isFileURL: true, absoluteString: value,
+    URLByResolvingSymlinksInPath: { path: value.replace('file://', '').replace(/^\/private\//, '/') } });
+  native.NSURL = { URLWithString: url, fileURLWithPath: value => url('file://' + value) };
+  const sandbox = { $: native, Ref: () => [], ObjC: { import() {}, castRefToObject: value => value, unwrap: value => value } };
+  runInNewContext(source, sandbox);
+  const api = sandbox.nativeAX();
+  assert.equal(api.matches({}, { mode: 'document', target: '/private/tmp/Pages-abc.pdf', token: 'Pages-abc.pdf' }), true);
+  assert.equal(api.matches({}, { mode: 'document', target: '/private/tmp/Other.pdf', token: 'Pages-abc.pdf' }), false,
+    'a matching title must never override another document path');
+});
+
 test('ordinary cancellation retains the helper until its owned window is closed', async t => {
   const { openFixture } = await import('../bench/real-fixture.mjs');
   const dir = mkdtempSync(join(tmpdir(), 'real-fixture-cancel-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const controller = new AbortController(), cleanup = new AbortController();
   let finish, helperSignal;
-  const lease = await openFixture({ dir, signal: controller.signal, cleanupSignal: cleanup.signal },
+  const lease = await openFixture({ dir, ownerAway: true, signal: controller.signal, cleanupSignal: cleanup.signal },
     { app: 'Safari', bundle: 'com.apple.Safari', target: 'http://127.0.0.1/test', mode: 'window' }, {
+      helper: async () => ({ command: 'native-browser-helper', args: [] }),
       run: async (_command, _args, options) => {
         helperSignal = options.signal;
         options.onStdout('{"stage":"launch","running":true}\n{"stage":"armed","running":true}\n{"stage":"ready"}\n');
@@ -530,6 +549,69 @@ test('a failed Safari File-menu lookup cancels that menu before propagating the 
   assert.deepEqual(events, ['open', 'cancel']);
   api.cancel = () => { throw new Error('cancel failed'); };
   assert.throws(() => chooseFileMenu(file, ['New Window'], api), error => error.menuCleanupError === 'cancel failed');
+});
+
+test('document cleanup does not inspect or discard the document exposed after its fixture closes', () => {
+  const { closeOwnedWindow } = nativeSource(), owned = {};
+  let matches = true;
+  closeOwnedWindow(owned, { mode: 'document' }, {}, {
+    exists: () => true, matches: () => matches, focused: () => owned, equal: (a, b) => a === b,
+    closeDocument: () => { matches = false; }, wait() {},
+    discard: () => assert.fail('preserve the owner document now visible in the retained window'),
+  });
+});
+
+test('document menu closure prefers the enabled per-document command over window closure', () => {
+  const { chooseFileMenu } = nativeSource(), file = {}, menu = {}, selected = { title: 'Close Selected PDF Document' },
+    wholeWindow = { title: 'Close Window' }, disabled = { title: 'Close Selected PDF Document', disabled: true }, presses = [];
+  chooseFileMenu(file, ['Close Selected PDF Document', 'Close Window'], {
+    children: element => element === file ? [menu] : [disabled, wholeWindow, selected],
+    text: (element, name) => name === 'AXRole' ? 'AXMenu' : element.title,
+    enabled: element => !element.disabled, press: element => presses.push(element), cancel() {},
+  });
+  assert.deepEqual(presses, [file, selected]);
+});
+
+test('document close revalidates focus after menu lookup and cancels on an owner switch', () => {
+  const { chooseFileMenu, closeOwnedWindow } = nativeSource();
+  const owned = {}, owner = {}, app = {}, file = {}, menu = {}, close = {}, presses = [];
+  let focused = owned, cancelled = false;
+  const api = {
+    exists: () => true, matches: () => true, focused: () => focused, equal: (a, b) => a === b,
+    closeDocument: (_app, beforePress) => chooseFileMenu(file, ['Close'], {
+      children: element => { if (element === file) return [menu]; focused = owner; return [close]; },
+      text: (_element, name) => name === 'AXRole' ? 'AXMenu' : 'Close',
+      press: element => presses.push(element), beforePress,
+      cancel: () => { cancelled = true; },
+    }),
+    wait() {}, discard: () => assert.fail('no discard after an owner switch'),
+  };
+  assert.throws(() => closeOwnedWindow(owned, { mode: 'document' }, app, api), /focus/);
+  assert.deepEqual(presses, [file]);
+  assert.equal(cancelled, true);
+});
+
+test('Safari refuses blank-window setup before any mutation without an owner-away boundary', async () => {
+  const { openFixture } = await import('../bench/real-fixture.mjs');
+  await assert.rejects(openFixture({ dir: '/unused' }, { app: 'Safari', bundle: 'com.apple.Safari' }, {
+    helper: async () => assert.fail('must not start a native helper'),
+    open: async () => assert.fail('must not launch Safari'),
+  }), error => error.noMutation === true && /owner-away/.test(error.message));
+});
+
+test('disabled document close activates only with an explicit owner-away boundary and revalidates', () => {
+  const { closeDocumentSafely } = nativeSource(), events = [];
+  assert.equal(typeof closeDocumentSafely, 'function');
+  let active = false;
+  const api = {
+    menu: (_app, validate) => { events.push('menu'); if (!active) throw new Error('Fixture menu item unavailable or ambiguous'); validate(); events.push('close'); },
+    activate: () => { active = true; events.push('activate'); },
+  };
+  assert.throws(() => closeDocumentSafely({}, {}, () => events.push('validate'), api), /unavailable/);
+  assert.deepEqual(events, ['menu']);
+  events.length = 0;
+  closeDocumentSafely({}, { ownerAway: true }, () => events.push('validate'), api);
+  assert.deepEqual(events, ['menu', 'validate', 'activate', 'validate', 'menu', 'validate', 'close']);
 });
 
 test('a collected helper refusal before any mutation confirms cleanup without an AX action', async t => {

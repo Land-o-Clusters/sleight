@@ -9,7 +9,7 @@ import { heliumHelper } from './real-helium.mjs';
 const execute = promisify(execFile);
 const script = fileURLToPath(new URL('./real-fixture.js', import.meta.url));
 async function fixtureHelper(request, signal) {
-  return request.bundle === 'net.imput.helium'
+  return ['net.imput.helium', 'com.apple.Safari'].includes(request.bundle)
     ? { command: await heliumHelper(signal), args: [] }
     : { command: '/usr/bin/osascript', args: ['-l', 'JavaScript', script] };
 }
@@ -18,6 +18,10 @@ async function fixtureHelper(request, signal) {
 // window inventory or an Apple Event. Only a retained reference permits closing
 // a window; a missing reference leaves cleanup unconfirmed.
 export async function openFixture(ctx, request, { run = runOwned, open = execute, launch, helper = fixtureHelper } = {}) {
+  if (request.bundle === 'com.apple.Safari' && ctx.ownerAway !== true) {
+    throw Object.assign(new Error('Safari blank-window setup requires an explicit owner-away boundary'), { noMutation: true });
+  }
+  request = { ...request, ownerAway: ctx.ownerAway === true };
   ctx.signal?.throwIfAborted();
   ctx.cleanupSignal?.throwIfAborted();
   const startedAtMs = Date.now();
@@ -73,7 +77,8 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
       if (untouched(result)) return;
       if (!result.groupClean || result.error || result.exit.code !== 0 ||
         !result.stdout.split('\n').some(line => { try { return JSON.parse(line).stage === 'closed'; } catch { return false; } })) {
-        throw new Error('Owned fixture window cleanup unconfirmed');
+        diagnostics.closeFailure = result.stderr?.trim() || result.error;
+        throw new Error(`Owned fixture window cleanup unconfirmed${diagnostics.closeFailure ? ': ' + diagnostics.closeFailure : ''}`);
       }
     },
     async dispose() { controller.abort(); return (await response).groupClean === true; },
@@ -98,7 +103,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
         if (typeof event.running === 'boolean') { lease.running = event.running; diagnostics.running = event.running; }
         if (event.pid) { lease.pid = event.pid; diagnostics.pid = event.pid; }
         if (event.stage === 'retry') diagnostics.retries.push({ code: event.code, waitMs: event.waitMs, totalWaitMs: event.totalWaitMs });
-        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'readiness']) {
+        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback']) {
           if (event[key] !== undefined) diagnostics[key] = event[key];
         }
         if (event.stage) stage(event.stage).resolve(event);
@@ -123,7 +128,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
   await waitStage('armed');
   signal?.throwIfAborted();
   if (launch) await launch(beginLaunch);
-  else {
+  else if (request.bundle !== 'com.apple.Safari') {
     beginLaunch();
     const args = request.app === 'Helium'
       ? ['-n', '-g', '-a', request.app, '--args', '--new-window', request.target]

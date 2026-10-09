@@ -4,7 +4,7 @@
 // and prints a table.
 //
 //   node bench/run.mjs [--arm sleight|lcu|codex|all|a,b] [--suite default|real] [--tasks id,id] [--runs N] [--model M] [--effort E]
-//     [--codex-model M] [--codex-effort E] [--dry-run] [--setup-only]
+//     [--codex-model M] [--codex-effort E] [--dry-run] [--setup-only] [--owner-away]
 //
 // Model and effort default to Sonnet 5.5 at medium (owner, 2026-10-03). Runs
 // before that used Claude Code's default, Opus 5.5.
@@ -52,6 +52,7 @@ function gitRoot(dir) {
 }
 const isDryRun = process.argv.includes('--dry-run');
 const isSetupOnly = process.argv.includes('--setup-only');
+const ownerAway = process.argv.includes('--owner-away');
 const suite = option('suite', 'default');
 if (isSetupOnly && (suite !== 'real' || isDryRun)) throw new Error('--setup-only requires --suite real without --dry-run');
 const suiteTasks = getTasks(suite);
@@ -210,7 +211,7 @@ mkdirSync(resultsDir, { recursive: true });
 const file = join(resultsDir, `${stamp}${isDryRun ? '-dry' : isSetupOnly ? '-setup' : ''}.json`);
 // Written after every run, so a run cut short keeps what it finished.
 const save = () => {
-  const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite, surfaces: 'computer' } : {}),
+  const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite, surfaces: 'computer', ownerAway } : {}),
     arms: armNames, model, effort, claude: claudeBin, results,
     ...(passCleanupErrors.length && { passCleanupErrors }) }, null, 2);
   writeFileSync(file, (suite === 'real' ? scrub(json) : json) + '\n');
@@ -260,7 +261,7 @@ pass: for (let run = 1; run <= runs; run++) {
       const nonce = randomBytes(4).toString('hex');
       const dir = join(suite === 'real' ? realpathSync(tmpdir()) : tmpdir(), 'sleight-bench', stamp, `${armName}-${task.id}-${run}`);
       mkdirSync(dir, { recursive: true });
-      const ctx = { dir, nonce };
+      const ctx = { dir, nonce, ownerAway };
       if (suite === 'real') {
         realContexts.push(ctx);
         const evidenceDir = join(tmpdir(), 'sleight-real-evidence', stamp, `${armName}-${task.id}-${run}`);
