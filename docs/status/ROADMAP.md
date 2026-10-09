@@ -61,7 +61,11 @@ only with a measured reason. In order:
    which slows the first call. Local tools spawn `osascript` twice per call, each lease operation
    opens SQLite, and the keyboard-tap scan holds up the turn end. Rank them by the footprint numbers.
 4. Fewer turns. Model time is about two thirds of a run, so batching like Claude's own computer use
-   is the largest lever left once the reads are cheap.
+   is the largest lever left once the reads are cheap. A transcript study (2026-10-09) found 13 to
+   20% of calls could have merged with the one before, mostly save-then-close and keys after a
+   click. The engine's description says to send only an acquisition first, and 798 of 799 sessions
+   did. `SLEIGHT_FIRST_CALL_BATCH=1` (`6cd41ba`) rewrites that sentence; A/B it on the default suite's
+   turns, then make it the default or drop it.
 5. A release only when the head-to-head shows sleight at Codex's speed and footprint, with the numbers
    published.
 
