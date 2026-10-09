@@ -50,13 +50,13 @@ only with a measured reason. In order:
    own processes (sleight's relay, mod, helper spawns and pane snapshots against Codex's).
 2. Cut the reads Codex doesn't make. A read right after an action waits for the UI to settle
    (about 400 ms, tens of seconds under load). The guard does one before each action after the
-   first in a call and one after the call. Keys, text and coordinates don't need the tree, and the
-   owner chose to skip the read before them by default (2026-10-09, `SLEIGHT_GUARD=careful` keeps it). Numbered actions keep it,
-   since it catches renumbering. The read after the call saves Claude a turn, so it stays only if
-   the head-to-head shows it pays.
-3. Stop spawning processes per call. The Space probe runs `osascript` on every app read
-   (about 150 ms of CPU each). One long-lived helper in the relay (persistent JXA answered in about
-   2 ms, Astra) or a probe only after a failure. Same for the keyboard-tap and other checks.
+   first in a call and one after the call. Done for keys, text, paste and coordinates (`44700ee`,
+   owner's call, `SLEIGHT_GUARD=careful` keeps the read). Numbered actions keep it, since it catches
+   renumbering. The read after the call saves Claude a turn, so it stays only if the head-to-head
+   shows it pays.
+3. Stop spawning processes per call. Done for app probes: one long-lived helper per session, about
+   33 ms a probe against about 180 ms a spawn (`818f7e7`). Left: the keyboard-tap check at turn end
+   and the pane's snapshot, once the footprint numbers say what they cost.
 4. Fewer turns. Model time is about two thirds of a run, so batching like Claude's own computer use
    is the largest lever left once the reads are cheap.
 5. A release only when the head-to-head shows sleight at Codex's speed and footprint, with the numbers
@@ -66,44 +66,29 @@ Done: the relay "spike" was a timing bug (real relay time is about 0.4 s a pass)
 dropped: a first-call hint (8/12 runs still called `getState` first), trimming the engine's docs
 (about 0.1 s a run), and screenshot scaling (`perf/screenshot-scale`, 92 turns against 85 in 9 runs each).
 
-- Speed under load (owner, 2026-10-09). The owner's dev Mac always runs big local tests, and
-  sleight must hold up there as Codex does. Run the same tasks through sleight and Codex, unloaded
-  and under load, and find where sleight's extra time goes: its guard reads, its own Accessibility
-  checks (0.5 s deadline) and the relay. On 2026-10-09, at a load average of about 100, one engine
-  read took 17 s, and that engine is the one Codex uses too. First measurement (`load-cost`, no
-  model): without load the guard turns eight clicks from 593 ms into 3,609 ms, and under load it
-  stopped 5 of 5 such calls on a renumbering check, against 0 of 5 without load. The false stops
-  were degraded reads (`7d63e48` fixed them, 0 of 5 under load after). The cost is a settle wait of
-  about 400 ms per action, tens of seconds under load, and the engine's inventory doesn't list windows to
-  check instead. Astra's native window check failed (`674502d`, report
-  `docs/benchmarks/2026-10-09-guard-speed.md`): the engine's JavaScript can't open a socket
-  (`connect EPERM`), and an Accessibility observer failed 14 of 20 reads at load 62 to 67, so a
-  loaded Mac starves any window check. Only the compactor fold for degraded lines was merged. Next:
-  the head-to-head under the owner's normal load, to size the gap on real tasks, then the owner's
-  call on an opt-in mode that skips the read between tree-free actions.
-- Batching (owner, 2026-10-09). Claude's own computer use groups more actions into one call. In 887 benchmark
-  transcripts, 62% of `js` calls that act send one action, and 35% of all calls only read. Find
-  what keeps Claude from batching (the guard's per-action reads, the skill, the tool description)
-  and measure fewer turns before releasing a change.
-- Model time is about two thirds of every run, so turns are the lever: each costs 2 to 2.7 s.
-- Guard reads after an action wait about 410 ms each for the UI to settle. A cheaper identity check
-  (the engine's app inventory answers in 11 to 30 ms) for actions on coordinates, keys or text would keep
-  the window check without the full read. Stable-controls mode (3,775 ms to 801 ms on Calculator)
-  gives up checks, so it stays out unless the owner chooses it.
+- Background for step 1 (2026-10-09). `load-cost` (no model): without load the guard turned eight
+  clicks from 593 ms into 3,609 ms. Under load it stopped 5 of 5 such calls on degraded reads
+  (`7d63e48` fixed that). The engine's inventory doesn't list windows, and Astra's native window
+  check failed (`674502d`): the engine's JavaScript can't open a socket, and an Accessibility observer
+  failed 14 of 20 reads at load 62 to 67. A loaded Mac starves any window check.
+- In 887 benchmark transcripts, 62% of `js` calls that act send one action, and 35% of all calls
+  only read. Each turn costs 2 to 2.7 s.
 - A warm-up read right after launch (one cold Calculator read took 16.7 s).
 - textedit-save spent 7 to 17.5 s per run in guard reads. Fold the last read into Claude's own.
+- Stable-controls mode (3,775 ms to 801 ms on Calculator) gives up checks, so it stays out unless the
+  owner chooses it.
 
 ## 4. Realistic apps (Sol)
 
-- Briefs 6, 7 and 7b are built. Qualification on 2026-10-09 went 3/3 each for Helium, Preview, Finder and TextEdit with
-  Calculator. Safari, helium-dense and word-edit blocked by harness problems.
-- Brief 8 fixes those (`4323a41`, done 2026-10-09). sleight-arch then reruns qualification with the owner away.
-- Mail and Mimestream run while the owner watches. simulator-flow runs with the owner away.
-- sleight-arch reviews, rebases onto `pane/auto-mode` and merges.
+- Briefs 6 to 10 are built and squash-merged into `pane/auto-mode` (through `309c2c9`).
+  Qualification on 2026-10-09 passed Helium, Preview, Finder and TextEdit with Calculator 3/3 each,
+  and all 11 web tasks 1/1. Still to qualify are Word, Excel and PowerPoint with brief 10 and
+  simulator-flow (owner away), and Mail and Mimestream (owner watching).
 
 ## 5. After 1.0, in the owner's order
 
-1. A real-use pass, then the Codex head-to-head on it (needs a Codex arm for the real suite).
+1. A real-use pass, then the Codex head-to-head on it. The Codex arm runs the real suite
+   (`768cbcd`, helium-form 1/1), so this is the head-to-head in track 3, step 1.
 2. Fill the [PENDING] lines of the launch post in `~/Desktop/sleight-launch/thread-1.0.md`.
 3. Replay: a successful run turns into a script that replays through the engine with no model,
    keeping sleight's guards, so it stops when the app isn't in the state the script expects. First
