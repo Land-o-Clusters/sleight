@@ -14,6 +14,12 @@ Accessibility text move is back on, settled with a Shift event posted to the app
 the event, 10 edits and then 10 `drag` moves saved with no hang; without it, 5 of 8 edits hung.
 Claude benchmark arms run without Bash, Write, Edit or web tools (`0270374`). No run had used them
 to pass a check (716 transcripts checked).
+Head-to-head on Calculator and TextEdit (`docs/benchmarks/2026-10-09-h2h-background.json`): sleight
+15/15 (446 s), Codex 12/15 (732 s), Codex 0/3 on textedit-drag. Chess and the simulator still need a
+run with the owner away. `main` has one README commit (`dcad210`, the release badge) that the branch
+carries as `4f652f6`: merge `origin/main` into the branch before the next fast-forward. A docs rewrite
+by an agent was discarded (5% shorter, built on stale files); regroup known-problems by area at the
+next release.
 Sol's next brief, from a review of `550080e`: `.dev/prompts/sol-real-use-tasks-5.md` (quit launched
 apps, the keyboard-tap check for real runs, `REAL_APPS` kept out of the core allowlist, recovery
 only through owned references, one failure doesn't stop the suite). The owner pastes it to Sol.

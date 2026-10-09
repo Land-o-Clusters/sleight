@@ -182,6 +182,17 @@ Passes on the way to 0.16.0, before its drag change:
   throughout. One chess-drag run hit the runner's 5-minute limit after saving a correct game, so it
   passed without a turn count.
 
+A head-to-head on the Calculator and TextEdit tasks
+([`h2h-background`](benchmarks/2026-10-09-h2h-background.json), 3 runs each, Sonnet 5.5 against
+gpt-6.1-sol, both at medium) went 15/15 for sleight in 101 turns and 446 s, and 12/15 for native
+Codex in 129 model requests and 732 s. Codex failed textedit-drag 3/3: its background mouse drags
+left the word where it was, as the engine's own drag did in every TextEdit text move we measured.
+sleight moved it 3/3 with its `drag` tool. On the other four tasks both passed 3/3, with medians
+within 11 s of each other. The models differ, so this compares the two products, not the
+harnesses alone. The owner was using the Mac, and the sleight arm ran unreleased code with the
+Accessibility text move (`ff3f406`). Chess and the simulator weren't run, because they can need the
+pointer or the keyboard.
+
 The first core head-to-head with native Codex computer use
 ([`h2h-core-stopped`](benchmarks/2026-10-09-h2h-core-stopped.json), Sonnet 5.5 against gpt-6.1-sol,
 both at medium) was stopped after 19 of 42 runs, when the owner's keyboard stopped working (see

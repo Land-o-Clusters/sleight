@@ -1,0 +1,1020 @@
+{
+  "stamp": "2026-10-09T02-25-10-664Z",
+  "arms": [
+    "sleight",
+    "codex"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 16.8,
+      "turns": 4,
+      "costUsd": 0.18665939999999998,
+      "usage": {
+        "input": 8,
+        "cacheRead": 193457,
+        "cacheWrite": 35973,
+        "output": 406
+      },
+      "timing": {
+        "totalMs": 14164,
+        "modelMs": 7525,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 4994,
+        "engineMs": 4906,
+        "relayMs": 88,
+        "localMs": 0,
+        "guardReads": 7,
+        "guardReadMs": 2673.932040999999,
+        "guardReadFailures": 0,
+        "otherMs": 1645
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 17,
+      "turns": 4,
+      "usage": {
+        "input": 92029,
+        "cacheRead": 75776,
+        "cacheWrite": 0,
+        "output": 205
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 2,
+      "engineMs": 1963
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 1,
+      "passed": true,
+      "seconds": 25.3,
+      "turns": 5,
+      "costUsd": 0.20348459999999996,
+      "usage": {
+        "input": 10,
+        "cacheRead": 255303,
+        "cacheWrite": 36496,
+        "output": 642
+      },
+      "timing": {
+        "totalMs": 23570,
+        "modelMs": 13481,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 7943,
+        "engineMs": 7874,
+        "relayMs": 69,
+        "localMs": 0,
+        "guardReads": 8,
+        "guardReadMs": 3516.304834000004,
+        "guardReadFailures": 0,
+        "otherMs": 2146
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "calculator-menu",
+      "run": 1,
+      "passed": true,
+      "seconds": 28.6,
+      "turns": 6,
+      "usage": {
+        "input": 165915,
+        "cacheRead": 143488,
+        "cacheWrite": 0,
+        "output": 286
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 6,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 4,
+      "engineMs": 5885
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 48.1,
+      "turns": 10,
+      "costUsd": 0.30131699999999995,
+      "usage": {
+        "input": 20,
+        "cacheRead": 539935,
+        "cacheWrite": 44105,
+        "output": 1687
+      },
+      "timing": {
+        "totalMs": 45861,
+        "modelMs": 22472,
+        "calls": 9,
+        "refused": 0,
+        "toolMs": 21189,
+        "engineMs": 18708,
+        "relayMs": 2481,
+        "localMs": 0,
+        "guardReads": 22,
+        "guardReadMs": 17484.058793,
+        "guardReadFailures": 1,
+        "otherMs": 2200
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 6,
+        "offScreenOnly": 2,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "I created a new TextEdit document, made it plain text, typed `sleight bench a8490002`, and saved it as `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T02-25-10-664Z/sleight-textedit-save-1/a8490002.txt`. Then I closed it.\n\nThe save dialog's window title and file URL showed",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 47.1,
+      "turns": 10,
+      "usage": {
+        "input": 345932,
+        "cacheRead": 305280,
+        "cacheWrite": 0,
+        "output": 586
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 8,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "Saved `a72128c7.txt` as plain text at the specified path with exactly `sleight bench a72128c7`, then closed the document.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 8,
+      "engineMs": 9372
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 25.1,
+      "turns": 6,
+      "costUsd": 0.20709940000000002,
+      "usage": {
+        "input": 12,
+        "cacheRead": 313407,
+        "cacheWrite": 33921,
+        "output": 871
+      },
+      "timing": {
+        "totalMs": 23422,
+        "modelMs": 9823,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 11815,
+        "engineMs": 11800,
+        "relayMs": 15,
+        "localMs": 0,
+        "guardReads": 8,
+        "guardReadMs": 2310.292248999999,
+        "guardReadFailures": 0,
+        "otherMs": 1784
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 3,
+        "offScreenOnly": 1,
+        "none": 1
+      },
+      "exitCode": 0,
+      "answer": "I opened `dd994fee-edit.txt` in TextEdit and changed its text from \"alpha beta gamma\" to \"alpha delta gamma\". I saved it and closed the window.\n\nAfter the save, TextEdit no longer showed the \"Edited\" marker, so the save went through. I didn't re-read the file from disk.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 34.8,
+      "turns": 8,
+      "usage": {
+        "input": 233386,
+        "cacheRead": 209024,
+        "cacheWrite": 0,
+        "output": 486
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "Replaced “beta” with “delta” in TextEdit, saved the file, and closed the document.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 6,
+      "engineMs": 7252
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 39.2,
+      "turns": 8,
+      "costUsd": 0.25595480000000004,
+      "usage": {
+        "input": 16,
+        "cacheRead": 448654,
+        "cacheWrite": 38043,
+        "output": 1402
+      },
+      "timing": {
+        "totalMs": 37574,
+        "modelMs": 19263,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 15398,
+        "engineMs": 12001,
+        "relayMs": 15,
+        "localMs": 3382,
+        "guardReads": 7,
+        "guardReadMs": 2577.247459000004,
+        "guardReadFailures": 0,
+        "otherMs": 2913
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 4,
+        "offScreenOnly": 2,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "I opened the file in TextEdit and dragged \"alpha\" to the end of the line, so it reads \"beta gamma alpha\". I then saved with Cmd+S and closed the window.\n\nThe drag was a real drag-and-drop of the selected word, with no typing or cut and paste. TextEdit added the space before \"alpha\" itself. I checked",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-drag",
+      "run": 1,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\"",
+      "seconds": 97.5,
+      "turns": 15,
+      "usage": {
+        "input": 488071,
+        "cacheRead": 433536,
+        "cacheWrite": 0,
+        "output": 1956
+      },
+      "appWindows": {
+        "samples": 20,
+        "onScreen": 17,
+        "offScreenOnly": 1,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "I opened the file and selected “alpha,” but the background mouse drags didn’t move it. I saved and closed the document; it still reads `alpha beta gamma`.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 13,
+      "engineMs": 17602
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 2,
+      "passed": true,
+      "seconds": 19.4,
+      "turns": 4,
+      "costUsd": 0.184178,
+      "usage": {
+        "input": 8,
+        "cacheRead": 195450,
+        "cacheWrite": 35063,
+        "output": 482
+      },
+      "timing": {
+        "totalMs": 15861,
+        "modelMs": 6221,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 4548,
+        "engineMs": 4538,
+        "relayMs": 10,
+        "localMs": 0,
+        "guardReads": 7,
+        "guardReadMs": 2628.5495419999997,
+        "guardReadFailures": 0,
+        "otherMs": 5092
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "calculator-click",
+      "run": 2,
+      "passed": true,
+      "seconds": 21.8,
+      "turns": 4,
+      "usage": {
+        "input": 99791,
+        "cacheRead": 79616,
+        "cacheWrite": 0,
+        "output": 192
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 2,
+      "engineMs": 1980
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 2,
+      "passed": true,
+      "seconds": 18,
+      "turns": 5,
+      "costUsd": 0.20271340000000002,
+      "usage": {
+        "input": 10,
+        "cacheRead": 255237,
+        "cacheWrite": 36444,
+        "output": 587
+      },
+      "timing": {
+        "totalMs": 16346,
+        "modelMs": 8956,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 5258,
+        "engineMs": 5244,
+        "relayMs": 14,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 3684.8345839999965,
+        "guardReadFailures": 0,
+        "otherMs": 2132
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "calculator-menu",
+      "run": 2,
+      "passed": true,
+      "seconds": 28.4,
+      "turns": 6,
+      "usage": {
+        "input": 162090,
+        "cacheRead": 138752,
+        "cacheWrite": 0,
+        "output": 406
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 6,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 4,
+      "engineMs": 2810
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 38.6,
+      "turns": 7,
+      "costUsd": 0.239449,
+      "usage": {
+        "input": 14,
+        "cacheRead": 385375,
+        "cacheWrite": 38219,
+        "output": 947
+      },
+      "timing": {
+        "totalMs": 37044,
+        "modelMs": 11567,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 16895,
+        "engineMs": 15834,
+        "relayMs": 1061,
+        "localMs": 0,
+        "guardReads": 16,
+        "guardReadMs": 13299.817082999998,
+        "guardReadFailures": 1,
+        "otherMs": 8582
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 3,
+        "offScreenOnly": 3,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "I created the TextEdit document, made it plain text, typed `sleight bench 4887f391`, and saved it as `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T02-25-10-664Z/sleight-textedit-save-2/4887f391.txt`. Then I closed the document.\n\nI used the Make Plain Text keyboard shortc",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 47.8,
+      "turns": 10,
+      "usage": {
+        "input": 412555,
+        "cacheRead": 359552,
+        "cacheWrite": 0,
+        "output": 585
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 8,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "Created the plain text file with exactly `sleight bench abf44f27`, saved it to the requested path, and closed the document.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 8,
+      "engineMs": 11022
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 2,
+      "passed": true,
+      "seconds": 26.2,
+      "turns": 6,
+      "costUsd": 0.2115912,
+      "usage": {
+        "input": 12,
+        "cacheRead": 317276,
+        "cacheWrite": 35193,
+        "output": 734
+      },
+      "timing": {
+        "totalMs": 24392,
+        "modelMs": 10029,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 12713,
+        "engineMs": 11733,
+        "relayMs": 980,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 4584.250913999997,
+        "guardReadFailures": 0,
+        "otherMs": 1650
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 2,
+        "offScreenOnly": 2,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "I replaced \"beta\" with \"delta\" in `ab982f7f-edit.txt`. The text now reads \"alpha delta gamma\". I saved it with Cmd+S and then closed the window.\n\nI didn't reopen the file to check the saved contents. The close happened with no unsaved-changes prompt, so the save should have gone through.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-edit",
+      "run": 2,
+      "passed": true,
+      "seconds": 38.5,
+      "turns": 8,
+      "usage": {
+        "input": 232547,
+        "cacheRead": 209280,
+        "cacheWrite": 0,
+        "output": 487
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 4,
+        "offScreenOnly": 2,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "Replaced “beta” with “delta” in TextEdit, saved the file, and closed the document.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 6,
+      "engineMs": 11269
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 2,
+      "passed": true,
+      "seconds": 32.6,
+      "turns": 8,
+      "costUsd": 0.2641714,
+      "usage": {
+        "input": 16,
+        "cacheRead": 455147,
+        "cacheWrite": 40060,
+        "output": 1287
+      },
+      "timing": {
+        "totalMs": 30844,
+        "modelMs": 14781,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 13238,
+        "engineMs": 9068,
+        "relayMs": 978,
+        "localMs": 3192,
+        "guardReads": 9,
+        "guardReadMs": 3000.835750999996,
+        "guardReadFailures": 0,
+        "otherMs": 2825
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 4,
+        "offScreenOnly": 1,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "The text in `bf22bd9c-drag.txt` now reads \"beta gamma alpha\". I saved the file and closed the document.\n\nI selected \"alpha\" and dragged it to the end of the line with the mouse. I didn't type or cut and paste. The drag moved the text and inserted the space itself. I read the text back from the windo",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-drag",
+      "run": 2,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\"",
+      "seconds": 146.9,
+      "turns": 18,
+      "usage": {
+        "input": 609154,
+        "cacheRead": 577664,
+        "cacheWrite": 0,
+        "output": 2137
+      },
+      "appWindows": {
+        "samples": 30,
+        "onScreen": 27,
+        "offScreenOnly": 0,
+        "none": 3
+      },
+      "exitCode": 0,
+      "answer": "I opened the file and selected “alpha,” but TextEdit did not move it during the mouse drag attempts. I closed the document unchanged; it still reads “alpha beta gamma.”",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 16,
+      "engineMs": 20070
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 3,
+      "passed": true,
+      "seconds": 14.7,
+      "turns": 4,
+      "costUsd": 0.1804414,
+      "usage": {
+        "input": 8,
+        "cacheRead": 193637,
+        "cacheWrite": 34217,
+        "output": 483
+      },
+      "timing": {
+        "totalMs": 13187,
+        "modelMs": 6936,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 4894,
+        "engineMs": 4882,
+        "relayMs": 12,
+        "localMs": 0,
+        "guardReads": 7,
+        "guardReadMs": 2863.9629569999997,
+        "guardReadFailures": 0,
+        "otherMs": 1357
+      },
+      "appWindows": {
+        "samples": 3,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "calculator-click",
+      "run": 3,
+      "passed": true,
+      "seconds": 17.9,
+      "turns": 4,
+      "usage": {
+        "input": 99824,
+        "cacheRead": 79616,
+        "cacheWrite": 0,
+        "output": 190
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "391",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 2,
+      "engineMs": 1830
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 3,
+      "passed": true,
+      "seconds": 15.3,
+      "turns": 4,
+      "costUsd": 0.18261280000000002,
+      "usage": {
+        "input": 8,
+        "cacheRead": 192974,
+        "cacheWrite": 34823,
+        "output": 471
+      },
+      "timing": {
+        "totalMs": 13945,
+        "modelMs": 7667,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 5074,
+        "engineMs": 4119,
+        "relayMs": 955,
+        "localMs": 0,
+        "guardReads": 9,
+        "guardReadMs": 2895.7735410000005,
+        "guardReadFailures": 0,
+        "otherMs": 1204
+      },
+      "appWindows": {
+        "samples": 3,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "calculator-menu",
+      "run": 3,
+      "passed": true,
+      "seconds": 28.6,
+      "turns": 6,
+      "usage": {
+        "input": 165676,
+        "cacheRead": 143360,
+        "cacheWrite": 0,
+        "output": 281
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 6,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "1,024",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 4,
+      "engineMs": 5636
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 3,
+      "passed": true,
+      "seconds": 48.8,
+      "turns": 12,
+      "costUsd": 0.39075360000000003,
+      "usage": {
+        "input": 24,
+        "cacheRead": 737888,
+        "cacheWrite": 56397,
+        "output": 1754
+      },
+      "timing": {
+        "totalMs": 46855,
+        "modelMs": 25456,
+        "calls": 11,
+        "refused": 1,
+        "toolMs": 19126,
+        "engineMs": 18003,
+        "relayMs": 1123,
+        "localMs": 0,
+        "guardReads": 14,
+        "guardReadMs": 7370.415247999997,
+        "guardReadFailures": 0,
+        "otherMs": 2273
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 6,
+        "offScreenOnly": 2,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "I created the TextEdit document, made it plain text, and typed `sleight bench 9c15030b`. I saved it as `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T02-25-10-664Z/sleight-textedit-save-3/9c15030b.txt`, then closed it.\n\nThe window title and URL after the save confirmed th",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-save",
+      "run": 3,
+      "passed": true,
+      "seconds": 46.4,
+      "turns": 10,
+      "usage": {
+        "input": 416187,
+        "cacheRead": 362368,
+        "cacheWrite": 0,
+        "output": 583
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 8,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "Created the plain text file with exactly `sleight bench d34ee065`, saved it at the specified path, and closed the document.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 8,
+      "engineMs": 11585
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 3,
+      "passed": true,
+      "seconds": 34.1,
+      "turns": 9,
+      "costUsd": 0.2769274,
+      "usage": {
+        "input": 18,
+        "cacheRead": 514697,
+        "cacheWrite": 39763,
+        "output": 1490
+      },
+      "timing": {
+        "totalMs": 31125,
+        "modelMs": 15660,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 12497,
+        "engineMs": 11487,
+        "relayMs": 1010,
+        "localMs": 0,
+        "guardReads": 14,
+        "guardReadMs": 5002.9682090000015,
+        "guardReadFailures": 0,
+        "otherMs": 2968
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "I changed \"beta\" to \"delta\" in `44ec6a14-edit.txt`, saved it, and closed the document. TextEdit showed `alpha delta gamma` before the save, and closing didn't prompt about unsaved changes. The file list in the Open dialog shows it at 18 bytes.\n\nTextEdit's \"Open\" dialog is still showing. It was left ",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-edit",
+      "run": 3,
+      "passed": true,
+      "seconds": 33.8,
+      "turns": 7,
+      "usage": {
+        "input": 198674,
+        "cacheRead": 175488,
+        "cacheWrite": 0,
+        "output": 432
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "Replaced “beta” with “delta” in TextEdit, saved the file, and closed the document.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 5,
+      "engineMs": 7512
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 3,
+      "passed": true,
+      "seconds": 44,
+      "turns": 9,
+      "costUsd": 0.27106660000000005,
+      "usage": {
+        "input": 18,
+        "cacheRead": 514243,
+        "cacheWrite": 39033,
+        "output": 1205
+      },
+      "timing": {
+        "totalMs": 39768,
+        "modelMs": 18601,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 15626,
+        "engineMs": 10365,
+        "relayMs": 1169,
+        "localMs": 4092,
+        "guardReads": 11,
+        "guardReadMs": 4335.501458000001,
+        "guardReadFailures": 0,
+        "otherMs": 5541
+      },
+      "appWindows": {
+        "samples": 9,
+        "onScreen": 6,
+        "offScreenOnly": 0,
+        "none": 3
+      },
+      "exitCode": 0,
+      "answer": "The file now reads \"beta gamma alpha\". I saved it and closed the document.\n\nI selected \"alpha\" and dragged it to the end of the line with the mouse. Typing and cut-and-paste weren't used. The file shows as 17 bytes in the Open dialog's file list, which fits \"beta gamma alpha\" plus a newline. I didn'",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-drag",
+      "run": 3,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\"",
+      "seconds": 97.1,
+      "turns": 13,
+      "usage": {
+        "input": 421190,
+        "cacheRead": 391936,
+        "cacheWrite": 0,
+        "output": 1643
+      },
+      "appWindows": {
+        "samples": 20,
+        "onScreen": 17,
+        "offScreenOnly": 0,
+        "none": 3
+      },
+      "exitCode": 0,
+      "answer": "I opened the file and selected “alpha,” but background mouse drags failed to move it. I saved and closed the document; it still reads “alpha beta gamma.”",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 10,
+      "engineMs": 12463
+    }
+  ]
+}
