@@ -19,9 +19,16 @@ simulator-form failure and every Chess first drag on 2026-10-09 came from Claude
 off a screenshot Claude Code had shrunk. Measure chess-drag, simulator-form and textedit-drag (3 each)
 with the owner away before merging.
 
-Sol (`codex/real-use-tasks`, head `00d9d62`): briefs 6, 7 and 7b are built and checked by Sol
-(883 tests). Every live run waits for an explicit owner-away boundary (`--owner-away`). sleight-arch
-runs them the next time the owner is away. Mail and Mimestream wait until the owner can watch.
+Sol (`codex/real-use-tasks`, head `3ac2a33`): sleight-arch ran qualification with the owner away
+(2026-10-09, results in that worktree's `bench/results/`). Round 6: helium-form, preview-pdf,
+finder-files and textedit-calculator 3/3 each, safari-form 0/3 in setup. sleight-arch's `3ac2a33`
+fixed the check for Safari's profile Start Page title, and setup then failed on the address field. Round 7:
+helium-grid 1/2 (one real miss), helium-editor 1/1, helium-dense opened the right article and then a
+cleanup stop ended the suite (the task's own navigation changed the window's URL), word-edit stopped
+on Word's own Replace All dialog. Brief 8 (`.dev/prompts/sol-real-use-tasks-8.md`, ready to paste)
+covers those. Left on the owner's screen were about six blank Safari Start Page windows and two Helium
+fixture windows. Word is open with an unsaved fixture document. The screenshot-scale branch is parked
+(no measured gain, `docs/benchmark.md`).
 
 Owner's plan after 1.0 (2026-10-09), run in order without check-ins: (1) the real-use suite (Sol),
 then the Codex head-to-head on it; (2) the launch post, draft at `~/Desktop/sleight-launch/thread-1.0.md`
