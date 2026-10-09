@@ -185,7 +185,9 @@ func newSafariWindow(_ app: AXUIElement, beforeCreate: () throws -> Void) throws
 }
 func blankSafariWindow(_ window: AXUIElement) throws -> Bool {
     let document = try text(window, kAXDocumentAttribute), title = try text(window, kAXTitleAttribute)
-    return (document.isEmpty || document == "about:blank") && (title.isEmpty || title == "Start Page" || title == "Untitled")
+    // With Safari profiles a new window's Start Page is titled "<Profile> — Start Page" (2026-10-09).
+    return (document.isEmpty || document == "about:blank") &&
+        (title.isEmpty || title == "Start Page" || title.hasSuffix(" — Start Page") || title == "Untitled")
 }
 func navigateSafariWindow(_ window: AXUIElement, target: String) throws {
     func fields(_ element: AXUIElement, _ depth: Int) throws -> [AXUIElement] {
@@ -310,7 +312,7 @@ func fixture(_ argument: String) throws {
             let document = try text(candidate, kAXDocumentAttribute), title = try text(candidate, kAXTitleAttribute)
             creation["blank"] = try blankSafariWindow(candidate)
             creation["documentScheme"] = document.isEmpty ? "absent" : String(document.prefix(while: { $0 != ":" }).prefix(32))
-            creation["titleKind"] = title.isEmpty ? "empty" : title == "Start Page" ? "start-page" : title == "Untitled" ? "untitled" : "other"
+            creation["titleKind"] = title.isEmpty ? "empty" : (title == "Start Page" || title.hasSuffix(" — Start Page")) ? "start-page" : title == "Untitled" ? "untitled" : "other"
         }
         try emit(["stage": "creation", "creation": creation])
         try navigateRetained(created, ownerAway: request["ownerAway"] as? Bool == true, blank: blankSafariWindow, retain: { owned = $0; createdFixture = true },
