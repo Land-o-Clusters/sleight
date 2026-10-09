@@ -157,10 +157,17 @@ function benchKeyboardTaps() {
   } catch (err) { return [{ app: 'unknown', error: `keyboard tap check failed: ${err.message}` }]; }
 }
 
+// Tools that act outside the app. A user's own settings can allow them (the owner's allow Bash(*)),
+// and with them a run could pass a check without touching the app: no run did, in 716 transcripts
+// checked on 2026-10-09, but Claude opened task files with `open` from Bash, which the Codex arm
+// (no shell) can't. Every Claude arm runs without them.
+const OUTSIDE_TOOLS = ['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'WebSearch'];
+
 function runClaude(prompt, arm, env = {}) {
   const args = [
     '-p', prompt,
     ...arm.args,
+    '--disallowedTools', OUTSIDE_TOOLS.join(','),
     '--settings', join(ROOT, 'bench', 'settings.json'),
     '--output-format', 'json',
     '--model', model,

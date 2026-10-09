@@ -214,6 +214,11 @@ npm run bench -- --arm all --runs 3   # sleight and LCU
 
 The LCU arm needs LCU registered for Claude Code in a separate folder. `bench/run.mjs` has the steps.
 
+Claude arms run with Bash, Write, Edit and the web tools disallowed, since a user's settings can
+allow them and a check could then pass without the app. Until 2026-10-09 they were allowed: no run
+wrote a checked file through them (716 transcripts checked), but Claude often opened the task's file
+with `open` from Bash instead of the app's Open panel.
+
 The `codex` arm runs native Codex computer use through `codex exec`, for a head-to-head
 (`--arm sleight,codex`). It uses its own Codex home, `~/.codex-bench` (log in once with
 `CODEX_HOME=~/.codex-bench codex login`), which configures only the engine server, so a user's

@@ -7,6 +7,8 @@
   that event, TextEdit's next Cmd+S deadlocked in 10 of 13 probe trials; with it, 0 in 10, and 10
   `drag` moves in a row saved cleanly. The background mouse drag's spacing repair gets the same event.
 
+- Benchmark runs disallow Bash, Write, Edit and the web tools for Claude, like the Codex arm's
+  disabled shell. No run used them to pass a check, but Claude often opened task files from Bash.
 - The benchmark quits Device Hub or Simulator after each simulator run, and stops a pass when a
   benchmark app still holds a keyboard event tap afterwards. On 2026-10-09 Device Hub's tap stalled
   every key on the owner's Mac until it quit.
