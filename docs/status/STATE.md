@@ -14,6 +14,9 @@ Accessibility text move is back on, settled with a Shift event posted to the app
 the event, 10 edits and then 10 `drag` moves saved with no hang; without it, 5 of 8 edits hung.
 Claude benchmark arms run without Bash, Write, Edit or web tools (`0270374`). No run had used them
 to pass a check (716 transcripts checked).
+1.0 conditions (LAWS): all four met as of 2026-10-09 (two engine updates, the friend's install, the
+desktop pane's picture, comparisons with LCU and Codex). Proposed to the owner: release 1.0.0 after
+Chess and the simulator head-to-head and a release pass on the current code. Waiting on the owner's yes.
 Head-to-head on Calculator and TextEdit (`docs/benchmarks/2026-10-09-h2h-background.json`): sleight
 15/15 (446 s), Codex 12/15 (732 s), Codex 0/3 on textedit-drag. Chess and the simulator still need a
 run with the owner away. `main` has one README commit (`dcad210`, the release badge) that the branch
@@ -91,7 +94,7 @@ merged. Their worktrees in `~/Projects/sleight-wt/` can go once Codex is done wi
 
 Public: `Land-o-Clusters/sleight`, latest release `v0.15.2`. The owner's install is a
 version-keyed copy in `~/.claude/plugins/cache/sleight/sleight/`, refreshed only by
-`claude plugin update` (now 0.16.0). Open PRs: none. The first outside user (the owner's friend) runs their iOS simulator tests
+`claude plugin update` (now 0.16.0). Open PRs: none. The first outside user (the owner's friend, installed from the GitHub repo per the owner, 2026-10-09) runs their iOS simulator tests
 through sleight and finds it faster than Maestro. `~/.claude.json` marks
 `~/Library/Caches/sleight-bench/sleight-arm` trusted (set for the interactive pane session,
 2026-10-06). Launch files for the owner's Grok bot are in `~/Desktop/sleight-launch/`, including
