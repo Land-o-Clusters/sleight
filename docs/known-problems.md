@@ -399,6 +399,11 @@ our own runs. Dates and engine versions are given where they matter.
 
 ## The real-use benchmark harness
 
+- The owner-away Office rerun after brief 10 passed Word once in 42.2 s and 10 turns. Excel's model
+  reported saved edits, then AXFocusedWindow returned `-25204` and cleanup remained unconfirmed.
+  PowerPoint didn't run. Cleanup reads now have a shared 15-second wait for that error, with
+  fake-clock proof. The [brief-11 report](benchmarks/2026-10-09-real-use-tasks-11.md) retains the pass.
+  Excel and PowerPoint await the architect's rerun.
 - The Office rerun after `b8f4b3f` failed Word's first AXFocusedWindow read with `-25204` and zero
   retries because Word was already running. It remained running after an earlier unconfirmed cleanup.
   Excel correctly stopped on “Start Using Excel”. PowerPoint did not run. The

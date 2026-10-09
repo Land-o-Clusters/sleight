@@ -117,7 +117,7 @@ test('retry elapsed time includes slow AX reads and stops before a read after th
   assert.ok(events.reduce((sum, e) => sum + (e.waitMs ?? 0), 0) < 6000);
 });
 
-test('cleanup and acted-on fixtures never retry an AX read, and other errors stop immediately', () => {
+test('reads outside setup or cleanup and acted-on setup never retry, and other setup errors stop immediately', () => {
   const { setupRead } = nativeSource();
   assert.equal(typeof setupRead, 'function');
   for (const state of [
@@ -134,6 +134,252 @@ test('cleanup and acted-on fixtures never retry an AX read, and other errors sto
     assert.throws(() => setupRead(() => { throw Object.assign(new Error('stop immediately'), { code }); },
       { fresh, setup: true }, { now: () => 0, wait: () => assert.fail('no backoff'), emit: () => assert.fail('no retry') }), /stop immediately/);
   }
+});
+
+function cleanupNative(readAttribute, state = {}) {
+  const sandbox = nativeSource(), events = [];
+  let time = 0;
+  const native = value => value;
+  native.AXUIElementCopyAttributeValue = (element, attribute, output) => {
+    const result = readAttribute(element, attribute, time, ms => { time += ms; });
+    output[0] = result.value;
+    return result.code || 0;
+  };
+  native.AXUIElementPerformAction = () => assert.fail('read retries must not perform an action');
+  native.CFEqual = (a, b) => a === b;
+  sandbox.$ = native; sandbox.Ref = () => []; sandbox.ObjC.castRefToObject = value => value;
+  const clock = { now: () => time, wait: ms => { time += ms; }, emit: event => events.push(event) };
+  const contextState = { setup: false, cleanup: true, setupCase: 'already-running', ...state };
+  return { sandbox, native, events, clock, state: contextState, time: () => time,
+    api: sandbox.nativeAX(contextState, clock) };
+}
+
+test('cleanup AX reads recover after twelve seconds without reusing the setup deadline', () => {
+  const focused = {};
+  const fixture = cleanupNative((_element, attribute, time) => {
+    assert.equal(attribute, 'AXFocusedWindow');
+    return time < 12000 ? { code: -25204 } : { value: focused };
+  }, { retryStarted: -30000 });
+  assert.equal(fixture.api.focused({}), focused);
+  assert.equal(fixture.time(), 12000);
+  const retries = fixture.events.filter(event => event.stage === 'retry');
+  assert.equal(retries.length, 120);
+  assert.ok(retries.every(event => event.phase === 'cleanup' && event.code === -25204));
+  assert.deepEqual(JSON.parse(JSON.stringify(fixture.events.at(-1).cleanupReadWait)),
+    { reason: 'ready', setupCase: 'already-running', elapsedMs: 12000, code: -25204, attribute: 'AXFocusedWindow' });
+});
+
+test('cleanup AX reads share one fifteen-second deadline across attributes', () => {
+  let reads = 0, lastReadAt;
+  const fixture = cleanupNative((_element, attribute, time) => {
+    reads++; lastReadAt = time;
+    return attribute === 'AXRole' && time >= 10000 ? { value: 'AXWindow' } : { code: -25204 };
+  });
+  assert.equal(fixture.api.text({}, 'AXRole'), 'AXWindow');
+  assert.throws(() => fixture.api.focused({}), error => error.code === -25204 && error.attribute === 'AXFocusedWindow');
+  assert.equal(fixture.time(), 15000);
+  assert.ok(lastReadAt < 15000);
+  assert.equal(fixture.events.at(-1).cleanupReadWait.reason, 'deadline');
+  assert.equal(fixture.events.at(-1).cleanupReadWait.elapsedMs, 15000);
+  const readsAtDeadline = reads;
+  assert.throws(() => fixture.api.focused({}), error => error.code === -25204);
+  assert.equal(reads, readsAtDeadline, 'no later AX read begins after cleanup used its wait budget');
+});
+
+test('cleanup deadline accounts for slow AX reads', () => {
+  let lastReadAt;
+  const fixture = cleanupNative((_element, _attribute, time, advance) => {
+    lastReadAt = time; advance(500); return { code: -25204 };
+  });
+  assert.throws(() => fixture.api.focused({}), error => error.code === -25204);
+  assert.equal(fixture.time(), 15500, 'the budget starts at the first error and includes later slow reads');
+  assert.ok(lastReadAt < 15500);
+  assert.equal(fixture.events.at(-1).cleanupReadWait.elapsedMs, 15000);
+});
+
+test('a close request during an observation wait carries its spent budget into cleanup', () => {
+  const fixture = cleanupNative(() => ({ code: -25204 }), { cleanup: false, observation: {} });
+  fixture.clock.cleanupRequested = () => fixture.time() >= 14000;
+  assert.throws(() => fixture.api.focused({}), error => error.code === -25204);
+  assert.equal(fixture.time(), 15000);
+  assert.equal(fixture.events.at(-1).cleanupReadWait.elapsedMs, 15000);
+});
+
+test('a close request during a successful observation read preserves the original deadline', () => {
+  let closeRequested = false, recovered = false;
+  const focused = {};
+  const fixture = cleanupNative((_element, _attribute, time, advance) => {
+    if (!recovered && time === 100) {
+      advance(500); closeRequested = true; recovered = true; return { value: focused };
+    }
+    return { code: -25204 };
+  }, { cleanup: false, observation: {} });
+  fixture.clock.cleanupRequested = () => closeRequested;
+  assert.equal(fixture.api.focused({}), focused);
+  // End the complete observation as the ready loop does, then enter cleanup.
+  fixture.state.observation = null; fixture.state.cleanup = true;
+  assert.throws(() => fixture.api.focused({}), error => error.code === -25204);
+  assert.equal(fixture.time(), 15000, 'a successful read must not discard the preceding wait');
+  assert.equal(fixture.events.at(-1).cleanupReadWait.elapsedMs, 15000);
+});
+
+test('cleanup stops immediately on other AX errors and retains a terminating hard error after a retry', () => {
+  for (const code of [-25205, -25211, -25202, -25200]) {
+    const fixture = cleanupNative(() => ({ code }));
+    assert.throws(() => fixture.api.focused({}), error => error.code === code);
+    assert.equal(fixture.time(), 0);
+    assert.equal(fixture.events.length, 0);
+  }
+  const fixture = cleanupNative((_element, _attribute, time) => ({ code: time ? -25211 : -25204 }));
+  assert.throws(() => fixture.api.focused({}), error => error.code === -25211);
+  assert.equal(fixture.time(), 100);
+  assert.equal(fixture.events.at(-1).cleanupReadWait.reason, 'error');
+  assert.equal(fixture.events.at(-1).cleanupReadWait.code, -25211);
+});
+
+test('cleanup preserves absent optional attributes without retries and never retries a press', () => {
+  const fixture = cleanupNative(() => ({ code: -25205 }));
+  assert.equal(fixture.api.read({}, 'AXSheets'), null);
+  let presses = 0;
+  fixture.native.AXUIElementPerformAction = () => { presses++; return -25204; };
+  assert.throws(() => fixture.api.press({}), /AX fixture press failed: -25204/);
+  assert.equal(presses, 1);
+  assert.equal(fixture.time(), 0);
+  assert.equal(fixture.events.length, 0);
+});
+
+test('cleanup revalidates recovered focus before closing the retained document', () => {
+  for (const focusChanged of [false, true]) {
+    const owned = {}, other = {}, actions = [];
+    let exists = true;
+    const fixture = cleanupNative((element, attribute, time) => {
+      if (attribute === 'AXFocusedWindow') return time < 12000 ? { code: -25204 } : { value: focusChanged ? other : owned };
+      assert.equal(element, owned);
+      return { value: attribute === 'AXRole' ? exists ? 'AXWindow' : '' : attribute === 'AXTitle' ? 'Report nonce' : null };
+    });
+    fixture.native.AXUIElementPerformAction = () => { actions.push('close'); exists = false; return 0; };
+    const api = { ...fixture.api, wait() {}, closeDocument: (_app, validate) => { validate(); fixture.api.press({}); } };
+    const close = () => fixture.sandbox.closeOwnedWindow(owned, { mode: 'document', token: 'nonce' }, {}, api);
+    if (focusChanged) {
+      assert.throws(close, /lost focus/);
+      assert.deepEqual(actions, []);
+    } else {
+      close();
+      assert.deepEqual(actions, ['close']);
+    }
+    assert.equal(fixture.time(), 12000);
+  }
+});
+
+test('cleanup repeats document identity checks when final focus validation waited', () => {
+  const owned = {}, actions = [];
+  let focusReads = 0;
+  const fixture = cleanupNative((_element, attribute, time) => {
+    if (attribute === 'AXFocusedWindow') {
+      focusReads++;
+      return focusReads > 1 && time < 12000 ? { code: -25204 } : { value: owned };
+    }
+    return { value: attribute === 'AXRole' ? 'AXWindow' : attribute === 'AXTitle' ? time < 12000 ? 'Report nonce' : 'Unrelated document' : null };
+  });
+  fixture.native.AXUIElementPerformAction = () => { actions.push('close'); return 0; };
+  const api = { ...fixture.api, wait() {}, closeDocument: (_app, validate) => { validate(); fixture.api.press({}); } };
+  assert.throws(() => fixture.sandbox.closeOwnedWindow(owned, { mode: 'document', token: 'nonce' }, {}, api), /identity changed/);
+  assert.equal(fixture.time(), 12000);
+  assert.deepEqual(actions, []);
+});
+
+test('cleanup revalidates identity after waiting for close or discard buttons', () => {
+  for (const discard of [false, true]) {
+    const owned = {}, sheet = {}, button = {}, actions = [];
+    const array = values => ({ count: values.length, objectAtIndex: index => values[index] });
+    const fixture = cleanupNative((element, attribute, time) => {
+      if ((discard && attribute === 'AXSheets') || (!discard && attribute === 'AXCloseButton')) {
+        return time < 12000 ? { code: -25204 } : { value: discard ? array([sheet]) : button };
+      }
+      if (attribute === 'AXFocusedWindow') return { value: owned };
+      if (element === owned) return { value: attribute === 'AXRole' ? 'AXWindow' : attribute === 'AXTitle' ? time < 12000 ? 'Report nonce' : 'Unrelated document' : null };
+      if (element === sheet) return { value: attribute === 'AXChildren' ? array([button]) : null };
+      assert.equal(element, button);
+      return { value: attribute === 'AXRole' ? 'AXButton' : attribute === 'AXTitle' ? "Don't Save" : null };
+    });
+    fixture.native.AXUIElementPerformAction = () => { actions.push('press'); return 0; };
+    const api = { ...fixture.api, wait() {}, closeDocument() {} };
+    assert.throws(() => fixture.sandbox.closeOwnedWindow(owned, { mode: discard ? 'document' : 'window', token: 'nonce' }, {}, api), /identity changed/);
+    assert.equal(fixture.time(), 12000);
+    assert.deepEqual(actions, []);
+  }
+});
+
+test('ready dialog reads survive pre-close and in-flight close failures without losing the retained fixture', () => {
+  for (const [inFlight, closeAt] of [[false, 12000], [true, 12000], [false, 40000]]) {
+    const sandbox = nativeSource(), events = [], actions = [], window = { AXRole: 'AXWindow', AXTitle: 'Report nonce' }, button = {};
+    const app = { AXFocusedWindow: window, AXMainWindow: window };
+    const target = { processIdentifier: 42 };
+    let time = 0, ready = false, closed = false, closeRequested = false;
+    const native = value => typeof value === 'string' && value.startsWith('{') ? { dataUsingEncoding: () => value } : value;
+    native.AXIsProcessTrusted = () => true;
+    native.NSRunningApplication = { runningApplicationsWithBundleIdentifier: () => ({ count: 1, objectAtIndex: () => target }) };
+    native.AXUIElementCreateApplication = () => app;
+    native.AXUIElementSetMessagingTimeout = () => {};
+    native.AXUIElementCopyAttributeValue = (element, attribute, output) => {
+      if (ready && attribute === 'AXFocusedWindow' && (time < 12000 || (closeAt === 40000 && time >= 30000 && time < 32000))) {
+        if (inFlight) { closeRequested = true; time += 500; }
+        return -25204;
+      }
+      if (element === window && closed) return -25202;
+      output[0] = attribute === 'AXCloseButton' ? button : element[attribute];
+      return 0;
+    };
+    native.AXUIElementPerformAction = (element) => { assert.equal(element, button); actions.push('close'); closed = true; return 0; };
+    native.CFEqual = (a, b) => a === b;
+    native.NSFileHandle = { fileHandleWithStandardOutput: { writeData: line => {
+      const event = JSON.parse(line); events.push(event); if (event.stage === 'ready') ready = true;
+    } } };
+    native.NSData = { dataWithContentsOfFile: () => ({ isNil: () => false }) };
+    native.NSString = { alloc: { initWithDataEncoding: () => JSON.stringify({ command: closeRequested || time >= closeAt ? 'close' : 'opened' }) } };
+    native.NSThread = { sleepForTimeInterval: seconds => { time += seconds * 1000; } };
+    sandbox.$ = native; sandbox.Ref = () => []; sandbox.ObjC.castRefToObject = value => value; sandbox.Date = { now: () => time };
+    sandbox.waitForLaunch = seconds => { time += (seconds ?? 0.1) * 1000; };
+    sandbox.run([JSON.stringify({ app: 'Microsoft Excel', bundle: 'com.microsoft.Excel', mode: 'window', control: 'fake',
+      token: 'nonce', target: 'nonce', stopOnAppDialog: true })]);
+    assert.deepEqual(actions, ['close']);
+    assert.equal(events.at(-1).stage, 'closed');
+    assert.equal(events.some(event => event.phase === 'cleanup' || event.phase === 'observation'), true);
+    assert.ok(time >= closeAt && time < closeAt + 4000);
+    if (closeAt === 40000) {
+      assert.equal(events.filter(event => event.observationReadWait).at(-1).observationReadWait.elapsedMs, 2000,
+        'a complete successful observation resets its episode before a later busy period');
+    }
+  }
+});
+
+test('parent cleanup retains retry receipts and allows the helper to finish beyond fifteen seconds', async t => {
+  const { openFixture } = await import('../bench/real-fixture.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'real-cleanup-read-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const ctx = { dir }, done = Promise.withResolvers();
+  let publish;
+  const lease = await openFixture(ctx, { app: 'Microsoft Excel', bundle: 'com.microsoft.Excel', mode: 'document' }, {
+    run: (_command, _args, options) => {
+      publish = options.onStdout;
+      publish('{"stage":"armed","running":true,"pid":42}\n{"stage":"ready","setupCase":"already-running"}\n');
+      return done.promise;
+    }, open: async () => {},
+  });
+  const closed = lease.close();
+  const verdict = closed.then(() => null, error => error);
+  t.mock.timers.tick(16000);
+  const cleanupReadWait = { reason: 'ready', setupCase: 'already-running', elapsedMs: 14900,
+    code: -25204, attribute: 'AXFocusedWindow' };
+  publish(JSON.stringify({ stage: 'retry', phase: 'cleanup', code: -25204, waitMs: 100, totalWaitMs: 14900, setupCase: 'already-running' }) + '\n');
+  publish(JSON.stringify({ stage: 'cleanup-read-wait', cleanupReadWait }) + '\n');
+  done.resolve({ groupClean: true, exit: { code: 0 }, stdout: '{"stage":"closed"}\n' });
+  assert.equal(await verdict, null);
+  assert.deepEqual(ctx.fixtureDiagnostics[0].cleanupReadWait, cleanupReadWait);
+  assert.equal(ctx.fixtureDiagnostics[0].cleanupRetries.length, 1);
+  assert.equal(ctx.fixtureDiagnostics[0].cleanupTotalWaitMs, 14900);
+  assert.deepEqual(ctx.fixtureDiagnostics[0].retries, [], 'setup retry records remain separate');
 });
 
 test('already-running Office readiness shares the initial-read deadline and reports its case', () => {
@@ -700,7 +946,10 @@ test('native Office setup waits in both running cases and retains a failed PID w
     sandbox.$ = foundation; sandbox.Date = { now: () => time };
     sandbox.waitForLaunch = seconds => { time += Math.round((seconds ?? 0.1) * 1000); };
     sandbox.nativeAX = (state, clock) => ({
-      dialog: () => [], readiness: () => ({}),
+      dialog: () => {
+        if (!state.setup) assert.equal(state.cleanup, true, 'cleanup must cover its initial dialog read too');
+        return [];
+      }, readiness: () => ({}),
       focused: () => {
         assert.equal(state.office, true, 'Office readiness covers existing apps as well as cold launches');
         const read = () => {

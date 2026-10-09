@@ -1,0 +1,540 @@
+{
+  "dateLocal": "2026-10-09",
+  "branch": "codex/real-use-tasks",
+  "base": "6abba433ba6775d9b0d5f1bcbb37fe59ca4f1a8a",
+  "originalTip": "309c2c9fd7877dd4dbf08de787c7dedbcc1936fc",
+  "rebase": {
+    "target": "origin/pane/auto-mode",
+    "initialExitCode": 1,
+    "initialResult": "Ordinary rebase attempted to replay earlier squashed commits and stopped on conflicts in the first historical real-use commit. Aborted without resolving or changing files.",
+    "exitCode": 0,
+    "result": "Rebased from the already-adopted 309c2c9 tip onto the fetched target. Prior fixture code, tests and brief-10 evidence were identical on the target. Architect CPU footprint, Codex arm and other upstream changes retained."
+  },
+  "liveRunsBySol": 0,
+  "loadRunsBySol": 0,
+  "qualification": "Pending architect excel-edit and powerpoint-edit rerun. Mail and Mimestream await owner supervision.",
+  "attempts": [
+    {
+      "sourceBranch": "pane/auto-mode",
+      "sourceCommit": "6abba433ba6775d9b0d5f1bcbb37fe59ca4f1a8a",
+      "source": "docs/benchmarks/2026-10-09-real-use-office-11.json",
+      "ownerAway": true,
+      "exitCode": null,
+      "exitCodeNote": "Architect pass terminal exit code was not supplied. Per-model exit codes are retained in the payload.",
+      "payload": {
+        "stamp": "2026-10-09T19-13-20-188Z",
+        "suite": "real",
+        "surfaces": "computer",
+        "ownerAway": true,
+        "arms": [
+          "sleight"
+        ],
+        "model": "claude-sonnet-5-5",
+        "effort": "medium",
+        "claude": "claude",
+        "results": [
+          {
+            "arm": "sleight",
+            "task": "word-edit",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "footprint": {
+              "cpuSeconds": 10.96,
+              "group": {
+                "claude": 2.11,
+                "engine node": 0.97,
+                "mcp@latest": 0.55,
+                "node": 0.22,
+                "osascript": 0.11,
+                "codex": 0.44
+              },
+              "outside": {
+                "Microsoft Word": 3.77,
+                "engine helper": 2.79
+              }
+            },
+            "timing": {
+              "totalMs": 40294,
+              "modelMs": 27952,
+              "calls": 9,
+              "refused": 0,
+              "toolMs": 10112,
+              "engineMs": 10075,
+              "relayMs": 37,
+              "localMs": 0,
+              "guardReads": 13,
+              "guardReadMs": 2293.2093340000056,
+              "guardReadFailures": 0,
+              "otherMs": 2230
+            },
+            "passed": true,
+            "seconds": 42.2,
+            "fixtureDiagnostics": [
+              {
+                "app": "Microsoft Word",
+                "bundle": "com.microsoft.Word",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 72606,
+                "setupCase": "already-running",
+                "launched": true,
+                "launchWait": {
+                  "reason": "ready",
+                  "setupCase": "already-running",
+                  "elapsedMs": 884,
+                  "code": -25205,
+                  "attribute": "AXSheets"
+                },
+                "fresh": false,
+                "appDialogs": [
+                  {
+                    "app": "Microsoft Word",
+                    "category": "application-result",
+                    "title": "",
+                    "buttons": [
+                      "OK"
+                    ],
+                    "stop": false,
+                    "description": "application-result application dialog"
+                  },
+                  {
+                    "app": "Microsoft Word",
+                    "category": "application-result",
+                    "title": "Insert Table",
+                    "buttons": [
+                      "",
+                      "",
+                      "",
+                      "",
+                      "",
+                      "",
+                      "OK",
+                      "Cancel"
+                    ],
+                    "stop": false,
+                    "description": "application-result application dialog"
+                  }
+                ],
+                "menuItems": [
+                  "New Document",
+                  "New from Template...",
+                  "Open...",
+                  "Open Recent",
+                  "",
+                  "Close",
+                  "Save",
+                  "Save As...",
+                  "Save as Template...",
+                  "Convert Document",
+                  "Move...",
+                  "Rename...",
+                  "",
+                  "Browse Version History",
+                  "",
+                  "Share",
+                  "",
+                  "Always Open Read-Only",
+                  "",
+                  "Reduce File Size...",
+                  "",
+                  "Page Setup...",
+                  "Print...",
+                  "",
+                  "Properties..."
+                ],
+                "menuCommands": [
+                  {
+                    "title": "New Document",
+                    "enabled": true
+                  },
+                  {
+                    "title": "New from Template...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Open Recent",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Close",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save As...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Save as Template...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Convert Document",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Move...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Rename...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Browse Version History",
+                    "enabled": false
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Share",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Always Open Read-Only",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Reduce File Size...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Page Setup...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "Print...",
+                    "enabled": true
+                  },
+                  {
+                    "title": "",
+                    "enabled": false
+                  },
+                  {
+                    "title": "Properties...",
+                    "enabled": true
+                  }
+                ]
+              }
+            ],
+            "appDialogs": [
+              {
+                "app": "Microsoft Word",
+                "category": "application-result",
+                "title": "",
+                "buttons": [
+                  "OK"
+                ],
+                "stop": false,
+                "description": "application-result application dialog"
+              },
+              {
+                "app": "Microsoft Word",
+                "category": "application-result",
+                "title": "Insert Table",
+                "buttons": [
+                  "",
+                  "",
+                  "",
+                  "",
+                  "",
+                  "",
+                  "OK",
+                  "Cancel"
+                ],
+                "stop": false,
+                "description": "application-result application dialog"
+              }
+            ],
+            "turns": 10,
+            "costUsd": 0.5260478,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 20,
+              "cacheRead": 634909,
+              "cacheWrite": 94379,
+              "output": 2151
+            },
+            "exitCode": 0,
+            "answer": "I made all the edits in `Report-65d3d917.docx`. I saved it with Cmd+S (the title bar shows \"Saved to my Mac\"), and it's still open in Word.\n\n- **Heading 1:** \"Report 65d3d917\" now has the Heading 1 style. My first attempt hit the last line by mistake. I undid that before applying it to the right par"
+          },
+          {
+            "arm": "sleight",
+            "task": "excel-edit",
+            "run": 1,
+            "groupClean": true,
+            "timedOut": false,
+            "cancelled": false,
+            "footprint": {
+              "cpuSeconds": 17.62,
+              "group": {
+                "claude": 2.96,
+                "engine node": 1.42,
+                "mcp@latest": 0.68,
+                "node": 0.25,
+                "osascript": 0.13,
+                "codex": 0.37
+              },
+              "outside": {
+                "Microsoft Excel": 5.94,
+                "engine helper": 5.87
+              }
+            },
+            "timing": {
+              "totalMs": 55805,
+              "modelMs": 37101,
+              "calls": 13,
+              "refused": 0,
+              "toolMs": 15469,
+              "engineMs": 15250,
+              "relayMs": 219,
+              "localMs": 0,
+              "guardReads": 12,
+              "guardReadMs": 3284.9768750000003,
+              "guardReadFailures": 0,
+              "otherMs": 3235
+            },
+            "passed": false,
+            "seconds": 57.7,
+            "cleanupError": "Owned fixture window cleanup unconfirmed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25204 (AXFocusedWindow) (-2700)",
+            "fixtureDiagnostics": [
+              {
+                "app": "Microsoft Excel",
+                "bundle": "com.microsoft.Excel",
+                "retries": [],
+                "totalWaitMs": 0,
+                "actionTaken": false,
+                "running": true,
+                "pid": 69926,
+                "setupCase": "already-running",
+                "launched": true,
+                "launchWait": {
+                  "reason": "ready",
+                  "setupCase": "already-running",
+                  "elapsedMs": 613,
+                  "code": -25205,
+                  "attribute": "AXSheets"
+                },
+                "fresh": false,
+                "closeFailure": "~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25204 (AXFocusedWindow) (-2700)"
+              }
+            ],
+            "fixtureDir": "<temp>/sleight-bench/2026-10-09T19-13-20-188Z/sleight-excel-edit-1",
+            "turns": 14,
+            "costUsd": 0.6796838000000001,
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "usage": {
+              "input": 28,
+              "cacheRead": 1099339,
+              "cacheWrite": 107950,
+              "output": 2796
+            },
+            "exitCode": 0,
+            "answer": "The edits are made and saved to `Inventory-89c4166b.xlsx`, and the workbook is still open in Excel. The title bar shows \"Saved to my Mac\", and D4 shows 15.\n\n- **Inventory sort:** A2:B4 now reads Apples 8, Bananas 5, Pears 3, with each quantity kept next to its item. I typed the sorted values into th"
+          }
+        ]
+      }
+    }
+  ],
+  "assessment": "Word passed once in 42.2 seconds and 10 turns. Its application-result dialogs were recorded without harness answers. Excel's model reported saved edits and D4 = 15 and exited 0, but the task failed when its retained helper's AXFocusedWindow read returned -25204 and closure remained unconfirmed. The result does not prove whether that read started before or after the close command. PowerPoint was not started. An Excel saved-file check result was not retained, so model output alone does not qualify it.",
+  "changes": {
+    "cleanupRead": "Only -25204 retries in native read operations during cleanup, within one shared fifteen-second budget beginning at the first failure. The setup deadline is separate. Required reads fail immediately on other AX errors. Optional absent values retain their prior meaning. Actions are outside the retry loop.",
+    "diagnostics": "cleanupRetries, cleanupTotalWaitMs and cleanupReadWait retain setupCase, elapsed time, last AX code and attribute, and ready/deadline/error outcome, without overwriting setup diagnostics.",
+    "parentWatchdog": "Thirty seconds instead of fifteen, allowing the helper to finish the fifteen-second read wait and report closure or failure. Permission cancellation still aborts the helper. Existing retained-reference/focus/identity and app ownership checks remain.",
+    "observationRead": "Ready-state dialog observations have separate fifteen-second retry episodes. Only a complete observation resets its episode. A close received during a read or wait carries the spent episode into cleanup, including success-path and observation-end transitions.",
+    "identityValidation": "A read-wait epoch makes cleanup repeat complete retained-window, document and focus validation before pressing. Native close and discard button lookups validate retained document identity after their own reads."
+  },
+  "developmentAttempts": [
+    {
+      "command": "node --test --test-name-pattern='cleanup AX reads|cleanup deadline|cleanup stops immediately|cleanup preserves absent|cleanup revalidates|parent cleanup retains|native Office setup waits' tests/bench-real-fixture.test.mjs",
+      "exitCode": 1,
+      "result": "RED: eight tests, one passed and seven failed. Reads did not retry, required -25205 returned absence, cleanup phase was missing and the parent watchdog expired at fifteen seconds."
+    },
+    {
+      "command": "node --test tests/bench-real-fixture.test.mjs",
+      "exitCode": 1,
+      "result": "60 passed, one failed because the new native test double lacked CFEqual. Added its equality implementation; production behavior was not changed for that failure."
+    },
+    {
+      "command": "node --test tests/bench-real-fixture.test.mjs",
+      "exitCode": 0,
+      "result": "61 passed, including twelve-second recovery, shared deadline, slow reads, hard errors, changed focus, single press attempt, lifecycle phase and parent receipt collection."
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 1,
+      "result": "Ordinary sandbox attempt before final review fixes. 976 tests, 932 passed, 44 failed: 41 localhost listener denials, 2 local socket denials and 1 fixture linker output denial. Plugin validation and mod checks were not reached.",
+      "failedTests": [
+        "grid checker uses posted state and rejects incomplete, changed and stale outcomes",
+        "grid page has executable script, stays local, rejects foreign state and closes its listener",
+        "editor checker uses posted state and rejects incomplete, changed and stale outcomes",
+        "editor page has executable script, stays local, rejects foreign state and closes its listener",
+        "dense checker uses posted state and rejects incomplete, changed and stale outcomes",
+        "dense page has executable script, stays local, rejects foreign state and closes its listener",
+        "spa checker uses posted state and rejects incomplete, changed and stale outcomes",
+        "spa page has executable script, stays local, rejects foreign state and closes its listener",
+        "nested checker uses posted state and rejects incomplete, changed and stale outcomes",
+        "nested page has executable script, stays local, rejects foreign state and closes its listener",
+        "infinite checker uses posted state and rejects incomplete, changed and stale outcomes",
+        "infinite page has executable script, stays local, rejects foreign state and closes its listener",
+        "dense checker requires a request for the named article, beyond a claimed page snapshot",
+        "all twelve tasks close their server even when owned-window cleanup fails",
+        "grid page controls emit the state the independent checker accepts",
+        "editor page controls emit the state the independent checker accepts",
+        "dense page controls emit the state the independent checker accepts",
+        "spa page controls emit the state the independent checker accepts",
+        "nested page controls emit the state the independent checker accepts",
+        "infinite page controls emit the state the independent checker accepts",
+        "editor actual script rejects extra paragraph",
+        "editor actual script rejects extra heading",
+        "editor actual script rejects extra text outside a block",
+        "editor actual script rejects bold outside the paragraph",
+        "editor actual script rejects bold in a list item",
+        "editor actual script rejects ordered list replacing bullets",
+        "editor actual script rejects paragraph moved after the list",
+        "editor actual script rejects changed paragraph whitespace",
+        "editor actual script rejects bold canceled inside the phrase",
+        "editor actual script accepts ordinary inline strong tag",
+        "editor actual script accepts ordinary inline bold span",
+        "editor actual script accepts ordinary inline split bold runs",
+        "web server refuses unsafe nonce, unknown page kinds and a second server on one context",
+        "all web tasks retain server cleanup when browser acquisition fails without mutation",
+        "safari-form checks submitted fields, select and checkbox, ignoring the agent's answer",
+        "safari-form rejects missing checkbox, changed select and a nonce from another run",
+        "helium-form checks submitted fields, select and checkbox, ignoring the agent's answer",
+        "helium-form rejects missing checkbox, changed select and a nonce from another run",
+        "simulator-flow checks the saved value and the required screen sequence",
+        "simulator-flow rejects wrong saved text and an unordered or incomplete flow",
+        "the simulator form passes only on the exact text, then closes its server",
+        "hover fixture refuses other apps, unknown operations and unnamed Chess windows before access",
+        "socket bridge authorizes its token, correlates replies and collects its child and private socket",
+        "a starved helper cannot authorize a late reply or a queued request after its deadline"
+      ]
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "result": "One wording error across 59 files: 'a single' in the new report. Corrected to 'one'."
+    },
+    {
+      "command": "node --test --test-name-pattern='final focus validation waited|ready dialog reads survive' tests/bench-real-fixture.test.mjs",
+      "exitCode": 1,
+      "result": "Initial review regression draft failed both tests on test-double omissions: no fake wait for the close loop and a bridged string stand-in that hid AX attributes. Corrected those doubles before assessing production behavior."
+    },
+    {
+      "command": "node --test --test-name-pattern='final focus validation waited|ready dialog reads survive' tests/bench-real-fixture.test.mjs",
+      "exitCode": 1,
+      "result": "RED: both review regressions failed on production behavior. Same-reference document identity could change during a waited focus read and still be closed. A ready-loop AXFocusedWindow error ended the helper without retries before or during a close request."
+    },
+    {
+      "command": "node --test tests/bench-real-fixture.test.mjs",
+      "exitCode": 0,
+      "result": "63 passed after adding separate ready-observation episodes, close-transition budget carry and complete identity revalidation after read waits."
+    },
+    {
+      "command": "node --test --test-name-pattern='close request during' tests/bench-real-fixture.test.mjs",
+      "exitCode": 1,
+      "result": "One passed, one failed. A close arriving during a successful observation read lost the prior 600 ms and renewed cleanup to 15,600 ms instead of 15,000 ms."
+    },
+    {
+      "command": "node --test tests/bench-real-fixture.test.mjs",
+      "exitCode": 0,
+      "result": "65 passed after preserving the deadline on successful reads and at observation completion. Includes real fake-clock ready-loop recovery across separate busy periods."
+    },
+    {
+      "command": "node --test tests/bench-real-fixture.test.mjs",
+      "exitCode": 0,
+      "result": "66 passed with identity mutation coverage after close/discard button lookups wait."
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 0,
+      "result": "Bare command with scoped host access after actual sandbox denials. All 981 unit tests, both plugin validations and all 11 mod tests passed. No live app or benchmark run."
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "result": "Two wording errors across 59 files in the added transition explanation: 'a read or wait carries' and 'spent budget'. Reworded without suppressions."
+    },
+    {
+      "command": "node --test --test-name-pattern='cleanup AX reads|cleanup deadline|a close request during|cleanup stops immediately|cleanup preserves absent|cleanup revalidates|cleanup repeats|ready dialog reads|parent cleanup retains' tests/bench-real-fixture.test.mjs",
+      "exitCode": 0,
+      "result": "Independent reviewer ran twelve targeted fake-clock tests. All twelve passed."
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "result": "Bare command after rewording and adding check/re-review results. Zero errors, warnings or suggestions across 59 files."
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "result": "Bare command after recording the prose exit code in the Markdown report. Zero errors, warnings or suggestions across 59 files."
+    }
+  ],
+  "verification": {
+    "check": {
+      "command": "npm run check",
+      "exitCode": 0,
+      "unitTestsPassed": 981,
+      "pluginValidationsPassed": 2,
+      "modTestsPassed": 11
+    },
+    "prose": {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "files": 59,
+      "finalExitCodeProse": "Verified with exit code 0"
+    },
+    "review": {
+      "initialImportantFindings": [
+        "Ready-loop dialog reads could fail before or during a close request, bypassing cleanup retries.",
+        "A waited focus read could leave earlier document identity checks stale."
+      ],
+      "followupImportantFinding": "A close arriving during a successful observation read could discard the preceding wait and renew the cleanup deadline.",
+      "resolution": "Separate observation episodes promote to cleanup without renewing elapsed time. Validation repeats after waits, including before existing close/discard button presses.",
+      "rereview": "No remaining Critical or Important findings. Independent targeted tests passed 12/12."
+    },
+    "evidence": "Full architect payload matches immutable source 6abba433ba6775d9b0d5f1bcbb37fe59ca4f1a8a. All 44 sandbox test failures retained by name. Report privacy checks and git diff --check passed."
+  },
+  "privacy": {
+    "sourcePayload": "Full supplied architect result retained with home paths as ~ and temporary paths as <temp>. Owner names excluded. No live observations added."
+  }
+}

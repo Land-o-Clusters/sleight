@@ -88,7 +88,9 @@ After brief 10 and the owner's click past Excel's welcome screen, the Office rer
 ([`real-use-office-11`](benchmarks/2026-10-09-real-use-office-11.json), one run each, the owner away)
 passed word-edit in 42.2 s and 10 turns, with Word's own dialogs recorded and left to Claude.
 excel-edit made and saved its edits, then cleanup's read of Excel's focused window timed out
-(-25204) and stopped the pass, so powerpoint-edit didn't run. Cleanup reads don't retry yet.
+(-25204) and stopped the pass, so powerpoint-edit didn't run. The
+[brief-11 report](benchmarks/2026-10-09-real-use-tasks-11.md) records cleanup's new bounded read wait
+and its fake-clock proof. Excel and PowerPoint await the architect's rerun.
 
 The Codex arm now runs the real suite. Its first run, helium-form on gpt-6.1-sol at medium, passed in
 36.5 s and 8 model requests with 6 engine calls, and the engine's "Always allow" list was restored

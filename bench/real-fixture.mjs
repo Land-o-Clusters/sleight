@@ -76,7 +76,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
       let timer;
       const result = await Promise.race([response, new Promise(resolve => { timer = setTimeout(() => {
         controller.abort(); resolve({ error: 'Fixture cleanup timed out', groupClean: false });
-      }, 15000); })]).finally(() => clearTimeout(timer));
+      }, 30000); })]).finally(() => clearTimeout(timer));
       if (untouched(result)) return;
       if (!result.groupClean || result.error || result.exit.code !== 0 ||
         !result.stdout.split('\n').some(line => { try { return JSON.parse(line).stage === 'closed'; } catch { return false; } })) {
@@ -110,8 +110,14 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
           if (event.appDialog.stop !== false) diagnostics.appDialog = event.appDialog;
           ctx.onAppDialog?.(event.appDialog);
         }
-        if (event.stage === 'retry') diagnostics.retries.push({ code: event.code, waitMs: event.waitMs, totalWaitMs: event.totalWaitMs, setupCase: event.setupCase });
-        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback', 'launchWait', 'readWait', 'setupCase']) {
+        if (event.stage === 'retry') {
+          const retry = { code: event.code, waitMs: event.waitMs, totalWaitMs: event.totalWaitMs, setupCase: event.setupCase };
+          if (['cleanup', 'observation'].includes(event.phase)) {
+            (diagnostics[event.phase + 'Retries'] ??= []).push(retry);
+            diagnostics[event.phase + 'TotalWaitMs'] = event.totalWaitMs;
+          } else diagnostics.retries.push(retry);
+        }
+        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback', 'launchWait', 'readWait', 'cleanupReadWait', 'observationReadWait', 'setupCase']) {
           if (event[key] !== undefined) diagnostics[key] = event[key];
         }
         if (event.stage) stage(event.stage).resolve(event);

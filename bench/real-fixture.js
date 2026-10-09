@@ -121,11 +121,74 @@ function setupRead(operation, state, clock) {
   }
 }
 
+function beginCleanup(state) {
+  if (state.cleanup) return;
+  state.cleanup = true;
+  if (state.observation) {
+    state.cleanupRetryStarted = state.observation.cleanupRetryStarted;
+    state.cleanupRetryError = state.observation.cleanupRetryError;
+  }
+}
+
+function cleanupRead(operation, state, clock) {
+  var lastError, episode;
+  function currentEpisode() {
+    // A close request may arrive during a ready-state observation or its wait.
+    // Carry that episode's spent budget into cleanup instead of starting over.
+    if (state.observation && !state.cleanup && clock.cleanupRequested()) {
+      beginCleanup(state);
+    }
+    return state.cleanup ? state : state.observation;
+  }
+  function receipt(reason) {
+    if (!lastError) return;
+    var phase = state.cleanup ? 'cleanup' : 'observation', key = phase + 'ReadWait';
+    state[key] = { reason: reason, setupCase: state.setupCase, elapsedMs: clock.now() - episode.cleanupRetryStarted,
+      code: lastError.code, attribute: lastError.attribute };
+    var event = { stage: phase + '-read-wait' }; event[key] = state[key]; clock.emit(event);
+  }
+  while (true) {
+    episode = currentEpisode();
+    if (episode.cleanupRetryStarted !== undefined && clock.now() - episode.cleanupRetryStarted >= 15000) {
+      lastError = episode.cleanupRetryError; receipt('deadline'); throw lastError;
+    }
+    try { var value = operation(); episode = currentEpisode(); receipt('ready'); return value; }
+    catch (error) {
+      episode = currentEpisode();
+      if (error.code !== -25204) {
+        if (episode.cleanupRetryError) lastError = error;
+        receipt('error'); throw error;
+      }
+      if (episode.cleanupRetryStarted === undefined) episode.cleanupRetryStarted = clock.now();
+      lastError = episode.cleanupRetryError = error;
+      var remaining = 15000 - (clock.now() - episode.cleanupRetryStarted);
+      if (remaining <= 0) { receipt('deadline'); throw error; }
+      var before = clock.now();
+      state.readEpoch = (state.readEpoch || 0) + 1;
+      clock.wait(Math.min(100, remaining));
+      episode = currentEpisode();
+      clock.emit({ stage: 'retry', phase: state.cleanup ? 'cleanup' : 'observation', code: error.code, waitMs: clock.now() - before,
+        totalWaitMs: clock.now() - episode.cleanupRetryStarted, setupCase: state.setupCase });
+    }
+  }
+}
+
+function validateOwnedFixture(window, request, app, api, focus) {
+  var epoch;
+  do {
+    epoch = api.readEpoch ? api.readEpoch() : 0;
+    if (!api.exists(window) || !api.matches(window, request, true)) throw new Error('Owned fixture document identity changed');
+    if (focus && !api.equal(api.focused(app), window)) throw new Error('Owned document lost focus; cleanup refused');
+    // Any waited read may have made an earlier check stale. Repeat all checks
+    // before allowing the existing action to use the retained reference.
+  } while (api.readEpoch && api.readEpoch() !== epoch);
+}
+
 function recoverSetup(window, request, api) {
   if (!window) return 'unconfirmed';
   if (!api.exists(window)) return 'closed retained fixture';
   if (!api.matches(window, request, true)) return 'unconfirmed';
-  api.closeButton(window);
+  api.closeButton(window, function () { validateOwnedFixture(window, request, null, api, false); });
   for (var attempt = 0; attempt < 30; attempt++) {
     api.wait();
     if (!api.exists(window)) return 'closed retained fixture';
@@ -161,19 +224,17 @@ function chooseFileMenu(file, titles, api) {
 function closeOwnedWindow(window, request, app, api) {
   if (!window || !api.exists(window)) return;
   if (!api.matches(window, request, true)) throw new Error('Owned fixture document identity changed');
+  var identity = function () { validateOwnedFixture(window, request, app, api, false); };
   if (request.mode === 'document') {
-    var validate = function () {
-      if (!api.exists(window) || !api.matches(window, request, true)) throw new Error('Owned fixture document identity changed');
-      if (!api.equal(api.focused(app), window)) throw new Error('Owned document lost focus; cleanup refused');
-    };
+    var validate = function () { validateOwnedFixture(window, request, app, api, true); };
     validate();
     api.closeDocument(app, validate, request);
-  } else api.closeButton(window);
+  } else api.closeButton(window, identity);
   for (var attempt = 0; attempt < 30; attempt++) {
     api.wait();
     if (!api.exists(window)) return;
     if (request.mode === 'document' && !api.matches(window, request, true)) return;
-    api.discard(window);
+    api.discard(window, identity);
   }
   throw new Error('Owned fixture window is still open');
 }
@@ -232,15 +293,16 @@ function nativeAX(state, clock) {
       var code = Number($.AXUIElementCopyAttributeValue(element, $(attribute), value));
       // These optional attributes can remain unsupported on a valid app
       // window. Their absence allows the existing nonce-title identity fallback.
-      if (code === -25205 && state && state.setup &&
+      if (code === -25205 && state && (state.setup || state.cleanup || state.observation) &&
           ['AXDocument', 'AXSheets', 'AXSubrole', 'AXMainWindow', 'AXChildren', 'AXValue'].indexOf(attribute) !== -1) {
         if (state.office) state.officeLastError = { code: code, attribute: attribute };
         return null;
       }
-      if (code === -25212 || (code === -25205 && !(state && state.setup))) return null;
+      if (code === -25212 || (code === -25205 && !(state && (state.setup || state.cleanup || state.observation)))) return null;
       if (code !== 0) throw Object.assign(new Error('AX fixture read failed: ' + code + ' (' + attribute + ')'), { code: code, attribute: attribute });
       return ObjC.castRefToObject(value[0]);
     };
+    if (state && (state.cleanup || state.observation)) return cleanupRead(operation, state, clock);
     return state && state.officeWaiting ? operation() : setupRead(operation, state, clock);
   }
   function text(element, attribute) { var value = read(element, attribute); return value ? String(ObjC.unwrap(value)) : ''; }
@@ -333,6 +395,7 @@ function nativeAX(state, clock) {
   }
   return {
     read: read, text: text, press: press, fileMenu: fileMenu,
+    readEpoch: function () { return state && state.readEpoch || 0; },
     wait: function () { $.NSThread.sleepForTimeInterval(0.1); },
     equal: function (a, b) { return !!a && !!b && !!$.CFEqual(a, b); },
     focused: function (app) { return read(app, 'AXFocusedWindow'); },
@@ -354,7 +417,12 @@ function nativeAX(state, clock) {
       }
       return { focused: describe(read(app, 'AXFocusedWindow')), main: describe(read(app, 'AXMainWindow')) };
     },
-    closeButton: function (window) { var button = read(window, 'AXCloseButton'); if (!button) throw new Error('Owned window has no close button'); press(button); },
+    closeButton: function (window, validate) {
+      var button = read(window, 'AXCloseButton');
+      if (!button) throw new Error('Owned window has no close button');
+      if (validate) validate();
+      press(button);
+    },
     closeDocument: function (app, validate, request) {
       closeDocumentSafely(app, request, validate, {
         menu: function (target, beforePress) { fileMenu(target, ['Close Selected PDF Document', 'Close'], beforePress); },
@@ -368,12 +436,13 @@ function nativeAX(state, clock) {
         },
       });
     },
-    discard: function (window) {
+    discard: function (window, validate) {
       var sheets = children(window, 'AXSheets');
       if (!sheets.length) return;
       if (sheets.length !== 1) throw new Error('Unexpected owned fixture sheets');
       var discardButtons = buttons(sheets[0], ["Don't Save", 'Don’t Save'], 6);
       if (discardButtons.length !== 1) throw new Error('Unexpected owned fixture sheet; cleanup refused');
+      if (validate) validate();
       press(discardButtons[0]);
     },
   };
@@ -416,7 +485,8 @@ function run(argv) {
     return Number(matches.count) === 1 ? matches.objectAtIndex(0) : null;
   }
   var state = { setup: true, fresh: false, fixtureExists: false, actionTaken: false, retryWaitMs: 0 };
-  var clock = { now: function () { return Date.now(); }, wait: function (ms) { waitForLaunch(ms / 1000); }, emit: emit };
+  var clock = { now: function () { return Date.now(); }, wait: function (ms) { waitForLaunch(ms / 1000); }, emit: emit,
+    cleanupRequested: function () { return command() === 'close'; } };
   var api = nativeAX(state, clock);
   var target, running, pid, app, previous, owned, observedDialogs = [];
   function checkAppDialog() {
@@ -511,7 +581,15 @@ function run(argv) {
   if (!inherited && !api.matches(owned, request)) throw new Error('Fixture document identity unconfirmed');
   emit({ stage: 'ready', pid: pid, fresh: state.fresh, totalWaitMs: state.retryWaitMs, setupCase: state.setupCase });
   state.setup = false;
-  while (command() !== 'close') { checkAppDialog(); api.wait(); }
+  while (command() !== 'close') {
+    state.observation = {};
+    try { checkAppDialog(); } finally {
+      if (clock.cleanupRequested()) beginCleanup(state);
+      state.observation = null;
+    }
+    api.wait();
+  }
+  beginCleanup(state);
   checkAppDialog();
   target = application();
   if (target && Number(target.processIdentifier) !== pid) throw new Error('Fixture process changed before cleanup');
@@ -520,6 +598,7 @@ function run(argv) {
   } catch (error) {
     if (state.setup) {
       state.setup = false;
+      state.cleanup = true;
       var cleanup, cleanupError = error.menuCleanupError;
       try {
         cleanup = error.appDialog ? 'unconfirmed' : recoverSetup(owned, request, api);
