@@ -56,6 +56,21 @@ and an iOS runtime (`xcodebuild -downloadPlatform iOS`, 8 GB). Without them its 
 The [initial report](benchmarks/2026-10-08-real-use-tasks.md) and
 [Known problems](known-problems.md) retain the earlier failed qualification passes.
 
+The round-5 [report](benchmarks/2026-10-08-real-use-tasks-5.md) records 16 of 18 slots, 6 passes,
+10 setup failures and 2 unstarted Simulator slots. All 6 model trials passed.
+
+| Task | Passed | Setup failures | Unstarted | Median s |
+|---|---|---|---|---|
+| safari-form | 0 | 3 | 0 | n/a |
+| helium-form | 3 | 0 | 0 | 18.2 |
+| preview-pdf | 0 | 3 | 0 | n/a |
+| finder-files | 3 | 0 | 0 | 52.2 |
+| textedit-calculator | 0 | 3 | 0 | n/a |
+| simulator-flow | 0 | 1 | 2 | n/a |
+
+The Simulator cleanup stop left qualification incomplete. The final launch-identity fix has no
+live result yet.
+
 ## Time per run
 
 Each run's result now splits its time. Claude Code reports the time spent in the model API, and

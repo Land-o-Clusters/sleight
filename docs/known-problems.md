@@ -3,6 +3,13 @@
 What doesn't work, or works only partly, with the measurements behind it. We found all of these in
 our own runs. Dates and engine versions are given where they matter.
 
+- Real-use round 5 stopped at 16/18 slots: 6 passes, 10 setup failures and 2 unstarted Simulator
+  slots (2026-10-08). Safari's File-menu lookup failed 3/3; Preview and TextEdit readiness failed
+  3/3 each, so Calculator was never reached. Preview's first quit was unconfirmed; the owner later
+  said Preview was closed. Simulator's local URL timed out and its missing PID prevented a confirmed
+  quit. The final launch-identity and ownership fix has unit proof only, with no successful native
+  app quit recorded. [Round-5 results](benchmarks/2026-10-08-real-use-tasks-5.json) retain every pass.
+
 - Real-use round 2 completed 3 of 18 requested model trials, with 1 pass (2026-10-08).
   Helium failed twice after dismissed browser permission requests that the system observer missed.
   [Round-2 results](benchmarks/2026-10-08-real-use-tasks-2.json) retain every attempt.
