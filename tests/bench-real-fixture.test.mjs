@@ -13,6 +13,69 @@ function nativeSource() {
   return sandbox;
 }
 
+test('cold Office readiness polls both startup AX errors until the fixture arrives after twelve seconds', () => {
+  const { waitForOfficeFixture } = nativeSource();
+  assert.equal(typeof waitForOfficeFixture, 'function');
+  const state = { fresh: true, setup: true, actionTaken: false }, events = [];
+  let time = 0, probes = 0;
+  const ready = waitForOfficeFixture(() => {
+    probes++;
+    if (time < 12000) throw Object.assign(new Error('launching'), { code: time < 5000 ? -25204 : -25205, attribute: 'AXFocusedWindow' });
+    return true;
+  }, state, { now: () => time, wait: ms => { time += ms; }, emit: event => events.push(event) });
+  assert.equal(ready, true);
+  assert.equal(probes, 121);
+  assert.equal(time, 12000);
+  assert.deepEqual(JSON.parse(JSON.stringify(events.at(-1).launchWait)),
+    { reason: 'ready', elapsedMs: 12000, code: -25205, attribute: 'AXFocusedWindow' });
+  assert.equal(state.actionTaken, false);
+});
+
+test('cold Office readiness stops at thirty seconds with the last AX error and no fixture action', () => {
+  const { waitForOfficeFixture } = nativeSource();
+  const state = { fresh: true, setup: true, actionTaken: false }, events = [];
+  let time = 0, lastProbeAt;
+  assert.throws(() => waitForOfficeFixture(() => {
+    lastProbeAt = time; time += 500;
+    throw Object.assign(new Error('launching'), { code: -25205, attribute: 'AXFocusedWindow' });
+  }, state, { now: () => time, wait: ms => { time += ms; }, emit: event => events.push(event) }),
+  /Office fixture readiness timed out.*-25205.*AXFocusedWindow/);
+  assert.equal(time, 30000);
+  assert.ok(lastProbeAt < 30000);
+  assert.deepEqual(JSON.parse(JSON.stringify(events.at(-1).launchWait)),
+    { reason: 'deadline', elapsedMs: 30000, code: -25205, attribute: 'AXFocusedWindow' });
+  assert.equal(state.actionTaken, false);
+  assert.equal(state.officeWaiting, false);
+});
+
+test('cold Office readiness bounds missing windows and does not retry permission identity or cancellation errors', () => {
+  const { waitForOfficeFixture } = nativeSource();
+  let time = 0;
+  const state = () => ({ fresh: true, setup: true, actionTaken: false });
+  const clock = { now: () => time, wait: ms => { time += ms; }, emit() {} };
+  assert.throws(() => waitForOfficeFixture(() => false, state(), clock), /timed out.*no AX error/);
+  assert.equal(time, 30000);
+  for (const error of [Object.assign(new Error('permission'), { code: -25211 }), new Error('Fixture process changed'), new Error('interrupted')]) {
+    assert.throws(() => waitForOfficeFixture(() => { throw error; }, state(),
+      { now: () => 0, wait: () => assert.fail('no retry'), emit() {} }), actual => actual === error);
+  }
+});
+
+test('Office launch treats unsupported optional document attributes as absent without an attribute retry', () => {
+  const sandbox = nativeSource(), state = { office: true, fresh: true, setup: true, officeWaiting: true, officeDeadline: 30000 };
+  let time = 0, reads = 0;
+  const native = value => value;
+  native.AXUIElementCopyAttributeValue = () => { reads++; return -25205; };
+  sandbox.$ = native; sandbox.Ref = () => [];
+  const api = sandbox.nativeAX(state, { now: () => time, wait: () => assert.fail('no inner retry'), emit() {} });
+  assert.equal(api.read({}, 'AXDocument'), null);
+  assert.equal(api.read({}, 'AXSheets'), null);
+  assert.throws(() => api.focused({}), error => error.code === -25205 && error.attribute === 'AXFocusedWindow');
+  time = 30000;
+  assert.throws(() => api.read({}, 'AXDocument'), /timed out/);
+  assert.equal(reads, 3, 'no AX read starts after the deadline');
+});
+
 test('fresh setup retries only the two startup AX errors and records the bounded wait', () => {
   const { setupRead } = nativeSource();
   assert.equal(typeof setupRead, 'function');
@@ -143,19 +206,25 @@ test('a launch exception waits for recovery before clearing the pending acquisit
   assert.equal(ctx.fixtureDiagnostics[0].cleanup, 'nothing created');
 });
 
-test('a partially successful launch is quit by its recorded PID after the launch command rejects', async t => {
+test('a failed Office launch keeps its startup and quit receipts and quits only its recorded PID', async t => {
   const { openFixture, closeFixtures } = await import('../bench/real-fixture.mjs');
   const dir = mkdtempSync(join(tmpdir(), 'real-partial-launch-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const ctx = { dir }, quits = [];
+  const launchWait = { reason: 'deadline', elapsedMs: 30000, code: -25205, attribute: 'AXFocusedWindow' };
+  const quitWait = { reason: 'exited', accepted: true, elapsedMs: 12000, finishedLaunching: false };
   let finish;
-  await assert.rejects(openFixture(ctx, { app: 'Preview', bundle: 'com.apple.Preview', mode: 'document' }, {
+  await assert.rejects(openFixture(ctx, { app: 'Microsoft Excel', bundle: 'com.microsoft.Excel', mode: 'document' }, {
     run: async (_command, args, options) => {
       const request = JSON.parse(args.at(-1));
-      if (request.mode === 'quit') { quits.push(request.pid); return { exit: { code: 0 }, groupClean: true }; }
+      if (request.mode === 'quit') {
+        assert.equal(options.timeoutMs, 35000, 'parent allows the full thirty-second normal quit');
+        quits.push(request.pid);
+        return { exit: { code: 0 }, groupClean: true, stdout: JSON.stringify({ stage: 'quit', quitWait }) + '\n' };
+      }
       options.onStdout('{"stage":"armed","running":false}\n');
       return new Promise(resolve => { finish = () => {
-        const stdout = '{"stage":"setup-failure","cleanup":"unconfirmed","pid":42}\n';
+        const stdout = JSON.stringify({ stage: 'setup-failure', cleanup: 'unconfirmed', pid: 42, launchWait }) + '\n';
         options.onStdout(stdout); resolve({ exit: { code: 1 }, stdout, groupClean: true });
       }; });
     },
@@ -163,6 +232,8 @@ test('a partially successful launch is quit by its recorded PID after the launch
   }), /launch command failed/);
   await closeFixtures(ctx);
   assert.deepEqual(quits, [42]);
+  assert.deepEqual(ctx.fixtureDiagnostics[0].launchWait, launchWait);
+  assert.deepEqual(ctx.fixtureDiagnostics[0].quitWait, quitWait);
 });
 
 test('inherit helpers never claim or close an application window during setup recovery', () => {
@@ -471,11 +542,88 @@ test('final pass cleanup quits the exact launched app after permission cancellat
 test('native quit refuses a replacement process and confirms only the launched app exits', () => {
   const { quitFixtureApplication } = nativeSource();
   assert.equal(typeof quitFixtureApplication, 'function');
-  const app = { processIdentifier: 42, bundleIdentifier: 'com.apple.Safari', terminate: () => true };
+  const app = { processIdentifier: 42, bundleIdentifier: 'com.apple.Safari', terminate: true };
   let observations = 0;
-  assert.equal(quitFixtureApplication(42, 'com.apple.Safari', () => ++observations < 3 ? app : null, () => {}), true);
+  const clock = { now: () => 0, wait: () => {}, emit() {} };
+  assert.equal(quitFixtureApplication(42, 'com.apple.Safari', () => ++observations < 3 ? app : null, clock), true);
   assert.throws(() => quitFixtureApplication(42, 'com.apple.Safari', () => ({ ...app, processIdentifier: 43 }),
-    () => assert.fail('no quit of replacement')), /identity/);
+    { ...clock, wait: () => assert.fail('no quit of replacement') }), /identity/);
+});
+
+test('normal quit waits for a cold app beyond five seconds and records the exact process outcome', () => {
+  const { quitFixtureApplication } = nativeSource(), events = [];
+  let time = 0, quits = 0;
+  const app = { processIdentifier: 42, bundleIdentifier: 'com.microsoft.Excel', isFinishedLaunching: false,
+    get terminate() { quits++; return true; }, get forceTerminate() { assert.fail('never force quit'); } };
+  assert.equal(quitFixtureApplication(42, 'com.microsoft.Excel', () => time < 12000 ? app : null,
+    { now: () => time, wait: ms => { time += ms; }, emit: event => events.push(event) }), true);
+  assert.equal(quits, 1);
+  assert.equal(time, 12000);
+  assert.deepEqual(JSON.parse(JSON.stringify(events.at(-1).quitWait)),
+    { reason: 'exited', accepted: true, elapsedMs: 12000, finishedLaunching: false });
+});
+
+test('normal quit leaves an app that does not exit unconfirmed and refuses a replacement during the wait', () => {
+  const { quitFixtureApplication } = nativeSource(), events = [];
+  let time = 0, quits = 0;
+  const app = { processIdentifier: 42, bundleIdentifier: 'com.microsoft.Excel', isFinishedLaunching: true,
+    get terminate() { quits++; return true; }, get forceTerminate() { assert.fail('never force quit unsaved work'); } };
+  assert.throws(() => quitFixtureApplication(42, 'com.microsoft.Excel', () => app,
+    { now: () => time, wait: ms => { time += ms; }, emit: event => events.push(event) }), /quit unconfirmed/);
+  assert.equal(time, 30000);
+  assert.equal(quits, 1);
+  assert.equal(events.at(-1).quitWait.reason, 'deadline');
+  assert.equal(events.at(-1).quitWait.accepted, true);
+  time = 0;
+  assert.throws(() => quitFixtureApplication(42, 'com.microsoft.Excel', () => time ? { processIdentifier: 43, bundleIdentifier: app.bundleIdentifier } : app,
+    { now: () => time, wait: ms => { time += ms; }, emit() {} }), /identity/);
+});
+
+test('native cold Office setup uses the launch wait before readiness and retains a failed launch PID without acting', () => {
+  for (const windowAt of [12000, Infinity]) {
+    const sandbox = nativeSource(), events = [];
+    let time = 0, closed = false, reads = 0;
+    const target = { processIdentifier: 42 }, owned = {};
+    const foundation = value => ({ dataUsingEncoding: () => value });
+    foundation.AXIsProcessTrusted = () => true;
+    foundation.NSRunningApplication = { runningApplicationsWithBundleIdentifier: () => {
+      const count = reads++ ? 1 : 0;
+      return { count, objectAtIndex: () => target };
+    } };
+    foundation.AXUIElementCreateApplication = () => ({});
+    foundation.AXUIElementSetMessagingTimeout = () => {};
+    foundation.NSFileHandle = { fileHandleWithStandardOutput: { writeData: line => {
+      const event = JSON.parse(line); events.push(event); if (event.stage === 'ready') closed = true;
+    } } };
+    foundation.NSData = { dataWithContentsOfFile: () => ({ isNil: () => false }) };
+    foundation.NSString = { alloc: { initWithDataEncoding: () => JSON.stringify({ command: closed ? 'close' : 'opened' }) } };
+    sandbox.$ = foundation; sandbox.Date = { now: () => time };
+    sandbox.waitForLaunch = seconds => { time += Math.round((seconds ?? 0.1) * 1000); };
+    sandbox.nativeAX = state => ({
+      dialog: () => [], readiness: () => ({}),
+      focused: () => {
+        assert.equal(state.officeWaiting, true, 'no unbounded AX reads before the cold-launch wait');
+        if (time < windowAt) throw Object.assign(new Error('not ready'), { code: time < 5000 ? -25204 : -25205, attribute: 'AXFocusedWindow' });
+        return owned;
+      },
+      matches: () => true, exists: () => false,
+      press: () => assert.fail('no fixture action while starting'), wait: () => assert.fail('use the launch run loop'),
+    });
+    const request = JSON.stringify({ app: 'Microsoft Excel', bundle: 'com.microsoft.Excel', mode: 'document', control: 'fake', token: 'fixture', target: '/fixture.xlsx' });
+    if (windowAt === Infinity) {
+      assert.throws(() => sandbox.run([request]), /timed out.*-25205.*AXFocusedWindow/);
+      const failed = events.at(-1);
+      assert.equal(failed.stage, 'setup-failure');
+      assert.equal(failed.pid, 42);
+      assert.equal(failed.actionTaken, false);
+      assert.equal(failed.launchWait.reason, 'deadline');
+    } else {
+      sandbox.run([request]);
+      assert.equal(events.find(event => event.stage === 'office-wait').launchWait.elapsedMs, 12000);
+      assert.equal(events.some(event => event.stage === 'ready'), true);
+      assert.equal(events.at(-1).stage, 'closed');
+    }
+  }
 });
 
 test('native JXA quit identity unwraps a bridged bundle string without accessing an app',

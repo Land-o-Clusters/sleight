@@ -70,7 +70,10 @@ Close commands are disabled. Use that flag only after the owner confirms they ar
 | textedit-calculator | 3 | 0 | 0 | 43.6 |
 
 The [brief-8 report](benchmarks/2026-10-09-real-use-tasks-8.md) records that qualification and the
-later failures in Safari, browser navigation and Word. Their harness corrections await an architect rerun.
+later failures in Safari, browser navigation and Word. The
+[brief-9 report](benchmarks/2026-10-09-real-use-tasks-9.md) records the architect's rerun: all 11 web
+tasks passed once each after the Safari correction. Word saved but failed ZIP validation; Excel
+failed cold setup and quit confirmation. Their latest harness changes await another architect rerun.
 
 The round-5 [report](benchmarks/2026-10-08-real-use-tasks-5.md) records 16 of 18 slots, 6 passes,
 10 setup failures and 2 unstarted Simulator slots. All 6 model trials passed.
@@ -81,9 +84,10 @@ The [report](benchmarks/2026-10-09-real-use-tasks-7.md) lists 20 new tasks, each
 Sonnet 5.5 medium trial. The browser IDs pair `safari-` and `helium-` with `grid`, `editor`, `dense`,
 `spa`, `nested` and `infinite`. Office adds `word-edit`, `excel-edit` and `powerpoint-edit`.
 Mail adds `mail-folder`, `mail-message`, `mail-thread`, `mail-attachment` and `mail-search` in a
-local invented mailbox. All 20 dry fixtures ran. The architect's desktop passes reached Helium's
-grid, editor and dense tasks, then stopped at cleanup. Word's pass ended at a dialog. Remaining tasks
-are unqualified. Mail waits until the owner can watch it.
+local invented mailbox. All 20 dry fixtures ran. The architect's later desktop pass passed 11 web
+tasks once each. Word continued past its Replace All result dialog and saved; its checker then
+rejected a ZIP entry. Excel stopped during cold setup, and PowerPoint did not run. Office remains
+unqualified. Mail waits until the owner can watch it.
 
 Brief 7b adds `mimestream-label`, `mimestream-message`, `mimestream-thread`, `mimestream-scroll`
 and `mimestream-search` on the owner's signed-in Gmail. Select those IDs in a separate sleight pass.

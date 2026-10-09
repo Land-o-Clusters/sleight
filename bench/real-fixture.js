@@ -20,16 +20,69 @@ function waitForApplication(application, wait) {
   return null;
 }
 
-function quitFixtureApplication(pid, bundle, application, wait) {
-  var target = application();
-  if (!target) return true;
-  if (Number(target.processIdentifier) !== pid || String(ObjC.unwrap(target.bundleIdentifier)) !== bundle) throw new Error('Launched app identity changed; quit refused');
-  if (!target.terminate) throw new Error('Launched app refused quit');
-  for (var attempt = 0; attempt < 50; attempt++) {
-    wait();
-    if (!application()) return true;
+function quitFixtureApplication(pid, bundle, application, clock) {
+  var started = clock.now(), accepted = false, finishedLaunching;
+  function identity(target) {
+    if (Number(target.processIdentifier) !== pid || String(ObjC.unwrap(target.bundleIdentifier)) !== bundle) throw new Error('Launched app identity changed; quit refused');
+    finishedLaunching = !!target.isFinishedLaunching;
   }
-  throw new Error('Launched app quit unconfirmed');
+  function receipt(reason) {
+    clock.emit({ stage: 'quit', quitWait: { reason: reason, accepted: accepted,
+      elapsedMs: clock.now() - started, finishedLaunching: finishedLaunching } });
+  }
+  var target = application();
+  if (!target) { receipt('already-exited'); return true; }
+  identity(target);
+  // NSRunningApplication.terminate requests an ordinary quit. Acceptance does
+  // not mean the process has exited, especially while Office is still starting.
+  accepted = !!target.terminate;
+  if (!accepted) { receipt('refused'); throw new Error('Launched app refused quit'); }
+  while (true) {
+    target = application();
+    if (!target) { receipt('exited'); return true; }
+    identity(target);
+    var remaining = 30000 - (clock.now() - started);
+    if (remaining <= 0) break;
+    clock.wait(Math.min(100, remaining));
+  }
+  receipt('deadline');
+  throw new Error('Launched app quit unconfirmed after thirty seconds (normal quit accepted; finishedLaunching=' + finishedLaunching + ')');
+}
+
+function officeDeadlineError(state) {
+  var last = state.officeLastError;
+  return Object.assign(new Error('Office fixture readiness timed out after thirty seconds; ' +
+    (last ? 'last AX error ' + last.code + ' (' + last.attribute + ')' : 'no AX error; matching window absent')), { officeDeadline: true });
+}
+
+function waitForOfficeFixture(probe, state, clock) {
+  if (!state.fresh || !state.setup || state.actionTaken) throw new Error('Office startup wait requires an untouched cold launch');
+  var started = clock.now(), reason = 'error';
+  state.officeWaiting = true;
+  state.officeDeadline = started + 30000;
+  try {
+    while (clock.now() < state.officeDeadline) {
+      try {
+        var ready = probe();
+        if (clock.now() >= state.officeDeadline) break;
+        if (ready) { reason = 'ready'; return true; }
+      } catch (error) {
+        if (error.officeDeadline) break;
+        if ([-25204, -25205].indexOf(error.code) === -1) throw error;
+        state.officeLastError = { code: error.code, attribute: error.attribute };
+      }
+      var remaining = state.officeDeadline - clock.now();
+      if (remaining > 0) clock.wait(Math.min(100, remaining));
+    }
+    reason = 'deadline';
+    throw officeDeadlineError(state);
+  } finally {
+    state.officeWaiting = false;
+    delete state.officeDeadline;
+    var last = state.officeLastError || {};
+    state.launchWait = { reason: reason, elapsedMs: clock.now() - started, code: last.code, attribute: last.attribute };
+    clock.emit({ stage: 'office-wait', launchWait: state.launchWait });
+  }
 }
 
 function setupRead(operation, state, clock) {
@@ -159,13 +212,22 @@ function dialogContents(element, api) {
 
 function nativeAX(state, clock) {
   function read(element, attribute) {
-    return setupRead(function () {
+    var operation = function () {
+      if (state && state.officeWaiting && clock.now() >= state.officeDeadline) throw officeDeadlineError(state);
       var value = Ref();
       var code = Number($.AXUIElementCopyAttributeValue(element, $(attribute), value));
+      // These optional attributes can remain unsupported on a valid Office
+      // window. Their absence allows the existing nonce-title identity fallback.
+      if (code === -25205 && state && state.office && state.setup &&
+          ['AXDocument', 'AXSheets', 'AXSubrole', 'AXMainWindow', 'AXChildren', 'AXValue'].indexOf(attribute) !== -1) {
+        state.officeLastError = { code: code, attribute: attribute };
+        return null;
+      }
       if (code === -25212 || (code === -25205 && !(state && state.fresh && state.setup))) return null;
-      if (code !== 0) throw Object.assign(new Error('AX fixture read failed: ' + code), { code: code });
+      if (code !== 0) throw Object.assign(new Error('AX fixture read failed: ' + code + ' (' + attribute + ')'), { code: code, attribute: attribute });
       return ObjC.castRefToObject(value[0]);
-    }, state, clock);
+    };
+    return state && state.office && state.setup ? operation() : setupRead(operation, state, clock);
   }
   function text(element, attribute) { var value = read(element, attribute); return value ? String(ObjC.unwrap(value)) : ''; }
   function children(element, attribute) {
@@ -311,7 +373,7 @@ function run(argv) {
       get terminate() { terminated = true; return true; } };
     return JSON.stringify({ quit: quitFixtureApplication(42, 'com.apple.Preview', function () {
       return terminated ? null : fake;
-    }, function () {}), path: request.path ? String(ObjC.unwrap($.NSURL.fileURLWithPath(request.path).URLByResolvingSymlinksInPath.path)) : undefined });
+    }, { now: function () { return 0; }, wait: function () {}, emit: function () {} }), path: request.path ? String(ObjC.unwrap($.NSURL.fileURLWithPath(request.path).URLByResolvingSymlinksInPath.path)) : undefined });
   }
   var allowed = ['com.apple.Safari', 'com.apple.Preview', 'com.apple.finder',
     'com.apple.TextEdit', 'com.apple.calculator', 'com.apple.dt.Devices', 'com.apple.iphonesimulator', 'net.imput.helium',
@@ -321,7 +383,7 @@ function run(argv) {
     return quitFixtureApplication(request.pid, request.bundle, function () {
       var value = $.NSRunningApplication.runningApplicationWithProcessIdentifier(request.pid);
       return value.isNil() || value.isTerminated ? null : value;
-    }, waitForLaunch);
+    }, { now: function () { return Date.now(); }, wait: function (ms) { waitForLaunch(ms / 1000); }, emit: emit });
   }
   if (allowed.indexOf(request.bundle) === -1 || !request.control || !request.mode) throw new Error('Invalid fixture request');
   if (!$.AXIsProcessTrusted()) throw new Error('Accessibility is unavailable; fixture not opened');
@@ -361,6 +423,7 @@ function run(argv) {
   running = !!target;
   state.fresh = !target || !!(target.launchDate && !target.launchDate.isNil() &&
     Number(target.launchDate.timeIntervalSince1970) * 1000 >= request.startedAtMs);
+  state.office = state.fresh && ['com.microsoft.Word', 'com.microsoft.Excel', 'com.microsoft.Powerpoint'].indexOf(request.bundle) !== -1;
   if (request.bundle === 'com.apple.Safari') {
     emit({ stage: 'launch', running: running });
     target = waitForApplication(application, waitForLaunch);
@@ -368,10 +431,10 @@ function run(argv) {
   if (target) {
     pid = Number(target.processIdentifier); app = $.AXUIElementCreateApplication(pid);
     $.AXUIElementSetMessagingTimeout(app, 0.5);
-    previous = api.focused(app);
+    if (!state.office) previous = api.focused(app);
   }
   emit({ stage: 'identified', running: running, pid: pid });
-  checkAppDialog();
+  if (!state.office) checkAppDialog();
   if (request.bundle === 'com.apple.Safari') {
     if (!target) {
       emit({ stage: 'untouched' });
@@ -400,24 +463,33 @@ function run(argv) {
     }
     waitForLaunch();
   }
-  var applicationReady = false;
-  for (var attempt = 0; attempt < 200; attempt++) {
+  function probeReadiness(attempt) {
     if (command() === 'close') throw new Error('Fixture opening interrupted before identity was recorded');
     target = application();
-    if (!target) { api.wait(); continue; }
+    if (!target) return false;
     if (pid && Number(target.processIdentifier) !== pid) throw new Error('Fixture process changed');
     pid = Number(target.processIdentifier); app = $.AXUIElementCreateApplication(pid);
     $.AXUIElementSetMessagingTimeout(app, 0.5);
     checkAppDialog();
-    if (inherited) { api.focused(app); applicationReady = true; break; }
+    if (inherited) { api.focused(app); return true; }
     if (attempt === 0 || attempt === 199) emit({ stage: 'readiness', readiness: api.readiness(app, request) });
     var current = owned || api.focused(app);
-    if (!current) { api.wait(); continue; }
+    if (!current) return false;
     if (request.mode === 'folder' && api.equal(current, previous)) {
-      api.wait(); continue;
+      return false;
     }
-    if (api.matches(current, request)) { owned = current; state.fixtureExists = true; applicationReady = true; break; }
-    api.wait();
+    if (api.matches(current, request)) { owned = current; state.fixtureExists = true; return true; }
+    return false;
+  }
+  var applicationReady = false;
+  if (state.office) {
+    var officeAttempt = 0;
+    applicationReady = waitForOfficeFixture(function () { return probeReadiness(officeAttempt++); }, state, clock);
+  } else {
+    for (var attempt = 0; attempt < 200; attempt++) {
+      if (probeReadiness(attempt)) { applicationReady = true; break; }
+      api.wait();
+    }
   }
   if (!applicationReady) throw new Error('Fixture application readiness unconfirmed');
   if (!inherited && !owned) throw new Error('Fixture identity could not be established without a window inventory');
@@ -438,7 +510,7 @@ function run(argv) {
         cleanup = error.appDialog ? 'unconfirmed' : recoverSetup(owned, request, api);
       } catch (failure) { cleanupError = [cleanupError, failure.message].filter(Boolean).join('; '); }
       emit({ stage: 'setup-failure', fresh: state.fresh, actionTaken: state.actionTaken, pid: pid,
-        cleanup: cleanup, cleanupError: cleanupError, totalWaitMs: state.retryWaitMs });
+        cleanup: cleanup, cleanupError: cleanupError, totalWaitMs: state.retryWaitMs, launchWait: state.launchWait });
     }
     throw error;
   }

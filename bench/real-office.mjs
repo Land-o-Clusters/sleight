@@ -147,22 +147,26 @@ function readPackage(ctx, main) {
     const packed = archive.readUInt32LE(offset + 20), size = archive.readUInt32LE(offset + 24);
     const nameLength = archive.readUInt16LE(offset + 28), extra = archive.readUInt16LE(offset + 30), comment = archive.readUInt16LE(offset + 32);
     const local = archive.readUInt32LE(offset + 42), mode = archive.readUInt32LE(offset + 38) >>> 16;
-    need(offset + 46 + nameLength + extra + comment <= end, 'truncated ZIP directory');
     const name = archive.subarray(offset + 46, offset + 46 + nameLength).toString('utf8');
-    offset += 46 + nameLength + extra + comment;
-    const directory = name.endsWith('/');
-    safePart(directory ? name.slice(0, -1) : name);
-    need(!parts.has(name) && !(mode && (mode & 0xf000) === 0xa000), 'duplicate or symlink package part');
-    need((flags & ~0x0808) === 0 && [0, 8].includes(method) && size <= 2 * 1024 * 1024 && (total += size) <= 8 * 1024 * 1024, 'unsupported or oversized ZIP entry');
-    need(local + 30 <= start && archive.readUInt32LE(local) === 0x04034b50, 'invalid ZIP local entry');
-    const localNameLength = archive.readUInt16LE(local + 26), dataStart = local + 30 + localNameLength + archive.readUInt16LE(local + 28);
-    need(dataStart + packed <= start && archive.readUInt16LE(local + 6) === flags && archive.readUInt16LE(local + 8) === method &&
-      archive.subarray(local + 30, local + 30 + localNameLength).toString('utf8') === name, 'inconsistent ZIP entry');
-    need(!ranges.some(([from, to]) => local < to && dataStart + packed > from), 'overlapping ZIP entries');
-    ranges.push([local, dataStart + packed]);
-    const data = method === 0 ? archive.subarray(dataStart, dataStart + packed) : inflateRawSync(archive.subarray(dataStart, dataStart + packed), { maxOutputLength: 2 * 1024 * 1024 });
-    need(data.length === size && crc32(data) === archive.readUInt32LE(offset - (46 + nameLength + extra + comment) + 16), 'corrupt ZIP entry');
-    if (!directory) parts.set(name, data);
+    const entry = `ZIP entry ${JSON.stringify(name.slice(0, 240))}${name.length > 240 ? ' (name truncated)' : ''}: flags=0x${flags.toString(16).padStart(4, '0')} method=${method} compressed=${packed} uncompressed=${size}`;
+    try {
+      need(offset + 46 + nameLength + extra + comment <= end, 'truncated ZIP directory');
+      offset += 46 + nameLength + extra + comment;
+      const directory = name.endsWith('/');
+      safePart(directory ? name.slice(0, -1) : name);
+      need(!parts.has(name) && !(mode && (mode & 0xf000) === 0xa000), 'duplicate or symlink package part');
+      const allowedFlags = 0x0808 | (method === 8 ? 0x0006 : 0);
+      need((flags & ~allowedFlags) === 0 && [0, 8].includes(method) && size <= 2 * 1024 * 1024 && (total += size) <= 8 * 1024 * 1024, 'unsupported or oversized ZIP entry');
+      need(local + 30 <= start && archive.readUInt32LE(local) === 0x04034b50, 'invalid ZIP local entry');
+      const localNameLength = archive.readUInt16LE(local + 26), dataStart = local + 30 + localNameLength + archive.readUInt16LE(local + 28);
+      need(dataStart + packed <= start && archive.readUInt16LE(local + 6) === flags && archive.readUInt16LE(local + 8) === method &&
+        archive.subarray(local + 30, local + 30 + localNameLength).toString('utf8') === name, 'inconsistent ZIP entry');
+      need(!ranges.some(([from, to]) => local < to && dataStart + packed > from), 'overlapping ZIP entries');
+      ranges.push([local, dataStart + packed]);
+      const data = method === 0 ? archive.subarray(dataStart, dataStart + packed) : inflateRawSync(archive.subarray(dataStart, dataStart + packed), { maxOutputLength: 2 * 1024 * 1024 });
+      need(data.length === size && crc32(data) === archive.readUInt32LE(offset - (46 + nameLength + extra + comment) + 16), 'corrupt ZIP entry');
+      if (!directory) parts.set(name, data);
+    } catch (error) { throw new Error(`${error.message}; ${entry}`); }
   }
   need(offset === end, 'invalid ZIP directory length');
   const read = name => { need(parts.has(name), `missing package part: ${name}`); return xml(parts.get(name).toString('utf8')); };

@@ -3,15 +3,22 @@
 What doesn't work, or works only partly, with the measurements behind it. We found all of these in
 our own runs. Dates and engine versions are given where they matter.
 
-- sleight-arch's owner-away qualification passed round 6's Helium, Preview, Finder and TextEdit tasks
+- sleight-arch's owner-away pass at `b284b05` passed 11 web tasks once each (2026-10-09).
+  Word made its edits and saved, but its ZIP entry was rejected without identifying it. The file
+  was removed during cleanup. Its rejection remains unexplained. Excel setup ended on `-25205` after
+  15,002 ms of AX retries, then normal quit remained unconfirmed after five seconds. PowerPoint
+  did not run. The [brief-9 report](benchmarks/2026-10-09-real-use-tasks-9.md) retains both passes.
+  ZIP compatibility, startup polling and longer quit waits have unit proof and await live qualification.
+
+- sleight-arch's earlier owner-away qualification passed round 6's Helium, Preview, Finder and TextEdit tasks
   3/3 each (2026-10-09). Safari failed setup 3/3, then failed address selection after a Start Page fix.
   Round 7 reached the correct dense article but stopped when cleanup rejected its navigation.
   Word stopped mid-task on an unrecognized dialog, leaving its unsaved fixture open. Excel and
-  PowerPoint did not run. Browser ownership and Office dialog corrections have unit proof only.
+  PowerPoint did not run. The later brief-9 pass supplies browser and Word result-dialog proof.
   The [brief-8 report](benchmarks/2026-10-09-real-use-tasks-8.md) retains all five architect result files.
   Finder averaged 112.5 s versus round 5's 57.2 s, chiefly from extra Claude turns and drag attempts.
 
-- Round 7's remaining browser tasks, saved Office files, Mail import and export, and app closure
+- Saved Office files, Mail import and export, and app closure
   still need live proof. Mail and Mimestream wait until the owner can watch them.
   Mail requires an already-running app and stops when local ownership or mutation coverage is
   unavailable. Its native export path lacks an independent current flag/read receipt and stops
