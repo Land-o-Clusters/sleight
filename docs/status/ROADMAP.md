@@ -24,7 +24,8 @@ app sleight acted on that holds a keyboard tap is named at turn end. Measured an
 
 Open, in order of user impact (full list in [known-problems.md](../known-problems.md)):
 
-- Full screen and Split View failed 8 of 21 runs. Detect it before acting and say so.
+- Full screen and Split View failed 8 of 21 runs. Detection is built (unreleased, after 1.1.0): an
+  app read says so. Left: a pass in real Split View with the Claude app, at release.
 - In the simulator, Claude's first tap on a Safari field often doesn't focus it (6 of 6 runs with shrunk
   screenshots), and Claude second-guesses the screenshot's scale there.
 - `typeText` after select-all wrote `Engine01engine01`. Send exact text by paste and verify it.
@@ -55,7 +56,7 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
 
 - Briefs 6, 7 and 7b are built. Qualification on 2026-10-09 went 3/3 each for Helium, Preview, Finder and TextEdit with
   Calculator. Safari, helium-dense and word-edit blocked by harness problems.
-- Brief 8 fixes those. sleight-arch then reruns qualification with the owner away.
+- Brief 8 fixes those (`4323a41`, done 2026-10-09). sleight-arch then reruns qualification with the owner away.
 - Mail and Mimestream run while the owner watches. simulator-flow runs with the owner away.
 - sleight-arch reviews, rebases onto `pane/auto-mode` and merges.
 
