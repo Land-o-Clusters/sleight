@@ -55,6 +55,8 @@ and an iOS runtime (`xcodebuild -downloadPlatform iOS`, 8 GB). Without them its 
 
 `node bench/run.mjs --arm sleight --suite real --tasks safari-form --runs 3` selects the new suite.
 Without `--suite real`, the same seven tasks and prompts run as before.
+The runner sets `SLEIGHT_SURFACES=computer` for every real task and its arm preflight, and records
+`surfaces: "computer"` in the results. This keeps Helium on the native app path.
 
 Tasks submit a form in Safari and Helium, rotate and save page 2 of a PDF in Preview, rename and
 move files in Finder, copy a number from TextEdit through Calculator and save its result, and go
@@ -75,8 +77,8 @@ Setup opens pages and files with `open`. A task-owned native Accessibility helpe
 reference until cleanup, without Apple Events or browser window inventories. Helium uses a Swift
 window-created callback, since JXA cannot supply AXObserver's C callback. It reads only the newly
 created reference and refuses multiple creation events. Helium must already be running on its real
-profile. Other apps use JXA with ObjC. Safari must already
-be running so the helper can create a new window without restoring a session. Document cleanup
+profile. Other apps use JXA with ObjC. Safari launches in the background with `open -g -a Safari`.
+The helper waits up to ten seconds for it to finish launching before creating a new window. Document cleanup
 refuses changed focus or identity. Ordinary cancellation keeps the helper alive through cleanup;
 a permission stop ends its AX activity immediately. A helper failure leaves cleanup unconfirmed
 and stops the pass. If helper collection fails, the required release on exit permits another holder

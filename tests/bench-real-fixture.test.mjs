@@ -53,6 +53,67 @@ test('AX cleanup closes the retained fixture without reading any other window', 
   assert.deepEqual(actions, ['close']);
 });
 
+test('Safari launches in the background before acquiring a new fixture window', async t => {
+  const { openFixture } = await import('../bench/real-fixture.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'real-safari-launch-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const actions = [];
+  let finish;
+  const lease = await openFixture({ dir }, {
+    app: 'Safari', bundle: 'com.apple.Safari', target: 'http://127.0.0.1/test', mode: 'window',
+  }, {
+    open: async (command, args) => {
+      assert.equal(command, '/usr/bin/open');
+      actions.push(args);
+    },
+    run: async (_command, _args, options) => {
+      assert.deepEqual(actions, [['-g', '-a', 'Safari']], 'launch must precede native acquisition');
+      options.onStdout('{"stage":"armed"}\n{"stage":"ready"}\n');
+      return new Promise(resolve => { finish = resolve; });
+    },
+  });
+  assert.deepEqual(actions, [
+    ['-g', '-a', 'Safari'], ['-g', '-a', 'Safari', 'http://127.0.0.1/test'],
+  ]);
+  const closed = lease.close();
+  finish({ exit: { code: 0 }, stdout: '{"stage":"closed"}\n', groupClean: true });
+  await closed;
+});
+
+test('Safari process acquisition waits for LaunchServices startup without a window inventory', () => {
+  const source = readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8');
+  const sandbox = { ObjC: { import() {} } };
+  runInNewContext(source, sandbox);
+  assert.equal(typeof sandbox.waitForApplication, 'function');
+  const starting = { isFinishedLaunching: false }, ready = { isFinishedLaunching: true };
+  const observations = [null, starting, ready];
+  let waits = 0;
+  assert.equal(sandbox.waitForApplication(() => observations.shift(), () => { waits++; }), ready);
+  assert.equal(waits, 2);
+  waits = 0;
+  assert.equal(sandbox.waitForApplication(() => null, () => { waits++; }), null);
+  assert.equal(waits, 100, 'a process that never appears must fail within ten seconds');
+});
+
+test('Safari startup polling advances AppKit cached properties through the native run loop', () => {
+  const source = readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8');
+  const target = { isFinishedLaunching: false }, turns = [], sleeps = [];
+  const deadline = { timeIntervalSinceNow: 0.04 };
+  const sandbox = { ObjC: { import() {} }, $: {
+    NSDefaultRunLoopMode: 'default',
+    NSDate: { dateWithTimeIntervalSinceNow: seconds => { assert.equal(seconds, 0.1); return deadline; } },
+    NSThread: { sleepForTimeInterval: seconds => sleeps.push(seconds) },
+    NSRunLoop: { mainRunLoop: { runModeBeforeDate(mode, deadline) {
+      turns.push([mode, deadline]); target.isFinishedLaunching = true;
+    } } },
+  } };
+  runInNewContext(source, sandbox);
+  assert.equal(typeof sandbox.waitForLaunch, 'function');
+  assert.equal(sandbox.waitForApplication(() => target, sandbox.waitForLaunch), target);
+  assert.deepEqual(turns, [['default', deadline]]);
+  assert.deepEqual(sleeps, [0.04], 'an early run-loop return still waits the rest of the poll interval');
+});
+
 test('document cleanup refuses a changed focus or document identity before pressing anything', () => {
   const source = readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8');
   const sandbox = { ObjC: { import() {} } };
@@ -107,8 +168,8 @@ test('a collected helper refusal before any mutation confirms cleanup without an
   const dir = mkdtempSync(join(tmpdir(), 'real-fixture-unavailable-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const ctx = { dir };
-  await assert.rejects(openFixture(ctx, { app: 'Safari', bundle: 'com.apple.Safari', mode: 'window' }, {
-    run: async () => ({ exit: { code: 1 }, stdout: '{"stage":"untouched"}\n', stderr: 'Safari is unavailable', groupClean: true }),
+  await assert.rejects(openFixture(ctx, { app: 'Preview', bundle: 'com.apple.Preview', mode: 'document' }, {
+    run: async () => ({ exit: { code: 1 }, stdout: '{"stage":"untouched"}\n', stderr: 'Preview is unavailable', groupClean: true }),
     open: async () => assert.fail('must not launch after a read-only refusal'),
   }), error => error.noMutation === true);
   await closeFixtures(ctx);

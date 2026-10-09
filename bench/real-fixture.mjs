@@ -17,6 +17,12 @@ async function fixtureHelper(request, signal) {
 // The child retains its AX window reference through cleanup. It never needs a
 // window inventory, a saved window title as authority, or an Apple Event.
 export async function openFixture(ctx, request, { run = runOwned, open = execute, launch, helper = fixtureHelper } = {}) {
+  ctx.signal?.throwIfAborted();
+  ctx.cleanupSignal?.throwIfAborted();
+  if (request.bundle === 'com.apple.Safari') {
+    await open('/usr/bin/open', ['-g', '-a', 'Safari'], { signal: ctx.signal, timeout: 15000 });
+    ctx.signal?.throwIfAborted();
+  }
   ctx.windowLeases ??= [];
   const control = join(ctx.dir, `window-${ctx.windowLeases.length}-control.json`);
   const signal = ctx.signal;

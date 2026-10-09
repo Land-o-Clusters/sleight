@@ -37,6 +37,7 @@ import { observePermission } from './real-permission.mjs';
 import { runOwned } from './preapproved-process.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
 import { runDriver } from './driver.mjs';
+import { benchmarkArm } from './arm-env.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TIMEOUT_MS = 5 * 60 * 1000;
@@ -115,7 +116,7 @@ if (wanted?.some(id => !suiteTasks.some(task => task.id === id))) throw new Erro
 
 // SLEIGHT_APPROVAL_PROMPT=client keeps approvals going to approve.mjs, even
 // when the benchmark runs from a desktop app session.
-const armEnv = arm => ({ ...process.env, BENCH_ROOT: ROOT, SLEIGHT_APPROVAL_PROMPT: 'client', ...arm.env });
+const armEnv = (arm, extra = {}) => benchmarkArm(suite, arm, { root: ROOT, extra }).env;
 
 // The MCP servers an arm's Claude Code starts, read from its init event and
 // stopped before any model call.
@@ -185,7 +186,7 @@ function runClaude(prompt, arm, env = {}, { signal, evidenceDir, onPermissionRef
     '--model', model,
     '--effort', effort,
   ];
-  return runDriver(claudeBin, args, { cwd: arm.cwd, env: { ...armEnv(arm), ...env }, timeoutMs: TIMEOUT_MS,
+  return runDriver(claudeBin, args, { cwd: arm.cwd, env: armEnv(arm, env), timeoutMs: TIMEOUT_MS,
     signal: signal ?? controller.signal, evidenceDir, onPermissionRefusal, format: suite === 'real' ? 'stream-json' : 'json' });
 }
 
@@ -205,7 +206,8 @@ mkdirSync(resultsDir, { recursive: true });
 const file = join(resultsDir, `${stamp}${isDryRun ? '-dry' : ''}.json`);
 // Written after every run, so a run cut short keeps what it finished.
 const save = () => {
-  const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite } : {}), arms: armNames, model, effort, claude: claudeBin, results }, null, 2);
+  const json = JSON.stringify({ stamp, ...benchmarkArm(suite, ARMS.sleight, { root: ROOT }).resultMetadata,
+    arms: armNames, model, effort, claude: claudeBin, results }, null, 2);
   writeFileSync(file, (suite === 'real' ? scrub(json) : json) + '\n');
 };
 // The runner owns the pass lock. Real tasks reuse it, so they cannot wait on
