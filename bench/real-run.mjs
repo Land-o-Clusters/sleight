@@ -12,8 +12,10 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, setupO
   ctx.signal = signal;
   ctx.cleanupSignal = cleanupController.signal;
   ctx.onAppDialog = dialog => {
+    const dialogs = ctx.appDialogs ??= [];
+    if (!dialogs.some(previous => JSON.stringify(previous) === JSON.stringify(dialog))) dialogs.push(dialog);
+    if (dialog.stop === false) return;
     result.appDialog = dialog;
-    (ctx.appDialogs ??= []).push(dialog);
     stop?.(); cleanupController.abort();
   };
   const dialogReason = () => result.appDialog && `${result.appDialog.app} ${result.appDialog.category} dialog: stopped`;

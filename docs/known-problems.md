@@ -3,8 +3,16 @@
 What doesn't work, or works only partly, with the measurements behind it. We found all of these in
 our own runs. Dates and engine versions are given where they matter.
 
-- Real-use round 7 has 20 desktop slots unstarted while it awaits owner-away time (2026-10-09).
-  Browser layout, saved Office files, Mail import and export, and app closure still need live proof.
+- sleight-arch's owner-away qualification passed round 6's Helium, Preview, Finder and TextEdit tasks
+  3/3 each (2026-10-09). Safari failed setup 3/3, then failed address selection after a Start Page fix.
+  Round 7 reached the correct dense article but stopped when cleanup rejected its navigation.
+  Word stopped mid-task on an unrecognized dialog, leaving its unsaved fixture open. Excel and
+  PowerPoint did not run. Browser ownership and Office dialog corrections have unit proof only.
+  The [brief-8 report](benchmarks/2026-10-09-real-use-tasks-8.md) retains all five architect result files.
+  Finder averaged 112.5 s versus round 5's 57.2 s, chiefly from extra Claude turns and drag attempts.
+
+- Round 7's remaining browser tasks, saved Office files, Mail import and export, and app closure
+  still need live proof. Mail and Mimestream wait until the owner can watch them.
   Mail requires an already-running app and stops when local ownership or mutation coverage is
   unavailable. Its native export path lacks an independent current flag/read receipt and stops
   before a model task. Import controls and folder topology remain unmeasured.
@@ -14,12 +22,8 @@ our own runs. Dates and engine versions are given where they matter.
   Sandbox probes lacked Accessibility access, and a host retry couldn't find a running Mimestream process.
   They stopped before mailbox reads or input. Native app behavior remains unqualified.
 
-- Real-use round 6 has 15 desktop slots unstarted while it awaits owner-away time (2026-10-09).
-  Safari's profile menu names and the document path-normalization mismatch explain round 5's setup
-  failures. Preview now reaches readiness, but its background document Close commands were disabled.
-  The guarded activation fallback and Safari's creation diagnostics need live proof. Calculator
-  remains unchecked, and no newly launched app has a confirmed live quit in this round.
-  [Round-6 results](benchmarks/2026-10-09-real-use-tasks-6.json) retain every attempt.
+- The earlier [round-6 diagnostics](benchmarks/2026-10-09-real-use-tasks-6.json) retain the setup
+  failures preceding the architect's qualification. Newly launched Office app quit remains unproved.
 
 - Real-use round 2 completed 3 of 18 requested model trials, with 1 pass (2026-10-08).
   Helium failed twice after dismissed browser permission requests that the system observer missed.

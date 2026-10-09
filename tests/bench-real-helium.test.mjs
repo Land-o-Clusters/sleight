@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runOwned } from '../bench/preapproved-process.mjs';
 
+for (const scenario of ['fixture-navigation', 'safari-address', 'safari-recovery']) {
+  test(`browser regression: ${scenario}`, async () => {
+    const { heliumHelper } = await import('../bench/real-helium.mjs');
+    const command = await heliumHelper();
+    const result = await runOwned(command, ['--self-test', scenario], { timeoutMs: 15000 });
+    assert.equal(result.groupClean, true);
+    assert.equal(result.exit.code, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), { scenario, passed: true });
+  });
+}
+
 test('Helium acquires creation events and recovers only a retained window reference', async () => {
   const { heliumHelper } = await import('../bench/real-helium.mjs');
   const command = await heliumHelper();

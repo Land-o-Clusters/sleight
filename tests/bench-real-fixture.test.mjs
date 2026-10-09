@@ -635,7 +635,7 @@ test('disabled document close activates only with an explicit owner-away boundar
   assert.deepEqual(events, ['menu', 'validate', 'activate', 'validate', 'menu', 'validate', 'close']);
 });
 
-test('application dialog classification stops licensing and first-run UI without exposing document titles', () => {
+test('application dialog classification distinguishes result UI from licensing and access prompts', () => {
   const { appDialogCategory } = nativeSource();
   assert.equal(typeof appDialogCategory, 'function');
   assert.equal(appDialogCategory({ title: 'Activate Office', document: '' }), 'activation');
@@ -645,7 +645,62 @@ test('application dialog classification stops licensing and first-run UI without
   assert.equal(appDialogCategory({ title: 'Welcome.docx', document: 'file:///owner/Welcome.docx' }), null);
   assert.equal(appDialogCategory({ title: 'Document1', document: '', buttons: ['Sign In'] }), null);
   assert.equal(appDialogCategory({ title: 'Word', document: '', buttons: ['Open'] }), null);
-  assert.equal(appDialogCategory({ title: 'Unexpected sheet', subrole: 'AXDialog', document: '' }), 'unexpected-dialog');
+  assert.equal(appDialogCategory({ title: 'Microsoft Word', subrole: 'AXDialog', buttons: ['OK'] }), 'application-result');
+  assert.equal(appDialogCategory({ title: 'Unexpected sheet', subrole: 'AXDialog', document: '' }), 'application-result');
+  assert.equal(appDialogCategory({ title: 'Word would like to access files', subrole: 'AXDialog', buttons: ["Don't Allow", 'Allow'] }), 'permission');
+  assert.equal(appDialogCategory({ title: 'Microsoft Word', subrole: 'AXDialog', document: 'file:///fixture.docx', buttons: ['Sign In'] }), 'sign-in');
+  assert.equal(appDialogCategory({ title: 'Welcome to Microsoft Word', subrole: 'AXDialog', buttons: ['Grant Access'] }), 'permission');
+  assert.equal(appDialogCategory({ title: 'Microsoft Word', subrole: 'AXDialog', text: ['Sign in to Office to continue'], buttons: ['Continue', 'Cancel'] }), 'sign-in');
+  assert.equal(appDialogCategory({ title: 'Microsoft Word', subrole: 'AXDialog', text: ['Grant access to this file'], buttons: ['OK', 'Cancel'] }), 'permission');
+});
+
+test('dialog records retain titles and button names and stop only access or licensing prompts', () => {
+  const { appDialogInfo } = nativeSource();
+  assert.equal(typeof appDialogInfo, 'function');
+  const result = appDialogInfo({ title: 'Microsoft Word', subrole: 'AXDialog', buttons: ['OK'] }, 'Microsoft Word');
+  assert.equal(result.title, 'Microsoft Word');
+  assert.deepEqual(Array.from(result.buttons), ['OK']);
+  assert.equal(result.stop, false);
+  for (const info of [{ title: 'Activate Office' }, { title: 'Microsoft Word', buttons: ['Sign In'] },
+    { title: 'Grant Access', subrole: 'AXDialog', buttons: ['OK'] }]) {
+    assert.equal(appDialogInfo(info, 'Microsoft Word').stop, true);
+  }
+});
+
+test('native dialog content classifies static prompt text without reading editable values or publishing body text', () => {
+  const { dialogContents, appDialogInfo } = nativeSource();
+  const content = dialogContents('dialog', {
+    children: element => element === 'dialog' ? ['group'] : element === 'group' ? ['body', 'button', 'password'] : [],
+    text: (element, attribute) => {
+      if (attribute === 'AXRole') return { group: 'AXGroup', body: 'AXStaticText', button: 'AXButton', password: 'AXTextField' }[element];
+      assert.notEqual(element, 'password');
+      return element === 'body' && attribute === 'AXValue' ? 'Sign in to Office to continue' : element === 'button' ? 'Continue' : '';
+    },
+  });
+  const record = appDialogInfo({ title: 'Microsoft Word', subrole: 'AXDialog', ...content }, 'Microsoft Word');
+  assert.equal(record.category, 'sign-in');
+  assert.equal(record.stop, true);
+  assert.deepEqual(Array.from(record.buttons), ['Continue']);
+  assert.equal(record.text, undefined);
+  const loop = { children: () => ['loop'], text: () => 'AXGroup' };
+  assert.throws(() => dialogContents('loop', loop), /exceeded its bound/);
+});
+
+test('native dialog observation includes a focused permission dialog that carries a document URL', () => {
+  const sandbox = nativeSource();
+  const body = { AXRole: 'AXStaticText', AXValue: 'Grant access to this file' }, button = { AXRole: 'AXButton', AXTitle: 'OK' };
+  const focused = { AXRole: 'AXWindow', AXSubrole: 'AXDialog', AXTitle: 'Microsoft Word',
+    AXDocument: 'file:///fixture.docx', AXChildren: [body, button] };
+  const foundation = value => value;
+  foundation.AXUIElementCopyAttributeValue = (element, attribute, ref) => { ref[0] = element[attribute] ?? null; return 0; };
+  foundation.CFEqual = (a, b) => a === b;
+  sandbox.$ = foundation; sandbox.Ref = () => [];
+  sandbox.ObjC.castRefToObject = value => Array.isArray(value) ? { count: value.length, objectAtIndex: i => value[i] } : value;
+  const dialogs = sandbox.nativeAX({}, {}).dialog({ AXFocusedWindow: focused }, {},
+    { app: 'Microsoft Word', stopOnAppDialog: true, target: 'http://fixture.test/' });
+  assert.equal(dialogs.length, 1);
+  assert.equal(dialogs[0].category, 'permission');
+  assert.equal(dialogs[0].stop, true);
 });
 
 test('a collected helper refusal before any mutation confirms cleanup without an AX action', async t => {

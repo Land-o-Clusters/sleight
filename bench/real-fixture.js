@@ -123,15 +123,38 @@ function closeDocumentSafely(app, request, validate, api) {
 }
 
 function appDialogCategory(info) {
-  if (info.document) return null;
   var modal = ['AXDialog', 'AXSystemDialog'].indexOf(info.subrole) !== -1;
+  if (info.document && !modal) return null;
   var startup = /^(?:Microsoft )?(?:Word|Excel|PowerPoint|Mail)$/.test(info.title || '');
-  var text = [info.title || ''].concat(modal || startup ? info.buttons || [] : []).join('\n');
+  var text = [info.title || ''].concat(modal || startup ? (info.buttons || []).concat(info.text || []) : []).join('\n');
   if (/(?:activate|activation|licen[cs][ei]|subscription|product key)/i.test(text)) return 'activation';
   if (/\b(?:sign[ -]?in|log[ -]?in)\b/i.test(text)) return 'sign-in';
+  if (/\b(?:grant access|allow access|needs? access|permission|would like to access|don.t allow)\b/i.test(text)) return 'permission';
   if (/\b(?:welcome|what.s new|getting started|first run|get started)\b/i.test(text)) return 'first-run';
-  if (/\b(?:grant access|allow access|permission)\b/i.test(text)) return 'permission';
-  return modal ? 'unexpected-dialog' : null;
+  return modal ? 'application-result' : null;
+}
+
+function appDialogInfo(info, app) {
+  var category = appDialogCategory(info);
+  if (!category) return null;
+  return { app: app, category: category, title: info.title || '', buttons: info.buttons || [],
+    stop: ['activation', 'sign-in', 'permission'].indexOf(category) !== -1,
+    description: category + ' application dialog' };
+}
+
+function dialogContents(element, api) {
+  var result = { buttons: [], text: [] }, visited = 0;
+  function visit(current, depth) {
+    if (depth < 0 || ++visited > 512) throw new Error('Application dialog inspection exceeded its bound');
+    api.children(current).forEach(function (child) {
+      var role = api.text(child, 'AXRole');
+      if (role === 'AXButton') result.buttons.push(api.text(child, 'AXTitle'));
+      if (role === 'AXStaticText') result.text.push(api.text(child, 'AXValue'), api.text(child, 'AXTitle'));
+      visit(child, depth - 1);
+    });
+  }
+  visit(element, 8);
+  return result;
 }
 
 function nativeAX(state, clock) {
@@ -166,35 +189,29 @@ function nativeAX(state, clock) {
     return result;
   }
   function dialog(app, owned, request) {
-    if (!request.stopOnAppDialog) return null;
+    if (!request.stopOnAppDialog) return [];
     var focused = read(app, 'AXFocusedWindow');
     var candidates = [];
     if (owned) candidates = candidates.concat(children(owned, 'AXSheets'));
     if (focused && (!owned || !$.CFEqual(focused, owned))) {
-      if (matches(focused, request)) candidates = candidates.concat(children(focused, 'AXSheets'));
+      if (['AXDialog', 'AXSystemDialog'].indexOf(text(focused, 'AXSubrole')) !== -1 || text(focused, 'AXRole') === 'AXSheet') candidates.push(focused);
+      else if (matches(focused, request)) candidates = candidates.concat(children(focused, 'AXSheets'));
       else if (!text(focused, 'AXDocument')) candidates.push(focused);
     }
+    var found = [];
     for (var index = 0; index < candidates.length; index++) {
       var candidate = candidates[index];
-      function labels(element, depth) {
-        if (depth < 0) return [];
-        var result = [];
-        children(element).forEach(function (child) {
-          var role = text(child, 'AXRole');
-          if (role === 'AXButton') result.push(text(child, 'AXTitle'));
-          if (['AXGroup', 'AXSheet', 'AXSplitGroup'].indexOf(role) !== -1) result = result.concat(labels(child, depth - 1));
-        });
-        return result;
-      }
       var info = { title: text(candidate, 'AXTitle'), subrole: text(candidate, 'AXSubrole'),
         document: text(candidate, 'AXDocument') };
       if (text(candidate, 'AXRole') === 'AXSheet') info.subrole = 'AXDialog';
-      if (['AXDialog', 'AXSystemDialog'].indexOf(info.subrole) !== -1 || /^(?:Microsoft )?(?:Word|Excel|PowerPoint|Mail)$/.test(info.title)) info.buttons = labels(candidate, 4);
-      var category = appDialogCategory(info);
-      if (category) return { app: request.app, category: category,
-        description: category === 'unexpected-dialog' ? 'Unrecognized application dialog' : category + ' application dialog' };
+      if (['AXDialog', 'AXSystemDialog'].indexOf(info.subrole) !== -1 || /^(?:Microsoft )?(?:Word|Excel|PowerPoint|Mail)$/.test(info.title)) {
+        var content = dialogContents(candidate, { children: children, text: text });
+        info.buttons = content.buttons; info.text = content.text;
+      }
+      var record = appDialogInfo(info, request.app);
+      if (record) found.push(record);
     }
-    return null;
+    return found;
   }
   function fileMenu(app, titles, beforePress) {
     var bar = read(app, 'AXMenuBar');
@@ -325,12 +342,19 @@ function run(argv) {
   var state = { setup: true, fresh: false, fixtureExists: false, actionTaken: false, retryWaitMs: 0 };
   var clock = { now: function () { return Date.now(); }, wait: function (ms) { waitForLaunch(ms / 1000); }, emit: emit };
   var api = nativeAX(state, clock);
-  var target, running, pid, app, previous, owned;
+  var target, running, pid, app, previous, owned, observedDialogs = [];
   function checkAppDialog() {
-    var found = app && api.dialog(app, owned, request);
-    if (!found) return;
-    emit({ stage: 'app-dialog', appDialog: found, pid: pid, running: running });
-    throw Object.assign(new Error(found.app + ' ' + found.category + ' dialog: stopped'), { appDialog: found });
+    var found = app && api.dialog(app, owned, request) || [];
+    var blocking;
+    found.forEach(function (dialog) {
+      var key = JSON.stringify(dialog);
+      if (observedDialogs.indexOf(key) === -1) {
+        observedDialogs.push(key);
+        emit({ stage: 'app-dialog', appDialog: dialog, pid: pid, running: running });
+      }
+      if (dialog.stop) blocking = dialog;
+    });
+    if (blocking) throw Object.assign(new Error(blocking.app + ' ' + blocking.category + ' dialog: stopped'), { appDialog: blocking });
   }
   try {
   target = application();
