@@ -87,7 +87,7 @@ then start a new session. A running session keeps the version it started with.
   OpenAI's apps stay off until you opt in, and sleight shows you each terminal command first unless
   you turn that off too.
 - The benchmark results are published with their failures. Its tasks in Calculator, TextEdit, Chess
-  and an iPhone simulator run three times each, and the 1.0.0 release pass passed 19/21. Every
+  and an iPhone simulator run three times each, and the 1.1.0 release pass passed 20/21. Every
   pass on the way is published too, including one at 13/21 run while the apps were on another Space,
   and head-to-heads with native Codex computer use, including the Chess one sleight lost 0/3 to 2/3.
 

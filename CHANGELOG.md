@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 (2026-10-09)
+
+Its release pass passed 20/21 ([results](docs/benchmarks/2026-10-09-release-1.1.0.json)), and
+chess-drag passed 3/3 after the last two changes below.
 
 - When a turn ends, sleight names any app it acted on that holds a keyboard event tap, once per
   session, in a notice. Device Hub kept a tap after simulator runs and stalled every key on the Mac
@@ -25,8 +28,11 @@
   reads the window's elements once instead of twice. Chess took 9.4 s per read.
 - A covered drag with no selected text presses nothing and tells Claude to use the engine's
   `app.drag`, which moved a covered Chess pawn where `drag`'s posts didn't.
-- The skill says to press a 3D Chess piece at its head. In the 1.0.0 head-to-head, sleight's three
-  Chess runs pressed lower and missed, and Codex's two passes pressed the head.
+- Benchmark runs disallow Glob, Grep and Read too. Claude's Glob for a saved Chess game never
+  returned, and runs that had passed hit the 5-minute limit.
+- The skill says to press another visible part of a piece when a drag moved nothing, instead of
+  repeating the point or switching to `drag`. Telling Claude to press a pawn's head backfired in a
+  small Chess window, where the e-pawn's head sits behind the king.
 - The benchmark counts an acquisition the relay sends ahead of a call's actions as engine time. It
   had counted as relay time: 9.6 of the 9.98 s of relay time in the background head-to-head.
 

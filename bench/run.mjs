@@ -160,8 +160,10 @@ function benchKeyboardTaps() {
 // Tools that act outside the app. A user's own settings can allow them (the owner's allow Bash(*)),
 // and with them a run could pass a check without touching the app: no run did, in 716 transcripts
 // checked on 2026-10-09, but Claude opened task files with `open` from Bash, which the Codex arm
-// (no shell) can't. Every Claude arm runs without them.
-const OUTSIDE_TOOLS = ['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'WebSearch'];
+// (no shell) can't. Every Claude arm runs without them. Glob, Grep and Read too: in the 1.1.0 pass,
+// Claude looked for its saved Chess game with Glob, which never returned, and 3 chess-drag runs that
+// had saved the right game ran into the 5-minute limit (2026-10-09).
+const OUTSIDE_TOOLS = ['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Glob', 'Grep', 'Read'];
 
 function runClaude(prompt, arm, env = {}) {
   const args = [

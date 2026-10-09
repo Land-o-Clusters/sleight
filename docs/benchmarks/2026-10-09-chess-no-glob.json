@@ -1,0 +1,131 @@
+{
+  "stamp": "2026-10-09T13-01-21-004Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 60.1,
+      "turns": 12,
+      "costUsd": 0.48259360000000007,
+      "usage": {
+        "input": 24,
+        "cacheRead": 732878,
+        "cacheWrite": 77000,
+        "output": 2797
+      },
+      "timing": {
+        "totalMs": 57242,
+        "modelMs": 40422,
+        "calls": 10,
+        "refused": 0,
+        "toolMs": 14369,
+        "engineMs": 14338,
+        "relayMs": 31,
+        "localMs": 0,
+        "guardReads": 13,
+        "guardReadMs": 2678.709583000007,
+        "guardReadFailures": 0,
+        "otherMs": 2451
+      },
+      "appWindows": {
+        "samples": 12,
+        "onScreen": 12,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "I started a new Chess game, moved e2 to e4 with the mouse, saved the game and closed its window. The window closed with no unsaved-changes prompt, so the save went through. I couldn't list the folder, so I haven't confirmed the file at `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 2,
+      "passed": true,
+      "seconds": 53.9,
+      "turns": 10,
+      "costUsd": 0.32428239999999997,
+      "usage": {
+        "input": 20,
+        "cacheRead": 595392,
+        "cacheWrite": 46636,
+        "output": 1862
+      },
+      "timing": {
+        "totalMs": 50713,
+        "modelMs": 34674,
+        "calls": 9,
+        "refused": 0,
+        "toolMs": 11802,
+        "engineMs": 11765,
+        "relayMs": 37,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 2910.5498759999973,
+        "guardReadFailures": 0,
+        "otherMs": 4237
+      },
+      "appWindows": {
+        "samples": 11,
+        "onScreen": 11,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "I started a new game in Chess, played e2→e4 as White by dragging the pawn, and saved the game to the path you gave. I closed that game's window without a save prompt, which suggests the save went through.\n\nI never confirmed that `dad830e2.game` exists on disk. After the save, the window title stayed",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 3,
+      "passed": true,
+      "seconds": 51.8,
+      "turns": 11,
+      "costUsd": 0.3390496,
+      "usage": {
+        "input": 22,
+        "cacheRead": 663558,
+        "cacheWrite": 46366,
+        "output": 2083
+      },
+      "timing": {
+        "totalMs": 48964,
+        "modelMs": 34783,
+        "calls": 9,
+        "refused": 0,
+        "toolMs": 10962,
+        "engineMs": 10937,
+        "relayMs": 25,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 2677.5832050000017,
+        "guardReadFailures": 0,
+        "otherMs": 3219
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 10,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "I started a new game in Chess, dragged the white e2 pawn to e4, saved the game and closed that window. I couldn't check the saved file, because I have no shell here to list the folder.\n\n- **Move:** the pawn is on e4, and the computer replied with a black pawn to e6.\n- **Save:** I saved to `/var/fold",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

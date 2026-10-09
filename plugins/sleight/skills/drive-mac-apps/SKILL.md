@@ -84,9 +84,9 @@ live-check lock.
 ## Drags and hover
 
 - `app.drag` works for things that move at once, like Chess pieces. Chess's tree names each square
-  but doesn't give its position, so take squares from a screenshot. On a 3D or tilted board, press
-  on the piece's head, not its base or its square. If a drag moved nothing, raise the press point.
-  Repeating the same point, or switching to sleight's `drag`, misses the same way.
+  but doesn't give its position, so take squares from a screenshot. If a drag moved nothing, press
+  another visible part of the piece. Repeating the same point, or switching to sleight's `drag`,
+  misses the same way.
 - Selected text needs the mouse held first: select it with `js`, then call sleight's `drag` with
   `app`, `windowId`, and `from` and `to` read off the latest engine screenshot of that window (sleight
   converts its pixels to points), both inside the window's visible content

@@ -1,0 +1,85 @@
+{
+  "stamp": "2026-10-09T12-24-04-029Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 302.3,
+      "appWindows": {
+        "samples": 60,
+        "onScreen": 60,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 143,
+      "answer": "",
+      "models": [],
+      "stderr": ""
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 2,
+      "passed": true,
+      "seconds": 302.7,
+      "appWindows": {
+        "samples": 60,
+        "onScreen": 60,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 143,
+      "answer": "",
+      "models": [],
+      "stderr": ""
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 3,
+      "passed": true,
+      "seconds": 57.9,
+      "turns": 16,
+      "costUsd": 0.38387060000000006,
+      "usage": {
+        "input": 32,
+        "cacheRead": 910093,
+        "cacheWrite": 43087,
+        "output": 2944
+      },
+      "timing": {
+        "totalMs": 55184,
+        "modelMs": 42872,
+        "calls": 15,
+        "refused": 0,
+        "toolMs": 9996,
+        "engineMs": 9957,
+        "relayMs": 39,
+        "localMs": 0,
+        "guardReads": 14,
+        "guardReadMs": 5440.14887399998,
+        "guardReadFailures": 0,
+        "otherMs": 2316
+      },
+      "appWindows": {
+        "samples": 12,
+        "onScreen": 12,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "I played e2–e4 by dragging the pawn, saved the game to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T12-24-04-029Z/sleight-chess-drag-3/77849b1b.game`, and closed that window. I didn't read the file back, but the window title showed the new filename after the save.\n\n- **",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

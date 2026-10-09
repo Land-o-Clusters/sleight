@@ -223,6 +223,16 @@ screen. chess-drag passed 2/3. Its failed run pressed only below the pawn's head
 2/3: in its failed run Claude's first tap missed the field, and none of its four later taps and
 typing put text in it.
 
+1.1.0's pass ([`release-1.1.0`](benchmarks/2026-10-09-release-1.1.0.json)) passed 20/21 in 1,469 s,
+with the owner away. Two chess-drag runs saved the right game and then ran into the 5-minute limit,
+because Claude checked for the file with Claude Code's Glob, which never returned. simulator-form
+failed once the way it did in 1.0.0: a first tap off the field, then no text from later taps. Relay
+time, measured right now, was 0.4 s for the pass. chess-drag then ran 3 times with a skill hint to
+press a 3D piece at its head, which missed in this small window, where the e-pawn's head sits behind the
+king ([`chess-glob`](benchmarks/2026-10-09-chess-glob.json): 3/3, two of them at the limit). With the
+hint replaced and Glob, Grep and Read disallowed, it passed 3/3 in 52 to 60 s and 10 to 12 turns
+([`chess-no-glob`](benchmarks/2026-10-09-chess-no-glob.json)).
+
 A hint in the `js` tool's description to acquire the app in the first call, instead of calling
 `cua.getState()` first, didn't change what Claude did
 ([`first-call-hint`](benchmarks/2026-10-09-first-call-hint.json), calculator-click, calculator-menu,
@@ -249,10 +259,12 @@ npm run bench -- --arm all --runs 3   # sleight and LCU
 
 The LCU arm needs LCU registered for Claude Code in a separate folder. `bench/run.mjs` has the steps.
 
-Claude arms run with Bash, Write, Edit and the web tools disallowed, since a user's settings can
+Claude arms run with Bash, Write, Edit, Glob, Grep, Read and the web tools disallowed, since a user's settings can
 allow them and a check could then pass without the app. Until 2026-10-09 they were allowed: no run
 wrote a checked file through them (716 transcripts checked), but Claude often opened the task's file
-with `open` from Bash instead of the app's Open panel.
+with `open` from Bash instead of the app's Open panel. Glob, Grep and Read joined the list after the
+1.1.0 pass, where Claude looked for its saved Chess game with Glob, which never returned, and 3
+chess-drag runs that had saved the right game ran into the 5-minute limit.
 
 The `codex` arm runs native Codex computer use through `codex exec`, for a head-to-head
 (`--arm sleight,codex`). It uses its own Codex home, `~/.codex-bench` (log in once with
