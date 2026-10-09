@@ -216,7 +216,7 @@ open:
 - [x] TextEdit drags in the background, with verified text readback and foreground fallback
 - [x] The pane and status line in the desktop app's Code tab
 - [ ] `/sleight stop` checked in the desktop app's Code tab
-- [ ] Windows, if the ChatGPT app there includes the computer-use helper (unchecked)
+- [ ] Windows. Codex computer use reached Windows on 2026-05-29 (foreground only); a port is unchecked
 - [x] Approve one document instead of a whole app (`SLEIGHT_APPROVAL_SCOPE=document`, a guard against
   mistakes rather than a security boundary)
 - [x] Review saved-file changes and choose Keep or Undo through a user prompt
