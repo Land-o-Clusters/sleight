@@ -62,6 +62,14 @@ in `.dev/prompts/`, for Sol threads the owner starts:
 - `/tmp/sleight-hold` exists while another project's window runs. Every brief stops live probes
   while it's there. sleight-arch removes it when Puddle releases the Mac.
 
+Guard reads (sleight-arch): `565f369` lets a call with no action after a split acquisition use that
+read as its header (53 reads, 27 s in tonight's traces) and traces skipped reads, which the relay's
+parser used to drop. Unit-tested, live check after 1009o. Asked the owner (23:10 UTC): reuse a
+split acquisition's read for the first action when the acquisition didn't launch the app (173
+refusals, 98 s since `e66791a`)? The trace study (227 runs) found reads before later numbered
+actions caught 12 renumbers and 23 window changes in 924 reads (572 s). sleight-arch recommends
+keeping them.
+
 Next, in order:
 1. Footprint: cut guard reads. Each call made about two (7 to 15 a run), the read after a call when
    nothing returned a header and the reads before each numbered action in a batch.
