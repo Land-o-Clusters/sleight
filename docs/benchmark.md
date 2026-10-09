@@ -340,6 +340,25 @@ used 50.7 CPU seconds for sleight and 64.8 for Codex, and the host CLI 44.1 (Cla
 23.8 (Codex CLI). sleight's own processes used 47.5, and the owner's other Claude Code plugins, which
 load in every run, 21.7.
 
+A loaded pass added 20 CPU-bound workers (load 12 at the start, 137 at the end) and ran four
+default tasks, alternating the arms, until it was stopped at 20:38 UTC to leave the Mac quiet for
+another project ([`h2h-loaded`](benchmarks/2026-10-09-h2h-loaded.json)). It ran 9 of the planned 16 runs.
+
+| Task | sleight | Codex |
+|---|---|---|
+| calculator-click | 0/2 (300 s and 286 s limits) | 1/1, 115.8 s |
+| calculator-menu | 0/1 (300 s limit) | 0/1 (300 s limit) |
+| textedit-save | 1/1, 61.5 s | 1/1, 52.7 s |
+| textedit-edit | 1/1, 27.1 s | 1/1, 86.3 s |
+
+In the first sleight run the guard's read before each call's first action took 17 to 57 s, seconds
+after Claude's own read took 1.9 s, and clicks by ID found nothing in reads that had dropped their
+IDs. `c2bd713`, live from about 20:25 UTC, reuses Claude's read for that first action and matches
+bare lines. The TextEdit runs and the second calculator-click ran with it. That calculator-click,
+at load near 137, still timed out: the acquisition took 28 s and failed once, Claude's own full read
+took 72.8 s, and a batch of seven clicks by ID read before each and took 137 s. Under this load
+every read costs tens of seconds, and clicks by ID need one each.
+
 `bench/load-cost.mjs` times the same Calculator calls with no model, once sent straight to
 the engine (which is what Codex does) and once through sleight. Each ran 5 times
 ([`load-cost`](benchmarks/2026-10-09-load-cost.json), 2026-10-09, with the owner away). At the Mac's own
