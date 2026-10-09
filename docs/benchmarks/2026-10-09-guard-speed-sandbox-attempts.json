@@ -1,0 +1,23 @@
+{
+  "attempts": [
+    {
+      "started": "2026-10-09T17:28:33.945Z",
+      "command": "node bench/guard-window-preflight.mjs",
+      "exitCode": 1,
+      "addedWorkers": 0,
+      "error": "EPERM writing the evidence file in ~/Projects/sleight-wt/guard-speed/docs/benchmarks/",
+      "nativeResult": "not retained: the initial script printed only after writing its evidence",
+      "limitation": "No native observation or success is claimed from this attempt."
+    },
+    {
+      "started": "2026-10-09T17:30:16.656Z",
+      "command": "node bench/guard-window-measure.mjs",
+      "exitCode": 1,
+      "addedWorkers": 0,
+      "rows": [],
+      "error": "node_repl kernel exited unexpectedly; kernel exited(code=71); sandbox-exec: sandbox_apply: Operation not permitted",
+      "evidenceWriteError": "EPERM writing the evidence file in ~/Projects/sleight-wt/guard-speed/docs/benchmarks/",
+      "limitation": "No app acquisition or native timing succeeded. The script closed its owned engine client."
+    }
+  ]
+}

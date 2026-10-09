@@ -43,3 +43,45 @@ engine time in these sequences. The engine has no header-only or depth-limited r
 doesn't say how long the helper's AX walk, its wait for the UI to settle, the capture or the
 transfer took. That a read after input waits for the UI to settle fits these numbers but isn't
 measured. Parsing the tree in sleight took 0.01 to 0.04 ms.
+
+## Native observation experiment (2026-10-09)
+
+The requested per-action speedup is unfinished. The production guard keeps its full reads. A
+persistent JXA observer in `bench/` reads the focused window, title, AXDocument, sheets and dialogs.
+It identifies the process by PID and launch time, retains AX window references for equality, and
+rejects multiple matching windows, missing required attributes and focus changes during a read.
+It checks existing Accessibility trust without requesting permission. Multiple app processes are
+ambiguous, never evidence that the benchmark launched the app.
+
+Cold JXA observations took median 78.39 ms. Persistent observations took 2.06 ms at load 3.
+The fuller socket observer took 3.85 and 12.97 ms in two low-load runs. With 20 workers at load
+62 to 67, only 6/20 observations succeeded; 14 returned an AX error after the 100 ms messaging
+deadline. The median across all 20 replies was 104.28 ms. Suspending the owned helper produced an
+expired reply at about 251 ms, never a usable observation. This does not establish a fast observer
+at load 100. A final 20-worker run at load 43 returned two AX errors, one expiry and 17 busy
+refusals, with no usable observations.
+
+The engine's JavaScript returned `connect EPERM` for the Unix socket. The prototype integration
+and its guard-routing tests are retained in `bench/guard-speed-native.patch` for review. They are
+not applied. The plugin has no native observer dependency. Further integration needs a supported
+transport and reliable observation latency at the requested load. Engine and sandbox settings are
+unchanged.
+
+The proposed routing keeps the first full read and every tree-based selector check. Only later
+keys, text, paste and coordinate actions could use a fresh matching native observation, with a
+full-read fallback on failure. Lease checks, invalidation across handles and post-call reads stay
+in place. A same-title replacement, a changed URL, a sheet or a late reply must never authorize
+input. Future integration must meet these requirements.
+
+A 100 ms `Promise.race` around the post-input read returned from the engine in 516 to 563 ms,
+and the read had completed by the following call in all four trials. This failed to demonstrate
+a bounded return or a following call while the read remained pending. Production reads
+have no new abandonment deadline.
+
+The compactor now folds a full button line and its bare ID form only when that ID is unique in
+both trees. Missing descriptions and help are reported as unavailable. Lost values or state,
+duplicate IDs and changed IDs still produce changes. Renumbering invalidates old numbers, and a remap must
+find one current line with an unambiguous ID across the current tree and retained beliefs.
+On a constructed degradation of a published live Calculator tree, output fell from 742 to 313
+characters. This measures output size, not live action speed. The [report](../benchmarks/2026-10-09-guard-speed.md)
+contains all attempts, load intervals, timing comparisons and remaining limits.

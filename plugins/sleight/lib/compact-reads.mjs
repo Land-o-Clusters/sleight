@@ -15,7 +15,7 @@
 // stale, so the relay tracks which numbers Claude has seen since its last full
 // read and refuses actions on any other (staleIndex).
 
-import { GUARD_END, GUARD_MARK, documentKey, windowFromText } from './document-scope.mjs';
+import { GUARD_END, GUARD_MARK, documentKey, windowFromText, hasIdentifier } from './document-scope.mjs';
 
 export { GUARD_END, GUARD_MARK };
 const MAX_LINES = 3000; // above this, the line diff costs more than it saves
@@ -30,6 +30,17 @@ function parse(line) {
   const m = ELEMENT.exec(line);
   return m ? { num: Number(m[2]), key: `${m[1]}${m[3]}` } : { num: undefined, key: line };
 }
+
+// Under load Calculator can return `button Two` instead of its description and ID.
+// Fold only a button's unique ID, never a lost value, state, indentation or guessed label.
+function degradedButton(full, bare) {
+  const m = /^(\t*)button ([^,:]+)$/.exec(bare);
+  return !!m && full.startsWith(m[1] + 'button ') && !/\(|\bValue:/.test(full) &&
+    full !== bare && hasIdentifier(full, m[2]);
+}
+const bareButtonId = key => /^\t*button ([^,:]+)$/.exec(key)?.[1];
+const buttonHasId = (key, id) => /^\t*button /.test(key) &&
+  (bareButtonId(key) === id || hasIdentifier(key, id));
 
 // The alignment of two trees by longest common subsequence of their keys,
 // after trimming the shared head and tail: [beforeIndex, afterIndex] pairs,
@@ -81,12 +92,23 @@ export function createReadCompactor() {
     seen.set(key, { lines });
     if (!before) return tree;
     const old = before.lines.map(parse), now = lines.map(parse);
-    const pairs = alignLines(before.lines, lines, line => parse(line).key);
+    const keys = now.map(line => line.key);
+    const degraded = new Set();
+    for (let j = 0; j < now.length; j++) {
+      const id = bareButtonId(now[j].key);
+      if (now[j].num === undefined || id === undefined) continue;
+      const matches = old.filter(line => line.num !== undefined && degradedButton(line.key, now[j].key));
+      if (matches.length === 1 && [old, now].every(lines =>
+        lines.filter(line => line.num !== undefined && buttonHasId(line.key, id)).length === 1)) {
+        keys[j] = matches[0].key; degraded.add(j);
+      }
+    }
+    const pairs = alignLines(old.map(line => line.key), keys);
     if (!pairs) return tree;
     // What Claude takes each number to be: the full tree it saw, plus the lines shown since.
     const believed = new Map(before.believed ?? numbered(before.lines));
     const valid = new Set(), changes = [];
-    let renumbered = 0;
+    let renumbered = 0, fewerAttributes = 0;
     for (const [i, j] of pairs) {
       if (j < 0) {
         changes.push('- ' + (old[i].num === undefined ? before.lines[i] : old[i].key));
@@ -96,6 +118,7 @@ export function createReadCompactor() {
       const { num } = now[j];
       if (i < 0) { changes.push('+ ' + lines[j]); if (num !== undefined) { valid.add(num); believed.set(num, now[j].key); } continue; }
       if (num === undefined) continue;
+      if (degraded.has(j)) fewerAttributes++;
       if (num !== old[i].num) renumbered++;
       else if (!before.valid || before.valid.has(num)) valid.add(num);
     }
@@ -111,9 +134,10 @@ export function createReadCompactor() {
       ? `sleight: lines changed since the last full tree you saw for this window (- removed, + added; numbers on + lines are current):\n${changes.join('\n')}`
       : 'sleight: no change since the last full tree you saw for this window' + (renumbered ? ', apart from numbering.' : '.');
     const note = renumbered
-      ? `\nsleight: ${renumbered} other elements kept their text but have new numbers. Use numbers from + lines above or from a full read. Read the window again with getAXState({ disableDiffing: true }) before acting on any other element; sleight refuses actions on numbers that changed.`
+      ? `\nsleight: ${renumbered} other elements have new numbers. Use numbers from + lines above or from a full read. Read the window again with getAXState({ disableDiffing: true }) before acting on any other element; sleight refuses actions on numbers that changed.`
       : '';
-    const text = `${header}\n${body}${note}`;
+    const degradedNote = fewerAttributes ? `\nsleight: ${fewerAttributes} button lines returned fewer attributes. Their unique IDs still match; missing descriptions and help are unavailable in this read.` : '';
+    const text = `${header}\n${body}${note}${degradedNote}`;
     if (text.length > tree.length * MAX_SHARE) return tree;
     const allValid = [...current.keys()].every(num => valid.has(num));
     seen.set(key, { lines, valid: allValid ? undefined : valid, believed: allValid ? undefined : believed });
@@ -185,8 +209,15 @@ export function createReadCompactor() {
       const out = code.replace(/(\.(?:click|setValue|selectText|performSecondaryAction|scroll)\(\s*)(\d+)(?=\s*[,)])/g, (whole, head, digits) => {
         const number = Number(digits);
         if (entry.valid.has(number)) return whole;
-        const text = entry.believed.get(number)?.replace(/^\t*/, '');
-        if (text === undefined || texts.filter(t => t === text).length !== 1) { missing = true; return whole; }
+        const believed = entry.believed.get(number)?.replace(/^\t*/, '');
+        const matches = believed === undefined ? [] : texts.filter(t => t === believed || degradedButton(believed, t));
+        if (matches.length !== 1) { missing = true; return whole; }
+        const text = matches[0];
+        if (text !== believed) {
+          const id = bareButtonId(text);
+          if (id === undefined || [texts, [...entry.believed.values()]].some(lines =>
+            lines.filter(line => buttonHasId(line, id)).length !== 1)) { missing = true; return whole; }
+        }
         remapped.push({ number, line: text });
         return head + JSON.stringify({ line: text });
       });
