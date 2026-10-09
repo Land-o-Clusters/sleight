@@ -1,0 +1,371 @@
+{
+  "stamp": "2026-10-09T13-16-19-378Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 46.4,
+      "turns": 9,
+      "costUsd": 0.26735059999999994,
+      "usage": {
+        "input": 18,
+        "cacheRead": 493793,
+        "cacheWrite": 38959,
+        "output": 1272
+      },
+      "timing": {
+        "totalMs": 44619,
+        "modelMs": 20776,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 21805,
+        "engineMs": 17073,
+        "relayMs": 29,
+        "localMs": 4703,
+        "guardReads": 11,
+        "guardReadMs": 3885.935333999999,
+        "guardReadFailures": 0,
+        "otherMs": 2038
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 6,
+        "offScreenOnly": 2,
+        "none": 2
+      },
+      "exitCode": 0,
+      "answer": "I dragged \"alpha\" to the end of the line in `5dd3c8c6-drag.txt`, so the text now reads \"beta gamma alpha\". I then saved and closed the document.\n\nI selected \"alpha\" and used a real mouse drag, with no typing or cut and paste. The text view showed \"beta gamma alpha\" right after the drop. The window t",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 62.8,
+      "turns": 14,
+      "costUsd": 0.4309236,
+      "usage": {
+        "input": 28,
+        "cacheRead": 908958,
+        "cacheWrite": 53819,
+        "output": 3380
+      },
+      "timing": {
+        "totalMs": 60209,
+        "modelMs": 43863,
+        "calls": 12,
+        "refused": 0,
+        "toolMs": 13860,
+        "engineMs": 13813,
+        "relayMs": 47,
+        "localMs": 0,
+        "guardReads": 15,
+        "guardReadMs": 3517.8749580000112,
+        "guardReadFailures": 0,
+        "otherMs": 2486
+      },
+      "appWindows": {
+        "samples": 13,
+        "onScreen": 13,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "I played e2–e4 by dragging, saved the game, and closed its window. I couldn't check the saved file's contents, because shell access was disabled in this session. Two things suggest the save worked: no save dialog appeared when I pressed Cmd+S a second time, and closing the window raised no unsaved-c",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 1,
+      "passed": true,
+      "seconds": 52.6,
+      "turns": 8,
+      "costUsd": 0.29622200000000004,
+      "usage": {
+        "input": 16,
+        "cacheRead": 440420,
+        "cacheWrite": 48049,
+        "output": 1591
+      },
+      "timing": {
+        "totalMs": 37433,
+        "modelMs": 23729,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 10434,
+        "engineMs": 9909,
+        "relayMs": 525,
+        "localMs": 0,
+        "guardReads": 8,
+        "guardReadMs": 2962.0465009999953,
+        "guardReadFailures": 0,
+        "otherMs": 3270
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 10,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "The page in the iPhone 18 Pro simulator now says **Sent**. I typed \"sleight bench 02b52403\" into the Message field and tapped Submit.\n\nThe text was partly hidden behind the pointer in the last screenshot before I submitted, so I couldn't confirm every character. I didn't see it duplicated.\n\nMy first",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 2,
+      "passed": true,
+      "seconds": 40.8,
+      "turns": 8,
+      "costUsd": 0.2471436,
+      "usage": {
+        "input": 16,
+        "cacheRead": 429318,
+        "cacheWrite": 37682,
+        "output": 1052
+      },
+      "timing": {
+        "totalMs": 38954,
+        "modelMs": 16268,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 20586,
+        "engineMs": 15688,
+        "relayMs": 24,
+        "localMs": 4874,
+        "guardReads": 8,
+        "guardReadMs": 2682.3290409999963,
+        "guardReadFailures": 0,
+        "otherMs": 2100
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 4,
+        "offScreenOnly": 1,
+        "none": 3
+      },
+      "exitCode": 0,
+      "answer": "I dragged \"alpha\" to the end of the line in TextEdit, so the document read \"beta gamma alpha\". I then saved it with Cmd+S and closed the window. I didn't reopen the file to check the saved contents. TextEdit closed without a save prompt, so the save appears to have worked.\n\nI selected the word first",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 2,
+      "passed": true,
+      "seconds": 40.4,
+      "turns": 9,
+      "costUsd": 0.31039020000000006,
+      "usage": {
+        "input": 18,
+        "cacheRead": 516931,
+        "cacheWrite": 47442,
+        "output": 1720
+      },
+      "timing": {
+        "totalMs": 37588,
+        "modelMs": 24513,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 10312,
+        "engineMs": 10277,
+        "relayMs": 35,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 4247.570456999995,
+        "guardReadFailures": 0,
+        "otherMs": 2763
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 8,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "I played e2–e4 by dragging the pawn, saved the game to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-09T13-16-19-378Z/sleight-chess-drag-2/4daf4d69.game`, and closed that window. The window title changed to `4daf4d69.game` after the save. I didn't open the saved file to che",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 2,
+      "passed": true,
+      "seconds": 48.2,
+      "turns": 9,
+      "costUsd": 0.3195056,
+      "usage": {
+        "input": 18,
+        "cacheRead": 516068,
+        "cacheWrite": 50609,
+        "output": 1382
+      },
+      "timing": {
+        "totalMs": 39538,
+        "modelMs": 21048,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 9920,
+        "engineMs": 9420,
+        "relayMs": 500,
+        "localMs": 0,
+        "guardReads": 6,
+        "guardReadMs": 1451.815708000002,
+        "guardReadFailures": 0,
+        "otherMs": 8570
+      },
+      "appWindows": {
+        "samples": 9,
+        "onScreen": 9,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "The page in the iPhone 18 Pro simulator now says \"Sent\". I typed \"sleight bench 4816bf74\" into the Message field and tapped Submit.\n\nBefore I tapped Submit, the typed text was partly covered by the pointer overlay in the screenshot. It read as the exact string, but I couldn't check each character ag",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 3,
+      "passed": true,
+      "seconds": 50.7,
+      "turns": 9,
+      "costUsd": 0.2630622,
+      "usage": {
+        "input": 18,
+        "cacheRead": 493021,
+        "cacheWrite": 38153,
+        "output": 1181
+      },
+      "timing": {
+        "totalMs": 48816,
+        "modelMs": 25376,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 21435,
+        "engineMs": 16484,
+        "relayMs": 25,
+        "localMs": 4926,
+        "guardReads": 10,
+        "guardReadMs": 3356.349168999999,
+        "guardReadFailures": 0,
+        "otherMs": 2005
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 6,
+        "offScreenOnly": 1,
+        "none": 3
+      },
+      "exitCode": 0,
+      "answer": "I dragged \"alpha\" to the end of the line in TextEdit, so the file now reads \"beta gamma alpha\". I saved it and closed the document.\n\nI selected \"alpha\" and dragged it past \"gamma\" with the mouse; I didn't type or cut and paste. After the drag, TextEdit showed \"beta gamma alpha\". The \"Edited\" marker ",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 3,
+      "passed": true,
+      "seconds": 78.9,
+      "turns": 17,
+      "costUsd": 0.40433700000000006,
+      "usage": {
+        "input": 34,
+        "cacheRead": 928725,
+        "cacheWrite": 44466,
+        "output": 4066
+      },
+      "timing": {
+        "totalMs": 76014,
+        "modelMs": 60628,
+        "calls": 16,
+        "refused": 0,
+        "toolMs": 12274,
+        "engineMs": 12230,
+        "relayMs": 44,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 3135.482001000004,
+        "guardReadFailures": 0,
+        "otherMs": 3112
+      },
+      "appWindows": {
+        "samples": 16,
+        "onScreen": 16,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "I played e2–e4 in Chess by dragging the pawn, saved the game, and closed that window.\n\n- **Game:** The pawn is on e4, and the computer replied e5. I didn't see the saved file's contents, only the window's title and file URL after saving.\n- **Saved file:** `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m000",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 3,
+      "passed": true,
+      "seconds": 64.3,
+      "turns": 9,
+      "costUsd": 0.3237344,
+      "usage": {
+        "input": 18,
+        "cacheRead": 517232,
+        "cacheWrite": 50873,
+        "output": 1676
+      },
+      "timing": {
+        "totalMs": 54996,
+        "modelMs": 36241,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 9846,
+        "engineMs": 9305,
+        "relayMs": 541,
+        "localMs": 0,
+        "guardReads": 6,
+        "guardReadMs": 1414.9456249999948,
+        "guardReadFailures": 0,
+        "otherMs": 8909
+      },
+      "appWindows": {
+        "samples": 12,
+        "onScreen": 12,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "The page now says **Sent**. I typed \"sleight bench de5fd7f7\" into the Message field in Safari on the iPhone 18 Pro simulator and tapped Submit.\n\nMy first click and typing attempt didn't land, because the click coordinates were off. I didn't see that text appear anywhere, and the successful attempt p",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

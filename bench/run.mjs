@@ -163,7 +163,9 @@ function benchKeyboardTaps() {
 // (no shell) can't. Every Claude arm runs without them. Glob, Grep and Read too: in the 1.1.0 pass,
 // Claude looked for its saved Chess game with Glob, which never returned, and 3 chess-drag runs that
 // had saved the right game ran into the 5-minute limit (2026-10-09).
-const OUTSIDE_TOOLS = ['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Glob', 'Grep', 'Read'];
+// Skill too: the user's own plugins load in a run, and one simulator run invoked another plugin's
+// skill (2026-10-09). sleight's skill reaches Claude with the engine's first result instead.
+const OUTSIDE_TOOLS = ['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Glob', 'Grep', 'Read', 'Skill'];
 
 function runClaude(prompt, arm, env = {}) {
   const args = [

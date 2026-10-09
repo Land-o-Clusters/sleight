@@ -291,6 +291,9 @@ our own runs. Dates and engine versions are given where they matter.
   saving no`. It still answered AppleScript, but its only window was an orphan "Save Panel Accessory
   View" that Accessibility didn't list. The relay's message again named a stuck helper, while
   `--doctor` passed. Quitting TextEdit fixed it.
+- In the simulator, Claude's first tap on the Safari field often doesn't focus it, even at the right
+  point, and a second tap does (6 of 6 runs on 2026-10-09 with shrunk screenshots). Claude also
+  second-guesses the screenshot's scale there, dividing or multiplying its own coordinates.
 - In the 1.0.0 pass, Claude's first tap in the simulator missed the Message field, and four later
   taps on the field followed by `typeText`, one with Device Hub's Capture Keyboard on, left it empty
   (1 of 3 runs). We don't know why the later taps didn't focus it.

@@ -1,0 +1,131 @@
+{
+  "stamp": "2026-10-09T13-26-58-917Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 1,
+      "passed": true,
+      "seconds": 69.1,
+      "turns": 9,
+      "costUsd": 0.3026902000000001,
+      "usage": {
+        "input": 18,
+        "cacheRead": 505271,
+        "cacheWrite": 47770,
+        "output": 1052
+      },
+      "timing": {
+        "totalMs": 60764,
+        "modelMs": 43782,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 8979,
+        "engineMs": 8553,
+        "relayMs": 426,
+        "localMs": 0,
+        "guardReads": 5,
+        "guardReadMs": 916.0775420000027,
+        "guardReadFailures": 0,
+        "otherMs": 8003
+      },
+      "appWindows": {
+        "samples": 13,
+        "onScreen": 13,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "The page now says **Sent**. I typed \"sleight bench e9e66f20\" into the Message field in Safari on the iPhone 18 Pro simulator and tapped Submit.\n\nThe mouse pointer covered part of the first word in the screenshot just before I tapped Submit, so I didn't see \"sleight\" fully rendered. The rest of the t",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 2,
+      "passed": true,
+      "seconds": 88.7,
+      "turns": 17,
+      "costUsd": 0.5018564,
+      "usage": {
+        "input": 32,
+        "cacheRead": 1030622,
+        "cacheWrite": 66557,
+        "output": 2944
+      },
+      "timing": {
+        "totalMs": 80632,
+        "modelMs": 60556,
+        "calls": 14,
+        "refused": 0,
+        "toolMs": 15839,
+        "engineMs": 14580,
+        "relayMs": 1259,
+        "localMs": 0,
+        "guardReads": 11,
+        "guardReadMs": 2975.2771660000035,
+        "guardReadFailures": 0,
+        "otherMs": 4237
+      },
+      "appWindows": {
+        "samples": 17,
+        "onScreen": 17,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "The page now says **Sent**. I typed \"sleight bench bb912197\" into the Message field in the iPhone 18 Pro simulator and tapped Submit.\n\nThe cursor overlay covered part of the field when I checked it, so I didn't see every character. The text before the cursor read \"sleigh\", and the rest read \"bench b",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 3,
+      "passed": true,
+      "seconds": 51.6,
+      "turns": 10,
+      "costUsd": 0.3351108,
+      "usage": {
+        "input": 20,
+        "cacheRead": 563114,
+        "cacheWrite": 51152,
+        "output": 1784
+      },
+      "timing": {
+        "totalMs": 43763,
+        "modelMs": 28517,
+        "calls": 9,
+        "refused": 0,
+        "toolMs": 9234,
+        "engineMs": 8707,
+        "relayMs": 527,
+        "localMs": 0,
+        "guardReads": 5,
+        "guardReadMs": 955.2125010000036,
+        "guardReadFailures": 0,
+        "otherMs": 6012
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 10,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "answer": "The page now says **Sent**. I typed \"sleight bench b7f7fd47\" into the Message field on the iPhone 18 Pro simulator in Device Hub, then tapped Submit.\n\nThe mouse cursor covered part of the field in the screenshot taken just before I tapped Submit. It read \"sleight bench b7f7fd47\" apart from the cover",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

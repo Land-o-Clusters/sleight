@@ -233,6 +233,15 @@ king ([`chess-glob`](benchmarks/2026-10-09-chess-glob.json): 3/3, two of them at
 hint replaced and Glob, Grep and Read disallowed, it passed 3/3 in 52 to 60 s and 10 to 12 turns
 ([`chess-no-glob`](benchmarks/2026-10-09-chess-no-glob.json)).
 
+A branch that shrinks screenshots to 1,568 px and scales coordinates back was compared with 1.1.0 on
+chess-drag, simulator-form and textedit-drag, 3 runs each, with the owner away
+([`shots-base`](benchmarks/2026-10-09-shots-base.json), [`shots-scaled`](benchmarks/2026-10-09-shots-scaled.json)).
+Both passed 9/9, in 85 turns and 475 s before and 92 turns and 485 s after. Only the simulator's
+screenshots were over the limit. On the branch, Claude's first tap was at the right point of the
+smaller image, yet it never focused the field (0 of 6 runs, with
+[`shots-scaled-tap`](benchmarks/2026-10-09-shots-scaled-tap.json), where a skill line to tap and
+type in separate calls didn't help). The branch (`perf/screenshot-scale`) stays unmerged.
+
 A hint in the `js` tool's description to acquire the app in the first call, instead of calling
 `cua.getState()` first, didn't change what Claude did
 ([`first-call-hint`](benchmarks/2026-10-09-first-call-hint.json), calculator-click, calculator-menu,
@@ -259,12 +268,13 @@ npm run bench -- --arm all --runs 3   # sleight and LCU
 
 The LCU arm needs LCU registered for Claude Code in a separate folder. `bench/run.mjs` has the steps.
 
-Claude arms run with Bash, Write, Edit, Glob, Grep, Read and the web tools disallowed, since a user's settings can
+Claude arms run with Bash, Write, Edit, Glob, Grep, Read, Skill and the web tools disallowed, since a user's settings can
 allow them and a check could then pass without the app. Until 2026-10-09 they were allowed: no run
 wrote a checked file through them (716 transcripts checked), but Claude often opened the task's file
 with `open` from Bash instead of the app's Open panel. Glob, Grep and Read joined the list after the
 1.1.0 pass, where Claude looked for its saved Chess game with Glob, which never returned, and 3
-chess-drag runs that had saved the right game ran into the 5-minute limit.
+chess-drag runs that had saved the right game ran into the 5-minute limit. Skill joined after a
+simulator run called another plugin's skill: the user's plugins load in benchmark runs.
 
 The `codex` arm runs native Codex computer use through `codex exec`, for a head-to-head
 (`--arm sleight,codex`). It uses its own Codex home, `~/.codex-bench` (log in once with
