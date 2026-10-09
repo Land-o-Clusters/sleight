@@ -15,6 +15,18 @@ function fixture(t) {
   return { dir: join(bank, 'fixture'), nonce: 'abc123', lockPath: join(bank, 'lock') };
 }
 
+test('a failure after a setup action stops even when exact-title recovery confirms cleanup', async t => {
+  const execute = await runner(), ctx = fixture(t);
+  const result = await execute({ setup(context) {
+    context.fixtureDiagnostics = [{ actionTaken: true, cleanup: 'nothing created', retries: [], totalWaitMs: 0 }];
+    throw new Error('read failed after action');
+  }, cleanup() {} }, ctx);
+  assert.equal(result.stopAfterAction, true);
+  assert.equal(result.cleanupError, undefined);
+  assert.equal(result.fixtureDiagnostics[0].cleanup, 'nothing created');
+  assert.equal(existsSync(ctx.lockPath), false);
+});
+
 test('an explicit no-mutation acquisition refusal removes only that pending acquisition', async t => {
   const { acquireFixture } = await import('../bench/real-run.mjs');
   const ctx = fixture(t);

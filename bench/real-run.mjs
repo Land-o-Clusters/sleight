@@ -21,6 +21,7 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, signal
       }
     } catch (error) { result.observerError = error.message; stop?.(); cleanupController.abort(); throw error; }
   };
+  if (!dryRun && permissionCheck) ctx.beforeFixtureCleanup = async () => { await observation; await observe(); };
   try {
     if (!dryRun && !lockHeld) release = await acquireLiveLock(ctx.lockPath ?? '/tmp/sleight-live.lock', { wait: true, signal, interval: 2000 });
     signal?.throwIfAborted();
@@ -81,6 +82,8 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, signal
     }
     clearInterval(monitor);
     await observation;
+    if (ctx.fixtureDiagnostics) result.fixtureDiagnostics = ctx.fixtureDiagnostics;
+    if (result.passed === false && (driverStarted || ctx.fixtureDiagnostics?.some(item => item.actionTaken))) result.stopAfterAction = true;
     if (result.permissionPrompt) { result.passed = false; result.reason = 'macOS permission prompt: stopped'; }
     if (result.observerError) { result.passed = false; result.reason = `macOS permission observer failed: ${result.observerError}`; }
     if (cleanupConfirmed) {

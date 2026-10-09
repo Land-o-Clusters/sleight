@@ -268,7 +268,7 @@ pass: for (let run = 1; run <= runs; run++) {
         });
         save();
         console.error(`${result.passed ? 'PASS' : isDryRun ? 'DRY' : 'FAIL'} ${armName} ${task.id} #${run} ${result.seconds ?? 0}s${result.reason ? ` (${scrub(result.reason)})` : ''}`);
-        if (result.cleanupError || result.permissionPrompt || result.permissionRefusal || result.observerError) {
+        if (result.cleanupError || result.permissionPrompt || result.permissionRefusal || result.observerError || result.stopAfterAction) {
           console.error(`STOP: ${scrub(result.cleanupError ?? result.reason ?? 'permission stop')}`);
           controller.abort(new Error('live safety stop'));
           process.exitCode = 1;

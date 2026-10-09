@@ -18,7 +18,7 @@ export async function heliumHelper(signal) {
     if (!result.groupClean) { uncollected = true; throw new Error('Helium compiler process group cleanup unconfirmed'); }
     if (result.exit.code !== 0 || result.cancelled || result.timedOut || result.spawnError) {
       rmSync(bank, { recursive: true, force: true }); bank = undefined;
-      throw new Error(`Helium helper compilation failed: ${result.stderr.trim() || result.spawnError || result.exit.code}`);
+      throw Object.assign(new Error(`Helium helper compilation failed: ${result.stderr.trim() || result.spawnError || result.exit.code}`), { noMutation: true });
     }
     executable = path;
     return path;
