@@ -48,13 +48,26 @@ Head-to-head (published in `docs/benchmark.md`): at normal load sleight 20/21 in
 tasks. Under 20 CPU workers (9 runs, stopped early) both timed out on Calculator, and sleight's
 reads before clicks by ID cost tens of seconds each.
 
+Working in parallel since 22:59 UTC (owner: "spin subagents ... let's get this done"). Briefs are
+in `.dev/prompts/`, for Sol threads the owner starts:
+- `sol-footprint-spawns.md` (`codex/footprint-spawns`): per-call `osascript`, the browser-discovery
+  engine at launch, the 29.5 s first acquisition, SQLite per lease operation, the turn-end tap scan,
+  the pane snapshot.
+- `sol-replay-next.md` (`codex/replay-next`): replay steps that wait for the app, and Claude taking
+  over at the step that stopped.
+- `sol-small-fixes.md` (`codex/small-fixes`): exact `typeText` after select-all, clipboard
+  preservation's 205 to 236 ms, localized settings titles in `blocked_app`, `menu_bar` guard tests.
+- sleight-arch: the guard's reads (`document-scope.mjs`, guard code in `relay.mjs`), with a
+  background subagent studying guard-read phases across tonight's traces.
+- `/tmp/sleight-hold` exists while another project's window runs. Every brief stops live probes
+  while it's there. sleight-arch removes it when Puddle releases the Mac.
+
 Next, in order:
-1. A full release pass with the owner away, in a quiet stretch after 1009o, then reread README whole
-   and release (LAWS). It covers the batching default and the menu note with Claude driving.
-2. Footprint: cut guard reads. Each call made about two (7 to 15 a run), the read after a call when
-   nothing returned a header and the reads before each numbered action in a batch. Then find what
-   `osascript` runs per call (0.15 to 0.59 s a run).
-3. The relay's first acquisition took 29.5 s in one calculator-menu run at load 21. Find out why.
+1. Footprint: cut guard reads. Each call made about two (7 to 15 a run), the read after a call when
+   nothing returned a header and the reads before each numbered action in a batch.
+2. Review and squash the Sol branches as they land, with each one's live check.
+3. A full release pass with the owner away, then reread README whole and release (LAWS). ROADMAP
+   3.5 holds the release until the head-to-head shows Codex's footprint.
 
 Branches and worktrees:
 - `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it.
