@@ -27,7 +27,7 @@ because the inventory doesn't list windows, so `e66791a` reads instead.
 Real-use qualification of Sol's brief 8 (`4323a41` plus sleight-arch's Safari fix `b284b05`, both on
 `codex/real-use-tasks`): all 11 web tasks passed 1/1. word-edit failed in the checker's ZIP reader,
 excel-edit in a cold-launch setup, and the pass stopped before powerpoint-edit. Brief 9
-(`.dev/prompts/sol-real-use-tasks-9.md`) covers those. The owner pastes it.
+(`.dev/prompts/sol-real-use-tasks-9.md`) covers those, and Sol is on it.
 
 Branches and worktrees:
 - `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it.
@@ -40,11 +40,11 @@ Branches and worktrees:
 Next, in order:
 - Astra's guard-speed brief (`.dev/prompts/astra-guard-speed.md`, worktree
   `~/Projects/sleight-wt/guard-speed` on `codex/guard-speed`, cut at `1bdfd39`): a native window
-  check in place of the settle-bound full read. The owner pastes it.
+  check in place of the settle-bound full read. Astra is on it.
 - After brief 9, rerun word-edit, excel-edit and powerpoint-edit, then merge `codex/real-use-tasks`.
 - A Codex arm for the real suite, then the real-use pass and the Codex head-to-head.
 
-Waiting on the owner: pasting brief 9 to Sol and the guard-speed brief to Astra, and watching the Mail and Mimestream tasks (about 10
+Sol (brief 9) and Astra (guard-speed) have been running since about 16:30 UTC. Waiting on the owner: watching the Mail and Mimestream tasks (about 10
 minutes). Qualification left windows on their screen. Safari has about seven
 fixture windows (Start Pages and one form), Helium two and Preview six (`Pages-*.pdf`), and Word and
 Excel are running with fixture documents.
@@ -100,7 +100,7 @@ Read first: `docs/known-problems.md` (grouped by area), `docs/benchmark.md` (eve
 
 ## Waiting on the owner
 
-- Pasting brief 9 to Sol, and being at the Mac to watch the Mail and Mimestream tasks.
+- Being at the Mac to watch the Mail and Mimestream tasks.
 - The OpenAI key note is theirs to handle. Don't raise it again (owner, 2026-10-09).
 
 ## Reading list
