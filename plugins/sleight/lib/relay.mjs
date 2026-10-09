@@ -125,14 +125,17 @@ export function imageSize(data) {
 }
 
 // The engine's screenshots are in pixels, 2× a window's points on a Retina display, and Claude
-// reads drag points off them. Returns [app name, size] for the last image in an engine result
-// that names one app ("Window: …, App: TextEdit."), so drag can convert.
+// reads drag points off them. Returns [app name, size, window title] for the last image in an
+// engine result that names one app ("Window: "Game 1", App: Chess."), so drag can convert. The
+// title is undefined when the result names more than one window.
 export function screenshotOf(content) {
   const image = content.filter(c => c?.type === 'image' && typeof c.data === 'string').at(-1);
   if (!image) return undefined;
-  const apps = new Set(content.filter(c => c?.type === 'text').flatMap(c => [...(c.text ?? '').matchAll(/\bApp: ([^\n.]+)\./g)].map(m => m[1].trim())));
+  const headers = content.filter(c => c?.type === 'text').flatMap(c => [...(c.text ?? '').matchAll(/^Window: ("(?:[^"\\]|\\.)*"), App: ([^\n]+?)\.?$/gm)]);
+  const apps = new Set(headers.map(m => m[2].trim()));
+  const titles = new Set(headers.map(m => { try { return JSON.parse(m[1]); } catch { return undefined; } }));
   const size = imageSize(image.data);
-  return apps.size === 1 && size ? [[...apps][0], size] : undefined;
+  return apps.size === 1 && size ? [[...apps][0], size, titles.size === 1 ? [...titles][0] : undefined] : undefined;
 }
 
 function lines(stream, onLine) {
@@ -257,7 +260,7 @@ export function createRelay({
   // js calls awaiting a reply, and whether this engine session has shown its first-call docs:
   // docs again without a js_reset mean the session restarted and every handle is gone.
   const jsCalls = new Map();
-  const screenshots = new Map(); // lowercased app name -> pixel size of its latest engine screenshot
+  const screenshots = new Map(); // lowercased app name -> { latest, byTitle } pixel sizes of its engine screenshots
   let docsShown = false;
   // Once per session: Claude keeps them in context across engine restarts.
   let rulesShown = false;
@@ -901,7 +904,8 @@ export function createRelay({
       if (name === 'drag') {
         // drag converts Claude's screenshot pixels to window points with this size (2026-10-08).
         const shot = [args.app, resolved?.app].map(a => typeof a === 'string' && screenshots.get(a.toLowerCase())).find(Boolean);
-        callArgs = { ...args, screenshot: shot ? [shot.width, shot.height] : undefined };
+        // Per window too: a second, untitled Chess window left 3 of 13 drags unconverted (2026-10-09).
+        callArgs = { ...args, screenshot: shot ? [shot.latest.width, shot.latest.height] : undefined, screenshots: shot?.byTitle };
       }
       result = await localTools.call(name, callArgs, async (parts, message, options) => {
         const allowed = await approve(parts, message, msg.id, options);
@@ -1490,7 +1494,12 @@ export function createRelay({
     // Last, after every check above has read the full tree.
     if (msg.method === undefined && Array.isArray(msg.result?.content)) {
       const shot = jsCode !== undefined && screenshotOf(msg.result.content);
-      if (shot) screenshots.set(shot[0].toLowerCase(), shot[1]);
+      if (shot) {
+        const entry = screenshots.get(shot[0].toLowerCase()) ?? { byTitle: {} };
+        entry.latest = shot[1];
+        if (shot[2] !== undefined) entry.byTitle[shot[2]] = [shot[1].width, shot[1].height];
+        screenshots.set(shot[0].toLowerCase(), entry);
+      }
       // sleight's own advice says getAXState({ disableDiffing: true }) gives a full read. Compacting
       // it to "no change" sent Claude to a screenshot instead (2026-10-08). Recovery's visible read
       // is full too.

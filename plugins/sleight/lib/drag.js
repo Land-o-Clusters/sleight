@@ -69,8 +69,9 @@ function clip(a, b) {
 // landed a line below the text, and 3 of Claude's first drags per run changed nothing.
 // The relay passes the size of the app's latest engine screenshot; a size that doesn't
 // match this window's shape is from another window and is ignored.
-function screenshotScale(request, bounds) {
-  const s = request.screenshot;
+function screenshotScale(request, bounds, title) {
+  const own = request.screenshots && Object.hasOwn(request.screenshots, title ?? '') ? request.screenshots[title ?? ''] : undefined;
+  const s = own ?? request.screenshot;
   if (!Array.isArray(s) || s.length !== 2 || !s.every(n => Number.isFinite(n) && n > 0)) return null;
   const x = s[0] / bounds.Width, y = s[1] / bounds.Height;
   return Math.abs(x - y) <= 0.03 * Math.max(x, y) && x >= 0.25 && x <= 4 ? { x, y } : null;
@@ -79,7 +80,7 @@ const toPoints = (p, scale) => scale ? [p[0] / scale.x, p[1] / scale.y] : p;
 function resolveWindow(own, request) {
   const list = () => JSON.stringify(own.map(w => ({ windowId: w.id, title: w.title, bounds: w.bounds })));
   const candidates = request.windowId === undefined
-    ? own.filter(w => inside(w.bounds, at(w.bounds, toPoints(request.from, screenshotScale(request, w.bounds)))))
+    ? own.filter(w => inside(w.bounds, at(w.bounds, toPoints(request.from, screenshotScale(request, w.bounds, w.title)))))
     : own.filter(w => w.id === request.windowId);
   if (candidates.length !== 1) throw new Error(`drag target is ${candidates.length > 1 ? 'ambiguous; supply windowId' : 'unavailable; read the window again'}. Windows: ${list()}`);
   return candidates[0];
@@ -397,7 +398,7 @@ function run(argv) {
       if (!own.length) throw new Error(`${app} has no window; open one on the current desktop before dragging`);
     }
     let main = resolveWindow(own, request);
-    const scale = screenshotScale(request, main.bounds);
+    const scale = screenshotScale(request, main.bounds, main.title);
     const pointFrom = toPoints(from, scale), pointTo = toPoints(to, scale);
     units = scale ? { screenshotScale: Math.round(scale.x * 1000) / 1000 }
       : { coordinates: request.screenshot ? 'window points: the latest screenshot is of another window size' : 'window points: no engine screenshot of this app yet' };

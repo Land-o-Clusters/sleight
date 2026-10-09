@@ -1610,7 +1610,7 @@ test('imageSize reads PNG and JPEG sizes and screenshotOf names the one app in t
   assert.deepEqual(imageSize(jpegOf(1312, 844)), { width: 1312, height: 844 });
   assert.equal(imageSize('bm90IGFuIGltYWdl'), undefined);
   const content = [{ type: 'text', text: 'Window: "a.txt", App: TextEdit.' }, { type: 'image', data: jpegOf(1312, 844), mimeType: 'image/jpeg' }];
-  assert.deepEqual(screenshotOf(content), ['TextEdit', { width: 1312, height: 844 }]);
+  assert.deepEqual(screenshotOf(content), ['TextEdit', { width: 1312, height: 844 }, 'a.txt']);
   assert.equal(screenshotOf([content[1]]), undefined, 'no app named');
   assert.equal(screenshotOf([...content, { type: 'text', text: 'Window: "b", App: Chess.' }]), undefined, 'two apps');
 });
@@ -1627,5 +1627,6 @@ test('drag gets the size of the app\'s latest engine screenshot, so it can conve
   h.fromClient({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'drag', arguments: { app: 'Chess', from: [1, 2], to: [3, 4] } } });
   await settle();
   assert.deepEqual(calls[0].screenshot, [1312, 844]);
+  assert.deepEqual(calls[0].screenshots, { 'a.txt': [1312, 844] });
   assert.equal(calls[1].screenshot, undefined, 'no screenshot of Chess, and Claude can\'t supply one');
 });

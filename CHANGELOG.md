@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `drag` scales Claude's points by the screenshot of the window it drags in, not only the app's latest
+  screenshot. In a 0.16.0 pass, Chess had a second, untitled window, and 3 of 13 drags went in
+  unconverted because the latest screenshot was of the other window.
+
 ## 0.16.0 (2026-10-08)
 
 - `drag` takes `from` and `to` in the engine screenshot's pixels, as its description always said. It
