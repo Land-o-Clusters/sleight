@@ -72,6 +72,8 @@ Next, in order:
    check's load. `codex/plugin-arm` `565854b` went back as `sol-plugin-arm-2.md`: its arm would
    pass the owner's API key to a competitor's server, and its evidence lists the owner's connectors
    and apps (private repo only).
+   `codex/review-receipts` `f01987f` went back as `sol-review-receipts-2.md`: receipts go off by
+   default (owner, 2026-10-10), and they kept the owner's full name in a title and single typed keys.
 2. The 1.1.0 live checks (helper resend, stale-number remap, keyboard-tap notice) and
    simulator-flow, with the owner away: they can take the pointer or keyboard.
 3. The footprint gap (Astra's branch, then rerun `--arm sleight,codex --tasks
