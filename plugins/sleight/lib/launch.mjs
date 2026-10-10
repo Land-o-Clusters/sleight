@@ -21,6 +21,7 @@ import { createRelay } from './relay.mjs';
 import { createAppHealthHelper, diagnoseReadFailure } from './read-failure.mjs';
 import { loadFlowRules } from './flow-rules.mjs';
 import { InputLease } from './input-lease.mjs';
+import { collectOwnedEngine } from './checked-stop.mjs';
 import { loadPreapproved } from './preapproved.mjs';
 import { createGrantAudit } from './preapproved-audit.mjs';
 import { BLOCKED_APP_TOOL, callBlockedApp, forbiddenTargetsAllowed } from './blocked-apps.mjs';
@@ -480,11 +481,14 @@ export async function run({ leaseDirectory } = {}) {
     stdio: ['pipe', 'pipe', 'inherit'],
     env: { ...process.env, ...s.env },
   });
+  const childClosed = new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
+  let stoppingForReceipt = false;
   child.on('error', err => fail(`could not start server: ${err.message}`));
   // Refresh every automatic session after initialization. Keep this description fixed;
   // the background inventory affects the next session only.
   const stopObservingInitialization = refreshAfterInitialize(child.stdout, surfaceCache);
   child.on('close', async code => {
+    if (stoppingForReceipt) return;
     stopObservingInitialization(); await surfaceCache?.close();
     await stopHelpers(); await appHealth.close(); await relay.close(); process.exit(code ?? 0);
   });
@@ -547,6 +551,30 @@ export async function run({ leaseDirectory } = {}) {
     firstCallRules: skillRules(),
     keyboardTaps: appHealth.keyboardTaps,
     windowIdentity: appHealth.windowIdentity,
+    beginStop: () => { stoppingForReceipt = true; },
+    stopEngine: async () => {
+      const engine = await collectOwnedEngine({ child, closed: childClosed });
+      stopObservingInitialization(); await surfaceCache?.close();
+      await stopHelpers();
+      return engine;
+    },
+    inspectInput: async () => {
+      const pointer = await runScript('input-state.js', {}, { cleanup: true });
+      const taps = await appHealth.keyboardTapState();
+      await appHealth.close(); await stopHelpers();
+      const ok = pointer.ok === true && Array.isArray(pointer.buttons) && pointer.buttons.length === 0 &&
+        taps.ok === true && Array.isArray(taps.taps) && taps.taps.length === 0 && ownedHelpers.size === 0;
+      return { ok, error: ok ? undefined : pointer.ok !== true ? 'Pointer state inspection failed'
+        : pointer.buttons.length ? 'A pointer button is down; its owner is unknown'
+        : taps.ok !== true ? 'Keyboard tap inspection failed'
+        : taps.taps.length ? 'Keyboard filter taps remain: ' + taps.taps.map(tap => tap.app || tap.bundleId || `pid ${tap.pid}`).join(', ')
+        : 'Owned helper exit is unconfirmed' };
+    },
+    onStopReported: report => {
+      if (report.engine === 'unconfirmed') return;
+      // The receipt reaches the MCP client before EOF. Its next connection starts a fresh engine.
+      process.stdout.end(() => process.exit(0));
+    },
   });
   process.once('exit', () => relay.close());
 

@@ -89,6 +89,80 @@ test('ambiguous native identity does not block browser-only candidates', async t
   assert.match(h.forwarded.at(-1).params.arguments.code, /Native access stopped/);
 });
 
+test('Interrupt drains a pending call, ends its turn, collects then checks cleanup', async t => {
+  const { harness } = setup(t);
+  let h;
+  const events = [];
+  h = harness('checked stop', { stopGraceMs: 50, stopEngine: async () => {
+    assert.equal(h.inputLease.owned.size, 1, 'the lease is held through engine collection');
+    events.push('collect'); return { collected: true, cutOff: false };
+  }, inspectInput: async () => {
+    assert.equal(h.inputLease.owned.size, 0); events.push('inspect'); return { ok: true };
+  } });
+  h.send(rpc('pending', 'js', { code: 'await app.typeText("x")', title: 'Type x' }));
+  h.send(rpc('stop', 'turn_ended', { hook_event_name: 'Interrupt' }));
+  assert.equal(h.received.length, 0);
+  h.reply(result('pending'));
+  await new Promise(resolve => setImmediate(resolve));
+  const end = h.forwarded.at(-1);
+  assert.equal(end.params.name, 'turn_ended'); h.reply(result(end.id, 'ended'));
+  await new Promise(resolve => setImmediate(resolve));
+  const receipt = h.received.find(m => m.id === 'stop').result;
+  assert.equal(receipt.isError, false);
+  assert.deepEqual(events, ['collect', 'inspect']);
+  assert.match(receipt.content[0].text, /in flight: js: Type x.*Engine exited and collected; turn finished.*Checked:/);
+});
+test('Interrupt cuts off hung calls and delayed local targeting cannot restart input', async t => {
+  const { harness } = setup(t);
+  let resolveTarget, localCalls = 0;
+  const h = harness('local stop', { changeReview: false, stopGraceMs: 5,
+    localTools: { tools: [{ name: 'drag' }], target: () => new Promise(resolve => { resolveTarget = resolve; }),
+      call: async () => { localCalls++; return { content: [] }; } },
+    stopEngine: async () => ({ collected: true, cutOff: true }), inspectInput: async () => ({ ok: true }) });
+  h.send(rpc('pending', 'drag', { app: 'TextEdit', from: [0, 0], to: [1, 1] }));
+  h.send(rpc('stop', 'turn_ended', { hook_event_name: 'Interrupt' }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  const receipt = h.received.find(m => m.id === 'stop').result;
+  assert.match(receipt.content[0].text, /in flight: drag.*cut off and collected; turn unconfirmed/);
+  resolveTarget({ appId: 'com.apple.TextEdit', app: 'TextEdit' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(localCalls, 0); assert.equal(h.inputLease.owned.size, 0);
+  assert.equal(h.received.filter(m => m.id === 'pending').length, 1);
+});
+test('post-read identity completion cannot deliver a second reply after checked stop', async t => {
+  const { harness } = setup(t);
+  let resolveIdentity;
+  const h = harness('late read', { fresh: true, changeReview: false, stopGraceMs: 5,
+    windowIdentity: window => new Promise(resolve => { resolveIdentity = () => resolve({ ...window,
+      status: 'ok', matches: 1, epoch: 'helper', window: 1, pid: 123, processStart: 1 }); }),
+    stopEngine: async () => ({ collected: true, cutOff: false }), inspectInput: async () => ({ ok: true }) });
+  h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit");' }));
+  h.reply(result('read', 'Window: "Untitled", App: TextEdit.\n0 standard window Untitled'));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('stop', 'turn_ended', { hook_event_name: 'Interrupt' }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(h.received.find(m => m.id === 'read').result.isError, true);
+  assert.equal(h.received.find(m => m.id === 'stop').result.isError, false);
+  resolveIdentity(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.received.filter(m => m.id === 'read').length, 1);
+  h.send(rpc('later', 'js', { code: 'await app.typeText("x")' }));
+  assert.match(h.received.at(-1).result.content[0].text, /closing/);
+});
+test('a late document approval cannot answer an already cancelled request after stop', async t => {
+  const { harness } = setup(t);
+  let decide;
+  const h = harness('late consent', { approvalScope: 'document', ask: () => new Promise(resolve => { decide = resolve; }),
+    stopGraceMs: 20, stopEngine: async () => ({ collected: true, cutOff: false }), inspectInput: async () => ({ ok: true }) });
+  h.send(rpc('consent', 'document_scope'));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('stop', 'turn_ended', { hook_event_name: 'Interrupt' }));
+  await new Promise(resolve => setImmediate(resolve));
+  const end = h.forwarded.at(-1); h.reply(result(end.id, 'ended'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.received.find(m => m.id === 'consent').result.isError, true);
+  decide('accept'); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.received.filter(m => m.id === 'consent').length, 1);
+});
 test('normal action results and app acquisitions have no window note', t => {
   const { a } = setup(t);
   a.send(rpc(1, 'js', { code: 'app = await cua.getApp("TextEdit")' })); a.reply(result(1));

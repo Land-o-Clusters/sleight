@@ -54,6 +54,16 @@ test('second holder is refused with its name and remaining time; reads have a na
   assert.equal(isLeaseRead('await app.getAXState(); await app.typeText("oops")'), false);
   assert.equal(isLeaseRead('await app.typeText("hello")'), false);
 });
+test('checked release accepts an unused missing bank and verifies owned records are gone', t => {
+  const directory = bank(t), a = new InputLease({ directory: join(directory, 'unused'), holder: 'A' });
+  assert.doesNotThrow(() => a.releaseChecked());
+  a.acquire(window); a.releaseChecked();
+  assert.equal(a.owned.size, 0);
+  a.acquire(window);
+  a.release = () => {};
+  assert.throws(() => a.releaseChecked(), /owned record remains/);
+  a.disposeCoordinator();
+});
 test('renewal, expiry at 30 s, and stale owner release never erase a successor', t => {
   const directory = bank(t);
   let time = 1000;

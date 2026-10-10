@@ -65,6 +65,7 @@ import { FLOW_TOOL } from './flow-rules.mjs';
 import { browserCall, browserReply } from './browser-call.mjs';
 import { isLeaseRead } from './input-lease.mjs';
 import { verifyWindowIdentity } from './window-identity.mjs';
+import { checkedStop, stopText } from './checked-stop.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
 import { createReadCompactor } from './compact-reads.mjs';
@@ -206,6 +207,7 @@ export function createRelay({
   // Lists apps holding keyboard filter taps ([{ app, bundleId }]), checked when a turn ends.
   keyboardTaps,
   windowIdentity,
+  beginStop = () => {}, stopEngine, inspectInput, onStopReported = () => {}, stopGraceMs = 3000,
   clientIn, clientOut, serverIn, serverOut,
   sessionId = randomUUID(),
   approvalScope = 'session',
@@ -274,6 +276,10 @@ export function createRelay({
   const promptFailures = new Map(); // call id -> native panel failure, distinct from a user decline
   const running = new Set(); // ids of engine calls waiting for a result
   const nativeChecked = new Set();
+  const callDetails = new Map();
+  const pendingClients = new Map();
+  const stoppedClients = new Set();
+  let stopCollected = false;
   const localRunning = new Set();
   const preapprovalNotes = new Map(); // call id -> grants made during that call
   let idleTimer;
@@ -615,6 +621,7 @@ export function createRelay({
     leaseTimer.unref?.();
   }
   function finishedCall(id) {
+    callDetails.delete(id);
     const call = leaseCalls.get(id);
     if (call) {
       if (call.key && !leaseFault && !disposed) {
@@ -781,11 +788,17 @@ export function createRelay({
   let nextElicitId = 0;
 
   const toServer = msg => {
+    if (stopCollected || (closing && msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL)) return;
+    if (closing && msg.result?.action === 'accept') msg = { ...msg, result: { action: 'cancel' } };
     if (serverIn.writableEnded || serverIn.destroyed) { trace('server-input-closed', { id: msg.id }); return; }
     trace('to-server', msg);
+    if (msg.method === 'tools/call' && msg.id !== undefined && msg.params.name !== TURN_END_TOOL) {
+      callDetails.set(msg.id, msg.params.name + (msg.params.arguments?.title ? ': ' + msg.params.arguments.title : ''));
+    }
     serverIn.write(JSON.stringify(msg) + '\n');
   };
   const toClient = msg => {
+    if (msg.method === undefined && stoppedClients.has(msg.id)) return;
     if (msg.method === undefined && promptFailures.has(msg.id)) {
       const message = promptFailures.get(msg.id); promptFailures.delete(msg.id);
       if (msg.error) msg = { ...msg, error: { ...msg.error, message } };
@@ -816,6 +829,7 @@ export function createRelay({
       clearTimeout(probe.timer); helperProbes.delete(msg.id); probe.receive?.(msg);
       trace('helper-recovery-result', msg); return;
     }
+    if (msg.method === undefined) pendingClients.delete(msg.id);
     if (clientOut.writableEnded || clientOut.destroyed) { trace('client-output-closed', { id: msg.id }); return; }
     trace('to-client', msg);
     clientOut.write(JSON.stringify(msg) + '\n');
@@ -971,6 +985,7 @@ export function createRelay({
     let resolved;
     if (name === 'select_window') clearSelection();
     try {
+      if (closing || disposed) throw new Error('Input lease: this session is closing.');
       // blocked_app reserves the whole app for its actions, like drag and
       // hover, and its consent names the resolved app even on reads.
       const appTool = ['drag', 'hover', 'blocked_app', 'select_window'].includes(name);
@@ -979,6 +994,7 @@ export function createRelay({
         resolved = await (localTools.target?.(args) ?? Promise.resolve(
           [leaseWindow?.app, leaseWindow?.appId].includes(args.app) ? leaseWindow : undefined));
       }
+      if (closing || disposed) throw new Error('Input lease: this session is closing.');
       if (leaseCalls.get(msg.id)?.localAction) {
         const target = resolved ?? { appId: 'desktop', app: 'macOS', title: 'local desktop controls', url: null };
         const key = inputLease.acquire(target, appTool ? 'app' : 'desktop');
@@ -1003,6 +1019,7 @@ export function createRelay({
       // The fourth argument stays runLocal for callLocalTool; the resolved
       // lease target rides fifth, where blocked_app reads it.
       }, undefined, resolved);
+      if (closing || disposed) throw new Error('Input lease: this session is closing.');
       if (msg.params.name === 'select_window' && !result.isError) {
         const value = JSON.parse(result.content.find(c => c.type === 'text')?.text ?? '{}');
         if (!value.ok || !value.target?.appId || typeof value.target?.title !== 'string' ||
@@ -1014,6 +1031,7 @@ export function createRelay({
       result = { content: [{ type: 'text', text: String(err?.message ?? err) }], isError: true };
     }
     localRunning.delete(msg.id);
+    if (!running.has(msg.id)) return; // Stop already settled this request after collection.
     if (plan) flowRules.observe(result, plan);
     finishedCall(msg.id);
     const reply = { jsonrpc: '2.0', id: msg.id, result };
@@ -1038,6 +1056,8 @@ export function createRelay({
       return;
     }
     // When each tool call arrived, so a trace can time the relay's own work on it.
+    if (msg.method === 'tools/call' && msg.id !== undefined) pendingClients.set(msg.id,
+      msg.params?.name + (msg.params?.arguments?.title ? ': ' + msg.params.arguments.title : ''));
     if (msg.method === 'tools/call') { trace('call-received', { id: msg.id, method: msg.method, params: { name: msg.params?.name } }); callSeqs.set(msg.id, ++callSeq); callStarts.set(msg.id, Date.now()); }
     // Claude sometimes sends js the Bash tool's parameter name (6 of 437 calls, 2026-10-07).
     const jsArgs = msg.method === 'tools/call' && msg.params?.name === 'js' ? msg.params.arguments : undefined;
@@ -1106,6 +1126,10 @@ export function createRelay({
       elicitations.get(msg.id)?.(msg);
       return;
     }
+    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && msg.params.arguments?.hook_event_name === 'Interrupt' && stopEngine) {
+      if (closing) { leaseStop(msg, 'stop is already pending or the session is closing.'); return; }
+      void interruptTurn(msg); return;
+    }
     if (closing && msg.method === 'tools/call') { leaseStop(msg, 'this session is closing.'); return; }
     if (windowIdentity && inputLease && msg.method === 'tools/call' && msg.params?.name === 'js' &&
         !isLeaseRead(msg.params.arguments?.code) && !browserCall(msg.params.arguments?.code ?? '', browserHandles) &&
@@ -1115,11 +1139,12 @@ export function createRelay({
       if (!leaseWindow.nativeIdentity) { leaseStop(msg, 'native window identity has no successful baseline. Read the app again.'); return; }
       const expected = leaseWindow;
       running.add(msg.id);
+      callDetails.set(msg.id, 'native window admission');
       Promise.resolve().then(() => windowIdentity(expected)).then(observed => {
         verifyWindowIdentity(expected, observed);
         if (leaseWindow !== expected || closing || disposed) throw new Error('Input lease: window changed while checking. Read again.');
         running.delete(msg.id); nativeChecked.add(msg.id); handleClient(msg);
-      }).catch(error => { finishedCall(msg.id); leaseStop(msg, error.message); });
+      }).catch(error => { if (stopCollected) return; finishedCall(msg.id); leaseStop(msg, error.message); });
       return;
     }
     if (msg.method === 'tools/call') {
@@ -1232,6 +1257,7 @@ export function createRelay({
       turnUsed = true;
       clearTimeout(idleTimer);
       running.add(msg.id);
+      callDetails.set(msg.id, msg.params.name);
       callLocal(msg, flowPlan);
       return;
     }
@@ -1381,6 +1407,7 @@ export function createRelay({
   }
 
   lines(serverOut, line => {
+    if (stopCollected) return;
     let msg;
     try {
       msg = JSON.parse(line);
@@ -1424,6 +1451,7 @@ export function createRelay({
     observeServerMessage(msg);
   });
   function observeServerMessage(msg) {
+    if (stopCollected) return;
     if (msg.method === undefined && spaceChecks.has(msg.id)) {
       // The probe takes about 150 ms against the engine's 400 ms or more, so this rarely waits.
       const check = spaceChecks.get(msg.id); spaceChecks.delete(msg.id);
@@ -1785,6 +1813,62 @@ export function createRelay({
     });
     rotateTurn();
     return done;
+  }
+
+  async function interruptTurn(msg) {
+    closing = true;
+    clearTimeout(idleTimer);
+    beginStop();
+    const inFlight = [...pendingClients].filter(([id]) => id !== msg.id).map(([, detail]) => detail);
+    for (const resolve of elicitations.values()) resolve({ result: { action: 'cancel' } });
+    elicitations.clear();
+    const report = await checkedStop({ inFlight,
+      endTurn: async () => {
+        if (running.size) {
+          const drainedInTime = await new Promise(resolve => {
+            const done = () => { clearTimeout(timer); resolve(true); };
+            const timer = setTimeout(() => { drained.delete(done); resolve(false); }, stopGraceMs);
+            drained.add(done);
+          });
+          if (!drainedInTime) return false;
+        }
+        const id = `sleight-stop-${nextInternalId++}`;
+        const ended = await new Promise(resolve => {
+          const timer = setTimeout(() => { internalRequests.delete(id); resolve(undefined); }, stopGraceMs);
+          internalRequests.set(id, reply => { clearTimeout(timer); resolve(reply); });
+          toServer({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: TURN_END_TOOL,
+            arguments: endTurnArgs({ hook_event_name: 'Interrupt' }) } });
+        });
+        return !!ended?.result && !ended.error && !ended.result.isError;
+      },
+      collect: async () => {
+        const engine = await stopEngine();
+        if (engine?.collected === true) stopCollected = true;
+        return engine;
+      },
+      release: async () => {
+        // Collection makes late results impossible. Resolve pending caller requests explicitly.
+        for (const pending of clipboardReplies.values()) pending.reject(new Error('Stopped: engine collected.'));
+        clipboardReplies.clear();
+        splitCalls.clear(); splitHeads.clear(); helperDiagnosticReplies.clear(); promptFailures.clear();
+        for (const id of [...pendingClients.keys()].filter(id => id !== msg.id)) {
+          leaseStop({ id }, 'stopped while in flight; its input outcome is unconfirmed.');
+          stoppedClients.add(id);
+        }
+        for (const id of [...running]) finishedCall(id);
+        leaseCalls.clear(); changeCalls.clear(); documentCalls.clear(); jsCalls.clear(); browserCalls.clear();
+        spaceChecks.clear(); preHealth.clear(); nativeChecked.clear(); restartRetries.clear();
+        await clipboard?.close();
+        stopHeartbeat();
+        inputLease?.releaseChecked();
+        turnUsed = false;
+      },
+      inspect: inspectInput ?? (async () => ({ ok: false, error: 'Input inspection unavailable' })),
+    });
+    trace('stop-receipt', report);
+    toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: report.resources !== 'clear' || report.leases !== 'released and checked',
+      content: [{ type: 'text', text: stopText(report) }], _meta: { 'sleight/stop': report } } });
+    onStopReported(report);
   }
 
   function dispose() {
