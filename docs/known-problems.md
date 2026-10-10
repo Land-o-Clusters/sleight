@@ -263,8 +263,12 @@ our own runs. Dates and engine versions are given where they matter.
   not the native cause of a shared helper fault.
   Doctor probes inventory by default, which does not prove that every app's accessibility read works.
   `sleight-mcp --doctor Calculator` also checks that running app's read, reporting its time and window
-  header. It skips apps that need approval or are missing or ambiguous in inventory. The app probe
-  has stand-in engine coverage; live checks on 2026-10-09 were held by `/tmp/sleight-hold`. Before
+  header. It uses the user's pre-approved list and writes the session's grant audit before accepting
+  a covered app approval. Other approvals are declined without a prompt. It skips apps missing or
+  ambiguous in inventory. The app probe
+  has stand-in engine coverage. Initial live checks on 2026-10-09 were held by `/tmp/sleight-hold`.
+  The later user-list check timed out during inventory, before the app read, so the app's timing
+  and header remain unmeasured. Before
   0.7.0 it also reported "ok" when the helper couldn't start at all.
   [The investigation](benchmarks/2026-10-04-helper-health.md) records each live attempt.
 - On a busy Mac the guard can stop a call that clicks several element numbers. With 20 CPU-bound

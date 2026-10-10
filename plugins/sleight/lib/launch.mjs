@@ -92,7 +92,7 @@ const readForbiddenTargets = () => execFileSync('/usr/bin/defaults', ['read', '-
 const listLaunchdJobs = () => new Promise((resolve, reject) =>
   execFile('/bin/launchctl', ['list'], { timeout: 5000 }, (err, stdout) => (err ? reject(err) : resolve(stdout))));
 
-export async function doctor({ env = process.env, log = console.log, app = process.argv.includes('--doctor') ? process.argv[process.argv.indexOf('--doctor') + 1] : undefined, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs, forbiddenTargets = readForbiddenTargets } = {}) {
+export async function doctor({ env = process.env, log = console.log, app = process.argv.includes('--doctor') ? process.argv[process.argv.indexOf('--doctor') + 1] : undefined, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs, forbiddenTargets = readForbiddenTargets, preapprovedIO, auditDirectory } = {}) {
   if (app !== undefined && (typeof app !== 'string' || !app.trim() || app.startsWith('-'))) {
     log('usage: sleight-mcp --doctor [running app name or bundle ID]'); return 1;
   }
@@ -116,8 +116,15 @@ export async function doctor({ env = process.env, log = console.log, app = proce
     log(`${found ? 'ok     ' : 'MISSING'}   ${label}: ${path ?? '(not set)'}`);
   }
   if (!ok) return 1;
+  let preapproved, grantAudit;
+  if (app !== undefined) {
+    try {
+      preapproved = loadPreapproved(preapprovedIO);
+      grantAudit = preapproved.size ? createGrantAudit(auditDirectory) : undefined;
+    } catch (err) { log(`sleight: ${err.message}`); return 1; }
+  }
   let probe;
-  try { probe = await probeHelper(s, { app, timeoutMs, startupTimeoutMs }); }
+  try { probe = await probeHelper(s, { app, preapproved, grantAudit, timeoutMs, startupTimeoutMs }); }
   catch (err) { log(`live read cleanup FAILED: ${err.message}`); return 1; }
   if (probe.ok || probe.inventoryOk) log('live read ok (helper inventory)');
   if (probe.appRead) {
