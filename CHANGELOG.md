@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The browser-extension check, which decides whether the next session gets the browser API, runs after the engine's
+  first call has answered, not during it. Its second engine used to overlap every session's first
+  call: about 0.12 s on a quiet Mac, and 2.4 s against 1.2 s under load
+  (`docs/benchmarks/2026-10-10-startup-costs.md`).
 - A call that acted and ended on exactly the window Claude last saw gets the whole tree instead of
   "no change since the last full tree you saw", which read as if the actions hadn't run. In
   calculator-click, Calculator still showed the previous run's 391, and Claude read again in 2 of 9

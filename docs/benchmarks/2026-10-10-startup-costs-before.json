@@ -1,0 +1,675 @@
+{
+ "meta": {
+  "date": "2026-10-10T22:46:18.883Z",
+  "node": "v26.4.0",
+  "reps": 10,
+  "hold": false,
+  "engineVersion": "26.1007.21159",
+  "helperRunning": false,
+  "surfaceCache": {
+   "present": true,
+   "connected": true,
+   "ageHours": 0
+  }
+ },
+ "probeSurfaces": {
+  "wallMs": {
+   "median": 527.8,
+   "min": 476.2,
+   "max": 881.5,
+   "n": 10
+  },
+  "children": {
+   "median": 14,
+   "min": 13,
+   "max": 21,
+   "n": 10
+  },
+  "runs": [
+   {
+    "ms": 881.5257499999989,
+    "children": 21
+   },
+   {
+    "ms": 650.4444999999996,
+    "children": 16
+   },
+   {
+    "ms": 524.2405409999992,
+    "children": 14
+   },
+   {
+    "ms": 481.38158399999884,
+    "children": 13
+   },
+   {
+    "ms": 578.6480420000007,
+    "children": 15
+   },
+   {
+    "ms": 476.19737499999974,
+    "children": 13
+   },
+   {
+    "ms": 558.7381249999999,
+    "children": 14
+   },
+   {
+    "ms": 531.2958749999998,
+    "children": 14
+   },
+   {
+    "ms": 518.1932500000003,
+    "children": 13
+   },
+   {
+    "ms": 506.37166699999943,
+    "children": 13
+   }
+  ]
+ },
+ "snapshot": {
+  "bytes": 113158,
+  "width": 1348,
+  "height": 816,
+  "captureMs": 53.33870900000011,
+  "decode": [
+   47.07241700000009,
+   37.11466599999994,
+   57.71670900000004,
+   82.343208,
+   22.9984579999998,
+   25.695207999999866,
+   26.07816700000012,
+   36.0458329999999,
+   23.456792000000178,
+   21.035667000000103
+  ],
+  "downsample": [
+   5.229458000000022,
+   2.7893329999999423,
+   3.899832999999944,
+   2.01304099999993,
+   2.5537500000000364,
+   3.5459169999999176,
+   3.128832999999986,
+   2.660041999999976,
+   4.5039160000001175,
+   2.700708000000077
+  ],
+  "snapshotCallMs": {
+   "median": 130.8,
+   "min": 123.6,
+   "max": 155.3,
+   "n": 10
+  },
+  "snapshotCalls": [
+   153.7428749999999,
+   135.19204099999843,
+   146.59604200000103,
+   155.29275000000052,
+   125.34262500000114,
+   126.26345800000126,
+   123.69150000000081,
+   123.56641699999818,
+   126.32533300000068,
+   136.10116699999708
+  ],
+  "framesDrawn": 10
+ },
+ "osascript": {
+  "osascriptSpawnMs": {
+   "median": 32.2,
+   "min": 29.8,
+   "max": 38.8,
+   "n": 10
+  },
+  "appHealthProbeColdMs": 192.9,
+  "appHealthProbeMs": {
+   "median": 32.9,
+   "min": 25.8,
+   "max": 37.1,
+   "n": 10
+  },
+  "spawnsPerCall": {
+   "helper-target-cold": [
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    }
+   ],
+   "menu-bar-apps": [
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    }
+   ],
+   "notifications-list": [
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    }
+   ],
+   "drag-background": [
+    {
+     "spawns": 3,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    }
+   ],
+   "blocked-app-click": [
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    }
+   ],
+   "open-file": [
+    {
+     "spawns": 3,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    }
+   ]
+  },
+  "unitRuns": [
+   38.79087499999878,
+   30.666417000000365,
+   31.593124999999418,
+   29.80516699999862,
+   31.06366699999853,
+   31.025499999999738,
+   32.76591700000063,
+   36.64970800000083,
+   38.84083299999838,
+   32.95941700000185
+  ]
+ },
+ "lease": {
+  "leaseColdAcquireMs": 1.5,
+  "leaseAcquireMs": {
+   "median": 0.4,
+   "min": 0.3,
+   "max": 0.6,
+   "n": 10
+  },
+  "leaseRenewMs": {
+   "median": 0.3,
+   "min": 0.3,
+   "max": 1,
+   "n": 10
+  },
+  "leaseReleaseMs": {
+   "median": 0.2,
+   "min": 0.1,
+   "max": 0.4,
+   "n": 10
+  },
+  "clipboardAcquireMs": {
+   "median": 0.2,
+   "min": 0.1,
+   "max": 0.3,
+   "n": 10
+  },
+  "clipboardReleaseMs": {
+   "median": 0.1,
+   "min": 0,
+   "max": 0.2,
+   "n": 10
+  },
+  "clipboardOpensPerAcquire": 1,
+  "clipboardOpens": 10,
+  "runs": {
+   "acquire": [
+    0.3458749999990687,
+    0.39800000000104774,
+    0.3913749999992433,
+    0.629958000001352,
+    0.4450830000023416,
+    0.30845899999985704,
+    0.3670829999973648,
+    0.30066699999952107,
+    0.30837500000052387,
+    0.27058299999771407
+   ],
+   "renew": [
+    0.35512499999822467,
+    0.3125839999993332,
+    0.3815419999991718,
+    0.9724169999972219,
+    0.34904200000164565,
+    0.25824999999895226,
+    0.317124999997759,
+    0.27149999999892316,
+    0.25662500000180444,
+    0.2907500000001164
+   ],
+   "release": [
+    0.20987500000046566,
+    0.15912500000194996,
+    0.19412500000180444,
+    0.40116600000328617,
+    0.25141699999949196,
+    0.15962500000023283,
+    0.23291700000117999,
+    0.13904099999854225,
+    0.1523750000014843,
+    0.15333299999838346
+   ],
+   "clipboardAcquire": [
+    0.21879099999932805,
+    0.20108299999992596,
+    0.3068329999987327,
+    0.22524999999950523,
+    0.26083400000061374,
+    0.30633400000078836,
+    0.15420799999992596,
+    0.18029100000057952,
+    0.2087500000016007,
+    0.11804200000187848
+   ],
+   "clipboardRelease": [
+    0.10212500000125146,
+    0.09716699999989942,
+    0.120375000002241,
+    0.1218750000007276,
+    0.13874999999825377,
+    0.16058300000076997,
+    0.1218750000007276,
+    0.11779100000057952,
+    0.05687499999839929,
+    0.04787500000020373
+   ]
+  }
+ },
+ "taps": {
+  "coldMs": 116.5,
+  "warmMs": {
+   "median": 8.3,
+   "min": 7.4,
+   "max": 8.9,
+   "n": 10
+  }
+ },
+ "launch": {
+  "computer": {
+   "toolsListMs": {
+    "median": 190,
+    "min": 173.9,
+    "max": 226.6,
+    "n": 10
+   },
+   "wallMs": {
+    "median": 1139.3,
+    "min": 1076,
+    "max": 1234.3,
+    "n": 10
+   },
+   "children": {
+    "median": 25,
+    "min": 23,
+    "max": 27,
+    "n": 10
+   },
+   "failed": 0,
+   "runs": [
+    {
+     "toolsListMs": 173.9,
+     "ms": 1234.275792,
+     "children": 27,
+     "enginesWaitMs": 37
+    },
+    {
+     "toolsListMs": 199.7,
+     "ms": 1199.0194999999999,
+     "children": 25,
+     "enginesWaitMs": 37
+    },
+    {
+     "toolsListMs": 196,
+     "ms": 1105.793459,
+     "children": 24,
+     "enginesWaitMs": 35
+    },
+    {
+     "toolsListMs": 191.6,
+     "ms": 1075.9979999999996,
+     "children": 23,
+     "enginesWaitMs": 32
+    },
+    {
+     "toolsListMs": 226.6,
+     "ms": 1147.4848330000004,
+     "children": 26,
+     "enginesWaitMs": 33
+    },
+    {
+     "toolsListMs": 188.4,
+     "ms": 1107.7083749999993,
+     "children": 24,
+     "enginesWaitMs": 36
+    },
+    {
+     "toolsListMs": 179.9,
+     "ms": 1087.055957999999,
+     "children": 24,
+     "enginesWaitMs": 41
+    },
+    {
+     "toolsListMs": 198.2,
+     "ms": 1172.0660420000004,
+     "children": 26,
+     "enginesWaitMs": 70
+    },
+    {
+     "toolsListMs": 180.1,
+     "ms": 1131.1953329999997,
+     "children": 25,
+     "enginesWaitMs": 42
+    },
+    {
+     "toolsListMs": 179.6,
+     "ms": 1180.3540420000008,
+     "children": 25,
+     "enginesWaitMs": 37
+    }
+   ]
+  },
+  "auto": {
+   "toolsListMs": {
+    "median": 200.1,
+    "min": 173.7,
+    "max": 227.4,
+    "n": 10
+   },
+   "wallMs": {
+    "median": 2351.5,
+    "min": 1678.8,
+    "max": 3636.6,
+    "n": 10
+   },
+   "children": {
+    "median": 49,
+    "min": 35,
+    "max": 74,
+    "n": 10
+   },
+   "failed": 0,
+   "runs": [
+    {
+     "toolsListMs": 227.4,
+     "ms": 2689.797957999999,
+     "children": 55,
+     "enginesWaitMs": 42
+    },
+    {
+     "toolsListMs": 225.2,
+     "ms": 3294.136624999999,
+     "children": 67,
+     "enginesWaitMs": 34
+    },
+    {
+     "toolsListMs": 173.7,
+     "ms": 2013.299084000002,
+     "children": 43,
+     "enginesWaitMs": 36
+    },
+    {
+     "toolsListMs": 199.5,
+     "ms": 3636.5982919999988,
+     "children": 74,
+     "enginesWaitMs": 37
+    },
+    {
+     "toolsListMs": 178.1,
+     "ms": 3203.5578330000026,
+     "children": 66,
+     "enginesWaitMs": 36
+    },
+    {
+     "toolsListMs": 221.9,
+     "ms": 1678.8082079999986,
+     "children": 36,
+     "enginesWaitMs": 30
+    },
+    {
+     "toolsListMs": 183.5,
+     "ms": 3056.585833000001,
+     "children": 62,
+     "enginesWaitMs": 35
+    },
+    {
+     "toolsListMs": 187.2,
+     "ms": 1893.643874999998,
+     "children": 41,
+     "enginesWaitMs": 49
+    },
+    {
+     "toolsListMs": 200.7,
+     "ms": 1689.6325829999987,
+     "children": 37,
+     "enginesWaitMs": 35
+    },
+    {
+     "toolsListMs": 220.9,
+     "ms": 1731.9834580000024,
+     "children": 35,
+     "enginesWaitMs": 33
+    }
+   ]
+  }
+ }
+}

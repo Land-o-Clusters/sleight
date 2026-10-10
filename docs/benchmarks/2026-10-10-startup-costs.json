@@ -1,0 +1,768 @@
+{
+ "meta": {
+  "date": "2026-10-10T23:12:11.283Z",
+  "node": "v26.4.0",
+  "reps": 10,
+  "hold": false,
+  "engineVersion": "26.1007.21159",
+  "helperRunning": false,
+  "surfaceCache": {
+   "present": true,
+   "connected": true,
+   "ageHours": 0.1
+  }
+ },
+ "probeSurfaces": {
+  "wallMs": {
+   "median": 527.8,
+   "min": 476.2,
+   "max": 881.5,
+   "n": 10
+  },
+  "children": {
+   "median": 14,
+   "min": 13,
+   "max": 21,
+   "n": 10
+  },
+  "runs": [
+   {
+    "ms": 881.5257499999989,
+    "children": 21
+   },
+   {
+    "ms": 650.4444999999996,
+    "children": 16
+   },
+   {
+    "ms": 524.2405409999992,
+    "children": 14
+   },
+   {
+    "ms": 481.38158399999884,
+    "children": 13
+   },
+   {
+    "ms": 578.6480420000007,
+    "children": 15
+   },
+   {
+    "ms": 476.19737499999974,
+    "children": 13
+   },
+   {
+    "ms": 558.7381249999999,
+    "children": 14
+   },
+   {
+    "ms": 531.2958749999998,
+    "children": 14
+   },
+   {
+    "ms": 518.1932500000003,
+    "children": 13
+   },
+   {
+    "ms": 506.37166699999943,
+    "children": 13
+   }
+  ]
+ },
+ "snapshot": {
+  "bytes": 113158,
+  "width": 1348,
+  "height": 816,
+  "captureMs": 53.33870900000011,
+  "decode": [
+   47.07241700000009,
+   37.11466599999994,
+   57.71670900000004,
+   82.343208,
+   22.9984579999998,
+   25.695207999999866,
+   26.07816700000012,
+   36.0458329999999,
+   23.456792000000178,
+   21.035667000000103
+  ],
+  "downsample": [
+   5.229458000000022,
+   2.7893329999999423,
+   3.899832999999944,
+   2.01304099999993,
+   2.5537500000000364,
+   3.5459169999999176,
+   3.128832999999986,
+   2.660041999999976,
+   4.5039160000001175,
+   2.700708000000077
+  ],
+  "snapshotCallMs": {
+   "median": 130.8,
+   "min": 123.6,
+   "max": 155.3,
+   "n": 10
+  },
+  "snapshotCalls": [
+   153.7428749999999,
+   135.19204099999843,
+   146.59604200000103,
+   155.29275000000052,
+   125.34262500000114,
+   126.26345800000126,
+   123.69150000000081,
+   123.56641699999818,
+   126.32533300000068,
+   136.10116699999708
+  ],
+  "framesDrawn": 10
+ },
+ "osascript": {
+  "osascriptSpawnMs": {
+   "median": 32.2,
+   "min": 29.8,
+   "max": 38.8,
+   "n": 10
+  },
+  "appHealthProbeColdMs": 192.9,
+  "appHealthProbeMs": {
+   "median": 32.9,
+   "min": 25.8,
+   "max": 37.1,
+   "n": 10
+  },
+  "spawnsPerCall": {
+   "helper-target-cold": [
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    },
+    {
+     "spawns": 0,
+     "opens": 0
+    }
+   ],
+   "menu-bar-apps": [
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    }
+   ],
+   "notifications-list": [
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    }
+   ],
+   "drag-background": [
+    {
+     "spawns": 3,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    }
+   ],
+   "blocked-app-click": [
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    },
+    {
+     "spawns": 1,
+     "opens": 0
+    }
+   ],
+   "open-file": [
+    {
+     "spawns": 3,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    },
+    {
+     "spawns": 2,
+     "opens": 0
+    }
+   ]
+  },
+  "unitRuns": [
+   38.79087499999878,
+   30.666417000000365,
+   31.593124999999418,
+   29.80516699999862,
+   31.06366699999853,
+   31.025499999999738,
+   32.76591700000063,
+   36.64970800000083,
+   38.84083299999838,
+   32.95941700000185
+  ]
+ },
+ "lease": {
+  "leaseColdAcquireMs": 1.5,
+  "leaseAcquireMs": {
+   "median": 0.4,
+   "min": 0.3,
+   "max": 0.6,
+   "n": 10
+  },
+  "leaseRenewMs": {
+   "median": 0.3,
+   "min": 0.3,
+   "max": 1,
+   "n": 10
+  },
+  "leaseReleaseMs": {
+   "median": 0.2,
+   "min": 0.1,
+   "max": 0.4,
+   "n": 10
+  },
+  "clipboardAcquireMs": {
+   "median": 0.2,
+   "min": 0.1,
+   "max": 0.3,
+   "n": 10
+  },
+  "clipboardReleaseMs": {
+   "median": 0.1,
+   "min": 0,
+   "max": 0.2,
+   "n": 10
+  },
+  "clipboardOpensPerAcquire": 1,
+  "clipboardOpens": 10,
+  "runs": {
+   "acquire": [
+    0.3458749999990687,
+    0.39800000000104774,
+    0.3913749999992433,
+    0.629958000001352,
+    0.4450830000023416,
+    0.30845899999985704,
+    0.3670829999973648,
+    0.30066699999952107,
+    0.30837500000052387,
+    0.27058299999771407
+   ],
+   "renew": [
+    0.35512499999822467,
+    0.3125839999993332,
+    0.3815419999991718,
+    0.9724169999972219,
+    0.34904200000164565,
+    0.25824999999895226,
+    0.317124999997759,
+    0.27149999999892316,
+    0.25662500000180444,
+    0.2907500000001164
+   ],
+   "release": [
+    0.20987500000046566,
+    0.15912500000194996,
+    0.19412500000180444,
+    0.40116600000328617,
+    0.25141699999949196,
+    0.15962500000023283,
+    0.23291700000117999,
+    0.13904099999854225,
+    0.1523750000014843,
+    0.15333299999838346
+   ],
+   "clipboardAcquire": [
+    0.21879099999932805,
+    0.20108299999992596,
+    0.3068329999987327,
+    0.22524999999950523,
+    0.26083400000061374,
+    0.30633400000078836,
+    0.15420799999992596,
+    0.18029100000057952,
+    0.2087500000016007,
+    0.11804200000187848
+   ],
+   "clipboardRelease": [
+    0.10212500000125146,
+    0.09716699999989942,
+    0.120375000002241,
+    0.1218750000007276,
+    0.13874999999825377,
+    0.16058300000076997,
+    0.1218750000007276,
+    0.11779100000057952,
+    0.05687499999839929,
+    0.04787500000020373
+   ]
+  }
+ },
+ "taps": {
+  "coldMs": 116.5,
+  "warmMs": {
+   "median": 8.3,
+   "min": 7.4,
+   "max": 8.9,
+   "n": 10
+  }
+ },
+ "launch": {
+  "computer": {
+   "toolsListMs": {
+    "median": 165.8,
+    "min": 164.1,
+    "max": 184.5,
+    "n": 10
+   },
+   "wallMs": {
+    "median": 971.8,
+    "min": 925.1,
+    "max": 1051,
+    "n": 10
+   },
+   "children": {
+    "median": 71,
+    "min": 71,
+    "max": 73,
+    "n": 10
+   },
+   "failed": 0,
+   "runs": [
+    {
+     "toolsListMs": 165.8,
+     "ms": 965.397792,
+     "children": 71,
+     "enginesWaitMs": 26
+    },
+    {
+     "toolsListMs": 164.7,
+     "ms": 946.5635829999992,
+     "children": 71,
+     "enginesWaitMs": 28
+    },
+    {
+     "toolsListMs": 165.7,
+     "ms": 974.5376250000008,
+     "children": 71,
+     "enginesWaitMs": 30
+    },
+    {
+     "toolsListMs": 165.7,
+     "ms": 1023.4417919999978,
+     "children": 72,
+     "enginesWaitMs": 27
+    },
+    {
+     "toolsListMs": 164.1,
+     "ms": 925.0667079999985,
+     "children": 71,
+     "enginesWaitMs": 29
+    },
+    {
+     "toolsListMs": 175.3,
+     "ms": 1051.0177919999987,
+     "children": 73,
+     "enginesWaitMs": 30
+    },
+    {
+     "toolsListMs": 166.6,
+     "ms": 961.7803750000021,
+     "children": 71,
+     "enginesWaitMs": 53
+    },
+    {
+     "toolsListMs": 173.6,
+     "ms": 998.1758330000011,
+     "children": 72,
+     "enginesWaitMs": 26
+    },
+    {
+     "toolsListMs": 165.1,
+     "ms": 969.0563330000004,
+     "children": 71,
+     "enginesWaitMs": 26
+    },
+    {
+     "toolsListMs": 184.5,
+     "ms": 1009.284415999995,
+     "children": 72,
+     "enginesWaitMs": 28
+    }
+   ]
+  },
+  "browser-computer": {
+   "toolsListMs": {
+    "median": 166.8,
+    "min": 165.5,
+    "max": 195.5,
+    "n": 10
+   },
+   "wallMs": {
+    "median": 1269,
+    "min": 1005.1,
+    "max": 1360.8,
+    "n": 10
+   },
+   "children": {
+    "median": 77,
+    "min": 72,
+    "max": 78,
+    "n": 10
+   },
+   "failed": 0,
+   "runs": [
+    {
+     "toolsListMs": 166.2,
+     "ms": 1005.1276249999996,
+     "children": 72,
+     "enginesWaitMs": 29
+    },
+    {
+     "toolsListMs": 176.4,
+     "ms": 1313.8527910000012,
+     "children": 78,
+     "enginesWaitMs": 30
+    },
+    {
+     "toolsListMs": 166.8,
+     "ms": 1085.0960419999974,
+     "children": 74,
+     "enginesWaitMs": 33
+    },
+    {
+     "toolsListMs": 166.3,
+     "ms": 1125.9360410000008,
+     "children": 74,
+     "enginesWaitMs": 29
+    },
+    {
+     "toolsListMs": 180.4,
+     "ms": 1209.1349580000024,
+     "children": 76,
+     "enginesWaitMs": 40
+    },
+    {
+     "toolsListMs": 165.5,
+     "ms": 1270.6401669999977,
+     "children": 77,
+     "enginesWaitMs": 30
+    },
+    {
+     "toolsListMs": 195.5,
+     "ms": 1360.7609999999986,
+     "children": 78,
+     "enginesWaitMs": 27
+    },
+    {
+     "toolsListMs": 166.7,
+     "ms": 1273.315625000003,
+     "children": 77,
+     "enginesWaitMs": 28
+    },
+    {
+     "toolsListMs": 167.1,
+     "ms": 1267.3346670000028,
+     "children": 77,
+     "enginesWaitMs": 27
+    },
+    {
+     "toolsListMs": 165.8,
+     "ms": 1323.6936249999999,
+     "children": 78,
+     "enginesWaitMs": 28
+    }
+   ]
+  },
+  "auto": {
+   "toolsListMs": {
+    "median": 169.9,
+    "min": 165.2,
+    "max": 186.4,
+    "n": 10
+   },
+   "wallMs": {
+    "median": 1205.7,
+    "min": 1092.6,
+    "max": 1400.1,
+    "n": 10
+   },
+   "children": {
+    "median": 76,
+    "min": 74,
+    "max": 79,
+    "n": 10
+   },
+   "failed": 0,
+   "runs": [
+    {
+     "toolsListMs": 179,
+     "ms": 1299.819208,
+     "children": 78,
+     "enginesWaitMs": 26,
+     "cacheRefreshed": true
+    },
+    {
+     "toolsListMs": 173.4,
+     "ms": 1182.495167000001,
+     "children": 76,
+     "enginesWaitMs": 27,
+     "cacheRefreshed": true
+    },
+    {
+     "toolsListMs": 165.2,
+     "ms": 1221.2714589999996,
+     "children": 76,
+     "enginesWaitMs": 28,
+     "cacheRefreshed": true
+    },
+    {
+     "toolsListMs": 166.1,
+     "ms": 1215.2792919999993,
+     "children": 76,
+     "enginesWaitMs": 26,
+     "cacheRefreshed": true
+    },
+    {
+     "toolsListMs": 186.4,
+     "ms": 1225.8302079999994,
+     "children": 76,
+     "enginesWaitMs": 32,
+     "cacheRefreshed": true
+    },
+    {
+     "toolsListMs": 165.2,
+     "ms": 1196.034832999998,
+     "children": 75,
+     "enginesWaitMs": 28,
+     "cacheRefreshed": true
+    },
+    {
+     "toolsListMs": 175,
+     "ms": 1133.9926660000056,
+     "children": 74,
+     "enginesWaitMs": 31,
+     "cacheRefreshed": true
+    },
+    {
+     "toolsListMs": 166.4,
+     "ms": 1157.466791999992,
+     "children": 75,
+     "enginesWaitMs": 27,
+     "cacheRefreshed": true
+    },
+    {
+     "toolsListMs": 173.3,
+     "ms": 1092.6087499999994,
+     "children": 74,
+     "enginesWaitMs": 32,
+     "cacheRefreshed": true
+    },
+    {
+     "toolsListMs": 165.8,
+     "ms": 1400.1189580000064,
+     "children": 79,
+     "enginesWaitMs": 28,
+     "cacheRefreshed": true
+    }
+   ]
+  }
+ }
+}

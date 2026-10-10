@@ -17,7 +17,7 @@ import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { discoverExtensions } from './browser-discovery.mjs';
-import { createSurfaceCache, refreshAfterInitialize } from './surface-cache.mjs';
+import { createSurfaceCache, refreshAfterFirstCall } from './surface-cache.mjs';
 import { createRelay } from './relay.mjs';
 import { createAppHealthHelper, diagnoseReadFailure } from './read-failure.mjs';
 import { loadFlowRules } from './flow-rules.mjs';
@@ -583,7 +583,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   const s = resolveServer();
   if (s.error) fail(s.error);
   if (!existsSync(s.command)) fail(`server runtime missing: ${s.command}`);
-  let surfaceCache, child, childClosed, stopObservingInitialization, relay;
+  let surfaceCache, child, childClosed, stopObservingFirstCall, relay;
   let stoppingForReceipt = false;
   let terminating = false;
   function startEngine() {
@@ -593,10 +593,10 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     trace?.('engine-started', { pid: current.pid });
     childClosed = new Promise(resolve => current.once('close', (code, signal) => resolve({ code, signal })));
     current.on('error', err => fail(`could not start server: ${err.message}`));
-    stopObservingInitialization = refreshAfterInitialize(current.stdout, surfaceCache);
+    stopObservingFirstCall = refreshAfterFirstCall(current.stdout, surfaceCache);
     current.on('close', async code => {
       if (current !== child || stoppingForReceipt) return;
-      stopObservingInitialization(); await surfaceCache?.close();
+      stopObservingFirstCall(); await surfaceCache?.close();
       await stopHelpers(); await appHealth.close(); await relay.close(); process.exit(code ?? 0);
     });
     terminating = false; stoppingForReceipt = false;
@@ -670,7 +670,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     beginStop: () => { stoppingForReceipt = true; },
     stopEngine: async () => {
       const engine = await collectOwnedEngine({ child, closed: childClosed });
-      stopObservingInitialization(); await surfaceCache?.close();
+      stopObservingFirstCall(); await surfaceCache?.close();
       await stopHelpers();
       return engine;
     },
