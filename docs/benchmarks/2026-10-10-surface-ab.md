@@ -9,6 +9,11 @@ extension connected. Every run is in [`2026-10-10-surface-ab.json`](2026-10-10-s
 The first attempt stopped at helium-form setup on all six sides: the fixture's control file made
 Helium's setup time out (`9aa125c`).
 
+Single helium-form runs from 14:10 to 14:36 UTC were published late
+([raw](2026-10-10-helium-form-singles.json)), and their results files don't say which side they
+ran. Of the 7, 4 passed in 23.8 to 33.7 s with 6 to 8 turns. Setup timed out in 2. After the
+last, the server had no submission with all five values.
+
 In the rerun, the accessibility side passed 21/21, in 634 s and 176 turns. The extension side ran 8
 runs and passed 2. In 3 runs the engine asked to let browser use reach the benchmark's own page
 (`http://127.0.0.1:…`), and the benchmark's approver declined the prompt, as it does for anything off

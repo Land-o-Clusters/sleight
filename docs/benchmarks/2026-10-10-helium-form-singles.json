@@ -1,0 +1,501 @@
+{
+ "note": "Single sleight helium-form runs on 2026-10-10 between the surface comparison attempts, published late. The files do not record the surface.",
+ "runs": {
+  "2026-10-10T14-10-16-996Z": {
+   "stamp": "2026-10-10T14-10-16-996Z",
+   "suite": "real",
+   "surfaces": "computer",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 9.17,
+      "group": {
+       "claude": 1.55,
+       "engine node": 0.58,
+       "mcp@latest": 0.47,
+       "node": 0.18,
+       "osascript": 0.06,
+       "codex": 0.46,
+       "(bash)": 0.01,
+       "(vibe-island-brid)": 0.01
+      },
+      "outside": {
+       "Helium": 1,
+       "engine helper": 4.85
+      }
+     },
+     "timing": {
+      "totalMs": 22538,
+      "modelMs": 13190,
+      "calls": 6,
+      "refused": 0,
+      "toolMs": 6823,
+      "engineMs": 6805,
+      "relayMs": 18,
+      "localMs": 0,
+      "guardReads": 7,
+      "guardReadMs": 1384.3583780000022,
+      "guardReadFailures": 0,
+      "otherMs": 2525
+     },
+     "passed": true,
+     "seconds": 23.8,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 7,
+     "costUsd": 0.0181302,
+     "reportedCostUsd": 0.6512803999999999,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 14,
+      "cacheRead": 369642,
+      "cacheWrite": 66922,
+      "output": 2096
+     },
+     "exitCode": 0,
+     "answer": "The form is submitted. The Helium window \"Form 001fb69a\" now shows a \"Submitted\" heading, and I left it open. I only touched that window. I did not read, list, switch to or close any other tabs or windows.\n\nThe entries were Name \"Morgan Reed\", Email \"morgan@example.test\", Team \"Design\", \"Send update"
+    }
+   ]
+  },
+  "2026-10-10T14-11-15-505Z": {
+   "stamp": "2026-10-10T14-11-15-505Z",
+   "suite": "real",
+   "surfaces": "computer",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 11.93,
+      "group": {
+       "claude": 1.83,
+       "engine node": 0.68,
+       "mcp@latest": 0.54,
+       "node": 0.19,
+       "(bash)": 0.02,
+       "Python": 0.05,
+       "osascript": 0.07,
+       "codex": 0.4
+      },
+      "outside": {
+       "Helium": 1.25,
+       "engine helper": 6.9
+      }
+     },
+     "timing": {
+      "totalMs": 32391,
+      "modelMs": 21679,
+      "calls": 7,
+      "refused": 0,
+      "toolMs": 8653,
+      "engineMs": 8625,
+      "relayMs": 28,
+      "localMs": 0,
+      "guardReads": 10,
+      "guardReadMs": 2745.133458000004,
+      "guardReadFailures": 0,
+      "otherMs": 2059
+     },
+     "passed": true,
+     "seconds": 33.7,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 8,
+     "costUsd": 0.0121777,
+     "reportedCostUsd": 0.38999,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 16,
+      "cacheRead": 485590,
+      "cacheWrite": 27021,
+      "output": 3832
+     },
+     "exitCode": 0,
+     "answer": "The form is submitted. The Helium window at http://127.0.0.1:54794/77a4e8a8/ now shows a \"Submitted\" heading, and I left it open.\n\nFilled values: Name \"Morgan Reed\", Email \"morgan@example.test\", Team \"Design\", \"Send updates\" checked, and Code \"77a4e8a8\". I did not touch any other tabs or windows.\n\nO"
+    }
+   ]
+  },
+  "2026-10-10T14-11-53-491Z": {
+   "stamp": "2026-10-10T14-11-53-491Z",
+   "suite": "real",
+   "surfaces": "computer",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "passed": false,
+     "reason": "Fixture setup readiness timed out",
+     "cleanupError": "Owned fixture window cleanup unconfirmed",
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true
+      }
+     ],
+     "fixtureDir": "<temp>/sleight-bench/2026-10-10T14-11-53-491Z/sleight-helium-form-1",
+     "models": []
+    }
+   ]
+  },
+  "2026-10-10T14-13-46-491Z": {
+   "stamp": "2026-10-10T14-13-46-491Z",
+   "suite": "real",
+   "surfaces": "computer",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "passed": false,
+     "reason": "Fixture setup readiness timed out",
+     "cleanupError": "Owned fixture window cleanup unconfirmed",
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true
+      }
+     ],
+     "fixtureDir": "<temp>/sleight-bench/2026-10-10T14-13-46-491Z/sleight-helium-form-1",
+     "models": []
+    }
+   ]
+  },
+  "2026-10-10T14-15-01-834Z": {
+   "stamp": "2026-10-10T14-15-01-834Z",
+   "suite": "real",
+   "surfaces": "computer",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 9.87,
+      "group": {
+       "claude": 1.59,
+       "engine node": 0.6,
+       "mcp@latest": 0.5,
+       "node": 0.19,
+       "(Python)": 0.06,
+       "(git)": 0.01,
+       "osascript": 0.07,
+       "codex": 0.34,
+       "(bash)": 0.01,
+       "(vibe-island-brid)": 0.01,
+       "(sh)": 0.01,
+       "(AgentPeekBridge)": 0.01
+      },
+      "outside": {
+       "Helium": 0.95,
+       "engine helper": 5.52
+      }
+     },
+     "timing": {
+      "totalMs": 24160,
+      "modelMs": 15722,
+      "calls": 5,
+      "refused": 0,
+      "toolMs": 6592,
+      "engineMs": 6575,
+      "relayMs": 17,
+      "localMs": 0,
+      "guardReads": 7,
+      "guardReadMs": 1943.5069159999966,
+      "guardReadFailures": 0,
+      "otherMs": 1846
+     },
+     "passed": true,
+     "seconds": 25.5,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 6,
+     "costUsd": 0.0096851,
+     "reportedCostUsd": 0.3176538,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 12,
+      "cacheRead": 348749,
+      "cacheWrite": 24107,
+      "output": 2750
+     },
+     "exitCode": 0,
+     "answer": "The form is submitted. The Helium window \"Form f536cf7e\" now shows a \"Submitted\" confirmation.\n\nI filled in Name \"Morgan Reed\", Email \"morgan@example.test\", Team \"Design\", ticked \"Send updates\", and entered Code \"f536cf7e\" before submitting. I only touched that one window and left it open for cleanu"
+    }
+   ]
+  },
+  "2026-10-10T14-16-30-144Z": {
+   "stamp": "2026-10-10T14-16-30-144Z",
+   "suite": "real",
+   "surfaces": "computer",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 7.14,
+      "group": {
+       "claude": 1.46,
+       "engine node": 0.52,
+       "mcp@latest": 0.51,
+       "node": 0.19,
+       "Python": 0.06,
+       "(git)": 0.02,
+       "codex": 0.34,
+       "osascript": 0.1
+      },
+      "outside": {
+       "Helium": 0.07,
+       "engine helper": 3.87
+      }
+     },
+     "timing": {
+      "totalMs": 27837,
+      "modelMs": 25957,
+      "calls": 2,
+      "refused": 0,
+      "toolMs": 335,
+      "engineMs": 214,
+      "relayMs": 3,
+      "localMs": 118,
+      "otherMs": 1545
+     },
+     "passed": false,
+     "reason": "server has no submission with all five expected values",
+     "seconds": 29.1,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 3,
+     "costUsd": 0.0070977,
+     "reportedCostUsd": 0.2529824,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 6,
+      "cacheRead": 154632,
+      "cacheWrite": 20934,
+      "output": 2728
+     },
+     "exitCode": 0,
+     "answer": "I haven't filled or submitted anything yet. I can't target the Helium window without its exact title, and the only other way in is reading Helium's full accessibility tree, which would expose the other windows you asked me to leave alone.\n\nHelium is running, but the browser inventory is empty and `s"
+    }
+   ]
+  },
+  "2026-10-10T14-36-31-458Z": {
+   "stamp": "2026-10-10T14-36-31-458Z",
+   "suite": "real",
+   "surfaces": "browser,computer",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 10.9,
+      "group": {
+       "claude": 1.79,
+       "engine node": 1,
+       "mcp@latest": 0.59,
+       "node": 0.23,
+       "(bash)": 0.02,
+       "<defunct>": 0,
+       "bash": 0.02,
+       "(vibe-island-brid)": 0.01,
+       "(python3)": 0.01,
+       "(grep)": 0,
+       "codex": 0.27,
+       "osascript": 0.09,
+       "(AgentPeekBridge)": 0.01
+      },
+      "outside": {
+       "Helium": 1.11,
+       "engine helper": 5.75
+      }
+     },
+     "timing": {
+      "totalMs": 30471,
+      "modelMs": 20899,
+      "calls": 7,
+      "refused": 0,
+      "toolMs": 7474,
+      "engineMs": 7455,
+      "relayMs": 19,
+      "localMs": 0,
+      "guardReads": 8,
+      "guardReadMs": 2005.3457089999974,
+      "guardReadFailures": 0,
+      "otherMs": 2098
+     },
+     "passed": true,
+     "seconds": 31.9,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 8,
+     "costUsd": 0.010143,
+     "reportedCostUsd": 0.31722720000000004,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 16,
+      "cacheRead": 442456,
+      "cacheWrite": 19364,
+      "output": 3688
+     },
+     "exitCode": 0,
+     "answer": "The form is submitted: the page now reads \"Submitted\". The Helium window for 127.0.0.1:60027/0ccea503/ is still open.\n\nFilled values: Name \"Morgan Reed\", Email \"morgan@example.test\", Team \"Design\", \"Send updates\" checked, Code \"0ccea503\".\n\nTwo things to know:\n- I couldn't target Helium through the b"
+    }
+   ]
+  }
+ }
+}
