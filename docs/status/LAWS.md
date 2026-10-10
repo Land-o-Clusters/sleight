@@ -30,6 +30,11 @@ belong in [STATE.md](STATE.md).
   four-model comparison in `docs/benchmark.md`). Passes before 2026-10-10 ran on Sonnet.
 - Codex runs on gpt-6.1-sol (owner, 2026-10-04), except deep performance tuning in the code, which
   may run on gpt-6-astra (owner, 2026-10-07).
+- Shopping scenarios run two ways (owner, 2026-10-10): a local shop page that copies a retailer's
+  flow for the head-to-head, and real retailer sites as one-run smoke tasks that stop before
+  checkout, decline non-essential cookies and stop at any CAPTCHA. CPU comparisons publish two arm
+  setups: clean arms without the owner's user plugins, and the owner's normal setup. iPhone
+  Mirroring runs only with the owner at the Mac, since it needs their sign-in and focus.
 - The benchmark grows toward the apps people use (owner, 2026-10-09): varied web pages (sheets,
   docs, dense, interactive, collapsible), Microsoft Office (Word, Excel, PowerPoint), and mail
   apps, where tasks only navigate and never send. Mimestream runs on the owner's own Gmail and only
@@ -68,7 +73,8 @@ belong in [STATE.md](STATE.md).
 - Apps get approved without a person at the moment of use only two ways: the benchmark's allowlist
   (Calculator, TextEdit, Chess, and Simulator or DeviceHub since 2026-10-07, by name or bundle ID) in benchmark runs,
   plus Safari, Preview, Finder and Helium for the real-use tasks (owner, 2026-10-08) and Word,
-  Excel, PowerPoint, Mail and Mimestream for them too (owner, 2026-10-09), and the repo's own
+  Excel, PowerPoint, Mail and Mimestream for them too (owner, 2026-10-09), VS Code, Cursor, Firefox,
+  Slack, Discord and WhatsApp for them too (owner, 2026-10-10, chat apps open and read only), and the repo's own
   hang fixture (`org.sleight.reliability-fixture`, owner, 2026-10-08) in its probe, browser-extension access to
   the benchmark's own local pages on `127.0.0.1` (owner, 2026-10-10), and a list the user writes in
   a file outside any project, read by sleight in every session, headless or not (owner, 2026-10-04).

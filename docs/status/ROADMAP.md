@@ -131,6 +131,17 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
    stopped. Replay from the desktop app is in review
    (`codex/replay-desktop`).
 
+## 5b. Before this release (owner, 2026-10-10)
+
+1. Match and beat Codex in the head-to-head on time, turns and own CPU. The `let app` failure and the
+   lease refusals are fixed (`80b5abc`), and the Save-panel lines are next.
+2. A CPU comparison on a quiet box, with clean arms and the owner's normal setup, both published.
+3. Shopping tasks: a local shop page (ZIP store lookup, search, add 3 items to cart) in both
+   browsers, and one-run real-site smoke tasks.
+4. Electron and Gecko: tasks for VS Code, Cursor, Firefox, and read-only Slack, Discord and
+   WhatsApp. iPhone Mirroring with the owner at the Mac.
+5. A head-to-head with LCU again after these are merged.
+
 ## 6. Features after replay
 
 When a competing plugin is released (the owner expects one, 2026-10-10), sleight answers with a same-day
