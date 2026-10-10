@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
-import { GUARD_END, GUARD_MARK, guardedCode, hasIdentifier, hasLabel, readCode, windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
+import { GUARD_END, GUARD_MARK, guardedCode, hasIdentifier, hasLabel, readCode, windowFromText, windowMatches } from '../plugins/sleight/lib/document-scope.mjs';
 
 test('headers require one exact identity, including a document URL', () => {
   assert.deepEqual(windowFromText('Window: "", App: Chess.\n0 standard window'), { title: '', app: 'Chess', url: null });
@@ -9,6 +9,11 @@ test('headers require one exact identity, including a document URL', () => {
   assert.deepEqual(windowFromText('Window: "a.txt", App: TextEdit.\n0 standard window a.txt, URL: file:///tmp/a.txt, Secondary Actions: Raise\n\t1 text entry area'), { title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' });
   assert.equal(windowFromText('Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt\nWindow: "b.txt", App: TextEdit\nURL: file:///tmp/b.txt'), undefined);
   assert.equal(windowFromText('Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt\nURL: file:///tmp/b.txt'), undefined);
+  const file = windowFromText('Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt');
+  assert.equal(windowMatches({ title: 'a.txt' }, file), true);
+  assert.equal(windowMatches({ title: 'a.txt', url: 'file:///tmp/a.txt' }, file), true);
+  assert.equal(windowMatches({ title: 'b.txt' }, file), false);
+  assert.equal(windowMatches({ title: 'a.txt', url: 'file:///tmp/b.txt' }, file), false);
 });
 
 test('file-only guard refuses another file while cached read and cancel paths remain usable', async () => {

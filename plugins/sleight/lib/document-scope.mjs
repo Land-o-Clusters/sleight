@@ -78,6 +78,12 @@ export function sameElement(was, now) {
 export const documentKey = window => window && JSON.stringify(window);
 export const documentLabel = window => `${JSON.stringify(window.title)} in ${window.app}${window.url ? ` (${window.url})` : ''}`;
 
+// Title always; URL only when the expected window named one.
+export function windowMatches(expected, observed) {
+  if (!expected || !observed || expected.title !== observed.title) return false;
+  return !expected.url || expected.url === observed.url;
+}
+
 export function isCancelAction(name, args, text = '') {
   if (name === 'pressKey') return /^(?:Escape|esc)$/i.test(args[0]);
   if (name !== 'click' || !Number.isInteger(Number(args[0]))) return false;

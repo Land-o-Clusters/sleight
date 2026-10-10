@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-10",
+  "branch": "codex/routines-demo",
+  "base": "332e3ca",
+  "historicalLogFilesRemoved": true,
+  "logRemovalReason": "Owner review allowed dropping all four large check logs while retaining this result record. Historical outputFile names below identify removed artifacts.",
+  "earlierAttempts": "See the accompanying report; interrupted terminal outcomes remain unknown.",
+  "nativePreflight": {
+    "command": "node bench/routines-demo-check.mjs",
+    "exitCode": 0,
+    "stdout": { "observerCompiled": true, "permissionRequested": false, "listening": false, "trusted": false },
+    "liveDemonstration": false,
+    "sourceState": "Before the final compiler-cancellation and unmatched-menu changes; superseded by the final native preflight below"
+  },
+  "installer": {
+    "command": "node bench/routines-demo-check.mjs --installer",
+    "exitCode": 0,
+    "temporaryHome": true,
+    "printedCompletePlan": true,
+    "previewWrites": false,
+    "simulatedInstallThenRemove": true,
+    "realLaunchctlCalled": false,
+    "intervalSeconds": 900
+  },
+  "focusedTests": { "exitCode": 0, "passed": 48, "failed": 0 },
+  "failedCheck": { "command": "npm run check", "exitCode": 1, "passed": 1142, "failed": 10, "cancelled": 1, "total": 1153, "durationMs": 245436.493708 },
+  "subsequentRuns": [
+    { "command": "node --test tests/background-drag-native.test.mjs", "exitCode": 1, "passed": 0, "failed": 1, "durationMs": 180763.644791, "error": "native fixture compilation timed out after 180 seconds", "context": "Other lanes reported concurrent full suites and extreme host load. Further runs wait for the coordinated check slot." },
+    { "command": "node --test tests/demonstration.test.mjs", "exitCode": 0, "passed": 7, "failed": 0, "durationMs": 3521.418167, "coverage": "compiler cancellation waits for close; mock event recording, permission refusal, optional stdout and interrupted stream" },
+    { "command": "npm run lint:prose", "exitCode": 1, "errors": 1, "files": 71, "error": "CataphoricForecasting: Four wording flags", "correction": "Wording flags in this table (4)" },
+    { "command": "npm run lint:prose", "exitCode": 0, "errors": 0, "warnings": 0, "suggestions": 0, "files": 71 },
+    { "command": "node bench/routines-demo-check.mjs", "exitCode": 0, "sourceState": "Final compiler-cancellation and unmatched-menu changes", "stdout": { "observerCompiled": true, "permissionRequested": false, "listening": false, "trusted": false }, "liveDemonstration": false },
+    { "command": "npm run check", "exitCode": 1, "passed": 1145, "failed": 8, "cancelled": 1, "total": 1154, "durationMs": 324837.462125, "outputFile": "2026-10-10-routines-demo-check-retry-failed.log", "context": "Other chats restarted full suites concurrently after the shared hold cleared. Native fixture compilation and short process deadlines failed. One Ctrl-C through the retained terminal collected exit 1; validation and mod checks were not reached. Receipt-review coordinates the next serialized slot." },
+    { "command": "node --test tests/clipboard-lock.test.mjs", "exitCode": 0, "passed": 2, "failed": 0, "durationMs": 156.428417, "context": "Focused retry before fixture correction. The full-suite failure was intermittent; another lane reproduced it in isolation." },
+    { "command": "node --test tests/clipboard-lock.test.mjs", "exitCode": 0, "passed": 2, "failed": 0, "durationMs": 264.426459, "context": "Retained the fixture transaction owner until process exit to prevent garbage collection from releasing its SQLite transaction. Assertions and deadlines are unchanged; production clipboard code is untouched." },
+    { "command": "node --test tests/owned-group.test.mjs tests/routines.test.mjs", "exitCode": 1, "passed": 11, "failed": 2, "context": "Regression before cleanup correction: missing group collector and routine released its lock after unconfirmed relay cleanup." },
+    { "command": "node --test tests/owned-group.test.mjs tests/routines.test.mjs tests/demonstration.test.mjs tests/replay.test.mjs", "exitCode": 0, "passed": 53, "failed": 0, "durationMs": 228.122334, "context": "Final review found direct-child close did not prove descendant collection. Compiler cache and routine lock now remain when group cleanup is unconfirmed; relay close awaits child and owned group collection." },
+    { "command": "node bench/routines-demo-check.mjs", "exitCode": 0, "sourceState": "Final owned-process-group collection changes", "stdout": { "observerCompiled": true, "permissionRequested": false, "listening": false, "trusted": false }, "liveDemonstration": false },
+    { "command": "npm run check", "exitCode": 1, "passed": 1146, "failed": 0, "cancelled": 6, "total": 1152, "durationMs": 48225.65175, "outputFile": "2026-10-10-routines-demo-check-interrupted.log", "context": "Interrupted once through the retained terminal after review found unresolved RPCs on relay exit. Collected before editing that code; no full-suite pass claimed." },
+    { "command": "node --test tests/owned-group.test.mjs", "exitCode": 1, "passed": 3, "failed": 1, "durationMs": 286.1065, "context": "Pending initialization did not settle when the relay exited, reproducing the final review finding." },
+    { "command": "node --test tests/owned-group.test.mjs tests/routines.test.mjs tests/demonstration.test.mjs tests/replay.test.mjs", "exitCode": 0, "passed": 54, "failed": 0, "durationMs": 438.801625, "context": "Relay exit rejects pending initialization and tool calls after collection, allowing routine logging and stop handling." },
+    { "command": "npm run check", "exitCode": 0, "passed": 1161, "failed": 0, "cancelled": 0, "total": 1161, "durationMs": 158992.9845, "manifestValidations": 2, "modPassed": 11, "modFailed": 0, "outputFile": "2026-10-10-routines-demo-check-passed-excerpt.log", "outputComplete": false, "context": "Final reviewed code, serialized after TextEdit released its slot. A polling call was interrupted by the conversation interruption, losing an intermediate output chunk. The original terminal was retained and its final totals, both validations, mod results and exit 0 were collected after resume. The saved excerpt marks the gap." }
+  ],
+  "finalGates": { "check": 0, "lintProse": 0 },
+  "finalReview": "No remaining blocker in the reported cleanup and pending-RPC fixes; read-only source review. Native demonstration remains unverified.",
+  "verificationQueue": {
+    "holdObserved": "2026-10-10T06:15:30Z",
+    "reason": "Shared Puddle Spend gate/load hold; load reported as 204 by sleight-arch",
+    "clearance": "load under 20 or Puddle architect clearance",
+    "holdCleared": "User reported the timed window ended; verified hold absent before taking the routines slot after real-use collected its passing check",
+    "order": ["receipt-review", "TextEdit", "routines", "waits-targeting", "footprint-parity", "verified-results", "simulation-savelock"],
+    "liveLock": "Owning simulation chat reported cleanup complete and lock released",
+    "nativeRebuildPending": false,
+    "receiptStage": "Verification before commit and publication"
+  }
+}

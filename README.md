@@ -172,6 +172,18 @@ The session id is the transcript's file name under `~/.claude/projects`. The she
 the terminal before using an app you haven't pre-approved.
 [How it works](docs/design/replay.md).
 
+Scheduled runs use `sleight-mcp routine add task.json --every 15m`. The command prints the job;
+type `install` in the terminal to install it. `routine list`, `routine run-now <id>` and
+`routine remove <id>` manage it. Removal asks for `remove` in the terminal. Runs wait for two minutes
+idle and require existing app windows. A stop pauses scheduled runs and sends a notification with
+the private log path. Only literal background steps in apps on your preapproved list can run.
+[Routine design and limits](docs/design/routines.md).
+
+To record your own demonstration, open Calculator or TextEdit with one window, then run
+`sleight-mcp record --watch Calculator task.json` (or `TextEdit`). Demonstrate for 60 seconds,
+or press Ctrl-C to finish. It observes without controlling the app and checks existing permissions
+without asking for new ones. [Supported observations and limits](docs/design/replay.md#recording-a-demonstration).
+
 ## Safety
 
 - `js` runs JavaScript as you, so treat it like Bash. Claude Code asks before each call unless you allow

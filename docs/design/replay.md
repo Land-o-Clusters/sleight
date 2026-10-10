@@ -10,6 +10,42 @@ sleight-mcp replay task.json
 sleight-mcp replay task.json --wait-ms 2000
 ```
 
+## Recording a demonstration
+
+`sleight-mcp record --watch Calculator task.json` observes an app already open, for 60 seconds.
+`TextEdit` also works. Add `--seconds 120` for longer, or press Ctrl-C to finish. Recording never
+launches, activates or controls the app. The output uses the same replay version and step shape as
+transcript recording. A filename and interactive terminal stdin are required. A macOS notification
+announces start and stop, including a failed capture. The file must not already exist; the recorder
+writes it with mode 0600 only after complete capture and cleanup. It never prints the script to stdout.
+
+Accessibility notifications supply focused-element changes, menu selections and editable native
+TextEdit values, with focus used only to track the edited field. Consecutive edits in one field become one
+`setValue` with its final text. Recording refuses editable fields that already contain text, and fields
+without an observed empty baseline. Earlier document contents never enter the event stream or script.
+Review the private file before sharing it. Each selector uses a unique AX identifier or label.
+
+Accessibility has no general button-press notification. A listen-only tap observes mouse clicks.
+The click location exists only long enough to hit-test an AX element in the selected app. It never posts
+input. The helper checks `AXIsProcessTrusted` and `CGPreflightListenEventAccess` without prompting,
+and stops if Accessibility or Input Monitoring is missing. It requires one app window and stops on
+a changed window, sheet, dialog, secure field, ambiguous selector or unsupported action. The observer
+is compiled from the included Swift source using the installed Xcode command-line tools.
+An unmatched menu notification stops capture, including when the notification arrives before the
+mouse observation. Compiler cancellation waits for its owned process group before removing the cache.
+Replay starts a detached relay group so it can collect descendants before returning. Terminal SIGINT
+and SIGTERM are forwarded to that group. Listeners are removed after collection.
+Demonstration scripts and routines acquire with `cua.getApp("<bundle id>")`. Replay uses the script's
+recorded window (or an explicit `window` option). A successful acquisition must match that title
+(and URL when present) or the run stops.
+
+Drags, gestures, scrolls, secondary clicks, Calculator typing, keyboard shortcuts and typing into
+web views are not captured. Native text edits depend on the app delivering value notifications;
+unreported programmatic changes cannot be reconstructed. A field without a unique ID or label
+stops the recording. The first version targets Calculator buttons and named TextEdit fields. It does
+not record file dialogs or save workflows. A recorded click says what the user clicked, not whether
+the app completed it. Native observation and replay need separate live qualification.
+
 ## Waiting
 
 The default wait is 5 s per step. `--wait-ms` sets it from 0 to 60,000 ms. Zero disables it. Results and
@@ -24,9 +60,10 @@ the missing element, and no later input may produce the same stop message. A dif
 element, an ambiguous match, complex code, or an unknown window stops at once. This avoids repeating
 input from a partly completed batch. It uses the existing guard.
 
-Replay takes its expected window from its first step's result. That can be a successful acquisition
-or the guard's first missing-element refusal, after proving that input hasn't run. Later refusals
-must match that window. Ordinary results outside replay aren't inspected or cached for it.
+Replay takes its expected window from the script, then from an explicit option, then from its first
+step's result. That first result can be a successful acquisition or the guard's first missing-element
+refusal, after proving that input hasn't run. Later refusals must match that window. Ordinary results
+outside replay aren't inspected or cached for it.
 
 `await app.click({"id":"Seven"}); await app.typeText("2");` can wait for its first button.
 If that button was pressed and a later click stopped, the call never repeats. Loops and computed arguments

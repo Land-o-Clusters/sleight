@@ -24,6 +24,19 @@
 - Return after `setValue` no longer reads the window first, as after typing (owner's call). In a
   Save sheet that read took 1.85 s a save. `SLEIGHT_GUARD=careful` keeps it. The first action of a
   session no longer says "UI unverified (no earlier read)" because of the engine's docs on that call.
+- Scheduled replay routines have `routine add`, `list`, `remove`, `unlock` and `run-now` commands.
+  Installation prints its launchd job and asks in an interactive terminal. Unattended runs require
+  two minutes idle (HID idle first, then the compiled observer). Existing windows and the user's
+  preapproved apps are required. Replay and routines acquire by bundle ID and confirm the window
+  title (and URL when present) before input, including a script's recorded window on plain replay.
+  Literal background steps only. Locks recover when the stored start time no longer matches the
+  live PID. Damaged receipts need `unlock`. A user returning mid-run skips and retries at the next
+  interval. Other stops pause the job and send a notification with the log path.
+- `record --watch Calculator|TextEdit <file.json>` observes a demonstration using Accessibility
+  and a passive click listener, then writes portable replay steps. It checks permissions without asking.
+  A terminal and filename are required, with notifications at start and stop. It refuses existing text
+  and unsupported actions, and preserves existing recordings. Native qualification
+  and limitations are in the [run report](docs/benchmarks/2026-10-10-routines-demo.md).
 - App approval prompts offer "Always allow" (owner's call). It adds the app to your pre-approved
   list with its risk level and the date, so later sessions don't ask. Only your click writes it,
   and terminals and OpenAI's apps never offer it. `sleight-mcp allow list` and

@@ -1,0 +1,221 @@
+{
+  "date": "2026-10-10",
+  "branch": "codex/routines-demo",
+  "base": "e42b9746d73cde9ace3904d86937636bea4b2b49",
+  "reviewedOriginal": "6f3b955e4c23e01f916ca3f31475587f4f5d3e06",
+  "status": "Final bare checks green; live qualification blocked as reported",
+  "attempts": [
+    {
+      "command": "node --test tests/routines-followup.test.mjs",
+      "exitCode": 1,
+      "phase": "red: recorder and confirmation"
+    },
+    {
+      "command": "node --test tests/routines-followup.test.mjs",
+      "exitCode": 0,
+      "phase": "green: recorder and confirmation"
+    },
+    {
+      "command": "node --test tests/routine-runtime.test.mjs",
+      "exitCode": 1,
+      "phase": "red: idle, stale locks, launcher, signals"
+    },
+    {
+      "command": "node --test tests/routine-runtime.test.mjs",
+      "exitCode": 0,
+      "phase": "green: idle, stale locks, launcher, signals"
+    },
+    {
+      "command": "node bench/routines-demo-check.mjs",
+      "exitCode": 0,
+      "phase": "native compile/preflight",
+      "trusted": false,
+      "listening": false
+    },
+    {
+      "command": "node --test tests/routines.test.mjs tests/demonstration.test.mjs tests/routines-followup.test.mjs tests/routine-runtime.test.mjs tests/owned-group.test.mjs tests/replay.test.mjs",
+      "exitCode": 0,
+      "passed": 63
+    },
+    {
+      "command": "node --test tests/routines-followup.test.mjs",
+      "exitCode": 0,
+      "passed": 6
+    },
+    {
+      "command": "node bench/routines-demo-check.mjs --live-preflight",
+      "exitCode": 1,
+      "phase": "live",
+      "error": "shared live lock occupied; no app input",
+      "capture": false,
+      "replay": false,
+      "realRoutineInstallation": false,
+      "idleDelivery": false,
+      "removal": false
+    },
+    {
+      "command": "node bench/routines-demo-check.mjs --installer",
+      "exitCode": 0,
+      "phase": "simulated installer",
+      "realLaunchctl": false
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "phase": "before fresh review"
+    },
+    {
+      "command": "node bench/routines-demo-check.mjs",
+      "exitCode": 0,
+      "phase": "native state probe",
+      "trusted": false,
+      "listening": false,
+      "idleProbeValid": true
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "phase": "wording corrected",
+      "errors": 0,
+      "files": 74
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 1,
+      "phase": "ordinary sandbox",
+      "errors": [
+        "listen EPERM for fixture sockets",
+        "linker cannot write bench/results in linked worktree"
+      ],
+      "counts": "Output truncated; no exact totals claimed."
+    },
+    {
+      "command": "node --test tests/owned-group.test.mjs",
+      "exitCode": 1,
+      "phase": "red: final review relay collection"
+    },
+    {
+      "command": "node --test tests/routine-runtime.test.mjs",
+      "exitCode": 1,
+      "phase": "red: retain unknown launch ownership"
+    },
+    {
+      "command": "node --test tests/owned-group.test.mjs",
+      "exitCode": 1,
+      "phase": "red: uncertainty before pipe closure"
+    },
+    {
+      "command": "node --test tests/owned-group.test.mjs tests/routine-runtime.test.mjs tests/routines.test.mjs tests/routines-followup.test.mjs tests/demonstration.test.mjs tests/replay.test.mjs",
+      "exitCode": 0,
+      "passed": 68,
+      "phase": "green: final review fix pass"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "phase": "after final review fix pass",
+      "errors": 0,
+      "files": 74
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 1,
+      "phase": "host retry",
+      "passed": 1185,
+      "failed": 1,
+      "total": 1186,
+      "error": "app-health helper multiplexing/deadline test failed",
+      "durationMs": 32629.480875
+    },
+    {
+      "command": "node --test tests/read-failure.test.mjs",
+      "exitCode": 0,
+      "phase": "isolated diagnosis",
+      "passed": 8,
+      "context": "Failing helper restart assertion passed unchanged in isolation; test uses a 200ms child-process response deadline. Production and fixture code unchanged."
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 0,
+      "phase": "final host retry",
+      "passed": 1186,
+      "failed": 0,
+      "cancelled": 0,
+      "total": 1186,
+      "durationMs": 42338.504583,
+      "manifestValidations": 2,
+      "modPassed": 26,
+      "modFailed": 0
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "phase": "final report wording",
+      "errors": 1,
+      "error": "NounString in final app-health check result sentence"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "phase": "final",
+      "errors": 0,
+      "files": 74
+    }
+  ],
+  "live": {
+    "qualified": false,
+    "permissionRequested": false,
+    "permissionAnswered": false,
+    "trusted": false,
+    "listening": false,
+    "sharedLockOccupied": true,
+    "calculatorDemonstration": false,
+    "textEditDemonstration": false,
+    "replay": false,
+    "installed": false,
+    "idleRun": false,
+    "removed": false
+  },
+  "rulings": [
+    {
+      "decision": "Use existing window-ID acquisition only, with no name fallback.",
+      "reason": "Name acquisition may launch an app that exits after a running-state preflight.",
+      "cost": "Mac engines that reject window IDs cannot execute these routines; live compatibility is unverified."
+    }
+  ],
+  "evidence": {
+    "largeLogsRemoved": 4,
+    "historicalResultsRetained": true
+  },
+  "review": {
+    "critical": 0,
+    "important": 2,
+    "fixed": [
+      "Begin group collection on relay leader exit before descendant-held pipes close.",
+      "Install lifecycle handlers before ownership callback; collect on receipt failure and propagate uncertainty.",
+      "Retain launch-in-progress ownership across a crash."
+    ],
+    "focusedPassed": 68,
+    "documentationCorrection": "Stale lock recovery note updated to match implemented owner and group checks.",
+    "unqualified": [
+      "window-ID compatibility",
+      "native event and notification delivery",
+      "launchd and background idle lifecycle"
+    ]
+  },
+  "finalGates": {
+    "check": 0,
+    "lintProse": 0,
+    "nodePassed": 1186,
+    "nodeFailed": 0,
+    "modPassed": 26,
+    "modFailed": 0,
+    "manifestValidations": 2
+  },
+  "publication": {
+    "remote": "private",
+    "branch": "codex/routines-demo",
+    "merge": false,
+    "prepared": true
+  }
+}

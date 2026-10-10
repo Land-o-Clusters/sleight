@@ -45,7 +45,7 @@ const use = (id, name, input) => ({ message: { content: [{ type: 'tool_use', id,
 const result = (id, text, isError = false) => ({ message: { content: [{ type: 'tool_result', tool_use_id: id, content: [{ type: 'text', text }], is_error: isError }] } });
 
 test('recording keeps successful calls in order, drops pure reads and errors, and reads numbers from earlier results', () => {
-  const { steps, skipped } = recordSteps([
+  const { steps, skipped, window } = recordSteps([
     use('a', 'js', { code: 'await cua.getState();' }), result('a', '## Computer Use docs'),
     use('b', 'js', { code: 'let app = await cua.getApp("Calculator");', title: 'Open' }), result('b', TREE),
     use('c', 'js', { code: 'await app.click(13);' }), result('c', 'error', true),
@@ -62,6 +62,7 @@ test('recording keeps successful calls in order, drops pure reads and errors, an
   ]);
   assert.equal(steps[0].args.title, 'Open');
   assert.deepEqual(skipped, ['hover']);
+  assert.deepEqual(window, windowFromText(TREE));
 });
 
 function fakeServer(replies) {
@@ -148,6 +149,47 @@ test('a missing element in a changed or unknown window never retries', async () 
     assert.equal(outcome.ok, false);
     assert.equal(attempts, 1);
   }
+});
+
+test('replay confirms the acquired window title and URL, and stops on a mismatch', async () => {
+  const calc = 'Window: "Calculator", App: Calculator.\n0 standard window Calculator';
+  const notes = 'Window: "Notes", App: Calculator.\n0 standard window Notes';
+  const doc = 'Window: "Untitled", App: TextEdit.\nURL: file:///tmp/a.txt';
+  const other = 'Window: "Untitled", App: TextEdit.\nURL: file:///tmp/other.txt';
+  const expected = { title: 'Calculator', app: 'Calculator', url: null };
+  const mismatch = await replayModule.replaySteps(scriptOf(step('let app = await cua.getApp("com.apple.calculator");')), {
+    window: expected, call: async () => ({ result: { content: [{ type: 'text', text: notes }] } }),
+  });
+  assert.equal(mismatch.ok, false);
+  assert.match(mismatch.error, /title or URL/);
+  const match = await replayModule.replaySteps(scriptOf(step('let app = await cua.getApp("com.apple.calculator");')), {
+    window: expected, call: async () => ({ result: { content: [{ type: 'text', text: calc }] } }),
+  });
+  assert.equal(match.ok, true);
+  const urlOk = await replayModule.replaySteps(scriptOf(step('let app = await cua.getApp("com.apple.TextEdit");')), {
+    window: { title: 'Untitled', app: 'TextEdit', url: 'file:///tmp/a.txt' },
+    call: async () => ({ result: { content: [{ type: 'text', text: doc }] } }),
+  });
+  assert.equal(urlOk.ok, true);
+  const urlBad = await replayModule.replaySteps(scriptOf(step('let app = await cua.getApp("com.apple.TextEdit");')), {
+    window: { title: 'Untitled', app: 'TextEdit', url: 'file:///tmp/a.txt' },
+    call: async () => ({ result: { content: [{ type: 'text', text: other }] } }),
+  });
+  assert.equal(urlBad.ok, false);
+  assert.match(urlBad.error, /title or URL/);
+});
+
+test('plain replay uses the script recorded window and stops on a mismatch', async () => {
+  const notes = 'Window: "Notes", App: Calculator.\n0 standard window Notes';
+  const script = scriptOf(step('let app = await cua.getApp("com.apple.calculator");'));
+  script.window = { title: 'Calculator', app: 'Calculator', url: null };
+  const { server } = fakeServer(msg => msg.method === 'tools/call' ? toolReply(msg, notes) : undefined);
+  const mismatch = await replay(script, { server, ask: async () => false });
+  assert.equal(mismatch.ok, false);
+  assert.match(mismatch.error, /title or URL/);
+  const calc = 'Window: "Calculator", App: Calculator.\n0 standard window Calculator';
+  const { server: okServer } = fakeServer(msg => msg.method === 'tools/call' ? toolReply(msg, calc) : undefined);
+  assert.equal((await replay(script, { server: okServer, ask: async () => false })).ok, true);
 });
 
 test('transport and snapshot failures retain the stopped step and never repeat input', async () => {

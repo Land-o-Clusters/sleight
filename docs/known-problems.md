@@ -18,6 +18,19 @@ our own runs. Dates and engine versions are given where they matter.
 
 ## Approvals and guards
 
+- Routines accept only literal app acquisition, named-element clicks, native value replacement,
+  typing and full AX reads. They refuse arbitrary code, shortcuts, paste, drags, focus and positions.
+  Crash locks recover after the former process and its recorded relay groups are gone, or when a
+  live PID's start time no longer matches the stored receipt. Damaged records, leftover launch
+  markers and matching live owners need `routine unlock` (typed `unlock` in a
+  terminal). An active session at start, or a person returning during replay, logs a skip and tries
+  at the next interval. Other stops pause the job until a successful explicit `run-now`.
+- Demonstration recording supports Calculator and TextEdit with one window. It requires existing
+  Accessibility and Input Monitoring access and never requests either permission. It depends on
+  app notifications for native text and menu changes. Drags, gestures, keyboard shortcuts, web-view
+  typing, Calculator typing and file dialogs are unsupported. A field without a unique ID or label
+  stops the capture. The source needs Xcode command-line tools to compile its passive observer.
+  A menu notification that arrives before its matching mouse observation also stops capture.
 - CPU parity with Codex is unverified after the guard setup and native app-probe changes. The
   [no-model profile](benchmarks/2026-10-10-footprint-parity.md) covers two small native trees and
   changing Space visibility. Full AX reads remain, and no large-tree scaling result is available.
@@ -694,6 +707,14 @@ our own runs. Dates and engine versions are given where they matter.
   app for Linux (checked 2026-10-04). We haven't checked the Windows app.
 
 ## Desktop replay
+
+Demonstration and routine qualification remains incomplete: the native preflight on 2026-10-10
+didn't have Accessibility or Input Monitoring access. We didn't request or answer a permission prompt.
+Routines acquire by bundle ID and confirm the window title (and URL when present) from the read
+before input. A name lookup can still launch an app that exited between the native check and
+`getApp`. Title and URL matching is unit-tested. Live Calculator and TextEdit confirmation is not.
+Recording only supports initially empty TextEdit fields, and checks using constructed events do not
+prove app notification delivery. The installer and notification tests use simulated transports.
 
 The pane logs replay step outcomes when the replay tool returns, showing a running entry and Stop
 until then. Desktop button delivery and automatic handoff still need the owner's check in the Code tab.

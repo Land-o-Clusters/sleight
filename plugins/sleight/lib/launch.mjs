@@ -707,6 +707,12 @@ async function replayCommand(args) {
   const [command, source, out] = args;
   if (!source) { process.stderr.write('usage: sleight-mcp record <transcript.jsonl | session id> [out.json]\n       sleight-mcp replay <script.json> [--allow-positions] [--wait-ms 5000]\n'); return 2; }
   if (command === 'record') {
+    if (source === '--watch') {
+      const { recordWatch, watchOptions } = await import('./demonstration.mjs');
+      const options = watchOptions(args.slice(1));
+      await recordWatch({ ...options, log: line => process.stderr.write(`sleight: ${line}\n`) });
+      return 0;
+    }
     const script = record(source);
     const text = JSON.stringify(script, null, 1) + '\n';
     if (out && !out.startsWith('--')) { (await import('node:fs')).writeFileSync(out, text); process.stderr.write(`sleight: ${script.steps.length} steps written to ${out}\n`); }
@@ -753,6 +759,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     try { process.exitCode = allowCommand(process.argv.slice(2)); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   } else if (process.argv.includes('--doctor')) process.exitCode = await doctor();
+  else if (process.argv[2] === 'routine') {
+    try { process.exitCode = await (await import('./routines.mjs')).routineCommand(process.argv.slice(3)); }
+    catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
+  }
   else if (['record', 'replay'].includes(process.argv[2])) {
     try { process.exitCode = await replayCommand(process.argv.slice(2)); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }

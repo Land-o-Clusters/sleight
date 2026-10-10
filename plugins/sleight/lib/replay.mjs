@@ -18,7 +18,8 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PassThrough } from 'node:stream';
-import { documentKey, hasIdentifier, hasLabel, windowFromText } from './document-scope.mjs';
+import { collectOwnedGroup } from './owned-group.mjs';
+import { documentKey, hasIdentifier, hasLabel, windowFromText, windowMatches } from './document-scope.mjs';
 
 const PREFIX = 'mcp__plugin_sleight_computer__';
 const REPLAYED = new Set(['js', 'drag']);
@@ -81,6 +82,7 @@ const textOf = content => Array.isArray(content)
 // Steps from a transcript's parsed lines, in order: the sleight calls that succeeded.
 export function recordSteps(entries) {
   const calls = new Map(), texts = [], steps = [], skipped = [];
+  let window;
   for (const entry of entries) {
     const content = entry?.message?.content;
     if (!Array.isArray(content)) continue;
@@ -91,7 +93,9 @@ export function recordSteps(entries) {
         const call = calls.get(block.tool_use_id);
         calls.delete(block.tool_use_id);
         const priorTexts = texts.slice(0, call.seen);
-        texts.push(textOf(block.content));
+        const text = textOf(block.content);
+        texts.push(text);
+        if (!window) window = windowFromText(text);
         if (block.is_error) continue;
         if (!REPLAYED.has(call.tool)) { skipped.push(call.tool); continue; }
         if (call.tool === 'drag') {
@@ -106,7 +110,7 @@ export function recordSteps(entries) {
       }
     }
   }
-  return { steps, skipped };
+  return { steps, skipped, window };
 }
 
 // A session id resolves to its transcript under ~/.claude/projects.
@@ -123,8 +127,8 @@ export function transcriptPath(source, home = homedir()) {
 export function record(source) {
   const path = transcriptPath(source);
   const entries = readFileSync(path, 'utf8').split('\n').filter(Boolean).map(line => { try { return JSON.parse(line); } catch { return null; } });
-  const { steps, skipped } = recordSteps(entries);
-  return { sleightReplay: 1, recorded: new Date().toISOString(), steps, ...(skipped.length ? { skipped } : {}) };
+  const { steps, skipped, window } = recordSteps(entries);
+  return { sleightReplay: 1, recorded: new Date().toISOString(), steps, ...(skipped.length ? { skipped } : {}), ...(window ? { window } : {}) };
 }
 
 const ACTIONS = new Set(['click', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction', 'paste', 'pressKey', 'typeText']);
@@ -180,7 +184,7 @@ function validateReplay(script, allowPositions, waitMs) {
 const realClock = { now: () => performance.now(), sleep: ms => new Promise(resolve => setTimeout(resolve, ms)) };
 
 // Shared by the CLI and Claude's tool. `call` reaches the ordinary relay; it never bypasses guards.
-export async function replaySteps(script, { call, log = () => {}, allowPositions = false, waitMs = 5000, clock = realClock, cancelled = () => false, window }) {
+export async function replaySteps(script, { call, log = () => {}, allowPositions = false, waitMs = 5000, clock = realClock, cancelled = () => false, window = script.window }) {
   const steps = validateReplay(script, allowPositions, waitMs), waits = [];
   let expectedWindow = window;
   let handle;
@@ -210,6 +214,11 @@ export async function replaySteps(script, { call, log = () => {}, allowPositions
       if (clock.now() - waitingAt >= waitMs) break;
     }
     const failed = reply.error || reply.result?.isError;
+    const observed = windowFromText(textOf(reply.result?.content));
+    if (!failed && acquisition && window && !windowMatches(window, observed)) {
+      waits.push({ step: index + 1, waitedMs });
+      return { ok: false, step: index + 1, error: 'replay stopped: window title or URL does not match', remaining: steps.slice(index), waits, window: textOf(reply.result?.content) };
+    }
     waits.push({ step: index + 1, waitedMs });
     log(`step ${index + 1}/${steps.length} ${step.tool}${step.args?.title ? ` (${step.args.title})` : ''}: ${failed ? 'failed' : 'ok'} in ${Math.round(clock.now() - started)} ms (waited ${waitedMs} ms)`);
     if (failed) {
@@ -237,11 +246,17 @@ export async function replaySteps(script, { call, log = () => {}, allowPositions
 }
 
 // Runs through a fresh stdio relay for the CLI. Claude's tool uses replaySteps in its own session.
-export async function replay(script, { server, ask = async () => false, ...options }) {
+export async function replay(script, { server, ask = async () => false, beforeCall, ...options }) {
   validateReplay(script, options.allowPositions ?? false, options.waitMs ?? 5000);
   if (typeof server === 'function') server = server();
   let nextId = 0;
   const pending = new Map();
+  let connectionError;
+  server.onClose?.(error => {
+    connectionError = error;
+    for (const { reject } of pending.values()) reject(error);
+    pending.clear();
+  });
   server.onMessage(async msg => {
     if (msg.method && msg.id !== undefined) {
       // Approvals go to the person running the replay. Anything else is declined.
@@ -249,16 +264,23 @@ export async function replay(script, { server, ask = async () => false, ...optio
         msg.params?._meta?.connector_id === 'computer-use';
       const yes = isApproval && await ask(msg.params?.message ?? 'Allow Computer Use?');
       server.send({ jsonrpc: '2.0', id: msg.id, result: msg.method === 'elicitation/create' ? { action: yes ? 'accept' : 'decline', content: {} } : {} });
-    } else if (pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
+    } else if (pending.has(msg.id)) { pending.get(msg.id).resolve(msg); pending.delete(msg.id); }
   });
-  const request = (method, params) => new Promise(resolve => { const id = nextId++; pending.set(id, resolve); server.send({ jsonrpc: '2.0', id, method, params }); });
+  const request = (method, params) => new Promise((resolve, reject) => {
+    if (connectionError) { reject(connectionError); return; }
+    const id = nextId++;
+    pending.set(id, { resolve, reject });
+    try { server.send({ jsonrpc: '2.0', id, method, params }); }
+    catch (error) { pending.delete(id); reject(error); }
+  });
   const meta = { 'x-codex-turn-metadata': JSON.stringify({ session_id: randomUUID(), turn_id: randomUUID() }) };
   try {
     await request('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: { form: {} } }, clientInfo: { name: 'sleight-replay', version: '1' } });
     server.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
     await request('tools/list', {});
-    return await replaySteps(script, { ...options, call: (name, args) => request('tools/call', { name, arguments: args, _meta: meta }) });
-  } finally { server.close(); }
+    const call = (name, args) => request('tools/call', { name, arguments: args, _meta: meta });
+    return await replaySteps(script, { ...options, window: options.window ?? script.window, call: beforeCall ? async (name, args) => { await beforeCall(name, args, call); return call(name, args); } : call });
+  } finally { await server.close(); }
 }
 
 export const REPLAY_TOOL = {
@@ -391,15 +413,51 @@ export function replayOptions(args) {
 }
 
 // A relay process over stdio, as Claude Code starts it.
-export function relayServer(bin = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'sleight-mcp')) {
-  const child = spawn(bin, [], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, SLEIGHT_APPROVAL_PROMPT: 'client' } });
+export function relayServer(bin = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'sleight-mcp'),
+  { spawn: spawnChild = spawn, collect = collectOwnedGroup, signals = process, onSpawn = () => {},
+    signalGroup } = {}) {
+  const child = spawnChild(bin, [], { detached: true, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, SLEIGHT_APPROVAL_PROMPT: 'client' } });
+  const forward = name => {
+    if (!child.pid) return;
+    try { if (signalGroup) signalGroup(name); else process.kill(-child.pid, name); }
+    catch (error) { if (error.code !== 'ESRCH') child.stdin.destroy(error); }
+  };
+  const interrupt = () => forward('SIGINT'), terminate = () => forward('SIGTERM');
+  signals.once('SIGINT', interrupt); signals.once('SIGTERM', terminate);
+  let spawnError, collection, resolveClosed, rejectClosed;
+  const completion = new Promise((resolve, reject) => { resolveClosed = resolve; rejectClosed = reject; });
+  const beginCollection = () => {
+    collection ??= Promise.resolve().then(() => collect(child.pid));
+    // Failed collection must settle the caller even if inherited pipes never close.
+    collection.catch(rejectClosed);
+    return collection;
+  };
+  child.on('error', error => { spawnError = error; beginCollection(); });
+  child.stdin.on('error', error => { spawnError ??= error; beginCollection(); });
+  // 'exit' precedes 'close' when descendants retain inherited stdout/stderr.
+  child.once('exit', beginCollection);
+  child.once('close', code => {
+    beginCollection().then(() => {
+      if (spawnError || code !== 0) rejectClosed(spawnError ?? new Error(`replay relay exited ${code}`));
+      else resolveClosed();
+    }, rejectClosed);
+  });
+  const closed = completion.finally(() => {
+    signals.removeListener('SIGINT', interrupt); signals.removeListener('SIGTERM', terminate);
+  });
+  // A child can exit before replay reaches its finally block; retain the rejection for close().
+  closed.catch(() => {});
   const output = createInterface({ input: child.stdout });
   // The relay notes each pre-approved call; once per line is enough here.
   const said = new Set();
   createInterface({ input: child.stderr }).on('line', line => { if (!said.has(line)) { said.add(line); process.stderr.write(line + '\n'); } });
+  // Persist ownership only after cleanup handlers exist. A failed receipt sends no RPC.
+  try { onSpawn(child.pid); }
+  catch (error) { spawnError = error; child.stdin.end(); beginCollection(); }
   return {
-    send: msg => child.stdin.write(JSON.stringify(msg) + '\n'),
+    send: msg => { if (!spawnError) child.stdin.write(JSON.stringify(msg) + '\n'); },
     onMessage: handler => output.on('line', line => { let msg; try { msg = JSON.parse(line); } catch { return; } handler(msg); }),
-    close: () => child.stdin.end(),
+    onClose: handler => { closed.then(() => handler(new Error('replay relay closed before a reply')), handler); },
+    close: () => { child.stdin.end(); return closed; },
   };
 }
