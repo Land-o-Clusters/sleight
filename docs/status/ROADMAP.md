@@ -62,10 +62,10 @@ only with a measured reason. In order:
    owner's call, `SLEIGHT_GUARD=careful` keeps the read). Numbered actions keep it, since it catches
    renumbering. The read after the call stays (study 2026-10-10, 93 runs). Codex makes it after
    527 of 527 acting calls, the lease needed it in 17 of 59 calls, and it costs a mean 1.3 s a run.
-   Next: count a call that only acquires and prints the app as that read (about 0.55 s on runs that
-   have one), let a call's first key, typing or coordinate action reuse Claude's full read when it's
-   under 10 s old (owner's call, 2026-10-10), and cut the guard's reads of Save and Open sheets inside a call (5.2 s a run in
-   textedit-save, trees over 20,000 characters). `.dev/research/2026-10-10-post-call-read.md`.
+   Done 2026-10-10 (`12042e8`): a call that only acquires and prints the app counts as that read,
+   and a call's first key, typing or coordinate action reuses Claude's full read when it's under
+   10 s old (owner's call). Cutting the guard's reads of Save and Open sheets (5.2 s a run in
+   textedit-save) isn't possible on engine 26.1007.21159, which has no partial read (`d008140`).
 3. Stop spawning processes per call. Done for app probes: one long-lived helper per session, about
    33 ms a probe against about 180 ms a spawn (`818f7e7`). Left, from a code audit (2026-10-09, costs
    unmeasured until the footprint run). The pane snapshot decodes a full screenshot in JavaScript
@@ -90,8 +90,12 @@ only with a measured reason. In order:
    the guard's first-action reuse (`a104a0d`): 190 s against 176 s, 44 turns against 45, own CPU
    58.4 s against 47.2 s (`2026-10-10-h2h-footprint-haiku-3.json`). Guard reads were 23.3 s:
    15.0 s in textedit-save's sheet and 7.5 s in Calculator, about 430 ms before each click in a
-   batch, which Codex doesn't read. Next: leave a crowded Save or Open sheet's browser rows out of
-   reads (known problems), and the owner's call on reads before clicks and ID actions in a batch.
+   batch, which Codex doesn't read. Those reads stay, because the engine takes only element numbers
+   (LAWS). At `d575dcf` sleight led on total time and turns (313.3 s and 79 against 340.2 s and 83)
+   and still trailed on own CPU (78.2 s against 54.3 s, with the owner's plugins loaded) and on
+   calculator-click. There, in 2 of 3 runs, the batch result read "no change" after 7 clicks, and
+   Claude read again (`docs/benchmarks/2026-10-10-h2h-afternoon.md`). Next: find that result's
+   cause from full traces. Then run the quiet-box CPU comparison.
 
 Done: the relay "spike" was a timing bug (real relay time is about 0.4 s a pass). Measured and
 dropped: a first-call hint (8/12 runs still called `getState` first), trimming the engine's docs
