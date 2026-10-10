@@ -522,6 +522,9 @@ our own runs. Dates and engine versions are given where they matter.
   to 107 (2026-10-10), the first failed 1 of 3 runs alone and both failed in a full check. At load 23
   the full check passed. Rerun `npm run check` when the load drops before reading a failure there as
   a bug.
+- With every test file running at once, the app-health restart test and the doctor's pipe test each
+  failed one full check at load 9 to 11 (2026-10-10) and passed 5 of 5 and 3 of 3 runs alone.
+  `npm test` now runs 4 files at a time.
 
 ## Hosts and platform
 

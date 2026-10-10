@@ -77,7 +77,10 @@ only with a measured reason. In order:
    click. The engine's description says to send only an acquisition first, and 798 of 799 sessions
    did. Rewriting that sentence is the default since 2026-10-09, after an A/B cut turns from 208 to
    168 in 24 runs a side (`docs/benchmark.md`). Merging later calls (save-then-close, keys after a
-   click) is still open, and so is the cost of guard reads before each numbered action in a batch.
+   click) is still open: wording that asked for it (`SLEIGHT_FIRST_CALL_BATCH=merge`) cut total time
+   20% in 24 runs against 18 on Haiku, but save and close never shared a call, so it stays opt-in
+   (`docs/benchmarks/2026-10-10-merge-ab.md`). The cost of guard reads before each numbered action
+   in a batch is open too.
 5. A release only when the head-to-head shows sleight at Codex's speed and footprint, with the numbers
    published.
 
