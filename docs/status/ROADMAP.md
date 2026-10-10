@@ -140,8 +140,10 @@ owner's call at that moment.
 The owner's rule, in order: do what competitors do but better, then improve where they haven't, then
 build what nobody has. Sources are `.dev/research/2026-10-04-competitors.md` and the README roadmap.
 
-- Separate results for "input sent", "the UI changed" and "saved", with a reason when unverified
-  (`codex/verified-results`, in review).
+- Separate results for "input sent", "the UI changed" and "saved", with a reason when unverified.
+  Merged 2026-10-10 (`f3d2790`, `8646071`), live 6/6 on Calculator and TextEdit. Before
+  release, Chess and Safari-form run with the owner away, and a save named through the panel's own
+  field still reads as "different document".
 - Done 2026-10-10 (`6ca6639`): sleight runs from Cursor or any MCP client, with Claude first in the docs.
 - One lease and consent broker shared by Claude, Codex and other runtimes (without leases, two
   sessions typing into one document doubled the text 5/5).

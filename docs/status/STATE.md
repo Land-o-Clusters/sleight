@@ -3,15 +3,15 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-10 15:15 UTC)
+## Banner (2026-10-10 15:35 UTC)
 
-`codex/verified-results` is squashed onto `pane/auto-mode` as `f3d2790` (pushed to private).
-sleight-arch resolved the relay conflicts with receipts and the guard, and dropped the
-"comparison unavailable" line. `npm run check` exit 0 (1,345/1,346, one skipped), lint exit 0.
-Running now: `vr-live`, the sleight arm on calculator-click, textedit-edit and textedit-save,
-2 runs each, to see the new lines in live replies (`.dev/passes/pass-vr-live.log`). The live lock
-is the runner's. `/tmp/sleight-hold` doesn't exist. Engine 26.1007.21159. Puddle has no window
-announced, and it asks first (memory `shared-mac-quiet-windows`).
+Nothing of sleight's is running. The live lock is free, `/tmp/sleight-hold` doesn't exist, and the
+tree is clean at `8646071` on `pane/auto-mode` (pushed to private). `codex/verified-results` is
+merged (`f3d2790`). Its first live run passed 6/6 on calculator-click, textedit-edit and
+textedit-save (`docs/benchmarks/2026-10-10-verified-results-live.md`), and a false "degraded read"
+it showed is fixed (`8646071`). A leftover "Untitled 9" TextEdit window from an earlier failed run
+is still open. Engine 26.1007.21159. Puddle has no window announced, and it asks first (memory
+`shared-mac-quiet-windows`).
 
 **Where work goes.** Work in progress is private between releases (LAWS): `remote.pushDefault
 private` sends pushes to `Land-o-Clusters/sleight-dev`, and a pre-push hook refuses the public repo
