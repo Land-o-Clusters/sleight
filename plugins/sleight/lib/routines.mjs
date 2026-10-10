@@ -27,6 +27,24 @@ export function intervalSeconds(value) {
   return seconds;
 }
 
+// Claude writes object arguments as JavaScript, `{ id: "AllClear" }`, and so do the scripts `record`
+// makes from its sessions, so no recorded script could become a routine (2026-10-10). Quote a bare
+// key after { or , outside strings. Values must still be JSON literals.
+function quoteKeys(text) {
+  let out = '', quoted = false, escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) { out += c; if (escaped) escaped = false; else if (c === '\\') escaped = true; else if (c === '"') quoted = false; continue; }
+    if (c === '"') { quoted = true; out += c; continue; }
+    out += c;
+    if (c === '{' || c === ',') {
+      const key = /^(\s*)([A-Za-z_$][\w$]*)(\s*:)/.exec(text.slice(i + 1));
+      if (key) { out += `${key[1]}"${key[2]}"${key[3]}`; i += key[0].length; }
+    }
+  }
+  return out;
+}
+
 // Consume a call's JSON arguments without mistaking punctuation inside strings for syntax.
 function jsonCall(code, start) {
   let quoted = false, escaped = false, depth = 0;
@@ -40,7 +58,7 @@ function jsonCall(code, start) {
     else if (c === '[' || c === '{') depth++;
     else if (c === ']' || c === '}') depth--;
     else if (c === ')' && depth === 0) {
-      return { args: JSON.parse(`[${code.slice(start, i)}]`), end: i + 1 };
+      return { args: JSON.parse(`[${quoteKeys(code.slice(start, i))}]`), end: i + 1 };
     }
   }
   throw new Error('routine call has incomplete JSON arguments');
@@ -50,7 +68,10 @@ function parseRoutine(script) {
   if (script?.sleightReplay !== 1 || !Array.isArray(script.steps) || !script.steps.length || script.allowPositions) throw new Error('routine needs a nonempty replay script without allowPositions');
   const handles = new Map();
   const steps = [];
-  for (const step of script.steps) {
+  for (const [index, step] of script.steps.entries()) {
+    try { parseStep(step); } catch (error) { throw new Error(`routine step ${index + 1}: ${error.message}`); }
+  }
+  function parseStep(step) {
     if (step?.tool !== 'js' || typeof step.args?.code !== 'string' || (step.positions?.length ?? 0)) throw new Error('routine refuses positional steps, drags and non-js tools');
     let code = step.args.code.trim();
     while (code) {
