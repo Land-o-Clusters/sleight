@@ -1,0 +1,47 @@
+{
+  "started": "2026-10-10T02:32:37.914Z",
+  "bank": "/private/tmp/sleight-textedit-fixes-IjdrS1",
+  "plain": false,
+  "legacy": false,
+  "move": true,
+  "orphan": false,
+  "trials": [
+    {
+      "op": "preflight",
+      "result": {
+        "id": 0,
+        "ok": true,
+        "running": true,
+        "foregroundTextEdit": false,
+        "documents": 0
+      }
+    },
+    {
+      "op": "open",
+      "error": "Expected one owned AX window"
+    },
+    {
+      "op": "close",
+      "result": {
+        "id": 2,
+        "ok": true,
+        "closed": true,
+        "foregroundSame": true
+      }
+    }
+  ],
+  "source": {
+    "bench/textedit-fixes.mjs": "76a445fc68f6e745f0396073f933e9d2af028555347baee85b5f2eebad39b28f",
+    "bench/textedit-fixes-fixture.js": "b34f489ad7594118fb836924372bd7072da7ea09fb777e52852dc2a7d1a65fc6",
+    "plugins/sleight/lib/drag.js": "c103eb5fce652a0c0550e7da6db24d3bd71aacd97261b1ee9a56afedec2c1b53"
+  },
+  "documentClosed": true,
+  "error": "Expected one owned AX window",
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixtureCollected": true,
+  "lockReleased": true,
+  "finished": "2026-10-10T02:32:41.728Z"
+}

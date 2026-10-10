@@ -26,6 +26,7 @@ import { createGrantAudit } from './preapproved-audit.mjs';
 import { BLOCKED_APP_TOOL, callBlockedApp, forbiddenTargetsAllowed } from './blocked-apps.mjs';
 import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
 import { probeHelper, staleHelperJobs } from './helper-health.mjs';
+import { runRichTextMove, drainRichTextMoves } from './rich-text-drag.mjs';
 import { replayBridge } from './replay.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
@@ -210,6 +211,9 @@ export async function stopHelpers() {
   // A cancelled drag may start its restoration helper after the child snapshot.
   // The whole operation owns that cleanup, so drain it before the launcher exits.
   await Promise.allSettled([...pendingDrags]);
+  // Keep the recovery supervisor alive across engine EOF or automatic stop. A pending Paste
+  // must never receive restored private data, and an unreceipted write must retain its snapshot.
+  await drainRichTextMoves();
 }
 
 export function askWithDialog(message, sessionScoped, options = {}, launch = execFile) {
@@ -370,7 +374,10 @@ async function performDrag(args, runLocal) {
   const focus = await runLocal('drag-focus.js', { op: 'capture', app: args.app });
   if (!focus.ok) return text(focus.error, true);
   let result;
-  try { result = await runLocal('drag.js', args); }
+  try {
+    result = await runLocal('drag.js', args);
+    if (result.richTextMove) result = await runRichTextMove(args, result.richTextMove, runLocal);
+  }
   catch (e) { result = { ok: false, error: String(e.message || e) }; }
   finally {
     // A completed background or Accessibility attempt never owned focus, including lost text.

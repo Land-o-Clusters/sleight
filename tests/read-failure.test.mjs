@@ -2,6 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import * as module from '../plugins/sleight/lib/read-failure.mjs';
+test('a Save panel without document windows is named before helper or Space advice', async () => {
+  const target = { status: 'responding', windows: 0, savePanelOnly: true, hidden: false, onScreen: 0, allWindows: 1, fullScreenSpace: true };
+  assert.equal(module.classifyReadFailure({ target }), 'app-save-panel');
+  assert.equal(module.offSpace(target), false);
+  const diagnosis = await module.diagnoseReadFailure('TextEdit', undefined, { probeApp: async () => target });
+  assert.equal(diagnosis.kind, 'app-save-panel');
+  const advice = module.readFailureAdvice('TextEdit', diagnosis);
+  assert.match(advice, /Save Panel Accessory View/); assert.match(advice, /Cancel|Escape/); assert.match(advice, /quit and reopen TextEdit/);
+  assert.doesNotMatch(advice, /restart ChatGPT/);
+});
 test('app hang diagnosis requires a fresh successful control read', () => {
   assert.equal(typeof module.classifyReadFailure, 'function');
   assert.equal(module.classifyReadFailure({ target: { status: 'timeout' }, control: { status: 'responding' }, read: { status: 'responding' } }), 'app-hung');

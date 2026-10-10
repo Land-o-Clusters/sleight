@@ -1,0 +1,42 @@
+{
+  "started": "2026-10-10T02:19:56.355Z",
+  "bank": "/private/tmp/sleight-textedit-fixes-RG2aLr",
+  "trials": [
+    {
+      "op": "preflight",
+      "result": {
+        "id": 0,
+        "ok": true,
+        "running": true,
+        "foregroundTextEdit": false
+      }
+    },
+    {
+      "op": "open",
+      "error": "Fixture request timeout"
+    },
+    {
+      "op": "close",
+      "result": {
+        "id": 2,
+        "ok": true,
+        "closed": true,
+        "foregroundSame": true
+      }
+    }
+  ],
+  "source": {
+    "bench/textedit-fixes.mjs": "704daeb4136771e04c3a8f846e42164c5fc3b8b989cb49a84f82ecad2c17422f",
+    "bench/textedit-fixes-fixture.js": "5157b7ef2d7399e7ed178407103d72a00a2e75dade49117cb3cc8ca9796c48e3",
+    "plugins/sleight/lib/drag.js": "56592ccd41a3c307a1f61ab5185dd5826ab92f485b73893a59c8a86296c61284"
+  },
+  "documentClosed": true,
+  "error": "Fixture request timeout",
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixtureCollected": true,
+  "lockReleased": true,
+  "finished": "2026-10-10T02:20:15.523Z"
+}

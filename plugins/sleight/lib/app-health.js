@@ -9,13 +9,13 @@ ObjC.import('CoreGraphics');
 function cgWindows(onScreenOnly) {
   const options = (onScreenOnly ? $.kCGWindowListOptionOnScreenOnly : $.kCGWindowListOptionAll) | $.kCGWindowListExcludeDesktopElements;
   const list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo(options, 0));
-  const pids = [];
+  const windows = [];
   for (let i = 0; i < list.count; i++) {
     const info = ObjC.deepUnwrap(list.objectAtIndex(i));
     const bounds = info.kCGWindowBounds ?? {};
-    if (info.kCGWindowLayer === 0 && (info.kCGWindowAlpha ?? 1) > 0 && bounds.Width >= 100 && bounds.Height >= 100) pids.push(info.kCGWindowOwnerPID);
+    if (info.kCGWindowLayer === 0 && (info.kCGWindowAlpha ?? 1) > 0 && bounds.Width >= 100 && bounds.Height >= 100) windows.push({ pid: info.kCGWindowOwnerPID, savePanel: info.kCGWindowName === 'Save Panel Accessory View' });
   }
-  return pids;
+  return windows;
 }
 
 // Whether the frontmost app's focused window is in full screen, which Split View windows are too.
@@ -34,9 +34,11 @@ function frontFullScreen() {
 // On another Space, an app's windows leave AXWindows too (Calculator, 2026-10-09), so CGWindowList
 // is the only count of them.
 function spaces(pid) {
+  const all = cgWindows(false).filter(w => w.pid === pid);
   return {
-    onScreen: cgWindows(true).filter(owner => owner === pid).length,
-    allWindows: cgWindows(false).filter(owner => owner === pid).length,
+    onScreen: cgWindows(true).filter(w => w.pid === pid).length,
+    allWindows: all.length,
+    onlySavePanel: all.length > 0 && all.every(w => w.savePanel),
     fullScreenSpace: frontFullScreen(),
   };
 }
@@ -103,11 +105,13 @@ function probe(selector) {
   }
   if (!target) return { status: 'absent' };
   const pid = Number(target.processIdentifier), app = $.AXUIElementCreateApplication(pid);
-  const space = { hidden: target.hidden === true, ...spaces(pid) };
+  const { onlySavePanel, ...counts } = spaces(pid);
+  const space = { hidden: target.hidden === true, ...counts };
   if (Number($.AXUIElementSetMessagingTimeout(app, 0.5)) !== 0) return { status: 'unknown', ...space };
   const value = Ref();
   const error = Number($.AXUIElementCopyAttributeValue(app, $('AXWindows'), value));
   if (error !== 0) return { status: error === -25204 ? 'timeout' : error === -25211 ? 'denied' : 'unknown', error, pid, ...space };
   const windows = ObjC.castRefToObject(value[0]);
-  return { status: 'responding', pid, windows: Number(windows.count), minimized: minimizedCount(windows), ...space };
+  return { status: 'responding', pid, windows: Number(windows.count), minimized: minimizedCount(windows), ...space,
+    ...(ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit' && Number(windows.count) === 0 && onlySavePanel ? { savePanelOnly: true } : {}) };
 }

@@ -22,7 +22,7 @@ test('independent coordinators refuse overlap and release without leaking the re
 test('a process exit releases the transaction without stale-lock takeover', async () => {
   const bank = mkdtempSync(join(tmpdir(), 'sleight-clipboard-lock-')), path = join(bank, 'lock.sqlite');
   const contender = createClipboardCoordinator(DatabaseSync, path);
-  const child = spawn(process.execPath, [fileURLToPath(new URL('./fixtures/clipboard-lock.mjs', import.meta.url)), path], { stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, ['--expose-gc', fileURLToPath(new URL('./fixtures/clipboard-lock.mjs', import.meta.url)), path], { stdio: ['pipe', 'pipe', 'pipe'] });
   const closed = once(child, 'close');
   try {
     const [data] = await once(child.stdout, 'data'); assert.match(data.toString(), /ready/);

@@ -457,3 +457,10 @@ test('a covered drag with no selected text presses nothing and points to the eng
   assert.equal(r.ok, false); assert.match(r.error, /Use the engine's app\.drag.*nothing was pressed/);
   assert.equal(h.pidEvents.length, 0); assert.equal(h.events.length, 0); assert.equal(h.activations.length, 0);
 });
+test('a prepared rich paste cannot fall back to pointer input when the native path is unavailable', () => {
+  for (const options of [{ background: false }, { background: true, coveredEnd: true, coveredPid: 9 }]) {
+    const h = harness(options), result = h.run({ windowId: 11, richTextMove: { windowId: 11 } });
+    assert.equal(result.ok, false); assert.match(result.error, /rich|prepared/i);
+    assert.equal(h.activations.length, 0); assert.equal(h.events.length, 0); assert.equal(h.pidEvents.length, 0);
+  }
+});

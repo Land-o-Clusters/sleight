@@ -1769,6 +1769,17 @@ test('a read with an open menu in front says how to close it', async () => {
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: 'Window: "", App: TextEdit.\n0 menu Secondary Actions: Cancel\n\t1 menu item Undo' }] } }); await tick();
   assert.match(h.toClient.find(m => m.id === 1).result.content.at(-1).text, /a menu is open/);
 });
+test('a read with only a native Save accessory panel names it even on an engine error', async () => {
+  for (const rpcError of [false, true]) {
+    const h = harness({ spaceProbe: async () => ({ status: 'responding', windows: 0, savePanelOnly: true }) });
+    h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("TextEdit")' } } }); await tick();
+    h.fromServer({ jsonrpc: '2.0', id: 1, ...(rpcError ? { error: { code: -32000, message: 'noWindowsAvailable' } }
+      : { result: { isError: true, content: [{ type: 'text', text: 'noWindowsAvailable' }] } }) }); await tick(); await tick();
+    const reply = h.toClient.find(m => m.id === 1), text = rpcError ? reply.error.message : reply.result.content.at(-1).text;
+    assert.match(text, /Save Panel Accessory View/); assert.match(text, /quit and reopen TextEdit/);
+    assert.doesNotMatch(text, /restart ChatGPT/);
+  }
+});
 
 test('SLEIGHT_FIRST_CALL_BATCH rewrites only the engine\'s first-call rule, only when it matches exactly', async () => {
   const { batchingDescription } = await import('../plugins/sleight/lib/relay.mjs');

@@ -1,0 +1,200 @@
+{
+  "started": "2026-10-10T02:18:20.429Z",
+  "bank": "/private/tmp/sleight-textedit-fixes-KsWDnL",
+  "trials": [
+    {
+      "op": "preflight",
+      "result": {
+        "id": 0,
+        "ok": true,
+        "running": true,
+        "foregroundTextEdit": false
+      }
+    },
+    {
+      "op": "open",
+      "result": {
+        "id": 1,
+        "ok": true,
+        "text": "alpha beta gamma\n",
+        "selected": "",
+        "foregroundSame": true,
+        "attributedText": "alpha beta gamma\n",
+        "characters": [
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          }
+        ]
+      }
+    },
+    {
+      "op": "attributed-write",
+      "result": {
+        "id": 2,
+        "ok": true,
+        "status": -25201,
+        "text": "alpha beta gamma\n",
+        "selected": "",
+        "foregroundSame": true,
+        "attributedText": "alpha beta gamma\n",
+        "characters": [
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          },
+          {
+            "bold": false,
+            "color": null
+          }
+        ]
+      }
+    },
+    {
+      "op": "close",
+      "result": {
+        "id": 3,
+        "ok": true,
+        "closed": true,
+        "foregroundSame": true
+      }
+    }
+  ],
+  "source": {
+    "bench/textedit-fixes.mjs": "d3c45a9f13ee158c049cc30cce87157064012674225c83fdcf49f23c72be08ff",
+    "bench/textedit-fixes-fixture.js": "ab5a5eb0a62cfea1657144852f1794b2f0f8e31c80b7696dd5b13eb2ae2f7bb1",
+    "plugins/sleight/lib/drag.js": "56592ccd41a3c307a1f61ab5185dd5826ab92f485b73893a59c8a86296c61284"
+  },
+  "documentClosed": true,
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixtureCollected": true,
+  "lockReleased": true,
+  "finished": "2026-10-10T02:18:21.899Z"
+}

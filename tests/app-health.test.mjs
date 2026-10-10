@@ -64,3 +64,13 @@ test('windows are counted on the current Space, leaving out small, transparent a
   assert.equal(probe({ hidden: true }).run('TextEdit').hidden, true);
   assert.equal(probe({ error: -25204, cg: [window(42, false)] }).run('TextEdit').onScreen, 0, 'a timed-out app still reports its Space');
 });
+test('an empty TextEdit with only a Save Panel Accessory View is identified without exposing titles', () => {
+  const panel = window(42, false, { kCGWindowName: 'Save Panel Accessory View' });
+  const result = probe({ count: 0, cg: [panel] }).run('TextEdit');
+  assert.equal(result.savePanelOnly, true);
+  assert.equal(JSON.stringify(result).includes('Save Panel Accessory View'), false);
+  for (const options of [{ count: 1, cg: [panel] }, { count: 0, cg: [panel, window(42, false)] },
+    { count: 0, cg: [window(42, false)] }, { count: 0, cg: [panel], apps: ['com.apple.Preview'] }, { count: 0, cg: [panel], error: -25204 }]) {
+    assert.notEqual(probe(options).run('TextEdit').savePanelOnly, true);
+  }
+});

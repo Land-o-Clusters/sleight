@@ -69,7 +69,7 @@ import { isInventoryRead } from './inventory-read.mjs';
 import { createReadCompactor } from './compact-reads.mjs';
 import { forbiddenTargetWarning, isForbiddenSettingsWindow, refusedApp } from './blocked-apps.mjs';
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
-import { offSpace, offSpaceNote, readFailureAdvice } from './read-failure.mjs';
+import { offSpace, offSpaceNote, readFailureAdvice, savePanelNote } from './read-failure.mjs';
 
 // `app.click(3); …` with no await and more code after it: the call goes on without the action,
 // and a failure then ends the session. A last statement is fine, since the call returns its promise.
@@ -1405,6 +1405,7 @@ export function createRelay({
       });
       return;
     }
+    const panelNote = preHealth.get(msg.id)?.savePanelOnly === true ? savePanelNote() : undefined;
     if (msg.method === undefined && Array.isArray(msg.result?.content)) {
       msg.result.content = stripGuardTiming(msg.result.content, metric => trace('guard-read', { id: msg.id, ...metric }));
     }
@@ -1707,6 +1708,10 @@ export function createRelay({
         // again before the first drag (3/3 textedit-drag runs, 2026-10-08). sleight's descriptions
         // are short, so all but the internal turn_ended load up front, local tools included.
         .map(t => (t.name !== TURN_END_TOOL ? { ...t, _meta: { ...t._meta, 'anthropic/alwaysLoad': true } } : t));
+    }
+    if (panelNote) {
+      if (Array.isArray(msg.result?.content)) msg.result.content.push({ type: 'text', text: panelNote });
+      else if (msg.error && typeof msg.error.message === 'string') msg.error.message += '\n' + panelNote;
     }
     // Last, after every check above has read the full tree.
     if (msg.method === undefined && Array.isArray(msg.result?.content)) {

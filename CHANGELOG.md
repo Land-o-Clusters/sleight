@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Covered TextEdit text moves prepare RTF when the selection and destination have different
+  formatting. They preserve readable clipboard items and formats, with attribute verification
+  before source deletion. Unconfirmed Paste defers restoration until TextEdit quits.
+  A read identifies a possible orphan Save panel when only `Save Panel Accessory View` remains without
+  AX windows. Unit tests pass. Fixed-path live checks are pending a desktop change.
+  [Investigation and every attempt](docs/benchmarks/2026-10-09-textedit-fixes.md).
+
 - Paste keeps the user's clipboard with one helper per session instead of a spawn per paste, and
   reads large clipboards in linear time (a mocked 40 MiB transfer fell from about 5 s to 31 to 88 ms).
   `blocked_app` also refuses a settings window by its Accessibility metadata, so a localized title or

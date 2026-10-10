@@ -114,8 +114,20 @@ our own runs. Dates and engine versions are given where they matter.
   same hang as `setValue` on 2026-10-05. One Shift press and release posted to TextEdit's process after
   the write prevents it: 0 hangs in 10 trials that edited, against 5 in 8 without it, and then 10
   `drag` moves in a row saved with no hang (2026-10-09). We don't know why the event helps, or what
-  held the lock. The move inserts plain text, so a moved word in a rich text document takes the
-  formatting at the drop point, and undoing it takes two Cmd+Z. Since 2026-10-09 it also applies to a
+  held the lock. A bold red word lost both attributes in 1/1 covered RTF trials of the old move.
+  The fix prepares RTF when the selection and destination have different attributes. It checks
+  the pasted attributes before source deletion and preserves readable clipboard formats.
+  Unit tests pass. Its live check is pending because TextEdit moved off the user's full-screen Space. Undoing a
+  completed move still takes two Cmd+Z. [Every attempt](benchmarks/2026-10-09-textedit-fixes.md).
+  If Paste consumption is unconfirmed, the relay retains the original clipboard in memory and
+  keeps its clipboard reservation. It defers restoration until the target process exits, so a
+  pending Paste cannot consume the restored data. Save other work and quit TextEdit to finish
+  that recovery. Graceful relay shutdown waits, but forced process death loses its in-memory
+  snapshot. A clipboard write that fails without a mutation receipt has an uncertain generation.
+  The relay keeps its snapshot and reservation, waiting for either the original bytes or a later
+  explicit Copy. It cannot restore over that uncertain generation. A later copy ends recovery
+  with the new contents intact. These failure paths have unit coverage but have not been exercised live.
+  Since 2026-10-09 it also applies to a
   selection in another app's text area or field, and there it runs first. Safari's web text areas
   ignore Accessibility text writes (1/1), so `drag` falls back to its mouse paths there, as before.
   Other apps' native text views should behave like TextEdit's, but none has been tried. The foreground drag is the last resort. On 2026-10-08 it took the owner's focus mid-sentence
@@ -371,7 +383,11 @@ our own runs. Dates and engine versions are given where they matter.
 - On 2026-10-06 TextEdit timed out every engine read after an AppleScript `close every document
   saving no`. It still answered AppleScript, but its only window was an orphan "Save Panel Accessory
   View" that Accessibility didn't list. The relay's message again named a stuck helper, while
-  `--doctor` passed. Quitting TextEdit fixed it.
+  `--doctor` passed. Quitting TextEdit fixed it. A read now identifies a possible orphan when macOS
+  lists only `Save Panel Accessory View` and TextEdit has zero AX windows. It asks the user to
+  close a visible panel with Cancel or Escape, or save other work and quit and reopen TextEdit
+  if the panel is hidden or will not close. Normal document windows and failed AX reads prevent
+  that diagnosis. Unit tests pass. The temporary-file reproduction and localized titles remain unchecked.
 - In the simulator, Claude's first tap on the Safari field often doesn't focus it, even at the right
   point, and a second tap does (6 of 6 runs on 2026-10-09 with shrunk screenshots). Claude also
   second-guesses the screenshot's scale there, dividing or multiplying its own coordinates.

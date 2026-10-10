@@ -1,0 +1,47 @@
+{
+  "started": "2026-10-10T02:33:48.601Z",
+  "bank": "/private/tmp/sleight-textedit-fixes-le9Rgz",
+  "plain": false,
+  "legacy": false,
+  "move": true,
+  "orphan": false,
+  "trials": [
+    {
+      "op": "preflight",
+      "result": {
+        "id": 0,
+        "ok": true,
+        "running": true,
+        "foregroundTextEdit": false,
+        "documents": 0
+      }
+    },
+    {
+      "op": "open",
+      "error": "Expected one owned AX window: {\"observed\":[{\"axWindows\":0}],\"cg\":[{\"fixture\":true,\"bounds\":{\"X\":152,\"Height\":860,\"Y\":73,\"Width\":610}},{\"fixture\":false,\"bounds\":{\"X\":0,\"Height\":33,\"Y\":0,\"Width\":1512}},{\"fixture\":false,\"bounds\":{\"X\":0,\"Height\":33,\"Y\":0,\"Width\":1512}},{\"fixture\":false,\"bounds\":{\"X\":0,\"Height\":33,\"Y\":0,\"Width\":1512}},{\"fixture\":false,\"bounds\":{\"X\":0,\"Height\":33,\"Y\":0,\"Width\":1512}},{\"fixture\":false,\"bounds\":{\"X\":0,\"Height\":500,\"Y\":482,\"Width\":500}}]}"
+    },
+    {
+      "op": "close",
+      "result": {
+        "id": 2,
+        "ok": true,
+        "closed": true,
+        "foregroundSame": true
+      }
+    }
+  ],
+  "source": {
+    "bench/textedit-fixes.mjs": "76a445fc68f6e745f0396073f933e9d2af028555347baee85b5f2eebad39b28f",
+    "bench/textedit-fixes-fixture.js": "6dc4a053604b23bac6e9b830c528a6045a9c4ecff59b8d993275a5b98415dd69",
+    "plugins/sleight/lib/drag.js": "c103eb5fce652a0c0550e7da6db24d3bd71aacd97261b1ee9a56afedec2c1b53"
+  },
+  "documentClosed": true,
+  "error": "Expected one owned AX window: {\"observed\":[{\"axWindows\":0}],\"cg\":[{\"fixture\":true,\"bounds\":{\"X\":152,\"Height\":860,\"Y\":73,\"Width\":610}},{\"fixture\":false,\"bounds\":{\"X\":0,\"Height\":33,\"Y\":0,\"Width\":1512}},{\"fixture\":false,\"bounds\":{\"X\":0,\"Height\":33,\"Y\":0,\"Width\":1512}},{\"fixture\":false,\"bounds\":{\"X\":0,\"Height\":33,\"Y\":0,\"Width\":1512}},{\"fixture\":false,\"bounds\":{\"X\":0,\"Height\":33,\"Y\":0,\"Width\":1512}},{\"fixture\":false,\"bounds\":{\"X\":0,\"Height\":500,\"Y\":482,\"Width\":500}}]}",
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixtureCollected": true,
+  "lockReleased": true,
+  "finished": "2026-10-10T02:33:50.539Z"
+}
