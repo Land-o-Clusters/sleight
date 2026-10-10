@@ -134,6 +134,14 @@ options. The check is the server-side store and cart. Both the sleight and Codex
 `--runs 1` only. They are not in the default real suite or the head-to-head. Safari only. The check
 is Claude's answer plus a cart-page screenshot. Sign-in and checkout are out of scope. Decline
 non-essential cookies, and stop at a CAPTCHA or bot check.
+### Electron and Firefox
+
+`vscode-edit`, `cursor-edit`, `firefox-form`, `firefox-grid`, `firefox-spa`, `slack-read`,
+`discord-read` and `whatsapp-read` are on `--suite real` (owner, 2026-10-10; chat apps open and
+read only). One engine read of each app, no input, is in
+[2026-10-10-electron-firefox.md](benchmarks/2026-10-10-electron-firefox.md). Slack, Firefox and
+WhatsApp were thin (15, 24 and 19 elements). VS Code and Cursor had no text fields. None of the
+six had button IDs. The tasks are unit-tested. sleight-arch runs them live.
 
 ## Time per run
 

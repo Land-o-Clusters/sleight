@@ -14,6 +14,11 @@
   when that element's line is in the new tree exactly once. It used to stop, and Claude rewrote the
   batch over several calls. A read bound to a name (`const state = await cua.getState(); return
   state;`) now passes as a read instead of being refused.
+- Real-suite tasks for VS Code, Cursor, Firefox, Slack, Discord and WhatsApp (owner, 2026-10-10).
+  `vscode-edit` and `cursor-edit` open a temp file, replace one word and save. Firefox reuses the
+  local form, grid and spa fixtures. Slack, Discord and WhatsApp only open a named chat and
+  report the newest author; published rows keep the Mimestream hash shape, with no message text.
+  Each app is quit only if that run launched it. Unit-tested. Not live-run on this branch.
 - A call that declares `app` itself (`let app = await cua.getApp(…)` with actions after it) no
   longer fails with "Cannot access 'app' before initialization". The guard's setup read `app`
   before that declaration (4 of 29 TextEdit runs on 2026-10-10).

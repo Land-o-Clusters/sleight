@@ -33,6 +33,18 @@ test('failed or missing private answers remain failures with no fabricated answe
   assert.throws(() => privateMailResult(task, {}, {}, { arm: 'lcu', run: 1 }), /PRIVATE_MAIL_RESULT_INVALID/);
 });
 
+test('chat read results hash the author the same way as private mail and drop the name', () => {
+  const task = { id: 'slack-read', privateExpected: () => 'Invented Author' };
+  const result = { passed: true, seconds: 2, out: { result: '{"answer":"Invented Author"}', num_turns: 4 } };
+  const row = privateMailResult(task, {}, result, { arm: 'sleight', run: 1 });
+  assert.equal(row.passed, true);
+  assert.match(row.expectedHash, /^[a-f0-9]{64}$/);
+  assert.equal(row.expectedHash, row.actualHash);
+  assert.equal(JSON.stringify(row).includes('Invented'), false);
+  assert.throws(() => privateMailResult({ ...task, id: 'slack-write' }, {}, result, { arm: 'sleight', run: 1 }),
+    /PRIVATE_MAIL_RESULT_INVALID/);
+});
+
 test('literal quiet grep refuses owner names, addresses and every observed label before publication', t => {
   const dir = mkdtempSync(join(tmpdir(), 'private-mail-results-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

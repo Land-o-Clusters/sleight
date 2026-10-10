@@ -27,11 +27,15 @@ test('benchmark open_file approves only the allowlisted apps', () => {
 });
 test('real tasks approve their apps and exact bundle IDs without widening core approval', () => {
   for (const app of ['Safari', 'com.apple.Safari', 'Preview', 'com.apple.Preview', 'Finder', 'com.apple.finder', 'Helium', 'net.imput.helium',
-    'Microsoft Word', 'Word', 'com.microsoft.Word', 'Microsoft Excel', 'Excel', 'com.microsoft.Excel', 'Microsoft PowerPoint', 'PowerPoint', 'com.microsoft.Powerpoint', 'Mail', 'com.apple.mail', 'Mimestream', 'com.mimestream.Mimestream']) {
+    'Microsoft Word', 'Word', 'com.microsoft.Word', 'Microsoft Excel', 'Excel', 'com.microsoft.Excel', 'Microsoft PowerPoint', 'PowerPoint', 'com.microsoft.Powerpoint', 'Mail', 'com.apple.mail', 'Mimestream', 'com.mimestream.Mimestream',
+    'Visual Studio Code', 'VS Code', 'com.microsoft.VSCode', 'Cursor', 'com.todesktop.230313mzl4w4u92',
+    'Firefox', 'org.mozilla.firefox', 'Slack', 'com.tinyspeck.slackmacgap', 'Discord', 'com.hnc.Discord',
+    'WhatsApp', 'net.whatsapp.WhatsApp']) {
     assert.equal(approve(`Allow Computer Use to use "${app}"?`), null);
     assert.equal(approve(`Allow Computer Use to use "${app}"?`, 'real'), 'accept');
   }
-  for (const app of ['Google Chrome', 'net.imput.helium.copy', 'com.apple.preview', 'com.microsoft.word', 'com.microsoft.Excel.copy', 'Mail copy', 'Mimestream copy', 'com.mimestream.mimestream']) {
+  for (const app of ['Google Chrome', 'net.imput.helium.copy', 'com.apple.preview', 'com.microsoft.word', 'com.microsoft.Excel.copy', 'Mail copy', 'Mimestream copy', 'com.mimestream.mimestream',
+    'Code copy', 'com.microsoft.vscode', 'Slack copy', 'org.mozilla.Firefox']) {
     assert.equal(approve(`Allow Computer Use to use "${app}"?`, 'real'), null);
   }
 });

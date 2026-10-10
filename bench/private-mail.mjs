@@ -2,7 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { renameSync, rmSync, writeFileSync } from 'node:fs';
 
-const ids = new Set(['mimestream-label', 'mimestream-message', 'mimestream-thread', 'mimestream-scroll', 'mimestream-search']);
+const ids = new Set(['mimestream-label', 'mimestream-message', 'mimestream-thread', 'mimestream-scroll', 'mimestream-search',
+  'slack-read', 'discord-read', 'whatsapp-read']);
 
 function answerValue(value) {
   if (typeof value !== 'string') return null;

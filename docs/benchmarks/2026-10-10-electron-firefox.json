@@ -1,0 +1,13 @@
+{
+  "stamp": "2026-10-10",
+  "kind": "engine-tree-counts",
+  "input": false,
+  "apps": [
+    {"app": "VS Code", "bundle": "com.microsoft.VSCode", "wasRunning": false, "launchedByProbe": true, "treeChars": 4130, "elements": 116, "windows": 1, "textFields": 0, "textFieldsLabeled": 0, "buttons": 27, "buttonsWithId": 0, "buttonsWithLabel": 24, "buttonsWithNeither": 3, "readMs": 1934},
+    {"app": "Cursor", "bundle": "com.todesktop.230313mzl4w4u92", "wasRunning": true, "launchedByProbe": false, "treeChars": 6777, "elements": 139, "windows": 1, "textFields": 0, "textFieldsLabeled": 0, "buttons": 34, "buttonsWithId": 0, "buttonsWithLabel": 31, "buttonsWithNeither": 3, "textEntryAreas": 1, "readMs": 446},
+    {"app": "Firefox", "bundle": "org.mozilla.firefox", "wasRunning": false, "launchedByProbe": true, "treeChars": 898, "elements": 24, "windows": 1, "textFields": 0, "textFieldsLabeled": 0, "buttons": 5, "buttonsWithId": 0, "buttonsWithLabel": 2, "buttonsWithNeither": 3, "readMs": 147},
+    {"app": "Slack", "bundle": "com.tinyspeck.slackmacgap", "wasRunning": false, "launchedByProbe": true, "treeChars": 483, "elements": 15, "windows": 1, "textFields": 0, "textFieldsLabeled": 0, "buttons": 3, "buttonsWithId": 0, "buttonsWithLabel": 0, "buttonsWithNeither": 3, "readMs": 914},
+    {"app": "Discord", "bundle": "com.hnc.Discord", "wasRunning": false, "launchedByProbe": true, "treeChars": 11158, "elements": 251, "windows": 1, "textFields": 1, "textFieldsLabeled": 1, "buttons": 46, "buttonsWithId": 0, "buttonsWithLabel": 43, "buttonsWithNeither": 3, "readMs": 594},
+    {"app": "WhatsApp", "bundle": "net.whatsapp.WhatsApp", "wasRunning": false, "launchedByProbe": true, "treeChars": 940, "elements": 19, "windows": 1, "textFields": 0, "textFieldsLabeled": 0, "buttons": 5, "buttonsWithId": 0, "buttonsWithLabel": 2, "buttonsWithNeither": 3, "readMs": 179}
+  ]
+}

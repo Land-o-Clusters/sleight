@@ -457,6 +457,12 @@ our own runs. Dates and engine versions are given where they matter.
 
 ## Specific apps
 
+- Slack, Firefox and WhatsApp expose thin engine trees (2026-10-10, one read each, no input):
+  Slack 15 elements and 483 characters, Firefox 24 / 898, WhatsApp 19 / 940. None of those three
+  had a text field. Slack's 3 buttons had neither IDs nor labels. Discord was not thin (251
+  elements, 1 labeled text field, 46 buttons). VS Code and Cursor had 116 and 139 elements, 0
+  text fields, and no button IDs. Chat tasks keep authors out of published results. Live
+  qualification of the new tasks is unverified.
 - A Save or Open sheet showing a folder with many items reads as a very large tree: 198 file rows
   made one read of TextEdit's Save sheet 57,000 characters (2026-10-10), past Claude Code's tool
   output limit, so Claude saw only a pointer to a file, and every guard read of it took 1.4 to

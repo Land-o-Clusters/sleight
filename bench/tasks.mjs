@@ -138,7 +138,11 @@ export const BENCH_APPS = ['Calculator', 'TextEdit', 'Chess', 'Simulator', 'Devi
   'com.apple.TextEdit', 'com.apple.Chess', 'com.apple.iphonesimulator', 'com.apple.dt.Devices'];
 export const REAL_APPS = ['Safari', 'com.apple.Safari', 'Preview', 'com.apple.Preview', 'Finder', 'com.apple.finder', 'Helium', 'net.imput.helium',
   'Microsoft Word', 'Word', 'com.microsoft.Word', 'Microsoft Excel', 'Excel', 'com.microsoft.Excel',
-  'Microsoft PowerPoint', 'PowerPoint', 'com.microsoft.Powerpoint', 'Mail', 'com.apple.mail', 'Mimestream', 'com.mimestream.Mimestream'];
+  'Microsoft PowerPoint', 'PowerPoint', 'com.microsoft.Powerpoint', 'Mail', 'com.apple.mail', 'Mimestream', 'com.mimestream.Mimestream',
+  // VS Code, Cursor, Firefox, Slack, Discord and WhatsApp (owner, 2026-10-10, chat apps open and read only).
+  'Visual Studio Code', 'VS Code', 'com.microsoft.VSCode', 'Cursor', 'com.todesktop.230313mzl4w4u92',
+  'Firefox', 'org.mozilla.firefox', 'Slack', 'com.tinyspeck.slackmacgap', 'Discord', 'com.hnc.Discord',
+  'WhatsApp', 'net.whatsapp.WhatsApp'];
 
 // simctl from Xcode, even when xcode-select points at the Command Line Tools.
 const XCODE = '/Applications/Xcode.app/Contents/Developer';

@@ -28,6 +28,8 @@ test('suite selection preserves the default tasks and rejects an unknown suite',
     'mail-folder', 'mail-message', 'mail-thread', 'mail-attachment', 'mail-search',
     'mimestream-label', 'mimestream-message', 'mimestream-thread', 'mimestream-scroll', 'mimestream-search',
     'safari-shop', 'helium-shop', 'real-shop-target', 'real-shop-bestbuy',
+    'vscode-edit', 'cursor-edit', 'firefox-form', 'firefox-grid', 'firefox-spa',
+    'slack-read', 'discord-read', 'whatsapp-read',
   ]);
   for (const task of benchmark.getTasks('real')) {
     for (const method of ['prepare', 'setup', 'prompt', 'check', 'cleanup']) {
@@ -37,7 +39,7 @@ test('suite selection preserves the default tasks and rejects an unknown suite',
   assert.throws(() => benchmark.getTasks('other'), /unknown suite/);
 });
 
-for (const id of ['safari-form', 'helium-form']) {
+for (const id of ['safari-form', 'helium-form', 'firefox-form']) {
   test(`${id} checks submitted fields, select and checkbox, ignoring the agent's answer`, async t => {
     const task = getTask(id), ctx = context(t);
     await task.prepare(ctx);
@@ -139,3 +141,17 @@ test('simulator-flow rejects wrong saved text and an unordered or incomplete flo
   assert.notEqual(await task.check(ctx), true);
   assert.match(task.prompt(ctx), /Edit profile/);
 });
+
+for (const id of ['vscode-edit', 'cursor-edit']) {
+  test(`${id} checks the saved file and ignores the agent's answer`, async t => {
+    const task = getTask(id), ctx = context(t);
+    await task.prepare(ctx);
+    assert.match(task.prompt(ctx), /beta/);
+    assert.doesNotMatch(task.prompt(ctx), /open_file|mcp__|getApp/);
+    assert.notEqual(await task.check({ ...ctx, answer: 'alpha delta gamma' }), true);
+    writeFileSync(ctx.document, 'alpha delta gamma\n');
+    assert.equal(await task.check(ctx), true);
+    writeFileSync(ctx.document, 'alpha beta gamma\n');
+    assert.notEqual(await task.check(ctx), true);
+  });
+}

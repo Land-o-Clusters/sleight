@@ -185,7 +185,7 @@ assertShopSmokeRuns(selected, runs);
 if (calculatorGate && (isDryRun || selected.some(task => task.id !== 'calculator-click'))) throw new Error('--calculator-gate requires a live calculator-click pass');
 const privatePass = selected.some(task => task.privateMail);
 if (privatePass && (selected.some(task => !task.privateMail) || armNames.some(name => name !== 'sleight'))) {
-  throw new Error('Mimestream requires a separate sleight-only pass selected with --tasks');
+  throw new Error('Mimestream and chat tasks require a separate sleight-only pass selected with --tasks');
 }
 
 // SLEIGHT_APPROVAL_PROMPT=client keeps approvals going to approve.mjs, even

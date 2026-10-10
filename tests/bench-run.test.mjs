@@ -389,7 +389,7 @@ test('a real run where Codex used a shell or edited a file fails even when its c
 
 test('a private mail pass still refuses the Codex arm', async () => {
   const result = await runner({ arm: 'sleight,codex', privateMail: true });
-  assert.match(result.error?.message ?? '', /Mimestream requires a separate sleight-only pass/);
+  assert.match(result.error?.message ?? '', /Mimestream and chat tasks require a separate sleight-only pass/);
 });
 
 test('a real Safari keyboard tap stops further runs after recording the tap', async () => {
