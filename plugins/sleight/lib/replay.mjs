@@ -196,8 +196,11 @@ export async function replaySteps(script, { call, log = () => {}, allowPositions
       } catch (error) { reply = { error: { message: error.message } }; }
       if (waitingAt !== undefined) waitedMs = Math.round(clock.now() - waitingAt);
       const message = textOf(reply.result?.content);
-      if (!waitMs || !prefix || reply.error || !reply.result?.isError ||
-          !(message === prefix || message.startsWith(prefix + '\n')) || !expectedWindow ||
+      const missing = prefix && !reply.error && reply.result?.isError && (message === prefix || message.startsWith(prefix + '\n'));
+      // The first refused input can supply its own window. Do not insert a read that could
+      // consume the relay's one-call flow exception before an approved identical retry.
+      if (index === 0 && expectedWindow === undefined && missing) expectedWindow = windowFromText(message);
+      if (!waitMs || !missing || !expectedWindow ||
           documentKey(windowFromText(message)) !== documentKey(expectedWindow) || cancelled()) break;
       waitingAt ??= clock.now();
       const remaining = waitMs - (clock.now() - waitingAt);
@@ -279,11 +282,27 @@ export const REPLAY_TOOL = {
 
 // Multiplex the tool's calls into the current relay, preserving its session, guards and prompts.
 // Internal replies return here; elicitation and every other server request still reach Claude.
+// Keep delimiters too: readline would replace CRLF with LF in an otherwise untouched message.
+function messageLines(input, receive) {
+  let pending = '';
+  input.setEncoding('utf8');
+  input.on('data', chunk => {
+    pending += chunk;
+    let end;
+    while ((end = pending.indexOf('\n')) !== -1) {
+      const line = pending.slice(0, end + 1);
+      pending = pending.slice(end + 1);
+      receive(line);
+    }
+  });
+  input.once('end', () => { if (pending) receive(pending); });
+}
+
 export function replayBridge({ input, output, clock = realClock }) {
   const clientIn = new PassThrough(), clientOut = new PassThrough();
-  const internal = new Map(), lists = new Set(), running = new Set();
+  const internal = new Map(), lists = new Map();
   const prefix = `sleight-replay-${randomUUID()}-`;
-  let sequence = 0, active, ended = false, window;
+  let sequence = 0, active, ended = false;
   const write = msg => output.write(JSON.stringify(msg) + '\n');
   const refuse = (id, message) => write({ jsonrpc: '2.0', id, result: { isError: true, content: [{ type: 'text', text: message }] } });
   const request = params => new Promise(resolve => {
@@ -293,38 +312,48 @@ export function replayBridge({ input, output, clock = realClock }) {
     internal.set(id, resolve);
     clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params }) + '\n');
   });
-  createInterface({ input: clientOut }).on('line', line => {
+  messageLines(clientOut, line => {
+    // With no replay or tool-list reply pending, even image payloads pass without inspection.
+    if ((!internal.size && !lists.size) || (!line.includes('\\u') && !line.includes('\\/') &&
+        !(internal.size && line.includes(prefix)) && ![...lists.values()].some(matches => matches.test(line)))) {
+      output.write(line); return;
+    }
     let msg;
-    try { msg = JSON.parse(line); } catch { output.write(line + '\n'); return; }
+    try { msg = JSON.parse(line); } catch { output.write(line); return; }
     if (!msg.method && internal.has(msg.id)) {
-      window = windowFromText(textOf(msg.result?.content));
       if (active?.inFlight === msg.id) active.inFlight = undefined;
       const resolve = internal.get(msg.id); internal.delete(msg.id); resolve(msg); return;
     }
-    if (!msg.method) {
-      if (running.delete(msg.id)) window = windowFromText(textOf(msg.result?.content));
-      if (lists.delete(msg.id) && Array.isArray(msg.result?.tools)) msg.result.tools.push(REPLAY_TOOL);
+    if (!msg.method && lists.delete(msg.id) && Array.isArray(msg.result?.tools)) {
+      msg.result.tools.push(REPLAY_TOOL);
+      write(msg); return;
     }
-    write(msg);
+    output.write(line);
   });
-  createInterface({ input }).on('line', line => {
+  messageLines(input, line => {
+    const toolCall = line.includes('"tools/call"');
+    // Escaped envelope fields are uncommon, but may spell the same methods, names and IDs.
+    if (!line.includes('\\u') && !line.includes('\\/') && !line.includes('"tools/list"') && !(toolCall && (active || line.includes('"replay"'))) &&
+        !(active && line.includes('"notifications/cancelled"'))) {
+      clientIn.write(line); return;
+    }
     let msg;
-    try { msg = JSON.parse(line); } catch { clientIn.write(line + '\n'); return; }
+    try { msg = JSON.parse(line); } catch { clientIn.write(line); return; }
     if (active && msg.method === 'notifications/cancelled' && msg.params?.requestId === active.id) {
       active.cancelled = true;
       if (!active.inFlight) return;
       msg = { ...msg, params: { ...msg.params, requestId: active.inFlight } };
+      clientIn.write(JSON.stringify(msg) + '\n'); return;
     }
     if (msg.method === 'tools/call' && msg.params?.name === 'turn_ended' && active) active.cancelled = true;
     if (msg.method === 'tools/call' && msg.params?.name !== 'turn_ended') {
       if (active) { refuse(msg.id, 'A replay is running. Wait for it to stop before sending another tool call.'); return; }
       if (msg.params?.name === 'replay') {
         if (msg.id === undefined) return;
-        if (running.size) { refuse(msg.id, 'Another tool call is running. Wait before starting replay.'); return; }
         const state = active = { id: msg.id, cancelled: false };
         const args = msg.params.arguments ?? {};
         replaySteps(args.script, {
-          allowPositions: args.allowPositions, waitMs: args.waitMs, clock, window,
+          allowPositions: args.allowPositions, waitMs: args.waitMs, clock,
           cancelled: () => state.cancelled,
           call: (name, arguments_) => request({ name, arguments: arguments_, _meta: msg.params._meta }),
         }).then(result => {
@@ -333,16 +362,21 @@ export function replayBridge({ input, output, clock = realClock }) {
         return;
       }
     }
-    if (msg.method === 'tools/list') lists.add(msg.id);
-    if (msg.method === 'tools/call') running.add(msg.id);
-    clientIn.write(JSON.stringify(msg) + '\n');
-  }).on('close', () => {
+    if (msg.method === 'tools/list' && msg.id !== undefined) {
+      const id = JSON.stringify(msg.id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      lists.set(msg.id, new RegExp(`"id"\\s*:\\s*${id}(?=\\s*[,}])`));
+    }
+    clientIn.write(line);
+  });
+  const close = () => {
+    if (ended) return;
     ended = true;
     if (active) active.cancelled = true;
     for (const resolve of internal.values()) resolve({ error: { message: 'The replay connection closed. Read the window before acting.' } });
     internal.clear();
     clientIn.end();
-  });
+  };
+  input.once('end', close).once('close', close);
   return { clientIn, clientOut };
 }
 
