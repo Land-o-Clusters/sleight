@@ -4,7 +4,7 @@
 // and prints a table.
 //
 //   node bench/run.mjs [--arm sleight|lcu|codex|all|a,b] [--suite default|real] [--tasks id,id] [--runs N] [--model M] [--effort E]
-//     [--codex-model M] [--codex-effort E] [--dry-run] [--setup-only] [--owner-away] [--clean-arms]
+//     [--codex-model M] [--codex-effort E] [--dry-run] [--setup-only] [--owner-away] [--owner-present] [--clean-arms]
 //
 // --clean-arms publishes the CPU comparison without the owner's setup (LAWS, 2026-10-10): the
 // sleight arm runs with strict MCP configuration and empty setting sources, so only sleight's
@@ -68,6 +68,8 @@ function gitRoot(dir) {
 const isDryRun = process.argv.includes('--dry-run');
 const isSetupOnly = process.argv.includes('--setup-only');
 const ownerAway = process.argv.includes('--owner-away');
+const ownerPresent = process.argv.includes('--owner-present');
+if (ownerAway && ownerPresent) throw new Error('--owner-present is the opposite of --owner-away; pass only one');
 const calculatorGate = process.argv.includes('--calculator-gate');
 const cleanArms = process.argv.includes('--clean-arms');
 const suite = option('suite', 'default');
@@ -182,6 +184,7 @@ const wanted = option('tasks', undefined)?.split(',');
 const claudeBin = process.env.CLAUDE_BIN || 'claude';
 const selected = selectSuiteTasks(suiteTasks, wanted);
 assertShopSmokeRuns(selected, runs);
+if (selected.some(task => task.ownerPresent) && !ownerPresent) throw new Error('iPhone Mirroring requires --owner-present');
 if (calculatorGate && (isDryRun || selected.some(task => task.id !== 'calculator-click'))) throw new Error('--calculator-gate requires a live calculator-click pass');
 const privatePass = selected.some(task => task.privateMail);
 if (privatePass && (selected.some(task => !task.privateMail) || armNames.some(name => name !== 'sleight'))) {
@@ -357,7 +360,7 @@ const save = () => {
       terms: realContexts.flatMap(ctx => ctx.privateTask.privateTerms(ctx)) });
     return;
   }
-  const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite, surfaces: realSurfaces, ownerAway } : {}),
+  const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite, surfaces: realSurfaces, ownerAway, ownerPresent } : {}),
     ...(guardedPass && { fixturePolicy: 'retained app observers for every arm', ownerAway }),
     arms: armNames, armMetadata: Object.fromEntries(armNames.filter(name => ARMS[name].generic).map(name => [name, ARMS[name].identity])), model, effort, claude: claudeBin, auth: auth.mode,
     armSetup: cleanArms ? 'clean' : 'normal', ...(codexCleanConfig && { codexConfig: codexCleanConfig }), results,
@@ -428,12 +431,12 @@ pass: for (let run = 1; run <= runs; run++) {
       const nonce = randomBytes(4).toString('hex');
       const dir = join(suite === 'real' ? realpathSync(tmpdir()) : tmpdir(), 'sleight-bench', stamp, `${armName}-${task.id}-${run}`);
       mkdirSync(dir, { recursive: true });
-      const ctx = { dir, nonce, ownerAway, ...(guardedPass && { stopOnAppDialog: true }) };
+      const ctx = { dir, nonce, ownerAway, ownerPresent, ...(guardedPass && { stopOnAppDialog: true }) };
       if (suite === 'real' || task.fixtureLifecycle || guardedPass) {
         if (task.privateMail) assertPrivateClaudePolicy();
         if (task.privateMail) ctx.privateTask = task;
         realContexts.push(ctx);
-        const evidenceDir = task.privateMail ? undefined : join(tmpdir(), 'sleight-real-evidence', stamp, `${armName}-${task.id}-${run}`);
+        const evidenceDir = task.privateMail || task.noScreenshot ? undefined : join(tmpdir(), 'sleight-real-evidence', stamp, `${armName}-${task.id}-${run}`);
         if (evidenceDir) mkdirSync(evidenceDir, { recursive: true, mode: 0o700 });
         let result;
         try { result = await executeRealTask(task, ctx, { dryRun: isDryRun, setupOnly: isSetupOnly, signal: controller.signal,
@@ -451,7 +454,7 @@ pass: for (let run = 1; run <= runs; run++) {
               if (stopWatching) response.appWindows = await stopWatching();
               return response;
             }
-            const response = await runClaude(prompt, ARMS[armName], !task.privateMail && armName === 'sleight' ? { SLEIGHT_TRACE: evidenceDir } : {},
+            const response = await runClaude(prompt, ARMS[armName], !task.privateMail && !task.noScreenshot && armName === 'sleight' ? { SLEIGHT_TRACE: evidenceDir } : {},
               { signal: controller.signal, evidenceDir, ...callbacks, privateMail: task.privateMail,
                 fixtureLifecycle: true, onSpawn: task.privateMail ? undefined : cpu.onSpawn });
             if (!task.privateMail) response.footprint = await cpu.finish();
@@ -470,6 +473,7 @@ pass: for (let run = 1; run <= runs; run++) {
         if (result.forbidden?.length) { result.passed = false; result.reason = `used ${[...new Set(result.forbidden)].join(' and ')}`; }
         if (result.approvalStop) { result.passed = false; result.reason = result.approvalStop; controller.abort(new Error(result.approvalStop)); process.exitCode = 1; }
         const { out, code, forbidden: _forbidden, ...rest } = result;
+        if (task.noScreenshot) { delete rest.screenshot; delete rest.cartShot; }
         results.push(task.privateMail ? privateMailResult(task, ctx, result, { arm: armName, run }) : { arm: armName, task: task.id, run, ...rest,
           ...(isDryRun && ARMS[armName].generic && { command: [claudeBin, ...ARMS[armName].args, '--disallowedTools', OUTSIDE_TOOLS.join(','), '--settings', ARMS[armName].settings] }),
           reason: scrub(result.reason), cleanupError: scrub(result.cleanupError), prompt: scrub(result.prompt),

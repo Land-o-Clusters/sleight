@@ -83,7 +83,7 @@ test('real Simulator cleanup shuts down an owned boot after window failure and p
   for (const bootedByTask of [true, false]) {
     const calls = [];
     const cleanup = runInNewContext(`${source}\nrealTasks.find(task => task.id === 'simulator-flow').cleanup`, {
-      webTasks: [], officeTasks: [], mailTasks: [], mimestreamTasks: [], shopTasks: [], electronTasks: [],
+      webTasks: [], officeTasks: [], mailTasks: [], mimestreamTasks: [], shopTasks: [], electronTasks: [], iphoneTasks: [],
       closeFixtures: async () => { calls.push('close'); throw new Error('close failed'); },
       simctl: (action, udid) => { assert.equal(udid, 'owned-device'); calls.push(action); },
       quitSimApp: async () => calls.push('quit'), checkForm() {}, checkFlow() {}, checkPDF() {},

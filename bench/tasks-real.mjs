@@ -11,6 +11,7 @@ import { mailTasks } from './tasks-mail.mjs';
 import { mimestreamTasks } from './tasks-mimestream.mjs';
 import { shopTasks } from './tasks-shop.mjs';
 import { electronTasks } from './tasks-electron.mjs';
+import { iphoneTasks } from './tasks-iphone.mjs';
 
 async function closePage(ctx) {
   try {
@@ -146,4 +147,5 @@ export const realTasks = [
   ...mimestreamTasks,
   ...shopTasks,
   ...electronTasks,
+  ...iphoneTasks,
 ];

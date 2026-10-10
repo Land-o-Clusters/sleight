@@ -106,7 +106,7 @@ export function selectSuiteTasks(suiteTasks, wanted) {
     if (wanted.some(id => !suiteTasks.some(task => task.id === id))) throw new Error('unknown task in selected suite');
     return selected;
   }
-  return suiteTasks.filter(task => !task.smoke);
+  return suiteTasks.filter(task => !task.smoke && !task.ownerPresent);
 }
 
 export function assertShopSmokeRuns(selected, runs) {

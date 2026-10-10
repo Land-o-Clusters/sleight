@@ -143,6 +143,8 @@ read only). One engine read of each app, no input, is in
 WhatsApp were thin (15, 24 and 19 elements). VS Code and Cursor had no text fields. None of the
 six had button IDs. The tasks are unit-tested. sleight-arch runs them live.
 
+`iphone-mirroring-settings` reports the iOS version from Settings > General > About in iPhone Mirroring. Select it with `--owner-present`. Default passes and the head-to-head skip it. The owner approves the app at the prompt, and published rows keep the answer and timings with no screenshot.
+
 ## Time per run
 
 Each run's result now splits its time. Claude Code reports the time spent in the model API, and

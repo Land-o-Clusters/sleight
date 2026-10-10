@@ -9,6 +9,7 @@
 - `click("Multiply")` with a bare name clicks the one element with that label, or else with that
   ID, as `click({ label })` does. The engine rejects a bare name, and Claude redid a batch over two
   calls when it wrote one.
+- Real-suite task `iphone-mirroring-settings` opens iPhone Mirroring and reads the iOS version from Settings > General > About. The check is that version text. `--owner-present` is required. Default passes and the head-to-head skip it. The owner approves the app at the prompt. It is not on the allowlist. Published rows keep the answer and timings, with no screenshot. Unit-tested. No live run (needs the owner at the Mac).
 - `sleight-mcp setup` (`--dry-run` prints the steps) runs OpenAI's helper installer from
   ChatGPT.app when its status isn't OK. Then it opens the Accessibility and Screen Recording panes
   and runs the doctor. With no Codex plugin under `~/.codex`, sleight starts the engine from

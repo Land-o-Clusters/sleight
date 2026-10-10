@@ -510,3 +510,37 @@ test('default real selection skips shop smoke tasks, and selecting them requires
   const refused = await runner({ suite: 'real', tasks: [shop, smoke], extraArgs: ['--tasks', 'real-shop-target'] });
   assert.match(refused.error?.message ?? '', /runs 1/);
 });
+
+test('default real selection skips iPhone Mirroring, and selecting it requires --owner-present', async () => {
+  const stub = id => ({ id, app: 'Safari', setup() {}, prompt: () => 'task', check: () => true, cleanup() {} });
+  const shop = stub('safari-shop');
+  const iphone = { ...stub('iphone-mirroring-settings'), app: 'iPhone Mirroring', ownerPresent: true, noScreenshot: true };
+  const excluded = await runner({ suite: 'real', tasks: [shop, iphone] });
+  assert.equal(excluded.error, undefined);
+  assert.equal(excluded.calls.filter(call => call === 'real run').length, 3);
+  assert.ok(excluded.saved.at(-1).results.every(row => row.task === 'safari-shop'));
+  const refused = await runner({ suite: 'real', tasks: [shop, iphone], extraArgs: ['--tasks', 'iphone-mirroring-settings'] });
+  assert.match(refused.error?.message ?? '', /owner-present/);
+  const both = await runner({ extraArgs: ['--owner-away', '--owner-present'] });
+  assert.match(both.error?.message ?? '', /owner-present/);
+});
+
+test('iPhone Mirroring published rows keep the answer and timings and omit screenshots', async () => {
+  const iphone = {
+    id: 'iphone-mirroring-settings', app: 'iPhone Mirroring', ownerPresent: true, noScreenshot: true,
+    setup() {}, prompt: () => 'task', check: () => true, cleanup() {},
+  };
+  const result = await runner({
+    suite: 'real', tasks: [iphone], drive: true, extraArgs: ['--owner-present', '--tasks', 'iphone-mirroring-settings'],
+    outcome: { passed: true, screenshot: { bytes: Buffer.alloc(800, 1) }, timing: { modelMs: 1200 } },
+    driverOut: { result: '18.6.2', num_turns: 6 },
+  });
+  assert.equal(result.error, undefined);
+  const row = result.saved.at(-1).results[0];
+  assert.equal(result.saved.at(-1).ownerPresent, true);
+  assert.equal(row.task, 'iphone-mirroring-settings');
+  assert.equal(row.answer, '18.6.2');
+  assert.deepEqual(row.timing, { modelMs: 1200 });
+  assert.equal(row.screenshot, undefined);
+  assert.ok(result.envs.every(env => !env.SLEIGHT_TRACE));
+});

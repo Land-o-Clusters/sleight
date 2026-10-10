@@ -35,7 +35,8 @@ test('real tasks approve their apps and exact bundle IDs without widening core a
     assert.equal(approve(`Allow Computer Use to use "${app}"?`, 'real'), 'accept');
   }
   for (const app of ['Google Chrome', 'net.imput.helium.copy', 'com.apple.preview', 'com.microsoft.word', 'com.microsoft.Excel.copy', 'Mail copy', 'Mimestream copy', 'com.mimestream.mimestream',
-    'Code copy', 'com.microsoft.vscode', 'Slack copy', 'org.mozilla.Firefox']) {
+    'Code copy', 'com.microsoft.vscode', 'Slack copy', 'org.mozilla.Firefox',
+    'iPhone Mirroring', 'com.apple.ScreenContinuity']) {
     assert.equal(approve(`Allow Computer Use to use "${app}"?`, 'real'), null);
   }
 });

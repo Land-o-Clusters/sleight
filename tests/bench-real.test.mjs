@@ -30,6 +30,7 @@ test('suite selection preserves the default tasks and rejects an unknown suite',
     'safari-shop', 'helium-shop', 'real-shop-target', 'real-shop-bestbuy',
     'vscode-edit', 'cursor-edit', 'firefox-form', 'firefox-grid', 'firefox-spa',
     'slack-read', 'discord-read', 'whatsapp-read',
+    'iphone-mirroring-settings',
   ]);
   for (const task of benchmark.getTasks('real')) {
     for (const method of ['prepare', 'setup', 'prompt', 'check', 'cleanup']) {
