@@ -208,6 +208,7 @@ without a previous snapshot reports that the diff is unavailable.
 ```bash
 npm run watch            # check now
 npm run watch:install    # run it every Monday at 9:00 (a launchd job)
+scripts/watch-install.sh --daily   # or every day at 9:00
 npm run watch:remove     # remove the job
 ```
 

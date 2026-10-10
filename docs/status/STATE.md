@@ -151,7 +151,9 @@ Read first: `docs/known-problems.md`, `docs/benchmark.md`, `docs/design/guard-re
 
 ## Machine state outside the repo
 
-- Weekly launchd job `com.landoclusters.sleight-watch` (Mondays 9:00, `scripts/watch.sh`). It saves
+- Daily launchd job `com.landoclusters.sleight-watch` (9:00, `scripts/watch.sh`), daily since
+  2026-10-10 on the owner's OK because a competitor hinted at an engine change; weekly with
+  `npm run watch:install`. It saves
   the engine's API docs (`~/Library/Logs/sleight/engine-api-26.1002.52244.md` is the latest) and
   diffs them on an engine update. Remove with `npm run watch:remove`.
 - `~/Library/Application Support/sleight/preapproved.json` lists Calculator (owner, 2026-10-04) and
