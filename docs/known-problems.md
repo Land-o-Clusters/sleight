@@ -482,17 +482,24 @@ our own runs. Dates and engine versions are given where they matter.
   that diagnosis. It also depends on Screen Recording permission: macOS otherwise omits the CG
   window names used to recognize the panel. Missing names prevent the orphan note. Unit tests pass.
   The temporary-file reproduction and localized titles remain unchecked.
-- simulator-form has failed setup in both Haiku passes since the round-12 fixture code landed
-  (2026-10-10, owner away): once on a launch handoff, once with "readiness unconfirmed" with one
-  DeviceHub process. Cleanup then refused to quit the DeviceHub the run launched ("Launched app
-  identity changed"), the pass stopped, and sleight-arch quit DeviceHub by hand both times. It
-  passed before that code. A brief for the fix is written.
-- DeviceHub replaced its launch process during `simulator-flow` setup on 2026-10-10. Setup and
-  cleanup refused the replacement. The architect quit it manually. Setup now accepts
-  one same-bundle handoff after the recorded PID exits, retains both PIDs, and quits the adopted
-  process. Fake-clock regressions pass, including cancellation during the handoff. The default
-  `simulator-form` uses the same ownership checks. The architect's owner-away rerun remains pending.
-  [The report](benchmarks/2026-10-10-real-use-tasks-12.md) retains the failed run.
+- simulator-form failed setup in both Haiku passes after the round-12 fixture code (2026-10-10,
+  owner away). The first pass stopped on a DeviceHub handoff while the original was still exiting.
+  The second ended "readiness unconfirmed" with one DeviceHub process, which never reported a
+  focused window after `open -g`. Cleanup then refused to quit the launched DeviceHub both times,
+  and sleight-arch quit it by hand. Setup now counts a finished launch with any window as ready,
+  or a finished launch once the simulator has booted, and records which held. Quit names the
+  expected and observed PID and bundle. A process with an empty bundle ID is quit only when it
+  runs from the expected app's own bundle on disk, so a reused PID is never quit. Unit-tested,
+  with no owner-away rerun yet ([round 13](benchmarks/2026-10-10-real-use-tasks-13.md)).
+- DeviceHub replaced its launch process during `simulator-flow` setup on 2026-10-10. Setup now
+  accepts one same-bundle handoff after the recorded PID exits, and cleanup quits only a viewer
+  the run launched. The owner-away rerun is pending
+  ([round 12](benchmarks/2026-10-10-real-use-tasks-12.md)).
+- Writing `launched` into the fixture control file made every Helium setup time out (7 of 7 with
+  the field, 4 of 4 without, 2026-10-10). The Helium helper read the file as text-only values, so
+  a boolean `launched` dropped the whole file and the helper never saw `opened`. Each failed
+  setup left a Form window open. The helper now reads `command` alone, and closes a created window
+  that matches the fixture even when setup times out. Live Helium hasn't run with the fix.
 - In six simulator runs on 2026-10-09 with shrunk screenshots, the first tap missed the Safari
   field and a second tap hit it. Claude also second-guessed the screenshot's scale, dividing
   or multiplying its own coordinates.

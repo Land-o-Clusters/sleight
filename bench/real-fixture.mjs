@@ -60,7 +60,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
       if (!final) { await ctx.beforeFixtureCleanup?.(); ctx.cleanupSignal?.throwIfAborted(); }
       if (!lease.pid) throw new Error('Launched app identity unconfirmed; quit refused');
       const result = await run('/usr/bin/osascript', ['-l', 'JavaScript', script,
-        JSON.stringify({ bundle: request.bundle, mode: 'quit', pid: lease.pid, ...(request.stopOnLiveHold && { stopOnLiveHold: true }) })], {
+        JSON.stringify({ bundle: lease.bundle || request.bundle, mode: 'quit', pid: Number(lease.pid), ...(request.stopOnLiveHold && { stopOnLiveHold: true }) })], {
         signal: final ? undefined : ctx.cleanupSignal, timeoutMs: 35000,
       });
       for (const line of result.stdout?.split('\n') ?? []) {
@@ -72,7 +72,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
     async close() {
       if (completed && untouched(completed)) return;
       if (ctx.cleanupSignal?.aborted) { await lease.dispose(); throw new Error('Fixture cleanup stopped by a permission window'); }
-      writeFileSync(control, JSON.stringify({ command: 'close' }), { mode: 0o600 });
+      writeControl('close');
       let timer;
       const result = await Promise.race([response, new Promise(resolve => { timer = setTimeout(() => {
         controller.abort(); resolve({ error: 'Fixture cleanup timed out', groupClean: false });
@@ -87,13 +87,19 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
     async dispose() { controller.abort(); return (await response).groupClean === true; },
   };
   let command;
+  const writeControl = command => writeFileSync(control, JSON.stringify({
+    command, launched: lease.launched,
+    ...(lease.simulatorBooted === true ? { simulatorBooted: true } : {}),
+  }), { mode: 0o600 });
   const beginLaunch = (launched = true) => {
     lease.launched = launched;
     diagnostics.launched = launched;
-    // No `launched` field: with it every Helium setup timed out (2026-10-10), cause unknown. Without
-    // it the fixture never adopts a launch handoff (DeviceHub); see sol-real-use-tasks-13.md.
-    writeFileSync(control, JSON.stringify({ command: 'launching' }), { mode: 0o600 });
+    writeControl('launching');
   };
+  Object.defineProperty(beginLaunch, 'simulatorBooted', {
+    set(value) { lease.simulatorBooted = value === true; },
+    get() { return lease.simulatorBooted === true; },
+  });
   try { command = await helper(request, signal); }
   catch (error) { if (error.noMutation === true) diagnostics.cleanup = 'nothing created'; throw error; }
   ctx.windowLeases.push(lease);
@@ -107,6 +113,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
         let event; try { event = JSON.parse(line); } catch { continue; }
         if (typeof event.running === 'boolean') { lease.running = event.running; diagnostics.running = event.running; }
         if (event.pid) { lease.pid = event.pid; diagnostics.pid = event.pid; }
+        if (event.bundle) { lease.bundle = event.bundle; diagnostics.observedBundle = event.bundle; }
         if (event.pids) { lease.pids = event.pids; diagnostics.pids = event.pids; }
         if (event.processHandoff) diagnostics.processHandoff = event.processHandoff;
         if (event.appDialog) {
@@ -121,7 +128,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
             diagnostics[event.phase + 'TotalWaitMs'] = event.totalWaitMs;
           } else diagnostics.retries.push(retry);
         }
-        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback', 'launchWait', 'readWait', 'cleanupReadWait', 'observationReadWait', 'setupCase']) {
+        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback', 'launchWait', 'readWait', 'cleanupReadWait', 'observationReadWait', 'setupCase', 'inheritReady']) {
           if (event[key] !== undefined) diagnostics[key] = event[key];
         }
         if (event.stage) stage(event.stage).resolve(event);
@@ -153,7 +160,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
       : ['-g', '-a', request.app, ...(request.target ? [request.target] : [])];
     await open('/usr/bin/open', args, { signal, timeout: 15000 });
   }
-  writeFileSync(control, JSON.stringify({ command: 'opened' }), { mode: 0o600 });
+  writeControl('opened');
   await waitStage('ready');
   return lease;
   } catch (error) {

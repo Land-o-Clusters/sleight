@@ -112,6 +112,7 @@ export const realTasks = [
         bundle: modern ? 'com.apple.dt.Devices' : 'com.apple.iphonesimulator', target: '', mode: 'inherit' }, {
         launch: async beginLaunch => {
           await acquireFixture(ctx, 'sim', () => bootedIPhone({ trackOwnership: true, beforeViewerLaunch: beginLaunch }));
+          beginLaunch.simulatorBooted = true;
           await serveRealPage(ctx, true);
           simctl('openurl', ctx.sim.udid, ctx.url);
           ctx.simPageOpened = true;

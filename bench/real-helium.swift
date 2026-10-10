@@ -66,6 +66,19 @@ func emit(_ object: [String: Any]) throws {
     FileHandle.standardOutput.write(data + Data([10]))
 }
 
+func controlCommand(_ data: Data?) -> String {
+    guard let data,
+          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let command = object["command"] as? String else { return "" }
+    return command
+}
+
+func createdFixtureForRecovery<Element>(_ owned: Element?, state: CreatedWindow<Element>, matches: (Element) throws -> Bool) -> Element? {
+    if let recovered = retainedForRecovery(owned, state: state) { return recovered }
+    guard let candidate = try? state.unique(), (try? matches(candidate)) == true else { return nil }
+    return candidate
+}
+
 func recoverRetained<Element>(_ window: Element?, present: (Element) throws -> Bool, close: (Element) throws -> Void, wait: () -> Void) throws -> String {
     guard let window else { return "unconfirmed" }
     if try !present(window) { return "closed retained fixture" }
@@ -185,6 +198,28 @@ func regression(_ scenario: String) throws {
         guard ambiguous == "unconfirmed" else { throw FixtureError("Late ambiguity allowed recovery") }
         do { _ = try retainCreated(state); throw FixtureError("Ambiguous creation retained") } catch let error as FixtureError {
             guard error.description.contains("Ambiguous new browser") else { throw error }
+        }
+    } else if scenario == "control-command" {
+        func cmd(_ text: String) -> String { controlCommand(text.data(using: .utf8)) }
+        guard cmd("{\"command\":\"opened\",\"launched\":true}") == "opened",
+              cmd("{\"command\":\"close\",\"launched\":true}") == "close",
+              cmd("{\"command\":\"opened\"}") == "opened",
+              cmd("{") == "",
+              controlCommand(nil) == "" else { throw FixtureError("Control command rejected a boolean launched field") }
+    } else if scenario == "timeout-recovery" {
+        let state = CreatedWindow<String>(equal: ==)
+        state.created("http://127.0.0.1:1234/abc/")
+        var closed: [String] = []
+        let recovered = createdFixtureForRecovery(nil as String?, state: state, matches: { $0.contains("abc") })
+        let status = try recoverFixture(recovered, target: "http://127.0.0.1:1234/abc/", token: "abc", allowBlank: false,
+            document: { $0 }, present: { _ in closed.isEmpty }, close: { closed.append($0) }, wait: {})
+        guard status == "closed retained fixture", closed == ["http://127.0.0.1:1234/abc/"] else {
+            throw FixtureError("Created fixture window leaked after a timed-out setup")
+        }
+        let foreign = CreatedWindow<String>(equal: ==)
+        foreign.created("https://example.test/")
+        guard createdFixtureForRecovery(nil as String?, state: foreign, matches: { $0.contains("abc") }) == nil else {
+            throw FixtureError("Unmatched created window recovered")
         }
     } else { throw FixtureError("Unknown browser regression") }
     try emit(["scenario": scenario, "passed": true])
@@ -403,11 +438,7 @@ func fixture(_ argument: String) throws {
         CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .defaultMode)
         withExtendedLifetime(created) {}
     }
-    func command() -> String {
-        guard let data = FileManager.default.contents(atPath: control),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: String] else { return "" }
-        return object["command"] ?? ""
-    }
+    func command() -> String { controlCommand(FileManager.default.contents(atPath: control)) }
     func sameProcess() throws -> Bool {
         guard let current = NSRunningApplication(processIdentifier: pid) else { return false }
         guard current.bundleIdentifier == bundle else { throw FixtureError("Browser fixture process changed") }
@@ -476,7 +507,10 @@ func fixture(_ argument: String) throws {
             do {
                 if let current = NSRunningApplication(processIdentifier: pid), !current.isTerminated {
                     guard current.bundleIdentifier == bundle else { throw FixtureError("Browser process changed before recovery") }
-                    event["cleanup"] = try recoverSetup(retainedForRecovery(owned, state: created), target: target, token: token, safari: safari)
+                    event["cleanup"] = try recoverSetup(createdFixtureForRecovery(owned, state: created, matches: {
+                        (try? matches($0, target: target, token: token)) == true
+                            || (try? matches($0, target: target, token: token, navigating: true)) == true
+                    }), target: target, token: token, safari: safari)
                 } else { event["cleanup"] = owned == nil ? "unconfirmed" : "closed retained fixture" }
             } catch { event["cleanupError"] = String(describing: error) }
             try emit(event)

@@ -904,6 +904,40 @@ test('native quit refuses a replacement process and confirms only the launched a
     { ...clock, wait: () => assert.fail('no quit of replacement') }), /identity/);
 });
 
+test('native quit names both pid and bundle when identity differs', () => {
+  const { quitFixtureApplication } = nativeSource();
+  const clock = { now: () => 0, wait: () => assert.fail('no quit of replacement'), emit() {} };
+  assert.throws(() => quitFixtureApplication(73541, 'com.apple.dt.Devices', () => ({
+    processIdentifier: 73541, bundleIdentifier: 'com.apple.dt.Xcode',
+  }), clock), /pid 73541 vs 73541, bundle com\.apple\.dt\.Xcode vs com\.apple\.dt\.Devices/);
+  assert.throws(() => quitFixtureApplication(73541, 'com.apple.dt.Devices', () => ({
+    processIdentifier: 64001, bundleIdentifier: 'com.apple.dt.Devices',
+  }), clock), /pid 64001 vs 73541, bundle com\.apple\.dt\.Devices vs com\.apple\.dt\.Devices/);
+});
+
+test('native quit with an empty bundle string needs the process to run from the expected app', () => {
+  const { quitFixtureApplication } = nativeSource();
+  let gone = false;
+  const app = { processIdentifier: 73541, bundleIdentifier: null, get terminate() { gone = true; return true; } };
+  // The clock advances so a wrong quit hits its deadline instead of looping.
+  const clock = sameApp => { let time = 0; return { now: () => (time += 1000), wait: () => {}, emit() {}, sameApp }; };
+  // A reused PID that runs some other program: never quit it.
+  assert.throws(() => quitFixtureApplication(73541, 'com.apple.dt.Devices', () => app, clock(() => false)), /quit refused/);
+  assert.throws(() => quitFixtureApplication(73541, 'com.apple.dt.Devices', () => app, clock(undefined)), /quit refused/);
+  assert.equal(gone, false);
+  assert.equal(quitFixtureApplication(73541, 'com.apple.dt.Devices', () => gone ? null : app,
+    clock((target, bundle) => target === app && bundle === 'com.apple.dt.Devices')), true);
+});
+
+test('native quit uses the pid the setup recorded even when it arrives as a string', () => {
+  const { quitFixtureApplication } = nativeSource();
+  let gone = false;
+  const app = { processIdentifier: 73541, bundleIdentifier: 'com.apple.dt.Devices',
+    get terminate() { gone = true; return true; } };
+  assert.equal(quitFixtureApplication('73541', 'com.apple.dt.Devices', () => gone ? null : app,
+    { now: () => 0, wait: () => {}, emit() {} }), true);
+});
+
 test('normal quit waits for a cold app beyond five seconds and records the exact process outcome', () => {
   const { quitFixtureApplication } = nativeSource(), events = [];
   let time = 0, quits = 0;

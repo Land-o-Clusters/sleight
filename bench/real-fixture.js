@@ -20,11 +20,39 @@ function waitForApplication(application, wait) {
   return null;
 }
 
+function runningBundle(target) {
+  var raw = target && target.bundleIdentifier;
+  if (raw == null) return '';
+  if (raw.isNil && raw.isNil()) return '';
+  var value = typeof raw === 'string' ? raw : ObjC.unwrap(raw);
+  return value == null ? '' : String(value);
+}
+
+function inheritReadyCondition(target, app, api, control) {
+  var finished = !!(target && target.isFinishedLaunching);
+  var focused = !!(api.focused && api.focused(app));
+  var hasWindow = !!(api.mainWindow && api.mainWindow(app));
+  if (!hasWindow && api.windowCount) hasWindow = api.windowCount(app) > 0;
+  if (finished && focused) return 'focused-window';
+  if (finished && hasWindow) return 'window';
+  // A booted simulator says nothing about the viewer, so the viewer must have finished launching.
+  if (finished && control && control.simulatorBooted === true) return 'simulator-booted';
+  return null;
+}
+
 function quitFixtureApplication(pid, bundle, application, clock) {
   var started = clock.now(), accepted = false, finishedLaunching;
+  pid = Number(pid);
   function identity(target) {
-    if (Number(target.processIdentifier) !== pid || String(ObjC.unwrap(target.bundleIdentifier)) !== bundle) throw new Error('Launched app identity changed; quit refused');
+    var actualPid = Number(target.processIdentifier), actualBundle = runningBundle(target);
     finishedLaunching = !!target.isFinishedLaunching;
+    // An empty identifier counts only when the process runs from the expected app's own bundle:
+    // a reused PID belongs to some other program, which cleanup must never quit.
+    var sameBundle = actualBundle ? actualBundle === bundle : !!(clock.sameApp && clock.sameApp(target, bundle));
+    if (actualPid !== pid || !sameBundle) {
+      throw new Error('Launched app identity changed; quit refused (pid ' + actualPid + ' vs ' + pid +
+        ', bundle ' + actualBundle + ' vs ' + bundle + ')');
+    }
   }
   function receipt(reason) {
     clock.emit({ stage: 'quit', quitWait: { reason: reason, accepted: accepted,
@@ -309,7 +337,7 @@ function nativeAX(state, clock) {
       // These optional attributes can remain unsupported on a valid app
       // window. Their absence allows the existing nonce-title identity fallback.
       if (code === -25205 && state && (state.setup || state.cleanup || state.observation) &&
-          ['AXDocument', 'AXSheets', 'AXSubrole', 'AXMainWindow', 'AXChildren', 'AXValue'].indexOf(attribute) !== -1) {
+          ['AXDocument', 'AXSheets', 'AXSubrole', 'AXMainWindow', 'AXWindows', 'AXChildren', 'AXValue'].indexOf(attribute) !== -1) {
         if (state.office) state.officeLastError = { code: code, attribute: attribute };
         return null;
       }
@@ -417,6 +445,8 @@ function nativeAX(state, clock) {
     wait: function () { $.NSThread.sleepForTimeInterval(0.1); },
     equal: function (a, b) { return !!a && !!b && !!$.CFEqual(a, b); },
     focused: function (app) { return read(app, 'AXFocusedWindow'); },
+    mainWindow: function (app) { return read(app, 'AXMainWindow'); },
+    windowCount: function (app) { return children(app, 'AXWindows').length; },
     exists: function (window) {
       try { return text(window, 'AXRole') === 'AXWindow'; }
       catch (error) { if (error.code === -25202) return false; throw error; }
@@ -487,7 +517,12 @@ function run(argv) {
     return quitFixtureApplication(request.pid, request.bundle, function () {
       var value = $.NSRunningApplication.runningApplicationWithProcessIdentifier(request.pid);
       return value.isNil() || value.isTerminated ? null : value;
-    }, { check: free, now: function () { return Date.now(); }, wait: function (ms) { free(); waitForLaunch(ms / 1000); }, emit: emit });
+    }, { check: free, now: function () { return Date.now(); }, wait: function (ms) { free(); waitForLaunch(ms / 1000); }, emit: emit,
+      sameApp: function (target, bundle) {
+        var url = target.bundleURL, expected = $.NSWorkspace.sharedWorkspace.URLForApplicationWithBundleIdentifier(bundle);
+        if (!url || url.isNil() || !expected || expected.isNil()) return false;
+        return ObjC.unwrap(url.URLByResolvingSymlinksInPath.path) === ObjC.unwrap(expected.URLByResolvingSymlinksInPath.path);
+      } });
   }
   if (allowed.indexOf(request.bundle) === -1 || !request.control || !request.mode) throw new Error('Invalid fixture request');
   if (!$.AXIsProcessTrusted()) throw new Error('Accessibility is unavailable; fixture not opened');
@@ -539,7 +574,7 @@ function run(argv) {
     pid = nextPid;
     pids.push(pid);
     emit({ stage: processHandoff ? 'process-handoff' : 'identified-process', pid: pid,
-      pids: pids.slice(), processHandoff: processHandoff });
+      bundle: runningBundle(value) || request.bundle, pids: pids.slice(), processHandoff: processHandoff });
   }
   function checkOpening() {
     var control = controlData();
@@ -617,7 +652,11 @@ function run(argv) {
     app = $.AXUIElementCreateApplication(pid);
     $.AXUIElementSetMessagingTimeout(app, 0.5);
     checkAppDialog();
-    if (inherited) return !!target.isFinishedLaunching && !!api.focused(app);
+    if (inherited) {
+      var condition = inheritReadyCondition(target, app, api, controlData());
+      if (condition) { state.inheritReady = condition; return true; }
+      return false;
+    }
     if (attempt === 0 || attempt === 199) emit({ stage: 'readiness', readiness: api.readiness(app, request) });
     var current = owned || api.focused(app);
     if (!current) return false;
@@ -641,6 +680,7 @@ function run(argv) {
   if (!inherited && !owned) throw new Error('Fixture identity could not be established without a window inventory');
   if (!inherited && !api.matches(owned, request)) throw new Error('Fixture document identity unconfirmed');
   emit({ stage: 'ready', pid: pid, pids: pids.slice(), processHandoff: processHandoff,
+    inheritReady: state.inheritReady, bundle: runningBundle(target) || request.bundle,
     fresh: state.fresh, totalWaitMs: state.retryWaitMs, setupCase: state.setupCase });
   state.setup = false;
   while (command() !== 'close') {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runOwned } from '../bench/preapproved-process.mjs';
 
-for (const scenario of ['fixture-navigation', 'safari-address', 'safari-recovery']) {
+for (const scenario of ['fixture-navigation', 'safari-address', 'safari-recovery', 'control-command', 'timeout-recovery']) {
   test(`browser regression: ${scenario}`, async () => {
     const { heliumHelper } = await import('../bench/real-helium.mjs');
     const command = await heliumHelper();

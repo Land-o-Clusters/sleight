@@ -96,10 +96,7 @@ for (const openedAt of [300, 700]) test(`cancellation during ${openedAt === 300 
   assert.deepEqual(fixture.closes, []);
 });
 
-// Skipped: the control file's `launched` field, which adoption needs, made every Helium setup time
-// out (2026-10-10, 7 of 7 runs; without it 4 of 4 set up), so real-fixture.mjs no longer writes it.
-// Restore with the fix in .dev/prompts/sol-real-use-tasks-13.md.
-test.skip('the parent retains both launch PIDs and quits only the adopted replacement after collecting its helper', async t => {
+test('the parent retains both launch PIDs and quits only the adopted replacement after collecting its helper', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'fixture-handoff-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const ctx = { dir }, quits = [];
@@ -137,6 +134,31 @@ test.skip('the parent retains both launch PIDs and quits only the adopted replac
   assert.deepEqual(quits, [43]);
 });
 
+test('an inherit DeviceHub opened control records launch ownership and simulator boot', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'fixture-opened-control-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ctx = { dir };
+  let opened;
+  const lease = await openFixture(ctx, { app: 'DeviceHub', bundle, mode: 'inherit' }, {
+    launch: async beginLaunch => { beginLaunch(true); beginLaunch.simulatorBooted = true; },
+    run: async (_command, _args, options) => {
+      options.onStdout('{"stage":"armed","running":false,"pid":73541}\n');
+      await new Promise(resolve => setImmediate(resolve));
+      opened = JSON.parse(readFileSync(join(dir, 'window-0-control.json'), 'utf8'));
+      options.onStdout('{"stage":"ready","pid":73541,"inheritReady":"window"}\n');
+      return new Promise(resolve => options.signal.addEventListener('abort', () => resolve({
+        groupClean: true, exit: { code: 0 }, stdout: '{"stage":"closed"}\n',
+      }), { once: true }));
+    },
+  });
+  assert.equal(opened.command, 'opened');
+  assert.equal(opened.launched, true);
+  assert.equal(opened.simulatorBooted, true);
+  assert.equal(ctx.fixtureDiagnostics[0].inheritReady, 'window');
+  assert.equal(lease.pid, 73541);
+  await lease.dispose();
+});
+
 test('a successor launched before this setup began is refused, not adopted', () => {
   const fixture = nativeFixture({ successorLaunchedAt: -100 });
   assert.throws(fixture.run, /predates this launch/);
@@ -163,4 +185,70 @@ test('an original that never exits is never adopted or marked ready, and setup t
   assert.throws(fixture.run, /readiness unconfirmed/);
   assert.equal(fixture.events.some(event => event.stage === 'process-handoff' || event.stage === 'ready'), false);
   assert.deepEqual(fixture.closes, []);
+});
+
+function inheritReadyFixture({ finished = true, focused = false, main = false, windows = 0, simulatorBooted = false } = {}) {
+  const events = [];
+  let time = 0, ready = false;
+  const target = { processIdentifier: 73541, bundleIdentifier: bundle, isFinishedLaunching: finished };
+  const sandbox = { ObjC: { import() {}, unwrap: value => value } };
+  runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), sandbox);
+  const foundation = value => ({ dataUsingEncoding: () => value });
+  foundation.AXIsProcessTrusted = () => true;
+  foundation.NSRunningApplication = {
+    runningApplicationsWithBundleIdentifier: () => ({ count: 1, objectAtIndex: () => target }),
+    runningApplicationWithProcessIdentifier: () => ({ isNil: () => true, isTerminated: true }),
+  };
+  foundation.AXUIElementCreateApplication = () => ({});
+  foundation.AXUIElementSetMessagingTimeout = () => {};
+  foundation.NSFileHandle = { fileHandleWithStandardOutput: { writeData: line => {
+    const event = JSON.parse(line); events.push(event); if (event.stage === 'ready') ready = true;
+  } } };
+  foundation.NSData = { dataWithContentsOfFile: () => ({ isNil: () => false }) };
+  foundation.NSString = { alloc: { initWithDataEncoding: () => JSON.stringify({
+    command: ready ? 'close' : 'opened', launched: true, simulatorBooted,
+  }) } };
+  sandbox.$ = foundation;
+  sandbox.Date = { now: () => time };
+  sandbox.waitForLaunch = seconds => { time += Math.round((seconds ?? 0.1) * 1000); };
+  sandbox.nativeAX = () => ({
+    focused: () => focused ? { role: 'AXWindow' } : null,
+    mainWindow: () => main ? { role: 'AXWindow' } : null,
+    windowCount: () => windows,
+    dialog: () => [], readiness: () => ({}),
+    wait: () => { time += 100; },
+  });
+  return { events, run: () => sandbox.run([JSON.stringify({
+    app: 'DeviceHub', bundle, mode: 'inherit', control: 'fake', startedAtMs: 0,
+  })]), inheritReady: sandbox.inheritReadyCondition };
+}
+
+test('inherit readiness accepts a finished launch with a window and no focused window', () => {
+  const fixture = inheritReadyFixture({ finished: true, focused: false, main: true });
+  fixture.run();
+  assert.equal(fixture.events.find(event => event.stage === 'ready').inheritReady, 'window');
+  assert.equal(fixture.events.find(event => event.stage === 'ready').pid, 73541);
+});
+
+test('inherit readiness records a focused window when that is what DeviceHub reports', () => {
+  const fixture = inheritReadyFixture({ finished: true, focused: true });
+  fixture.run();
+  assert.equal(fixture.events.find(event => event.stage === 'ready').inheritReady, 'focused-window');
+});
+
+test('a booted simulator is not readiness while the viewer is still launching', () => {
+  const fixture = inheritReadyFixture({ finished: false, simulatorBooted: true });
+  assert.equal(fixture.inheritReady({ isFinishedLaunching: false }, {}, { focused: () => null }, { simulatorBooted: true }), null);
+});
+
+test('inherit readiness accepts simctl boot state when DeviceHub has no window', () => {
+  const fixture = inheritReadyFixture({ finished: true, simulatorBooted: true });
+  fixture.run();
+  assert.equal(fixture.events.find(event => event.stage === 'ready').inheritReady, 'simulator-booted');
+});
+
+test('inherit readiness stays unconfirmed without a window or simulator boot', () => {
+  const fixture = inheritReadyFixture({ finished: true });
+  assert.throws(fixture.run, /readiness unconfirmed/);
+  assert.equal(fixture.events.some(event => event.stage === 'ready'), false);
 });

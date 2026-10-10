@@ -305,6 +305,7 @@ export const tasks = [
         bundle: modern ? 'com.apple.dt.Devices' : 'com.apple.iphonesimulator', target: '', mode: 'inherit' }, {
         launch: async beginLaunch => {
           await acquireFixture(ctx, 'sim', () => bootedIPhone({ trackOwnership: true, beforeViewerLaunch: beginLaunch }));
+          beginLaunch.simulatorBooted = true;
           await prepareSimulatorForm(ctx);
           simctl('openurl', ctx.sim.udid, ctx.url);
           ctx.simPageOpened = true;
