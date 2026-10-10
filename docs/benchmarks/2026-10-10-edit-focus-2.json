@@ -1,0 +1,196 @@
+{
+  "stamp": "2026-10-10T11-16-18-471Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 30.7,
+      "turns": 6,
+      "costUsd": 0.008881,
+      "reportedCostUsd": 0.2886464,
+      "usage": {
+        "input": 12,
+        "cacheRead": 332972,
+        "cacheWrite": 23043,
+        "output": 1883
+      },
+      "timing": {
+        "totalMs": 29255,
+        "modelMs": 11193,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 3888,
+        "engineMs": 3870,
+        "relayMs": 18,
+        "localMs": 0,
+        "guardReads": 4,
+        "guardReadMs": 422.10941699999876,
+        "guardReadFailures": 0,
+        "otherMs": 14174
+      },
+      "footprint": {
+        "cpuSeconds": 11.61,
+        "group": {
+          "claude": 1.74,
+          "engine node": 1.04,
+          "mcp@latest": 0.64,
+          "node": 0.25,
+          "osascript": 0.26,
+          "codex": 0.39,
+          "(bash)": 0.01,
+          "(vibe-island-brid)": 0.01
+        },
+        "outside": {
+          "engine helper": 6.16,
+          "TextEdit": 1.11
+        }
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I replaced \"beta\" with \"delta\" in `3a1fe864-edit.txt`, saved it, and closed the window. The document now reads \"alpha delta gamma\" and the save cleared the edited marker before close.\n\nTextEdit now shows a different window, \"Untitled 6\", which I did not open or change. I only pressed Cmd+W once, on ",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 2,
+      "passed": true,
+      "seconds": 21,
+      "turns": 8,
+      "costUsd": 0.0104228,
+      "reportedCostUsd": 0.3261596,
+      "usage": {
+        "input": 16,
+        "cacheRead": 453758,
+        "cacheWrite": 24198,
+        "output": 2088
+      },
+      "timing": {
+        "totalMs": 19592,
+        "modelMs": 13218,
+        "calls": 6,
+        "refused": 1,
+        "toolMs": 4099,
+        "engineMs": 4054,
+        "relayMs": 45,
+        "localMs": 0,
+        "guardReads": 4,
+        "guardReadMs": 662.2343340000007,
+        "guardReadFailures": 0,
+        "otherMs": 2275
+      },
+      "footprint": {
+        "cpuSeconds": 8.96,
+        "group": {
+          "claude": 1.59,
+          "engine node": 1.03,
+          "mcp@latest": 0.56,
+          "node": 0.24,
+          "bash": 0.01,
+          "Python": 0.01,
+          "(bash)": 0,
+          "(python3)": 0.01,
+          "osascript": 0.18,
+          "(node)": 0,
+          "codex": 0.32
+        },
+        "outside": {
+          "engine helper": 3.86,
+          "TextEdit": 1.15
+        }
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "The word \"beta\" in `70d7b4d9-edit.txt` is now \"delta,\" the file is saved, and its window is closed. The document now reads \"alpha delta gamma.\" After closing, TextEdit brought forward a different window, \"Untitled 6,\" which I didn't touch.",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 3,
+      "passed": true,
+      "seconds": 24.2,
+      "turns": 6,
+      "costUsd": 0.009237,
+      "reportedCostUsd": 0.30258640000000003,
+      "usage": {
+        "input": 12,
+        "cacheRead": 334472,
+        "cacheWrite": 23708,
+        "output": 2299
+      },
+      "timing": {
+        "totalMs": 22793,
+        "modelMs": 12979,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 3144,
+        "engineMs": 3119,
+        "relayMs": 25,
+        "localMs": 0,
+        "guardReads": 3,
+        "guardReadMs": 0.012709000000540982,
+        "guardReadFailures": 0,
+        "otherMs": 6670
+      },
+      "footprint": {
+        "cpuSeconds": 9.94,
+        "group": {
+          "claude": 1.71,
+          "engine node": 0.91,
+          "mcp@latest": 0.6,
+          "node": 0.24,
+          "osascript": 0.24,
+          "open": 0.01,
+          "codex": 0.35,
+          "(sh)": 0.01,
+          "(bash)": 0.01
+        },
+        "outside": {
+          "engine helper": 4.77,
+          "TextEdit": 1.09
+        }
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I replaced \"beta\" with \"delta\" in the file, saved it, and closed the document. The text now reads \"alpha delta gamma\", and the edited marker cleared after the save.\n\nAfter the close, TextEdit showed a separate window called \"Untitled 6\". I didn't open it deliberately, so it may have appeared on its ",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    }
+  ]
+}
