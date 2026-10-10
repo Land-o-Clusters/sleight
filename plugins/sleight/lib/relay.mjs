@@ -1883,11 +1883,15 @@ export function createRelay({
       }
     }
     const jsCode = msg.method === undefined ? jsCalls.get(msg.id) : undefined;
+    // A "call failed" line after this message sent Claude to check again (h2h-3, 2026-10-10), so the
+    // close it reports gets no verified-results line.
+    let closedLast = false;
     // Reading after ⌘W closed the last window fails with noWindowsAvailable, but the
     // close worked (7 of 437 calls, 2026-10-07). Say so instead of reporting an error.
     if (jsCode !== undefined && msg.result?.isError && /\bsuper\+w\b|cmd\+w\b|command\+w\b/i.test(jsCode) &&
         (msg.result.content ?? []).some(c => c.type === 'text' && /noWindowsAvailable/.test(c.text ?? ''))) {
       msg.result = { ...msg.result, isError: false, content: [{ type: 'text', text: 'sleight: the app has no windows left, so the window this call closed was its last. Nothing more to read.' }] };
+      closedLast = true;
     } else if (jsCode !== undefined && msg.result?.isError && Array.isArray(msg.result.content) &&
         msg.result.content.some(c => c.type === 'text' && /noWindowsAvailable/.test(c.text ?? ''))) {
       // The engine says this when the app's window is on another Space: the user in full
@@ -2203,7 +2207,7 @@ export function createRelay({
       // is full too.
       if (!automatic) msg.result.content = compactor.process(dropRepeatedImages(msg.result.content),
         { forceFull: healthPlan?.fullVisible === true || /\bdisableDiffing\s*:\s*true\b/.test(jsCode ?? ''),
-          action: resultCalls.get(msg.id), failed: resultFailed || !!msg.result?.isError });
+          action: closedLast ? undefined : resultCalls.get(msg.id), failed: !closedLast && (resultFailed || !!msg.result?.isError) });
     }
     if (msg.method === undefined && resultCalls.has(msg.id)) {
       if (msg.error) msg.error.message += '\n' + compactor.process([], { action: resultCalls.get(msg.id), failed: true })[0].text;

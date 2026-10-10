@@ -31,12 +31,14 @@ test('the relay adds independent results without an extra engine call or changin
   assert.doesNotMatch(note(h, 1), /^sleight: (?:UI|saved:|call failed)/);
 });
 
-test('a rewritten last-window close error never becomes confirmed input', async t => {
+test('a rewritten last-window close error gets the close message alone, never a confirmed or failed line', async t => {
   const h = harness(t);
   h.call(1, 'let app = await cua.getApp("Calculator")'); h.reply(1, tree(0)); await tick();
   h.call(2, 'await app.pressKey("super+w")'); h.reply(2, 'noWindowsAvailable', true); await tick();
   assert.equal(h.received.find(msg => msg.id === 2).result.isError, false, 'existing close recovery stays intact');
-  assert.match(note(h, 2), /call failed \(partial input possible\)/);
+  // The relay's own line says the close worked; a "call failed" line after it contradicted it.
+  assert.match(note(h, 2), /no windows left/);
+  assert.doesNotMatch(note(h, 2), /call failed|UI (?:changed|unverified)|saved:/);
 });
 
 // vr-live and waits-live, 2026-10-10: the engine's docs on a session's first call made every first
