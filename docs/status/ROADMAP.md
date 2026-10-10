@@ -59,8 +59,12 @@ only with a measured reason. In order:
    (about 400 ms, tens of seconds under load). The guard does one before each action after the
    first in a call and one after the call. Done for keys, text, paste and coordinates (`44700ee`,
    owner's call, `SLEIGHT_GUARD=careful` keeps the read). Numbered actions keep it, since it catches
-   renumbering. The read after the call saves Claude a turn, so it stays only if the head-to-head
-   shows it pays.
+   renumbering. The read after the call stays (study 2026-10-10, 93 runs). Codex makes it after
+   527 of 527 acting calls, the lease needed it in 17 of 59 calls, and it costs a mean 1.3 s a run.
+   Next: count a call that only acquires and prints the app as that read (about 0.55 s on runs that
+   have one), let a call's first key, typing or coordinate action reuse Claude's full read when it's
+   under 10 s old (owner's call, 2026-10-10), and cut the guard's reads of Save and Open sheets inside a call (5.2 s a run in
+   textedit-save, trees over 20,000 characters). `.dev/research/2026-10-10-post-call-read.md`.
 3. Stop spawning processes per call. Done for app probes: one long-lived helper per session, about
    33 ms a probe against about 180 ms a spawn (`818f7e7`). Left, from a code audit (2026-10-09, costs
    unmeasured until the footprint run). The pane snapshot decodes a full screenshot in JavaScript
@@ -89,7 +93,8 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
 - In 887 benchmark transcripts, 62% of `js` calls that act send one action, and 35% of all calls
   only read. Each turn costs 2 to 2.7 s.
 - A warm-up read right after launch (one cold Calculator read took 16.7 s).
-- textedit-save spent 7 to 17.5 s per run in guard reads. Fold the last read into Claude's own.
+- textedit-save spent 7 to 17.5 s per run in guard reads. Folding the last read into Claude's own
+  is already how the guard works. The sheet reads above are most of the rest.
 - Stable-controls mode (3,775 ms to 801 ms on Calculator) gives up checks, so it stays out unless the
   owner chooses it.
 

@@ -65,7 +65,13 @@ Next, in order:
    owner to be away. Done through the commits (`8e9e201`). The A/B started 07:04 UTC
    (`.dev/passes/merge-ab.sh`, log `.dev/passes/merge-ab.log`), and the select-all run is blocked
    by its helper (ROADMAP track 2).
-1. Review Sol's next rounds of the three branches above as they land, and merge them.
+1. Review Sol's next rounds of the three branches above as they land, and merge them. After the
+   A/B (both edit `bench/run.mjs`): squash `codex/real-use-tasks` `0d24316` (reviewed: merge after
+   fixes) with a `launchDate` check on the adopted DeviceHub, a brief two-PID overlap treated as
+   wait, `elapsedMs` from `beginLaunch`, and its `--test-concurrency=4` kept, since it lowers the
+   check's load. `codex/plugin-arm` `565854b` went back as `sol-plugin-arm-2.md`: its arm would
+   pass the owner's API key to a competitor's server, and its evidence lists the owner's connectors
+   and apps (private repo only).
 2. The 1.1.0 live checks (helper resend, stale-number remap, keyboard-tap notice) and
    simulator-flow, with the owner away: they can take the pointer or keyboard.
 3. The footprint gap (Astra's branch, then rerun `--arm sleight,codex --tasks
