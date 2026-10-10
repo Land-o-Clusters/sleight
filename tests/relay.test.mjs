@@ -277,6 +277,23 @@ test('a visible refresh before diagnostic expiry cannot approve input after its 
   helperRead(h, 5, 'await app.click(1)'); assert.equal(h.toServer.length, sent);
 });
 
+test('a visible refresh after diagnostic expiry still requires another read after its late reply', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');
+  const h = harness({ diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, {
+    probeApp: async () => ({ status: 'responding', windows: 1 }), readControl,
+  }) });
+  helperRead(h, 1); helperReply(h, 1, 'Window: "Calculator", App: Calculator', false);
+  helperRead(h, 2, 'var te = await cua.getApp("TextEdit")'); helperReply(h, 2);
+  helperRead(h, 3, 'await te.getAXState()'); helperReply(h, 3); await tick();
+  const probe = h.toServer.at(-1);
+  t.mock.timers.tick(5500); await tick();
+  helperRead(h, 4, 'await app.getAXState()'); helperReply(h, 4, 'Window: "Calculator", App: Calculator', false);
+  helperReply(h, probe.id, 'Window: "Calculator", App: Calculator', false);
+  const sent = h.toServer.length;
+  helperRead(h, 5, 'await app.click(1)'); assert.equal(h.toServer.length, sent);
+});
+
 test('expired diagnostics decline new approval without prompting', async t => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
   const { diagnoseReadFailure } = await import('../plugins/sleight/lib/read-failure.mjs');

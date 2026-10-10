@@ -1,0 +1,14 @@
+{
+  "started": "2026-10-10T05:39:25.298Z",
+  "mode": "live",
+  "ownerAway": true,
+  "load": [
+    138.0107421875,
+    117.53759765625,
+    94.1455078125
+  ],
+  "attempts": [],
+  "error": "Another live run holds /tmp/sleight-live.lock. Wait for it to finish.",
+  "childrenCollected": true,
+  "finished": "2026-10-10T05:39:25.300Z"
+}

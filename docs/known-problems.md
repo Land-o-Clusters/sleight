@@ -23,7 +23,9 @@ our own runs. Dates and engine versions are given where they matter.
   known inputs. [The design](design/review-receipts.md) describes the scope.
   The full-name scrub matches the name as `id -F` gives it, exact case, and fails open if `id -F`
   fails. A turn's read text is kept until its receipt is built (13.1 MB at 200 reads of 64 KiB,
-  measured by the branch).
+  measured by the branch). Typed text is also removed from the app, window and document names, even
+  one character long: typing "x" turned "TextEdit" into "Te[redacted 1 chars]tEdit" (a unit test,
+  2026-10-10).
 - [Verified results](design/verified-results.md) add a line to native `js` replies from reads the
   relay already has. A changed value or window is an observation after input, and a person's own
   activity can cause it too. Missing or degraded reads leave the result unverified. A save is
@@ -61,6 +63,27 @@ our own runs. Dates and engine versions are given where they matter.
   do not take these leases, and arbitrary JavaScript can bypass the injected guard.
   Never delete the SQLite coordinator during live use. Replacement between transactions is detected
   and reopened, but metadata checks cannot prevent arbitrary filesystem replacement during an action.
+- Multiple equal-title candidates without a URL need one matching native AX window. The relay
+  uses the selected or acquired window number, or the app's focused window number, and retains
+  its AX reference with the app's PID and launch time. When AX omits a number, exact AX bounds
+  can identify one CG window. Single windows and sheets skip the check. Inconclusive identity falls back to the
+  engine header and existing guards, with one warning. If titles are missing from both the engine
+  inventory and health result, candidate count is unknown and the native check is skipped.
+  Same-title replacement detection is unavailable on these paths and during an action.
+  TextEdit Save, equal titles and CPU comparisons remain pending under a live hold,
+  as recorded in the [third follow-up report](benchmarks/2026-10-10-waits-targeting-3.md).
+- `/sleight stop` collects its owned engine and helpers before checking pointer button state,
+  keyboard filter taps and owned lease records. A pressed button has no reliable owner, so it
+  leaves cleanup unconfirmed. A remaining tap or failed scan also prevents a clear receipt.
+  The shared computer-use helper stays running. These are observations at stop time, rather than
+  proof about future input from a shared service. Stop retains the relay and session approvals.
+  After the next user message, the next call starts and initializes a fresh engine. Acquire the app again.
+  The protocol and owned-process checks have unit coverage,
+  but the host observations have not been qualified live.
+  Esc keeps the engine and relay alive. After an unconfirmed explicit stop, the next user message
+  clears closing and invalidates old handles. If collection closed stdin, requests answer with
+  reconnect advice. Existing in-flight reservations stay held until their work finishes; delayed
+  input, approvals and Undo decisions from before stop cannot resume.
 - Change review covers saved files observed before `js` actions. A file first seen after an action
   needs a fresh standalone read before editing. Undo then starts at that later copy.
   Unsaved buffers, Save As targets,
@@ -102,7 +125,8 @@ our own runs. Dates and engine versions are given where they matter.
 - Document scope checks the last observed window before forwarding a call and stops on changed or
   missing Window/URL headers. Its injected action guard checks again, but arbitrary JavaScript can
   bypass it or forge observations. Result checks cannot undo actions already taken. Discovery reads
-  can expose other windows' contents, and equal titles without URLs are indistinguishable.
+  can expose other windows' contents. The engine's equal titles without URLs are indistinguishable,
+  so native admission refuses multiple matches.
 
 ## The pointer, drags and hover
 

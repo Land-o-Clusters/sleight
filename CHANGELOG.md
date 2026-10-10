@@ -47,6 +47,18 @@
   [Investigation and every attempt](docs/benchmarks/2026-10-09-textedit-fixes.md).
   [Review follow-up](docs/benchmarks/2026-10-10-textedit-fixes-2.md).
   [Third review](docs/benchmarks/2026-10-10-textedit-fixes-3.md).
+- `/sleight stop` says which calls were in flight and whether the engine finished or was cut off,
+  then checks lease files, the pointer button and keyboard taps once the engine and helpers are
+  collected. The relay and session approvals stay, and the next call after the user's next message
+  starts a fresh engine (acquire the app again). Esc ends the engine turn and keeps the engine.
+  Unit-tested, with the live checks before release (Sol, `codex/waits-targeting`).
+- Windows with the same title and no URL get a native identity check before input, using the
+  window number from `select_window`, the acquisition or the focused window. When identity can't
+  tell them apart, the guards work as before and warn once. Single windows and TextEdit Save sheets
+  skip it.
+- `app.waitFor({ id | label | line }, { timeoutMs })` waits up to 10 s for one element in the same
+  window, polling full reads at least 250 ms apart. The skill asks Claude to use it only for
+  elements that appear late.
 - Paste keeps the user's clipboard with one helper per session instead of a spawn per paste, and
   reads large clipboards in linear time (a mocked 40 MiB transfer fell from about 5 s to 31 to 88 ms).
   `blocked_app` also refuses a settings window by its Accessibility metadata, so a localized title or

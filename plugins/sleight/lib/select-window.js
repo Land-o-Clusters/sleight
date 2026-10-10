@@ -1,11 +1,13 @@
 // AXRaise/AXMain choose a window without activating its app. No input is sent.
 ObjC.import('AppKit');
+ObjC.import('CoreGraphics');
 function run(argv) {
   try {
     const request = JSON.parse(argv[0]);
     const hasTitle = request.title !== undefined, hasURL = request.url !== undefined;
     if (!request.app || hasTitle === hasURL || (hasTitle && typeof request.title !== 'string')) throw new Error('Supply app and exactly one of title or file URL');
     if (request.url && !request.url.startsWith('file://')) throw new Error('URL must be a file URL');
+    if (request.windowNumber !== undefined && (!Number.isSafeInteger(request.windowNumber) || request.windowNumber <= 0)) throw new Error('Invalid window number');
     const apps = $.NSWorkspace.sharedWorkspace.runningApplications, matches = [];
     for (let i = 0; i < apps.count; i++) {
       const app = apps.objectAtIndex(i);
@@ -22,6 +24,22 @@ function run(argv) {
       try { return window.attributes.byName(key).value(); } catch { return null; }
     };
     const windows = processes[0].windows(), selected = [];
+    let cg;
+    const windowNumber = window => {
+      const direct = attribute(window, 'AXWindowNumber');
+      if (Number.isSafeInteger(direct) && direct > 0) return direct;
+      try {
+        if (!cg) {
+          const list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionAll | $.kCGWindowListExcludeDesktopElements, 0));
+          cg = Array.from({ length: Number(list.count) }, (_, i) => ObjC.deepUnwrap(list.objectAtIndex(i)));
+        }
+        const p = window.position(), s = window.size();
+        if (![...p, ...s].every(Number.isFinite)) return null;
+        const matches = cg.filter(info => Number(info.kCGWindowOwnerPID) === Number(app.processIdentifier) && info.kCGWindowLayer === 0 &&
+          ['X', 'Y', 'Width', 'Height'].every((key, i) => Math.abs(info.kCGWindowBounds?.[key] - [...p, ...s][i]) < 0.5));
+        return matches.length === 1 ? matches[0].kCGWindowNumber : null;
+      } catch { return null; }
+    };
     const canonical = value => {
       try {
         const url = $.NSURL.URLWithString(value);
@@ -35,19 +53,26 @@ function run(argv) {
       const document = attribute(window, 'AXDocument');
       const file = document && canonical(document);
       if (document && !file) continue;
-      if (hasTitle ? title === request.title : file && file === wantedURL) {
+      if ((hasTitle ? title === request.title : file && file === wantedURL) &&
+          (request.windowNumber === undefined || windowNumber(window) === request.windowNumber)) {
         selected.push({ window, title, url: document || null });
       }
     }
-    if (selected.length !== 1) throw new Error(`Expected exactly one matching window, found ${selected.length}`);
+    if (selected.length !== 1) throw new Error(`Expected exactly one matching window, found ${selected.length}. Window numbers: ${JSON.stringify(selected.map(target => windowNumber(target.window)))}`);
     const target = selected[0];
     const active = !!app.active, frontmost = $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
     target.window.actions.byName('AXRaise').perform();
     target.window.attributes.byName('AXMain').value = true;
     if (!attribute(target.window, 'AXMain')) throw new Error('Window selection unconfirmed: AXMain is false');
+    if (attribute(target.window, 'AXTitle') !== target.title || (attribute(target.window, 'AXDocument') || null) !== target.url) {
+      throw new Error('Window selection unconfirmed: identity changed during selection');
+    }
     if (!active && (app.active || $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier !== frontmost)) {
       throw new Error('Window selection changed the foreground app');
     }
-    return JSON.stringify({ ok: true, target: { appId, app: name, title: target.title, url: target.url } });
+    // AXWindowNumber is optional on macOS; title and AXDocument alone cannot resolve duplicates.
+    const number = windowNumber(target.window);
+    return JSON.stringify({ ok: true, target: { appId, app: name, title: target.title, url: target.url },
+      identity: { pid: Number(app.processIdentifier), windowNumber: typeof number === 'number' ? number : null } });
   } catch (err) { return JSON.stringify({ ok: false, error: String(err.message || err) }); }
 }

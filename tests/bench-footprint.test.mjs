@@ -44,3 +44,39 @@ test('snapshots track only the owned root and descendants without stopping sampl
     assert.deepEqual(second.group, { codex: 1.25, 'engine node': 0.8 });
   } finally { await stop(); }
 });
+
+test('a warm phase excludes existing process CPU and counts new descendants', async () => {
+  const frames = [
+    ['100 1 100 0:10.00 /usr/local/bin/node', '101 100 101 0:03.00 /x/node',
+      '300 1 300 0:50.00 /Apps/Codex Computer Use.app/Contents/MacOS/SkyComputerUseService',
+      '400 1 400 1:40.00 /System/Applications/Calculator.app/Contents/MacOS/Calculator'],
+    ['100 1 100 0:12.00 /usr/local/bin/node', '101 100 101 0:04.00 /x/node',
+      '102 101 102 0:02.00 /Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node',
+      '300 1 300 0:52.00 /Apps/Codex Computer Use.app/Contents/MacOS/SkyComputerUseService',
+      '400 1 400 1:43.00 /System/Applications/Calculator.app/Contents/MacOS/Calculator'],
+  ];
+  let call = 0;
+  const stop = startFootprint({ pgid: 100, apps: ['Calculator'], baselineGroup: true, intervalMs: 1e6,
+    ps: async () => frames[Math.min(call++, frames.length - 1)].join('\n') });
+  await stop.ready;
+  const result = await stop();
+  assert.deepEqual(result.group, { node: 3, 'engine node': 2 });
+  assert.deepEqual(result.outside, { 'engine helper': 2, Calculator: 3 });
+  assert.equal(result.cpuSeconds, 10);
+});
+
+test('an unavailable warm baseline refuses instead of counting existing lifetime CPU', async () => {
+  let call = 0;
+  const stop = startFootprint({ pgid: 100, apps: ['Calculator'], baselineGroup: true, intervalMs: 1e6,
+    ps: async () => call++ ? '100 1 100 10:00.00 /x/node\n400 1 400 20:00.00 /x/Calculator' : '' });
+  try { await assert.rejects(stop.ready, /baseline/); }
+  finally { assert.equal((await stop()).cpuSeconds, 0, 'the later snapshot cannot count lifetime CPU'); }
+});
+
+test('a failed final warm sample cannot publish a zero CPU result', async () => {
+  let call = 0;
+  const stop = startFootprint({ pgid: 100, baselineGroup: true, intervalMs: 1e6,
+    ps: async () => call++ ? '' : '100 1 100 10:00.00 /x/node' });
+  await stop.ready;
+  await assert.rejects(stop(), /final sample/);
+});

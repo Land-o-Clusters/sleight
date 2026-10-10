@@ -21,6 +21,7 @@ import { createRelay } from './relay.mjs';
 import { createAppHealthHelper, diagnoseReadFailure } from './read-failure.mjs';
 import { loadFlowRules } from './flow-rules.mjs';
 import { InputLease } from './input-lease.mjs';
+import { collectOwnedEngine } from './checked-stop.mjs';
 import { addPreapproved, listPreapproved, loadPreapproved, removePreapproved } from './preapproved.mjs';
 import { createGrantAudit } from './preapproved-audit.mjs';
 import { BLOCKED_APP_TOOL, callBlockedApp, forbiddenTargetsAllowed, matchBlockedApp } from './blocked-apps.mjs';
@@ -218,6 +219,10 @@ export async function stopHelpers() {
   await Promise.allSettled([...pendingDrags]);
   // Give clipboard recovery a bounded window, then report any contents left on shutdown.
   await drainRichTextMoves();
+}
+export function resumeHelpers() {
+  if (ownedHelpers.size || pendingDrags.size) throw new Error('Owned helpers are not collected.');
+  helpersClosing = false;
 }
 
 export function askWithDialog(message, sessionScoped, options = {}, launch = execFile) {
@@ -552,7 +557,7 @@ export function approvalOptions(env = process.env, dialog = askWithDialog) {
   return { fallbackAsk: setting === 'client' ? undefined : prompt, onInitialize };
 }
 
-export async function run({ leaseDirectory } = {}) {
+export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, healthHelperFactory = createAppHealthHelper } = {}) {
   let flowRules, preapproved;
   try { flowRules = loadFlowRules(); preapproved = loadPreapproved(); } catch (err) { fail(err.message); }
   const { trace, grantAudit } = approvalLogging(preapproved);
@@ -560,38 +565,44 @@ export async function run({ leaseDirectory } = {}) {
   const s = resolveServer();
   if (s.error) fail(s.error);
   if (!existsSync(s.command)) fail(`server runtime missing: ${s.command}`);
-  const surfaceCache = selectSurfaces(s);
-
-  const child = spawn(s.command, s.args, {
-    stdio: ['pipe', 'pipe', 'inherit'],
-    env: { ...process.env, ...s.env },
-  });
-  child.on('error', err => fail(`could not start server: ${err.message}`));
-  // Refresh every automatic session after initialization. Keep this description fixed;
-  // the background inventory affects the next session only.
-  const stopObservingInitialization = refreshAfterInitialize(child.stdout, surfaceCache);
-  child.on('close', async code => {
-    stopObservingInitialization(); await surfaceCache?.close();
-    await stopHelpers(); await appHealth.close(); await relay.close(); process.exit(code ?? 0);
-  });
+  let surfaceCache, child, childClosed, stopObservingInitialization, relay;
+  let stoppingForReceipt = false;
   let terminating = false;
+  function startEngine() {
+    surfaceCache = selectSurfaces(s);
+    const current = spawn(s.command, s.args, { stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, ...s.env } });
+    child = current;
+    trace?.('engine-started', { pid: current.pid });
+    childClosed = new Promise(resolve => current.once('close', (code, signal) => resolve({ code, signal })));
+    current.on('error', err => fail(`could not start server: ${err.message}`));
+    stopObservingInitialization = refreshAfterInitialize(current.stdout, surfaceCache);
+    current.on('close', async code => {
+      if (current !== child || stoppingForReceipt) return;
+      stopObservingInitialization(); await surfaceCache?.close();
+      await stopHelpers(); await appHealth.close(); await relay.close(); process.exit(code ?? 0);
+    });
+    terminating = false; stoppingForReceipt = false;
+    return { serverIn: current.stdin, serverOut: current.stdout };
+  }
+  startEngine();
   function terminateEngine(signal = 'SIGTERM') {
-    if (terminating) return;
+    if (terminating || child.exitCode !== null || child.signalCode !== null) return;
     terminating = true;
-    child.stdin.end();
+    const current = child;
+    current.stdin.end();
     // The launcher owns this child. Finish collecting it before exit cleanup
     // releases the leases, including when a call or approval never answers.
-    setTimeout(() => child.kill(signal), 2000).unref();
-    setTimeout(() => child.kill('SIGKILL'), 5000).unref();
+    setTimeout(() => current.kill(signal), 2000).unref();
+    setTimeout(() => current.kill('SIGKILL'), 5000).unref();
   }
   const sessionId = randomUUID();
 
-  const appHealth = createAppHealthHelper();
+  let appHealth = healthHelperFactory();
   process.once('exit', () => appHealth.close());
   const replayClient = replayBridge({ input: process.stdin, output: process.stdout });
-  const relay = createRelay({
+  relay = createRelay({
     diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, { readControl, probeApp: appHealth.probe }),
-    spaceProbe: appHealth.probe,
+    spaceProbe: app => appHealth.probe(app),
     guardMode: process.env.SLEIGHT_GUARD,
     takeNotices: takeRichTextNotices,
     firstCallBatch: process.env.SLEIGHT_FIRST_CALL_BATCH === 'merge' ? 'merge' : process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
@@ -634,7 +645,37 @@ export async function run({ leaseDirectory } = {}) {
     trace: relayTrace,
     guardTiming: !!process.env.SLEIGHT_TRACE,
     firstCallRules: skillRules(),
-    keyboardTaps: appHealth.keyboardTaps,
+    keyboardTaps: () => appHealth.keyboardTaps(),
+    windowIdentity: window => appHealth.windowIdentity(window),
+    beginStop: () => { stoppingForReceipt = true; },
+    stopEngine: async () => {
+      const engine = await collectOwnedEngine({ child, closed: childClosed });
+      stopObservingInitialization(); await surfaceCache?.close();
+      await stopHelpers();
+      return engine;
+    },
+    restartEngine: async isCurrent => {
+      await appHealth.close();
+      if (!isCurrent()) throw new Error('Engine restart was stopped.');
+      resumeHelpers();
+      appHealth = healthHelperFactory();
+      return startEngine();
+    },
+    inspectInput: inspectStoppedInput ?? (async () => {
+      const pointer = await runScript('input-state.js', {}, { cleanup: true });
+      const taps = await appHealth.keyboardTapState();
+      await appHealth.close(); await stopHelpers();
+      const ok = pointer.ok === true && Array.isArray(pointer.buttons) && pointer.buttons.length === 0 &&
+        taps.ok === true && Array.isArray(taps.taps) && taps.taps.length === 0 && ownedHelpers.size === 0;
+      return { ok, error: ok ? undefined : pointer.ok !== true ? 'Pointer state inspection failed'
+        : pointer.buttons.length ? 'A pointer button is down; its owner is unknown'
+        : taps.ok !== true ? 'Keyboard tap inspection failed'
+        : taps.taps.length ? 'Keyboard filter taps remain: ' + taps.taps.map(tap => tap.app || tap.bundleId || `pid ${tap.pid}`).join(', ')
+        : 'Owned helper exit is unconfirmed' };
+    }),
+    onStopReported: report => {
+      if (report.engine === 'unconfirmed') stoppingForReceipt = false;
+    },
   });
   process.once('exit', () => relay.close());
 

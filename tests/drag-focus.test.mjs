@@ -106,6 +106,14 @@ test('shutdown waits for an active drag and its delayed focus restoration', asyn
   finishRestore({ ok: true });
   await shutdown; assert.equal(stopped, true); assert.equal((await drag).isError, true);
 });
+test('collected helpers reopen for local tools after an engine restart', async () => {
+  const launch = await import('../plugins/sleight/lib/launch.mjs');
+  await launch.stopHelpers();
+  const run = (_command, _args, options, callback) => execFile(process.execPath, ['-e', 'console.log(JSON.stringify({ok:true}))'], options, callback);
+  assert.equal((await launch.runScript('select-window.js', {}, run)).ok, false);
+  launch.resumeHelpers();
+  assert.equal((await launch.runScript('select-window.js', {}, run)).ok, true);
+});
 test('a rejected app approval cannot capture focus or launch a helper', async () => {
   const result = await callLocalTool('drag', { app: 'Chess' }, async () => false, () => assert.fail('no helper allowed'));
   assert.equal(result.isError, true);

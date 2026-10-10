@@ -98,6 +98,7 @@ function run(argv) {
   };
   const taps = argv[0] === '--session' ? query('keyboard-taps') : undefined;
   const target = argv[0] === '--session' ? query('lease-target') : undefined;
+  let windowIdentity;
   const stdin = $.NSFileHandle.fileHandleWithStandardInput, stdout = $.NSFileHandle.fileHandleWithStandardOutput;
   let buffer = '';
   for (;;) {
@@ -115,7 +116,8 @@ function run(argv) {
       let request;
       try {
         request = JSON.parse(line);
-        const result = request.op === 'keyboard-taps' ? JSON.parse(taps())
+        const result = request.op === 'window-identity' ? JSON.parse((windowIdentity ||= query('window-identity'))([JSON.stringify(request.window)]))
+          : request.op === 'keyboard-taps' ? JSON.parse(taps())
           : request.op === 'lease-target' ? JSON.parse(target([JSON.stringify({ app: request.app })])) : probe(request.app);
         reply = { id: request.id, ...result };
       } catch { reply = { id: request?.id, status: 'unknown', ok: false, error: 'session query failed' }; }
@@ -139,6 +141,16 @@ function probe(selector) {
   const error = Number($.AXUIElementCopyAttributeValue(app, $('AXWindows'), value));
   if (error !== 0) return { status: error === -25204 ? 'timeout' : error === -25211 ? 'denied' : 'unknown', error, pid, ...space };
   const windows = ObjC.castRefToObject(value[0]);
-  return { status: 'responding', pid, windows: Number(windows.count), minimized: minimizedCount(windows), ...space,
+  // A single window costs no title reads. Only multiple windows need candidate disambiguation.
+  let windowTitles;
+  if (Number(windows.count) > 1 && Number(windows.count) <= 64) {
+    windowTitles = [];
+    for (let i = 0; i < Number(windows.count); i++) {
+      const title = Ref();
+      if (Number($.AXUIElementCopyAttributeValue(windows.objectAtIndex(i), $('AXTitle'), title)) !== 0) { windowTitles = undefined; break; }
+      windowTitles.push(ObjC.unwrap(ObjC.castRefToObject(title[0])));
+    }
+  }
+  return { status: 'responding', pid, windows: Number(windows.count), windowTitles, minimized: minimizedCount(windows), ...space,
     ...(ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit' && Number(windows.count) === 0 && onlySavePanel ? { savePanelOnly: true, savePanelWindowIds } : {}) };
 }

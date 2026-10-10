@@ -30,6 +30,10 @@ it. If an app needs approval, ask the user, or stop when a headless run refuses 
   images. It shows the picture itself. Don't sleep before a read, which waits on its own.
 - To choose among several windows, call `select_window` with `app` and an exact file `url` (or
   `title`), then acquire the app in a call of its own and check its Window and URL.
+- Use `waitFor` only for an element that appears late, such as a Save sheet after `super+s`:
+  `nodeRepl.write(await app.waitFor({ id: "save-panel" }, { timeoutMs: 10000 }))`.
+  It returns one full window tree (also accepts `label` or `line`), polling no faster than every
+  250 ms. Act directly on elements already in the tree.
 - If a result says the user changed the app, read it again. They may be using it. A changed or
   missing header after an action means "outcome unconfirmed": read before retrying.
 

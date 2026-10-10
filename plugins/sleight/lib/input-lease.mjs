@@ -179,4 +179,15 @@ export class InputLease {
     if (errors.length === 1) throw errors[0];
     if (errors.length > 1) throw new AggregateError(errors, 'Input lease: release and coordinator cleanup failed.');
   }
+  releaseChecked() {
+    const tokens = new Set(this.owned.values());
+    this.release();
+    let names;
+    try { names = readdirSync(this.directory); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; names = []; }
+    for (const name of names.filter(name => name.endsWith('.json'))) {
+      if (tokens.has(this.read(join(this.directory, name))?.token)) throw new Error('Input lease: owned record remains after release.');
+    }
+    if (this.owned.size) throw new Error('Input lease: owned reservations remain.');
+  }
 }

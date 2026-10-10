@@ -156,9 +156,9 @@ async function replayCurrent($: any, file: string) {
 
 // Tells the engine the turn is over so it releases what it holds, as Codex
 // does at the end of each turn. The relay fills in the session and turn ids.
-async function endEngineTurn($: any, event: 'Stop' | 'Interrupt') {
+async function endEngineTurn($: any, event: 'Stop' | 'Interrupt', checked = false) {
   try {
-    const ended = await call($, 'turn_ended', { hook_event_name: event })
+    const ended = await call($, 'turn_ended', { hook_event_name: event, ...(checked ? { sleight_stop: true } : {}) })
     let latest = (ended as { _meta?: { 'sleight/receipt'?: { path?: string; review?: string; unavailable?: boolean } } })._meta?.['sleight/receipt']
     // The installed host's $.mcp.call keeps content but drops _meta. The relay supplies JSON
     // in one fixed marker so paths with spaces and multi-line reviews don't need a prose parser.
@@ -182,8 +182,13 @@ async function endEngineTurn($: any, event: 'Stop' | 'Interrupt') {
       const text = typeof block?.text === 'string' ? block.text : ''
       if (text.startsWith('sleight-warning: ')) $.ui.toast(text.slice('sleight-warning: '.length))
     }
+    if (checked) {
+      return (ended.content ?? []).map((block: { text?: string }) => block.text ?? '')
+        .find((text: string) => text.startsWith('sleight stop:')) ?? 'sleight stop unconfirmed: the engine returned no checked receipt.'
+    }
   } catch (err) {
     $.ui.log(`sleight: could not end the turn: ${(err as Error).message}`, { to: 'debug' })
+    if (checked) return `sleight stop unconfirmed: ${(err as Error).message}`
   }
 }
 
@@ -246,6 +251,10 @@ export const register: Register = on => {
   // moved the engine's diff baseline. The host skips this hook for our own
   // automatic handoff, so that handoff cannot lift Stop.
   on('prompt.submit', async ($, e, next) => {
+    if (await read($, stopped)) {
+      // A failed collection keeps the relay alive. Lift its closing flag only at this user boundary.
+      await call($, 'turn_ended', { sleight_resume: true }).catch(() => undefined)
+    }
     await update($, stopped, () => false)
     if (snapshottedApps.size === 0) return next(e)
     const apps = [...snapshottedApps].join(', ')
@@ -319,9 +328,10 @@ export const register: Register = on => {
     if (e.args.trim() === 'stop') {
       if (replayActive) replayCancelled = true
       await update($, stopped, () => true)
-      await endEngineTurn($, 'Interrupt')
+      usedThisTurn = false
+      const receipt = await endEngineTurn($, 'Interrupt', true)
       $.ui.status('sleight · stopped')
-      return { text: 'sleight stopped: Claude can’t use it again until your next message. Press Esc to stop the rest of the turn.' }
+      return { text: `${receipt} Press Esc to stop the rest of the turn.` }
     }
     await $.ui.open({ id: PANE, title: 'sleight' })
     if (args === 'replay' || args.startsWith('replay ')) return replayCurrent($, args.slice(6))
@@ -407,7 +417,8 @@ export const register: Register = on => {
             onPress={() => {
               if (replayActive) replayCancelled = true
               void update($, stopped, () => true)
-              void endEngineTurn($, 'Interrupt')
+              usedThisTurn = false
+              void endEngineTurn($, 'Interrupt', true).then(receipt => $.ui.toast(receipt ?? 'sleight stop unconfirmed'))
               $.ui.status('sleight · stopped')
             }}
           />

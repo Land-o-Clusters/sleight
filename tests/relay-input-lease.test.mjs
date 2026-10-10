@@ -14,6 +14,645 @@ const rpc = (id, name, args = {}) => ({ jsonrpc: '2.0', id, method: 'tools/call'
 const result = (id, text = header) => ({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }],
   _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit' } } } } });
 const windowContent = msg => msg.result.content.filter(item => !/^sleight: (?:UI|call failed|saved:)/.test(item.text ?? ''));
+const duplicateTree = '[sleight:windows]' + JSON.stringify([{ id: 'com.apple.TextEdit', windows: [{ title: 'Untitled' }, { title: 'Untitled' }] }]) +
+  '\nWindow: "Untitled", App: TextEdit.\n0 standard window Untitled';
+test('same-title replacement refuses input before forwarding', async t => {
+  for (const combined of [false]) {
+    const { harness } = setup(t);
+    let identity = 1, matches = 1;
+    const h = harness('native', { fresh: true, changeReview: false, windowIdentity: async window => ({
+      ...window, status: 'ok', epoch: 'helper', window: identity, pid: 123, processStart: 1, matches
+    }) });
+    const code = combined ? 'let app = await cua.getApp("TextEdit"); await app.typeText("x");'
+      : 'let app = await cua.getApp("TextEdit");';
+    h.send(rpc('read', 'js', { code }));
+    const acquisition = h.forwarded.at(-1).id;
+    matches = combined ? 2 : 1;
+    h.reply(result(acquisition, duplicateTree));
+    await new Promise(resolve => setImmediate(resolve));
+    if (!combined) {
+      identity = 2;
+      h.send(rpc('act', 'js', { code: 'await app.typeText("x")' }));
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    assert.equal(h.forwarded.length, 1);
+    assert.equal(h.received.at(-1).result.isError, true);
+    assert.match(h.received.at(-1).result.content.map(c => c.text ?? '').join('\n'), /ambiguous|changed/);
+  }
+});
+test('inconclusive native identity keeps the existing header guard and warns once', async t => {
+  for (const observed of [{ status: 'unknown' }, { status: 'ok', matches: 2 }, { status: 'ok', matches: 0 }, { status: 'ok', matches: 1 }]) {
+    const { harness } = setup(t);
+    const h = harness('fallback', { fresh: true, changeReview: false, windowIdentity: async () => observed });
+    for (const id of ['first', 'second']) {
+      h.send(rpc(id, 'js', { code: 'let app = await cua.getApp("TextEdit"); await app.typeText("x");' }));
+      h.reply(result(h.forwarded.at(-1).id, duplicateTree));
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(h.forwarded.at(-1).id, id);
+      assert.match(h.forwarded.at(-1).params.arguments.code, /window or URL changed/);
+      h.reply(result(id, duplicateTree));
+    }
+    assert.equal(h.received.filter(m => m.result.isError).length, 0);
+    assert.equal(h.received.flatMap(m => m.result.content).filter(c => /sleight-warning:.*identity/.test(c.text)).length, 1);
+  }
+});
+test('selection passes its window number into duplicate-title identity checks', async t => {
+  const { harness } = setup(t), requests = [];
+  const target = { appId: 'com.apple.TextEdit', app: 'TextEdit', title: 'Untitled', url: null };
+  const h = harness('number', { fresh: true, changeReview: false, localTools: {
+    tools: [SELECT_WINDOW_TOOL], target: async () => target,
+    call: async () => ({ content: [{ type: 'text', text: JSON.stringify({ ok: true, target, identity: { pid: 123, windowNumber: 22 } }) }] }),
+  }, windowIdentity: async window => { requests.push(window); return { ...window, status: 'ok', matches: 1,
+    epoch: 'helper', window: 2, windowNumber: 22, pid: 123, processStart: 1 }; } });
+  h.send(rpc('select', 'select_window', { app: 'TextEdit', title: 'Untitled', windowNumber: 22 }));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); h.reply(result('read', duplicateTree));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(requests[0].windowNumber, 22);
+  h.send(rpc('action', 'js', { code: 'await app.typeText("x")' }));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.forwarded.at(-1).id, 'action');
+  assert.equal(requests[1].nativeIdentity.windowNumber, 22);
+  h.reply(result('action', duplicateTree));
+});
+test('multiple candidates hold admission while their native check is pending', async t => {
+  const { harness } = setup(t);
+  let resolveCheck;
+  const observe = window => ({ ...window, status: 'ok', epoch: 'helper', window: 1, pid: 123, processStart: 1, matches: 1 });
+  const h = harness('native', { fresh: true, changeReview: false, windowIdentity: window =>
+    resolveCheck === undefined ? Promise.resolve(observe(window)) : new Promise(resolve => { resolveCheck = () => resolve(observe(window)); }) });
+  h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit");' }));
+  h.reply(result('read', duplicateTree));
+  await new Promise(resolve => setImmediate(resolve));
+  resolveCheck = true;
+  h.send(rpc('act', 'js', { code: 'await app.typeText("x")' }));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('other', 'js', { code: 'await app.typeText("y")' }));
+  assert.match(h.received.at(-1).result.content[0].text, /pending/);
+  resolveCheck(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.forwarded.at(-1).id, 'act');
+});
+test('identity on and off retain the baseline refusal while an engine read is pending', async t => {
+  for (const enabled of [false, true]) {
+    const { harness } = setup(t); let checks = 0;
+    const h = harness('pending baseline', { fresh: true, changeReview: false, ...(enabled ? { windowIdentity: async window => {
+      checks++; return { ...window, status: 'ok', epoch: 'helper', window: 1, pid: 123, processStart: 1, matches: 1 };
+    } } : {}) });
+    h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); h.reply(result('read', duplicateTree));
+    await new Promise(resolve => setImmediate(resolve));
+    h.send(rpc('pending', 'js', { code: 'await app.getAXState()' }));
+    const before = h.forwarded.length;
+    h.send(rpc('action', 'js', { code: 'await app.typeText("x")' }));
+    assert.equal(h.forwarded.length, before);
+    assert.match(h.received.at(-1).result.content[0].text, /another call in this session is pending/);
+    assert.equal(checks, enabled ? 1 : 0, 'no additional identity request for the refused action');
+    h.reply(result('pending', duplicateTree)); await new Promise(resolve => setImmediate(resolve));
+  }
+});
+test('metadata-free rereads after reset and through aliases establish a native baseline', async t => {
+  for (const reset of [false, true]) {
+    const { harness } = setup(t);
+    let identity = 1, checks = 0;
+    const h = harness('baseline', { fresh: true, changeReview: false, windowIdentity: async window => {
+      checks++;
+      return { ...window, status: 'ok', epoch: 'helper', window: identity, pid: 123, processStart: 1, matches: 1 };
+    } });
+    const tree = duplicateTree;
+    h.send(rpc('first', 'js', { code: 'let te = await cua.getApp("TextEdit");' })); h.reply(result('first', tree));
+    await new Promise(resolve => setImmediate(resolve));
+    if (reset) { h.send(rpc('reset', 'js_reset')); h.reply(result('reset', 'reset')); }
+    h.send(rpc('again', 'js', { code: reset ? 'let te = await cua.getApp("TextEdit");' : 'await te.getAXState();' }));
+    const reply = result('again', tree); delete reply.result._meta; h.reply(reply);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(checks, 2, 'the metadata-free read checked native identity');
+    identity = 2;
+    const before = h.forwarded.length;
+    h.send(rpc('action', 'js', { code: 'await te.typeText("x");' }));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.forwarded.length, before);
+    assert.match(h.received.at(-1).result.content[0].text, /changed/);
+  }
+});
+test('ambiguous native identity does not block browser-only candidates', async t => {
+  const { harness } = setup(t);
+  const h = harness('browser', { fresh: true, changeReview: false, windowIdentity: async window => ({ ...window, status: 'ok', matches: 2 }) });
+  h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit");' }));
+  h.reply(result('read', duplicateTree));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('browser', 'js', { code: 'let tab = await cua.createBrowserTab("chrome", "https://example.com");' }));
+  assert.equal(h.forwarded.at(-1).id, 'browser');
+  assert.doesNotMatch(h.forwarded.at(-1).params.arguments.code, /Native access stopped/);
+});
+
+test('explicit stop drains a pending call, ends its turn, collects then checks cleanup', async t => {
+  const { harness } = setup(t);
+  let h;
+  const events = [];
+  h = harness('checked stop', { stopGraceMs: 50, stopEngine: async () => {
+    assert.equal(h.inputLease.owned.size, 1, 'the lease is held through engine collection');
+    events.push('collect'); return { collected: true, cutOff: false };
+  }, inspectInput: async () => {
+    assert.equal(h.inputLease.owned.size, 0); events.push('inspect'); return { ok: true };
+  } });
+  h.send(rpc('pending', 'js', { code: 'await app.typeText("x")', title: 'Type x' }));
+  h.send(rpc('stop', 'turn_ended', { hook_event_name: 'Interrupt', sleight_stop: true }));
+  assert.equal(h.received.length, 0);
+  h.reply(result('pending'));
+  await new Promise(resolve => setImmediate(resolve));
+  const end = h.forwarded.at(-1);
+  assert.equal(end.params.name, 'turn_ended'); h.reply(result(end.id, 'ended'));
+  await new Promise(resolve => setImmediate(resolve));
+  const receipt = h.received.find(m => m.id === 'stop').result;
+  assert.equal(receipt.isError, false);
+  assert.deepEqual(events, ['collect', 'inspect']);
+  assert.match(receipt.content[0].text, /in flight: js: Type x.*Engine exited and collected; turn finished.*Checked:/);
+});
+test('explicit stop cuts off hung calls and delayed local targeting cannot restart input', async t => {
+  const { harness } = setup(t);
+  let resolveTarget, localCalls = 0;
+  const h = harness('local stop', { changeReview: false, stopGraceMs: 5,
+    localTools: { tools: [{ name: 'drag' }], target: () => new Promise(resolve => { resolveTarget = resolve; }),
+      call: async () => { localCalls++; return { content: [] }; } },
+    stopEngine: async () => ({ collected: true, cutOff: true }), inspectInput: async () => ({ ok: true }) });
+  h.send(rpc('pending', 'drag', { app: 'TextEdit', from: [0, 0], to: [1, 1] }));
+  h.send(rpc('stop', 'turn_ended', { hook_event_name: 'Interrupt', sleight_stop: true }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  const receipt = h.received.find(m => m.id === 'stop').result;
+  assert.match(receipt.content[0].text, /in flight: drag.*cut off and collected; turn unconfirmed/);
+  resolveTarget({ appId: 'com.apple.TextEdit', app: 'TextEdit' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(localCalls, 0); assert.equal(h.inputLease.owned.size, 0);
+  assert.equal(h.received.filter(m => m.id === 'pending').length, 1);
+});
+test('post-read identity completion cannot deliver a second reply after checked stop', async t => {
+  const { harness } = setup(t);
+  let resolveIdentity;
+  const h = harness('late read', { fresh: true, changeReview: false, stopGraceMs: 5,
+    windowIdentity: window => new Promise(resolve => { resolveIdentity = () => resolve({ ...window,
+      status: 'ok', matches: 1, epoch: 'helper', window: 1, pid: 123, processStart: 1 }); }),
+    stopEngine: async () => ({ collected: true, cutOff: false }), inspectInput: async () => ({ ok: true }) });
+  h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit");' }));
+  h.reply(result('read', duplicateTree));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('stop', 'turn_ended', { hook_event_name: 'Interrupt', sleight_stop: true }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(h.received.find(m => m.id === 'read').result.isError, true);
+  assert.equal(h.received.find(m => m.id === 'stop').result.isError, false);
+  resolveIdentity(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.received.filter(m => m.id === 'read').length, 1);
+  h.send(rpc('later', 'js', { code: 'await app.typeText("x")' }));
+  assert.match(h.received.at(-1).result.content[0].text, /closing/);
+});
+test('a late document approval cannot answer an already cancelled request after stop', async t => {
+  const { harness } = setup(t);
+  let decide;
+  const h = harness('late consent', { approvalScope: 'document', ask: () => new Promise(resolve => { decide = resolve; }),
+    stopGraceMs: 20, stopEngine: async () => ({ collected: true, cutOff: false }), inspectInput: async () => ({ ok: true }) });
+  h.send(rpc('consent', 'document_scope'));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('stop', 'turn_ended', { hook_event_name: 'Interrupt', sleight_stop: true }));
+  await new Promise(resolve => setImmediate(resolve));
+  const end = h.forwarded.at(-1); h.reply(result(end.id, 'ended'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.received.find(m => m.id === 'consent').result.isError, true);
+  decide('accept'); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.received.filter(m => m.id === 'consent').length, 1);
+});
+test('an old split acquisition cannot send input after unconfirmed stop and resume', async t => {
+  const { harness } = setup(t);
+  let resolveIdentity, first = true;
+  const observe = window => ({ ...window, status: 'ok', matches: 1, epoch: 'helper', window: 1, pid: 123, processStart: 1 });
+  const h = harness('old split', { fresh: true, changeReview: false, stopGraceMs: 5,
+    stopEngine: async () => ({ collected: false }), windowIdentity: window => first
+      ? (first = false, new Promise(resolve => { resolveIdentity = () => resolve(observe(window)); })) : Promise.resolve(observe(window)) });
+  h.send(rpc('old', 'js', { code: 'let app = await cua.getApp("TextEdit"); await app.typeText("OLD");' }));
+  h.reply(result(h.forwarded.at(-1).id, duplicateTree));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.ok(h.received.some(m => m.id === 'stop'));
+  h.send(rpc('resume', 'turn_ended', { sleight_resume: true }));
+  resolveIdentity(); await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.forwarded.some(m => m.id === 'old'), false);
+  assert.equal(h.received.filter(m => m.id === 'old').length, 1);
+  assert.equal(h.received.find(m => m.id === 'old').result.isError, true);
+});
+test('an old engine document approval cannot accept after unconfirmed stop and resume', async t => {
+  const { harness } = setup(t);
+  let decide;
+  const h = harness('old engine consent', { fresh: true, approvalScope: 'document', stopGraceMs: 5,
+    stopEngine: async () => ({ collected: false }), ask: () => new Promise(resolve => { decide = resolve; }) });
+  h.send(rpc('old-read', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+  h.reply({ jsonrpc: '2.0', id: 'old-approval', method: 'elicitation/create', params: { message: 'Allow TextEdit?',
+    _meta: { connector_id: 'computer-use', persist: ['session'], tool_params: { app: 'TextEdit' }, riskLevel: 'low' } } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(typeof decide, 'function');
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  h.send(rpc('resume', 'turn_ended', { sleight_resume: true }));
+  decide('accept'); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.forwarded.some(m => m.id === 'old-approval' && m.result?.action === 'accept'), false);
+});
+test('an old clipboard acquisition cannot dispatch after unconfirmed stop and resume', async t => {
+  const { harness } = setup(t);
+  let acquire, released = false;
+  const h = harness('old clipboard', { changeReview: false, stopGraceMs: 5, stopEngine: async () => ({ collected: false }),
+    clipboardMode: 'preserve', clipboardIO: async request => {
+      if (request.op === 'acquire') await new Promise(resolve => { acquire = resolve; });
+      if (request.op === 'read') return { count: 1, items: [] };
+      if (request.op === 'release') released = true;
+    } });
+  h.send(rpc('old', 'js', { code: 'await app.pressKey("super+x")' }));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  h.send(rpc('resume', 'turn_ended', { sleight_resume: true }));
+  acquire(); await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.forwarded.some(m => m.id === 'old'), false);
+  assert.equal(released, true);
+});
+test('an old review cannot undo a file after unconfirmed stop and resume', async t => {
+  const { harness, path } = setup(t);
+  let decide;
+  const h = harness('old review', { stopGraceMs: 5, stopEngine: async () => ({ collected: false }),
+    ask: () => new Promise(resolve => { decide = resolve; }) });
+  h.send(rpc('edit', 'js', { code: 'await app.typeText("edit")' }));
+  writeFileSync(path, 'after\n'); h.reply(result('edit'));
+  h.send(rpc('review', 'review_changes', { op: 'review' })); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(typeof decide, 'function');
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  h.send(rpc('resume', 'turn_ended', { sleight_resume: true }));
+  decide('undo'); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(readFileSync(path, 'utf8'), 'after\n');
+});
+test('a client approval from before stop is cancelled after resume without being remembered', async t => {
+  const { harness } = setup(t);
+  const h = harness('old client consent', { changeReview: false, stopGraceMs: 5, stopEngine: async () => ({ collected: false }) });
+  const approval = id => ({ jsonrpc: '2.0', id, method: 'elicitation/create', params: { message: 'Allow TextEdit?',
+    _meta: { connector_id: 'computer-use', persist: ['session'], tool_params: { app: 'TextEdit' }, riskLevel: 'low' } } });
+  h.send(rpc('old', 'js', { code: 'await app.typeText("x")' })); h.reply(approval('old-consent'));
+  assert.ok(h.received.some(m => m.id === 'old-consent'));
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  h.send(rpc('resume', 'turn_ended', { sleight_resume: true }));
+  h.send({ jsonrpc: '2.0', id: 'old-consent', result: { action: 'accept' } });
+  assert.equal(h.forwarded.find(m => m.id === 'old-consent').result.action, 'cancel');
+  h.reply(approval('fresh-consent'));
+  assert.ok(h.received.some(m => m.id === 'fresh-consent'));
+});
+test('discarding a stopped retry clears its pending app-health state without adopting its UI', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const { harness } = setup(t);
+  const h = harness('stopped retry', { changeReview: false, stopGraceMs: 5, stopEngine: async () => ({ collected: false }) });
+  for (const id of ['timeout-1', 'timeout-2']) {
+    h.send(rpc(id, 'js', { code: 'let calc = await cua.getApp("Calculator")' }));
+    const failed = result(id, 'timeoutReached'); failed.result.isError = true; h.reply(failed);
+  }
+  h.send(rpc('busy', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+  t.mock.timers.tick(20000); h.reply(result('busy'));
+  h.send(rpc('old-retry', 'js', { code: 'let calc = await cua.getApp("Calculator")' }));
+  assert.equal(h.forwarded.at(-1).id, 'old-retry');
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true }));
+  t.mock.timers.tick(5); await new Promise(resolve => setImmediate(resolve));
+  assert.ok(h.received.some(m => m.id === 'stop'));
+  h.send(rpc('resume', 'turn_ended', { sleight_resume: true })); h.reply(result('old-retry'));
+  h.send(rpc('busy-again', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+  t.mock.timers.tick(20000); h.reply(result('busy-again'));
+  h.send(rpc('fresh-read', 'js', { code: 'let calc = await cua.getApp("Calculator")' }));
+  assert.equal(h.forwarded.at(-1).id, 'fresh-read');
+});
+test('launching an app uses the final health result to detect restored equal-title windows', async t => {
+  const { harness } = setup(t);
+  let probes = 0, identities = 0;
+  const h = harness('restored windows', { fresh: true, changeReview: false,
+    spaceProbe: async () => ++probes === 1 ? { status: 'absent' }
+      : { status: 'responding', windows: 2, windowTitles: ['Untitled', 'Untitled'] },
+    windowIdentity: async window => { identities++; return { ...window, status: 'ok', matches: 1, epoch: 'helper', window: 1, pid: 123, processStart: 1 }; } });
+  h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+  h.reply(result('read', 'Window: "Untitled", App: TextEdit.\n0 standard window Untitled'));
+  await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(probes, 2); assert.equal(identities, 1);
+});
+test('single native windows and the recorded TextEdit Save sheet never need helper trust', async t => {
+  const trace = JSON.parse(readFileSync(new URL('../docs/benchmarks/2026-10-04-hover-discovery-2/results.json', import.meta.url), 'utf8'));
+  const strings = [];
+  const visit = value => { if (typeof value === 'string') strings.push(value); else if (value && typeof value === 'object') Object.values(value).forEach(visit); };
+  visit(trace);
+  const save = strings.find(text => text.startsWith('Window: "Save", App: TextEdit.'));
+  assert.match(save, /0 sheet.*ID: save-panel/);
+  for (const tree of ['Window: "Calculator", App: Calculator.\n0 standard window Calculator', save]) {
+    const { harness } = setup(t);
+    let checks = 0;
+    const h = harness('one window', { fresh: true, changeReview: false, windowIdentity: async () => { checks++; throw new Error('helper not trusted'); } });
+    h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit");' })); h.reply(result('read', tree));
+    await new Promise(resolve => setImmediate(resolve));
+    h.send(rpc('act', 'js', { code: 'await app.pressKey("Return")' }));
+    assert.equal(h.forwarded.at(-1).id, 'act'); h.reply(result('act', tree));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.received.at(-1).result.isError, undefined);
+    assert.equal(checks, 0);
+  }
+});
+test('untrusted helper falls back for duplicate candidates and warns once per session', async t => {
+  const { harness } = setup(t);
+  const h = harness('untrusted', { fresh: true, changeReview: false, windowIdentity: async () => ({ status: 'denied' }) });
+  for (const id of ['first', 'again']) {
+    h.send(rpc(id, 'js', { code: 'let app = await cua.getApp("TextEdit");' })); h.reply(result(id, duplicateTree));
+    await new Promise(resolve => setImmediate(resolve));
+    h.send(rpc(id + '-act', 'js', { code: 'await app.typeText("x")' }));
+    assert.equal(h.forwarded.at(-1).id, id + '-act'); h.reply(result(id + '-act', 'Window: "Untitled", App: TextEdit.'));
+  }
+  assert.equal(h.received.flatMap(msg => msg.result.content).filter(c => /sleight-warning:.*Accessibility/.test(c.text)).length, 1);
+});
+test('Esc ends the turn without collecting the engine and keeps session approvals', async t => {
+  const { harness } = setup(t);
+  let collected = 0, asks = 0;
+  const h = harness('Esc', { changeReview: false, stopEngine: async () => { collected++; return { collected: true }; }, ask: async () => { asks++; return 'accept'; } });
+  const approval = id => ({ jsonrpc: '2.0', id, method: 'elicitation/create', params: { message: 'Allow TextEdit?',
+    _meta: { connector_id: 'computer-use', persist: ['session'], tool_params: { app: 'TextEdit' }, riskLevel: 'low' } } });
+  h.reply(approval('approve')); await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('esc', 'turn_ended', { hook_event_name: 'Interrupt' }));
+  assert.equal(h.forwarded.at(-1).id, 'esc'); h.reply(result('esc', 'ended'));
+  h.send(rpc('act', 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(h.forwarded.at(-1).id, 'act'); h.reply(approval('approved-again'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(asks, 1); assert.equal(collected, 0);
+  h.reply(result('act'));
+});
+test('the next user message clears closing after an unconfirmed engine exit', async t => {
+  const { harness } = setup(t);
+  const h = harness('resume', { changeReview: false, stopGraceMs: 20, stopEngine: async () => ({ collected: false }) });
+  h.send(rpc('stop', 'turn_ended', { hook_event_name: 'Interrupt', sleight_stop: true }));
+  h.reply(result(h.forwarded.at(-1).id, 'ended')); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.received.find(m => m.id === 'stop').result.isError, true);
+  h.send(rpc('blocked', 'js', { code: 'await app.typeText("x")' }));
+  assert.match(h.received.at(-1).result.content[0].text, /closing/);
+  h.send(rpc('new-message', 'turn_ended', { sleight_resume: true }));
+  h.send(rpc('read-again', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); h.reply(result('read-again'));
+  h.send(rpc('act', 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(h.forwarded.at(-1).id, 'act'); h.reply(result('act'));
+});
+test('confirmed stop waits for a new message, restarts once and retains session approval', async t => {
+  const { harness } = setup(t);
+  let asks = 0, starts = 0;
+  const h = harness('confirmed resume', { changeReview: false, stopGraceMs: 20,
+    stopEngine: async () => ({ collected: true }), inspectInput: async () => ({ ok: true }),
+    restartEngine: async () => { starts++; return { serverIn: h.serverIn, serverOut: h.serverOut }; },
+    ask: async () => { asks++; return 'accept'; } });
+  const approval = () => ({ jsonrpc: '2.0', id: 'same-engine-token', method: 'elicitation/create', params: { message: 'Allow TextEdit?',
+    _meta: { connector_id: 'computer-use', persist: ['session'], tool_params: { app: 'TextEdit' }, riskLevel: 'low' } } });
+  h.reply(approval()); await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true })); h.reply(result(h.forwarded.at(-1).id, 'ended'));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('before-message', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+  assert.equal(starts, 0); assert.equal(h.received.at(-1).result.isError, true);
+  h.send(rpc('message', 'turn_ended', { sleight_resume: true }));
+  assert.equal(starts, 0, 'the message only authorizes the next call');
+  h.send(rpc('read-after', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(starts, 1); assert.equal(h.forwarded.at(-1).id, 'read-after');
+  h.reply(approval()); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(asks, 1); h.reply(result('read-after'));
+  assert.equal(h.received.at(-1).id, 'read-after'); assert.ok(!h.received.at(-1).result.isError);
+});
+test('a confirmed stop closes the turn receipt with the stopped call, and the next engine starts clean', async t => {
+  const { harness } = setup(t);
+  const written = [];
+  const h = harness('stop receipt', { changeReview: false, stopGraceMs: 20, receipts: true, receiptWriter: r => { written.push(r); return '/tmp/r.json'; },
+    stopEngine: async () => ({ collected: true }), inspectInput: async () => ({ ok: true }),
+    restartEngine: async () => ({ serverIn: h.serverIn, serverOut: h.serverOut }) });
+  h.send(rpc('typing', 'js', { code: 'await app.typeText("x")' }));
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true })); h.reply(result(h.forwarded.at(-1).id, 'ended'));
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.equal(written.length, 1, 'the stop writes the stopped turn\'s receipt');
+  assert.ok(written[0].calls.some(call => call.actions.some(a => a.action === 'typeText') && /error|pending/.test(call.result)), JSON.stringify(written[0].calls));
+  h.send(rpc('message', 'turn_ended', { sleight_resume: true }));
+  h.send(rpc('read-after', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+  await new Promise(resolve => setImmediate(resolve));
+  h.reply(result('read-after'));
+  h.send(rpc('end', 'turn_ended', {})); h.reply(result(h.forwarded.at(-1).id, 'ended'));
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.ok(written.slice(1).every(r => !r.calls.some(call => call.actions.some(a => a.action === 'typeText'))), 'no stopped call carries into the next receipt');
+});
+test('a replacement engine cannot reuse an old client approval response', async t => {
+  const { harness } = setup(t);
+  const h = harness('reused approval', { changeReview: false, stopGraceMs: 20,
+    stopEngine: async () => ({ collected: true }), inspectInput: async () => ({ ok: true }),
+    restartEngine: async () => ({ serverIn: h.serverIn, serverOut: h.serverOut }) });
+  const approval = app => ({ jsonrpc: '2.0', id: 'engine-approval-0', method: 'elicitation/create', params: { message: `Allow ${app}?`,
+    _meta: { connector_id: 'computer-use', persist: ['session'], tool_params: { app }, riskLevel: 'low' } } });
+  h.reply(approval('TextEdit')); const old = h.received.at(-1).id;
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true })); h.reply(result(h.forwarded.at(-1).id, 'ended'));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('message', 'turn_ended', { sleight_resume: true }));
+  h.send(rpc('new-read', 'js', { code: 'let app = await cua.getApp("Calculator")' }));
+  await new Promise(resolve => setImmediate(resolve));
+  h.reply(approval('Calculator')); const current = h.received.at(-1).id;
+  assert.notEqual(current, old);
+  const before = h.forwarded.length;
+  h.send({ jsonrpc: '2.0', id: old, result: { action: 'accept', content: {} } });
+  assert.equal(h.forwarded.length, before);
+  h.send({ jsonrpc: '2.0', id: current, result: { action: 'accept', content: {} } });
+  assert.equal(h.forwarded.at(-1).id, 'engine-approval-0'); assert.equal(h.forwarded.at(-1).result.action, 'accept');
+  h.reply(result('new-read', 'Window: "Calculator", App: Calculator.'));
+});
+test('restart cancellation checks authorization before starting a replacement engine', async t => {
+  const { harness } = setup(t); let finish, spawned = 0;
+  const h = harness('cancel restart', { changeReview: false, stopGraceMs: 20,
+    stopEngine: async () => ({ collected: true }), inspectInput: async () => ({ ok: true }),
+    restartEngine: async isCurrent => { await new Promise(resolve => { finish = resolve; });
+      if (!isCurrent()) throw new Error('restart cancelled');
+      spawned++; return { serverIn: h.serverIn, serverOut: h.serverOut }; } });
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true })); h.reply(result(h.forwarded.at(-1).id, 'ended'));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('message', 'turn_ended', { sleight_resume: true }));
+  h.send(rpc('new-read', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+  await new Promise(resolve => setImmediate(resolve));
+  h.relay.close(); finish(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(spawned, 0);
+  assert.match(h.received.find(m => m.id === 'new-read').result.content[0].text, /restart cancelled/);
+});
+test('a failed restart is collected and can retry after another user message', async t => {
+  for (const timeout of [false, true]) {
+    const { harness } = setup(t); let collections = 0;
+    const h = harness('restart failure', { fresh: true, changeReview: false, stopGraceMs: 5, restartTimeoutMs: 10,
+      stopEngine: async () => { collections++; return { collected: true }; }, inspectInput: async () => ({ ok: true }),
+      restartEngine: async () => ({ serverIn: h.serverIn, serverOut: h.serverOut }) });
+    h.send({ jsonrpc: '2.0', id: 'init', method: 'initialize', params: { protocolVersion: '2025-06-18' } });
+    h.reply({ jsonrpc: '2.0', id: 'init', result: { protocolVersion: '2025-06-18' } });
+    h.send(rpc('stop', 'turn_ended', { sleight_stop: true })); h.reply(result(h.forwarded.at(-1).id, 'ended'));
+    await new Promise(resolve => setImmediate(resolve));
+    h.send(rpc('message', 'turn_ended', { sleight_resume: true }));
+    h.send(rpc('failed', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+    await new Promise(resolve => setImmediate(resolve));
+    if (timeout) await new Promise(resolve => setTimeout(resolve, 20));
+    else h.reply({ jsonrpc: '2.0', id: h.forwarded.at(-1).id, error: { code: -32000, message: 'startup failed' } });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(collections, 2); assert.equal(h.received.find(m => m.id === 'failed').result.isError, true);
+    h.send(rpc('next-message', 'turn_ended', { sleight_resume: true }));
+    h.send(rpc('retry', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+    await new Promise(resolve => setImmediate(resolve));
+    h.reply({ jsonrpc: '2.0', id: h.forwarded.at(-1).id, result: { protocolVersion: '2025-06-18' } });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.forwarded.at(-1).id, 'retry'); h.reply(result('retry'));
+    assert.ok(!h.received.at(-1).result.isError);
+  }
+});
+test('stopping during initialization cancels its waiter before the next restart', async t => {
+  const { harness } = setup(t); let starts = 0;
+  const h = harness('stop during initialize', { fresh: true, changeReview: false, stopGraceMs: 5,
+    stopEngine: async () => ({ collected: true }), inspectInput: async () => ({ ok: true }),
+    restartEngine: async () => { starts++; return { serverIn: h.serverIn, serverOut: h.serverOut }; } });
+  h.send({ jsonrpc: '2.0', id: 'init', method: 'initialize', params: { protocolVersion: '2025-06-18' } });
+  h.reply({ jsonrpc: '2.0', id: 'init', result: { protocolVersion: '2025-06-18' } });
+  for (const index of [1, 2]) {
+    h.send(rpc('stop-' + index, 'turn_ended', { sleight_stop: true })); h.reply(result(h.forwarded.at(-1).id, 'ended'));
+    await new Promise(resolve => setImmediate(resolve));
+    h.send(rpc('message-' + index, 'turn_ended', { sleight_resume: true }));
+    h.send(rpc('read-' + index, 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(starts, 2);
+  h.reply({ jsonrpc: '2.0', id: h.forwarded.at(-1).id, result: { protocolVersion: '2025-06-18' } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.forwarded.at(-1).id, 'read-2'); h.reply(result('read-2'));
+});
+test('unconfirmed collection during initialization cannot authorize another engine', async t => {
+  const { harness } = setup(t); let starts = 0, collections = 0;
+  const h = harness('uncollected initialization', { fresh: true, changeReview: false, stopGraceMs: 5,
+    stopEngine: async () => ({ collected: ++collections !== 2 }), inspectInput: async () => ({ ok: true }),
+    restartEngine: async () => { starts++; return { serverIn: h.serverIn, serverOut: h.serverOut }; } });
+  h.send({ jsonrpc: '2.0', id: 'init', method: 'initialize', params: { protocolVersion: '2025-06-18' } });
+  h.reply({ jsonrpc: '2.0', id: 'init', result: { protocolVersion: '2025-06-18' } });
+  for (const index of [1, 2]) {
+    h.send(rpc('stop-' + index, 'turn_ended', { sleight_stop: true })); h.reply(result(h.forwarded.at(-1).id, 'ended'));
+    await new Promise(resolve => setImmediate(resolve));
+    h.send(rpc('message-' + index, 'turn_ended', { sleight_resume: true }));
+    h.send(rpc('read-' + index, 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(h.received.find(msg => msg.id === 'stop-2').result._meta['sleight/stop'].engine, 'unconfirmed');
+  assert.equal(starts, 1, 'an uncollected initializing engine retains ownership');
+  assert.match(h.received.find(msg => msg.id === 'read-2').result.content[0].text, /collection is unconfirmed/);
+  h.send(rpc('stop-3', 'turn_ended', { sleight_stop: true })); h.reply(result(h.forwarded.at(-1).id, 'ended'));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('message-3', 'turn_ended', { sleight_resume: true }));
+  h.send(rpc('read-3', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(starts, 2, 'confirmed collection permits replacement');
+  h.reply({ jsonrpc: '2.0', id: h.forwarded.at(-1).id, result: { protocolVersion: '2025-06-18' } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.forwarded.at(-1).id, 'read-3'); h.reply(result('read-3'));
+});
+test('a deferred split identity cannot publish or act after confirmed stop and restart', async t => {
+  const { harness } = setup(t); let finish;
+  const h = harness('old internal identity', { fresh: true, changeReview: false, stopGraceMs: 5,
+    windowIdentity: window => new Promise(resolve => { finish = () => resolve({ ...window, status: 'ok', matches: 1,
+      epoch: 'helper', window: 1, pid: 123, processStart: 1 }); }),
+    stopEngine: async () => ({ collected: true }), inspectInput: async () => ({ ok: true }),
+    restartEngine: async () => ({ serverIn: h.serverIn, serverOut: h.serverOut }) });
+  h.send(rpc('old', 'js', { code: 'let app = await cua.getApp("TextEdit"); await app.typeText("old");' }));
+  h.reply(result(h.forwarded.at(-1).id, duplicateTree)); await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true })); await new Promise(resolve => setTimeout(resolve, 20));
+  h.send(rpc('message', 'turn_ended', { sleight_resume: true }));
+  h.send(rpc('fresh', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); await new Promise(resolve => setImmediate(resolve));
+  h.reply(result('fresh')); const count = h.received.length, sent = h.forwarded.length;
+  finish(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.received.length, count); assert.equal(h.forwarded.length, sent);
+});
+test('a deferred split health observation cannot publish after collected stop and restart', async t => {
+  const { harness } = setup(t); let finish, probes = 0;
+  const health = { status: 'responding', windows: 1, windowTitles: ['a.txt'] };
+  const h = harness('old internal health', { fresh: true, changeReview: false, stopGraceMs: 5,
+    spaceProbe: () => ++probes === 1 ? new Promise(resolve => { finish = () => resolve(health); }) : Promise.resolve(health),
+    stopEngine: async () => ({ collected: true }), inspectInput: async () => ({ ok: true }),
+    restartEngine: async () => ({ serverIn: h.serverIn, serverOut: h.serverOut }) });
+  h.send(rpc('old', 'js', { code: 'let app = await cua.getApp("TextEdit"); await app.typeText("old");' }));
+  await new Promise(resolve => setImmediate(resolve));
+  h.reply(result(h.forwarded.at(-1).id));
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true })); await new Promise(resolve => setTimeout(resolve, 20));
+  h.send(rpc('message', 'turn_ended', { sleight_resume: true }));
+  h.send(rpc('fresh', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); await new Promise(resolve => setImmediate(resolve));
+  h.reply(result('fresh')); await new Promise(resolve => setImmediate(resolve));
+  const count = h.received.length, sent = h.forwarded.length;
+  finish(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.received.length, count); assert.equal(h.forwarded.length, sent);
+});
+test('a collected automatic recovery deadline cannot poison the new engine health state', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const { harness } = setup(t);
+  const h = harness('old recovery', { fresh: true, changeReview: false, stopGraceMs: 5,
+    stopEngine: async () => ({ collected: true }), inspectInput: async () => ({ ok: true }),
+    restartEngine: async () => ({ serverIn: h.serverIn, serverOut: h.serverOut }) });
+  const timeout = id => ({ jsonrpc: '2.0', id, result: { isError: true, content: [{ type: 'text', text: 'timeoutReached' }] } });
+  for (const id of ['failed-1', 'failed-2']) {
+    h.send(rpc(id, 'js', { code: 'let app = await cua.getApp("TextEdit")' })); h.reply(timeout(id));
+  }
+  t.mock.timers.tick(20000); assert.match(String(h.forwarded.at(-1).id), /^sleight-helper-/);
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true })); t.mock.timers.tick(5);
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('message', 'turn_ended', { sleight_resume: true }));
+  h.send(rpc('fresh', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); await new Promise(resolve => setImmediate(resolve));
+  h.reply(result('fresh')); t.mock.timers.tick(5500);
+  h.send(rpc('one-timeout', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); h.reply(timeout('one-timeout'));
+  assert.doesNotMatch(h.received.at(-1).result.content.map(c => c.text ?? '').join('\n'), /timed out twice/);
+});
+test('a scheduled helper retry cannot send stopped input to a replacement engine', async t => {
+  const { harness } = setup(t);
+  const h = harness('old timer', { changeReview: false, stopGraceMs: 5,
+    stopEngine: async () => ({ collected: true }), inspectInput: async () => ({ ok: true }),
+    restartEngine: async () => ({ serverIn: h.serverIn, serverOut: h.serverOut }) });
+  h.send(rpc('old', 'js', { code: 'await app.pressKey("7")' }));
+  h.reply({ jsonrpc: '2.0', id: 'old', result: { isError: true, content: [{ type: 'text', text: 'Sky Computer Use native pipe startup failed' }] } });
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true })); await new Promise(resolve => setTimeout(resolve, 20));
+  h.send(rpc('message', 'turn_ended', { sleight_resume: true }));
+  h.send(rpc('fresh', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); await new Promise(resolve => setImmediate(resolve));
+  h.reply(result('fresh')); const before = h.forwarded.length;
+  await new Promise(resolve => setTimeout(resolve, 1050));
+  assert.equal(h.forwarded.length, before);
+});
+test('an explicit engine window ID reaches native identity resolution', async t => {
+  const { harness } = setup(t); let expected;
+  const h = harness('windowId', { fresh: true, changeReview: false, windowIdentity: async window => {
+    expected = window; return { ...window, status: 'ok', matches: 1, epoch: 'helper', window: 1,
+      windowNumber: window.windowNumber, pid: 123, processStart: 1 }; } });
+  h.send(rpc('read', 'js', { code: 'let app = await cua.getApp({ windowId: 11 })' }));
+  h.reply(result('read', duplicateTree)); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(expected.windowNumber, 11);
+});
+test('a closed engine transport after failed collection answers the next read with reconnect advice', async t => {
+  const { harness } = setup(t);
+  let h;
+  h = harness('closed transport', { changeReview: false, stopGraceMs: 10, stopEngine: async () => { h.serverIn.end(); return { collected: false }; } });
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true })); h.reply(result(h.forwarded.at(-1).id, 'ended'));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('resume', 'turn_ended', { sleight_resume: true }));
+  h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+  assert.equal(h.received.at(-1).id, 'read'); assert.match(h.received.at(-1).result.content[0].text, /reconnect/i);
+});
+test('new-message recovery never revives pre-stop local input waiting for its target', async t => {
+  const { harness } = setup(t);
+  let resolveTarget, actions = 0;
+  const h = harness('cancelled local', { changeReview: false, stopGraceMs: 5, stopEngine: async () => ({ collected: false }),
+    localTools: { tools: [{ name: 'drag' }], target: () => new Promise(resolve => { resolveTarget = resolve; }), call: async () => { actions++; return { content: [] }; } } });
+  h.send(rpc('old', 'drag', { app: 'TextEdit', from: [0, 0], to: [1, 1] }));
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true })); await new Promise(resolve => setTimeout(resolve, 20));
+  h.send(rpc('resume', 'turn_ended', { sleight_resume: true }));
+  resolveTarget({ appId: 'com.apple.TextEdit' }); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(actions, 0); assert.equal(h.inputLease.owned.size, 0);
+  assert.equal(h.received.find(m => m.id === 'old').result.isError, true);
+});
+test('two differently titled windows do not check the unique target, even without engine inventory', async t => {
+  const { harness } = setup(t); let checks = 0;
+  const h = harness('unique candidate', { fresh: true, changeReview: false,
+    spaceProbe: async () => ({ status: 'responding', windows: 2, windowTitles: ['Unique', 'Other'] }),
+    windowIdentity: async () => { checks++; return { status: 'unknown' }; } });
+  h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); h.reply(result('read', 'Window: "Unique", App: TextEdit.'));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('act', 'js', { code: 'await app.typeText("x")' }));
+  assert.equal(h.forwarded.at(-1).id, 'act'); assert.equal(checks, 0); h.reply(result('act', 'Window: "Unique", App: TextEdit.'));
+});
 test('normal action results and app acquisitions have no window note', t => {
   const { a } = setup(t);
   a.send(rpc(1, 'js', { code: 'app = await cua.getApp("TextEdit")' })); a.reply(result(1));
@@ -67,7 +706,7 @@ function setup(t) {
     const reply = msg => serverOut.write(JSON.stringify(msg).replaceAll('file:///tmp/a.txt', pathToFileURL(path).href) + '\n');
     if (!fresh) { send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); reply(result('read')); }
     forwarded.length = received.length = 0;
-    return { send, reply, forwarded, received, relay, inputLease, serverIn, clientOut };
+    return { send, reply, forwarded, received, relay, inputLease, serverIn, serverOut, clientOut };
   };
   return { a: harness('A'), b: harness('B'), directory, path, harness };
 }

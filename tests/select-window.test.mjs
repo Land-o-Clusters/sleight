@@ -15,10 +15,10 @@ function select(request, windows, options = {}) {
   Object.assign($, { NSWorkspace: { sharedWorkspace: workspace }, NSURL: { URLWithString: value => {
     const url = new URL(value);
     return { isNil: () => false, isFileURL: url.protocol === 'file:', URLByResolvingSymlinksInPath: { path: decodeURIComponent(url.pathname) } };
-  } } });
+  } }, CGWindowListCopyWindowInfo: () => list(options.cgWindows ?? []) });
   const uiWindows = windows.map(window => {
     const main = { get value() { return () => options.mainStatus !== -1; }, set value(_) {} };
-    return { attributes: { byName: key => {
+    return { position: () => window.position, size: () => window.size, attributes: { byName: key => {
       if (key === 'AXMain') { events.push({ window, key }); if (options.activates) app.active = true; return main; }
       return { value: () => window[key] ?? null };
     } }, actions: { byName: action => ({ perform: () => {
@@ -29,11 +29,36 @@ function select(request, windows, options = {}) {
     Application: () => ({ processes: { whose: query => {
       assert.equal(query.unixId, 1); return () => [{ windows: () => uiWindows }];
     } } }),
-    ObjC: { import() {}, unwrap: x => x } });
+    ObjC: { import() {}, unwrap: x => x, deepUnwrap: x => x, castRefToObject: x => x } });
   return { result: JSON.parse(result), events };
 }
 const left = { AXTitle: 'left.txt', AXDocument: 'file:///tmp/left.txt' };
+test('recorded unsaved TextEdit headers with equal titles refuse selection without AX input', () => {
+  const recorded = JSON.parse(readFileSync(new URL('../docs/benchmarks/2026-10-04-input-lease-window-attempt.json', import.meta.url), 'utf8'));
+  const tree = recorded.trials[0].error.slice(recorded.trials[0].error.indexOf('Window: '));
+  // Project the same recorded header onto two native windows. The engine tree cannot separate them.
+  const trees = [tree, tree];
+  const windows = trees.map(tree => ({ AXTitle: JSON.parse(/^Window: ("[^"]*")/.exec(tree)[1]), AXDocument: null }));
+  const { result, events } = select({ app: 'TextEdit', title: windows[0].AXTitle }, windows);
+  assert.equal(result.ok, false); assert.match(result.error, /found 2/); assert.deepEqual(events, []);
+});
 const right = { AXTitle: 'right.txt', AXDocument: 'file:///tmp/right.txt' };
+test('window numbers select one of two equal-title windows without activation', () => {
+  const windows = [11, 22].map(AXWindowNumber => ({ AXTitle: 'Untitled', AXWindowNumber }));
+  const { result, events } = select({ app: 'TextEdit', title: 'Untitled', windowNumber: 22 }, windows);
+  assert.equal(result.ok, true);
+  assert.equal(result.identity.windowNumber, 22);
+  assert.equal(events[0].window, windows[1]);
+  assert.equal(select({ app: 'TextEdit', title: 'Untitled', windowNumber: 33 }, windows).events.length, 0);
+});
+test('equal-title selection resolves a CG number when AXWindowNumber is unsupported', () => {
+  const windows = [10, 400].map(x => ({ AXTitle: 'Untitled', position: [x, 20], size: [300, 200] }));
+  const cgWindows = windows.map((window, i) => ({ kCGWindowOwnerPID: 1, kCGWindowLayer: 0, kCGWindowNumber: 11 + i,
+    kCGWindowBounds: { X: window.position[0], Y: 20, Width: 300, Height: 200 } }));
+  const { result, events } = select({ app: 'TextEdit', title: 'Untitled', windowNumber: 12 }, windows, { cgWindows });
+  assert.equal(result.ok, true); assert.equal(result.identity.windowNumber, 12); assert.equal(events[0].window, windows[1]);
+  assert.equal(select({ app: 'TextEdit', title: 'Untitled', windowNumber: 12 }, windows, { cgWindows: [...cgWindows, cgWindows[1]] }).events.length, 0);
+});
 test('window-selection opt-out leaves the other local tools enabled', () => {
   const names = env => localToolDefinitions(env).map(tool => tool.name);
   assert.ok(names({}).includes('select_window'));

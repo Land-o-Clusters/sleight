@@ -413,6 +413,20 @@ describe('sleight mod', () => {
     expect(String(refused.deny)).toMatch(/stopped sleight/)
   })
 
+  test('/sleight stop displays the checked engine receipt and an absent receipt stays unconfirmed', async ($, on) => {
+    let text = 'sleight stop: in flight: js: Type. Engine cut off and collected; turn unconfirmed. Input leases released and checked.'
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async (_$, e) => {
+      expect(e.args.sleight_stop).toBe(true)
+      return { value: { content: [{ type: 'text', text }] } } as never
+    })
+    const receipt = await $.command.run({ command: 'sleight', args: 'stop' } as never)
+    expect(String((receipt as { text?: string }).text)).toContain(text)
+    text = 'old engine response'
+    const absent = await $.command.run({ command: 'sleight', args: 'stop' } as never)
+    expect(String((absent as { text?: string }).text)).toContain('no checked receipt')
+  })
+
   test('the pane’s Stop button stops it too', async ($, on) => {
     on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [] } }) as never)
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { bodyColumns: 60 } as never })

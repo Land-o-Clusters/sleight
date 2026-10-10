@@ -21,7 +21,7 @@ export function label(command) {
   return command.split('/').pop();
 }
 
-export function startFootprint({ pgid, rootPid, apps = [], intervalMs = 1000, ps = defaultPs }) {
+export function startFootprint({ pgid, rootPid, apps = [], intervalMs = 1000, ps = defaultPs, baselineGroup = false }) {
   const seen = new Map(); // pid -> { label, group, first, last }
   let sampling = Promise.resolve(), firstSample = true;
   // Descendants of the group count as the group: Codex starts its engine server in a process group
@@ -33,6 +33,7 @@ export function startFootprint({ pgid, rootPid, apps = [], intervalMs = 1000, ps
       const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/.exec(line);
       if (m) rows.push({ pid: m[1], ppid: m[2], group: Number(m[3]), time: m[4], command: m[5] });
     }
+    if (baselineGroup && !rows.some(row => row.group === pgid)) return false;
     for (const row of rows) if (row.group === pgid) members.add(row.pid);
     for (let grew = true; grew;) {
       grew = false;
@@ -44,17 +45,20 @@ export function startFootprint({ pgid, rootPid, apps = [], intervalMs = 1000, ps
       const outside = name === 'engine helper' || apps.some(app => command.endsWith(`/${app}`));
       if (!inGroup && !outside) continue;
       const cpu = cpuSeconds(time), entry = seen.get(pid);
-      // The group's processes and anything first seen after the run began started with it, so all
-      // their time counts. Processes already running outside it count only what they used since.
+      // Whole-run measurements count all group CPU. Warm phases subtract the initial sample for
+      // existing group members too. Anything first seen later counts from its start.
       if (entry) entry.last = cpu;
-      else seen.set(pid, { label: name, group: inGroup, first: inGroup || !firstSample ? 0 : cpu, last: cpu });
+      else seen.set(pid, { label: name, group: inGroup, first: (inGroup && !baselineGroup) || !firstSample ? 0 : cpu, last: cpu });
     }
     firstSample = false;
+    return true;
   });
-  sample();
+  const ready = sample().then(observed => {
+    if (!observed) throw new Error('Warm CPU baseline unavailable; no driver group observed');
+  });
   const timer = setInterval(sample, intervalMs);
   const snapshot = async () => {
-    await sample();
+    if (!await sample()) throw new Error('Warm CPU final sample unavailable; no driver group observed');
     const group = {}, outside = {};
     for (const entry of seen.values()) {
       const into = entry.group ? group : outside;
@@ -65,5 +69,6 @@ export function startFootprint({ pgid, rootPid, apps = [], intervalMs = 1000, ps
   };
   const stop = () => { clearInterval(timer); return snapshot(); };
   stop.snapshot = snapshot;
+  stop.ready = ready;
   return stop;
 }
