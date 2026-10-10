@@ -78,7 +78,7 @@ Next, in order:
    (2026-10-10): the recorder starts only from a terminal and shows a notification, routine
    install asks in the terminal, and routines wait until the user has been idle for 2 minutes.
    `codex/textedit-fixes` `f23748b` went back as `sol-textedit-fixes-3.md`: the rich move becomes
-   opt-in until it passes live (sleight-arch), and an unconfirmed paste still holds the shared
+   opt-in until it passes live (sleight-arch), and after an unconfirmed paste it keeps the shared
    clipboard lock without a limit. sleight-arch runs its live trials after round 3.
 2. The 1.1.0 live checks (helper resend, stale-number remap, keyboard-tap notice) and
    simulator-flow, with the owner away: they can take the pointer or keyboard.
