@@ -74,6 +74,9 @@ Next, in order:
    and apps (private repo only).
    `codex/review-receipts` `f01987f` went back as `sol-review-receipts-2.md`: receipts go off by
    default (owner, 2026-10-10), and they kept the owner's full name in a title and single typed keys.
+   `codex/routines-demo` `6f3b955` went back as `sol-routines-demo-2.md` with the owner's calls
+   (2026-10-10): the recorder starts only from a terminal and shows a notification, routine
+   install asks in the terminal, and routines wait until the user has been idle for 2 minutes.
 2. The 1.1.0 live checks (helper resend, stale-number remap, keyboard-tap notice) and
    simulator-flow, with the owner away: they can take the pointer or keyboard.
 3. The footprint gap (Astra's branch, then rerun `--arm sleight,codex --tasks
