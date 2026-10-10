@@ -38,6 +38,14 @@ function bank(t, cleanup = () => {}) {
   t.after(() => { try { cleanup(); } finally { rmSync(directory, { recursive: true, force: true }); } });
   return directory;
 }
+function assertCoordinatorLock(coordinator, expected) {
+  const code = `import {DatabaseSync} from 'node:sqlite'; const db=new DatabaseSync(process.argv[1]);
+    try {db.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE'); console.log('won'); db.exec('ROLLBACK');}
+    catch(error) {if(error.errcode!==5)throw error; console.log('busy');} finally {db.close();}`;
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', code, coordinator], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(child.status, 0, child.error?.message ?? child.stderr);
+  assert.equal(child.stdout.trim(), expected);
+}
 test('second holder is refused with its name and remaining time; reads have a narrow grammar', t => {
   const directory = bank(t);
   const a = new InputLease({ directory, holder: 'session A', now: () => 1000 });
@@ -135,6 +143,96 @@ test('a failed rollback disposes its lock and the next operation reopens a conne
   assert.throws(() => b.acquire(window), /A.*s remaining/);
 });
 
+test('failed close after rollback blocks transactions until cleanup releases the real lock', t => {
+  let closeFails = true, rollbackFails = true, time = 1000;
+  const directory = bank(t, () => {
+    closeFails = false; rollbackFails = false;
+    try { a.close(); } catch { a.close(); } finally { b.close(); }
+  }), coordinator = join(directory, '.coordinator.sqlite');
+  const a = new InputLease({ directory, holder: 'A', now: () => time }), b = new InputLease({ directory, holder: 'B', now: () => time });
+  a.acquire(window);
+  const original = a.db, exec = original.exec.bind(original), close = original.close.bind(original);
+  const rollbackFailure = new Error('injected rollback failure'), closeFailure = new Error('injected close failure');
+  original.exec = sql => {
+    if (sql === 'ROLLBACK' && rollbackFails) { rollbackFails = false; throw rollbackFailure; }
+    return exec(sql);
+  };
+  original.close = () => { if (closeFails) throw closeFailure; return close(); };
+  time = 2000;
+  assert.throws(() => a.renew(), error => error instanceof AggregateError &&
+    error.errors.includes(rollbackFailure) && error.errors.includes(closeFailure));
+  assertCoordinatorLock(coordinator, 'busy');
+  const record = readFileSync(a.grant(leaseKey(window)).path, 'utf8');
+  time = 3000;
+  assert.throws(() => a.renew(), error => error.cause === closeFailure);
+  assert.equal(readFileSync(a.grant(leaseKey(window)).path, 'utf8'), record);
+  assert.throws(() => a.close(), error => error instanceof AggregateError && error.errors.includes(closeFailure));
+  assertCoordinatorLock(coordinator, 'busy');
+  closeFails = false;
+  assert.throws(() => a.acquire({ ...window, url: 'file:///tmp/b.txt' }), error => error.cause === closeFailure);
+  assert.throws(() => a.close(), error => error instanceof AggregateError && error.errors.some(e => e.cause === closeFailure));
+  assertCoordinatorLock(coordinator, 'won');
+  a.close();
+  a.acquire(window);
+  assert.throws(() => b.acquire(window), /A.*s remaining/);
+});
+
+test('failed close during coordinator replacement never admits work on the stale connection', t => {
+  let closeFails = true;
+  const directory = bank(t, () => {
+    closeFails = false;
+    try { a.close(); } catch { a.close(); } finally { b.close(); }
+  }), coordinator = join(directory, '.coordinator.sqlite');
+  const a = new InputLease({ directory, holder: 'A' }), b = new InputLease({ directory, holder: 'B' });
+  const other = { ...window, url: 'file:///tmp/b.txt' };
+  a.acquire(window);
+  const original = a.db, close = original.close.bind(original), closeFailure = new Error('injected close failure');
+  original.close = () => { if (closeFails) throw closeFailure; return close(); };
+  renameSync(coordinator, `${coordinator}.previous`);
+  b.acquire(other);
+  const record = readFileSync(b.grant(leaseKey(other)).path, 'utf8');
+  assert.throws(() => a.acquire(other), error => error === closeFailure);
+  assert.equal(readFileSync(b.grant(leaseKey(other)).path, 'utf8'), record);
+  assert.throws(() => a.renew(), error => error.cause === closeFailure);
+  assert.throws(() => a.close(), error => error instanceof AggregateError && error.errors.includes(closeFailure));
+  closeFails = false;
+  assert.throws(() => a.acquire(other), error => error.cause === closeFailure);
+  assert.throws(() => a.close(), error => error instanceof AggregateError && error.errors.some(e => e.cause === closeFailure));
+  a.close();
+  assert.throws(() => original.exec('BEGIN IMMEDIATE'), /not open/);
+  assert.throws(() => a.acquire(other), /B.*s remaining/);
+  assert.equal(readFileSync(b.grant(leaseKey(other)).path, 'utf8'), record);
+  b.close(); a.acquire(other);
+});
+
+test('failed close of a reopened coordinator recovers after cleanup without retaining either connection', t => {
+  let closeFails = true;
+  const directory = bank(t, () => {
+    closeFails = false;
+    try { a.close(); } catch { a.close(); } finally { b.close(); }
+  }), coordinator = join(directory, '.coordinator.sqlite');
+  const a = new InputLease({ directory, holder: 'A' }), b = new InputLease({ directory, holder: 'B' });
+  const key = a.acquire(window), original = a.db;
+  renameSync(coordinator, `${coordinator}.previous`);
+  a.renew();
+  const reopened = a.db, close = reopened.close.bind(reopened), closeFailure = new Error('injected close failure');
+  reopened.close = () => { if (closeFails) throw closeFailure; return close(); };
+  assert.throws(() => a.close(), error => error === closeFailure);
+  assert.equal(readdirSync(directory).filter(name => name.endsWith('.json')).length, 0);
+  assert.throws(() => a.acquire(window), error => error.cause === closeFailure);
+  assert.throws(() => a.close(), error => error === closeFailure);
+  closeFails = false;
+  assert.throws(() => a.acquire(window), error => error.cause === closeFailure);
+  a.close();
+  assert.throws(() => original.exec('BEGIN IMMEDIATE'), /not open/);
+  assert.throws(() => reopened.exec('BEGIN IMMEDIATE'), /not open/);
+  assertCoordinatorLock(coordinator, 'won');
+  b.acquire(window);
+  assert.throws(() => a.acquire(window), /B.*s remaining/);
+  b.close(); a.acquire(window);
+  assert.ok(a.grant(key).token);
+});
+
 test('replacement after BEGIN refuses before the lease callback changes its record', t => {
   const directory = bank(t, () => a.close()), coordinator = join(directory, '.coordinator.sqlite');
   const a = new InputLease({ directory, holder: 'A' });
@@ -160,16 +258,9 @@ test('a cached and then replaced coordinator both retain kernel exclusion agains
   const directory = bank(t, () => a.close()), coordinator = join(directory, '.coordinator.sqlite');
   const a = new InputLease({ directory, holder: 'A' });
   const key = a.acquire(window);
-  const code = `import {DatabaseSync} from 'node:sqlite'; const db=new DatabaseSync(process.argv[1]);
-    try {db.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE'); console.log('won'); db.exec('ROLLBACK');}
-    catch(error) {if(error.errcode!==5)throw error; console.log('busy');} finally {db.close();}`;
   for (const replace of [false, true]) {
     if (replace) renameSync(coordinator, `${coordinator}.previous`);
-    a.transact(key, () => {
-      const child = spawnSync(process.execPath, ['--input-type=module', '-e', code, coordinator], { encoding: 'utf8', timeout: 10000 });
-      assert.equal(child.status, 0, child.error?.message ?? child.stderr);
-      assert.equal(child.stdout.trim(), 'busy');
-    });
+    a.transact(key, () => assertCoordinatorLock(coordinator, 'busy'));
   }
 });
 test('independent processes racing one file admit exactly one action owner', async t => {
