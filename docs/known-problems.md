@@ -332,7 +332,13 @@ our own runs. Dates and engine versions are given where they matter.
   "Sleight is here. It works", while `paste` saved it exactly. We don't know why select-all didn't replace the old text.
   A separate digit probe passed all five key-by-key and five bulk replacements. The skill says to
   paste exact text and to read the result. [All attempts](benchmarks/2026-10-08-engine-time.json)
-  include the failure and later fixture cleanup.
+  include the failure and later fixture cleanup. A background probe now compares direct engine
+  input with default and careful relay guards, and records selected text, the document buffer and
+  saved bytes. The shared live hold prevented it from running on 2026-10-09. The cause remains
+  unconfirmed. The skill now requires checking an exact pasted replacement before saving.
+  It excludes the iOS simulator, where paste can insert the Mac's clipboard.
+  sleight-arch runs the affected `textedit-save` and `textedit-edit` tasks before release.
+  [The probe report](benchmarks/2026-10-09-exact-text.md) includes the stopped attempt.
 - TextEdit hung 3 times on 2026-10-05, each time after Claude set a document's text with `setValue`
   and then pressed a save shortcut (Cmd+Shift+S, which is Duplicate, twice and Cmd+S once). Its main
   thread waits forever on the document's save lock. Every read then times out, and the relay's

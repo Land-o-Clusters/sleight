@@ -1,0 +1,10 @@
+{
+  "started": "2026-10-09T23:24:36.993Z",
+  "repetitions": 1,
+  "bank": "/private/tmp/sleight-exact-KzsEw6",
+  "trials": [],
+  "records": [],
+  "error": "Live hold exists; app driving stopped",
+  "attached": false,
+  "finished": "2026-10-09T23:24:36.994Z"
+}
