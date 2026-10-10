@@ -64,7 +64,9 @@ Next, in order:
    background with TextEdit only, run `bench/small-fixes-textedit.mjs --quick` (the select-all
    question) and the merge A/B on textedit-edit and textedit-save, 12 runs a side, about $14. The
    plan is in `.dev/research/2026-10-10-merged-calls.md`. Chess and simulator-form wait for the
-   owner to be away.
+   owner to be away. Done through the commits (`8e9e201`). The A/B started 07:04 UTC
+   (`.dev/passes/merge-ab.sh`, log `.dev/passes/merge-ab.log`), and the select-all run is blocked
+   by its helper (ROADMAP track 2).
 1. Review Sol's next rounds of the three branches above as they land, and merge them.
 2. The 1.1.0 live checks (helper resend, stale-number remap, keyboard-tap notice) and
    simulator-flow, with the owner away: they can take the pointer or keyboard.

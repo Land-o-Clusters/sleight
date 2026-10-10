@@ -32,8 +32,9 @@ Open, in order of user impact (full list in [known-problems.md](../known-problem
   (`05903fa`, 6/6 on the TextEdit tasks). Likely cause (2026-10-10, inferred from tree sizes, not
   confirmed): a pending TextEdit capitalization suggestion took Cmd+A, so nothing was selected. The
   relay's settle read was there, so it isn't sleight's. Confirm with
-  `bench/small-fixes-textedit.mjs --quick` (background) after Puddle's window
-  (`.dev/research/2026-10-10-select-all-typetext.md`).
+  `bench/small-fixes-textedit.mjs --quick` (`.dev/research/2026-10-10-select-all-typetext.md`) once
+  its helper is fixed: it refused twice on 2026-10-10 with "Ambiguous TextEdit process" while
+  AppKit listed one TextEdit.
 - The TextEdit save lock: the Shift-event fix measured 0/10 hangs, but we don't know why it works.
 - Live checks for the unit-tested 1.1.0 changes: the helper resend, the stale-number remap and the
   keyboard-tap notice.

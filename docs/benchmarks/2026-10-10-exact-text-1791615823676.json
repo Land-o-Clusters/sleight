@@ -1,0 +1,30 @@
+{
+  "started": "2026-10-10T07:03:43.674Z",
+  "repetitions": 1,
+  "bank": "/private/tmp/sleight-exact-mZsSWV",
+  "trials": [],
+  "records": [],
+  "source": {
+    "plugins/sleight/lib/relay.mjs": "639f2c1f652ac03676addd0b3674996e30986fa4c8096613c2e5386ef6b70e85",
+    "bench/small-fixes-textedit.js": "a24ca755aa7a9e867b1ccf15f72ca11e8192759fd12247c3b8265f6790b6fd12",
+    "bench/small-fixes-textedit.mjs": "35eb1b3c0e1fd205c53bb0a769ead063d7452be4ae207d78063eeb851b0c6e1e"
+  },
+  "preflight": {
+    "id": 0,
+    "ok": true,
+    "running": true,
+    "foregroundTextEdit": false
+  },
+  "error": "Ambiguous TextEdit process",
+  "documentClosed": true,
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixtureCollected": true,
+  "lockReleased": true,
+  "attached": false,
+  "finished": "2026-10-10T07:03:43.971Z",
+  "exactCount": 0,
+  "completedCount": 0
+}
