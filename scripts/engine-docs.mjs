@@ -71,8 +71,12 @@ export async function captureEngineDocs({
     if (!/^#{1,6} .*\bAPI\b/im.test(text)) {
       throw new Error(`engine docs call returned no API docs: ${text.slice(0, 500)}`);
     }
-    // Drop the engine's "Invalid app" line, so snapshots differ only when the docs do.
-    const docs = text.slice(text.search(/^#{1,6} /m));
+    // Drop the engine's "Invalid app" line, and sleight's own skill, which the relay sends with the
+    // first result, so snapshots differ only when the engine's docs do (the skill filled the whole
+    // diff for 26.1007.21159).
+    let docs = text.slice(text.search(/^#{1,6} /m));
+    const skill = docs.search(/^# Driving Mac apps with sleight$/m);
+    if (skill > 0) docs = docs.slice(0, skill).trimEnd();
     return docs.endsWith('\n') ? docs : docs + '\n';
   } finally {
     clearTimeout(timer);

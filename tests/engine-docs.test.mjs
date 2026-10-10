@@ -15,6 +15,10 @@ test('captures the API docs from an isError reply, without the invalid-app line 
   assert.equal(await capture('docs'), '# Runtime API\n\ncua.getApp(name) → app\n');
 });
 
+test('leaves out sleight\'s own skill, which the relay sends with the first result', async () => {
+  assert.equal(await capture('skill'), '# Runtime API\n\ncua.getApp(name) → app\n');
+});
+
 for (const [mode, error] of [
   ['rpc-error', /engine unavailable/],
   ['tool-error', /no API docs.*kernel reset/],

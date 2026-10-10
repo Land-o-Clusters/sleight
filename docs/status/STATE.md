@@ -46,7 +46,11 @@ Next, in order:
 1. At Puddle's CLOSE: lift the hold, run `npm run check`, and commit the staged
    `codex/real-use-tasks` squash with sleight-arch's launch-date and overlap fixes, then the engine
    docs capture that leaves out sleight's skill.
-2. Merge `codex/review-receipts` with the Shift fix, and `codex/textedit-fixes` after its review.
+2. Merge `codex/review-receipts` with the Shift fix. Merge `codex/textedit-fixes` `cc1d7e6`
+   (reviewed: five of seven fixes) after sleight-arch's own round: resolve the `app-health.js`
+   conflict with `4082ae9` (window names from the pid-filtered windows only), report the
+   unconfirmed-paste recovery in Claude's next tool result instead of only on stderr, then the live
+   trials listed in its review.
 3. Live, owner away: textedit-fixes trials (`bench/textedit-fixes.mjs`), the select-all probe
    (`bench/small-fixes-textedit.mjs --quick`), the TextEdit tasks with `open_file`, the 1.1.0 live
    checks, simulator-flow and the DeviceHub handoff, waits-targeting and plugin-arm live checks if

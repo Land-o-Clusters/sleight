@@ -39,6 +39,7 @@ input.on('line', line => {
       { type: 'text', text: 'Invalid app: com.landoclusters.sleight.no-such-app' },
       { type: 'image', mimeType: 'image/png', data: 'unused' },
       { type: 'text', text: '# Runtime API\n\ncua.getApp(name) → app' + (process.env.SLEIGHT_TEST_VERSION ? `\nVersion ${process.env.SLEIGHT_TEST_VERSION}` : '') },
+      ...(mode === 'skill' ? [{ type: 'text', text: '# Driving Mac apps with sleight\n\nsleight rules' }] : []),
     ];
     // Split a JSON line across writes, including a UTF-8 character.
     const reply = Buffer.from(JSON.stringify({ jsonrpc: '2.0', id: call.id, result: { isError: true, content } }) + '\n');
