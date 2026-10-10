@@ -36,8 +36,9 @@ our own runs. Dates and engine versions are given where they matter.
   known inputs. [The design](design/review-receipts.md) describes the scope.
   The full-name scrub matches the name as `id -F` gives it, exact case, and fails open if `id -F`
   fails. A turn's read text is kept until its receipt is built (13.1 MB at 200 reads of 64 KiB,
-  measured by the branch). Typed text is also removed from the app, window and document names, even
-  one character long: typing "x" turned "TextEdit" into "Te[redacted 1 chars]tEdit" (a unit test,
+  measured by the branch). Typed text is also removed from the app, window and document names, but
+  only where it is the whole name or a whole word in one: typing "x" leaves "TextEdit" intact, and
+  a document named "opulently.txt" keeps its name when "opulent" was typed (a unit test,
   2026-10-10).
 - [Verified results](design/verified-results.md) add a line to native `js` replies from reads the
   relay already has. A changed value or window is an observation after input, and a person's own

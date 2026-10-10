@@ -236,10 +236,16 @@ export class TurnJournal {
       const controls = entry.uncertain ? [] : entry.after?.revert ?? [];
       return { app: entry.window.app, window: entry.window.title, document: documentName(entry.window), ...difference, modified: entry.after?.modified ?? false, revert: controls };
     });
+    // A name echoes typed text whole (a Save panel names a file what was typed), so redact a value
+    // only as the whole name or a whole word in one; a substring match shredded TextEdit itself.
+    const nameSecrets = [...secrets].sort((a, b) => b.length - a.length).map(secret => {
+      const source = secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[\uD800-\uDFFF]/g, unit => `\\u${unit.charCodeAt(0).toString(16).padStart(4, '0')}`);
+      return { pattern: new RegExp(`(^|[^\\p{L}\\p{N}])${source}(?=$|[^\\p{L}\\p{N}])`, 'gu'), marker: `[redacted ${secret.length} chars]` };
+    });
     const scrub = (value, field) => {
       if (typeof value === 'string') {
         let clean = value;
-        if (['window', 'app', 'document'].includes(field)) for (const secret of [...secrets].sort((a, b) => b.length - a.length)) clean = clean.replaceAll(secret, `[redacted ${secret.length} chars]`);
+        if (['window', 'app', 'document'].includes(field)) for (const { pattern, marker } of nameSecrets) clean = clean.replace(pattern, `$1${marker}`);
         clean = clean.replaceAll(this.home, '~');
         for (const owner of this.ownerNames.filter(Boolean).sort((a, b) => b.length - a.length)) clean = clean.replaceAll(owner, '[owner]');
         return clean;

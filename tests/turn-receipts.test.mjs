@@ -348,6 +348,25 @@ test('short inputs and action-like text are redacted without changing action nam
   assert.doesNotMatch(receipt.review, /typeText|hi/);
 });
 
+test('typed inputs leave names they only appear inside of intact', () => {
+  const result = run('await app.typeText("x"); await app.typeText("Edit")', 'Window: "Untitled", App: TextEdit.\n0 standard window\n\t1 text area, Value: xEdit');
+  assert.equal(result.calls[1].app, 'TextEdit');
+  assert.equal(result.windows[0].app, 'TextEdit');
+  assert.doesNotMatch(JSON.stringify(result), /redacted [14] chars/);
+});
+
+test('a longer typed secret leaves no trace in a visible window title or a document name', () => {
+  const journal = new TurnJournal({ redactTitles: false, ownerNames: [] });
+  const output = 'Window: "opulent quokka.txt", App: TextEdit.\nURL: file:///Users/fixture/Documents/opulent%20quokka.txt\n0 window';
+  journal.request(request(1, 'let app = await cua.getApp("TextEdit")')); journal.reply(reply(1, output));
+  journal.request(request(2, 'await app.typeText("opulent quokka")')); journal.reply(reply(2, output));
+  const receipt = journal.finish({ review: true });
+  assert.equal(receipt.calls[1].window, '[redacted 14 chars].txt');
+  assert.equal(receipt.calls[1].document, '[redacted 14 chars].txt');
+  assert.equal(receipt.windows[0].window, '[redacted 14 chars].txt');
+  assert.doesNotMatch(JSON.stringify(receipt), /opulent|quokka/);
+});
+
 test('regular expression contents cannot invent receipt actions', () => {
   const receipt = run('const pattern = /app.click(123)/; await app.getAXState()');
   assert.ok(receipt.calls[1].actions.every(action => action.action !== 'click'));

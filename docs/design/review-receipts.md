@@ -8,7 +8,11 @@ Receipts default to off and use private files in `~/Library/Logs/sleight/receipt
 Each receipt contains the app, window, actions, targets, call outcome and observed changes. Literal text
 inputs and values become length markers. Computed inputs have unknown length. Raw code, trees, screenshots
 and arbitrary result text never go into the receipt. Titles become length markers by default.
-The app name and the document's file URL basename remain. The username and full name from `id -F`
+The app name and the document's file URL basename remain. Typed text is also removed from app, window
+and document names, but only where it is the whole name or a whole word in one, because a name echoes
+typed text whole (a file's Save panel takes its name from what was typed), while a minimum length
+would leave short secrets in names and still mangle a name a short input merely sits inside.
+The username and full name from `id -F`
 are scrubbed from retained fields. Single printable keys become length markers; named keys and
 shortcuts with modifiers remain.
 Unknown JavaScript stays an opaque call, with no claim that every action was understood.
