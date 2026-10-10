@@ -933,7 +933,7 @@ export function createRelay({
     // pre-approved list and never from session memory.
     const scoped = approvalScope === 'session' && !options.once;
     const preapprovable = !options.once && keyParts.length === 2 &&
-      ['drag', 'menu_bar', 'blocked_app'].includes(keyParts[0]);
+      ['drag', 'menu_bar', 'blocked_app', 'open_file'].includes(keyParts[0]);
     const decided = asking.then(async () => {
       let auditFailed = false;
       try {
@@ -967,7 +967,7 @@ export function createRelay({
     try {
       // blocked_app reserves the whole app for its actions, like drag and
       // hover, and its consent names the resolved app even on reads.
-      const appTool = ['drag', 'hover', 'blocked_app', 'select_window'].includes(name);
+      const appTool = ['drag', 'hover', 'blocked_app', 'select_window', 'open_file'].includes(name);
       if (appTool) {
         if (closing) throw new Error('Input lease: this session is closing.');
         resolved = await (localTools.target?.(args) ?? Promise.resolve(

@@ -38,7 +38,7 @@ test('window-selection opt-out leaves the other local tools enabled', () => {
   const names = env => localToolDefinitions(env).map(tool => tool.name);
   assert.ok(names({}).includes('select_window'));
   assert.deepEqual(names({ SLEIGHT_SELECT_WINDOW: '0' }), names({}).filter(name => name !== 'select_window'));
-  assert.deepEqual(names({ SLEIGHT_SELECT_WINDOW: '0', SLEIGHT_DRAG: '0', SLEIGHT_MENU_BAR: '0', SLEIGHT_HOVER: '0' }), ['blocked_app']);
+  assert.deepEqual(names({ SLEIGHT_SELECT_WINDOW: '0', SLEIGHT_DRAG: '0', SLEIGHT_MENU_BAR: '0', SLEIGHT_HOVER: '0', SLEIGHT_OPEN_FILE: '0' }), ['blocked_app']);
 });
 test('window selection raises exactly one title or AXDocument without activation', () => {
   for (const selector of [{ title: 'left.txt' }, { url: left.AXDocument }]) {

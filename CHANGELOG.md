@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `open_file` opens an existing file in an app with the app left in the background (`open -g`),
+  instead of the File > Open panel. Finishing that panel brought TextEdit to the front for about a
+  second in 3 of about 21 textedit-edit runs while the owner worked (2026-10-10). The skill points
+  Claude to it. Each app is approved once per session, and the user's pre-approved list covers it.
+  The app is resolved to its bundle ID first, and the tool refuses terminals, OpenAI's apps, apps
+  that run or install what they open (Python Launcher, Installer), scripts, apps and executable
+  files, and anything but an existing regular file. `SLEIGHT_OPEN_FILE=0` turns it off. It's
+  unit-tested, and the TextEdit tasks run with it before release.
 - Paste keeps the user's clipboard with one helper per session instead of a spawn per paste, and
   reads large clipboards in linear time (a mocked 40 MiB transfer fell from about 5 s to 31 to 88 ms).
   `blocked_app` also refuses a settings window by its Accessibility metadata, so a localized title or

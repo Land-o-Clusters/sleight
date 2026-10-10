@@ -348,6 +348,11 @@ our own runs. Dates and engine versions are given where they matter.
 
 ## Specific apps
 
+- Finishing a File > Open panel brought TextEdit to the front for about a second in 3 of about 21
+  textedit-edit runs while the owner worked (2026-10-10, WindowServer log), each time just after the
+  panel opened the document. The engine's actions themselves didn't. The skill now sends Claude to
+  `open_file`, which opens a file with the app in the background; a task that still uses the panel
+  can take focus the same way. Whether Codex sees it too isn't checked.
 - In a TextEdit typing probe on 2026-10-08, select-all followed by `typeText("engine01")` and save
   left `Engine01engine01` instead of replacing the text. Part of it is macOS auto-capitalization,
   which `typeText` goes through: a later probe typed "sleight is here. it works" and TextEdit saved

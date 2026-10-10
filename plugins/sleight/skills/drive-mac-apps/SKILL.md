@@ -46,6 +46,8 @@ it. If an app needs approval, ask the user, or stop when a headless run refuses 
 - Don't set a TextEdit document's text with `setValue`. Saving right after it hung TextEdit 3/3 times.
 - Use an app's menus by their shortcut (`super+shift+t` is TextEdit's Make Plain Text), or click
   the menu and its item in one call. `menu_bar` is only for icons at the right end of the menu bar.
+- Open an existing file with the `open_file` tool, not File > Open: the Open panel can bring the app
+  in front of the user's work.
 - Save to a path in one call once the save dialog shows, including the final Return:
 
   ```js

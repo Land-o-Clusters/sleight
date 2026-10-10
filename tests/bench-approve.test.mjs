@@ -21,6 +21,10 @@ test('benchmark drags approve the three apps by bundle ID too, exact case only',
     assert.equal(approve(`Allow Claude to drag in ${app}? It moves the pointer.`), null);
   }
 });
+test('benchmark open_file approves only the allowlisted apps', () => {
+  assert.equal(approve('Allow Claude to open files in TextEdit? They open in the background.'), 'accept');
+  assert.equal(approve('Allow Claude to open files in Terminal? They open in the background.'), null);
+});
 test('real tasks approve their apps and exact bundle IDs without widening core approval', () => {
   for (const app of ['Safari', 'com.apple.Safari', 'Preview', 'com.apple.Preview', 'Finder', 'com.apple.finder', 'Helium', 'net.imput.helium',
     'Microsoft Word', 'Word', 'com.microsoft.Word', 'Microsoft Excel', 'Excel', 'com.microsoft.Excel', 'Microsoft PowerPoint', 'PowerPoint', 'com.microsoft.Powerpoint', 'Mail', 'com.apple.mail', 'Mimestream', 'com.mimestream.Mimestream']) {

@@ -30,11 +30,12 @@ Set `SLEIGHT_APPROVAL_SCOPE=document` to approve a document or window for the se
 First call `js` with only `let app = await cua.getApp("TextEdit")`, then call `document_scope`:
 the prompt specifies the observed window
 and document URL. A different window stops further actions until you read it and ask the user again;
-`drag`, `hover`, `menu_bar`, `notifications` and resets are unavailable in this mode.
+`drag`, `hover`, `menu_bar`, `notifications`, `open_file` and resets are unavailable in this mode.
 `cua.getApp({ windowId: 123 })` does not work on macOS, so it cannot select a document here.
 For several windows, call `select_window` with `app` and an exact file `url` or `title`,
 then acquire the app and check its full Window and URL before `document_scope`.
 `SLEIGHT_SELECT_WINDOW=0` leaves the selection tool out.
+`SLEIGHT_OPEN_FILE=0` leaves out `open_file`, which opens a file in an approved app in the background.
 This guards mistakes in cooperative code. [The design](design/document-scope.md) lists what
 the relay enforces and how arbitrary JavaScript can bypass the checks.
 

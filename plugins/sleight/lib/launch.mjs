@@ -10,9 +10,9 @@
 //   launch.mjs record|replay …  turn a finished run into a script, and run it again (replay.mjs)
 
 import { execFile, execFileSync, spawn } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { discoverExtensions } from './browser-discovery.mjs';
@@ -23,7 +23,7 @@ import { loadFlowRules } from './flow-rules.mjs';
 import { InputLease } from './input-lease.mjs';
 import { loadPreapproved } from './preapproved.mjs';
 import { createGrantAudit } from './preapproved-audit.mjs';
-import { BLOCKED_APP_TOOL, callBlockedApp, forbiddenTargetsAllowed } from './blocked-apps.mjs';
+import { BLOCKED_APP_TOOL, callBlockedApp, forbiddenTargetsAllowed, matchBlockedApp } from './blocked-apps.mjs';
 import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
 import { probeHelper, staleHelperJobs } from './helper-health.mjs';
 import { replayBridge } from './replay.mjs';
@@ -314,7 +314,72 @@ export function localToolDefinitions(env = process.env) {
     ...(env.SLEIGHT_HOVER === '0' ? [] : [HOVER_TOOL]),
     BLOCKED_APP_TOOL,
     ...(env.SLEIGHT_DRAG === '0' ? [] : [DRAG_TOOL]),
+    ...(env.SLEIGHT_OPEN_FILE === '0' ? [] : [OPEN_FILE_TOOL]),
   ];
+}
+
+// Opening a document through an app's Open panel brought TextEdit to the front for about a second
+// in 3 of about 21 textedit-edit runs (2026-10-10, WindowServer log), while the owner worked. `open -g`
+// opens it with the app left in the background, in one call instead of about four actions.
+export const OPEN_FILE_TOOL = {
+  name: 'open_file',
+  description: 'Open an existing file in an app without bringing the app forward, instead of its File > Open panel, ' +
+    'which can take the user\'s focus. `path` is absolute or starts with ~/. Then read the app with ' +
+    'getAXState({ disableDiffing: true }) before acting. The user approves each app once per session.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      app: { type: 'string', minLength: 1, description: 'App name or bundle ID, such as TextEdit or com.apple.TextEdit' },
+      path: { type: 'string', minLength: 1, description: 'The file to open' },
+    },
+    required: ['app', 'path'], additionalProperties: false,
+  },
+};
+
+const BUNDLE_ID = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
+// Apps whose job is to run, install or unpack what they open, refused whatever file they get.
+const LAUNCHER_BUNDLES = new Set(['org.python.pythonlauncher', 'com.apple.jarlauncher', 'com.apple.installer',
+  'com.apple.archiveutility', 'com.apple.scriptmenuapp', 'com.apple.automator.runner', 'com.apple.shortcuts',
+  'com.apple.systemevents', 'com.apple.applescriptutility']);
+// Files that run code when the right app opens them, refused whatever app is named.
+const RUNNABLE = /\.(?:command|tool|sh|bash|zsh|csh|ksh|fish|py|pyc|pyw|rb|pl|php|js|mjs|jar|app|pkg|mpkg|dmg|scpt|scptd|applescript|workflow|action|shortcut|terminal|osax|plugin|kext|so|dylib)$/i;
+// LaunchServices' answer for an app name or bundle ID: its real bundle ID, or '' when no app matches.
+const RESOLVE_APP = `ObjC.import('AppKit');
+function run(argv) {
+  const ws = $.NSWorkspace.sharedWorkspace, name = argv[0];
+  let url = /^[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+$/.test(name) ? ws.URLForApplicationWithBundleIdentifier(name) : undefined;
+  if (!url || url.isNil()) { const path = ws.fullPathForApplication(name); if (!path.isNil()) url = $.NSURL.fileURLWithPath(path); }
+  if (!url || url.isNil()) return '';
+  const bundle = $.NSBundle.bundleWithURL(url);
+  return bundle.isNil() || bundle.bundleIdentifier.isNil() ? '' : ObjC.unwrap(bundle.bundleIdentifier);
+}`;
+const resolveAppId = name => new Promise(resolve => execFile('/usr/bin/osascript', ['-l', 'JavaScript', '-e', RESOLVE_APP, name],
+  { timeout: 10000 }, (err, stdout) => resolve(err ? '' : String(stdout).trim())));
+const runOpen = (file, argv) => new Promise((resolve, reject) =>
+  execFile(file, argv, { timeout: 15000 }, err => (err ? reject(err) : resolve())));
+// Refuses what would run code or reach outside the app: a path or .app as the app, an app that
+// doesn't resolve, the apps the engine refuses (terminals and OpenAI's apps), launchers, script and
+// executable files, relative paths, and anything but an existing regular file. The open goes to the
+// resolved bundle ID, so the app checked is the app that opens the file.
+export async function openDocument(args, { exec = runOpen, resolve = resolveAppId, home = homedir() } = {}) {
+  const app = String(args.app ?? '').trim();
+  const raw = String(args.path ?? '');
+  const path = raw.startsWith('~/') ? join(home, raw.slice(2)) : raw;
+  if (!app || app.includes('/') || /\.app$/i.test(app)) return text('open_file needs an app name or bundle ID, not a path.', true);
+  if (!isAbsolute(path)) return text('open_file needs an absolute path or one starting with ~/.', true);
+  if (RUNNABLE.test(path)) return text(`open_file doesn't open scripts, apps or installers (${raw}).`, true);
+  let info;
+  try { info = lstatSync(path); } catch { return text(`No file at ${raw}.`, true); }
+  if (!info.isFile()) return text(`${raw} isn't a regular file.`, true);
+  if (info.mode & 0o111) return text(`open_file doesn't open executable files (${raw}).`, true);
+  const bundleId = await resolve(app);
+  if (!BUNDLE_ID.test(bundleId)) return text(`macOS has no app named ${app}.`, true);
+  if (matchBlockedApp(app, bundleId) || LAUNCHER_BUNDLES.has(bundleId.toLowerCase())) {
+    return text(`open_file doesn't open files in ${app}, which runs or installs what it opens or isn't driven by sleight.`, true);
+  }
+  try { await exec('/usr/bin/open', ['-g', '-b', bundleId, path]); }
+  catch (err) { return text(`macOS couldn't open ${raw} in ${app}: ${String(err.message || err).split('\n')[0]}`, true); }
+  return text(`Opened ${raw} in ${app} in the background. Read the app with getAXState({ disableDiffing: true }) before acting: its windows changed.`);
 }
 
 export const HOVER_TOOL = {
@@ -419,6 +484,12 @@ export async function callLocalTool(name, args, approve, runLocal = runScript, t
     return result;
   }
   if (name === 'select_window') return selectWindow(args, { approve, runScript: runLocal });
+  if (name === 'open_file') {
+    if (!await approve(['open_file', args.app], `Allow Claude to open files in ${args.app}? They open in the background.`)) {
+      return text(`The user didn't allow opening files in ${args.app}. Stop and tell them; don't work around it.`, true);
+    }
+    return openDocument(args);
+  }
   if (name === 'drag') {
     if (!await approve(['drag', args.app], `Allow Claude to drag in ${args.app}? Background comes first; foreground fallback can move your pointer for a few seconds.`)) {
       return text(`The user didn't allow dragging in ${args.app}. Stop and tell them; don't work around it.`, true);
