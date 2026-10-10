@@ -111,6 +111,11 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
 
 ## 6. Features after replay
 
+When a competing plugin is released (the owner expects one, 2026-10-10), sleight answers with a same-day
+head-to-head, published in full, through a generic benchmark arm for any plugin or MCP server
+(`.dev/prompts/sol-plugin-arm.md`). Whether to release on speed before footprint parity is the
+owner's call at that moment.
+
 The owner's rule, in order: do what competitors do but better, then improve where they haven't, then
 build what nobody has. Sources are `.dev/research/2026-10-04-competitors.md` and the README roadmap.
 
