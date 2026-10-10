@@ -11,10 +11,11 @@
 - Cursor and generic MCP clients can use sleight's native approval panel and idle turn cleanup.
   The panel still names Claude under Claude Code. Unanswered relay forms expire after five minutes, and a panel
   that cannot be shown reports a failure. Unit-tested only, with [install notes](docs/other-hosts.md).
-- Native action replies separate engine acceptance, observed UI changes and save confirmation.
-  Missing, degraded or overlapping reads explain what remains unverified. The summary reuses the
-  compactor's existing diff and doesn't add engine reads. Unit-tested with abbreviated benchmark traces
-  and controlled complete trees. Calculator and TextEdit tasks await sleight-arch's release checks.
+- Native action replies add short observations for value, element and window changes, using the
+  existing diff without more engine reads. Unchanged trees don't repeat routine acceptance or save text.
+  Save observations specify the same file or the target this call named. Clearing an Edited state
+  doesn't credit Claude for autosave. Unit-tested with recorded replies and controlled variations.
+  Calculator, TextEdit, Chess and Safari-form tasks await sleight-arch's release checks.
 - `sleight-mcp --doctor <app>` reads an app that is already running and reports the read's time and
   whether it had a window header. It never launches the app or sends input. An app on the user's
   pre-approved list is read, with the grant audited; any other app needing approval is skipped without

@@ -25,10 +25,10 @@ test('the relay adds independent results without an extra engine call or changin
   h.call(1, 'let app = await cua.getApp("Calculator")'); h.reply(1, tree(0)); await tick();
   h.call(2, 'await app.click(2)');
   h.reply(2, GUARD_MARK + tree(1) + GUARD_END); await tick();
-  assert.match(note(h, 2), /input sent: yes.*UI changed: yes.*saved: not confirmed/);
+  assert.match(note(h, 2), /^sleight: UI changed \(value\)\.$/);
   assert.equal(h.sent.filter(msg => msg.method === 'tools/call').length, 2);
   assert.equal(h.sent.at(-1).params.arguments.code, 'await app.click(2)');
-  assert.ok(!note(h, 1).includes('sleight result:'));
+  assert.doesNotMatch(note(h, 1), /^sleight: (?:UI|saved:|call failed)/);
 });
 
 test('a rewritten last-window close error never becomes confirmed input', async t => {
@@ -36,7 +36,7 @@ test('a rewritten last-window close error never becomes confirmed input', async 
   h.call(1, 'let app = await cua.getApp("Calculator")'); h.reply(1, tree(0)); await tick();
   h.call(2, 'await app.pressKey("super+w")'); h.reply(2, 'noWindowsAvailable', true); await tick();
   assert.equal(h.received.find(msg => msg.id === 2).result.isError, false, 'existing close recovery stays intact');
-  assert.match(note(h, 2), /input sent: unverified \(call failed; partial input possible\)/);
+  assert.match(note(h, 2), /call failed \(partial input possible\)/);
 });
 
 test('overlapping calls cannot attribute a changed value to either action', async t => {
@@ -44,7 +44,7 @@ test('overlapping calls cannot attribute a changed value to either action', asyn
   h.call(1, 'let app = await cua.getApp("Calculator")'); h.reply(1, tree(0)); await tick();
   h.call(2, 'await app.click(2)'); h.call(3, 'await app.pressKey("1")');
   h.reply(3, GUARD_MARK + tree(1) + GUARD_END); h.reply(2, GUARD_MARK + tree(11) + GUARD_END); await tick();
-  for (const id of [2, 3]) assert.match(note(h, id), /UI changed: no change seen \(overlapping calls\)/);
+  for (const id of [2, 3]) assert.match(note(h, id), /UI unverified \(overlapping calls\)/);
 });
 
 test('reset discards the previous read and pending observations', async t => {
@@ -52,7 +52,7 @@ test('reset discards the previous read and pending observations', async t => {
   h.call(1, 'let app = await cua.getApp("Calculator")'); h.reply(1, tree(0)); await tick();
   h.call(2, '', 'js_reset'); h.reply(2, 'reset'); await tick();
   h.call(3, 'await app.click(2)'); h.reply(3, GUARD_MARK + tree(1) + GUARD_END); await tick();
-  assert.match(note(h, 3), /UI changed: no change seen \(no earlier read\)/);
+  assert.match(note(h, 3), /UI unverified \(no earlier read\)/);
 });
 
 test('a successful reply that reports a caught action failure stays unverified', async t => {
@@ -60,5 +60,5 @@ test('a successful reply that reports a caught action failure stays unverified',
   h.call(1, 'let app = await cua.getApp("Calculator")'); h.reply(1, tree(0)); await tick();
   h.call(2, 'await app.click(2)');
   h.reply(2, 'sleight: an action in this call failed, and the call went on without it: click.\n' + GUARD_MARK + tree(1) + GUARD_END); await tick();
-  assert.match(note(h, 2), /input sent: unverified/);
+  assert.match(note(h, 2), /call failed \(partial input possible\)/);
 });

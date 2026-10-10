@@ -16,6 +16,7 @@
 // read and refuses actions on any other (staleIndex).
 
 import { GUARD_END, GUARD_MARK, documentKey, windowFromText, hasIdentifier, hasLabel } from './document-scope.mjs';
+import { pathToFileURL } from 'node:url';
 
 export { GUARD_END, GUARD_MARK };
 const MAX_LINES = 3000; // above this, the line diff costs more than it saves
@@ -86,14 +87,20 @@ function actionKind(code, before) {
     value => ' '.repeat(value.length));
   const calls = [...masked.matchAll(/\.\s*(click|setValue|selectText|performSecondaryAction|scroll|drag|pressKey|typeText|paste)\s*\(/g)];
   if (!calls.length) return undefined;
-  let save = false, opens = false, navigates = false, saveCall, saveHandle;
+  const receiver = call => /([A-Za-z_$][\w$]*)\s*$/.exec(masked.slice(0, call.index))?.[1];
+  const literal = args => /^\s*['"]([^'"\\]*)['"]\s*(?:,|$)/.exec(args)?.[1];
+  const savePanel = /\b(?:sheet|dialog)\b.*\b(?:save-panel|save)\b/i.test(before?.root ?? '');
+  let save = false, opens = false, navigates = false, deletes = false, saveCall, saveHandle;
+  let folderHandle, folder, fileName, nameHandle;
   for (const call of calls) {
     const args = code.slice(call.index + call[0].length).split(')')[0];
     let isSave = false;
     if (call[1] === 'pressKey') {
-      const key = /^\s*['"]([^'"\\]*)['"]/.exec(args)?.[1] ?? '';
+      const key = literal(args) ?? '';
       isSave = /^(?:super|cmd|command)\+s$/i.test(key) ||
-        (/^(?:return|enter)$/i.test(key) && /\b(?:sheet|dialog)\b.*\b(?:save-panel|save)\b/i.test(before?.root ?? ''));
+        (/^(?:return|enter)$/i.test(key) && savePanel);
+      deletes ||= /^(?:fn\+)?(?:delete|backspace|forwarddelete)$/i.test(key);
+      if (savePanel && /^(?:super|cmd|command)\+shift\+g$/i.test(key)) folderHandle = receiver(call);
       opens ||= key.includes('+') || /^(?:return|enter|escape|esc)$/i.test(key);
       navigates ||= !isSave && /^(?:(?:super|cmd|command)\+(?:[a-z]+\+)*[now]|return|enter|escape|esc)$/i.test(key);
     }
@@ -105,18 +112,31 @@ function actionKind(code, before) {
         /^\s*\{\s*(?:label|id|line)\s*:\s*['"](?:Save|button Save)['"]\s*\}/.test(args);
       navigates ||= !isSave;
     }
-    if (isSave) { save = true; saveCall = call; saveHandle = /([A-Za-z_$][\w$]*)\s*$/.exec(masked.slice(0, call.index))?.[1]; }
+    if (savePanel && call[1] === 'typeText' && folderHandle && receiver(call) === folderHandle) {
+      const value = literal(args); if (value?.startsWith('/')) folder = value;
+    }
+    if (savePanel && call[1] === 'setValue') {
+      const named = /^\s*(\{\s*id\s*:\s*['"]saveAsNameTextField['"]\s*\}|\d+)\s*,([\s\S]*)/.exec(args);
+      const line = named && /^\d+$/.test(named[1]) && before.lines.find(line => parse(line).num === Number(named[1]));
+      if (named && (named[1].startsWith('{') || (line && hasIdentifier(line, 'saveAsNameTextField')))) {
+        fileName = literal(named[2]); nameHandle = receiver(call);
+      }
+    }
+    if (isSave) { save = true; saveCall = call; saveHandle = receiver(call); }
   }
   const otherRead = save && [...masked.matchAll(/([A-Za-z_$][\w$]*)\s*\.\s*(?:getAXState|getAXStateAndScreenshot|getScreenshot)\s*\(/g)]
     .some(read => read[1] !== saveHandle);
   const acquisitionAfterSave = save && [...masked.matchAll(/\bcua\s*\.\s*getApp\s*\(/g)].some(read => read.index > saveCall.index);
-  return { save, opens, mixedSave: save && (navigates || calls.at(-1) !== saveCall || otherRead || acquisitionAfterSave) };
+  const namedURL = save && folder && fileName && !/[\/]/.test(fileName) && !['.', '..'].includes(fileName) &&
+    folderHandle === saveHandle && nameHandle === saveHandle ? pathToFileURL(folder + '/' + fileName).href : undefined;
+  return { save, opens, deletes, namedURL, mixedSave: save && (navigates || calls.at(-1) !== saveCall || otherRead || acquisitionAfterSave ||
+    calls.some(call => receiver(call) !== saveHandle)) };
 }
 
 // Compare state itself, so losing Help or renaming an unselected row cannot become a value change.
 function stateFields(line) {
   const fields = [];
-  for (const pattern of [/\bValue: (.*?)(?=, (?:Secondary Actions|ID|Help|Description):|$)/,
+  for (const pattern of [/\bValue: ?(.*?)(?=, (?:Secondary Actions|ID|Help|Description):|$)/,
     /;value:([^,]*)/, /\bSelected text: (.*?)(?=, (?:Secondary Actions|ID|Help|Description):|$)/]) {
     const match = pattern.exec(line); if (match) fields.push(match[0].startsWith('Selected') ? 'text:' + match[1] : 'value:' + match[1]);
   }
@@ -128,6 +148,8 @@ function stateFields(line) {
 const attributes = line => (line.match(/\b(?:Help|Description|ID):/g) ?? []).length;
 const panel = line => /(?:^|\t)(?:sheet|dialog)\b/.test(line);
 const edited = title => /(?: — | - )Edited$/.test(title);
+const withoutValue = line => line.replace(/(?:, )?Value: ?.*?(?=, (?:Secondary Actions|ID|Help|Description):|$)/, '')
+  .replace(/, (?=(?:Secondary Actions|ID|Help|Description):)/g, ' ').replace(/ +/g, ' ').trimEnd();
 
 function resultNote(action, after, failed) {
   const before = action.before;
@@ -137,35 +159,38 @@ function resultNote(action, after, failed) {
     : !before ? 'no earlier read' : before.window.app !== after.window.app ? 'another app' : undefined;
   const windowChanged = !reason && action.opens &&
     (before.window.title !== after.window.title || before.window.url !== after.window.url);
-  let ui = windowChanged ? 'yes (window changed)' : undefined;
+  let ui = windowChanged ? 'UI changed (window)' : undefined;
   const incomplete = before?.incomplete || after?.incomplete;
-  const sameDocument = before && after && before.window.title === after.window.title && before.window.url === after.window.url;
+  const sameDocument = before && after && /^standard window\b/.test(before.root) &&
+    before.window.url?.startsWith('file://') && before.window.url === after.window.url;
   const modifiedCleared = sameDocument && /\b(?:Modified|Edited): true\b/i.test(before.root) &&
     /\b(?:Modified|Edited): false\b/i.test(after.root);
+  const degraded = after?.delta?.degraded || (after?.delta?.lostState && !(action.deletes && after.delta.clearedValue));
   if (!ui) {
-    reason ||= incomplete ? 'incomplete read' : after?.delta?.degraded ? 'degraded read'
+    reason ||= incomplete ? 'incomplete read' : degraded ? 'degraded read'
       : after?.delta?.baseline !== before ? 'comparison unavailable' : undefined;
-    if (!reason && after.delta.panel) ui = 'yes (sheet or dialog changed)';
-    if (!reason && after.delta.semantic) ui = 'yes (value or selection changed)';
-    if (!reason && action.save && modifiedCleared) ui = 'yes (document modified state cleared)';
-    ui ||= `no change seen (${reason ?? (after.delta.renumbered ? 'only numbering changed' : 'no action-related change in tree')})`;
+    if (!reason && after.delta.panel) ui = 'UI changed (sheet or dialog)';
+    if (!reason && (after.delta.semantic || (action.deletes && after.delta.clearedValue))) ui = 'UI changed (value)';
+    if (!reason && action.save && modifiedCleared) ui = 'UI changed (modified state)';
+    if (!reason && after.delta.element) ui ||= 'UI changed (element)';
+    if (reason) ui = `UI unverified (${reason})`;
   }
-  let saved = 'not confirmed (no save action)';
+  let saved;
   if (action.save) {
     const unavailable = failed ? 'call failed' : action.overlap ? 'overlapping calls' : action.mixedSave ? 'mixed save targets' : !after ? invalidRead ?? 'no read after input'
       : !before ? 'no earlier read' : before.window.app !== after.window.app ? 'another app'
-        : incomplete ? 'incomplete read' : after.delta?.degraded ? 'degraded read' : undefined;
+        : incomplete ? 'incomplete read' : degraded ? 'degraded read' : undefined;
     const document = after && /^standard window\b/.test(after.root) && !/\b(?:save|open)-panel\b/.test(after.root);
-    const editedTitleCleared = before && after && edited(before.window.title) && !edited(after.window.title) &&
+    const editedTitleCleared = sameDocument && edited(before.window.title) && !edited(after.window.title) &&
       before.window.title.replace(/(?: — | - )Edited$/, '') === after.window.title && before.window.url === after.window.url;
-    const urlChanged = after?.window.url?.startsWith('file://') && before?.window.url !== after.window.url;
-    const titleChanged = before && after && /^standard window\b/.test(before.root) &&
-      !before.window.url && !after.window.url && before.window.title !== after.window.title && !edited(after.window.title);
-    saved = unavailable ? `not confirmed (${unavailable})` : document && modifiedCleared
-      ? 'yes (document modified state cleared)' : document && (urlChanged || titleChanged || editedTitleCleared)
-      ? 'yes (document URL or title changed)' : 'not confirmed (no document save state change seen)';
+    const named = action.namedURL && action.namedURL === after?.window.url;
+    saved = unavailable ? `not confirmed (${unavailable})` : !document ? 'not confirmed (no document save state change seen)'
+      : !sameDocument && !named ? `not confirmed (${after.window.url ? 'different document' : 'document identity unavailable'})`
+      : modifiedCleared || editedTitleCleared ? `observed ${JSON.stringify(after.window.url)} (modified state cleared; cause unknown)`
+      : named ? `observed ${JSON.stringify(after.window.url)} (named file URL)` : 'not confirmed (no document save state change seen)';
   }
-  return `sleight result: input sent: ${failed ? 'unverified (call failed; partial input possible)' : 'yes (engine accepted call)'}; UI changed: ${ui}; saved: ${saved}.`;
+  const fields = [failed ? 'call failed (partial input possible)' : ui, saved && 'saved: ' + saved].filter(Boolean);
+  return fields.length ? 'sleight: ' + fields.join('; ') + '.' : undefined;
 }
 
 export function createReadCompactor() {
@@ -211,10 +236,11 @@ export function createReadCompactor() {
     const believed = new Map(before.believed ?? numbered(before.lines));
     const valid = new Set(), changes = [];
     let renumbered = 0, fewerAttributes = 0, removedAttributes = 0, addedAttributes = 0, changedPanel = false;
-    const removedState = [], addedState = [];
+    const removedState = [], addedState = [], removedNodes = new Map(), addedNodes = new Map();
     for (const [i, j] of pairs) {
       if (j < 0) {
-        removedState.push(...stateFields(old[i].key)); removedAttributes += attributes(old[i].key);
+        const fields = stateFields(old[i].key); removedState.push(...fields); removedAttributes += attributes(old[i].key);
+        removedNodes.set(old[i].num ?? withoutValue(old[i].key), { ...old[i], fields });
         changedPanel ||= panel(old[i].key);
         changes.push('- ' + (old[i].num === undefined ? before.lines[i] : old[i].key));
         if (old[i].num !== undefined && believed.get(old[i].num) === old[i].key) believed.delete(old[i].num);
@@ -222,7 +248,8 @@ export function createReadCompactor() {
       }
       const { num } = now[j];
       if (i < 0) {
-        addedState.push(...stateFields(now[j].key)); addedAttributes += attributes(now[j].key); changedPanel ||= panel(now[j].key);
+        const fields = stateFields(now[j].key); addedState.push(...fields); addedAttributes += attributes(now[j].key); changedPanel ||= panel(now[j].key);
+        addedNodes.set(num ?? withoutValue(now[j].key), { ...now[j], fields });
         changes.push('+ ' + lines[j]); if (num !== undefined) { valid.add(num); believed.set(num, now[j].key); } continue;
       }
       if (num === undefined) continue;
@@ -230,10 +257,20 @@ export function createReadCompactor() {
       if (num !== old[i].num) renumbered++;
       else if (!before.valid || before.valid.has(num)) valid.add(num);
     }
+    let clearedFields = 0, element = false;
+    for (const [number, was] of removedNodes) {
+      const now = addedNodes.get(number);
+      if (!now) continue;
+      element ||= was.num !== undefined;
+      if (/\btext (?:entry area|field)\b/.test(was.key) && withoutValue(was.key) === withoutValue(now.key) &&
+          !now.fields.some(field => field.startsWith('value:'))) clearedFields += was.fields.filter(field => field.startsWith('value:')).length;
+    }
     observation.delta = { baseline: before.observation,
       semantic: removedState.length > 0 && addedState.length > 0 && JSON.stringify(removedState.sort()) !== JSON.stringify(addedState.sort()),
-      panel: changedPanel, renumbered,
-      degraded: fewerAttributes > 0 || removedState.length > addedState.length || removedAttributes > addedAttributes };
+      panel: changedPanel, renumbered, element,
+      lostState: removedState.length > addedState.length,
+      clearedValue: clearedFields > 0 && clearedFields >= removedState.length - addedState.length,
+      degraded: fewerAttributes > 0 || removedAttributes > addedAttributes };
     // Numbers Claude saw in this same result, on a line identical to the
     // current tree's, are current too (its own reads, the engine's diff).
     const current = new Map(now.filter(l => l.num !== undefined).map(l => [l.num, l.key]));
@@ -301,7 +338,8 @@ export function createReadCompactor() {
         }
         return { ...item, text: out };
       });
-      if (action) out.push({ type: 'text', text: resultNote(action, observedInResult, failed) });
+      const note = action && resultNote(action, observedInResult, failed);
+      if (note) out.push({ type: 'text', text: note });
       if (failed || (action && (!observedInResult || observedInResult.invalid || action.overlap))) latest = undefined;
       return out;
     },
