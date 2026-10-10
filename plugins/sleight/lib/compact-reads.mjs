@@ -16,6 +16,8 @@
 // read and refuses actions on any other (staleIndex).
 
 import { GUARD_END, GUARD_MARK, documentKey, windowFromText, hasIdentifier, hasLabel } from './document-scope.mjs';
+import { homedir } from 'node:os';
+import { isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export { GUARD_END, GUARD_MARK };
@@ -79,6 +81,9 @@ export function lineDiff(before, after) {
     .map(([i, j]) => (j < 0 ? '- ' + before[i] : '+ ' + after[j]));
 }
 
+const folderPath = value => value.startsWith('/') || value.startsWith('~/');
+const baseName = value => value && !/[\/]/.test(value) && !['.', '..'].includes(value);
+
 // Recognize literal native calls without treating strings or comments as actions. This is
 // advisory, like the window headers themselves; computed methods and aliases are not receipts.
 function actionKind(code, before) {
@@ -91,18 +96,28 @@ function actionKind(code, before) {
   const literal = args => /^\s*['"]([^'"\\]*)['"]\s*(?:,|$)/.exec(args)?.[1];
   const savePanel = /\b(?:sheet|dialog)\b.*\b(?:save-panel|save)\b/i.test(before?.root ?? '');
   let save = false, opens = false, navigates = false, deletes = false, saveCall, saveHandle;
-  let folderHandle, folder, fileName, nameHandle;
+  // A folder and name count only on the way to a save: an Open panel reached the same way named the
+  // file it opened, and its URL would have read as a save.
+  let folderHandle, folder, fileName, nameHandle, folderReady, saveOpened = savePanel;
   for (const call of calls) {
     const args = code.slice(call.index + call[0].length).split(')')[0];
-    let isSave = false;
+    let isSave = false, gotoReturn = false;
     if (call[1] === 'pressKey') {
       const key = literal(args) ?? '';
+      const handle = receiver(call);
+      const isReturn = /^(?:return|enter)$/i.test(key);
+      if (/^(?:super|cmd|command)\+(?:shift\+)?s$/i.test(key)) saveOpened = true;
+      if (/^(?:super|cmd|command)\+shift\+g$/i.test(key)) { folderHandle = handle; folderReady = false; }
+      if (isReturn && folderHandle && handle === folderHandle && folder && !folderReady) {
+        folderReady = true;
+        gotoReturn = true;
+      }
       isSave = /^(?:super|cmd|command)\+s$/i.test(key) ||
-        (/^(?:return|enter)$/i.test(key) && savePanel);
+        (isReturn && savePanel) ||
+        (isReturn && !gotoReturn && saveOpened && folder && fileName && handle === folderHandle);
       deletes ||= /^(?:fn\+)?(?:delete|backspace|forwarddelete)$/i.test(key);
-      if (savePanel && /^(?:super|cmd|command)\+shift\+g$/i.test(key)) folderHandle = receiver(call);
       opens ||= key.includes('+') || /^(?:return|enter|escape|esc)$/i.test(key);
-      navigates ||= !isSave && /^(?:(?:super|cmd|command)\+(?:[a-z]+\+)*[now]|return|enter|escape|esc)$/i.test(key);
+      navigates ||= !isSave && !gotoReturn && /^(?:(?:super|cmd|command)\+(?:[a-z]+\+)*[now]|return|enter|escape|esc)$/i.test(key);
     }
     if (call[1] === 'click') {
       opens = true;
@@ -112,12 +127,14 @@ function actionKind(code, before) {
         /^\s*(?:\{\s*(?:label|id|line)\s*:\s*)?['"](?:Save|button Save)['"]\s*\}?\s*$/.test(args);
       navigates ||= !isSave;
     }
-    if (savePanel && call[1] === 'typeText' && folderHandle && receiver(call) === folderHandle) {
-      const value = literal(args); if (value?.startsWith('/')) folder = value;
+    if (call[1] === 'typeText' && folderHandle && receiver(call) === folderHandle) {
+      const value = literal(args);
+      if (value && folderPath(value) && !folderReady) folder = value;
+      else if (baseName(value)) { fileName = value; nameHandle = receiver(call); }
     }
-    if (savePanel && call[1] === 'setValue') {
+    if (call[1] === 'setValue') {
       const named = /^\s*(\{\s*id\s*:\s*['"]saveAsNameTextField['"]\s*\}|\d+)\s*,([\s\S]*)/.exec(args);
-      const line = named && /^\d+$/.test(named[1]) && before.lines.find(line => parse(line).num === Number(named[1]));
+      const line = named && /^\d+$/.test(named[1]) && before?.lines.find(line => parse(line).num === Number(named[1]));
       if (named && (named[1].startsWith('{') || (line && hasIdentifier(line, 'saveAsNameTextField')))) {
         fileName = literal(named[2]); nameHandle = receiver(call);
       }
@@ -127,8 +144,9 @@ function actionKind(code, before) {
   const otherRead = save && [...masked.matchAll(/([A-Za-z_$][\w$]*)\s*\.\s*(?:getAXState|getAXStateAndScreenshot|getScreenshot)\s*\(/g)]
     .some(read => read[1] !== saveHandle);
   const acquisitionAfterSave = save && [...masked.matchAll(/\bcua\s*\.\s*getApp\s*\(/g)].some(read => read.index > saveCall.index);
-  const namedURL = save && folder && fileName && !/[\/]/.test(fileName) && !['.', '..'].includes(fileName) &&
-    folderHandle === saveHandle && nameHandle === saveHandle ? pathToFileURL(folder + '/' + fileName).href : undefined;
+  const namedPath = folder?.startsWith('~/') ? join(homedir(), folder.slice(2)) : folder;
+  const namedURL = save && folderHandle === saveHandle && nameHandle === saveHandle && baseName(fileName) &&
+    namedPath && isAbsolute(namedPath) ? pathToFileURL(join(namedPath, fileName)).href : undefined;
   return { save, opens, deletes, namedURL, mixedSave: save && (navigates || calls.at(-1) !== saveCall || otherRead || acquisitionAfterSave ||
     calls.some(call => receiver(call) !== saveHandle)) };
 }

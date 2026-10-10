@@ -22,6 +22,7 @@
   search, filters, pagination, options, cart), with a server-side cart check. Safari smoke tasks
   `real-shop-target` and `real-shop-bestbuy` take `--runs 1` only and stay out of default passes
   and the head-to-head. Their check is the answer plus a cart-page screenshot.
+- Go to Folder and a panel name field in the same call name that file URL, including `~/` folders.
 - Cmd+S opening a Save panel, and Save in the panel producing a file the call didn't name, no longer
   say "saved: not confirmed". The window header shows both steps. A named path that doesn't match
   still says so.

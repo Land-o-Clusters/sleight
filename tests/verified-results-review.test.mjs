@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createReadCompactor, GUARD_MARK, GUARD_END } from '../plugins/sleight/lib/compact-reads.mjs';
 
 const fixtures = JSON.parse(readFileSync(new URL('./fixtures/verified-results-review.json', import.meta.url)));
@@ -27,6 +30,52 @@ test('a same-file modified-state change names its file without attributing autos
 test('an Edited title clearing after typing does not claim that Claude saved', () => {
   const result = last(run(tree('a.txt — Edited', 'file:///tmp/a.txt'), tree('a.txt', 'file:///tmp/a.txt'), 'await app.typeText("alpha")'));
   assert.doesNotMatch(result, /saved:/);
+});
+
+const panel = 'Window: "Save", App: TextEdit.\n0 sheet Description: save, ID: save-panel\n\t79 text field (settable) Value: Untitled.txt, ID: saveAsNameTextField\n\t87 button Save, ID: OKButton';
+const untitled = 'Window: "Untitled", App: TextEdit.\n0 standard window Untitled\n\t1 text entry area (settable) Value: alpha, ID: First Text View';
+const namedDoc = (url, title = 'x.txt') => `Window: ${JSON.stringify(title)}, App: TextEdit.\n0 standard window ${title}, URL: ${url}\n\t1 text entry area (settable) Value: alpha, ID: First Text View`;
+const saveAs = (folder, name, how = 'set') => {
+  const nameCall = how === 'set'
+    ? `await app.setValue({ id: "saveAsNameTextField" }, ${JSON.stringify(name)})`
+    : `await app.typeText(${JSON.stringify(name)})`;
+  return `await app.pressKey("super+s"); await app.pressKey("super+shift+g"); await app.typeText(${JSON.stringify(folder)}); await app.pressKey("Return"); ${nameCall}; await app.pressKey("Return")`;
+};
+
+test('an Open panel reached by folder and file name is not a save', () => {
+  const open = 'await app.pressKey("super+o"); await app.pressKey("super+shift+g"); await app.typeText("/tmp"); await app.pressKey("Return"); await app.typeText("x.txt"); await app.pressKey("Return")';
+  assert.doesNotMatch(last(run(untitled, namedDoc('file:///tmp/x.txt'), open)) ?? '', /saved:/);
+});
+
+test('a folder and name field in one call observe that named file URL', () => {
+  const url = 'file:///tmp/x.txt';
+  assert.match(last(run(untitled, namedDoc(url), saveAs('/tmp', 'x.txt'))), /saved: observed "file:\/\/\/tmp\/x.txt" \(named file URL\)/);
+  assert.match(last(run(panel, namedDoc(url), saveAs('/tmp', 'x.txt', 'type'))), /saved: observed "file:\/\/\/tmp\/x.txt" \(named file URL\)/);
+  const home = pathToFileURL(join(homedir(), 'tmp', 'x.txt')).href;
+  assert.ok(last(run(panel, namedDoc(home), saveAs('~/tmp', 'x.txt')))
+    .includes(`saved: observed ${JSON.stringify(home)} (named file URL)`));
+});
+
+test('a name field alone keeps today\'s Save-panel output', () => {
+  const note = last(run(panel, namedDoc('file:///tmp/x.txt'), 'await app.setValue({ id: "saveAsNameTextField" }, "x.txt"); await app.pressKey("Return")')) ?? '';
+  assert.doesNotMatch(note, /saved: observed/);
+  assert.doesNotMatch(note, /saved: not confirmed/);
+});
+
+test('a mismatched URL after a named folder and name field is a different document', () => {
+  assert.match(last(run(untitled, namedDoc('file:///tmp/other.txt', 'other.txt'), saveAs('/tmp', 'x.txt'))), /saved: not confirmed \(different document\)/);
+});
+
+test('a folder typed in an earlier call does not name this call\'s file URL', () => {
+  const c = createReadCompactor();
+  c.process([text(panel)]);
+  c.process([text(GUARD_MARK + panel + GUARD_END)], {
+    action: c.beginAction('await app.pressKey("super+shift+g"); await app.typeText("/tmp"); await app.pressKey("Return")'),
+  });
+  const note = last(c.process([text(GUARD_MARK + namedDoc('file:///tmp/x.txt') + GUARD_END)], {
+    action: c.beginAction('await app.setValue({ id: "saveAsNameTextField" }, "x.txt"); await app.pressKey("Return")'),
+  })) ?? '';
+  assert.doesNotMatch(note, /saved: observed/);
 });
 
 test('the recorded TextEdit Save-panel call names the resulting file URL', () => {
