@@ -11,8 +11,8 @@ function run(argv) {
     return JSON.stringify({ requested: true });
   }
   const app = Application('TextEdit');
-  if (request.op === 'documents') return JSON.stringify(app.documents().map(doc => String(doc.id())));
-  const matches = app.documents().filter(doc => String(doc.id()) === request.id);
+  if (request.op === 'documents') return JSON.stringify(app.documents().map(doc => String(doc.name())));
+  const matches = app.documents().filter(doc => String(doc.name()) === request.id);
   if (matches.length !== 1) throw new Error('Owned document ID missing or ambiguous');
   if (request.op === 'close') { matches[0].close({ saving: 'no' }); return JSON.stringify({ closed: true }); }
   throw new Error('Unknown fixture operation');

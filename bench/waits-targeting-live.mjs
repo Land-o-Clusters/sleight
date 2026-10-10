@@ -151,7 +151,10 @@ try {
       let wasRunning = true, docId;
       try {
         ready(); wasRunning = (await fixture({ op: 'running', appId })).running;
-        await command('/usr/bin/open', ['-g', '-b', appId, ...(['com.apple.Chess', 'com.apple.TextEdit'].includes(appId) && !wasRunning ? ['--args', '-ApplePersistenceIgnoreState', 'YES'] : [])]);
+        // For this launch only: no restored windows, and TextEdit opens an untitled document instead of
+        // its iCloud Open panel, which neither Escape nor Cancel closed in the background (2026-10-10).
+        await command('/usr/bin/open', ['-g', '-b', appId, ...(['com.apple.Chess', 'com.apple.TextEdit'].includes(appId) && !wasRunning
+          ? ['--args', '-ApplePersistenceIgnoreState', 'YES', ...(appId === 'com.apple.TextEdit' ? ['-NSShowAppCentricOpenPanelInsteadOfUntitledFile', 'NO'] : [])] : [])]);
         const identities = await connect();
         if (appId === 'com.apple.calculator') {
           await js('var app = await cua.getApp("com.apple.calculator")', 'Calculator acquisition');
@@ -161,7 +164,10 @@ try {
           const initial = await js('var app = await cua.getApp("com.apple.TextEdit")', 'TextEdit acquisition');
           if (/ID: open-panel/.test(text(initial))) {
             assert.ok(!wasRunning, 'Existing TextEdit Open panel left alone');
-            await js('await app.pressKey("Escape")', 'Dismiss owned launch Open panel');
+            // Escape sent to TextEdit in the background left its launch Open panel up, and Cmd+N then made
+            // no document (2026-10-10, 2 runs). Its Cancel button closes it.
+            const dismissed = await js('await app.click({ label: "Cancel" }); await app.getAXState()', 'Dismiss owned launch Open panel');
+            assert.doesNotMatch(text(dismissed), /ID: open-panel/, 'Launch Open panel still open after Cancel');
           }
           const before = await fixture({ op: 'documents' });
           await js('await app.pressKey("super+n")', 'TextEdit new document');
@@ -169,7 +175,7 @@ try {
           assert.equal(created.length, 1); docId = created[0]; trial.documentId = docId;
           await js('await app.pressKey("super+shift+t"); await app.typeText("Sleight wait save proof."); await app.pressKey("super+s"); nodeRepl.write(await app.waitFor({ id: "save-panel" }))', 'TextEdit late Save sheet');
           const destination = join(bank, 'wait-save.txt');
-          const saved = await js(`await app.pressKey("super+shift+g"); await app.typeText(${JSON.stringify(bank)}); await app.pressKey("Return"); await app.setValue({ id: "saveAsNameTextField" }, "wait-save.txt"); await app.pressKey("Return")`, 'TextEdit save');
+          const saved = await js(`await app.pressKey("super+shift+g"); await app.typeText(${JSON.stringify(bank)}); await app.pressKey("Return"); await app.waitFor({ id: "saveAsNameTextField" }); await app.setValue({ id: "saveAsNameTextField" }, "wait-save.txt"); await app.pressKey("Return")`, 'TextEdit save');
           assert.match(text(saved), /wait-save\.txt/); trial.savedBytes = readFileSync(destination, 'utf8');
           assert.match(trial.savedBytes, /Sleight wait save proof\./);
         } else {
