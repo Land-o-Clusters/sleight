@@ -33,6 +33,17 @@ our own runs. Dates and engine versions are given where they matter.
   do not take these leases, and arbitrary JavaScript can bypass the injected guard.
   Never delete the SQLite coordinator during live use. Replacement between transactions is detected
   and reopened, but metadata checks cannot prevent arbitrary filesystem replacement during an action.
+- Windows without a URL need one matching native AX window. The relay retains that reference with
+  the app's PID and launch time, and compares it before each native input call. Duplicate untitled
+  headers refuse. A replacement during a call can still escape that check. Unit tests use a
+  published TextEdit tree and mocked native identities. Live qualification is pending.
+- `/sleight stop` collects its owned engine and helpers before checking pointer button state,
+  keyboard filter taps and owned lease records. A pressed button has no reliable owner, so it
+  leaves cleanup unconfirmed. A remaining tap or failed scan also prevents a clear receipt.
+  The shared computer-use helper stays running. These are observations at stop time, rather than
+  proof about future input from a shared service. Stop closes the engine connection; later use
+  needs a fresh connection and app read. The protocol and owned-process checks have unit coverage,
+  but the host observations have not been qualified live.
 - Change review covers saved files observed before `js` actions. A file first seen after an action
   needs a fresh standalone read before editing. Undo then starts at that later copy.
   Unsaved buffers, Save As targets,
@@ -74,7 +85,8 @@ our own runs. Dates and engine versions are given where they matter.
 - Document scope checks the last observed window before forwarding a call and stops on changed or
   missing Window/URL headers. Its injected action guard checks again, but arbitrary JavaScript can
   bypass it or forge observations. Result checks cannot undo actions already taken. Discovery reads
-  can expose other windows' contents, and equal titles without URLs are indistinguishable.
+  can expose other windows' contents. The engine's equal titles without URLs are indistinguishable,
+  so native admission refuses multiple matches.
 
 ## The pointer, drags and hover
 

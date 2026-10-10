@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `/sleight stop` reports calls in flight and whether the owned engine finished or was cut off.
+  It waits for engine and helper collection before checking lease files, pointer button state and
+  keyboard filter taps. Missing evidence stays unconfirmed. Stop closes this engine connection,
+  so later use needs a fresh connection and app read. Unit-tested, with live checks held.
 - Input admission for windows without a URL now checks one native AX match and retains the
   AX reference with the app's PID and launch time. Same-title replacements and duplicate
   untitled windows refuse input. `select_window` also rechecks identity after raising its match.

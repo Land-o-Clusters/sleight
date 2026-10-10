@@ -70,8 +70,13 @@ async function endEngineTurn($: any, event: 'Stop' | 'Interrupt') {
       const text = typeof block?.text === 'string' ? block.text : ''
       if (text.startsWith('sleight-warning: ')) $.ui.toast(text.slice('sleight-warning: '.length))
     }
+    if (event === 'Interrupt') {
+      return (ended.content ?? []).map((block: { text?: string }) => block.text ?? '')
+        .find((text: string) => text.startsWith('sleight stop:')) ?? 'sleight stop unconfirmed: the engine returned no checked receipt.'
+    }
   } catch (err) {
     $.ui.log(`sleight: could not end the turn: ${(err as Error).message}`, { to: 'debug' })
+    if (event === 'Interrupt') return `sleight stop unconfirmed: ${(err as Error).message}`
   }
 }
 
@@ -194,9 +199,10 @@ export const register: Register = on => {
   on('command.run', { command: 'sleight' }, async ($, e) => {
     if (e.args.trim() === 'stop') {
       await update($, stopped, () => true)
-      await endEngineTurn($, 'Interrupt')
+      usedThisTurn = false
+      const receipt = await endEngineTurn($, 'Interrupt')
       $.ui.status('sleight · stopped')
-      return { text: 'sleight stopped: Claude can’t use it again until your next message. Press Esc to stop the rest of the turn.' }
+      return { text: `${receipt} Press Esc to stop the rest of the turn.` }
     }
     await $.ui.open({ id: PANE, title: 'sleight' })
     // `/sleight do this` opens the pane and sends "do this" to Claude, as if
@@ -279,7 +285,8 @@ export const register: Register = on => {
             hotkey="s"
             onPress={() => {
               void update($, stopped, () => true)
-              void endEngineTurn($, 'Interrupt')
+              usedThisTurn = false
+              void endEngineTurn($, 'Interrupt').then(receipt => $.ui.toast(receipt ?? 'sleight stop unconfirmed'))
               $.ui.status('sleight · stopped')
             }}
           />

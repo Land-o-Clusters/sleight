@@ -84,6 +84,7 @@ export function createAppHealthHelper({ timeoutMs = 2000, operationTimeoutMs = 3
     target: args => target.request({ op: 'lease-target', app: args.app }, { ok: false,
       error: `Lease-target resolution failed: its helper was unavailable or did not answer within ${operationTimeoutMs / 1000} s. Stop this local action; reading the app again won't help.` }),
     keyboardTaps: async () => { const r = await taps.request({ op: 'keyboard-taps' }, { ok: false }); return r.ok ? r.taps : []; },
+    keyboardTapState: () => taps.request({ op: 'keyboard-taps' }, { ok: false, error: 'Keyboard tap scan unavailable' }),
     close: () => Promise.all([probe.close(), target.close(), taps.close()]),
   };
 }
