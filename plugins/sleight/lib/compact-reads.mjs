@@ -187,7 +187,15 @@ function resultNote(action, after, failed) {
     const editedTitleCleared = sameDocument && edited(before.window.title) && !edited(after.window.title) &&
       before.window.title.replace(/(?: — | - )Edited$/, '') === after.window.title && before.window.url === after.window.url;
     const named = action.namedURL && action.namedURL === after?.window.url;
-    saved = unavailable ? `not confirmed (${unavailable})` : !document ? 'not confirmed (no document save state change seen)'
+    // The two ordinary steps of a Save panel get no saved field: the panel opening, and the panel
+    // closing on a document with a file URL when the call named no path it could check. The header
+    // shows both, and "not confirmed" there sent Claude to check again (h2h-3, 2026-10-10). A named
+    // path that doesn't match still says so.
+    const panel = root => /^(?:sheet|dialog)\b|\b(?:save|open)-panel\b/.test(root ?? '');
+    const panelStep = !unavailable && after && (panel(after.root) ||
+      (panel(before?.root) && /^standard window\b/.test(after.root) && after.window.url?.startsWith('file://') && !action.namedURL));
+    if (panelStep) saved = undefined;
+    else saved = unavailable ? `not confirmed (${unavailable})` : !document ? 'not confirmed (no document save state change seen)'
       : !sameDocument && !named ? `not confirmed (${after.window.url ? 'different document' : 'document identity unavailable'})`
       : modifiedCleared || editedTitleCleared ? `observed ${JSON.stringify(after.window.url)} (modified state cleared; cause unknown)`
       : named ? `observed ${JSON.stringify(after.window.url)} (named file URL)` : 'not confirmed (no document save state change seen)';

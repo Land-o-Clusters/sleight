@@ -54,11 +54,14 @@ test('failure after input and overlapping calls never confirm saving or UI attri
   assert.match(note, /saved: not confirmed \(overlapping calls\)/);
 });
 
-test('Save opens a sheet without confirming a file save', () => {
+test('Save opens a sheet without a saved field, and Save in the sheet makes no claim either way', () => {
   const sheet = 'Window: "Save", App: TextEdit.\n0 sheet Description: save, ID: save-panel\n\t1 button Save';
   const note = run(tree(rows, 'Untitled', null), sheet, 'await app.pressKey("super+s")');
   assert.match(note, /UI changed \(window\)/);
-  assert.match(note, /saved: not confirmed \(no document save state change seen\)/);
+  assert.doesNotMatch(note, /saved:/);
+  const saved = run(sheet, tree(rows, 'b.txt', 'file:///tmp/b.txt'), 'await app.pressKey("Return")') ?? '';
+  assert.doesNotMatch(saved, /saved: not confirmed/);
+  assert.doesNotMatch(saved, /saved: observed/);
 });
 
 test('a save action cannot confirm a new file without a named target', () => {

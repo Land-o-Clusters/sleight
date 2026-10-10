@@ -47,7 +47,8 @@ requires the same file URL before and after, or the exact URL named by this call
 The supported naming sequence is Go to Folder, a literal absolute folder, and a literal name set
 through `saveAsNameTextField`, followed by Save or Return on the same handle. Computed paths and
 filesystem aliases aren't resolved. A new URL or title alone cannot establish document identity.
-Opening a Save sheet alone is not confirmation. A save with an unchanged
+Opening a Save sheet alone is not confirmation, and that step doesn't get a saved field. Save in the
+panel doesn't get one either unless the call gave a path the feature resolves. The header then shows the new file. A save with an unchanged
 URL and no exposed modified state says `saved: not confirmed (no document save state change seen)`.
 Only save calls get a saved field. It specifies the observed file URL:
 `saved: observed "file:///tmp/a.txt" (modified state cleared; cause unknown)`.

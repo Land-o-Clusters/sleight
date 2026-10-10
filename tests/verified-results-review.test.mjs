@@ -49,7 +49,7 @@ test('computed Save-panel folder, filename and Return arguments cannot confirm a
     code.replace('"141adc6c.txt"', '"141adc6c.txt" + ".bak"'),
     code.replace('sleight-textedit-save-1"', 'sleight-textedit-save-1" + "/other"'),
     code.replace(/"Return"(?=\);\nawait app.getAXState)/, '"Return" + "extra"'),
-  ]) assert.match(last(run(before, after, computed)), /saved: not confirmed/);
+  ]) assert.doesNotMatch(last(run(before, after, computed)) ?? '', /saved: observed/);
 });
 
 test('an untitled document acquiring an unnamed URL or title is not a confirmed save', () => {

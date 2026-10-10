@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Cmd+S opening a Save panel, and Save in the panel producing a file the call didn't name, no longer
+  say "saved: not confirmed". The window header shows both steps. A named path that doesn't match
+  still says so.
 - A numbered click in a batch that an earlier click renumbered (Calculator renumbers every button
   when its first click closes the history) goes to the same element at its new number, with a note,
   when that element's line is in the new tree exactly once. It used to stop, and Claude rewrote the
