@@ -506,7 +506,9 @@ npm run bench -- --runs 3             # sleight only
 npm run bench -- --arm all --runs 3   # sleight and LCU
 ```
 
-The LCU arm needs LCU registered for Claude Code in a separate folder. `bench/run.mjs` has the steps.
+The LCU arm needs LCU registered for Claude Code in a folder outside any git repo. `node
+bench/lcu-arm-setup.mjs` creates it from the runtime already installed (`lcu setup`, the folder
+`LCU_ARM_DIR`, default `~/Library/Caches/sleight-bench/lcu-arm`) and verifies it with `lcu doctor`.
 
 `--clean-arms` publishes the CPU comparison without the owner's setup, which LAWS says runs
 alongside the normal one: the sleight arm loads only sleight's server and mod (strict MCP
