@@ -208,6 +208,8 @@ export function createRelay({
   sessionId = randomUUID(),
   approvalScope = 'session',
   ask,
+  // The launcher supplies its native dialog for clients without form elicitation.
+  fallbackAsk,
   preapproved,
   grantAudit = () => {},
   stderr = process.stderr,
@@ -263,6 +265,7 @@ export function createRelay({
   const approvalRequests = new Map(); // server request id -> approval key
   const approved = new Set(); // approval keys the user accepted this session
   let asking = Promise.resolve(); // `ask` prompts, one at a time
+  let clientCanElicit; // undefined until initialize (legacy in-process callers)
   const localNames = new Set(localTools?.tools.map(t => t.name) ?? []);
   const elicitations = new Map(); // our elicitation id -> resolve
   const running = new Set(); // ids of engine calls waiting for a result
@@ -869,6 +872,7 @@ export function createRelay({
 
   // Asks Claude Code's user through an elicitation of our own.
   function elicit(message) {
+    if (clientCanElicit === false) return Promise.resolve('cancel');
     const id = `sleight-elicit-${nextElicitId++}`;
     const answer = new Promise(resolve => elicitations.set(id, resolve));
     toClient({ jsonrpc: '2.0', id, method: 'elicitation/create', params: { message, mode: 'form', requestedSchema: { type: 'object', properties: {} } } });
@@ -876,6 +880,7 @@ export function createRelay({
   }
 
   function elicitReview(message) {
+    if (clientCanElicit === false) return Promise.resolve('cancel');
     const id = `sleight-elicit-${nextElicitId++}`;
     const answer = new Promise(resolve => elicitations.set(id, resolve));
     toClient({ jsonrpc: '2.0', id, method: 'elicitation/create', params: { message, mode: 'form', requestedSchema: {
@@ -1038,6 +1043,21 @@ export function createRelay({
     return true;
   }
   function handleClient(msg) {
+    if (msg.method === 'initialize') {
+      const capabilities = msg.params?.capabilities ?? {};
+      const elicitation = capabilities.elicitation;
+      // MCP 2025-06-18 used {}; later versions distinguish form and URL prompts.
+      clientCanElicit = !!elicitation && typeof elicitation === 'object' &&
+        !Array.isArray(elicitation) && (Object.keys(elicitation).length === 0 ||
+          (elicitation.form !== null && typeof elicitation.form === 'object' && !Array.isArray(elicitation.form)));
+      if (!ask && !clientCanElicit) ask = fallbackAsk;
+      if (ask) {
+        // The relay, rather than the client, can answer the engine's form requests.
+        msg = { ...msg, params: { ...msg.params, capabilities: {
+          ...capabilities, elicitation: { ...elicitation, form: {} },
+        } } };
+      }
+    }
     if (msg.method === 'server/discover' && msg.id !== undefined) {
       toClient({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'Method not found' } });
       return;
@@ -1618,6 +1638,7 @@ export function createRelay({
       } catch {
         // An audit failure must reach a person, even with a remembered approval.
         if (ask) askUser(msg, true);
+        else if (clientCanElicit === false) toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } });
         else {
           const key = approvalScope === 'session' ? approvalKey(msg) : undefined;
           if (key !== undefined) approvalRequests.set(msg.id, key);
@@ -1633,6 +1654,10 @@ export function createRelay({
     }
     if (ask && (isAppApproval(msg) || (msg.method === 'elicitation/create' && msg.params?._meta?.connector_id === 'browser-use'))) {
       askUser(msg);
+      return;
+    }
+    if (clientCanElicit === false && msg.method === 'elicitation/create') {
+      toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } });
       return;
     }
     const key = approvalScope === 'session' ? approvalKey(msg) : undefined;

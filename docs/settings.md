@@ -45,6 +45,27 @@ showing them, so a forwarded prompt would always come back as no. Return does no
 panel, Escape means no, and it gives up after five minutes. Session memory works the same way.
 `SLEIGHT_APPROVAL_PROMPT=dialog` or `client` overrides the choice.
 
+In other MCP clients, sleight reads `initialize.params.capabilities.elicitation`. Form support
+(`form: {}`, or the older empty elicitation object) uses the client's prompt. Missing elicitation
+or URL-only support uses sleight's panel for app and browser approvals and its own tools' prompts.
+The relay tells the engine it can answer forms itself. It remembers accepted apps with the same
+risk and session limits. A failed panel never approves an app. A forced `client` setting without
+form support cancels the request without opening a panel. Put these environment settings in your
+client's server configuration.
+
+## Turns without a hook
+
+The Claude Code mod ends the engine's turn when Claude finishes. Other clients can omit the mod
+and `turn_ended`: after 30 seconds with no pending tool call, the relay ends a used turn itself.
+It keeps the session's accepted approvals and gives the next call a new turn ID. Disconnecting
+also ends the open turn. This releases engine turn resources; it does not cancel a running call
+or quit an app.
+
+`SLEIGHT_IDLE_TURN_END_MS` changes that wait in milliseconds, and `0` disables it. Keep the default
+when your client has no turn hook. The wait restarts on each completed call, so several model turns
+can share one engine turn. Approvals last for the server process,
+so a client that keeps one server across conversations also keeps its approval session.
+
 ## Preapproved apps
 
 Write `~/Library/Application Support/sleight/preapproved.json` yourself to allow selected apps without
