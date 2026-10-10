@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Claude can run a recorded script itself with the new `replay` tool. On a stop it gets the step,
+  the error, the steps left and the window as it is now, and finishes the task from there. A step
+  whose element isn't there yet waits up to 5 s (`--wait-ms` on the command line) when nothing in
+  that call could have sent input yet. Unit-tested only (Sol, `codex/replay-next`).
 - A call keeps going when its own shortcut, Return or click opens or names a window in the same
   app: the Save or Open panel, a new untitled window, or the document saved or opened under a name
   the call typed (owner's call). The lease stopped such calls in 10 of 12 TextEdit runs with

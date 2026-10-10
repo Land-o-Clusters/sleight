@@ -17,7 +17,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hasIdentifier, hasLabel } from './document-scope.mjs';
+import { PassThrough } from 'node:stream';
+import { documentKey, hasIdentifier, hasLabel, windowFromText } from './document-scope.mjs';
 
 const PREFIX = 'mcp__plugin_sleight_computer__';
 const REPLAYED = new Set(['js', 'drag']);
@@ -126,15 +127,119 @@ export function record(source) {
   return { sleightReplay: 1, recorded: new Date().toISOString(), steps, ...(skipped.length ? { skipped } : {}) };
 }
 
-// Runs a script's steps through a relay. `server` is { send, onMessage, close }; `ask` answers an
-// approval prompt with true or false; `log` gets one line per step.
-export async function replay(script, { server, ask, log = () => {}, allowPositions = false }) {
+const ACTIONS = new Set(['click', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction', 'paste', 'pressKey', 'typeText']);
+
+// A deliberately small grammar: awaited app calls with JSON arguments, separated by semicolons.
+// Anything else may have sent input that a missing-element error doesn't account for. Do not guess.
+function literalCalls(code = '') {
+  const calls = [], pattern = /\s*await\s+([A-Za-z_$][\w$]*)\.(click|drag|scroll|selectText|setValue|performSecondaryAction|paste|pressKey|typeText|getAXState|getScreenshot|getAXStateAndScreenshot)\(\s*(.*?)\s*\)\s*(?:;|$)/sy;
+  let at = 0;
+  while (code.slice(at).trim()) {
+    pattern.lastIndex = at;
+    const found = pattern.exec(code);
+    if (!found) return;
+    let args;
+    try { args = JSON.parse('[' + found[3] + ']'); } catch { return; }
+    calls.push({ handle: found[1], method: found[2], args });
+    at = pattern.lastIndex;
+  }
+  return calls;
+}
+
+function missingPrefix(call) {
+  const spec = call?.args[0];
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return;
+  const key = ['id', 'label', 'line'].find(key => typeof spec[key] === 'string');
+  if (!key || !['click', 'scroll', 'selectText', 'setValue', 'performSecondaryAction'].includes(call.method)) return;
+  return `sleight stopped before ${call.method}: no element with ${key === 'id' ? 'ID' : key} ${JSON.stringify(spec[key])} in this window. Use an element number or another ID from the window below.`;
+}
+
+function retryPrefix(step) {
+  if (step.tool !== 'js') return;
+  const inputs = literalCalls(step.args.code)?.filter(c => ACTIONS.has(c.method));
+  const prefix = missingPrefix(inputs?.[0]);
+  // A later action with the same selector could be the one that stopped after earlier input.
+  return prefix && !inputs.slice(1).some(c => missingPrefix(c) === prefix) ? prefix : undefined;
+}
+
+function validateReplay(script, allowPositions, waitMs) {
   const steps = script?.steps;
   if (script?.sleightReplay !== 1 || !Array.isArray(steps)) throw new Error('not a sleight replay script');
-  const positional = steps.map((s, i) => [i + 1, s]).filter(([, s]) => s.positions?.length);
+  if (typeof allowPositions !== 'boolean') throw new Error('allowPositions must be a boolean');
+  if (!Number.isInteger(waitMs) || waitMs < 0 || waitMs > 60000) throw new Error('waitMs must be an integer from 0 to 60000');
+  if (steps.some(s => !s || !REPLAYED.has(s.tool) || !s.args || (s.tool === 'js' && typeof s.args.code !== 'string'))) throw new Error('replay steps must be js or drag calls with arguments');
+  const positional = steps.map((s, i) => [i + 1, { ...s, positions: [...new Set([
+    ...(s.positions ?? []), ...(s.tool === 'drag' ? ['drag points'] : portableCode(s.args.code, []).positions),
+  ])] }]).filter(([, s]) => s.positions.length);
   if (positional.length && !allowPositions) {
     throw new Error(`these steps depend on the window's layout, so replay could act in the wrong place: ${positional.map(([i, s]) => `step ${i} (${s.positions.join('; ')})`).join(', ')}. Run with --allow-positions only if the windows are where they were when you recorded it`);
   }
+  return steps;
+}
+
+const realClock = { now: () => performance.now(), sleep: ms => new Promise(resolve => setTimeout(resolve, ms)) };
+
+// Shared by the CLI and Claude's tool. `call` reaches the ordinary relay; it never bypasses guards.
+export async function replaySteps(script, { call, log = () => {}, allowPositions = false, waitMs = 5000, clock = realClock, cancelled = () => false, window }) {
+  const steps = validateReplay(script, allowPositions, waitMs), waits = [];
+  let expectedWindow = window;
+  let handle;
+  for (const [index, step] of steps.entries()) {
+    const acquisition = step.tool === 'js' && /^\s*(?:let|const|var)?\s*([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.getApp\([^;]*\)\s*;?\s*$/.exec(step.args.code);
+    const calls = step.tool === 'js' ? literalCalls(step.args.code) : undefined;
+    handle = acquisition?.[1];
+    const prefix = retryPrefix(step), started = clock.now();
+    let reply, waitingAt, waitedMs = 0;
+    while (true) {
+      try {
+        reply = cancelled() ? { error: { message: 'Replay stopped by the client. Read the window before acting.' } } : await call(step.tool, step.args);
+      } catch (error) { reply = { error: { message: error.message } }; }
+      if (waitingAt !== undefined) waitedMs = Math.round(clock.now() - waitingAt);
+      const message = textOf(reply.result?.content);
+      const missing = prefix && !reply.error && reply.result?.isError && (message === prefix || message.startsWith(prefix + '\n'));
+      // The first refused input can supply its own window. Do not insert a read that could
+      // consume the relay's one-call flow exception before an approved identical retry.
+      if (index === 0 && expectedWindow === undefined && missing) expectedWindow = windowFromText(message);
+      if (!waitMs || !missing || !expectedWindow ||
+          documentKey(windowFromText(message)) !== documentKey(expectedWindow) || cancelled()) break;
+      waitingAt ??= clock.now();
+      const remaining = waitMs - (clock.now() - waitingAt);
+      if (remaining <= 0) break;
+      await clock.sleep(Math.min(250, remaining));
+      waitedMs = Math.round(clock.now() - waitingAt);
+      if (clock.now() - waitingAt >= waitMs) break;
+    }
+    const failed = reply.error || reply.result?.isError;
+    waits.push({ step: index + 1, waitedMs });
+    log(`step ${index + 1}/${steps.length} ${step.tool}${step.args?.title ? ` (${step.args.title})` : ''}: ${failed ? 'failed' : 'ok'} in ${Math.round(clock.now() - started)} ms (waited ${waitedMs} ms)`);
+    if (failed) {
+      const error = reply.error?.message ?? textOf(reply.result?.content);
+      const stopped = calls?.filter(c => { const prefix = missingPrefix(c); return prefix && error.startsWith(prefix); });
+      const candidates = stopped?.length ? stopped : calls?.filter(c => ACTIONS.has(c.method));
+      const handles = [...new Set((candidates?.length ? candidates : calls)?.map(c => c.handle) ?? [])];
+      if (!acquisition && handles.length === 1) handle = handles[0];
+      let window = null, windowError = 'No app handle could be determined. Read the intended window with js.';
+      // Any intervening js call clears the relay's pending one-call flow exception.
+      const flowRefusal = /^Flow rules:/m.test(error);
+      if (flowRefusal) windowError = 'Use flow_exception before another js call; a snapshot would discard the pending user decision.';
+      if (handle && !acquisition && !cancelled() && !flowRefusal) {
+        try {
+          const snapshot = await call('js', { code: `await ${handle}.getAXState({ disableDiffing: true });`, title: 'Read the window where replay stopped' });
+          if (snapshot.error || snapshot.result?.isError) windowError = snapshot.error?.message ?? textOf(snapshot.result?.content);
+          else { window = textOf(snapshot.result?.content); windowError = undefined; }
+        } catch (error) { windowError = error.message; }
+      }
+      return { ok: false, step: index + 1, error, remaining: steps.slice(index), waits, window, ...(windowError ? { windowError } : {}) };
+    }
+    expectedWindow = windowFromText(textOf(reply.result?.content));
+  }
+  return { ok: true, steps: steps.length, waits };
+}
+
+// Runs through a fresh stdio relay for the CLI. Claude's tool uses replaySteps in its own session.
+export async function replay(script, { server, ask = async () => false, ...options }) {
+  validateReplay(script, options.allowPositions ?? false, options.waitMs ?? 5000);
+  if (typeof server === 'function') server = server();
   let nextId = 0;
   const pending = new Map();
   server.onMessage(async msg => {
@@ -147,21 +252,142 @@ export async function replay(script, { server, ask, log = () => {}, allowPositio
     } else if (pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
   });
   const request = (method, params) => new Promise(resolve => { const id = nextId++; pending.set(id, resolve); server.send({ jsonrpc: '2.0', id, method, params }); });
-  await request('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: { form: {} } }, clientInfo: { name: 'sleight-replay', version: '1' } });
-  server.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
-  await request('tools/list', {});
   const meta = { 'x-codex-turn-metadata': JSON.stringify({ session_id: randomUUID(), turn_id: randomUUID() }) };
   try {
-    for (const [index, step] of steps.entries()) {
-      const started = Date.now();
-      const reply = await request('tools/call', { name: step.tool, arguments: step.args, _meta: meta });
-      const text = textOf(reply.result?.content);
-      const failed = reply.error || reply.result?.isError;
-      log(`step ${index + 1}/${steps.length} ${step.tool}${step.args?.title ? ` (${step.args.title})` : ''}: ${failed ? 'failed' : 'ok'} in ${Date.now() - started} ms`);
-      if (failed) return { ok: false, step: index + 1, error: reply.error?.message ?? text };
-    }
-    return { ok: true, steps: steps.length };
+    await request('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: { form: {} } }, clientInfo: { name: 'sleight-replay', version: '1' } });
+    server.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    await request('tools/list', {});
+    return await replaySteps(script, { ...options, call: (name, args) => request('tools/call', { name, arguments: args, _meta: meta }) });
   } finally { server.close(); }
+}
+
+export const REPLAY_TOOL = {
+  name: 'replay',
+  _meta: { 'anthropic/alwaysLoad': true },
+  description: 'Run a recorded sleight script in this session. Pass the JSON script made by sleight-mcp record. ' +
+    'On a stop, returns the 1-based step, error, remaining steps (including the stopped step), each step\'s wait and a fresh full window read when available. ' +
+    'Finish from that window using js and the existing app handles; a stopped batch may have sent some input, so inspect it before continuing. ' +
+    'The user approves apps as for js. Positions require allowPositions. Missing first elements wait up to waitMs (default 5000, 0 disables); ' +
+    'calls that may have sent input stop without retrying.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      script: { type: 'object', properties: { sleightReplay: { const: 1 }, steps: { type: 'array', items: { type: 'object' } } }, required: ['sleightReplay', 'steps'] },
+      waitMs: { type: 'integer', minimum: 0, maximum: 60000 },
+      allowPositions: { type: 'boolean' },
+    },
+    required: ['script'], additionalProperties: false,
+  },
+};
+
+// Multiplex the tool's calls into the current relay, preserving its session, guards and prompts.
+// Internal replies return here; elicitation and every other server request still reach Claude.
+// Keep delimiters too: readline would replace CRLF with LF in an otherwise untouched message.
+function messageLines(input, receive) {
+  let pending = '';
+  input.setEncoding('utf8');
+  input.on('data', chunk => {
+    pending += chunk;
+    let end;
+    while ((end = pending.indexOf('\n')) !== -1) {
+      const line = pending.slice(0, end + 1);
+      pending = pending.slice(end + 1);
+      receive(line);
+    }
+  });
+  input.once('end', () => { if (pending) receive(pending); });
+}
+
+export function replayBridge({ input, output, clock = realClock }) {
+  const clientIn = new PassThrough(), clientOut = new PassThrough();
+  const internal = new Map(), lists = new Map();
+  const prefix = `sleight-replay-${randomUUID()}-`;
+  let sequence = 0, active, ended = false;
+  const write = msg => output.write(JSON.stringify(msg) + '\n');
+  const refuse = (id, message) => write({ jsonrpc: '2.0', id, result: { isError: true, content: [{ type: 'text', text: message }] } });
+  const request = params => new Promise(resolve => {
+    if (ended) return resolve({ error: { message: 'The replay connection closed. Read the window before acting.' } });
+    const id = prefix + sequence++;
+    if (active) active.inFlight = id;
+    internal.set(id, resolve);
+    clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params }) + '\n');
+  });
+  messageLines(clientOut, line => {
+    // With no replay or tool-list reply pending, even image payloads pass without inspection.
+    if ((!internal.size && !lists.size) || (!line.includes('\\u') && !line.includes('\\/') &&
+        !(internal.size && line.includes(prefix)) && ![...lists.values()].some(matches => matches.test(line)))) {
+      output.write(line); return;
+    }
+    let msg;
+    try { msg = JSON.parse(line); } catch { output.write(line); return; }
+    if (!msg.method && internal.has(msg.id)) {
+      if (active?.inFlight === msg.id) active.inFlight = undefined;
+      const resolve = internal.get(msg.id); internal.delete(msg.id); resolve(msg); return;
+    }
+    if (!msg.method && lists.delete(msg.id) && Array.isArray(msg.result?.tools)) {
+      msg.result.tools.push(REPLAY_TOOL);
+      write(msg); return;
+    }
+    output.write(line);
+  });
+  messageLines(input, line => {
+    const toolCall = line.includes('"tools/call"');
+    // Escaped envelope fields are uncommon, but may spell the same methods, names and IDs.
+    if (!line.includes('\\u') && !line.includes('\\/') && !line.includes('"tools/list"') && !(toolCall && (active || line.includes('"replay"'))) &&
+        !(active && line.includes('"notifications/cancelled"'))) {
+      clientIn.write(line); return;
+    }
+    let msg;
+    try { msg = JSON.parse(line); } catch { clientIn.write(line); return; }
+    if (active && msg.method === 'notifications/cancelled' && msg.params?.requestId === active.id) {
+      active.cancelled = true;
+      if (!active.inFlight) return;
+      msg = { ...msg, params: { ...msg.params, requestId: active.inFlight } };
+      clientIn.write(JSON.stringify(msg) + '\n'); return;
+    }
+    if (msg.method === 'tools/call' && msg.params?.name === 'turn_ended' && active) active.cancelled = true;
+    if (msg.method === 'tools/call' && msg.params?.name !== 'turn_ended') {
+      if (active) { refuse(msg.id, 'A replay is running. Wait for it to stop before sending another tool call.'); return; }
+      if (msg.params?.name === 'replay') {
+        if (msg.id === undefined) return;
+        const state = active = { id: msg.id, cancelled: false };
+        const args = msg.params.arguments ?? {};
+        replaySteps(args.script, {
+          allowPositions: args.allowPositions, waitMs: args.waitMs, clock,
+          cancelled: () => state.cancelled,
+          call: (name, arguments_) => request({ name, arguments: arguments_, _meta: msg.params._meta }),
+        }).then(result => {
+          write({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: JSON.stringify(result) }] } });
+        }, error => refuse(msg.id, error.message)).finally(() => { active = undefined; });
+        return;
+      }
+    }
+    if (msg.method === 'tools/list' && msg.id !== undefined) {
+      const id = JSON.stringify(msg.id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      lists.set(msg.id, new RegExp(`"id"\\s*:\\s*${id}(?=\\s*[,}])`));
+    }
+    clientIn.write(line);
+  });
+  const close = () => {
+    if (ended) return;
+    ended = true;
+    if (active) active.cancelled = true;
+    for (const resolve of internal.values()) resolve({ error: { message: 'The replay connection closed. Read the window before acting.' } });
+    internal.clear();
+    clientIn.end();
+  };
+  input.once('end', close).once('close', close);
+  return { clientIn, clientOut };
+}
+
+export function replayOptions(args) {
+  const options = { allowPositions: false, waitMs: 5000 };
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--allow-positions') options.allowPositions = true;
+    else if (args[i] === '--wait-ms' && /^\d+$/.test(args[i + 1] ?? '')) options.waitMs = Number(args[++i]);
+    else throw new Error(`unknown replay option or missing value: ${args[i]}`);
+  }
+  return options;
 }
 
 // A relay process over stdio, as Claude Code starts it.
