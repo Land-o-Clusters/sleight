@@ -9,7 +9,7 @@ import { privateDriverEnvironment } from '../bench/driver.mjs';
 
 // Execute the actual runner body with inert dependencies. No app, CLI, approval
 // file, live lock, compiler or filesystem operation reaches the host.
-async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false, fixtureLifecycle = false, ownerName = '', auth = { mode: 'login', env: {}, unset: [] }, keySource = 'none', spend = () => 0 } = {}) {
+async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false, fixtureLifecycle = false, ownerName = '', auth = { mode: 'login', env: {}, unset: [] }, keySource = 'none', spend = () => 0 } = {}) {
   const calls = [], saved = [], envs = [], tailScopes = [], directories = [];
   const logs = [], driverOptions = [], codexRuns = [];
   const source = readFileSync(new URL('../bench/run.mjs', import.meta.url), 'utf8')
@@ -19,7 +19,7 @@ async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = []
   if (privateMail) Object.assign(task, { id: 'mimestream-label', app: 'Mimestream', privateMail: true,
     privateExpected: () => 'private answer', privateTerms: () => ['private label'] });
   const sandbox = {
-    process: { argv: ['node', 'run', '--suite', suite, '--arm', arm, '--runs', '3', ...(setupOnly ? ['--setup-only'] : [])], env: base, on() {}, once() {} },
+    process: { argv: ['node', 'run', '--suite', suite, '--arm', arm, '--runs', '3', ...(setupOnly ? ['--setup-only'] : []), ...extraArgs], env: base, on() {}, once() {} },
     console: { log: text => logs.push(text), error: text => logs.push(text) }, AbortController, AbortSignal, setTimeout, clearTimeout,
     dirname, join, fileURLToPath: () => '/fixture/bench/run.mjs', homedir: () => '/owner', tmpdir: () => '/private/tmp/unit',
     existsSync: () => true, realpathSync: path => path, mkdirSync: path => directories.push(path), rmdirSync() {}, statSync: () => ({ dev: 1, ino: 1 }),
@@ -181,6 +181,15 @@ test('runner binds suite approvals and forces real computer access in preflight 
   const standard = await runner({ suite: 'default', base: { BENCH_SUITE: 'real', SLEIGHT_SURFACES: 'browser' } });
   assert.equal(standard.error, undefined);
   for (const env of standard.envs) { assert.equal(env.BENCH_SUITE, 'default'); assert.equal(env.SLEIGHT_SURFACES, 'browser'); }
+});
+
+test('--surfaces browser,computer reaches every real-suite run and the results; anything else is refused', async () => {
+  const both = await runner({ drive: true, extraArgs: ['--surfaces', 'browser,computer'] });
+  assert.equal(both.error, undefined);
+  for (const env of both.envs) assert.equal(env.SLEIGHT_SURFACES, 'browser,computer');
+  assert.equal(both.saved.at(-1).surfaces, 'browser,computer');
+  const bad = await runner({ extraArgs: ['--surfaces', 'browser'] });
+  assert.match(String(bad.error?.message), /--surfaces must be/);
 });
 
 test('Codex default approvals contain only the five core benchmark bundle IDs', async () => {

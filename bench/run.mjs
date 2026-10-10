@@ -111,6 +111,10 @@ for (const name of armNames) {
   if (repo) throw new Error(`${name} arm folder ${ARMS[name].cwd} is inside the git repo ${repo}, so its runs would load that repo's CLAUDE.md and project memory. Use a folder outside any repo.`);
 }
 const runs = Number(option('runs', '1'));
+// The real suite drives web pages through the accessibility tree unless --surfaces browser,computer
+// asks for the extension browser surface too (the 2026-10-10 comparison).
+const realSurfaces = option('surfaces', 'computer');
+if (!['computer', 'browser,computer'].includes(realSurfaces)) throw new Error('--surfaces must be computer or browser,computer');
 const model = option('model', 'claude-haiku-5-5');
 const effort = option('effort', 'high');
 const codexModel = option('codex-model', 'gpt-6.1-sol');
@@ -138,7 +142,7 @@ if (auth.mode === 'api') console.log(`Claude arms run on the API key: $${auth.sp
 const armEnv = (arm, extra = {}) => {
   const env = { ...process.env, BENCH_ROOT: ROOT, SLEIGHT_APPROVAL_PROMPT: 'client',
     ...arm.env, ...extra, BENCH_SUITE: suite, ENABLE_CLAUDEAI_MCP_SERVERS: 'false', ...auth.env,
-    ...(suite === 'real' ? { SLEIGHT_SURFACES: 'computer' } : {}) };
+    ...(suite === 'real' ? { SLEIGHT_SURFACES: realSurfaces } : {}) };
   for (const key of auth.unset) delete env[key];
   return env;
 };
@@ -260,7 +264,7 @@ const save = () => {
       terms: realContexts.flatMap(ctx => ctx.privateTask.privateTerms(ctx)) });
     return;
   }
-  const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite, surfaces: 'computer', ownerAway } : {}),
+  const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite, surfaces: realSurfaces, ownerAway } : {}),
     arms: armNames, model, effort, claude: claudeBin, auth: auth.mode, results,
     ...(passCleanupErrors.length && { passCleanupErrors }) }, null, 2);
   writeFileSync(file, scrub(json) + '\n');
