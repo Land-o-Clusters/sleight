@@ -3,16 +3,21 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-10 16:00 UTC)
+## Banner (2026-10-10 16:45 UTC)
 
-Nothing of sleight's is running. The live lock is free, `/tmp/sleight-hold` doesn't exist, and the
-tree is clean at `082212e` on `pane/auto-mode` (pushed to private). Merged today by sleight-arch,
-since Codex is out of quota until later: verified results (`f3d2790`, live 6/6), waits and stop
-(`6291251`, background tasks 6/6, loaded identity cost equal with one window) and the generic
-benchmark arms (`5b7a16e`). `codex/sim-savelock` round 2 is committed and pushed (`ae3a8fb`),
-not merged. The owner is running `sol-real-use-tasks-13.md` through Grok in the `real-use-tasks`
-worktree. Engine 26.1007.21159. Puddle has no window announced, and it asks first (memory
-`shared-mac-quiet-windows`).
+Running: `h2h-2`, sleight against Codex on calculator-click, textedit-edit and textedit-save,
+2 runs each, at `e1ec4fa` (`.dev/passes/pass-h2h-2.log`). The owner is away, and live runs that
+take the pointer are allowed. Puddle is down for the day, so there's no hold.
+
+Verified results merged today with a first-call fix, and real-use round 13 (Grok) with two safety
+fixes. Waits and stop, the generic benchmark arms and sim-savelock round 2 merged too. Of
+the owner's three guard-read skips, only Return after `setValue` is in (`e1ec4fa`). The other
+two rested on sleight-arch's wrong claim that the engine resolves IDs (LAWS), and are reverted.
+
+Lanes (Grok and GLM, briefs `.dev/prompts/lane-*.md`): `codex/routines-demo` (Grok, in
+progress), `codex/sheet-reads` (Grok, done at `17507cf`, no partial reads exist on this engine),
+`codex/receipt-redaction` and `codex/typecheck` (GLM, in progress). In the waits live check Calculator passed.
+Chess and TextEdit didn't run (the small Chess window, and the script's TextEdit Open panel).
 
 **Where work goes.** Work in progress is private between releases (LAWS): `remote.pushDefault
 private` sends pushes to `Land-o-Clusters/sleight-dev`, and a pre-push hook refuses the public repo
