@@ -187,7 +187,15 @@ our own runs. Dates and engine versions are given where they matter.
 - Opt-in preservation added median call times of 236 ms for Copy, 205 ms for Cut and 226 ms for Paste
   in three trials each on this Mac. Clipboard helper and coordination time accounted for about
   180, 177 and 179 ms respectively. Separate runs include engine timing variation; larger payloads
-  may cost more. Native sessions skip this work.
+  may cost more. Native sessions skip this work. The helper now starts once per preserving session
+  and handles later byte requests over the same pipes. Unit and relay checks passed 43/43 on
+  2026-10-10, including failed writes, generation conflicts, malformed replies, delayed process
+  collection and frame-size boundaries. Quadratic buffering found in review was removed. With a
+  synthetic 40 MiB payload in 64 KiB chunks, reply framing fell from 5,115 to 88 ms and request
+  framing from 5,331 to 31 ms under mocks. These exclude AppKit and process costs.
+  A new live helper timing and four-fixture byte check is prepared, but the shared live hold
+  prevented execution. The earlier timings and 4/4 result remain the latest live measurements.
+  [The helper report](benchmarks/2026-10-09-clipboard-helper.md) records this qualification gap.
 - Preservation cannot snapshot unreadable formats, file promises or more than 64 MiB. It falls back
   to the native shortcut and tells Claude the clipboard was not preserved. Claude must never modify
   the user's clipboard to get around that fallback. Menu actions and browser handles are outside

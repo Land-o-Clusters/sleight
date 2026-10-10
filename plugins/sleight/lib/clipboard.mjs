@@ -1,5 +1,5 @@
 import { tokens } from './flow-rules.mjs';
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -111,9 +111,61 @@ export function createClipboardCoordinator(DatabaseSync, path) {
 
 // The engine can read files but cannot write files, open SQLite or reach a
 // loopback service. Keep byte IO and the session copy in the local relay.
-export function createNativeClipboardIO(helper) {
+export function createNativeClipboardIO(helper, { timeoutMs = 10000,
+  spawnHelper = () => spawn('/usr/bin/osascript', ['-l', 'JavaScript', helper, '--serve'], { stdio: ['pipe', 'pipe', 'ignore'] }) } = {}) {
   let coordinator;
-  return async request => {
+  let child, nextId = 0, closed = false;
+  const pending = new Map(), limit = 96 * 1024 * 1024;
+  const ascii = value => JSON.stringify(value).replace(/[\u007f-\uffff]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+  function fail(error) {
+    for (const p of pending.values()) { clearTimeout(p.timer); p.reject(error); }
+    pending.clear();
+  }
+  function stop(error) {
+    if (!child) { fail(error); return; }
+    if (child.stopping) return;
+    // Keep the caller and its SQLite reservation pending until the old helper
+    // cannot finish a staged write. A stopping flag fences only this session.
+    child.failure = error;
+    child.stopping = true;
+    for (const p of pending.values()) clearTimeout(p.timer);
+    child.stdin.end(); child.kill();
+  }
+  function start() {
+    const current = child = spawnHelper();
+    current.collected = new Promise(resolve => current.once('close', () => {
+      if (child === current) { child = undefined; fail(current.failure ?? new Error('Clipboard guard: helper closed; input was not retried.')); }
+      resolve();
+    }));
+    current.once('error', () => stop(new Error('Clipboard guard: helper failed; input was not retried.')));
+    current.stdin.on('error', () => stop(new Error('Clipboard guard: helper input failed; input was not retried.')));
+    current.stdout.on('error', () => stop(new Error('Clipboard guard: helper output failed; input was not retried.')));
+    current.unref?.(); current.stdin.unref?.(); current.stdout.unref?.();
+    let fragments = [], bytes = 0;
+    current.stdout.setEncoding('utf8').on('data', chunk => {
+      if (child !== current || current.stopping) return;
+      // Scan and count only new segments; flatten each frame once at its delimiter.
+      let offset = 0;
+      while (offset < chunk.length) {
+        const at = chunk.indexOf('\n', offset), end = at < 0 ? chunk.length : at;
+        const part = chunk.slice(offset, end);
+        bytes += Buffer.byteLength(part) + (at < 0 ? 0 : 1);
+        if (bytes > limit) { stop(new Error('Clipboard guard: helper reply too large.')); return; }
+        fragments.push(part);
+        if (at < 0) break;
+        const line = fragments.join(''); fragments = []; bytes = 0; offset = at + 1;
+        let result;
+        try { result = JSON.parse(line); } catch { stop(new Error('Clipboard guard: invalid reply from helper.')); return; }
+        const p = pending.get(result?.id);
+        if (!p || typeof result.ok !== 'boolean') { stop(new Error('Clipboard guard: invalid reply from helper.')); return; }
+        pending.delete(result.id); clearTimeout(p.timer); delete result.id;
+        if (result.ok) p.resolve(result);
+        else p.reject(Object.assign(new Error(result.error), { clipboardCount: result.count, clipboardMutation: result.mutated }));
+      }
+    });
+  }
+  const io = async request => {
+    if (closed) throw new Error('Clipboard guard: session closed.');
     if (request.op === 'acquire') {
       if (!coordinator) {
         const directory = join(homedir(), 'Library', 'Application Support', 'sleight');
@@ -126,20 +178,30 @@ export function createNativeClipboardIO(helper) {
       return;
     }
     if (request.op === 'release') { coordinator?.release(); return; }
+    if (child?.stopping) throw new Error('Clipboard guard: helper stopping; retry only after it has closed.');
+    if (!child) start();
+    const id = nextId++, line = ascii({ ...request, id }) + '\n';
+    if (Buffer.byteLength(line) > limit) throw new Error('Clipboard guard: request too large.');
     return new Promise((resolve, reject) => {
-      const child = execFile('/usr/bin/osascript', ['-l', 'JavaScript', helper],
-        { timeout: 10000, maxBuffer: 96 * 1024 * 1024 }, (error, stdout) => {
-          if (error) { reject(new Error('Clipboard guard: helper failed: ' + error.message)); return; }
-          try {
-            const result = JSON.parse(stdout);
-            if (!result.ok) throw Object.assign(new Error(result.error), { clipboardCount: result.count, clipboardMutation: result.mutated });
-            resolve(result);
-          } catch (error) { reject(error); }
-        });
-      child.stdin.on('error', reject);
-      child.stdin.end(JSON.stringify(request));
+      const timer = setTimeout(() => stop(new Error('Clipboard guard: helper timed out; input was not retried.')), timeoutMs);
+      pending.set(id, { resolve, reject, timer });
+      child.stdin.write(line);
     });
   };
+  io.close = async () => {
+    closed = true;
+    const current = child;
+    if (current) {
+      current.failure ??= new Error('Clipboard guard: session closed.');
+      current.stopping = true;
+      for (const p of pending.values()) clearTimeout(p.timer);
+      current.stdin.end();
+      const timer = setTimeout(() => { current.stopping = true; current.kill(); }, timeoutMs);
+      try { await current.collected; } finally { clearTimeout(timer); }
+    } else fail(new Error('Clipboard guard: session closed.'));
+    coordinator?.release();
+  };
+  return io;
 }
 
 export function createClipboardSession(io) {
@@ -156,7 +218,7 @@ export function createClipboardSession(io) {
       try { await active?.catch(() => {}); cua[Symbol.for('sleight.clipboard')].copy = undefined; }
       finally { resetting = false; }
     },
-    async close() { closed = true; await active?.catch(() => {}); cua[Symbol.for('sleight.clipboard')].copy = undefined; },
+    async close() { closed = true; await active?.catch(() => {}); cua[Symbol.for('sleight.clipboard')].copy = undefined; await io.close?.(); },
     async run(action, execute) {
     if (busy || closed || resetting) throw new Error('Clipboard guard: another clipboard action is pending or the session closed.');
     busy = true; dispatch = execute; notices = [];

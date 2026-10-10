@@ -49,8 +49,8 @@ function write(board, request) {
   const ownedCount = Number(board.clearContents);
   try {
     if (objects.count && !board.writeObjects(objects)) throw new Error('Clipboard write failed after clearing');
-    // Materialize every published representation before this short-lived JXA
-    // process exits. AppKit can otherwise expose only the first file item.
+    // Materialize every published representation before acknowledging the write.
+    // AppKit can otherwise expose only the first file item after the helper exits.
     const actual = read(board);
     const canonical = items => JSON.stringify(items.map(reps => reps.slice().sort((a, b) => a.type.localeCompare(b.type))));
     if (actual.count !== ownedCount || canonical(actual.items) !== canonical(request.items)) throw new Error('Clipboard write verification failed');
@@ -58,15 +58,49 @@ function write(board, request) {
   return { ok: true, count: Number(board.changeCount) };
 }
 
-function run() {
+function dispatch(request) {
   let board;
   try {
-    const input = $.NSFileHandle.fileHandleWithStandardInput.readDataToEndOfFile;
-    if (Number(input.length) > 96 * 1024 * 1024) throw new Error('Clipboard request too large');
-    const request = JSON.parse(ObjC.unwrap($.NSString.alloc.initWithDataEncoding(input, $.NSUTF8StringEncoding)));
     board = $.NSPasteboard.generalPasteboard;
-    if (request.op === 'read') return JSON.stringify(read(board));
-    if (request.op === 'write') return JSON.stringify(write(board, request));
+    if (request.op === 'read') return read(board);
+    if (request.op === 'write') return write(board, request);
     throw new Error('Unknown clipboard operation');
-  } catch (error) { return JSON.stringify({ ok: false, mutated: error.clipboardMutation ?? false, count: error.clipboardCount ?? (board ? Number(board.changeCount) : null), error: String(error.message || error) }); }
+  } catch (error) { return { ok: false, mutated: error.clipboardMutation ?? false, count: error.clipboardCount ?? (board ? Number(board.changeCount) : null), error: String(error.message || error) }; }
+}
+
+// ASCII JSON lines avoid splitting UTF-8 characters across availableData chunks.
+// EOF collects the helper when the relay exits. The one-shot interface remains for probes.
+function run(argv) {
+  const stdin = $.NSFileHandle.fileHandleWithStandardInput;
+  const decode = data => ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding));
+  if (argv[0] !== '--serve') {
+    try {
+      const input = stdin.readDataToEndOfFile;
+      if (Number(input.length) > 96 * 1024 * 1024) throw new Error('Clipboard request too large');
+      return JSON.stringify(dispatch(JSON.parse(decode(input))));
+    } catch { return JSON.stringify({ ok: false, mutated: false, count: null, error: 'Invalid clipboard request' }); }
+  }
+  const stdout = $.NSFileHandle.fileHandleWithStandardOutput;
+  let fragments = [], bytes = 0;
+  for (;;) {
+    const data = stdin.availableData;
+    if (Number(data.length) === 0) return '';
+    const chunk = decode(data);
+    // Requests are ASCII: segment length is its byte count, including the delimiter.
+    let offset = 0;
+    while (offset < chunk.length) {
+      const at = chunk.indexOf('\n', offset), end = at < 0 ? chunk.length : at;
+      const part = chunk.slice(offset, end);
+      bytes += part.length + (at < 0 ? 0 : 1);
+      if (bytes > 96 * 1024 * 1024) return '';
+      fragments.push(part);
+      if (at < 0) break;
+      const line = fragments.join(''); fragments = []; bytes = 0; offset = at + 1;
+      let reply;
+      try { const request = JSON.parse(line); reply = { id: request.id, ...dispatch(request) }; }
+      catch { return ''; }
+      const encoded = JSON.stringify(reply).replace(/[\u007f-\uffff]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+      stdout.writeData($(encoded + '\n').dataUsingEncoding($.NSUTF8StringEncoding));
+    }
+  }
 }

@@ -28,15 +28,22 @@ Preservation mode reserves a shared SQLite transaction for the JavaScript reques
 session gets a busy error before input. The reservation ends after restoration or process exit.
 Native sessions and other tools do not take it, so an outside copy can still interrupt preservation.
 
-The AppKit helper reads and writes bytes, without opening apps or reading referenced files. Payloads
-travel through subprocess stdin/stdout and stay in memory. They are absent from relay output and
-traces. It validates representations before clearing and reads back every item before exiting. Snapshots
+The AppKit helper reads and writes bytes, without opening apps or reading referenced files. One helper
+starts on the session's first byte operation and serves later requests over stdin/stdout. ASCII JSON
+lines keep Unicode type names intact across transport chunks. Each side counts new segments and
+searches only the incoming chunk, then joins a frame once at its newline. The 96 MiB transport bound
+includes that newline and resets per frame. Payloads stay in memory and are absent
+from relay output and traces. It validates representations before clearing and reads back every item
+before acknowledging a write. Snapshots
 are capped at 64 MiB. It cannot snapshot unreadable formats or file promises. If a successful Copy creates unreadable data, the helper returns
 its generation without payloads. An attributable generation still permits restoring the original,
 but the private copy is discarded and an error is returned. Restoration checks the current generation after preparing the
 items. A changed generation leaves the current clipboard alone and reports an error.
 If a helper write fails after clearing, it returns the owned generation and the guard attempts one
 restoration before reporting the failure. A lost helper or failed recovery cannot restore the bytes.
+Malformed replies, process failure and timeouts stop the helper. Pending work retains its reservation
+until the process exits, so a late write cannot run after another preserving session acquires it.
+Requests and input are never replayed. A later request may start a new helper after collection.
 
 This is a cooperative guard in the engine's mutable JavaScript realm. Arbitrary code can bypass it.
 It covers shortcuts on native app handles, not menu actions or browser handles. A successful Copy
@@ -56,7 +63,7 @@ code in the request can run before a refusal. Ordinary declarations remain at th
 Private copies last until a successful reset or session exit. A reset reply during a clipboard call
 waits for its cleanup before discarding the copy. A reset during preflight prevents input into the
 new JavaScript realm. Closing a session stops input still
-in preparation and waits for restoration. It then releases the reservation and discards its copy. The launcher
+in preparation and waits for restoration. It then discards its copy and collects the helper. The launcher
 awaits that cleanup before exiting after an engine failure. A process crash during private Paste can leave the
 temporary copy on the clipboard. File URLs restore references; they cannot recreate deleted files or
 providers that promise future files. Apps may change the clipboard through other actions. Small
