@@ -78,17 +78,22 @@ named in the result. The transcript then shows the click.
 
 Settings and preferences windows of these apps are refused for every operation,
 including reads. Claude cannot change the apps' own approval or safety settings.
-The title decides, with the relay's pattern and its flags (blocked-apps.mjs);
-Terminal titles its settings window after the open pane ("General",
-"Profiles"). The driver refuses a window with a toolbar as well. The check errs
-toward refusal.
+The title is the first filter, with the relay's pattern and flags (blocked-apps.mjs).
+The driver also checks nonlocalized `AXIdentifier` values on window containers,
+dialog subroles, `AXModal` and nested toolbars. It refuses unreadable child trees
+and scans exceeding 300 nodes or 12 levels. A settings launcher button in ordinary
+content does not count as a settings container.
 
 ## Limits
 
 The gate is consent. It does not isolate the approved app from Claude, and a yes
 covers clicks on the app's approval buttons. The consent prompt says as much.
-Settings refusal depends on titles plus the toolbar rule, and a localized title
-without a toolbar can pass it. The screenshot needs Screen Recording for the app
+Settings metadata differs by app. A localized window without a recognized identifier,
+dialog or toolbar can still pass. Unit tests passed 7/7 on recorded content-window roles
+and constructed metadata, including independent checks for the old title, toolbar collection and
+direct-child toolbar rules. Live settings detection is unqualified. Engine window
+headers lack this metadata, so the separate engine path still uses title checks.
+The screenshot needs Screen Recording for the app
 that runs Claude Code, and it captures only a window that is on screen. The AX
 path needs Accessibility for it, as `menu_bar` and `drag` already do. Background
 scroll reaches the app's focused view and may not affect every view. Keystrokes

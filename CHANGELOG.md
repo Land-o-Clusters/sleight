@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Paste keeps the user's clipboard with one helper per session instead of a spawn per paste, and
+  reads large clipboards in linear time (a mocked 40 MiB transfer fell from about 5 s to 31 to 88 ms).
+  `blocked_app` also refuses a settings window by its Accessibility metadata, so a localized title or
+  a pane name like "General" no longer passes. The skill says to replace a whole document with
+  select-all and `app.paste`, then compare before saving, outside the iOS simulator. Live byte
+  checks and the TextEdit benchmark runs are pending (Sol, `codex/small-fixes`).
 - Cursor and generic MCP clients can use sleight's native approval panel and idle turn cleanup.
   The panel still names Claude under Claude Code. Unanswered relay forms expire after five minutes, and a panel
   that cannot be shown reports a failure. Unit-tested only, with [install notes](docs/other-hosts.md).

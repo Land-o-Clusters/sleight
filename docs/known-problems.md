@@ -39,9 +39,16 @@ our own runs. Dates and engine versions are given where they matter.
   organization sets. To stop Codex asking for approvals, change Codex's own approval setting. With
   your opt-in, sleight can drive these apps through its own Accessibility path (see
   [Driving apps the engine refuses](settings.md#driving-apps-the-engine-refuses)); the engine's refusal itself
-  stays. On that path, settings refusal checks the window title and the window's toolbar (Terminal
-  titles its settings window after the open pane, like "General"), so a localized title and a pane
-  name can pass it. Background scroll reaches the app's focused view. System Events' keystroke
+  stays. On that path, settings refusal keeps the title and toolbar filters and now inspects
+  `AXIdentifier` on window containers, `AXModal`, dialog subroles and nested toolbars, independent
+  of the displayed language. Unreadable trees and scans over 300 nodes or 12 levels refuse.
+  Unit tests passed 7/7 on recorded ChatGPT content-window roles and constructed attribute cases
+  (2026-10-10), including the old title, toolbar collection and direct-child toolbar rules.
+  The recording lacks settings attributes, so localized settings still need live
+  qualification. An app that exposes neither a recognized identifier nor dialog or toolbar metadata
+  can still pass with an unknown title. The engine path used when the user disables its refusal
+  still has only title checks. Changing its guard needs a separate relay change.
+  Background scroll reaches the app's focused view. System Events' keystroke
   doesn't act on
   an embedded newline in Terminal, so blocked_app sends one Return key press per newline instead.
   The window screenshot needs Screen Recording for the app that runs Claude Code, on top of the
@@ -150,7 +157,10 @@ our own runs. Dates and engine versions are given where they matter.
   It does not restore the full window order. Earlier fixture pointer mismatches remain unresolved.
   Since 0.16.0, hover and the `menu_bar` real click wait like the foreground drag for 2 s without
   input (up to 10 s), and hover fails if keys are typed while it holds focus. Hover's guard has unit
-  tests. The `menu_bar` guard has none, and neither has had a live run.
+  tests. The `menu_bar` guard now has five fake-clock tests (2026-10-09): the 2 s threshold,
+  input during the wait, refusal at 10 s, quiet at exactly 10 s and an unavailable input clock.
+  They verify that refusal doesn't post mouse events and success restores the pointer. Neither guard
+  has had a live run; no `menu_bar` approval was requested for these tests.
 - When you work in a full-screen or Split View Space, apps sleight drives in the background are on
   another Space. Clicks and typing still reach them, but the engine's `app.drag` answers
   `noWindowsAvailable`, sleight's `drag` refuses the off-screen window, and TextEdit's reads timed
@@ -177,7 +187,15 @@ our own runs. Dates and engine versions are given where they matter.
 - Opt-in preservation added median call times of 236 ms for Copy, 205 ms for Cut and 226 ms for Paste
   in three trials each on this Mac. Clipboard helper and coordination time accounted for about
   180, 177 and 179 ms respectively. Separate runs include engine timing variation; larger payloads
-  may cost more. Native sessions skip this work.
+  may cost more. Native sessions skip this work. The helper now starts once per preserving session
+  and handles later byte requests over the same pipes. Unit and relay checks passed 43/43 on
+  2026-10-10, including failed writes, generation conflicts, malformed replies, delayed process
+  collection and frame-size boundaries. Quadratic buffering found in review was removed. With a
+  synthetic 40 MiB payload in 64 KiB chunks, reply framing fell from 5,115 to 88 ms and request
+  framing from 5,331 to 31 ms under mocks. These exclude AppKit and process costs.
+  A new live helper timing and four-fixture byte check is prepared, but the shared live hold
+  prevented execution. The earlier timings and 4/4 result remain the latest live measurements.
+  [The helper report](benchmarks/2026-10-09-clipboard-helper.md) records this qualification gap.
 - Preservation cannot snapshot unreadable formats, file promises or more than 64 MiB. It falls back
   to the native shortcut and tells Claude the clipboard was not preserved. Claude must never modify
   the user's clipboard to get around that fallback. Menu actions and browser handles are outside
@@ -314,7 +332,13 @@ our own runs. Dates and engine versions are given where they matter.
   "Sleight is here. It works", while `paste` saved it exactly. We don't know why select-all didn't replace the old text.
   A separate digit probe passed all five key-by-key and five bulk replacements. The skill says to
   paste exact text and to read the result. [All attempts](benchmarks/2026-10-08-engine-time.json)
-  include the failure and later fixture cleanup.
+  include the failure and later fixture cleanup. A background probe now compares direct engine
+  input with default and careful relay guards, and records selected text, the document buffer and
+  saved bytes. The shared live hold prevented it from running on 2026-10-09. The cause remains
+  unconfirmed. The skill now requires checking an exact pasted replacement before saving.
+  It excludes the iOS simulator, where paste can insert the Mac's clipboard.
+  sleight-arch runs the affected `textedit-save` and `textedit-edit` tasks before release.
+  [The probe report](benchmarks/2026-10-09-exact-text.md) includes the stopped attempt.
 - TextEdit hung 3 times on 2026-10-05, each time after Claude set a document's text with `setValue`
   and then pressed a save shortcut (Cmd+Shift+S, which is Duplicate, twice and Cmd+S once). Its main
   thread waits forever on the document's save lock. Every read then times out, and the relay's

@@ -1,0 +1,111 @@
+{
+  "dateUtc": "2026-10-10",
+  "node": "v26.4.0",
+  "scope": "Framing timings use synthetic mocks and exclude process startup, AppKit IO and app input. No live clipboard or app-driving probes. Hold absent before execution.",
+  "beforeImplementationCommit": "a3f625fd55ea8bc39a6bf295df2e80d8f31ac49d",
+  "afterSourceSha256": {
+    "plugins/sleight/lib/clipboard.mjs": "39ef7fa99a7e28ce104fc92d1a38ce6af5759df187105dfdf3d2a2bedc6d9b96",
+    "plugins/sleight/lib/clipboard.js": "2f111a9aa5cfedc7fa60d35c3f41bafaa31cea78e83c5d2c7465122eaff51645",
+    "tests/clipboard-helper.test.mjs": "466d015d5bbc1b4b29af9625e38d983d40e522bb3061dd48095b569fe5ae748f",
+    "tests/clipboard-native.test.mjs": "11bd17669ea8826ba43e52fa0e04616d4471fc85b1645a4dc8b07e924b862341",
+    "tests/blocked-settings.test.mjs": "267bbb9976edab7b58f49d2e389dcb73cfe11f5dd60fc08dc2b573d00819868a"
+  },
+  "payloadBytes": 41943040,
+  "chunkBytes": 65536,
+  "baseline": {
+    "reply": "Model of the old execFile chunk collection, incremental byte count and one JSON parse at EOF",
+    "request": "Retained native helper one-shot run interface under VM, with mocked AppKit and synthetic ignored request padding"
+  },
+  "runs": [
+    {
+      "phase": "red timing",
+      "command": "node --test --test-concurrency=1 tests/clipboard-helper.test.mjs tests/clipboard-native.test.mjs tests/blocked-settings.test.mjs",
+      "exitCode": 1,
+      "tests": 33,
+      "passed": 31,
+      "failed": 2,
+      "durationMs": 11821.575459,
+      "timings": {
+        "reply": { "wireBytes": 55924129, "oneShotMs": 48.120041, "streamedMs": 5114.847209 },
+        "request": { "wireBytes": 55924090, "oneShotMs": 61.723334, "streamedMs": 5330.574959 }
+      },
+      "failures": ["40 MiB reply exceeded the relative timing bound", "40 MiB request exceeded the relative timing bound"]
+    },
+    {
+      "phase": "red boundaries",
+      "command": "node --test --test-concurrency=1 --test-name-pattern='size includes|coalesced.*reset|complete.*oversized' tests/clipboard-helper.test.mjs tests/clipboard-native.test.mjs",
+      "exitCode": 1,
+      "tests": 6,
+      "passed": 2,
+      "failed": 4,
+      "durationMs": 308.466541,
+      "failures": ["Coalesced replies were rejected by the aggregate bound", "A valid reply before an oversized partial frame was dropped", "Coalesced requests were rejected by the aggregate bound", "A valid request before an oversized partial frame was dropped"]
+    },
+    {
+      "phase": "green focused",
+      "command": "node --test --test-concurrency=1 tests/clipboard-helper.test.mjs tests/clipboard-native.test.mjs tests/blocked-settings.test.mjs tests/relay-clipboard.test.mjs",
+      "exitCode": 0,
+      "tests": 50,
+      "passed": 50,
+      "failed": 0,
+      "durationMs": 910.1805,
+      "timings": {
+        "reply": { "wireBytes": 55924129, "oneShotMs": 54.22075, "streamedMs": 87.717709 },
+        "request": { "wireBytes": 55924090, "oneShotMs": 28.689, "streamedMs": 30.779542 }
+      }
+    },
+    {
+      "phase": "full check in sandbox",
+      "command": "npm run check",
+      "exitCode": 1,
+      "tests": 1074,
+      "passed": 1029,
+      "failed": 45,
+      "durationMs": 133631.616625,
+      "timings": {
+        "reply": { "wireBytes": 55924129, "oneShotMs": 697.143, "streamedMs": 742.6615 },
+        "request": { "wireBytes": 55924090, "oneShotMs": 386.246291, "streamedMs": 474.594208 }
+      },
+      "failures": ["Loopback and Unix socket listen EPERM denials", "Linker denied bench/results/hover-window-fixture output", "Unrelated process-group test missed its ready message within 400 ms"],
+      "clipboardTimingTestsPassed": true,
+      "validationAndModTestsReached": false
+    },
+    {
+      "phase": "full check with host access after sandbox denial",
+      "command": "npm run check",
+      "exitCode": 0,
+      "tests": 1074,
+      "passed": 1074,
+      "failed": 0,
+      "durationMs": 67574.883917,
+      "timings": {
+        "reply": { "wireBytes": 55924129, "oneShotMs": 104.846875, "streamedMs": 165.371291 },
+        "request": { "wireBytes": 55924090, "oneShotMs": 28.740041, "streamedMs": 34.753667 }
+      },
+      "pluginValidationPassed": true,
+      "modTests": { "passed": 11, "failed": 0 }
+    },
+    {
+      "phase": "prose check",
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "files": 59,
+      "errors": 0
+    },
+    {
+      "phase": "benchmark report prose before adjustment",
+      "command": "vale docs/benchmarks/2026-10-09-clipboard-helper.md docs/benchmarks/2026-10-09-exact-text.md",
+      "exitCode": 1,
+      "files": 2,
+      "errors": 1,
+      "failure": "ai-tells.VerbTricolon in the boundary-coverage sentence"
+    },
+    {
+      "phase": "benchmark report prose after adjustment",
+      "command": "vale docs/benchmarks/2026-10-09-clipboard-helper.md docs/benchmarks/2026-10-09-exact-text.md",
+      "exitCode": 0,
+      "files": 2,
+      "errors": 0
+    }
+  ]
+}

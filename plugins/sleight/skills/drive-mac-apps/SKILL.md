@@ -39,6 +39,10 @@ it. If an app needs approval, ask the user, or stop when a headless run refuses 
   auto-capitalization: TextEdit saved "sleight is here. it works" as "Sleight is here. It works".
   Use one `typeText` instead of a `pressKey` per character when exact case doesn't matter, and in
   the iOS simulator, where paste can insert the Mac's clipboard instead.
+- For an exact whole-document replacement in a Mac app (excluding the iOS simulator), select all
+  then `app.paste("text")` in one call. Read the same document and compare its text before saving.
+  If the read is incomplete or differs, stop and read again. A select-all shortcut alone doesn't
+  confirm replacement.
 - Don't set a TextEdit document's text with `setValue`. Saving right after it hung TextEdit 3/3 times.
 - Use an app's menus by their shortcut (`super+shift+t` is TextEdit's Make Plain Text), or click
   the menu and its item in one call. `menu_bar` is only for icons at the right end of the menu bar.
