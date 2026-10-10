@@ -62,6 +62,11 @@ in `.dev/prompts/`, for Sol threads the owner starts:
 - Follow-ups after review: `sol-replay-next-2.md` (the bridge parses every message) and
   `sol-footprint-spawns-2.md` (browser surface always on, one 2 s helper for slow operations).
 - The launch post's real-use line is filled (`~/Desktop/sleight-launch/thread-1.0.md`, 23:58 UTC).
+- Merge study (subagent, 48 runs): with batching on, Claude chained past Cmd+N or Cmd+O and the lease
+  stopped 10 of 12 TextEdit batches. `eb7c653` tells it to end the call there (needs benchmark runs).
+  Asked the owner (00:05 UTC) whether the guard may accept a window the call's own shortcut opened or
+  renamed in the same app (save and open panels, new untitled windows, a saved name). TextEdit save and edit would
+  go from about 6 calls to 3. Risk: a window the user opens in that app at that moment is accepted.
 - sleight-arch: the guard's reads (`document-scope.mjs`, guard code in `relay.mjs`), with a
   background subagent studying guard-read phases across tonight's traces.
 - `/tmp/sleight-hold` exists while another project's window runs. Every brief stops live probes
