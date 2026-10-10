@@ -164,8 +164,10 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
    node_repl path. Probe v2 sets the engine's whole environment and uses the helper inside
    ChatGPT.app where it is. In puddle-census, never signed in, it initialized the engine, listed
    its tools and answered the first call (the engine's docs). Probe v3 adds a `listApps` call,
-   which tells whether the helper reads apps there too. macOS permissions always need the user's
-   click.
+   which listed apps there too. Built 2026-10-10 (`5a4a8c4`): `sleight-mcp setup`, and an engine
+   started from ChatGPT.app when there's no Codex plugin, computer-only because the browser API
+   needs a Codex sign-in. Left: a live `setup` run in a fresh macOS user. macOS permissions always
+   need the user's click.
 
 ## 6. Features after replay
 
