@@ -1,0 +1,637 @@
+{
+  "stamp": "2026-10-10T02-10-58-254Z",
+  "arms": [
+    "sleight",
+    "codex"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 18.3,
+      "turns": 4,
+      "costUsd": 0.1547152,
+      "usage": {
+        "input": 8,
+        "cacheRead": 196016,
+        "cacheWrite": 27729,
+        "output": 458
+      },
+      "timing": {
+        "totalMs": 16075,
+        "modelMs": 7360,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 4955,
+        "engineMs": 4936,
+        "relayMs": 19,
+        "localMs": 0,
+        "guardReads": 7,
+        "guardReadMs": 2729.9502919999986,
+        "guardReadFailures": 0,
+        "otherMs": 3760
+      },
+      "footprint": {
+        "cpuSeconds": 6.86,
+        "group": {
+          "claude": 1.52,
+          "engine node": 1.36,
+          "mcp@latest": 0.61,
+          "(codex)": 0.22,
+          "(node)": 0.42,
+          "node": 0.28,
+          "(Python)": 0.09,
+          "(bash)": 0.04,
+          "(git)": 0,
+          "(grep)": 0,
+          "osascript": 0.15,
+          "codex": 0.33,
+          "(vibe-island-brid)": 0.01
+        },
+        "outside": {
+          "Calculator": 0.71,
+          "engine helper": 1.12
+        }
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 19.8,
+      "turns": 4,
+      "usage": {
+        "input": 97332,
+        "cacheRead": 66688,
+        "cacheWrite": 0,
+        "output": 253
+      },
+      "footprint": {
+        "cpuSeconds": 3.65,
+        "group": {
+          "codex": 1.24,
+          "engine node": 0.87,
+          "node": 0.18,
+          "codex-code-mode-host": 0.11,
+          "(node)": 0
+        },
+        "outside": {
+          "Calculator": 0.48,
+          "engine helper": 0.77
+        }
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "391",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 2,
+      "engineMs": 3629
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 38,
+      "turns": 8,
+      "costUsd": 0.18476599999999999,
+      "usage": {
+        "input": 16,
+        "cacheRead": 386880,
+        "cacheWrite": 23532,
+        "output": 1323
+      },
+      "timing": {
+        "totalMs": 35674,
+        "modelMs": 15035,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 17154,
+        "engineMs": 16799,
+        "relayMs": 355,
+        "localMs": 0,
+        "guardReads": 14,
+        "guardReadMs": 10277.271418,
+        "guardReadFailures": 0,
+        "otherMs": 3485
+      },
+      "footprint": {
+        "cpuSeconds": 11.17,
+        "group": {
+          "claude": 2.02,
+          "engine node": 1.56,
+          "mcp@latest": 0.65,
+          "node": 0.29,
+          "Python": 0.05,
+          "bash": 0.02,
+          "(grep)": 0,
+          "osascript": 0.64,
+          "codex": 0.41,
+          "(bash)": 0.01,
+          "(AgentPeekBridge)": 0,
+          "(vibe-island-brid)": 0
+        },
+        "outside": {
+          "engine helper": 2.89,
+          "TextEdit": 2.63
+        }
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 7,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I created the TextEdit document, made it plain text and typed \"sleight bench f6ff4ab0\". I saved it to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-10T02-10-58-254Z/sleight-textedit-save-1/f6ff4ab0.txt` and closed it.\n\nThe window title and URL matched that file after the sa",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 44.5,
+      "turns": 11,
+      "usage": {
+        "input": 440867,
+        "cacheRead": 377216,
+        "cacheWrite": 0,
+        "output": 711
+      },
+      "footprint": {
+        "cpuSeconds": 7.21,
+        "group": {
+          "codex": 1.49,
+          "engine node": 0.93,
+          "node": 0.18,
+          "codex-code-mode-host": 0.11
+        },
+        "outside": {
+          "engine helper": 2.36,
+          "TextEdit": 2.14
+        }
+      },
+      "appWindows": {
+        "samples": 9,
+        "onScreen": 7,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "Created the plain-text file with exactly `sleight bench 596d980f`, saved it to the specified path, and closed the document.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 9,
+      "engineMs": 11860
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 22.7,
+      "turns": 6,
+      "costUsd": 0.12618400000000002,
+      "usage": {
+        "input": 12,
+        "cacheRead": 267140,
+        "cacheWrite": 15748,
+        "output": 974
+      },
+      "timing": {
+        "totalMs": 20551,
+        "modelMs": 10078,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 7869,
+        "engineMs": 7654,
+        "relayMs": 215,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 4858.172460000002,
+        "guardReadFailures": 0,
+        "otherMs": 2604
+      },
+      "footprint": {
+        "cpuSeconds": 6.72,
+        "group": {
+          "claude": 1.76,
+          "engine node": 1.25,
+          "mcp@latest": 0.63,
+          "node": 0.28,
+          "osascript": 0.26,
+          "codex": 0.28,
+          "uv": 0.02,
+          "python3": 0.02,
+          "(bash)": 0,
+          "(Python)": 0.02
+        },
+        "outside": {
+          "engine helper": 1.26,
+          "TextEdit": 0.94
+        }
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I opened the file in TextEdit, changed \"alpha beta gamma\" to \"alpha delta gamma\", saved it and closed the document.\n\nI didn't read the file back from disk. The window showed no unsaved-changes prompt when it closed. TextEdit now shows its original blank \"Untitled 6\" window.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 88,
+      "turns": 23,
+      "usage": {
+        "input": 802612,
+        "cacheRead": 768768,
+        "cacheWrite": 0,
+        "output": 1750
+      },
+      "footprint": {
+        "cpuSeconds": 11.66,
+        "group": {
+          "codex": 1.78,
+          "engine node": 1,
+          "node": 0.16,
+          "codex-code-mode-host": 0.16
+        },
+        "outside": {
+          "engine helper": 4.63,
+          "TextEdit": 3.93
+        }
+      },
+      "appWindows": {
+        "samples": 18,
+        "onScreen": 14,
+        "offScreenOnly": 2,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "Replaced “beta” with “delta” in TextEdit, saved the file, and closed the document.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 21,
+      "engineMs": 17349
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 2,
+      "passed": true,
+      "seconds": 13.4,
+      "turns": 3,
+      "costUsd": 0.1408872,
+      "usage": {
+        "input": 6,
+        "cacheRead": 136016,
+        "cacheWrite": 27503,
+        "output": 366
+      },
+      "timing": {
+        "totalMs": 11064,
+        "modelMs": 4827,
+        "calls": 2,
+        "refused": 0,
+        "toolMs": 4709,
+        "engineMs": 4692,
+        "relayMs": 17,
+        "localMs": 0,
+        "guardReads": 7,
+        "guardReadMs": 2694.484083,
+        "guardReadFailures": 0,
+        "otherMs": 1528
+      },
+      "footprint": {
+        "cpuSeconds": 5.91,
+        "group": {
+          "claude": 1.59,
+          "engine node": 1.19,
+          "mcp@latest": 0.72,
+          "<defunct>": 0,
+          "(bash)": 0.01,
+          "(uname)": 0,
+          "node": 0.3,
+          "bash": 0.02,
+          "Python": 0.01,
+          "(Python)": 0.01,
+          "(grep)": 0,
+          "osascript": 0.2,
+          "codex": 0.3
+        },
+        "outside": {
+          "Calculator": 0.65,
+          "engine helper": 0.91
+        }
+      },
+      "appWindows": {
+        "samples": 3,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "calculator-click",
+      "run": 2,
+      "passed": true,
+      "seconds": 15.6,
+      "turns": 4,
+      "usage": {
+        "input": 99950,
+        "cacheRead": 79616,
+        "cacheWrite": 0,
+        "output": 197
+      },
+      "footprint": {
+        "cpuSeconds": 3.14,
+        "group": {
+          "codex": 1.06,
+          "engine node": 0.8,
+          "node": 0.17,
+          "codex-code-mode-host": 0.06
+        },
+        "outside": {
+          "Calculator": 0.37,
+          "engine helper": 0.68
+        }
+      },
+      "appWindows": {
+        "samples": 3,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "391",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 2,
+      "engineMs": 1853
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 33.2,
+      "turns": 6,
+      "costUsd": 0.1788614,
+      "usage": {
+        "input": 12,
+        "cacheRead": 308797,
+        "cacheWrite": 26467,
+        "output": 1121
+      },
+      "timing": {
+        "totalMs": 30966,
+        "modelMs": 10967,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 16218,
+        "engineMs": 16033,
+        "relayMs": 185,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 6473.632250999997,
+        "guardReadFailures": 0,
+        "otherMs": 3781
+      },
+      "footprint": {
+        "cpuSeconds": 9.73,
+        "group": {
+          "claude": 1.91,
+          "engine node": 1.38,
+          "mcp@latest": 0.64,
+          "codex": 0.46,
+          "node": 0.26,
+          "osascript": 0.18
+        },
+        "outside": {
+          "engine helper": 2.57,
+          "TextEdit": 2.33
+        }
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 5,
+        "offScreenOnly": 1,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I created a new TextEdit document, made it plain text, and typed `sleight bench f96a9e43`. I saved it as `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-10T02-10-58-254Z/sleight-textedit-save-2/f96a9e43.txt`, then closed it.\n\nI didn't open the Format menu to confirm the plain",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 37.7,
+      "turns": 9,
+      "usage": {
+        "input": 359734,
+        "cacheRead": 308608,
+        "cacheWrite": 0,
+        "output": 540
+      },
+      "footprint": {
+        "cpuSeconds": 7.15,
+        "group": {
+          "codex": 1.6,
+          "engine node": 1,
+          "node": 0.18,
+          "codex-code-mode-host": 0.11
+        },
+        "outside": {
+          "engine helper": 2.39,
+          "TextEdit": 1.87
+        }
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 4,
+        "offScreenOnly": 2,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "Created the plain-text file with exactly `sleight bench 9528ca69`, saved it at the specified path, and closed the document.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 7,
+      "engineMs": 12745
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 2,
+      "passed": true,
+      "seconds": 28.7,
+      "turns": 8,
+      "costUsd": 0.2529656,
+      "usage": {
+        "input": 16,
+        "cacheRead": 465308,
+        "cacheWrite": 37128,
+        "output": 1136
+      },
+      "timing": {
+        "totalMs": 25736,
+        "modelMs": 12951,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 9620,
+        "engineMs": 9255,
+        "relayMs": 365,
+        "localMs": 0,
+        "guardReads": 9,
+        "guardReadMs": 911.775623999999,
+        "guardReadFailures": 0,
+        "otherMs": 3165
+      },
+      "footprint": {
+        "cpuSeconds": 9.71,
+        "group": {
+          "claude": 2.08,
+          "engine node": 2.05,
+          "mcp@latest": 0.65,
+          "codex": 0.43,
+          "node": 0.27,
+          "(bash)": 0.01,
+          "(vibe-island-brid)": 0.01,
+          "osascript": 0.74,
+          "(uv)": 0.02,
+          "(Python)": 0.09,
+          "(python3.14)": 0.12,
+          "(git)": 0.01
+        },
+        "outside": {
+          "engine helper": 1.92,
+          "TextEdit": 1.31
+        }
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I replaced \"beta\" with \"delta\" in `9208b739-edit.txt`, saved it, and closed the document. It now reads \"alpha delta gamma\".\n\nMy first attempt to open the file left an empty \"Untitled 6\" window open in TextEdit, and it's still there. I didn't create or save anything in it.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-edit",
+      "run": 2,
+      "passed": true,
+      "seconds": 33.6,
+      "turns": 8,
+      "usage": {
+        "input": 234150,
+        "cacheRead": 208640,
+        "cacheWrite": 0,
+        "output": 482
+      },
+      "footprint": {
+        "cpuSeconds": 5.85,
+        "group": {
+          "codex": 1.55,
+          "engine node": 0.94,
+          "node": 0.18,
+          "codex-code-mode-host": 0.11
+        },
+        "outside": {
+          "engine helper": 1.77,
+          "TextEdit": 1.3
+        }
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "Replaced “beta” with “delta” in TextEdit, saved the file, and closed the document.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 6,
+      "engineMs": 6601
+    }
+  ]
+}

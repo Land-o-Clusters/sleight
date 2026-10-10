@@ -383,6 +383,14 @@ node process took 3.8 (9.3 against 5.4), the host CLIs 5.2 (Claude Code 11.3 plu
 separate), and `osascript` 1.9. The helper and the apps together used 0.6 less for sleight (20.8
 against 21.3). The gap per run was largest on calculator-click (4.7 and 6.6 s against 3.3 and 3.3).
 
+After tonight's cuts (helper lanes, cached extension check, the split read's reuse, first-call
+batching; `6e21846`, 2026-10-10 02:10 UTC, the owner away, load 22 to 30 from another project's test
+suite), the same six runs a side ([`footprint-2`](benchmarks/2026-10-10-footprint-2.json)) passed 6/6
+each. sleight took 154 s and 35 turns, Codex 239 s and 59. sleight used 45.8 CPU seconds of its own
+(50.1 with the owner's plugins) against Codex's 38.7, a gap of 7.1 against 10.4 before. The engine's
+node process still took 3.3 more (8.8 against 5.5), and `osascript` 2.2, mostly the per-read app
+probe.
+
 A loaded pass added 20 CPU-bound workers (load 12 at the start, 137 at the end) and ran four
 default tasks, alternating the arms, until it was stopped at 20:38 UTC to leave the Mac quiet for
 another project ([`h2h-loaded`](benchmarks/2026-10-09-h2h-loaded.json)). It ran 9 of the planned 16 runs.

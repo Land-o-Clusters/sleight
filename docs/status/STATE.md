@@ -99,6 +99,12 @@ in `.dev/prompts/`, for Sol threads the owner starts:
   audited), the scoped-approvals design note (`2cf81d0`, not built, the owner's call) and
   `codex/footprint-spawns` (`7d880dc`). Follow-ups to paste: `sol-replay-desktop-2.md`,
   `sol-verified-results-2.md`, `sol-footprint-spawns-4.md`.
+- Footprint gate (02:10 UTC on 2026-10-10, `docs/benchmark.md`): sleight 45.8 CPU s of its own
+  against Codex 38.7 (gap 7.1, was 10.4), 154 s against 239 s. Left: engine node +3.3 (guard reads)
+  and `osascript` +2.2 (the per-read app probe). Not at parity, so ROADMAP 3.5 still holds the release.
+- Briefs for the remaining rows: `sol-sim-savelock.md`, `sol-lease-broker.md`,
+  `sol-review-receipts.md`, `sol-routines-demo.md`. Removing the helper's stale launchd job stays
+  manual (doctor prints the command): it would change OpenAI's helper state (LAWS).
 - sleight-arch: the guard's reads (`document-scope.mjs`, guard code in `relay.mjs`), with a
   background subagent studying guard-read phases across tonight's traces.
 - `/tmp/sleight-hold` exists while another project's window runs. Every brief stops live probes
