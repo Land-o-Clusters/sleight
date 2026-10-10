@@ -199,10 +199,14 @@ build what nobody has. Sources are `.dev/research/2026-10-04-competitors.md` and
 - Stop that confirms the Mac stopped, element waits and exact window targeting for untitled windows
   merged 2026-10-10 (`6291251`), with their live checks before release. Recording a task from the
   user's demonstration merged with routines (`da78144`). Its live check is open.
-- Windows, tested in a Windows 11 ARM VM (owner's idea, 2026-10-09). Codex computer use reached
-  Windows on 2026-05-29, foreground only. First check, in a free UTM VM, whether that engine runs on
-  ARM and exposes the same `cua_repl` API. The relay, guards, mod and benchmark could carry over.
-  `drag.js`, `menu_bar`, `notifications`, `blocked_app`, the keyboard-tap check and the launchd watch
-  are macOS-only. Paid VM software is the owner's call. Research done (`docs/design/windows.md`):
-  public docs don't show the Windows engine's API, so the next step is a bounded spike in a UTM VM,
-  which needs the owner's OK on a Windows license and about 120 GB of disk.
+- Windows (owner's idea, 2026-10-09). Codex computer use reached Windows on 2026-05-29, foreground
+  only. The relay, guards, mod and benchmark could carry over. `drag.js`, `menu_bar`,
+  `notifications`, `blocked_app`, the keyboard-tap check and the launchd watch are macOS-only
+  (`docs/design/windows.md`). Research on 2026-10-10 didn't find a public report of it working on ARM64,
+  and one of it failing at startup there (Codex #52133). In a VMware VM screenshots timed out
+  (#51589). An outside stdio client did start `cua-repl.mjs` and list apps, but only with the
+  running ChatGPT app's native pipe directory (#45948). Plan (2026-10-10): the owner's 2020 Intel
+  MacBook Pro (16 GB) runs VMware Fusion, free, with Windows 11 Enterprise's free 90-day x64
+  evaluation. Boot Camp is the fallback if the engine fails in the VM. The owner registers,
+  downloads, installs ChatGPT and turns on OpenSSH. sleight-arch runs the spike over SSH: engine
+  start, app list, screenshot, one approved action.

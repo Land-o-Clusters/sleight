@@ -519,6 +519,11 @@ our own runs. Dates and engine versions are given where they matter.
   expected and observed PID and bundle. A process with an empty bundle ID is quit only when it
   runs from the expected app's own bundle on disk, so a reused PID is never quit. Unit-tested,
   with no owner-away rerun yet ([round 13](benchmarks/2026-10-10-real-use-tasks-13.md)).
+  The reruns on 2026-10-10 evening failed earlier, at `simctl openurl` (POSIX error 60, 3 times),
+  and cleanup again refused to quit DeviceHub, whose launched PID it recorded as -1. By hand, with
+  the same device, `openurl` took 0.4 to 6.5 s after a fresh boot, with DeviceHub running and
+  freshly launched. We don't know yet which step of the task makes it time out
+  ([report](benchmarks/2026-10-10-away.md)).
 - DeviceHub replaced its launch process during `simulator-flow` setup on 2026-10-10. Setup now
   accepts one same-bundle handoff after the recorded PID exits, and cleanup quits only a viewer
   the run launched. The owner-away rerun is pending
