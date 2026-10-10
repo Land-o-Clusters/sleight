@@ -89,7 +89,7 @@ for (const [mode, entries, auditFails, expected] of [
 
 test('doctor does not start a live read when required files are missing', async () => {
   const lines = [];
-  assert.equal(await doctor({ env: { CODEX_HOME: '/no-such-sleight-home' }, log: line => lines.push(line) }), 1);
+  assert.equal(await doctor({ env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' }, log: line => lines.push(line) }), 1);
   assert.match(lines.join('\n'), /no Codex computer-use plugin/);
 });
 

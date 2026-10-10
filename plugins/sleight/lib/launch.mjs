@@ -7,6 +7,7 @@
 //
 //   launch.mjs           run the server over stdio, through relay.mjs
 //   launch.mjs --doctor  print what would run, and check it exists
+//   launch.mjs setup     install the helper, open permission panes, run doctor
 //   launch.mjs record|replay …  turn a finished run into a script, and run it again (replay.mjs)
 
 import { execFile, execFileSync, spawn } from 'node:child_process';
@@ -29,6 +30,7 @@ import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
 import { probeHelper, staleHelperJobs } from './helper-health.mjs';
 import { runRichTextMove, drainRichTextMoves, richPasteChildState, takeRichTextNotices } from './rich-text-drag.mjs';
 import { replayBridge } from './replay.mjs';
+import { serverFromChatGPTApp, setup } from './setup.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
 const SERVER_KEY = 'cua_repl';
@@ -57,13 +59,20 @@ function compareVersions(a, b) {
 export function resolveServer(env = process.env) {
   const codexHome = env.CODEX_HOME || join(homedir(), '.codex');
   const root = join(codexHome, ...PLUGIN_DIR);
-  if (!existsSync(root)) {
-    return { error: `no Codex computer-use plugin at ${root}. Install the ChatGPT desktop app and turn on Computer Use in Codex once.` };
-  }
+  const fromBundle = () => {
+    const fallback = serverFromChatGPTApp({ env });
+    if (fallback.error) {
+      return { error: `no Codex computer-use plugin at ${root}. Install the ChatGPT desktop app and turn on Computer Use in Codex once.` };
+    }
+    const serverEnv = { ...fallback.env };
+    serverEnv.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES || 'computer';
+    return { ...fallback, env: serverEnv, fromChatGPTApp: true };
+  };
+  if (!existsSync(root)) return fromBundle();
   const versions = readdirSync(root)
     .filter(v => /^\d+(\.\d+)*$/.test(v) && existsSync(join(root, v, '.mcp.json')))
     .sort(compareVersions);
-  if (!versions.length) return { error: `no versioned .mcp.json under ${root}` };
+  if (!versions.length) return fromBundle();
 
   const version = versions.at(-1);
   const configPath = join(root, version, '.mcp.json');
@@ -87,6 +96,9 @@ export function selectSurfaces(server, env = process.env, options) {
     server.env.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES;
     return;
   }
+  // Started from ChatGPT.app, the browser surface needs a Codex sign-in ("Codex auth token is
+  // unavailable", 2026-10-10), so it stays computer-only unless the user sets SLEIGHT_SURFACES.
+  if (server.fromChatGPTApp) { server.env.CUA_REPL_ENABLED_SURFACES = 'computer'; return; }
   const cache = createSurfaceCache(server, options);
   server.env.CUA_REPL_ENABLED_SURFACES = cache.connected ? 'browser,computer' : 'computer';
   server.env.BROWSER_USE_AVAILABLE_BACKENDS = 'chrome';
@@ -99,6 +111,9 @@ export async function probeSurfaces(server, env = process.env, options) {
     server.env.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES;
     return;
   }
+  // Started from ChatGPT.app, the browser surface needs a Codex sign-in ("Codex auth token is
+  // unavailable", 2026-10-10), so it stays computer-only unless the user sets SLEIGHT_SURFACES.
+  if (server.fromChatGPTApp) { server.env.CUA_REPL_ENABLED_SURFACES = 'computer'; return; }
   const browsers = await discoverExtensions(server, options);
   server.env.CUA_REPL_ENABLED_SURFACES = browsers.length ? 'browser,computer' : 'computer';
   // The in-app browser needs ChatGPT host context. Auto mode uses extensions only.
@@ -760,6 +775,9 @@ export function allowCommand(args, { list = listPreapproved, remove = removePrea
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv[2] === 'allow') {
     try { process.exitCode = allowCommand(process.argv.slice(2)); }
+    catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
+  } else if (process.argv[2] === 'setup') {
+    try { process.exitCode = await setup({ doctor, resolveServer, dryRun: process.argv.includes('--dry-run') }); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   } else if (process.argv.includes('--doctor')) process.exitCode = await doctor();
   else if (process.argv[2] === 'routine') {

@@ -56,6 +56,12 @@ Or, inside a Claude Code session, `/plugin marketplace add Land-o-Clusters/sleig
 ~/.claude/plugins/marketplaces/sleight/plugins/sleight/bin/sleight-mcp --doctor
 ```
 
+`sleight-mcp setup` finds ChatGPT, runs OpenAI's helper installer when its status isn't OK, opens
+the Accessibility and Screen Recording panes so you can allow Codex Computer Use, and runs
+`--doctor`. ChatGPT has to be installed, but you don't need to sign in or open Codex: in a macOS
+user that never signed in, the engine started and listed apps (2026-10-10). Installing the helper takes
+an administrator's Touch ID or password.
+
 And try it:
 
 ```text

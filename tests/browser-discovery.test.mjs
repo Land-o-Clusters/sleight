@@ -35,6 +35,12 @@ test('explicit override skips detection and preserves backend configuration', as
   assert.equal(s.env.BROWSER_USE_AVAILABLE_BACKENDS, 'iab');
   assert.throws(() => requests(s), { code: 'ENOENT' });
 });
+test('an engine started from ChatGPT.app stays computer-only: its browser surface needs a Codex sign-in', async t => {
+  const s = { ...server(t, [{ type: 'extension', metadata: { extensionInstanceId: 'helium-instance' } }]), fromChatGPTApp: true };
+  await selectSurfaces(s, {});
+  assert.equal(s.env.CUA_REPL_ENABLED_SURFACES, 'computer');
+  assert.throws(() => requests(s), { code: 'ENOENT' });
+});
 test('hung discovery is bounded and collected', async t => {
   const s = server(t, [], { SLEIGHT_TEST_HUNG: '1' }); const start = Date.now();
   await selectSurfaces(s, {}, { timeoutMs: 100 });
