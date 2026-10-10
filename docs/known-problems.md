@@ -8,10 +8,13 @@ our own runs. Dates and engine versions are given where they matter.
 - [Verified results](design/verified-results.md) summarize native `js` calls from existing reads.
   A changed value or window is an observation after input; concurrent user activity can cause it
   too. Missing or degraded reads leave the result unverified. Saving without an exposed URL or
-  modified-state change remains unconfirmed, and an observed save state does not prove durable
+  modified-state change remains unconfirmed. A save needs the same file URL or the exact path
+  named by the Save-panel call. Computed paths and filesystem aliases remain unconfirmed.
+  When autosave clears an Edited state, the result reports an unknown cause and cannot credit Claude.
+  An observed save state does not prove durable
   storage. Local pointer tools, browser calls and computed action methods have no summary.
-  Unit checks are published in the [report](benchmarks/2026-10-09-verified-results.md); affected
-  Calculator and TextEdit model tasks still need sleight-arch's release checks.
+  Unit checks and CPU measurements are published in the [review report](benchmarks/2026-10-10-verified-results-review.md).
+  Calculator, TextEdit, Chess and Safari-form tasks still need sleight-arch's release checks.
 - Browser call text never turns off native guards. The engine must confirm `browserUse` on its reply
   before sleight learns browser handles. Candidates attempt the known native window lease and
   saved-file checks; when native access is unavailable, their runtime guard denies native access

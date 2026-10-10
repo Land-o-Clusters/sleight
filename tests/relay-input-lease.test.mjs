@@ -13,7 +13,7 @@ const header = 'Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt';
 const rpc = (id, name, args = {}) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
 const result = (id, text = header) => ({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }],
   _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit' } } } } });
-const windowContent = msg => msg.result.content.filter(item => !item.text?.startsWith('sleight result:'));
+const windowContent = msg => msg.result.content.filter(item => !/^sleight: (?:UI|call failed|saved:)/.test(item.text ?? ''));
 test('normal action results and app acquisitions have no window note', t => {
   const { a } = setup(t);
   a.send(rpc(1, 'js', { code: 'app = await cua.getApp("TextEdit")' })); a.reply(result(1));

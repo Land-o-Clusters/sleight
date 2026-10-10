@@ -1,0 +1,479 @@
+{
+  "method": "process.cpuUsage user + system; only process() timed",
+  "lines": 3000,
+  "baselineCommit": "3a5fa3edcdd08a3e06757d1512f93b2ea529f19c",
+  "node": "v26.4.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "attempts": [
+    {
+      "arm": "baseline",
+      "sourceSha256": "2a2ae91e85e51f32f0c524ed36f0afb6b48bc9cd619d759d4b73434e34d2ac43",
+      "started": "2026-10-10T02:20:02.924Z",
+      "cases": [
+        {
+          "name": "unchanged",
+          "samples": [
+            {
+              "iterations": 100,
+              "userMs": 450.996,
+              "systemMs": 16.856,
+              "cpuMsPerCall": 4.67852
+            },
+            {
+              "iterations": 100,
+              "userMs": 291.367,
+              "systemMs": 6.52,
+              "cpuMsPerCall": 2.97887
+            },
+            {
+              "iterations": 100,
+              "userMs": 266.582,
+              "systemMs": 8.456,
+              "cpuMsPerCall": 2.7503800000000003
+            },
+            {
+              "iterations": 100,
+              "userMs": 235.012,
+              "systemMs": 6.751,
+              "cpuMsPerCall": 2.41763
+            },
+            {
+              "iterations": 100,
+              "userMs": 278.915,
+              "systemMs": 8.388,
+              "cpuMsPerCall": 2.87303
+            }
+          ],
+          "medianCpuMsPerCall": 2.87303
+        },
+        {
+          "name": "one-value",
+          "samples": [
+            {
+              "iterations": 100,
+              "userMs": 382.544,
+              "systemMs": 8.205,
+              "cpuMsPerCall": 3.90749
+            },
+            {
+              "iterations": 100,
+              "userMs": 262.898,
+              "systemMs": 5.522,
+              "cpuMsPerCall": 2.6842
+            },
+            {
+              "iterations": 100,
+              "userMs": 276.517,
+              "systemMs": 5.352,
+              "cpuMsPerCall": 2.81869
+            },
+            {
+              "iterations": 100,
+              "userMs": 234.135,
+              "systemMs": 5.144,
+              "cpuMsPerCall": 2.3927899999999998
+            },
+            {
+              "iterations": 100,
+              "userMs": 265.299,
+              "systemMs": 5.243,
+              "cpuMsPerCall": 2.7054199999999997
+            }
+          ],
+          "medianCpuMsPerCall": 2.7054199999999997
+        },
+        {
+          "name": "all-element-labels",
+          "samples": [
+            {
+              "iterations": 10,
+              "userMs": 482.836,
+              "systemMs": 3.766,
+              "cpuMsPerCall": 48.660199999999996
+            },
+            {
+              "iterations": 10,
+              "userMs": 519.323,
+              "systemMs": 7.14,
+              "cpuMsPerCall": 52.6463
+            },
+            {
+              "iterations": 10,
+              "userMs": 486.068,
+              "systemMs": 12.493,
+              "cpuMsPerCall": 49.8561
+            },
+            {
+              "iterations": 10,
+              "userMs": 527.05,
+              "systemMs": 7.937,
+              "cpuMsPerCall": 53.4987
+            },
+            {
+              "iterations": 10,
+              "userMs": 514.891,
+              "systemMs": 6.71,
+              "cpuMsPerCall": 52.1601
+            }
+          ],
+          "medianCpuMsPerCall": 52.1601
+        }
+      ],
+      "exitCode": 0,
+      "finished": "2026-10-10T02:20:22.716Z"
+    },
+    {
+      "arm": "revised",
+      "sourceSha256": "5a83444db9e60faf388cfbb3ca123d2d536f6bed707edea16fb960b498ccede7",
+      "started": "2026-10-10T02:23:33.050Z",
+      "cases": [
+        {
+          "name": "unchanged",
+          "samples": [
+            {
+              "iterations": 100,
+              "userMs": 386.334,
+              "systemMs": 10.421,
+              "cpuMsPerCall": 3.96755
+            },
+            {
+              "iterations": 100,
+              "userMs": 238.734,
+              "systemMs": 4.574,
+              "cpuMsPerCall": 2.43308
+            },
+            {
+              "iterations": 100,
+              "userMs": 232.612,
+              "systemMs": 4.217,
+              "cpuMsPerCall": 2.36829
+            },
+            {
+              "iterations": 100,
+              "userMs": 228.141,
+              "systemMs": 3.101,
+              "cpuMsPerCall": 2.31242
+            },
+            {
+              "iterations": 100,
+              "userMs": 240.007,
+              "systemMs": 3.025,
+              "cpuMsPerCall": 2.43032
+            }
+          ],
+          "medianCpuMsPerCall": 2.43032
+        },
+        {
+          "name": "one-value",
+          "samples": [
+            {
+              "iterations": 100,
+              "userMs": 431.353,
+              "systemMs": 8.321,
+              "cpuMsPerCall": 4.396739999999999
+            },
+            {
+              "iterations": 100,
+              "userMs": 326.381,
+              "systemMs": 3.248,
+              "cpuMsPerCall": 3.2962900000000004
+            },
+            {
+              "iterations": 100,
+              "userMs": 225.073,
+              "systemMs": 3.353,
+              "cpuMsPerCall": 2.2842599999999997
+            },
+            {
+              "iterations": 100,
+              "userMs": 250.719,
+              "systemMs": 1.794,
+              "cpuMsPerCall": 2.52513
+            },
+            {
+              "iterations": 100,
+              "userMs": 225.392,
+              "systemMs": 1.564,
+              "cpuMsPerCall": 2.26956
+            }
+          ],
+          "medianCpuMsPerCall": 2.52513
+        },
+        {
+          "name": "all-element-labels",
+          "samples": [
+            {
+              "iterations": 10,
+              "userMs": 454.657,
+              "systemMs": 3.663,
+              "cpuMsPerCall": 45.832
+            },
+            {
+              "iterations": 10,
+              "userMs": 482.336,
+              "systemMs": 2.411,
+              "cpuMsPerCall": 48.4747
+            },
+            {
+              "iterations": 10,
+              "userMs": 488.907,
+              "systemMs": 4.323,
+              "cpuMsPerCall": 49.323
+            },
+            {
+              "iterations": 10,
+              "userMs": 422.334,
+              "systemMs": 1.527,
+              "cpuMsPerCall": 42.3861
+            },
+            {
+              "iterations": 10,
+              "userMs": 404.851,
+              "systemMs": 1.773,
+              "cpuMsPerCall": 40.662400000000005
+            }
+          ],
+          "medianCpuMsPerCall": 45.832
+        }
+      ],
+      "exitCode": 0,
+      "finished": "2026-10-10T02:23:44.073Z"
+    },
+    {
+      "arm": "pre-feature",
+      "sourceSha256": "026f0bc54d54a0b4ed400f08af348d89e4b3d9f8dbf2c1b93e09526d67eb141b",
+      "started": "2026-10-10T02:25:31.156Z",
+      "cases": [
+        {
+          "name": "unchanged",
+          "samples": [
+            {
+              "iterations": 100,
+              "userMs": 355.435,
+              "systemMs": 12.475,
+              "cpuMsPerCall": 3.6791
+            },
+            {
+              "iterations": 100,
+              "userMs": 241.31,
+              "systemMs": 3.267,
+              "cpuMsPerCall": 2.44577
+            },
+            {
+              "iterations": 100,
+              "userMs": 257.266,
+              "systemMs": 3.44,
+              "cpuMsPerCall": 2.60706
+            },
+            {
+              "iterations": 100,
+              "userMs": 235.452,
+              "systemMs": 3.138,
+              "cpuMsPerCall": 2.3859
+            },
+            {
+              "iterations": 100,
+              "userMs": 231.861,
+              "systemMs": 4.155,
+              "cpuMsPerCall": 2.36016
+            }
+          ],
+          "medianCpuMsPerCall": 2.44577
+        },
+        {
+          "name": "one-value",
+          "samples": [
+            {
+              "iterations": 100,
+              "userMs": 235.146,
+              "systemMs": 4.316,
+              "cpuMsPerCall": 2.3946199999999997
+            },
+            {
+              "iterations": 100,
+              "userMs": 238.869,
+              "systemMs": 4.755,
+              "cpuMsPerCall": 2.4362399999999997
+            },
+            {
+              "iterations": 100,
+              "userMs": 247.654,
+              "systemMs": 3.713,
+              "cpuMsPerCall": 2.51367
+            },
+            {
+              "iterations": 100,
+              "userMs": 250.07,
+              "systemMs": 3.915,
+              "cpuMsPerCall": 2.53985
+            },
+            {
+              "iterations": 100,
+              "userMs": 255.413,
+              "systemMs": 3.442,
+              "cpuMsPerCall": 2.58855
+            }
+          ],
+          "medianCpuMsPerCall": 2.51367
+        },
+        {
+          "name": "all-element-labels",
+          "samples": [
+            {
+              "iterations": 10,
+              "userMs": 460.982,
+              "systemMs": 5.11,
+              "cpuMsPerCall": 46.6092
+            },
+            {
+              "iterations": 10,
+              "userMs": 459.161,
+              "systemMs": 5.352,
+              "cpuMsPerCall": 46.451299999999996
+            },
+            {
+              "iterations": 10,
+              "userMs": 472.118,
+              "systemMs": 12.613,
+              "cpuMsPerCall": 48.4731
+            },
+            {
+              "iterations": 10,
+              "userMs": 475.018,
+              "systemMs": 5.922,
+              "cpuMsPerCall": 48.094
+            },
+            {
+              "iterations": 10,
+              "userMs": 467.086,
+              "systemMs": 3.427,
+              "cpuMsPerCall": 47.0513
+            }
+          ],
+          "medianCpuMsPerCall": 47.0513
+        }
+      ],
+      "exitCode": 0,
+      "finished": "2026-10-10T02:25:57.399Z"
+    },
+    {
+      "arm": "revised",
+      "sourceSha256": "55115ae3aa6a39e1abcf4746a39b238fa58ec9abc7a0180a3462b16fc5528025",
+      "started": "2026-10-10T02:32:43.787Z",
+      "cases": [
+        {
+          "name": "unchanged",
+          "samples": [
+            {
+              "iterations": 100,
+              "userMs": 421.037,
+              "systemMs": 14.407,
+              "cpuMsPerCall": 4.35444
+            },
+            {
+              "iterations": 100,
+              "userMs": 240.919,
+              "systemMs": 4.647,
+              "cpuMsPerCall": 2.45566
+            },
+            {
+              "iterations": 100,
+              "userMs": 243.951,
+              "systemMs": 5.013,
+              "cpuMsPerCall": 2.48964
+            },
+            {
+              "iterations": 100,
+              "userMs": 234.653,
+              "systemMs": 5.683,
+              "cpuMsPerCall": 2.40336
+            },
+            {
+              "iterations": 100,
+              "userMs": 242.473,
+              "systemMs": 5.75,
+              "cpuMsPerCall": 2.48223
+            }
+          ],
+          "medianCpuMsPerCall": 2.48223
+        },
+        {
+          "name": "one-value",
+          "samples": [
+            {
+              "iterations": 100,
+              "userMs": 441.977,
+              "systemMs": 7.969,
+              "cpuMsPerCall": 4.49946
+            },
+            {
+              "iterations": 100,
+              "userMs": 477.488,
+              "systemMs": 7.267,
+              "cpuMsPerCall": 4.84755
+            },
+            {
+              "iterations": 100,
+              "userMs": 417.384,
+              "systemMs": 5.691,
+              "cpuMsPerCall": 4.23075
+            },
+            {
+              "iterations": 100,
+              "userMs": 432.047,
+              "systemMs": 6.477,
+              "cpuMsPerCall": 4.38524
+            },
+            {
+              "iterations": 100,
+              "userMs": 437.19,
+              "systemMs": 8.267,
+              "cpuMsPerCall": 4.45457
+            }
+          ],
+          "medianCpuMsPerCall": 4.45457
+        },
+        {
+          "name": "all-element-labels",
+          "samples": [
+            {
+              "iterations": 10,
+              "userMs": 443.264,
+              "systemMs": 3.189,
+              "cpuMsPerCall": 44.6453
+            },
+            {
+              "iterations": 10,
+              "userMs": 464.22,
+              "systemMs": 3.964,
+              "cpuMsPerCall": 46.818400000000004
+            },
+            {
+              "iterations": 10,
+              "userMs": 470.422,
+              "systemMs": 5.748,
+              "cpuMsPerCall": 47.617000000000004
+            },
+            {
+              "iterations": 10,
+              "userMs": 466.761,
+              "systemMs": 4.873,
+              "cpuMsPerCall": 47.1634
+            },
+            {
+              "iterations": 10,
+              "userMs": 463.272,
+              "systemMs": 4.949,
+              "cpuMsPerCall": 46.8221
+            }
+          ],
+          "medianCpuMsPerCall": 46.8221
+        }
+      ],
+      "exitCode": 0,
+      "finished": "2026-10-10T02:32:55.691Z"
+    }
+  ],
+  "preFeatureCommit": "f7392bee7d9a07c103c761a41117866026b70398"
+}
