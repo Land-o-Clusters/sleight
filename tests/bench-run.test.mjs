@@ -386,6 +386,25 @@ test('real cleanup tails never inspect unrelated apps and Simulator awaits only 
   assert.equal(quit, true);
 });
 
+test('a TextEdit task refuses to start next to a document the pass did not open', () => {
+  const source = readFileSync(new URL('../bench/tasks.mjs', import.meta.url), 'utf8')
+    .replace(/^import .*;\n/gm, '').replace(/^export \{.*\} from .*;\n/gm, '').replace(/^export /gm, '');
+  for (const [docs, refused] of [[[{ name: 'Untitled 9', path: '/Users/x/Library/Mobile Documents/Untitled 9.txt' }], true], [[], false]]) {
+    const actions = [];
+    const tasks = runInNewContext(`${source}\n({ freshTextEdit })`, {
+      join, tmpdir: () => '/private/tmp', realpathSync: path => path,
+      execFileSync: (command, args) => {
+        if (command === 'osascript' && args.some(a => String(a).includes('documents().map'))) return JSON.stringify(docs);
+        actions.push(command); return '';
+      },
+    });
+    if (refused) {
+      assert.throws(() => tasks.freshTextEdit(), /1 document this pass didn't open/);
+      assert.deepEqual(actions, [], 'the user\'s document is never closed and TextEdit never quit');
+    } else tasks.freshTextEdit();
+  }
+});
+
 const apiAuth = { mode: 'api', env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, unset: ['ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'], spent: 0, capUsd: 150 };
 
 test('API mode gives every Claude run the key, drops other tokens, and checks the preflight used it', async () => {

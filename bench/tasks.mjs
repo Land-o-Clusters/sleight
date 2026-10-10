@@ -85,6 +85,11 @@ function freshTextEdit() {
     if (!docs) return;
     userDocs = new Set(docs.filter(d => !isBenchDoc(d)).map(docKey));
   }
+  // Claude can type into or save a document that was already open: in h2h-2 (2026-10-10) a Save
+  // sheet on a leftover iCloud "Untitled 9" moved it into the task's folder. So a TextEdit task
+  // doesn't start next to documents this pass didn't open, and the benchmark never closes them.
+  const foreign = (textEditDocs() ?? []).filter(d => !isBenchDoc(d)).length;
+  if (foreign) throw new Error(`TextEdit has ${foreign} document${foreign === 1 ? '' : 's'} this pass didn't open. Claude could type into or save ${foreign === 1 ? 'it' : 'them'}, so TextEdit tasks don't start until ${foreign === 1 ? 'it is' : 'they are'} closed.`);
   closeBenchTextEdit({ quit: true });
 }
 

@@ -482,6 +482,11 @@ our own runs. Dates and engine versions are given where they matter.
   that diagnosis. It also depends on Screen Recording permission: macOS otherwise omits the CG
   window names used to recognize the panel. Missing names prevent the orphan note. Unit tests pass.
   The temporary-file reproduction and localized titles remain unchecked.
+- A benchmark run can act on a TextEdit document it didn't open. In a head-to-head on 2026-10-10,
+  Claude typed into two leftover iCloud documents and a Save sheet moved one of them, empty, into
+  the task's folder ([report](benchmarks/2026-10-10-h2h-guard.md)). TextEdit tasks now refuse to
+  start while TextEdit has a document the pass didn't open. A user's own session has no such guard, and
+  Claude can act on any document in an approved app.
 - simulator-form failed setup in both Haiku passes after the round-12 fixture code (2026-10-10,
   owner away). The first pass stopped on a DeviceHub handoff while the original was still exiting.
   The second ended "readiness unconfirmed" with one DeviceHub process, which never reported a

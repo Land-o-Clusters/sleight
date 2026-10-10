@@ -1,0 +1,324 @@
+{
+  "stamp": "2026-10-10T16-19-28-693Z",
+  "arms": [
+    "sleight",
+    "codex"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 22.2,
+      "turns": 7,
+      "costUsd": 0.0198498,
+      "reportedCostUsd": 0.7159030000000001,
+      "usage": {
+        "input": 14,
+        "cacheRead": 390435,
+        "cacheWrite": 74370,
+        "output": 2140
+      },
+      "timing": {
+        "totalMs": 20387,
+        "modelMs": 13536,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 5282,
+        "engineMs": 5227,
+        "relayMs": 55,
+        "localMs": 0,
+        "guardReads": 8,
+        "guardReadMs": 1956.9253329999947,
+        "guardReadFailures": 0,
+        "otherMs": 1569
+      },
+      "footprint": {
+        "cpuSeconds": 7.09,
+        "group": {
+          "claude": 1.89,
+          "engine node": 1.51,
+          "mcp@latest": 0.63,
+          "codex": 0.31,
+          "node": 0.29,
+          "osascript": 0.1
+        },
+        "outside": {
+          "Calculator": 0.86,
+          "engine helper": 1.5
+        }
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 0,
+        "offScreenOnly": 5,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "391",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 18.2,
+      "turns": 4,
+      "costUsd": 0,
+      "usage": {
+        "input": 91243,
+        "cacheRead": 64000,
+        "cacheWrite": 0,
+        "output": 286
+      },
+      "footprint": {
+        "cpuSeconds": 3.35,
+        "group": {
+          "codex": 1.14,
+          "engine node": 0.75,
+          "node": 0.14,
+          "(bash)": 0,
+          "codex-code-mode-host": 0.12
+        },
+        "outside": {
+          "Calculator": 0.42,
+          "engine helper": 0.78
+        }
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 0,
+        "offScreenOnly": 4,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "391",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 2,
+      "engineMs": 1849
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 68.9,
+      "turns": 16,
+      "costUsd": 0.0309487,
+      "reportedCostUsd": 0.9905304000000001,
+      "usage": {
+        "input": 32,
+        "cacheRead": 1237092,
+        "cacheWrite": 75583,
+        "output": 6916
+      },
+      "timing": {
+        "totalMs": 66611,
+        "modelMs": 39193,
+        "calls": 15,
+        "refused": 1,
+        "toolMs": 24110,
+        "engineMs": 24058,
+        "relayMs": 52,
+        "localMs": 0,
+        "guardReads": 19,
+        "guardReadMs": 7167.023623999994,
+        "guardReadFailures": 0,
+        "otherMs": 3308
+      },
+      "footprint": {
+        "cpuSeconds": 13.9,
+        "group": {
+          "claude": 2.71,
+          "engine node": 1.42,
+          "mcp@latest": 0.67,
+          "<defunct>": 0,
+          "node": 0.25,
+          "codex": 0.4,
+          "osascript": 0.06,
+          "(bash)": 0.01,
+          "(AgentPeekBridge)": 0.01,
+          "(vibe-island-brid)": 0
+        },
+        "outside": {
+          "engine helper": 4.97,
+          "TextEdit": 3.4
+        }
+      },
+      "appWindows": {
+        "samples": 14,
+        "onScreen": 11,
+        "offScreenOnly": 0,
+        "none": 3
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "Created `<temp>/sleight-bench/2026-10-10T16-19-28-693Z/sleight-textedit-save-1/10a4b370.txt` containing exactly \"sleight bench 10a4b370\", and closed the document.\n\n- **Plain text:** The Format menu offered \"Make Rich Text\", so the document was already plain ",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 46.3,
+      "turns": 10,
+      "costUsd": 0,
+      "usage": {
+        "input": 357408,
+        "cacheRead": 304384,
+        "cacheWrite": 0,
+        "output": 592
+      },
+      "footprint": {
+        "cpuSeconds": 7.33,
+        "group": {
+          "codex": 1.46,
+          "engine node": 0.74,
+          "node": 0.18,
+          "codex-code-mode-host": 0.1
+        },
+        "outside": {
+          "engine helper": 2.61,
+          "TextEdit": 2.24
+        }
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 8,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "Created the plain text file with exactly `sleight bench 6777ee62`, saved it to the requested path, and closed the document.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 8,
+      "engineMs": 10470
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 21.2,
+      "turns": 6,
+      "costUsd": 0.0089697,
+      "reportedCostUsd": 0.2921428,
+      "usage": {
+        "input": 12,
+        "cacheRead": 333234,
+        "cacheWrite": 23206,
+        "output": 1990
+      },
+      "timing": {
+        "totalMs": 19504,
+        "modelMs": 12405,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 3971,
+        "engineMs": 3947,
+        "relayMs": 24,
+        "localMs": 0,
+        "guardReads": 4,
+        "guardReadMs": 401.93937400000095,
+        "guardReadFailures": 0,
+        "otherMs": 3128
+      },
+      "footprint": {
+        "cpuSeconds": 6.23,
+        "group": {
+          "claude": 1.6,
+          "engine node": 0.98,
+          "mcp@latest": 0.53,
+          "(node)": 0.03,
+          "(node_repl)": 0.1,
+          "<defunct>": 0,
+          "node": 0.21,
+          "osascript": 0.26,
+          "(bash)": 0.01,
+          "(AgentPeekBridge)": 0.01,
+          "(zsh)": 0,
+          "codex": 0.31
+        },
+        "outside": {
+          "TextEdit": 0.73,
+          "engine helper": 1.46
+        }
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I replaced \"beta\" with \"delta\" in the file, saved it, and closed the document window. The text now reads \"alpha delta gamma\".\n\nThe tool reported the save as unconfirmed, but the \"Edited\" marker cleared after Cmd+S, and closing the window raised no save prompt. I didn't read the file from disk to con",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": false,
+      "reason": "file holds \"alpha beta gamma\\n\"",
+      "seconds": 78.2,
+      "turns": 16,
+      "costUsd": 0,
+      "footprint": {
+        "cpuSeconds": 12.77,
+        "group": {
+          "codex": 1.51,
+          "engine node": 0.91,
+          "node": 0.17,
+          "codex-code-mode-host": 0.12
+        },
+        "outside": {
+          "engine helper": 4.83,
+          "TextEdit": 5.23
+        }
+      },
+      "appWindows": {
+        "samples": 16,
+        "onScreen": 14,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 1,
+      "groupClean": true,
+      "cancelled": true,
+      "answer": "The file dialog isn’t accepting the path reliably. I’m adjusting the interaction to open the requested file.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 15,
+      "engineMs": 15578,
+      "stderr": "Reading additional input from stdin...\n"
+    }
+  ]
+}
