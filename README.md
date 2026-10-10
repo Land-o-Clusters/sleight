@@ -149,10 +149,12 @@ Code tab or a terminal session:
 `sleight-<session id>.json`. It refuses to replace an existing file. Replay uses that session's
 engine connection, app approvals and input lease. Its pane lists each attempted step's outcome and
 wait when the replay returns. On a stop, Claude gets the stop details and remaining work so it can
-finish. Stop in the pane cancels the replay and leaves Claude paused until your next message.
+finish. Stop in the pane cancels replay and keeps sleight input blocked until your next message.
 
-The pane also has a JSON file field, Replay file and Record session buttons. Paths are relative to
-the session's working directory. Quote a filename containing spaces in a command. Position-dependent
+The pane also has an empty JSON file field, Replay file and Record session buttons. Choose a file
+before using either button. Replay preserves Stop until your next message and reports the stopped
+step with a warning that it may have sent input. Paths are relative to the session's working
+directory. Quote a filename containing spaces in a command. Position-dependent
 scripts require Claude's `replay` tool with explicit `allowPositions`. The pane refuses them.
 
 From a shell, you can also specify an older session:

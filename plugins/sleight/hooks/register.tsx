@@ -19,7 +19,7 @@ const log = atom({ plugin: 'sleight', key: 'log' } as const, [] as LogEntry[])
 const frame = atom({ plugin: 'sleight', key: 'frame' } as const, null as Frame | null)
 const view = atom({ plugin: 'sleight', key: 'view' } as const, { kind: 'idle' } as ViewStatus)
 const stopped = atom({ plugin: 'sleight', key: 'stopped' } as const, false)
-const replayFile = atom({ plugin: 'sleight', key: 'replayFile' } as const, 'task.json')
+const replayFile = atom({ plugin: 'sleight', key: 'replayFile' } as const, '')
 const replaying = atom({ plugin: 'sleight', key: 'replaying' } as const, false)
 let replayActive = false
 let replayCancelled = false
@@ -62,7 +62,7 @@ async function call($: any, tool: string, args: Record<string, unknown>) {
 async function recordCurrent($: any, file?: string) {
   if (turnRunning || replayActive) return { text: 'Wait for the current run to finish before recording.' }
   try {
-    const path = file ? fileArgument(file) : `sleight-${await $.session.id()}.json`
+    const path = file !== undefined ? fileArgument(file) : `sleight-${await $.session.id()}.json`
     if (await $.fs.exists(path)) throw new Error(`${path} already exists. Choose another file.`)
     const session = await $.session.id()
     // The live API's messages may have been compacted. The CLI reads the saved transcript.
@@ -85,8 +85,9 @@ async function replayCurrent($: any, file: string) {
   replayCancelled = false
   const id = `replay-${++replaySequence}`
   let engineStarted = false
+  let handoff: string | undefined
   try {
-    await update($, stopped, () => false)
+    if (await read($, stopped) || replayCancelled) return { text: 'sleight is stopped. Send a new message before replaying.' }
     const path = fileArgument(file)
     const script: ReplayScript = JSON.parse(await $.fs.read(path))
     if (replayCancelled) return { text: 'Replay stopped before starting.' }
@@ -105,16 +106,17 @@ async function replayCurrent($: any, file: string) {
     const outcome = outcomeOf(await $.mcp.call(conn.server, 'replay', { script }))
     const entries = resultEntries(script, outcome, id, now())
     await update($, log, list => [...list.filter(entry => entry.id !== id), ...entries].slice(-LOG_LIMIT))
-    if (await read($, stopped) || replayCancelled) return { text: 'Replay stopped by the user.' }
+    if (await read($, stopped) || replayCancelled) {
+      const step = outcome.step ?? outcome.steps ?? outcome.waits.at(-1)?.step
+      const text = `Replay stopped by the user at step ${step ?? 'unknown'}. This step may have sent input. Check the window before repeating it.`
+      await update($, log, list => [...list, { id: `${id}-stop`, title: text, status: 'refused', at: now() } as LogEntry].slice(-LOG_LIMIT))
+      return { text }
+    }
     if (!outcome.ok) {
       // No pane read or turn_ended here: either can discard a pending flow exception.
-      const prompt = 'sleight replay stopped. Inspect the stop details and finish the task with the existing app handles. ' +
+      handoff = 'sleight replay stopped. Inspect the stop details and finish the task with the existing app handles. ' +
         'The stopped batch may have sent input; check the window before repeating any action. ' +
         'Respect refusals and ask the user for any required approval. Replay result:\n' + JSON.stringify(outcome)
-      $.clock.after(0, async () => {
-        if (await read($, stopped) || replayCancelled || replayActive || id !== `replay-${replaySequence}`) return
-        await $.prompt.submit({ text: prompt }).catch((err: Error) => $.ui.toast(`sleight: couldn't hand the stop to Claude (${err.message}). Send the stop details from the log.`))
-      })
       return { text: `Replay stopped at step ${outcome.step}: ${outcome.error}. Sending the stop details to Claude.` }
     }
     const app = [...script.steps].reverse().map(step => appFrom(step.args.code ?? '', undefined)).find(Boolean)
@@ -132,6 +134,17 @@ async function replayCurrent($: any, file: string) {
     if (replayCancelled) await update($, stopped, () => true)
     await update($, replaying, () => false)
     replayActive = false
+    if (handoff) {
+      const prompt = handoff
+      $.clock.after(0, async () => {
+        if (await read($, stopped) || replayCancelled) return
+        if (replayActive || id !== `replay-${replaySequence}`) {
+          $.ui.toast('sleight: a newer replay started before the stop reached Claude. Send the stop details from the log when it finishes.')
+          return
+        }
+        await $.prompt.submit({ text: prompt }).catch((err: Error) => $.ui.toast(`sleight: couldn't hand the stop to Claude (${err.message}). Send the stop details from the log.`))
+      })
+    }
   }
 }
 
@@ -207,7 +220,8 @@ export const register: Register = on => {
   })
 
   // A new prompt lifts a stop, and tells Claude about pane snapshots that
-  // moved the engine's diff baseline.
+  // moved the engine's diff baseline. The host skips this hook for our own
+  // automatic handoff, so that handoff cannot lift Stop.
   on('prompt.submit', async ($, e, next) => {
     await update($, stopped, () => false)
     if (snapshottedApps.size === 0) return next(e)
