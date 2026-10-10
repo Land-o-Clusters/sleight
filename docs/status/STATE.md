@@ -3,17 +3,32 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-10 19:35 UTC)
+## Banner (2026-10-10 20:10 UTC, flushed before the owner's clear)
 
-Nothing of sleight-arch's is running, and the live lock is free. `pane/auto-mode` is at `da78144`
-(pushed to private). The latest head-to-head (`d575dcf`, 3 runs a task a side,
-`bench/results/2026-10-10T19-07-34-250Z.json`) passed 9/9 each: sleight 313.3 s and 79 turns
-against Codex's 340.2 s and 83. sleight still loses calculator-click (24.3 s against 15.1 s median,
-about 8 s a run of startup) and own CPU (78.2 s against 54.3 s, with the owner's user plugins in the
-Claude arm). Merged today since the last banner: turn fixes (`80b5abc`, `25c2d3c`, `d575dcf`), clean
-arms, the shop tasks, receipt redaction, typecheck, and routines (with a lock fix). Lanes still out:
-`codex/electron-tasks` (Grok) and `codex/results-page` (GLM). The owner runs
-`/Users/Shared/sleight-setup-probe.sh` as puddle-census after the Electron lane's reads.
+Nothing of sleight-arch's is running, and the live lock is free. `pane/auto-mode` is at `1421cf0`
+(pushed to private). The test routine's launchd job
+`com.landoclusters.sleight-routine-535e98589ef1a23ab711` is still installed and fires every 5 minutes and fails harmlessly
+(the installed plugin is 1.1.0). `routine remove` waits in the owner's Terminal tab for `remove`. If
+that tab is gone, run `plugins/sleight/bin/sleight-mcp routine remove 535e98589ef1a23ab711` in a
+terminal and type `remove`.
+
+Head-to-head at `d575dcf` (3 runs a task a side): sleight 313.3 s and 79 turns, Codex 340.2 s and 83,
+9/9 each. sleight still loses calculator-click (24.3 s against 15.1 s, about 8 s a run of startup).
+Shop tasks at `1421cf0`, 1 run each, all passed: helium-shop sleight 53 s and 19 turns, Codex 82 s
+and 23; safari-shop sleight 95 s and 22 turns, Codex 84.2 s and 25. The CPU split puts sleight's own
+processes at 0.25 to 0.29 s a run. The engine is about even, and the rest is the claude client and
+the owner's plugins. Routines passed live (`docs/benchmarks/2026-10-10-routines-live.md`).
+
+The 2026-10-10 lanes and turn fixes are merged (`git log` has the list), and no lane is out.
+
+Next, in order:
+1. The owner runs `zsh /Users/Shared/sleight-setup-probe.sh` as puddle-census. It writes its log to
+   `/Users/Shared/sleight-setup-probe-puddle-census.log`. If it works, build `sleight-mcp setup`.
+2. The calculator-click startup gap.
+3. A quiet-box CPU run with `--clean-arms` and with the normal setup.
+4. Live runs of the Electron and Firefox tasks, and the real-site shop smoke.
+5. Owner-away runs (Chess, simulator, plugin-arm pair, the release pass, LCU), then the release
+   (ROADMAP 5b).
 
 **Where work goes.** Work in progress is private between releases (LAWS): `remote.pushDefault
 private` sends pushes to `Land-o-Clusters/sleight-dev`, and a pre-push hook refuses the public repo
