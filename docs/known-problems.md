@@ -328,6 +328,13 @@ our own runs. Dates and engine versions are given where they matter.
 
 ## The engine and its helper
 
+- The engine keeps two keyboard event taps ("ChatGPT Computer Use") from its first key action until
+  its process exits. Measured 2026-10-10 on engine 26.1007.21159 with Calculator: a turn end didn't
+  remove them within 30 s, with or without `js_reset` before it, both through sleight's relay and
+  straight to the engine. They went when the engine exited, which for sleight is when the Claude Code
+  session ends. LCU 0.11.2 ends turns before `js_reset` because it found taps left after a reset;
+  here a turn end didn't remove them either way, so sleight doesn't copy that yet. Whether they
+  explain the doubled or dead keyboard seen on 2026-10-09 is unknown.
 - Exact window selection is unavailable on macOS. Engine 26.1002.52244's docs say `getApp({ windowId })`
   is for Linux and Windows and macOS takes an app name, path or bundle ID (not retested live). On
   26.930.31730 the API listed

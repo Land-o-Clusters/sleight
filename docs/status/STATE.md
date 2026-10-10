@@ -3,50 +3,30 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-10 21:05 UTC, re-hydrated after the owner's clear)
+## Banner (2026-10-10 23:15 UTC)
 
-Nothing of sleight-arch's is running, and the live lock is free. `pane/auto-mode` is at `4cae28e`,
-pushed to private. Every benchmark result from 2026-10-10 is now in `docs/benchmarks/`.
-`SLEIGHT_TRACE_CODE` now keeps the code it records, and `SLEIGHT_TRACE_CUT` lengthens the trace's
-cut (`4cae28e`). The waits live attempts from 16:11 to 16:14 UTC were left uncommitted. They're published
-now in `docs/benchmarks/2026-10-10-waits-targeting-4.md`, and all failed setup. The Chess move
-points in `bench/reliability-chess-points.json` are for a 1223 by 949 board, and a fresh Chess
-opened at 667 by 532. The next try runs with `--inspect-chess`. STATE's Sol section was a round
-behind and is corrected: every lane branch is merged. The test routine's launchd job
-`com.landoclusters.sleight-routine-535e98589ef1a23ab711` is still installed and fires every 5 minutes and fails harmlessly
-(the installed plugin is 1.1.0). `routine remove` waits in the owner's Terminal tab for `remove` (pid
-90569 at 21:00 UTC). If
-that tab is gone, run `plugins/sleight/bin/sleight-mcp routine remove 535e98589ef1a23ab711` in a
-terminal and type `remove`.
+`pane/auto-mode` is pushed to private, and the live lock is free. The owner is back at the Mac and
+said live work may go on. The test routine is removed. `sleight-mcp setup` is merged, and the
+engine runs from ChatGPT.app without a sign-in (probe v3). Merged tonight: setup, textedit-helper,
+privacy, panel-name (with an Open-panel fix), live-checks, lcu-arm, iphone-mirroring, and
+release-prep's audit (its results page left out). `codex/spawns` (GLM) is still out. LCU 0.11.2 is
+installed (0.8.8 kept in `~/.local/share/lcu/releases`), and its arm dry-runs. Windows: the owner's
+2020 Intel MacBook Pro, VMware Fusion and the Windows 11 x64 evaluation (ROADMAP track 6).
 
-Head-to-head at `d575dcf` (3 runs a task a side): sleight 313.3 s and 79 turns, Codex 340.2 s and 83,
-9/9 each. sleight still loses calculator-click (24.3 s against 15.1 s median). sleight took 4 to 6
-turns against Codex's 4, and its 3 to 5 calls held 7 to 13 guard reads (2.7 to 5.1 s). Only one of
-its three runs had a startup-sized gap (7.1 s outside model and tool time). The afternoon's runs, unpublished until now, are in
-`docs/benchmarks/2026-10-10-h2h-afternoon.md`.
-Shop tasks at `1421cf0`, 1 run each, all passed: helium-shop sleight 53 s and 19 turns, Codex 82 s
-and 23; safari-shop sleight 95 s and 22 turns, Codex 84.2 s and 25. The CPU split puts sleight's own
-processes at 0.25 to 0.29 s a run. The engine is about even, and the rest is the claude client and
-the owner's plugins. Routines passed live (`docs/benchmarks/2026-10-10-routines-live.md`).
-
-Lanes: `codex/setup` merged as `5a4a8c4` and `codex/textedit-helper` as `a021a7c` (Grok, both with
-review fixes). Out (briefs in `.dev/prompts/`): `codex/spawns`, `codex/privacy`, `codex/lcu-arm` and
-`codex/release-prep` (GLM), `codex/panel-name`, `codex/live-checks` and `codex/iphone-mirroring` (Grok). Setup
-probe v3 in puddle-census, never signed in: the engine from ChatGPT.app listed apps (ROADMAP 5b.7).
-The away-window chain is `.dev/passes/away-2026-10-10.sh`.
+The away runs are in `docs/benchmarks/2026-10-10-away.md`: calculator-click 15/15, Chess and
+Safari-form 2/2 each, the plugin-arm pair 1/1 a side. calculator-click's "no change" result was true
+(Calculator kept the previous run's 391); an acting call that ends on the same tree now gets the
+whole tree (0 of 6 after, 2 of 9 before), and `click("Name")` resolves like `{ label }`. The engine
+holds its keyboard taps until it exits, with or without sleight (known problems).
 
 Next, in order:
-1. The owner runs `zsh /Users/Shared/sleight-setup-probe.sh` as puddle-census. It writes its log to
-   `/Users/Shared/sleight-setup-probe-puddle-census.log`. If it works, build `sleight-mcp setup`.
-2. Why sleight takes extra turns on calculator-click. In 2 of the 3 `d575dcf` runs, the click
-   batch's result said "no change since the last full tree you saw" after 7 clicks changed the
-   display, and Claude read again. The trace cut that result, so the cause is unknown. With the
-   owner away: `SLEIGHT_TRACE_CODE=1 SLEIGHT_TRACE_CUT=60000 node bench/run.mjs --arm sleight
-   --tasks calculator-click --runs 3`.
-3. A quiet-box CPU run with `--clean-arms` and with the normal setup.
-4. Live runs of the Electron and Firefox tasks, and the real-site shop smoke.
-5. Owner-away runs (Chess, simulator, plugin-arm pair, the release pass, LCU), then the release
-   (ROADMAP 5b).
+1. Review `codex/spawns` when GLM reports.
+2. simulator-form: `simctl openurl` times out inside the task but not by hand (known problems).
+3. With the owner away, rerun the waits check's TextEdit save and Chess drag and the select-all
+   `typeText` check. Run `bench/live-checks-1-1.mjs` and the LCU head-to-head on 0.11.2 too.
+4. Make the results page pick the head-to-head with the most runs and accept single-arm files.
+5. The quiet-box CPU run, the Electron and Firefox tasks, the real-site shop smoke, then the release
+   pass and the release (ROADMAP 5b).
 
 **Where work goes.** Work in progress is private between releases (LAWS): `remote.pushDefault
 private` sends pushes to `Land-o-Clusters/sleight-dev`, and a pre-push hook refuses the public repo
@@ -54,7 +34,7 @@ without `SLEIGHT_RELEASE_PUSH=1`. Public `origin/pane/auto-mode` stays at `332e3
 branches already public stay there (owner).
 
 **Benchmark.** Claude arms run on the owner's API key, Haiku 5.5 at high, capped at $200 a month
-(LAWS), priced from token counts. $2.58 is spent in October. Old runs move to
+(LAWS), priced from token counts. $3.85 is spent in October (23:05 UTC). Old runs move to
 `~/Library/Caches/sleight-bench/runs-archive` before each pass. `--surfaces browser,computer` runs
 the real suite with the extension browser API.
 
@@ -78,9 +58,6 @@ non-simulator tasks. simulator-form fails setup (below).
   `docs/benchmarks/2026-10-10-surface-ab.md`). Extension access to local pages is approved in LAWS.
 - Trying "Always allow" in sleight's panel once (unit-tested only).
 - Being away for the live runs in Next, step 2, and being at the Mac for Esc and `/sleight stop`.
-- Keeping or reverting acquisition by bundle ID in routines and replay. It merged in `da78144`
-  (bundle ID, then the window's exact title is confirmed, because this engine rejects
-  `getApp({ windowId })`), and no record of the owner's OK for it exists.
 - Deleting the benchmark's leftover "Untitled 6.txt" and "Untitled 9.txt" in the owner's iCloud
   TextEdit folder, from runs whose save failed (2026-10-10).
 
