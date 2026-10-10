@@ -64,6 +64,11 @@
   sent input. Replay preserves the user's Stop until a new message, and its schema can load on demand.
   Mod and relay tests cover the paths;
   desktop clicks await the owner's check (Sol, `codex/replay-desktop`).
+- Native action replies add a line when a value, element, window or sheet changed, from the reads
+  the relay already has (no extra engine read). A save is reported only for the same file URL or
+  the path the call named, and an Edited title cleared by autosave isn't credited to Claude.
+  Unit-tested with recorded replies; the affected live tasks run before release (Sol,
+  `codex/verified-results`).
 - `sleight-mcp --doctor <app>` reads an app that is already running and reports the read's time and
   whether it had a window header. It never launches the app or sends input. An app on the user's
   pre-approved list is read, with the grant audited; any other app needing approval is skipped without

@@ -24,6 +24,15 @@ our own runs. Dates and engine versions are given where they matter.
   The full-name scrub matches the name as `id -F` gives it, exact case, and fails open if `id -F`
   fails. A turn's read text is kept until its receipt is built (13.1 MB at 200 reads of 64 KiB,
   measured by the branch).
+- [Verified results](design/verified-results.md) add a line to native `js` replies from reads the
+  relay already has. A changed value or window is an observation after input, and a person's own
+  activity can cause it too. Missing or degraded reads leave the result unverified. A save is
+  confirmed only by the same file URL, or the exact path the call named in a Save panel, together
+  with a cleared modified state, and that still doesn't prove the bytes were written. Autosave can
+  clear an Edited title. The line then gives the cause as unknown. Browser calls, local pointer tools
+  and computed method names don't get a line. The compactor's cache grows with each distinct window.
+  In the idle run, unchanged and one-value cases added at most 0.196 ms a call, and changing every
+  label added 1.169 to 3.571 ms ([memory and CPU report](benchmarks/2026-10-10-verified-results-lifetime.md)).
 - Browser call text never turns off native guards. The engine must confirm `browserUse` on its reply
   before sleight learns browser handles. Candidates attempt the known native window lease and
   saved-file checks; when native access is unavailable, their runtime guard denies native access
