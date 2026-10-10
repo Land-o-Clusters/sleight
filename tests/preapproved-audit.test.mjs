@@ -66,6 +66,18 @@ test('empty list creates no audit, and explicit tracing remains opt-in', t => {
   assert.match(raw, /explicit debug text/);
   assert.doesNotMatch(fs.readFileSync(join(dir, name), 'utf8'), /explicit debug text/);
 });
+test('the trace keeps code the relay chose to keep, and SLEIGHT_TRACE_CUT sets the cut for the rest', t => {
+  const read = dir => fs.readFileSync(join(dir, `trace-${process.pid}.jsonl`), 'utf8').trim().split('\n').map(line => JSON.parse(line).msg);
+  const code = 'await calc.click({ id: "Seven" });\n'.repeat(30), tree = 'x'.repeat(1000);
+  const plain = bank(t);
+  approvalLogging({ size: 0 }, { SLEIGHT_TRACE: plain }, plain).trace('call-received', { params: { code }, text: tree });
+  const [cut] = read(plain);
+  assert.equal(cut.params.code, code);
+  assert.equal(cut.text, 'x'.repeat(300) + '…(1000)');
+  const wide = bank(t);
+  approvalLogging({ size: 0 }, { SLEIGHT_TRACE: wide, SLEIGHT_TRACE_CUT: '5000' }, wide).trace('to-client', { text: tree });
+  assert.equal(read(wide)[0].text, tree);
+});
 test('concurrent relay processes rotate their own logs without replacing another audit', async t => {
   const dir = bank(t);
   const module = new URL('../plugins/sleight/lib/preapproved-audit.mjs', import.meta.url).href;

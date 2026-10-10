@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Trace settings for diagnosis on this Mac: `SLEIGHT_TRACE_CODE=1` keeps Claude's code in the
+  trace, up to 4,000 characters (the trace's 300-character cut used to drop the end of every
+  batch), and `SLEIGHT_TRACE_CUT` sets that cut for everything else, such as whole UI trees.
 - Real-use shop tasks: local Harbor Market pages for `safari-shop` and `helium-shop` (ZIP, store,
   search, filters, pagination, options, cart), with a server-side cart check. Safari smoke tasks
   `real-shop-target` and `real-shop-bestbuy` take `--runs 1` only and stay out of default passes

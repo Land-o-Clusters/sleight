@@ -31,7 +31,11 @@ The 2026-10-10 lanes and turn fixes are merged (`git log` has the list), and no 
 Next, in order:
 1. The owner runs `zsh /Users/Shared/sleight-setup-probe.sh` as puddle-census. It writes its log to
    `/Users/Shared/sleight-setup-probe-puddle-census.log`. If it works, build `sleight-mcp setup`.
-2. Why sleight takes extra turns and guard reads on calculator-click.
+2. Why sleight takes extra turns on calculator-click. In 2 of the 3 `d575dcf` runs, the click
+   batch's result said "no change since the last full tree you saw" after 7 clicks changed the
+   display, and Claude read again. The trace cut that result, so the cause is unknown. With the
+   owner away: `SLEIGHT_TRACE_CODE=1 SLEIGHT_TRACE_CUT=60000 node bench/run.mjs --arm sleight
+   --tasks calculator-click --runs 3`.
 3. A quiet-box CPU run with `--clean-arms` and with the normal setup.
 4. Live runs of the Electron and Firefox tasks, and the real-site shop smoke.
 5. Owner-away runs (Chess, simulator, plugin-arm pair, the release pass, LCU), then the release

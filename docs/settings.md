@@ -159,7 +159,9 @@ and it cannot override the engine's app blocks.
 The list also applies with `SLEIGHT_APPROVAL_SCOPE=once`. Each grant goes to stderr and a grant audit,
 and the tool result tells Claude that the app was pre-approved by the user's list, even if the action
 fails. Each relay's audit at `~/Library/Logs/sleight/preapproved-<pid>.jsonl` contains grant fields only.
-It rotates at 64 KiB and keeps one prior file per process. Full relay tracing requires explicit `SLEIGHT_TRACE`.
+It rotates at 64 KiB and keeps one prior file per process. Full relay tracing requires explicit `SLEIGHT_TRACE`,
+which cuts long strings to 300 characters. `SLEIGHT_TRACE_CUT` changes that length, and
+`SLEIGHT_TRACE_CODE=1` adds Claude's code, up to 4,000 characters.
 An audit write failure falls back to asking. List grants never send an engine persistence setting.
 
 ## Review changes

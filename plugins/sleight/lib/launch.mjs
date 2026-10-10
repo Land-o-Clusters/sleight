@@ -167,21 +167,24 @@ export async function doctor({ env = process.env, log = console.log, app = proce
 
 // SLEIGHT_TRACE=1 logs every relayed message to
 // ~/Library/Logs/sleight/trace-<pid>.jsonl; any other value is used as the
-// directory. Long strings (screenshots, UI state) are cut to 300 characters.
-function traceTo(setting) {
+// directory. Long strings (screenshots, UI state) are cut to 300 characters, or to
+// SLEIGHT_TRACE_CUT. Claude's code, which the relay records only with SLEIGHT_TRACE_CODE=1
+// and caps itself, is kept whole: cut at 300, it lost the end of every batch (2026-10-10).
+function traceTo(setting, limit) {
   const dir = setting === '1' ? join(homedir(), 'Library', 'Logs', 'sleight') : setting;
   mkdirSync(dir, { recursive: true });
   const file = join(dir, `trace-${process.pid}.jsonl`);
   process.stderr.write(`sleight: tracing to ${file}\n`);
-  const cut = (_key, value) =>
-    typeof value === 'string' && value.length > 300 ? `${value.slice(0, 300)}…(${value.length})` : value;
+  const max = /^[1-9]\d*$/.test(limit ?? '') ? Number(limit) : 300;
+  const cut = keep => (key, value) =>
+    typeof value === 'string' && value.length > max && !(keep && key === 'code') ? `${value.slice(0, max)}…(${value.length})` : value;
   return (direction, msg) =>
-    appendFileSync(file, JSON.stringify({ t: new Date().toISOString(), direction, msg }, cut) + '\n');
+    appendFileSync(file, JSON.stringify({ t: new Date().toISOString(), direction, msg }, cut(direction === 'call-received')) + '\n');
 }
 
 export function approvalLogging(preapproved, env = process.env, auditDirectory) {
   return {
-    trace: env.SLEIGHT_TRACE ? traceTo(env.SLEIGHT_TRACE) : undefined,
+    trace: env.SLEIGHT_TRACE ? traceTo(env.SLEIGHT_TRACE, env.SLEIGHT_TRACE_CUT) : undefined,
     grantAudit: preapproved.size ? createGrantAudit(auditDirectory) : undefined,
   };
 }
