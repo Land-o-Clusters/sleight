@@ -7,9 +7,10 @@ What is true now. One banner, replaced in place as work happens. Always-true rul
 
 Nothing of sleight-arch's is running, and the live lock is free. `pane/auto-mode` is pushed to
 private. The waits live attempts from 16:11 to 16:14 UTC were left uncommitted. They're published
-now in `docs/benchmarks/2026-10-10-waits-targeting-4.md`, and all failed setup. One cause needs a
-fix before the next live try: the Chess move points in `bench/reliability-chess-points.json` are
-for a 1223 by 949 board, and a fresh Chess opened at 667 by 532. The test routine's launchd job
+now in `docs/benchmarks/2026-10-10-waits-targeting-4.md`, and all failed setup. The Chess move
+points in `bench/reliability-chess-points.json` are for a 1223 by 949 board, and a fresh Chess
+opened at 667 by 532. The next try runs with `--inspect-chess`. STATE's Sol section was a round
+behind and is corrected: every lane branch is merged. The test routine's launchd job
 `com.landoclusters.sleight-routine-535e98589ef1a23ab711` is still installed and fires every 5 minutes and fails harmlessly
 (the installed plugin is 1.1.0). `routine remove` waits in the owner's Terminal tab for `remove`. If
 that tab is gone, run `plugins/sleight/bin/sleight-mcp routine remove 535e98589ef1a23ab711` in a
@@ -63,21 +64,21 @@ non-simulator tasks. simulator-form fails setup (below).
   `docs/benchmarks/2026-10-10-surface-ab.md`). Extension access to local pages is approved in LAWS.
 - Trying "Always allow" in sleight's panel once (unit-tested only).
 - Being away for the live runs in Next, step 2, and being at the Mac for Esc and `/sleight stop`.
-- Whether `routines-demo` may acquire apps by bundle ID (this engine rejects `getApp({ windowId })`).
+- Keeping or reverting acquisition by bundle ID in routines and replay. It merged in `da78144`
+  (bundle ID, then the window's exact title is confirmed, because this engine rejects
+  `getApp({ windowId })`), and no record of the owner's OK for it exists.
 - Deleting the benchmark's leftover "Untitled 6.txt" and "Untitled 9.txt" in the owner's iCloud
   TextEdit folder, from runs whose save failed (2026-10-10).
 
-**Sol branches** (private remote):
-- Pushed, not yet reviewed: `codex/sim-savelock` `ae3a8fb` (round 2, committed by sleight-arch).
-- Waiting on a new round: `codex/real-use-tasks` (round 13 not started), `codex/routines-demo` `210423b` (routines can't run
-  on this engine, which rejects `getApp({ windowId })`. Accepting acquisition by bundle ID instead
-  is the owner's call).
-- Merged on 2026-10-10: waits-targeting, plugin-arm, verified-results, footprint-parity, real-use-tasks round 12, review-receipts, textedit-fixes,
-  replay-desktop, lease-close-tests, windows-research.
+**Sol, Grok and GLM branches** (private remote): none open. Merged on 2026-10-10: sim-savelock
+rounds 1 and 2 (`71f7e95`), routines-demo (`da78144`), real-use-tasks round 13 (`4aeec4e`),
+electron-tasks, results-page, waits-targeting, plugin-arm, verified-results, footprint-parity,
+real-use-tasks round 12, review-receipts, textedit-fixes, replay-desktop, lease-close-tests,
+windows-research.
 
 Next, in order:
-1. Review and squash `codex/sim-savelock` `ae3a8fb`. Review real-use-tasks round 13 when Grok
-   pushes it.
+1. With the owner away, rerun the waits live checks with `--inspect-chess`, which screenshots the
+   board as it opened and waits for move points measured from that picture.
 2. With the owner away, Chess and Safari-form with verified results, the waits live checks
    (`node bench/waits-targeting-live.mjs live --owner-away`), the paired plugin-arm Calculator run
    (`--arm mcp:sleight-plain,sleight --calculator-gate`, Calculator's window on the current Space),
@@ -99,7 +100,7 @@ Branches and worktrees (`~/Projects/sleight-wt/<name>`):
 - Merged, worktrees safe to remove: `replay-next`, `doctor-flow`, `doctor-preapproved`,
   `footprint-spawns`, `small-fixes`, `other-hosts`, `scoped-approvals`, `codex-real`, `guard-speed`,
   `replay-desktop`, `windows-research`, `textedit-fixes`, `review-receipts`, `footprint-parity`, `verified-results`, `waits-targeting`, `plugin-arm` (its stash is applied and committed).
-- Sol's open worktrees: `sim-savelock`, `routines-demo`, `real-use-tasks` (Grok, round 13).
+- Merged too, worktrees safe to remove: `sim-savelock`, `routines-demo`, `real-use-tasks`.
 - `perf/screenshot-scale` (`1aa574b`, `shots`): parked.
 
 ## Machine state outside the repo
