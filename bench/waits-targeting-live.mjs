@@ -151,7 +151,7 @@ try {
       let wasRunning = true, docId;
       try {
         ready(); wasRunning = (await fixture({ op: 'running', appId })).running;
-        await command('/usr/bin/open', ['-g', '-b', appId, ...(appId === 'com.apple.Chess' && !wasRunning ? ['--args', '-ApplePersistenceIgnoreState', 'YES'] : [])]);
+        await command('/usr/bin/open', ['-g', '-b', appId, ...(['com.apple.Chess', 'com.apple.TextEdit'].includes(appId) && !wasRunning ? ['--args', '-ApplePersistenceIgnoreState', 'YES'] : [])]);
         const identities = await connect();
         if (appId === 'com.apple.calculator') {
           await js('var app = await cua.getApp("com.apple.calculator")', 'Calculator acquisition');
