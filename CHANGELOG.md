@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- A call keeps going when its own shortcut, Return or click opens or names a window in the same
+  app: the Save or Open panel, a new untitled window, or the document saved or opened under a name
+  the call typed (owner's call). The lease stopped such calls in 10 of 12 TextEdit runs with
+  first-call batching, and a transcript study estimates TextEdit's save and edit tasks drop from about
+  6 calls to 3. A window you open in that app at that moment passes too. Document scope and change
+  review still stop. Unit-tested only.
 - In a call that starts with the app's acquisition, the first action uses that read, taken
   milliseconds before, when the app was already running with a window (owner's call). An app the
   acquisition launched, or one the probe couldn't see, is read again. With the reuse check fixed

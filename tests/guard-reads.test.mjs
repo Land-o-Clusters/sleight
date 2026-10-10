@@ -294,3 +294,24 @@ test('a call that took no action after a split acquisition takes that read as it
     globalThis.other = await cua.getApp("Notes");`, { prior: prior(true) });
   assert.equal(f.output.at(-1), GUARD_MARK + notes + GUARD_END);
 });
+
+test('a window the call\'s own shortcut or Return opened or named is accepted, in the default mode only', async () => {
+  const open = 'Window: "Open", App: TextEdit.\n0 standard window Open, ID: open-panel, Secondary Actions: Raise\n\t1 button Cancel';
+  const untitled = 'Window: "Untitled 3", App: TextEdit.\n0 standard window Untitled 3\n\t1 button Save, ID: Save';
+  const saved = tree({ title: 'b.txt', app: 'TextEdit', url: 'file:///tmp/x/b.txt' });
+  const other = tree({ title: 'c.txt', app: 'TextEdit', url: 'file:///tmp/c.txt' });
+  // [code, the action after which the window changes, the window then, options, stopped]
+  for (const [code, trigger, after, options, stopped] of [
+    ['await app.pressKey("super+o"); await app.pressKey("super+shift+g");', 'super+o', open, { adoptUrl: true }, false],
+    ['await app.pressKey("super+n"); await app.pressKey("super+shift+t");', 'super+n', untitled, { adoptUrl: true }, false],
+    ['await app.typeText("/tmp/x/b.txt"); await app.pressKey("Return"); await app.click({ id: "Save" });', 'Return', saved, { adoptUrl: true }, false],
+    // Not this call's name, not after an opening action, or a strict mode: still a stop.
+    ['await app.pressKey("super+o"); await app.pressKey("super+shift+g");', 'super+o', other, { adoptUrl: true }, true],
+    ['await app.typeText("abc"); await app.click({ id: "Save" });', 'abc', untitled, { adoptUrl: true }, true],
+    ['await app.pressKey("super+n"); await app.pressKey("super+shift+t");', 'super+n', untitled, {}, true]]) {
+    let changed = false;
+    const f = fixture({ current: () => changed ? after : tree(), action: (name, args) => { if (args[0] === trigger) changed = true; } });
+    const done = f.run(code, options);
+    if (stopped) await assert.rejects(done, /changed window/, code); else await done;
+  }
+});

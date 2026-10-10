@@ -145,6 +145,8 @@ function guardSetup(update) {
     // relay split off its acquisition takes that read as its header instead of reading again: 53
     // such reads cost 27 s across the benchmark runs of 2026-10-09.
     state.acted = false; state.startApp = state.activeApp;
+    // Text this call typed, pasted or set, so a window it named (a saved or opened file) is its own.
+    state.typed = [];
     // What Claude was last shown for the numbers this call acts on (number -> line).
     state.seenLines = ${JSON.stringify(update?.seenLines) ?? 'undefined'};
     const clock = () => globalThis.performance?.now() ?? Date.now();
@@ -340,6 +342,24 @@ function guardSetup(update) {
           // in a Save panel: 18 stopped calls in two benchmark passes, 2026-10-07). It
           // isn't another document, so the lease alone lets it through.
           const panel = state.adoptUrl && observed?.app === state.expected?.app && observed.title === '' && !observed.url;
+          // A window this call's own shortcut, Return or click just opened or renamed in the same app
+          // becomes the expected one (owner's call, 2026-10-09): the Save or Open panel, a new untitled
+          // window, or a document titled or saved with a name this call typed. Stopping there cost
+          // TextEdit save and edit about three calls a run. A window the user opens in that app at that
+          // moment would pass too. Document scope and change review stay strict.
+          const opener = before && (before.name === 'click' || (before.name === 'pressKey' && typeof before.key === 'string' &&
+            (before.key.includes('+') || /^(?:return|enter)$/i.test(before.key))));
+          const named = observed && state.typed.some(typed => {
+            const base = typed.trim().split('/').pop();
+            if (base.length < 3) return false;
+            let file;
+            try { file = observed.url?.startsWith('file://') ? decodeURIComponent(new URL(observed.url).pathname).split('/').pop() : undefined; } catch {}
+            return observed.title === base || file === base;
+          });
+          if (state.adoptUrl && opener && observed && state.expected && observed.app === state.expected.app &&
+            (/^0 [^\\n]*\\bID: (?:save|open)-panel\\b/m.test(text ?? '') || (!observed.url && /^Untitled(?: \\d+)?$/.test(observed.title)) || named)) {
+            state.expected = observed;
+          }
           // A relay without a lease, document scope or change review forwards actions
           // unguarded, yet handles a read acquired are still proxies. No guarded call
           // has configured the guard then, so there is nothing to compare. A guarded
@@ -352,6 +372,8 @@ function guardSetup(update) {
           await checkLease();
           state.activeApp = proxy;
           state.previous.set(proxy, { name, key: name === 'pressKey' ? args[0] : undefined });
+          const typed = name === 'setValue' ? args[1] : ['typeText', 'paste'].includes(name) ? args[0] : undefined;
+          if (typeof typed === 'string') state.typed.push(typed);
           // A second handle may refer to this same app/window. Every input
           // invalidates the call's observations, including reads on that alias.
           state.reads = new WeakMap();

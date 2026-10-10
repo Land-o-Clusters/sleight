@@ -86,3 +86,16 @@ The launcher and extended benchmark can force-kill an owned engine that does
 not exit, but collecting that process leaves the shared native helper's health
 unverified. The owner cleared the earlier helper timeouts by restarting ChatGPT.
 We have no measurement that attributes that wedge to a shutdown.
+
+## Windows a call opens itself
+
+In the default mode, a call may move to a window its own action produced in the same app (owner's
+call, 2026-10-09). The action must be a shortcut, Return or click. Accepted windows:
+
+- the Save or Open panel (`ID: save-panel` or `open-panel`)
+- a new untitled window with no file
+- a document titled or saved with a name the call typed
+
+Before, the lease stopped such calls in 10 of 12 TextEdit runs with
+first-call batching. A window the user opens in that app at that moment passes too. Document scope and
+change review still stop on any change.
