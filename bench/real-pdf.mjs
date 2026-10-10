@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runOwned } from './preapproved-process.mjs';
+import { swiftModuleCache } from './swift-cache.mjs';
 
 const source = fileURLToPath(new URL('./real-pdf.swift', import.meta.url));
 export function createPDFTool({ run = runOwned, temporaryRoot = tmpdir() } = {}) {
@@ -29,7 +30,7 @@ export function createPDFTool({ run = runOwned, temporaryRoot = tmpdir() } = {})
         const path = join(bank, 'pdf-fixture');
         try {
           // Match the existing native fixtures' bounded allowance on a loaded host.
-          await execute('/usr/bin/xcrun', ['swiftc', '-module-cache-path', bank, source, '-o', path], signal, 180000);
+          await execute('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), source, '-o', path], signal, 180000);
           executable = path;
         } catch (error) {
           if (!uncollected) { rmSync(bank, { recursive: true, force: true }); bank = undefined; }

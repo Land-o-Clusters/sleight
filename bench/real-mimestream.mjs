@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { runOwned } from './preapproved-process.mjs';
+import { swiftModuleCache } from './swift-cache.mjs';
 
 const privateState = new WeakMap();
 const kinds = new Set(['label', 'message', 'thread', 'scroll', 'search']);
@@ -147,7 +148,7 @@ export async function mimestreamHelper(signal) {
   compilation ??= (async () => {
     helperBank = mkdtempSync(join(tmpdir(), 'sleight-mimestream-helper-'));
     const path = join(helperBank, 'mimestream-fixture');
-    const result = await runOwned('/usr/bin/xcrun', ['swiftc', '-module-cache-path', helperBank,
+    const result = await runOwned('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(),
       fileURLToPath(new URL('./real-mimestream.swift', import.meta.url)), '-o', path], { signal, timeoutMs: 180000 });
     if (!result.groupClean) { uncollected = true; throw failure('MIMESTREAM_HELPER_UNCOLLECTED'); }
     if (result.exit?.code !== 0 || result.cancelled || result.timedOut || result.spawnError) {

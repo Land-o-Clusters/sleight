@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runOwned } from './preapproved-process.mjs';
+import { swiftModuleCache } from './swift-cache.mjs';
 
 let compilation, bank, executable, uncollected = false;
 process.once('exit', () => { if (bank && !uncollected) rmSync(bank, { recursive: true, force: true }); });
@@ -13,7 +14,7 @@ export async function heliumHelper(signal) {
   compilation ??= (async () => {
     bank = mkdtempSync(join(tmpdir(), 'real-helium-cache-'));
     const path = join(bank, 'helium-fixture');
-    const result = await runOwned('/usr/bin/xcrun', ['swiftc', '-module-cache-path', bank,
+    const result = await runOwned('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(),
       fileURLToPath(new URL('./real-helium.swift', import.meta.url)), '-o', path], { signal, timeoutMs: 180000 });
     if (!result.groupClean) { uncollected = true; throw new Error('Helium compiler process group cleanup unconfirmed'); }
     if (result.exit.code !== 0 || result.cancelled || result.timedOut || result.spawnError) {
