@@ -95,6 +95,10 @@ in `.dev/prompts/`, for Sol threads the owner starts:
 - Merged `codex/small-fixes` as `05903fa`. Its skill bullet (compare before saving) passed 6/6 on
   textedit-save and textedit-edit, but textedit-save took 19 turns against 15 before. Watch it in the
   release pass and drop the compare step if it keeps costing a turn.
+- 02:10 UTC: merged `codex/doctor-preapproved` (`ac9f0d2`, which read Calculator live in 156 ms with the grant
+  audited), the scoped-approvals design note (`2cf81d0`, not built, the owner's call) and
+  `codex/footprint-spawns` (`7d880dc`). Follow-ups to paste: `sol-replay-desktop-2.md`,
+  `sol-verified-results-2.md`, `sol-footprint-spawns-4.md`.
 - sleight-arch: the guard's reads (`document-scope.mjs`, guard code in `relay.mjs`), with a
   background subagent studying guard-read phases across tonight's traces.
 - `/tmp/sleight-hold` exists while another project's window runs. Every brief stops live probes
