@@ -1,0 +1,46 @@
+{
+  "stamp": "2026-10-10T15-51-51-500Z",
+  "fixturePolicy": "retained app observers for every arm",
+  "ownerAway": false,
+  "arms": [
+    "mcp:sleight-plain",
+    "sleight"
+  ],
+  "armMetadata": {
+    "mcp:sleight-plain": {
+      "kind": "mcp",
+      "name": "sleight-plain",
+      "source": "<scratch>/plain.json",
+      "configHash": "06c82bdc73d873261884f339159a509f474f2c699af7ef23357109053e5b7beb",
+      "packageHash": "f0420a00b1de1013352813dcfd839f528577b92369d338f275fd8331d7ad6719",
+      "servers": {
+        "sleight-plain": {
+          "transport": "stdio",
+          "artifacts": [
+            {
+              "name": "sleight",
+              "version": "1.1.0",
+              "extent": "package-directory",
+              "source": "~/Projects/sleight-wt/pa-squash/plugins/sleight",
+              "commit": "5b7a16e14182a72ed618eedaec161856ce9c87e9",
+              "packageHash": "c1f8024dc9a9c3d3229a785ee3ae40cefda85893023015ba7cd42e6e777088ff"
+            }
+          ],
+          "executable": "~/Projects/sleight-wt/pa-squash/plugins/sleight/bin/sleight-mcp"
+        }
+      }
+    }
+  },
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "results": [
+    {
+      "phase": "preflight",
+      "passed": false,
+      "reason": "Calculator has no visible window on the current Space"
+    }
+  ],
+  "liveConditions": []
+}

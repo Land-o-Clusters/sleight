@@ -60,6 +60,8 @@ Times are UTC.
 | 07:40:34 revised MCP dry | 0 | [Raw](2026-10-10T07-40-34-193Z-plugin-arm-mcp-dry.json), ten own tools with scrubbed server environment. |
 | 07:41:32 revised plugin dry | 1 | [Raw](2026-10-10T07-41-32-433Z-plugin-arm-plugin-dry.json), expected configuration refusal for automatic module hooks. |
 | 07:59:27 committed MCP comparison | 1 | [Raw](2026-10-10T07-59-27-338Z-plugin-arm-mcp-live.json), another run held the shared live lock. Both task drivers were skipped. |
+| 15:51:38 `mcp:sleight-plain,sleight`, sleight-arch | 1 | [Raw](2026-10-10T15-51-38-982Z-plugin-arm-gate.json), the gate refused before any arm ran. Calculator had no window on the current Space. |
+| 15:51:51 same, Calculator open | 1 | [Raw](2026-10-10T15-51-51-500Z-plugin-arm-gate.json), same refusal. Calculator's window was on another Space. The paired run waits for the owner to be away. |
 
 Sandbox denials, native compilation timeouts, observer failures and the clipboard fixture failures
 remain in the check receipt. The unrelated clipboard test edits and review working notes are removed.
