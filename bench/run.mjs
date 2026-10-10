@@ -79,7 +79,7 @@ const ARMS = {
     })(),
     args: ['--plugin-dir', join(ROOT, 'plugins', 'sleight'), // Every sleight tool, as a user who approves its prompts would have. Without
     // them Claude lost 8 turns to refused select_window and menu_bar calls (2026-10-07).
-    '--allowedTools', ['js', 'js_reset', 'drag', 'hover', 'menu_bar', 'notifications', 'select_window', 'blocked_app'].map(t => `mcp__plugin_sleight_computer__${t}`).join(',')],
+    '--allowedTools', ['js', 'js_reset', 'drag', 'hover', 'menu_bar', 'notifications', 'select_window', 'blocked_app', 'open_file'].map(t => `mcp__plugin_sleight_computer__${t}`).join(',')],
     env: {},
     server: 'plugin:sleight:computer',
   },

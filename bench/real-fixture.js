@@ -506,7 +506,7 @@ function run(argv) {
     cleanupRequested: function () { return command() === 'close'; } };
   var api = nativeAX(state, clock);
   var target, running, pid, app, previous, owned, observedDialogs = [];
-  var pids = [], processHandoff, launchStarted = clock.now();
+  var pids = [], processHandoff, handoffPending = false, launchStarted = clock.now();
   function recordProcess(value) {
     var nextPid = Number(value.processIdentifier);
     if (pid === nextPid) return;
@@ -514,11 +514,14 @@ function run(argv) {
       if (!state.setup || running || controlData().launched !== true || processHandoff || owned || state.actionTaken ||
         String(ObjC.unwrap(value.bundleIdentifier)) !== request.bundle) throw new Error('Fixture process changed');
       var original = $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid);
-      if (!original.isNil() && !original.isTerminated) throw new Error('Fixture process changed while original is running');
+      // DeviceHub listed its successor while the original was still exiting (2026-10-10 10:31 UTC):
+      // wait for the original to exit, within setup's own limits, rather than refusing the handoff.
+      if (!original.isNil() && !original.isTerminated) { handoffPending = true; return; }
       // Adopt only a successor launched after this setup began, never an app someone opened before.
       var launched = value.launchDate;
       if (launched.isNil() || Number(launched.timeIntervalSince1970) * 1000 < launchStarted) throw new Error('Fixture successor predates this launch');
       processHandoff = { fromPid: pid, toPid: nextPid, elapsedMs: clock.now() - launchStarted };
+      handoffPending = false;
       previous = null;
     }
     pid = nextPid;
@@ -597,7 +600,9 @@ function run(argv) {
     checkOpening();
     target = application();
     if (!target) return false;
-    recordProcess(target); app = $.AXUIElementCreateApplication(pid);
+    recordProcess(target);
+    if (handoffPending) return false; // the original is still exiting: not ready, and never ready on it
+    app = $.AXUIElementCreateApplication(pid);
     $.AXUIElementSetMessagingTimeout(app, 0.5);
     checkAppDialog();
     if (inherited) return !!target.isFinishedLaunching && !!api.focused(app);

@@ -9,7 +9,7 @@ import { openFixture, closeFixtures } from '../bench/real-fixture.mjs';
 const bundle = 'com.apple.dt.Devices';
 function nativeFixture({ openedAt = 700, initiallyRunning = false, launched = true, oldAlive = false,
   replacementBundle = bundle, secondChange = false, cleanupChange = false, mode = 'document', cancelAt = Infinity,
-  successorLaunchedAt = 400, overlap = false } = {}) {
+  successorLaunchedAt = 400, overlap = false, originalExitsAt = 400 } = {}) {
   const events = [], closes = [], lookups = [];
   let time = 0, ready = false;
   const date = ms => ({ isNil: () => false, timeIntervalSince1970: ms / 1000 });
@@ -30,7 +30,7 @@ function nativeFixture({ openedAt = 700, initiallyRunning = false, launched = tr
     },
     runningApplicationWithProcessIdentifier: pid => {
       lookups.push(pid);
-      return { isNil: () => false, isTerminated: !oldAlive && (pid === 42 ? time >= 400 : time >= 600) };
+      return { isNil: () => false, isTerminated: !oldAlive && (pid === 42 ? time >= originalExitsAt : time >= 600) };
     },
   };
   foundation.AXUIElementCreateApplication = pid => ({ pid });
@@ -71,7 +71,6 @@ for (const mode of ['inherit', 'document']) for (const openedAt of [300, 700]) t
 for (const [name, options, lastPid] of [
   ['a second handoff', { secondChange: true }, 43],
   ['another bundle', { replacementBundle: 'other.app' }, 42],
-  ['a still-running original process', { oldAlive: true }, 42],
   ['an app present before setup', { initiallyRunning: true }, 42],
   ['an app opened by the owner during preparation', { launched: false }, 42],
 ]) test(`setup refuses ${name} without adopting or closing it`, () => {
@@ -147,4 +146,18 @@ test('the original and its successor listed together waits for the original to e
   fixture.run();
   assert.deepEqual(fixture.events.find(event => event.stage === 'process-handoff')?.processHandoff, { fromPid: 42, toPid: 43, elapsedMs: 400 });
   assert.equal(fixture.events.find(event => event.stage === 'ready').pid, 43);
+});
+
+test('a successor listed while the original is still exiting waits, then is adopted', () => {
+  const fixture = nativeFixture({ originalExitsAt: 800 });
+  fixture.run();
+  assert.equal(fixture.events.find(event => event.stage === 'process-handoff')?.processHandoff.toPid, 43);
+  assert.equal(fixture.events.find(event => event.stage === 'ready').pid, 43);
+});
+
+test('an original that never exits is never adopted or marked ready, and setup times out', () => {
+  const fixture = nativeFixture({ oldAlive: true });
+  assert.throws(fixture.run, /readiness unconfirmed/);
+  assert.equal(fixture.events.some(event => event.stage === 'process-handoff' || event.stage === 'ready'), false);
+  assert.deepEqual(fixture.closes, []);
 });
