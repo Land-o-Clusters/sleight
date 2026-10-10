@@ -74,6 +74,17 @@ test('every native method checks the identity returned by a combined observation
   }
 });
 
+test('a renumbered element is followed only when its line is in the new tree exactly once', async () => {
+  for (const [after, clicks] of [['\t2 button Delete\n\t3 button Save, ID: Save', [2, 3]],
+    ['\t2 button Delete\n\t3 button Save, ID: Save\n\t4 button Save, ID: Save', [2]]]) {
+    let changed = false;
+    const f = fixture({ current: () => tree(expected, changed ? after : '\t2 button Save, ID: Save'), action: () => { changed = true; } });
+    const done = f.run('await app.getAXStateAndScreenshot(); await app.click(2); await app.click(2);');
+    if (clicks.length === 1) await assert.rejects(done, /changed what element 2 is/); else await done;
+    assert.deepEqual(f.calls.filter(c => c[0] === 'click').map(c => c[1]), clicks);
+  }
+});
+
 test('a combined snapshot cannot preserve a stale number, ID or label after an action', async () => {
   for (const selector of ['2', '{ id: "Save" }', '{ label: "Save" }']) {
     let changed = false;
@@ -81,8 +92,9 @@ test('a combined snapshot cannot preserve a stale number, ID or label after an a
       action: () => { changed = true; } });
     const done = f.run(`await app.getAXStateAndScreenshot(); await app.click(2); await app.click(${selector});`);
     if (selector === '2') {
-      await assert.rejects(done, /changed what element 2 is/);
-      assert.deepEqual(f.calls.filter(c => c[0] === 'click'), [['click', 2]]);
+      // The line Claude saw ("button Save, ID: Save") is now 3, once: the click goes there.
+      await done;
+      assert.deepEqual(f.calls.filter(c => c[0] === 'click'), [['click', 2], ['click', 3]]);
     } else {
       await done;
       assert.deepEqual(f.calls.filter(c => c[0] === 'click'), [['click', 2], ['click', 3]]);

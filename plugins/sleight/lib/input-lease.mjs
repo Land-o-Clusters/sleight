@@ -26,6 +26,10 @@ export const leaseKey = (window, scope = 'window') => createHash('sha256')
 // as an action, including read/action mixtures and expressions in read options.
 export function isLeaseRead(code = '') {
   if (isDocumentRead(code) || isInventoryRead(code)) return true;
+  // `const state = await cua.getState(); return state;` is the same read bound to a name: the
+  // bound expression must pass on its own. Refusing it cost a turn (calculator-click, 2026-10-10).
+  const bound = String(code).trim().match(/^(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([^;]+?)\s*;?\s*(?:return\s+)?\1\s*;?$/);
+  if (bound && isLeaseRead(bound[2])) return true;
   const options = String.raw`\s*(?:\{\s*(?:(?:disableDiffing|emit)\s*:\s*(?:true|false)\s*,?\s*)*\})?\s*`;
   const call = String.raw`[A-Za-z_$][\w$]*\.(?:getAXState|getAXStateAndScreenshot|getScreenshot)\(${options}\)`;
   return new RegExp(String.raw`^await\s+${call}\s*;?$`).test(code.trim()) ||

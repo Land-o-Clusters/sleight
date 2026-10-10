@@ -63,14 +63,15 @@ test('screenshot snapshots check title, app and URL before input and expire afte
   }
 });
 
-test('numbered actions stop on changed elements after screenshot; IDs and labels resolve again', async () => {
+test('numbered actions follow a renumbered element after screenshot; IDs and labels resolve again', async () => {
   for (const selector of ['2', '{ id: "Save" }', '{ label: "Save" }']) {
     const f = fixture();
     f.action = () => { f.current = tree(expected, '\t2 button Delete\n\t3 button Save, ID: Save'); };
     const run = f.run(`await app.getScreenshot(); await app.click(2); await app.click(${selector});`);
     if (selector === '2') {
-      await assert.rejects(run, /changed what element 2 is/);
-      assert.deepEqual(f.calls, ['both', ['click', 2], 'read']);
+      // Save moved from 2 to 3 and its line is there once, so the click follows it.
+      await run;
+      assert.deepEqual(f.calls, ['both', ['click', 2], 'read', ['click', 3], 'read']);
     } else {
       await run;
       assert.deepEqual(f.calls, ['both', ['click', 2], 'read', ['click', 3], 'read']);

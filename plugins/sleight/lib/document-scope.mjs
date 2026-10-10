@@ -390,7 +390,16 @@ function guardSetup(update, { reuseSetup = false, acknowledge = false } = {}) {
           }
           else if (typeof args[0] === 'number' && !byId) {
             const was = state.callElements.get(proxy).get(args[0]), now = elements(text).get(args[0]);
-            if (!sameElement(was, now)) throw stop('sleight stopped before ' + name + '(' + args[0] + '): an earlier action in this call changed what element ' + args[0] + ' is (was ' + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + '). Use the current numbers in the window below.');
+            // Calculator renumbers every button when its first click closes the history, so a batch
+            // of numbers from one read went stale and Claude rewrote it as an ID lookup over four calls
+            // (calculator-click, 2026-10-10). The element Claude meant is the line it saw: when that
+            // line, with an ID, description or help, is in the new tree exactly once, act on it there.
+            const moved = sameElement(was, now) || typeof was !== 'string' || !/\\b(?:ID|Description|Help): /.test(was) ? []
+              : [...elements(text)].filter(([, line]) => sameElement(was, line));
+            if (moved.length === 1) {
+              nodeRepl.write('sleight: ' + name + '(' + args[0] + ') went to element ' + moved[0][0] + ', the same ' + JSON.stringify(was) + ': an earlier action in this call renumbered the window.\\n');
+              args = [moved[0][0], ...args.slice(1)];
+            } else if (!sameElement(was, now)) throw stop('sleight stopped before ' + name + '(' + args[0] + '): an earlier action in this call changed what element ' + args[0] + ' is (was ' + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + '). Use the current numbers in the window below.');
           }
           const cancel = state.fileOnly && isCancel(name, args, text ?? '');
           if (state.cancelOnly && !cancel) throw new Error('Change review: Cancel target changed. Read the current window before retrying.');

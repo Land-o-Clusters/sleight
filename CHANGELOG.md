@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A numbered click in a batch that an earlier click renumbered (Calculator renumbers every button
+  when its first click closes the history) goes to the same element at its new number, with a note,
+  when that element's line is in the new tree exactly once. It used to stop, and Claude rewrote the
+  batch over several calls. A read bound to a name (`const state = await cua.getState(); return
+  state;`) now passes as a read instead of being refused.
 - A call that declares `app` itself (`let app = await cua.getApp(…)` with actions after it) no
   longer fails with "Cannot access 'app' before initialization". The guard's setup read `app`
   before that declaration (4 of 29 TextEdit runs on 2026-10-10).

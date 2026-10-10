@@ -645,6 +645,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     },
     trace: relayTrace,
     guardTiming: !!process.env.SLEIGHT_TRACE,
+    traceCode: process.env.SLEIGHT_TRACE_CODE === '1',
     firstCallRules: skillRules(),
     keyboardTaps: () => appHealth.keyboardTaps(),
     windowIdentity: window => appHealth.windowIdentity(window),

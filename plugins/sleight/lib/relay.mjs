@@ -267,6 +267,7 @@ export function createRelay({
   // Probes an app's windows outside the engine ({ status, windows, minimized, hidden, onScreen }).
   spaceProbe,
   trace: writeTrace = () => {},
+  traceCode = false,
 }) {
   let compactor = createReadCompactor();
   const journal = receipts || stateReview ? new TurnJournal({ redactTitles: redactReceiptTitles }) : undefined;
@@ -1273,7 +1274,9 @@ export function createRelay({
       callGenerations.set(msg.id, stopGeneration);
       pendingClients.set(msg.id, msg.params?.name + (msg.params?.arguments?.title ? ': ' + msg.params.arguments.title : ''));
     }
-    if (msg.method === 'tools/call') { trace('call-received', { id: msg.id, method: msg.method, params: { name: msg.params?.name } }); callSeqs.set(msg.id, ++callSeq); callStarts.set(msg.id, Date.now()); }
+    // SLEIGHT_TRACE_CODE=1 also keeps Claude's code, for benchmark diagnosis on this Mac only.
+    if (msg.method === 'tools/call') { trace('call-received', { id: msg.id, method: msg.method, params: { name: msg.params?.name,
+      ...(traceCode && typeof msg.params?.arguments?.code === 'string' ? { code: msg.params.arguments.code.slice(0, 4000) } : {}) } }); callSeqs.set(msg.id, ++callSeq); callStarts.set(msg.id, Date.now()); }
     // Claude sometimes sends js the Bash tool's parameter name (6 of 437 calls, 2026-10-07).
     const jsArgs = msg.method === 'tools/call' && msg.params?.name === 'js' ? msg.params.arguments : undefined;
     if (jsArgs && jsArgs.code === undefined && typeof jsArgs.command === 'string') {

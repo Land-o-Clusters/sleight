@@ -1175,6 +1175,18 @@ test('a failed acquisition never becomes the recovery advice; the last good app 
   assert.match(acquisition, /\nlet app = await cua\.getApp\("com\.apple\.TextEdit"\)$/);
 });
 
+// calculator-click, 2026-10-10: `const state = await cua.getState(); return state;` was refused and
+// cost a turn. A read bound to a name is still the same literal read.
+test('a read bound to a name and returned passes as a read, and an action bound the same way does not', t => {
+  const fresh = setup(t).harness('bound', { fresh: true });
+  fresh.send(rpc(1, 'js', { code: 'const state = await cua.getState(); return state;' }));
+  assert.equal(fresh.forwarded.at(-1)?.id, 1);
+  fresh.reply(result(1));
+  const other = setup(t).harness('bound-action', { fresh: true });
+  other.send(rpc(2, 'js', { code: 'const x = await app.click(3); return x;' }));
+  assert.equal(other.forwarded.length, 0);
+});
+
 test('a refused inventory statement is told the one-expression form that passes', t => {
   const { a } = setup(t);
   a.send(rpc(1, 'js_reset')); a.reply(result(1, 'reset'));
