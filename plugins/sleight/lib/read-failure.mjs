@@ -67,17 +67,23 @@ function helperLane(kind, timeoutMs, spawnHelper) {
   } };
 }
 
-// At most two live helpers, both lazy: 2 s probes, and the original 30 s target/tap deadlines.
+export function spawnAppHealthHelper(kind) {
+  return spawn('/usr/bin/osascript', ['-l', 'JavaScript', HEALTH_SCRIPT,
+    ...(kind === 'probe' ? [] : ['--session', dirname(HEALTH_SCRIPT)])], { stdio: ['pipe', 'pipe', 'ignore'] });
+}
+
+// Three lazy lanes: 2 s probes, 30 s targets, 30 s taps. A stuck scan cannot delay a target.
 export function createAppHealthHelper({ timeoutMs = 2000, operationTimeoutMs = 30000,
-  spawnHelper = kind => spawn('/usr/bin/osascript', ['-l', 'JavaScript', HEALTH_SCRIPT,
-    ...(kind === 'slow' ? ['--session', dirname(HEALTH_SCRIPT)] : [])], { stdio: ['pipe', 'pipe', 'ignore'] }) } = {}) {
+  spawnHelper = spawnAppHealthHelper } = {}) {
   const probe = helperLane('probe', timeoutMs, spawnHelper);
-  const slow = helperLane('slow', operationTimeoutMs, spawnHelper);
+  const target = helperLane('target', operationTimeoutMs, spawnHelper);
+  const taps = helperLane('taps', operationTimeoutMs, spawnHelper);
   return {
     probe: app => probe.request({ app }, { status: 'unknown' }),
-    target: args => slow.request({ op: 'lease-target', app: args.app }, { ok: false, error: 'session helper unavailable; read the app again' }),
-    keyboardTaps: async () => { const r = await slow.request({ op: 'keyboard-taps' }, { ok: false }); return r.ok ? r.taps : []; },
-    close: () => Promise.all([probe.close(), slow.close()]),
+    target: args => target.request({ op: 'lease-target', app: args.app }, { ok: false,
+      error: `Lease-target resolution failed: its helper was unavailable or did not answer within ${operationTimeoutMs / 1000} s. Stop this local action; reading the app again won't help.` }),
+    keyboardTaps: async () => { const r = await taps.request({ op: 'keyboard-taps' }, { ok: false }); return r.ok ? r.taps : []; },
+    close: () => Promise.all([probe.close(), target.close(), taps.close()]),
   };
 }
 

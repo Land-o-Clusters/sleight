@@ -1,16 +1,19 @@
 # Browser control
 
-Ordinary startup enables extension browsers only when a discovery result less than one minute old
+Ordinary startup enables extension browsers only when a discovery result less than six hours old
 reports a connected extension. It reads `~/Library/Caches/sleight/extensions.json`, keyed to the
 installed engine. Missing, expired or invalid entries keep the session on `computer`.
-After the session engine initializes, an owned background discovery refreshes a missing or expired
-entry for the next session. A fresh entry avoids that extra engine. The current session keeps its
+After the session engine initializes, an owned background discovery refreshes the entry on every
+automatic session, even with a fresh positive or negative. The current session keeps its
 tool description. Automatic mode excludes the in-app browser. An explicit `SLEIGHT_SURFACES`
 preserves the requested surfaces and configured backends and skips the cache and discovery.
 
 The cache stores a timestamp and a boolean, with no browser identities or approvals. A disconnect
-can leave a positive result stale for up to one minute. Connecting an extension requires a later
-session after discovery completes. Cache write failures leave native control available.
+can leave a positive result stale for up to six hours. Negative results last 24 hours but still
+refresh every session. Connecting an extension requires a later session after discovery completes.
+The reply deadline is four seconds, with up to 2.5 seconds for process collection. A timeout or
+failed discovery preserves the previous result and timestamp. Older completed discoveries cannot
+overwrite a newer result. Cache write failures leave native control available.
 
 Doctor still runs one owned discovery engine with only browser control enabled. It calls
 `cua.listBrowsers({emit: false})` with fresh session and turn metadata. Doctor enables browser control

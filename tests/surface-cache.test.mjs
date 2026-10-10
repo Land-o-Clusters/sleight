@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdtempSync, rmSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -32,7 +32,7 @@ function setup(t, discover) {
   return { file, server, time: value => { now = value; }, options: { file, now: () => now, discover } };
 }
 
-test('background inventory informs only the next session and a fresh cache avoids another engine', async t => {
+test('background inventory informs the next session for six hours and refreshes every session', async t => {
   let calls = 0;
   const f = setup(t, async () => { calls++; return [{ type: 'extension', metadata: { extensionInstanceId: 'connected' } }]; });
   const first = f.server(); const cache = selectSurfaces(first, {}, f.options);
@@ -41,16 +41,18 @@ test('background inventory informs only the next session and a fresh cache avoid
   await cache.refresh();
   assert.equal(first.env.CUA_REPL_ENABLED_SURFACES, 'computer', 'session tool description stays fixed');
   assert.equal(JSON.parse(readFileSync(f.file)).checkedAt, 100000);
+  f.time(100000 + 3 * 60 * 60 * 1000);
   const next = f.server(); const nextCache = selectSurfaces(next, {}, f.options);
   assert.equal(next.env.CUA_REPL_ENABLED_SURFACES, 'browser,computer');
-  await nextCache.refresh(); assert.equal(calls, 1);
+  await Promise.all([nextCache.refresh(), nextCache.refresh()]); assert.equal(calls, 2);
+  assert.equal(JSON.parse(readFileSync(f.file)).checkedAt, 100000 + 3 * 60 * 60 * 1000);
 });
 
 test('stale, future, malformed and other-engine caches cannot enable browser control', async t => {
   const f = setup(t, async () => [{ type: 'extension', metadata: { extensionInstanceId: 'connected' } }]);
   await selectSurfaces(f.server(), {}, f.options).refresh();
   const valid = JSON.parse(readFileSync(f.file));
-  for (const change of [{ checkedAt: 39999 }, { checkedAt: 100001 }, { connected: 'yes' }, { engine: 'different' }]) {
+  for (const change of [{ checkedAt: 100000 - 6 * 60 * 60 * 1000 }, { checkedAt: 100001 }, { connected: 'yes' }, { engine: 'different' }]) {
     writeFileSync(f.file, JSON.stringify({ ...valid, ...change }));
     const server = f.server(); selectSurfaces(server, {}, f.options);
     assert.equal(server.env.CUA_REPL_ENABLED_SURFACES, 'computer');
@@ -62,7 +64,7 @@ test('stale, future, malformed and other-engine caches cannot enable browser con
 
 test('discovery and collection time count against the cache lifetime', async t => {
   const f = setup(t, async () => {
-    f.time(160001);
+    f.time(100000 + 6 * 60 * 60 * 1000);
     return [{ type: 'extension', metadata: { extensionInstanceId: 'connected' } }];
   });
   await selectSurfaces(f.server(), {}, f.options).refresh();
@@ -71,7 +73,7 @@ test('discovery and collection time count against the cache lifetime', async t =
   assert.equal(JSON.parse(readFileSync(f.file)).checkedAt, 100000);
 });
 
-test('negative and failed discovery stay computer-only, and shutdown cancels owned discovery', async t => {
+test('negative inventory stays computer-only, and shutdown cancels owned discovery', async t => {
   for (const inventory of [[], [{ type: 'iab' }], [{ type: 'extension' }]]) {
     const f = setup(t, async () => inventory);
     await selectSurfaces(f.server(), {}, f.options).refresh();
@@ -82,9 +84,54 @@ test('negative and failed discovery stay computer-only, and shutdown cancels own
   const cache = selectSurfaces(f.server(), {}, f.options);
   const refresh = cache.refresh(); await cache.close(); await refresh;
   assert.throws(() => readFileSync(f.file), { code: 'ENOENT' });
+});
+
+test('a newly connected extension refreshes a fresh negative for the following session', async t => {
+  const f = setup(t, async () => []);
+  await selectSurfaces(f.server(), {}, f.options).refresh();
+  f.time(100001);
+  const current = f.server();
+  const cache = selectSurfaces(current, {}, { ...f.options, discover: async () => [{ type: 'extension', metadata: { extensionInstanceId: 'new' } }] });
+  assert.equal(current.env.CUA_REPL_ENABLED_SURFACES, 'computer');
+  await cache.refresh();
+  assert.equal(current.env.CUA_REPL_ENABLED_SURFACES, 'computer');
+  const next = f.server(); selectSurfaces(next, {}, f.options);
+  assert.equal(next.env.CUA_REPL_ENABLED_SURFACES, 'browser,computer');
+});
+
+test('discovery failure neither creates a negative entry nor extends a previous result', async t => {
   const failure = setup(t, async () => { throw new Error('failed'); });
   await selectSurfaces(failure.server(), {}, failure.options).refresh();
-  assert.equal(JSON.parse(readFileSync(failure.file)).connected, false);
+  assert.equal(existsSync(failure.file), false);
+  const f = setup(t, async () => [{ type: 'extension', metadata: { extensionInstanceId: 'connected' } }]);
+  await selectSurfaces(f.server(), {}, f.options).refresh();
+  const previous = readFileSync(f.file, 'utf8');
+  f.time(100001);
+  await selectSurfaces(f.server(), {}, { ...f.options, discover: async () => { throw new Error('timeout'); } }).refresh();
+  assert.equal(readFileSync(f.file, 'utf8'), previous);
+});
+
+test('a late older discovery cannot overwrite the newer inventory', async t => {
+  let completeOlder;
+  const f = setup(t, () => new Promise(resolve => { completeOlder = resolve; }));
+  const older = selectSurfaces(f.server(), {}, f.options).refresh();
+  f.time(100001);
+  await selectSurfaces(f.server(), {}, { ...f.options, discover: async () => [{ type: 'extension', metadata: { extensionInstanceId: 'connected' } }] }).refresh();
+  completeOlder([]); await older;
+  const inventory = JSON.parse(readFileSync(f.file));
+  assert.equal(inventory.checkedAt, 100001);
+  assert.equal(inventory.connected, true);
+});
+
+test('a publisher crash cannot leave future inventory refreshes locked out', async t => {
+  const f = setup(t, async () => [{ type: 'extension', metadata: { extensionInstanceId: 'connected' } }]);
+  mkdirSync(`${f.file}.publish`); // An abandoned directory from the earlier lock implementation.
+  const code = `import {DatabaseSync} from 'node:sqlite'; const db=new DatabaseSync(process.argv[1]);
+    db.exec('BEGIN IMMEDIATE'); process.exit(0);`;
+  execFileSync(process.execPath, ['--input-type=module', '-e', code, `${f.file}.publish.sqlite`]);
+  await selectSurfaces(f.server(), {}, f.options).refresh();
+  const next = f.server(); selectSurfaces(next, {}, f.options);
+  assert.equal(next.env.CUA_REPL_ENABLED_SURFACES, 'browser,computer');
 });
 
 test('unsafe cache files fail closed without following links or reading special files', { skip: process.platform === 'win32' }, async t => {
