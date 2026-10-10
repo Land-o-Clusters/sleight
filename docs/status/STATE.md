@@ -29,7 +29,9 @@ and 23; safari-shop sleight 95 s and 22 turns, Codex 84.2 s and 25. The CPU spli
 processes at 0.25 to 0.29 s a run. The engine is about even, and the rest is the claude client and
 the owner's plugins. Routines passed live (`docs/benchmarks/2026-10-10-routines-live.md`).
 
-The 2026-10-10 lanes and turn fixes are merged (`git log` has the list), and no lane is out.
+Lanes out (21:20 UTC, briefs in `.dev/prompts/`): `codex/setup` and `codex/textedit-helper`
+(Grok), `codex/spawns` and `codex/privacy` (GLM). The owner reruns the setup probe v2 as
+puddle-census. v1 showed `install` asks for administrator access (ROADMAP 5b.7).
 
 Next, in order:
 1. The owner runs `zsh /Users/Shared/sleight-setup-probe.sh` as puddle-census. It writes its log to

@@ -153,9 +153,13 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
    `~/.codex/.tmp`). The helper is inside ChatGPT.app with OpenAI's own installer
    (`Codex Computer Use Installer install|uninstall|status`; `status` printed "OK: installed" here),
    and the engine's command is in the app bundle too. So `sleight-mcp setup` could run that
-   installer and open the two permission panes, with no Codex session. To test in a clean macOS
-   user or VM: whether `install` needs an admin password, and whether the engine works without
-   ChatGPT ever signed in. macOS permissions always need the user's click.
+   installer and open the two permission panes, with no Codex session. In a fresh macOS user with
+   no `~/.codex` (puddle-census, 2026-10-10), `status` already said "OK: installed", and `install`
+   asked for administrator access (Touch ID or password), then exited 0 without creating
+   `~/.codex/computer-use`. The engine didn't start there, because the probe left out its
+   node_repl path. Probe v2 sets the engine's whole environment and uses the helper inside
+   ChatGPT.app where it is. It started the engine for the owner's user. Still unknown: whether it
+   works without ChatGPT ever signed in. macOS permissions always need the user's click.
 
 ## 6. Features after replay
 
@@ -184,7 +188,7 @@ build what nobody has. Sources are `.dev/research/2026-10-04-competitors.md` and
   Receipts of each run's actions with redaction: `codex/review-receipts`.
 - Stop that confirms the Mac stopped, element waits and exact window targeting for untitled windows
   merged 2026-10-10 (`6291251`), with their live checks before release. Recording a task from the
-  user's demonstration is open.
+  user's demonstration merged with routines (`da78144`). Its live check is open.
 - Windows, tested in a Windows 11 ARM VM (owner's idea, 2026-10-09). Codex computer use reached
   Windows on 2026-05-29, foreground only. First check, in a free UTM VM, whether that engine runs on
   ARM and exposes the same `cua_repl` API. The relay, guards, mod and benchmark could carry over.
