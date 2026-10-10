@@ -323,7 +323,7 @@ export function createReadCompactor() {
       if (!Array.isArray(content)) return content;
       observedInResult = undefined;
       const out = content.map(item => {
-        if (item?.type === 'text' && /sleight: an action in this call failed|engine's JavaScript session restarted|## Computer Use\n/.test(item.text ?? '')) failed = true;
+        if (item?.type === 'text' && /sleight: an action in this call failed|engine's JavaScript session restarted/.test(item.text ?? '')) failed = true;
         if (item?.type !== 'text' || typeof item.text !== 'string' || !item.text.includes(GUARD_MARK)) {
           if (item?.type === 'text' && typeof item.text === 'string') remember(item.text);
           return item;

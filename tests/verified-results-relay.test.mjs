@@ -39,6 +39,16 @@ test('a rewritten last-window close error never becomes confirmed input', async 
   assert.match(note(h, 2), /call failed \(partial input possible\)/);
 });
 
+// vr-live and waits-live, 2026-10-10: the engine's docs on a session's first call made every first
+// action say "no earlier read".
+test("the engine's docs on the first call keep that call's read as the baseline", async t => {
+  const h = harness(t);
+  h.call(1, 'let app = await cua.getApp("Calculator")'); h.reply(1, '## Computer Use\n\nControl native apps.\n' + tree(0)); await tick();
+  h.call(2, 'await app.click(2)');
+  h.reply(2, GUARD_MARK + tree(1) + GUARD_END); await tick();
+  assert.match(note(h, 2), /^sleight: UI changed \(value\)\.$/);
+});
+
 test('overlapping calls cannot attribute a changed value to either action', async t => {
   const h = harness(t);
   h.call(1, 'let app = await cua.getApp("Calculator")'); h.reply(1, tree(0)); await tick();
