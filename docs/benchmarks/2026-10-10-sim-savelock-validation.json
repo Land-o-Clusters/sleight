@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-10",
+  "runs": [
+    { "command": "npm run check", "stage": "first run before interruption", "exitCode": null, "result": "Unknown: terminal handle was unavailable after interruption" },
+    { "command": "npm run lint:prose", "stage": "first run before interruption", "exitCode": null, "result": "Unknown: terminal handle was unavailable after interruption" },
+    { "command": "vale sync", "stage": "sandbox style initialization", "exitCode": 2, "result": "EPERM initializing linked-worktree styles" },
+    { "command": "vale sync", "stage": "host style initialization", "exitCode": 0 },
+    { "command": "npm run lint:prose", "stage": "fresh combined prose", "exitCode": 1, "errors": 21, "warnings": 0 },
+    { "command": "npm run check", "stage": "fresh ordinary sandbox", "exitCode": 1, "interrupted": true, "result": "Stopped once with Ctrl-C through its original terminal after native timeouts and sandbox refusals; final exit collected from the same handle", "observedFailures": ["Native compiler and PDF helper timeouts", "Browser regression deadlines", "EPERM binding localhost and Unix test sockets", "EPERM creating bench/results", "Timing assertions for helper restart and process collection"], "completeSuiteCounts": null, "hostLoadSamples": [[202.55,155.68,126.69],[224.66,167.64,132.56],[244.00,205.19,155.42],[269.23,215.49,161.16]] },
+    { "command": "node --check bench/textedit-save-lock-cleanup.js", "exitCode": 0 },
+    { "command": "node --check bench/textedit-save-lock-cleanup.mjs", "exitCode": 0 },
+    { "command": "npm run check", "stage": "host retry after actual sandbox refusals", "exitCode": 1, "interrupted": true, "pass": 1130, "fail": 15, "cancelled": 2, "tests": 1147, "durationMs": 247439.85625, "result": "One Ctrl-C through the original terminal after native timeouts; final exit collected from the same handle. Other chats later confirmed overlapping checks and requested no further overlapping full suites.", "observedFailures": ["Native drag, Helium, Mail, Mimestream, PDF and Chess helper compile deadlines", "Driver policy and helper restart timing assertions", "Process collection timing assertions", "Idle timer real-clock assertion", "Watch test interrupted", "Window observer authorization timing assertion"], "hostLoadSamples": [[302.76,245.43,180.15],[293.12,259.44,193.92],[298.50,271.58,205.95]] },
+    { "command": "node --test tests/simulator-focus.test.mjs tests/simulator-focus-setup.test.mjs tests/relay-turn-lifecycle.test.mjs", "stage": "focused combined regressions", "exitCode": 0, "pass": 12, "fail": 0 },
+    { "command": "npm run lint:prose", "stage": "wording corrections", "exitCode": 1, "errors": 2, "warnings": 0 },
+    { "command": "npm run lint:prose", "stage": "final combined prose", "exitCode": 0, "errors": 0, "warnings": 0, "files": 73 },
+    { "command": "vale docs/benchmarks/2026-10-10-sim-savelock.md", "stage": "final report receipt-link wording", "exitCode": 0, "errors": 0, "warnings": 0, "files": 1 },
+    { "command": "npm run check", "stage": "retry after hold ended, before local concurrency limit", "exitCode": 1, "interrupted": true, "pass": 1138, "fail": 9, "cancelled": 1, "tests": 1148, "durationMs": 341988.974125, "hostLoadAtStart": [32.12,23.10,20.58], "laterHostLoad": [59.01,41.55,28.89], "result": "Native helper compiles again exceeded 180 seconds; process timing assertions also failed. One Ctrl-C sent through the original owned terminal and its final exit collected. Coordination later confirmed multiple restarted full suites and assigned a retry queue." },
+    { "command": "npm run lint:prose", "stage": "cleanup follow-up wording", "exitCode": 1, "errors": 1, "warnings": 0 },
+    { "command": "npm run lint:prose", "stage": "cleanup wording corrected", "exitCode": 0, "errors": 0, "warnings": 0, "files": 73 },
+    { "command": "npm run lint:prose", "stage": "serialized-check report wording", "exitCode": 1, "errors": 1, "warnings": 0 },
+    { "command": "npm run lint:prose", "stage": "serialized-check report corrected", "exitCode": 0, "errors": 0, "warnings": 0, "files": 73 },
+    { "command": "node --test tests/clipboard-lock.test.mjs", "stage": "retained process fixture owner", "exitCode": 0, "pass": 2, "fail": 0, "result": "Applied the receipt-review fixture correction after its independent red/green reproduction and the failed full check here. Existing assertions and deadlines are unchanged." },
+    { "command": "npm run lint:prose", "stage": "retained fixture report", "exitCode": 0, "errors": 0, "warnings": 0, "files": 73 },
+    { "command": "npm run check", "stage": "coordinated final run with sequential test files", "exitCode": 0, "tests": 1150, "pass": 1150, "fail": 0, "cancelled": 0, "skipped": 0, "nodeDurationMs": 390166.471958, "manifestValidations": 2, "modTests": 11, "modPass": 11, "modFail": 0, "result": "Completed without interruption; final exit collected from the original terminal. No assertions, selections or deadlines were weakened." },
+    { "command": "npm run lint:prose", "stage": "final passing-check report", "exitCode": 1, "errors": 1, "warnings": 0, "files": 73, "result": "One report wording flag; corrected before the next run." },
+    { "command": "npm run lint:prose", "stage": "final report corrected", "exitCode": 0, "errors": 0, "warnings": 0, "suggestions": 0, "files": 73 }
+  ]
+}

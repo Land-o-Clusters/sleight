@@ -1,0 +1,11 @@
+{
+  "started": "2026-10-10T08:24:59.443Z",
+  "source": "docs/benchmarks/2026-10-10-save-lock-1791610854988.json",
+  "cleanupOnly": true,
+  "testInput": false,
+  "readOnly": true,
+  "holdPresent": true,
+  "error": "Live hold exists; cleanup stopped",
+  "lockRetained": false,
+  "finished": "2026-10-10T08:24:59.444Z"
+}

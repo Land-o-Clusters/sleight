@@ -435,6 +435,26 @@ test('a confirmed stop closes the turn receipt with the stopped call, and the ne
   await new Promise(resolve => setTimeout(resolve, 50));
   assert.ok(written.slice(1).every(r => !r.calls.some(call => call.actions.some(a => a.action === 'typeText'))), 'no stopped call carries into the next receipt');
 });
+test('a confirmed stop drops a rejected turn cleanup instead of retrying it on the next engine', async t => {
+  const { harness } = setup(t);
+  const h = harness('stop cleanup', { changeReview: false, stopGraceMs: 20,
+    stopEngine: async () => ({ collected: true }), inspectInput: async () => ({ ok: true }),
+    restartEngine: async () => ({ serverIn: h.serverIn, serverOut: h.serverOut }) });
+  h.send(rpc('end', 'turn_ended', {}));
+  const rejected = h.forwarded.at(-1);
+  h.serverOut.write(JSON.stringify({ jsonrpc: '2.0', id: rejected.id, error: { code: -32603, message: 'busy' } }) + '\n');
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('stop', 'turn_ended', { sleight_stop: true })); h.reply(result(h.forwarded.at(-1).id, 'ended'));
+  await new Promise(resolve => setTimeout(resolve, 50));
+  h.send(rpc('message', 'turn_ended', { sleight_resume: true }));
+  h.send(rpc('read-after', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
+  await new Promise(resolve => setImmediate(resolve));
+  h.reply(result('read-after'));
+  const before = h.forwarded.length;
+  await h.relay.shutdown();
+  const retried = h.forwarded.slice(before).filter(m => m.params?.name === 'turn_ended' && m.params.arguments.turn_id === rejected.params.arguments.turn_id);
+  assert.equal(retried.length, 0);
+});
 test('a replacement engine cannot reuse an old client approval response', async t => {
   const { harness } = setup(t);
   const h = harness('reused approval', { changeReview: false, stopGraceMs: 20,

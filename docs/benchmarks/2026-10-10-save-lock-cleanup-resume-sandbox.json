@@ -1,0 +1,10 @@
+{
+  "source": "docs/benchmarks/2026-10-10-save-lock-1791610854988.json",
+  "cleanupOnly": true,
+  "exitCode": 1,
+  "receiptWriteError": "EPERM writing the linked-worktree receipt inside the ordinary workspace sandbox",
+  "intendedReceipt": "docs/benchmarks/2026-10-10-save-lock-cleanup-1791613048870.json",
+  "testInput": false,
+  "holdPresent": true,
+  "followUp": "Same command repeated with host access to preserve the hold refusal"
+}

@@ -1,0 +1,43 @@
+{
+  "started": "2026-10-10T05:40:54.017Z",
+  "trials": [
+    {
+      "method": "key",
+      "variant": "shift",
+      "repetition": 1,
+      "launchAttempted": true,
+      "openLauncherExit": 0,
+      "attachAttempts": [
+        "Expected only owned temporary window"
+      ]
+    }
+  ],
+  "opening": "open -n -g (owned isolated instance)",
+  "engineUsed": false,
+  "pointerUsed": false,
+  "preflight": {
+    "id": 0,
+    "ok": true,
+    "background": true,
+    "existingProcessCount": 1,
+    "isolatedInstance": true
+  },
+  "failedOperation": {
+    "id": 1,
+    "ok": false,
+    "error": "Expected only owned temporary window",
+    "pid": 86808,
+    "background": true
+  },
+  "error": "Expected only owned temporary window",
+  "helperExit": {
+    "code": 0,
+    "signal": null
+  },
+  "lockRetained": "Owned temporary document cleanup unconfirmed; operator inspection required",
+  "documentMayRemain": true,
+  "bank": "/private/tmp/sleight-save-lock-khVl9r",
+  "finished": "2026-10-10T05:40:54.987Z",
+  "completed": 0,
+  "saveTests": 0
+}

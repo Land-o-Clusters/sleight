@@ -1,0 +1,24 @@
+{
+  "started": "2026-10-10T05:31:10.519Z",
+  "trials": [],
+  "opening": "open -g",
+  "engineUsed": false,
+  "pointerUsed": false,
+  "failedOperation": {
+    "id": 0,
+    "ok": false,
+    "error": "AXWindows failed: -25204",
+    "pid": 52188,
+    "background": true
+  },
+  "error": "AXWindows failed: -25204",
+  "helperExit": {
+    "code": 0,
+    "signal": null
+  },
+  "lockReleased": true,
+  "documentMayRemain": false,
+  "bank": "/private/tmp/sleight-save-lock-xWb5ox",
+  "finished": "2026-10-10T05:31:11.748Z",
+  "completed": 0
+}

@@ -1,0 +1,12 @@
+{
+  "started": "2026-10-10T05:29:45.503Z",
+  "trials": [],
+  "opening": "open -g",
+  "engineUsed": false,
+  "pointerUsed": false,
+  "error": "Another live run holds /tmp/sleight-live.lock. Wait for it to finish.",
+  "documentMayRemain": false,
+  "bank": "/private/tmp/sleight-save-lock-3jSkGd",
+  "finished": "2026-10-10T05:29:45.507Z",
+  "completed": 0
+}

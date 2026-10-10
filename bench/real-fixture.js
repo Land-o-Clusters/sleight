@@ -30,14 +30,17 @@ function quitFixtureApplication(pid, bundle, application, clock) {
     clock.emit({ stage: 'quit', quitWait: { reason: reason, accepted: accepted,
       elapsedMs: clock.now() - started, finishedLaunching: finishedLaunching } });
   }
+  if (clock.check) clock.check();
   var target = application();
   if (!target) { receipt('already-exited'); return true; }
   identity(target);
   // NSRunningApplication.terminate requests an ordinary quit. Acceptance does
   // not mean the process has exited, especially while Office is still starting.
+  if (clock.check) clock.check();
   accepted = !!target.terminate;
   if (!accepted) { receipt('refused'); throw new Error('Launched app refused quit'); }
   while (true) {
+    if (clock.check) clock.check();
     target = application();
     if (!target) { receipt('exited'); return true; }
     identity(target);
@@ -299,6 +302,7 @@ function dialogContents(element, api) {
 function nativeAX(state, clock) {
   function read(element, attribute) {
     var operation = function () {
+      if (clock && clock.check) clock.check();
       if (state && state.officeWaiting && clock.now() >= state.officeDeadline) throw officeDeadlineError(state);
       var value = Ref();
       var code = Number($.AXUIElementCopyAttributeValue(element, $(attribute), value));
@@ -323,6 +327,7 @@ function nativeAX(state, clock) {
     return result;
   }
   function press(element) {
+    if (clock && clock.check) clock.check();
     if (state && state.setup) { state.actionTaken = true; clock.emit({ stage: 'action', actionTaken: true }); }
     var code = Number($.AXUIElementPerformAction(element, $('AXPress')));
     if (code !== 0) throw new Error('AX fixture press failed: ' + code);
@@ -368,6 +373,7 @@ function nativeAX(state, clock) {
     if (files.length !== 1) throw new Error('Fixture needs the File menu');
     chooseFileMenu(files[0], titles, { press: press, children: children, text: text, beforePress: beforePress,
       enabled: function (item) { return Number(ObjC.unwrap(read(item, 'AXEnabled'))) === 1; }, cancel: function (menu) {
+      if (clock && clock.check) clock.check();
       var method = cancelFixtureMenu(menu, { role: function (target) { return text(target, 'AXRole'); },
         cancel: function (target) { return Number($.AXUIElementPerformAction(target, $('AXCancel'))) === 0; },
         escape: function () {
@@ -375,6 +381,7 @@ function nativeAX(state, clock) {
         if (Number($.AXUIElementGetPid(app, pidRef)) !== 0) throw new Error('File-menu cancellation lost the app identity');
         var down = $.CGEventCreateKeyboardEvent(null, 53, true), up = $.CGEventCreateKeyboardEvent(null, 53, false);
         if (!down || down.isNil() || !up || up.isNil()) throw new Error('File-menu Escape could not be created');
+        if (clock && clock.check) clock.check();
         $.CGEventPostToPid(Number(pidRef[0]), down); $.CGEventPostToPid(Number(pidRef[0]), up);
       } }, refuseDialogs === true || state.refuseDialogs);
       clock.emit({ stage: 'menu-cancel', menuCancelled: true, menuCancelMethod: method });
@@ -438,6 +445,7 @@ function nativeAX(state, clock) {
       closeDocumentSafely(app, request, validate, {
         menu: function (target, beforePress) { fileMenu(target, ['Close Selected PDF Document', 'Close'], beforePress, request.refuseDialogs); },
         activate: function (target) {
+          if (clock && clock.check) clock.check();
           var pidRef = Ref();
           if (Number($.AXUIElementGetPid(target, pidRef)) !== 0) throw new Error('Document activation lost the app identity');
           var running = $.NSRunningApplication.runningApplicationWithProcessIdentifier(Number(pidRef[0]));
@@ -461,6 +469,8 @@ function nativeAX(state, clock) {
 
 function run(argv) {
   var request = JSON.parse(argv[0]);
+  function free() { if (request.stopOnLiveHold === true && $.NSFileManager.defaultManager.fileExistsAtPath('/tmp/sleight-hold')) throw new Error('Live hold exists; fixture stopped'); }
+  free();
   if (request.mode === 'self-test') {
     var terminated = false;
     var fake = { processIdentifier: 42, bundleIdentifier: $('com.apple.Preview'),
@@ -477,7 +487,7 @@ function run(argv) {
     return quitFixtureApplication(request.pid, request.bundle, function () {
       var value = $.NSRunningApplication.runningApplicationWithProcessIdentifier(request.pid);
       return value.isNil() || value.isTerminated ? null : value;
-    }, { now: function () { return Date.now(); }, wait: function (ms) { waitForLaunch(ms / 1000); }, emit: emit });
+    }, { check: free, now: function () { return Date.now(); }, wait: function (ms) { free(); waitForLaunch(ms / 1000); }, emit: emit });
   }
   if (allowed.indexOf(request.bundle) === -1 || !request.control || !request.mode) throw new Error('Invalid fixture request');
   if (!$.AXIsProcessTrusted()) throw new Error('Accessibility is unavailable; fixture not opened');
@@ -485,6 +495,7 @@ function run(argv) {
     $.NSFileHandle.fileHandleWithStandardOutput.writeData($(JSON.stringify(value) + '\n').dataUsingEncoding($.NSUTF8StringEncoding));
   }
   function controlData() {
+    free();
     var data = $.NSData.dataWithContentsOfFile(request.control);
     if (data.isNil()) return {};
     var string = $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding);
@@ -492,6 +503,7 @@ function run(argv) {
   }
   function command() { return controlData().command || ''; }
   function application() {
+    free();
     var matches = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(request.bundle);
     // During a launch handoff the original and its successor can both be listed for a moment:
     // keep the original until it exits rather than failing setup.
@@ -502,7 +514,7 @@ function run(argv) {
     return Number(matches.count) === 1 ? matches.objectAtIndex(0) : null;
   }
   var state = { setup: true, fresh: false, fixtureExists: false, actionTaken: false, retryWaitMs: 0, refuseDialogs: request.refuseDialogs === true };
-  var clock = { now: function () { return Date.now(); }, wait: function (ms) { waitForLaunch(ms / 1000); }, emit: emit,
+  var clock = { check: free, now: function () { return Date.now(); }, wait: function (ms) { free(); waitForLaunch(ms / 1000); }, emit: emit,
     cleanupRequested: function () { return command() === 'close'; } };
   var api = nativeAX(state, clock);
   var target, running, pid, app, previous, owned, observedDialogs = [];

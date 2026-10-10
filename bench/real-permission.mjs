@@ -9,21 +9,22 @@ const execute = promisify(execFile);
 
 // Inspect only macOS's authorization process. frontmost-window enumerates all
 // windows of the active app, which would expose unrelated Helium windows.
-export async function observePermission({ inspector = join(homedir(), '.codex/bin/codex-macos-inspect'), run = execute } = {}) {
+export async function observePermission({ inspector = join(homedir(), '.codex/bin/codex-macos-inspect'), run = execute, check = () => {}, stopOnLiveHold = false } = {}) {
+  const inspect = (command, args, options) => { check(); return run(command, args, options); };
   if (!existsSync(inspector)) throw new Error('macOS permission observer unavailable: install codex-macos-inspect');
   let pids;
-  try { pids = (await run('/usr/bin/pgrep', ['-x', 'UserNotificationCenter'], { timeout: 10000 })).stdout.trim().split(/\s+/); }
+  try { pids = (await inspect('/usr/bin/pgrep', ['-x', 'UserNotificationCenter'], { timeout: 10000 })).stdout.trim().split(/\s+/); }
   catch (error) { if (error.code === 1) return false; throw error; }
   if (!pids.length || pids.length > 64 || pids.some(pid => !/^[1-9]\d*$/.test(pid))) throw new Error('invalid authorization process identity');
   for (const pid of pids) {
-    const apps = JSON.parse((await run(inspector, ['app-info', pid], { timeout: 10000 })).stdout);
+    const apps = JSON.parse((await inspect(inspector, ['app-info', pid], { timeout: 10000 })).stdout);
     if (!Array.isArray(apps)) throw new Error('invalid authorization app observation');
     if (!apps.some(app => app.bundleIdentifier === 'com.apple.UserNotificationCenter')) continue;
-    const windows = JSON.parse((await run(inspector, ['windows-for-pid', pid, '--scope', 'on-screen'], { timeout: 10000 })).stdout);
+    const windows = JSON.parse((await inspect(inspector, ['windows-for-pid', pid, '--scope', 'on-screen'], { timeout: 10000 })).stdout);
     if (!Array.isArray(windows)) throw new Error('invalid authorization window observation');
     if (!windows.some(window => window.ownerPID === Number(pid))) continue;
-    const details = JSON.parse((await run('/usr/bin/osascript', ['-l', 'JavaScript',
-      fileURLToPath(new URL('./real-permission.js', import.meta.url)), pid], { timeout: 10000 })).stdout);
+    const details = JSON.parse((await inspect('/usr/bin/osascript', ['-l', 'JavaScript',
+      fileURLToPath(new URL('./real-permission.js', import.meta.url)), pid, ...(stopOnLiveHold ? ['stop-on-live-hold'] : [])], { timeout: 10000 })).stdout);
     if (!Array.isArray(details.titles) || details.titles.some(title => typeof title !== 'string')) throw new Error('invalid authorization titles');
     if (!details.titles.length) throw new Error('visible authorization window has no readable title; live run stopped');
     const titles = details.titles.filter(title => !/quit unexpectedly/i.test(title));

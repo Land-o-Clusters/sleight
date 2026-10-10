@@ -116,6 +116,17 @@ when your client has no turn hook. The wait restarts on each completed call, so 
 can share one engine turn. Approvals last for the server process,
 so a client that keeps one server across conversations also keeps its approval session.
 
+Rejected turn cleanup retries at that interval, with three total attempts per turn. After the third
+rejection, sleight logs one warning and drops that turn's cleanup. A later turn has its own budget.
+This bounds retries. It cannot confirm that an engine which rejects cleanup released its resources.
+
+## Simulator focus note
+
+Set `SLEIGHT_SIM_FOCUS_NOTE=1` in the server's environment to add image dimensions and focus guidance
+to a standalone screenshot from an acquired Simulator or Device Hub handle. It asks Claude to check
+visible focus before typing and leave Capture Keyboard unchanged. The note is off by default until
+the affected `simulator-form` task runs with it while the owner is away. Coordinates are unchanged.
+
 ## Preapproved apps
 
 Write `~/Library/Application Support/sleight/preapproved.json` yourself to allow selected apps without

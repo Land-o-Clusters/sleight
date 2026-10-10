@@ -73,6 +73,7 @@ import { forbiddenTargetWarning, isForbiddenSettingsWindow, matchBlockedApp, ref
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
 import { offSpace, offSpaceNote, readFailureAdvice, savePanelNote } from './read-failure.mjs';
 import { TurnJournal, writeReceipt } from './turn-receipts.mjs';
+import { simulatorScreenshotNote } from './simulator-focus.mjs';
 
 // `app.click(3); …` with no await and more code after it: the call goes on without the action,
 // and a failure then ends the session. A last statement is fine, since the call returns its promise.
@@ -246,6 +247,7 @@ export function createRelay({
   redactReceiptTitles = true,
   receiptWriter = writeReceipt,
   idleTurnEndMs,
+  simFocusNote = false,
   inputLease,
   onLeaseFault = () => {},
   engineForbiddenTargets = false,
@@ -312,6 +314,13 @@ export function createRelay({
   const nativeCopies = new Set();
   const listRequests = new Set();
   const internalRequests = new Map();
+  const turnEndCalls = new Map(); // request id -> original turn arguments, until acknowledgement
+  const failedTurnEnds = new Map(); // turn id -> cleanup the engine rejected
+  const turnEndAttempts = new Map(); // includes the initial explicit or idle cleanup
+  function trackTurnEnd(id, args) {
+    turnEndCalls.set(id, args);
+    turnEndAttempts.set(args.turn_id, (turnEndAttempts.get(args.turn_id) ?? 0) + 1);
+  }
   const approvalRequests = new Map(); // server request id -> approval key and stop generation
   const alwaysOffered = new Map(); // server request id -> { app, riskLevel } offered "Always allow"
   // "Always allow" is offered only for a session-scoped engine app approval, never for terminals or
@@ -926,7 +935,7 @@ export function createRelay({
 
   function scheduleIdleEnd() {
     clearTimeout(idleTimer);
-    if (!idleTurnEndMs || running.size || reviewing || !turnUsed) return;
+    if (!idleTurnEndMs || disposed || closing || running.size || reviewing || (!turnUsed && !failedTurnEnds.size)) return;
     idleTimer = setTimeout(() => {
       trace('idle-turn-end', { turnId });
       endOpenTurn();
@@ -1534,6 +1543,7 @@ export function createRelay({
         const ending = { pending: true, replies: [] };
         if (journal) receiptEnds.set(msg.id, ending);
         msg.params.arguments = endTurnArgs(msg.params.arguments);
+        if (msg.id !== undefined) trackTurnEnd(msg.id, msg.params.arguments);
         if (keyboardTaps && msg.id !== undefined && drivenApps.size) turnEnds.add(msg.id);
         toServer(msg);
         const receipt = finishReceipt();
@@ -1760,6 +1770,26 @@ export function createRelay({
       });
       if (msg.error || msg.result?.isError) forgetGuard();
       else if (installed && generation === guardGeneration) guardReady = true;
+    }
+    if (msg.method === undefined && turnEndCalls.has(msg.id)) {
+      const args = turnEndCalls.get(msg.id);
+      turnEndCalls.delete(msg.id);
+      if (msg.error || msg.result?.isError) {
+        const attempts = turnEndAttempts.get(args.turn_id);
+        if (attempts >= 3) {
+          failedTurnEnds.delete(args.turn_id);
+          turnEndAttempts.delete(args.turn_id);
+          trace('turn-end-abandoned', { turnId: args.turn_id, attempts });
+          stderr.write(`sleight: turn cleanup rejected after 3 attempts; dropping turn ${args.turn_id}\n`);
+        } else {
+          failedTurnEnds.set(args.turn_id, args);
+          trace('turn-end-failed', { turnId: args.turn_id, attempts });
+        }
+      } else {
+        failedTurnEnds.delete(args.turn_id);
+        turnEndAttempts.delete(args.turn_id);
+      }
+      scheduleIdleEnd();
     }
     if (msg.method === undefined && spaceChecks.has(msg.id)) {
       // The probe takes about 150 ms against the engine's 400 ms or more, so this rarely waits.
@@ -2155,6 +2185,15 @@ export function createRelay({
         if (shot[2] !== undefined) entry.byTitle[shot[2]] = [shot[1].width, shot[1].height];
         screenshots.set(shot[0].toLowerCase(), entry);
       }
+      if (simFocusNote && !automatic && !confirmedBrowser && !msg.result.isError && typeof jsCode === 'string') {
+        // A standalone screenshot need not contain a Window header. Associate only its exact
+        // acquired handle, never the session's most recently observed app or an ambiguous batch.
+        const handle = /^\s*await\s+([A-Za-z_$][\w$]*)\.(?:getScreenshot|getAXStateAndScreenshot)\(\s*\)\s*;?\s*$/.exec(jsCode)?.[1];
+        const target = handle && handleBundles.get(handle);
+        const appId = msg.result._meta?.['codex/toolSurface']?.app?.appId;
+        const note = target && (!appId || appId === target.appId) && simulatorScreenshotNote(msg.result.content, target, imageSize);
+        if (note) msg.result.content.push({ type: 'text', text: note });
+      }
       if (!automatic && jsCode !== undefined) {
         const note = openMenuNote(msg.result.content.filter(c => c.type === 'text').map(c => c.text).join('\n'));
         if (note) msg.result.content.push({ type: 'text', text: note });
@@ -2177,21 +2216,20 @@ export function createRelay({
   // or after a short grace period.
   async function endOpenTurn() {
     if (inputLease && running.size) await new Promise(resolve => drained.add(resolve));
-    if (!turnUsed) return Promise.resolve();
-    const id = `sleight-${nextInternalId++}`;
-    const done = new Promise(resolve => {
-      internalRequests.set(id, resolve);
-      setTimeout(resolve, SHUTDOWN_GRACE_MS).unref();
+    const owed = [...failedTurnEnds.values(), ...(turnUsed ? [endTurnArgs()] : [])];
+    failedTurnEnds.clear();
+    const done = owed.map(args => {
+      const id = `sleight-${nextInternalId++}`;
+      const answered = new Promise(resolve => {
+        internalRequests.set(id, resolve);
+        setTimeout(resolve, SHUTDOWN_GRACE_MS).unref();
+      });
+      trackTurnEnd(id, args);
+      toServer({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: TURN_END_TOOL, arguments: args } });
+      return answered;
     });
-    toServer({
-      jsonrpc: '2.0',
-      id,
-      method: 'tools/call',
-      params: { name: TURN_END_TOOL, arguments: endTurnArgs() },
-    });
-    finishReceipt();
-    rotateTurn();
-    return done;
+    if (turnUsed) { finishReceipt(); rotateTurn(); }
+    return Promise.all(done);
   }
 
   async function interruptTurn(msg) {
@@ -2250,6 +2288,8 @@ export function createRelay({
         spaceChecks.clear(); preHealth.clear(); nativeChecked.clear(); restartRetries.clear();
         // The stopped turn's receipt keeps its unanswered calls as unknown; nothing carries into the next engine.
         resultCalls.clear(); guardCalls.clear(); finishReceipt();
+        // A collected engine can't take an old turn's cleanup; the next engine starts its own turns.
+        turnEndCalls.clear(); failedTurnEnds.clear(); turnEndAttempts.clear();
         await clipboard?.close();
         stopHeartbeat();
         inputLease?.releaseChecked();
@@ -2272,6 +2312,7 @@ export function createRelay({
     detachServer();
     cancelInternalRequests('Session ended.');
     clearTimeout(idleTimer);
+    turnEndCalls.clear(); failedTurnEnds.clear(); turnEndAttempts.clear();
     for (const resolve of elicitations.values()) resolve({ result: { action: 'cancel' } });
     elicitations.clear();
     promptFailures.clear();

@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-10",
+  "method": "Offline transcript, stored image, relay trace and source inspection. No live app access.",
+  "transcriptRoot": "~/.claude/projects/-Users-<user>-Library-Caches-sleight-bench-sleight-arm/",
+  "traceRoot": "$TMPDIR/sleight-bench/",
+  "rows": [
+    { "pass": "shots-base", "run": 1, "session": "e5e42674-6a3f-43b2-890e-bd487a6adf87", "nonce": "3d6dde16", "image": [2000,1455], "firstTap": [627,141], "successfulTap": [1254,282], "passed": true, "turns": 7, "seconds": 48.1 },
+    { "pass": "shots-base", "run": 2, "session": "3a5a299a-e6db-4915-9670-0f5a86431774", "nonce": "09ab87b6", "image": [2000,1455], "firstTap": [1254,282], "passed": true, "turns": 6, "seconds": 45.2 },
+    { "pass": "shots-base", "run": 3, "session": "d7fbab0f-cb40-4e5e-ba52-b673e33f4d63", "nonce": "f68552a3", "image": [2000,1455], "firstTap": [627,141], "successfulTap": [1254,282], "passed": true, "turns": 7, "seconds": 51.4 },
+    { "pass": "shots-scaled", "run": 1, "session": "cefc0912-2b15-4e90-b48c-881ab14fbd46", "nonce": "02b52403", "image": [1568,1140], "firstTap": [895,201], "firstPointerApprox": [639,144], "firstTapOutsidePhone": true, "captureKeyboardEnabled": true, "passed": true, "turns": 8, "seconds": 52.6 },
+    { "pass": "shots-scaled", "run": 2, "session": "8c7e46df-6813-47e2-95b0-0aa786a6ae97", "nonce": "4816bf74", "image": [1568,1140], "firstTap": [895,201], "firstPointerApprox": [639,144], "firstTapOutsidePhone": true, "captureKeyboardEnabled": false, "passed": true, "turns": 9, "seconds": 48.2 },
+    { "pass": "shots-scaled", "run": 3, "session": "f9e34b85-33fe-4d84-bfbf-2f418ccadec9", "nonce": "de5fd7f7", "image": [1568,1140], "firstTap": [895,201], "firstPointerApprox": [639,144], "firstTapOutsidePhone": true, "captureKeyboardEnabled": false, "passed": true, "turns": 9, "seconds": 64.3 },
+    { "pass": "shots-scaled-tap", "run": 1, "session": "1bd0521f-321f-4756-b53a-0a2a2d32ffb2", "nonce": "e9e66f20", "image": [1568,1140], "firstTap": [895,201], "firstPointerApprox": [639,144], "firstTapOutsidePhone": true, "captureKeyboardEnabled": false, "passed": true, "turns": 9, "seconds": 69.1 },
+    { "pass": "shots-scaled-tap", "run": 2, "session": "89012983-4983-48d1-931f-fc99b8d4251a", "nonce": "bb912197", "image": [1568,1140], "firstTap": [895,201], "firstPointerApprox": [639,144], "firstTapOutsidePhone": true, "captureKeyboardEnabled": true, "passed": true, "turns": 17, "seconds": 88.7 },
+    { "pass": "shots-scaled-tap", "run": 3, "session": "cff757c8-0e5b-4e8f-b777-118bf8ac8265", "nonce": "b7f7fd47", "image": [1568,1140], "firstTap": [895,201], "firstPointerApprox": [639,144], "firstTapOutsidePhone": true, "captureKeyboardEnabled": false, "passed": true, "turns": 10, "seconds": 51.6 }
+  ],
+  "hypothesis": {
+    "parkedCommit": "1aa574b66c623167dbbab2177ca6d7ef518816b6",
+    "firstStandaloneScreenshotHasWindowHeader": false,
+    "screenshotOfWithoutHeader": null,
+    "scaleRegistrationRequiresScreenshotOf": true,
+    "originalImage": [2200,1600],
+    "coordinateFactor": 1.403061224489796,
+    "explanation": "The parked branch fails to register the first headerless image scale. The first tap uses the unscaled coordinates; later action responses carry a header and register the factor.",
+    "status": "Static source and six stored pointer images agree. Fresh live reproduction remains pending."
+  },
+  "newLiveRuns": 0,
+  "verification": [
+    { "command": "node --test tests/simulator-focus.test.mjs", "stage": "helper stub", "exitCode": 1, "pass": 1, "fail": 3 },
+    { "command": "node --test tests/simulator-focus.test.mjs", "stage": "helper implemented", "exitCode": 0, "pass": 4, "fail": 0 },
+    { "command": "node --test tests/simulator-focus.test.mjs", "stage": "malformed header regression", "exitCode": 1, "pass": 3, "fail": 1 },
+    { "command": "node --test tests/simulator-focus.test.mjs", "stage": "malformed header refusal", "exitCode": 0, "pass": 4, "fail": 0 },
+    { "command": "node --test tests/simulator-focus.test.mjs", "stage": "relay behavior regression", "exitCode": 1, "pass": 4, "fail": 1 },
+    { "command": "node --test tests/simulator-focus.test.mjs", "stage": "relay integrated, test action after ambiguous response had no lease", "exitCode": 1, "pass": 4, "fail": 1 },
+    { "command": "node --test tests/simulator-focus.test.mjs", "stage": "same missing-lease test error after event-loop wait", "exitCode": 1, "pass": 4, "fail": 1 },
+    { "command": "node --test tests/simulator-focus.test.mjs", "stage": "reacquired test handle before action", "exitCode": 0, "pass": 5, "fail": 0 },
+    { "command": "node --check bench/simulator-focus-live.mjs", "stage": "initial probe", "exitCode": 0 },
+    { "command": "node --check bench/simulator-focus-live.mjs", "stage": "name scrub and cleanup error collection", "exitCode": 0 },
+    { "command": "node --check bench/simulator-focus-live.mjs", "stage": "retain lock on uncertain cleanup", "exitCode": 0 },
+    { "command": "node --test tests/simulator-focus.test.mjs tests/relay-images.test.mjs tests/relay-input-lease.test.mjs", "stage": "adjacent image and lease coverage", "exitCode": 0, "pass": 72, "fail": 0 },
+    { "command": "vale docs/benchmarks/2026-10-10-simulator-focus.md", "stage": "first prose pass", "exitCode": 1, "errors": 11 },
+    { "command": "vale docs/benchmarks/2026-10-10-simulator-focus.md", "stage": "prose corrected", "exitCode": 0, "errors": 0 },
+    { "command": "offline transcript image metadata extractor", "stage": "missing message content array check", "exitCode": 1, "error": "some is not a function" },
+    { "command": "offline transcript image metadata extractor", "stage": "array check added; original 2200x1600 recovered", "exitCode": 0 },
+    { "command": "saved source JPEG header inspection", "stage": "confirmed original 2200x1600", "exitCode": 0 },
+    { "command": "vale docs/benchmarks/2026-10-10-simulator-focus.md", "stage": "metadata follow-up prose", "exitCode": 1, "errors": 1 },
+    { "command": "vale docs/benchmarks/2026-10-10-simulator-focus.md", "stage": "final simulator report prose", "exitCode": 0, "errors": 0 },
+    { "command": "node --test tests/simulator-focus-setup.test.mjs", "stage": "ownership and hold regressions before setup extraction", "exitCode": 1, "pass": 0, "fail": 4 },
+    { "command": "node --test tests/simulator-focus-setup.test.mjs", "stage": "ownership and hold checks added", "exitCode": 0, "pass": 4, "fail": 0 },
+    { "command": "node --test tests/simulator-focus-setup.test.mjs", "stage": "persist boot ownership regression", "exitCode": 1, "pass": 3, "fail": 1 },
+    { "command": "node --test tests/simulator-focus.test.mjs tests/simulator-focus-setup.test.mjs", "stage": "boot ownership recorded before boot command", "exitCode": 0, "pass": 9, "fail": 0 }
+  ]
+}

@@ -605,6 +605,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     spaceProbe: app => appHealth.probe(app),
     guardMode: process.env.SLEIGHT_GUARD,
     takeNotices: takeRichTextNotices,
+    simFocusNote: process.env.SLEIGHT_SIM_FOCUS_NOTE === '1',
     firstCallBatch: process.env.SLEIGHT_FIRST_CALL_BATCH === 'merge' ? 'merge' : process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
     clientIn: replayClient.clientIn,
     clientOut: replayClient.clientOut,

@@ -71,3 +71,25 @@ A prepared child still refuses changed or unavailable
 rich text. Edit-menu localization is unqualified. Unit tests pass. Live qualification remains
 pending. The [investigation](../benchmarks/2026-10-09-textedit-fixes.md) includes the original
 format-loss reproduction and every stopped attempt.
+
+## TextEdit save lock
+
+After an Accessibility text write, a Shift press and release goes to TextEdit's PID as two
+`flagsChanged` events. The earlier comparison measured 0/10 hangs with the pair and 5/8 without
+it. The saved bytes matched after ten product moves too. These counts support keeping the
+mitigation. The activity responsible for the document's save lock remains unidentified.
+
+The [2026-10-10 investigation](../benchmarks/2026-10-10-save-lock.md) distinguishes candidate
+causes from measurements. A Shift pair changes both modifier state and event delivery. It could
+finish pending document work or reschedule an autosave monitor, and its delays could matter.
+The new probe gives every arm the same delay and compares the pair with a zero-modifier event,
+a Shift release alone, Escape and no event. It records saved bytes and dirty state before Cmd+S
+to identify runs already autosaved before the shortcut. An autosave racing the shortcut remains possible.
+
+The historical Open-panel setup cannot be reproduced under this task's no-dialog rule. The
+existing background TextEdit process returned `AXWindows -25204` before any new input, which
+does not establish a save-lock hang. Stopped attempts don't add trials to the older denominators.
+A fresh instance then restored extra windows. Exact-fixture cleanup also failed on an Accessibility
+read. A later read-only check confirmed zero Accessibility windows in that same launch and released
+the retained live lock without app input. The comparison must wait until an instance can open only
+its owned fixture and the live hold has ended.

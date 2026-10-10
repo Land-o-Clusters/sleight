@@ -3,6 +3,8 @@
 ObjC.import('AppKit');
 ObjC.import('ApplicationServices');
 function run(argv) {
+  function free() { if (argv[1] === 'stop-on-live-hold' && $.NSFileManager.defaultManager.fileExistsAtPath('/tmp/sleight-hold')) throw new Error('Live hold exists; permission observation stopped'); }
+  free();
   if (!/^[1-9][0-9]*$/.test(argv[0])) throw new Error('Invalid authorization PID');
   if (!$.AXIsProcessTrusted()) throw new Error('Authorization titles need existing Accessibility access');
   var pid = Number(argv[0]);
@@ -13,6 +15,7 @@ function run(argv) {
   var app = $.AXUIElementCreateApplication(pid);
   $.AXUIElementSetMessagingTimeout(app, 0.5);
   function read(element, attribute) {
+    free();
     var value = Ref();
     var code = Number($.AXUIElementCopyAttributeValue(element, $(attribute), value));
     if (code === -25205 || code === -25212) return null;

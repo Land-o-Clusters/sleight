@@ -1,0 +1,18 @@
+{
+  "started": "2026-10-10T06:19:44.401Z",
+  "source": "docs/benchmarks/2026-10-10-save-lock-1791610854988.json",
+  "cleanupOnly": true,
+  "testInput": false,
+  "readOnly": true,
+  "holdPresent": true,
+  "result": {
+    "readOnly": true,
+    "fixtureClosed": true,
+    "remainingWindows": 0,
+    "processQuit": false,
+    "unrelatedWindowsPreserved": true
+  },
+  "pid": 86808,
+  "lockReleased": true,
+  "finished": "2026-10-10T06:19:44.878Z"
+}

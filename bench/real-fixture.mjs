@@ -60,7 +60,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
       if (!final) { await ctx.beforeFixtureCleanup?.(); ctx.cleanupSignal?.throwIfAborted(); }
       if (!lease.pid) throw new Error('Launched app identity unconfirmed; quit refused');
       const result = await run('/usr/bin/osascript', ['-l', 'JavaScript', script,
-        JSON.stringify({ bundle: request.bundle, mode: 'quit', pid: lease.pid })], {
+        JSON.stringify({ bundle: request.bundle, mode: 'quit', pid: lease.pid, ...(request.stopOnLiveHold && { stopOnLiveHold: true }) })], {
         signal: final ? undefined : ctx.cleanupSignal, timeoutMs: 35000,
       });
       for (const line of result.stdout?.split('\n') ?? []) {

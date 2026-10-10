@@ -179,7 +179,12 @@ our own runs. Dates and engine versions are given where they matter.
   same hang as `setValue` on 2026-10-05. One Shift press and release posted to TextEdit's process after
   the write prevents it: 0 hangs in 10 trials that edited, against 5 in 8 without it, and then 10
   `drag` moves in a row saved with no hang (2026-10-09). We don't know why the event helps, or what
-  held the lock. A bold red word lost both attributes in 1/1 covered RTF trials of the old move.
+  held the lock. The [2026-10-10 follow-up](benchmarks/2026-10-10-save-lock.md) stopped before
+  editing: the existing background TextEdit process returned `AXWindows -25204`. A new instance
+  restored extra windows, then exact-fixture cleanup returned `AXRole -25204`. A later read-only
+  check confirmed zero Accessibility windows in that same launch and released the retained live
+  lock without app input. The event comparison has no new causal result.
+  A bold red word lost both attributes in 1/1 covered RTF trials of the old move.
   The opt-in fix (`SLEIGHT_RICH_TEXT_MOVE=1`) prepares RTF when the selection and destination have different visual character attributes. It checks
   the pasted attributes before source deletion and preserves readable clipboard formats.
   Unit tests pass. Live attempts stopped at off-Space windows and an occupied shared lock.
@@ -488,9 +493,16 @@ our own runs. Dates and engine versions are given where they matter.
   process. Fake-clock regressions pass, including cancellation during the handoff. The default
   `simulator-form` uses the same ownership checks. The architect's owner-away rerun remains pending.
   [The report](benchmarks/2026-10-10-real-use-tasks-12.md) retains the failed run.
-- In the simulator, Claude's first tap on the Safari field often doesn't focus it, even at the right
-  point, and a second tap does (6 of 6 runs on 2026-10-09 with shrunk screenshots). Claude also
-  second-guesses the screenshot's scale there, dividing or multiplying its own coordinates.
+- In six simulator runs on 2026-10-09 with shrunk screenshots, the first tap missed the Safari
+  field and a second tap hit it. Claude also second-guessed the screenshot's scale, dividing
+  or multiplying its own coordinates.
+  [Offline inspection](benchmarks/2026-10-10-simulator-focus.md) found the first pointer outside
+  the phone in all six resized runs. The parked scaling branch associated its factors only with
+  image replies containing a Window header. A first standalone screenshot had none. The original
+  image was 2200 × 1600 pixels and the resized image 1568 × 1140. This explains those stored misses,
+  but a fresh reproduction and Safari focus timing remain pending. With `SLEIGHT_SIM_FOCUS_NOTE=1`, the relay includes the
+  image's dimensions in its screenshot reply, with unit proof only. The note is off by default and instructs Claude to
+  confirm visible focus before typing. Coordinates remain unchanged.
 - In the 1.0.0 pass, Claude's first tap in the simulator missed the Message field, and four later
   taps on the field followed by `typeText`, one with Device Hub's Capture Keyboard on, left it empty
   (1 of 3 runs). We don't know why the later taps didn't focus it.
@@ -651,6 +663,11 @@ our own runs. Dates and engine versions are given where they matter.
   the turn until the session closed. Desktop sessions twice showed as busy after Claude had finished,
   and ending the turn cleared it once, so the open turn is the likely cause.
   `SLEIGHT_IDLE_TURN_END_MS` changes the wait, and 0 turns it off.
+  A rejected `turn_ended` previously forgot its original turn. The relay now retries it after the
+  configured idle interval, with fake-engine proof for explicit and idle cleanup errors. Lost
+  replies, calls that never finish and hook delays remain unconfirmed. The
+  [turn investigation](benchmarks/2026-10-10-turn-lifecycle.md) does not connect this error path to
+  either historical desktop incident.
 - It's macOS on Apple Silicon only. The engine's JavaScript has Linux and Windows instructions, but
   the helper that clicks and types comes only with the Mac ChatGPT app, and there's no ChatGPT desktop
   app for Linux (checked 2026-10-04). We haven't checked the Windows app.

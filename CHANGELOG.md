@@ -59,6 +59,14 @@
 - `app.waitFor({ id | label | line }, { timeoutMs })` waits up to 10 s for one element in the same
   window, polling full reads at least 250 ms apart. The skill asks Claude to use it only for
   elements that appear late.
+- Repository checks use four test workers, retaining the full suite and its existing deadlines.
+- A rejected `turn_ended` keeps its original turn identity and retries after the configured idle
+  interval, up to three total attempts. A third rejection logs once and drops that turn.
+  Fake-engine tests cover explicit and idle cleanup errors and a newer turn in flight.
+  The historical desktop busy incidents still need live qualification.
+- With `SLEIGHT_SIM_FOCUS_NOTE=1`, Simulator screenshot replies specify the acquired window and image dimensions and ask Claude to
+  confirm field focus before typing. Coordinates are unchanged. Unit-tested only; the affected
+  simulator task and the owner-away focus probe remain pending. The note is off by default.
 - Paste keeps the user's clipboard with one helper per session instead of a spawn per paste, and
   reads large clipboards in linear time (a mocked 40 MiB transfer fell from about 5 s to 31 to 88 ms).
   `blocked_app` also refuses a settings window by its Accessibility metadata, so a localized title or

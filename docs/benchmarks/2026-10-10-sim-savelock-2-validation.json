@@ -1,0 +1,197 @@
+{
+  "branch": "codex/sim-savelock",
+  "reviewedCommit": "6e5e04dc6ddd1ad3dcf7d2ea42495ecce4cfb11a",
+  "rebasedOnto": "fa079f065c9b2490e2e40aaf933e0a329c560f23",
+  "attempts": [
+    {
+      "command": "node --test tests/relay-turn-lifecycle.test.mjs tests/simulator-focus.test.mjs tests/sim-savelock-config.test.mjs",
+      "phase": "before fixes",
+      "exit": 1,
+      "tests": 13,
+      "passed": 8,
+      "failed": 5
+    },
+    {
+      "command": "node --test tests/relay-turn-lifecycle.test.mjs tests/simulator-focus.test.mjs tests/sim-savelock-config.test.mjs",
+      "phase": "after fixes",
+      "exit": 0,
+      "tests": 13,
+      "passed": 13
+    },
+    {
+      "command": "node --test tests/save-lock-cleanup.test.mjs tests/simulator-focus-report.test.mjs",
+      "phase": "before fixes",
+      "exit": 1,
+      "tests": 8,
+      "passed": 3,
+      "failed": 5,
+      "reason": "four hold assertions failed; serializer module absent"
+    },
+    {
+      "command": "node --test tests/save-lock-cleanup.test.mjs tests/simulator-focus-report.test.mjs",
+      "phase": "after fixes",
+      "exit": 0,
+      "tests": 9,
+      "passed": 9
+    },
+    {
+      "command": "node --test tests/save-lock-cleanup-run.test.mjs",
+      "phase": "before runner",
+      "exit": 1,
+      "reason": "runner module absent"
+    },
+    {
+      "command": "node --test tests/save-lock-cleanup-run.test.mjs tests/save-lock-cleanup.test.mjs tests/simulator-focus-report.test.mjs",
+      "exit": 1,
+      "tests": 15,
+      "passed": 14,
+      "failed": 1,
+      "reason": "test fixture finish preceded start; corrected fixture"
+    },
+    {
+      "command": "node --test tests/relay-turn-lifecycle.test.mjs tests/simulator-focus.test.mjs tests/sim-savelock-config.test.mjs tests/save-lock-cleanup-run.test.mjs tests/save-lock-cleanup.test.mjs tests/simulator-focus-report.test.mjs tests/simulator-focus-setup.test.mjs",
+      "exit": 0,
+      "tests": 32,
+      "passed": 32
+    },
+    {
+      "command": "node bench/textedit-save-lock-cleanup.mjs docs/benchmarks/2026-10-10-save-lock-1791610854988.json --inspect-only",
+      "environment": "sandbox",
+      "exit": 1,
+      "reason": "EPERM writing receipt in ~/Projects/sleight-wt/sim-savelock; stopped under hold before lock or AX"
+    },
+    {
+      "command": "node bench/textedit-save-lock-cleanup.mjs docs/benchmarks/2026-10-10-save-lock-1791610854988.json --inspect-only",
+      "environment": "host",
+      "exit": 1,
+      "receipt": "2026-10-10-save-lock-cleanup-1791620699444.json",
+      "reason": "Live hold exists; cleanup stopped",
+      "lockTouched": false,
+      "accessibilityTouched": false
+    },
+    {
+      "command": "npm run lint:prose",
+      "exit": 1,
+      "errors": 9,
+      "files": 77,
+      "reason": "new prose flags corrected"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exit": 0,
+      "errors": 0,
+      "files": 77
+    },
+    {
+      "command": "node --check",
+      "files": [
+        "bench/simulator-focus-live.mjs",
+        "bench/textedit-save-lock.mjs",
+        "bench/textedit-save-lock-cleanup.mjs",
+        "bench/textedit-save-lock.js",
+        "bench/textedit-save-lock-cleanup.js"
+      ],
+      "exit": 0,
+      "note": "Each script checked separately"
+    },
+    {
+      "command": "npm run check",
+      "exit": 1,
+      "terminalSession": 39353,
+      "reason": "waiting at shared hold gate; one Ctrl-C through original terminal; collected final exit; tests never started"
+    },
+    {
+      "command": "node --test tests/save-lock-cleanup-run.test.mjs",
+      "exit": 1,
+      "reason": "new current-trial cleanup export absent"
+    },
+    {
+      "command": "node --test focused seven files",
+      "exit": 0,
+      "tests": 36,
+      "passed": 36
+    },
+    {
+      "command": "node --test tests/simulator-focus-observers.test.mjs",
+      "exit": 1,
+      "tests": 5,
+      "passed": 0,
+      "failed": 5,
+      "reason": "nested hold guards and direct-probe opt-in wiring absent"
+    },
+    {
+      "command": "node --test tests/simulator-focus-observers.test.mjs tests/simulator-focus-setup.test.mjs tests/bench-real-permission.test.mjs",
+      "exit": 0,
+      "tests": 10,
+      "passed": 10
+    },
+    {
+      "command": "node --test tests/bench-real-fixture.test.mjs",
+      "exit": 0,
+      "tests": 66,
+      "passed": 66,
+      "note": "Native bridge self-test uses a fake application; no app or AX inspection"
+    },
+    {
+      "command": "node --test tests/relay-turn-lifecycle.test.mjs tests/simulator-focus.test.mjs tests/sim-savelock-config.test.mjs tests/save-lock-cleanup-run.test.mjs tests/save-lock-cleanup.test.mjs tests/simulator-focus-report.test.mjs tests/simulator-focus-setup.test.mjs tests/simulator-focus-observers.test.mjs tests/bench-real-permission.test.mjs tests/bench-real-fixture.test.mjs",
+      "exit": 0,
+      "tests": 110,
+      "passed": 110,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run lint:prose",
+      "exit": 1,
+      "files": 77,
+      "errors": 1,
+      "reason": "follow-up report lead-in flagged; corrected"
+    },
+    {
+      "command": "node --check",
+      "files": [
+        "bench/real-fixture.js",
+        "bench/real-fixture.mjs",
+        "bench/real-permission.js",
+        "bench/real-permission.mjs",
+        "bench/simulator-focus-live.mjs",
+        "bench/textedit-save-lock.mjs"
+      ],
+      "exit": 0,
+      "note": "Each checked separately after nested observer fixes"
+    },
+    {
+      "command": "npm run lint:prose",
+      "exit": 0,
+      "files": 77,
+      "errors": 0
+    }
+  ],
+  "fullCheck": "pending shared hold",
+  "prose": {
+    "command": "npm run lint:prose",
+    "exit": 0,
+    "files": 77,
+    "errors": 0
+  },
+  "ownedTextEditQuit": "pending shared hold; do not infer process presence or absence",
+  "simulatorProbe": "left for sleight-arch, owner away",
+  "simulatorFormWithNote": "left for sleight-arch, owner away",
+  "textEditCausality": "left for sleight-arch, owner away",
+  "merged": false,
+  "codeReview": {
+    "findings": 0,
+    "previousFindingsResolved": 2,
+    "scopedTests": 78,
+    "exit": 0,
+    "note": "Native JXA bridge self-test uses a fake app, no live app/AX/lock reads"
+  },
+  "nextSteps": [
+    "Wait for sleight-arch to lift /tmp/sleight-hold",
+    "Run exact owned TextEdit cleanup using prior receipt and preserve any restored windows",
+    "Run bare npm run check to exit 0, then bare npm run lint:prose to exit 0",
+    "Commit only named follow-up paths and push codex/sim-savelock to private, verifying published SHA; no merge",
+    "Owner-away Simulator probe, affected simulator-form task and TextEdit causality trial belong to sleight-arch"
+  ]
+}

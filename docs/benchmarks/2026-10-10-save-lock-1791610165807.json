@@ -1,0 +1,17 @@
+{
+  "started": "2026-10-10T05:29:25.692Z",
+  "trials": [],
+  "opening": "open -g",
+  "engineUsed": false,
+  "pointerUsed": false,
+  "error": "Requires at most one TextEdit process",
+  "helperExit": {
+    "code": 0,
+    "signal": null
+  },
+  "lockReleased": true,
+  "documentMayRemain": false,
+  "bank": "/private/tmp/sleight-save-lock-YQ4FZh",
+  "finished": "2026-10-10T05:29:25.806Z",
+  "completed": 0
+}

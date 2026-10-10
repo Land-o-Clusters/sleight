@@ -1,0 +1,9 @@
+{
+  "started": "2026-10-10T05:51:27.005Z",
+  "source": "docs/benchmarks/2026-10-10-save-lock-1791610854988.json",
+  "cleanupOnly": true,
+  "testInput": false,
+  "error": "Command failed: /usr/bin/osascript -l JavaScript ~/Projects/sleight-wt/sim-savelock/bench/textedit-save-lock-cleanup.js /private/tmp/sleight-save-lock-khVl9r/trial.txt 86808 1791610854017 1791610854987\n~/Projects/sleight-wt/sim-savelock/bench/textedit-save-lock-cleanup.js: execution error: Error: Error: AXRole failed: -25204 (-2700)\n",
+  "lockRetained": true,
+  "finished": "2026-10-10T05:51:34.561Z"
+}

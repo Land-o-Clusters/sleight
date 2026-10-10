@@ -1,0 +1,16 @@
+{
+  "started": "2026-10-10T05:27:15.950Z",
+  "trials": [],
+  "opening": "open -g",
+  "engineUsed": false,
+  "pointerUsed": false,
+  "helperExit": { "code": 1, "signal": null },
+  "error": "~/Projects/sleight-wt/sim-savelock/bench/textedit-save-lock.js: execution error: Error: Error: Application can't be found. (-2700)",
+  "publicationError": "EPERM writing the linked-worktree report inside the sandbox; private results copied through apply_patch",
+  "terminalExit": 1,
+  "lockReleased": true,
+  "documentMayRemain": false,
+  "bank": "/private/tmp/sleight-save-lock-h0OsFW",
+  "finished": "2026-10-10T05:27:21.930Z",
+  "completed": 0
+}
