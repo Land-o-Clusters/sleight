@@ -152,3 +152,18 @@ test('stored DOM locators keep browser flow destinations within and across calls
   flow.forward(plan);
   assert.equal(flow.analyze('js', { code: 'await field.fill("SECRET")' }, { app: 'TextEdit' }).violations[0]?.rule, 'secret');
 });
+
+test('a site rule refuses browser input before the relay sends it to the engine', async t => {
+  const flow = new FlowRules({ version: 1, rules: [{ id: 'private-site', kind: 'pattern', pattern: 'SECRET', destinations: ['site:example.com'] }] });
+  const h = harness(t, { flowRules: flow });
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  h.call(1, 'let tab = await cua.getTab("1")'); await tick();
+  h.reply(1, { content: [{ type: 'text', text: 'Browser tab: 1, Title: "Test", URL: "https://example.com".\n0 AXWebArea Test' }],
+    _meta: { 'codex/toolSurface': { kind: 'browserUse' } } }); await tick();
+  h.call(2, 'await tab.playwright.getByRole("textbox").fill("SECRET")'); await tick();
+  assert.equal(h.sent.some(m => m.id === 2), false);
+  assert.equal(h.received.find(m => m.id === 2)?.result.isError, true);
+  assert.match(h.received.find(m => m.id === 2)?.result.content[0].text, /private-site/);
+  h.call(3, 'await tab.playwright.getByRole("textbox").fill("public value")'); await tick();
+  assert.equal(h.sent.some(m => m.id === 3), true);
+});
