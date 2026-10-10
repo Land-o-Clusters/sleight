@@ -3,21 +3,17 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-10 16:45 UTC)
+## Banner (2026-10-10 19:35 UTC)
 
-Running: `h2h-2`, sleight against Codex on calculator-click, textedit-edit and textedit-save,
-2 runs each, at `e1ec4fa` (`.dev/passes/pass-h2h-2.log`). The owner is away, and live runs that
-take the pointer are allowed. Puddle is down for the day, so there's no hold.
-
-Verified results merged today with a first-call fix, and real-use round 13 (Grok) with two safety
-fixes. Waits and stop, the generic benchmark arms and sim-savelock round 2 merged too. Of
-the owner's three guard-read skips, only Return after `setValue` is in (`e1ec4fa`). The other
-two rested on sleight-arch's wrong claim that the engine resolves IDs (LAWS), and are reverted.
-
-Lanes (Grok and GLM, briefs `.dev/prompts/lane-*.md`): `codex/routines-demo` (Grok, in
-progress), `codex/sheet-reads` (Grok, done at `17507cf`, no partial reads exist on this engine),
-`codex/receipt-redaction` and `codex/typecheck` (GLM, in progress). In the waits live check Calculator passed.
-Chess and TextEdit didn't run (the small Chess window, and the script's TextEdit Open panel).
+Nothing of sleight-arch's is running, and the live lock is free. `pane/auto-mode` is at `da78144`
+(pushed to private). The latest head-to-head (`d575dcf`, 3 runs a task a side,
+`bench/results/2026-10-10T19-07-34-250Z.json`) passed 9/9 each: sleight 313.3 s and 79 turns
+against Codex's 340.2 s and 83. sleight still loses calculator-click (24.3 s against 15.1 s median,
+about 8 s a run of startup) and own CPU (78.2 s against 54.3 s, with the owner's user plugins in the
+Claude arm). Merged today since the last banner: turn fixes (`80b5abc`, `25c2d3c`, `d575dcf`), clean
+arms, the shop tasks, receipt redaction, typecheck, and routines (with a lock fix). Lanes still out:
+`codex/electron-tasks` (Grok) and `codex/results-page` (GLM). The owner runs
+`/Users/Shared/sleight-setup-probe.sh` as puddle-census after the Electron lane's reads.
 
 **Where work goes.** Work in progress is private between releases (LAWS): `remote.pushDefault
 private` sends pushes to `Land-o-Clusters/sleight-dev`, and a pre-push hook refuses the public repo
