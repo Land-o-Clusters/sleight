@@ -93,7 +93,8 @@ const TURN_END_TOOL = 'turn_ended';
 // first call held no action, though sleight acquires and checks the window before any that follow
 // (batching study, 2026-10-09). Rewritten only while the engine's sentence is exactly this.
 const FIRST_CALL_RULE = 'execute exactly one of the API calls shown below, optionally assigning its result to a variable. Do not add other API calls, waits, or snapshots to that invocation.';
-const FIRST_CALL_BATCH = 'start with one of the API calls shown below, assigning the app to a variable. When you already know the first actions on that app, put them after it in the same call: sleight acquires the app and checks its window before they run. Chain every later action whose target you already know (keys, text, `{ id }` or `{ label }` clicks) in one call too.';
+// Chaining past Cmd+N or Cmd+O got the lease to stop 10 of 12 TextEdit batches (2026-10-09), hence its last clause.
+const FIRST_CALL_BATCH = 'start with one of the API calls shown below, assigning the app to a variable. When you already know the first actions on that app, put them after it in the same call: sleight acquires the app and checks its window before they run. Chain every later action whose target you already know (keys, text, `{ id }` or `{ label }` clicks) in one call too, but end the call after a shortcut that opens or names a window (Cmd+N, Cmd+O, or Cmd+S on an untitled document): sleight stops the rest of a call when its window changes.';
 // An open menu in front of a window reads as "0 menu Secondary Actions: Cancel". Escape left it open in
 // 3 of 3 tries in the head-to-head (TextEdit and Finder, 2026-10-09), and its Cancel action closed it.
 export function openMenuNote(text) {

@@ -16,7 +16,9 @@
   (`SLEIGHT_FIRST_CALL_BATCH=0` keeps it). On calculator-menu, textedit-save, textedit-edit and
   chess-drag, 3 runs each in two rounds, it passed 24/24 in 168 turns, 366 s of model time and 780 s,
   against 23/24 in 208 turns, 464 s and 835 s without it. Chess gained most (91 turns to 56), and
-  textedit-save went from 41 turns to 46.
+  textedit-save went from 41 turns to 46, because Claude chained keys past Cmd+N or Cmd+O, and the lease
+  stopped the call when the window changed (10 of 12 TextEdit runs). The wording now says to end the
+  call after such a shortcut. That sentence hasn't run in the benchmark yet.
 - A result whose window shows an open menu (`menu Secondary Actions: Cancel`) says how to close it.
   Escape left such menus open in 3 of 3 tries in the head-to-head, and their Cancel action closed
   one in Finder. Checked live on Calculator's View menu, where the note pointed at the menu (element 1)
