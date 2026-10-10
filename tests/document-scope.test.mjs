@@ -185,6 +185,22 @@ test('an element given by its AX ID is found in the read before each action, eve
   await assert.rejects(run(guardedCode('await app.click({ id: "Seven" });', window)), /2 elements with ID "Seven"/);
 });
 
+test('a click given a bare name finds the one element with that label, else that ID', async () => {
+  // calculator-click, 2026-10-10: `calc.click("Multiply")` failed in the engine, and Claude spent two
+  // calls redoing the batch.
+  const clicked = [];
+  const tree = ['Window: "Calculator", App: Calculator.', '0 standard window Calculator',
+    '\t2 button Description: =, ID: Equals', '\t3 button Description: ×, ID: Multiply', '\t4 button Description: 7, ID: Seven'].join('\n');
+  const raw = { getAXState: async () => tree, click: async n => { clicked.push(n); } };
+  const context = { cua: { getApp: async () => raw }, nodeRepl: { write: () => {} } };
+  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  await run(readCode('await cua.getApp("Calculator");'));
+  const window = { title: 'Calculator', app: 'Calculator', url: null };
+  await run(guardedCode('await app.click("×"); await app.click("Multiply"); await app.click("Seven");', window));
+  assert.deepEqual(clicked, [3, 3, 4], 'by label, else by ID');
+  await assert.rejects(run(guardedCode('await app.click("Eight");', window)), /no element with label or ID "Eight"/);
+});
+
 test('labels match a description or a title, whole, never part of one', () => {
   assert.equal(hasLabel('button Multiply', 'Multiply'), true);
   assert.equal(hasLabel('toggle button Bold, Value: 0', 'Bold'), true);

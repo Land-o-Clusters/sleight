@@ -1,0 +1,55 @@
+{
+  "started": "2026-10-10T22:35:14.290Z",
+  "trials": [
+    {
+      "method": "key",
+      "variant": "shift",
+      "repetition": 1,
+      "launchAttempted": true,
+      "openLauncherExit": 0,
+      "attachAttempts": [
+        "AXWindows failed: -25204",
+        "Expected only owned temporary window"
+      ],
+      "failedOperation": {
+        "id": 2,
+        "ok": false,
+        "error": "Expected only owned temporary window",
+        "pid": 73602,
+        "background": true
+      }
+    }
+  ],
+  "opening": "open -n -g (owned isolated instance)",
+  "engineUsed": false,
+  "pointerUsed": false,
+  "preflight": {
+    "id": 0,
+    "ok": true,
+    "background": true,
+    "existingProcessCount": 1,
+    "isolatedInstance": true
+  },
+  "failedOperation": {
+    "id": 2,
+    "ok": false,
+    "error": "Expected only owned temporary window",
+    "pid": 73602,
+    "background": true
+  },
+  "error": "Expected only owned temporary window",
+  "helperExit": {
+    "code": 0,
+    "signal": null
+  },
+  "failedLaunchCleanup": {
+    "lockHeld": true,
+    "error": "Command failed: /usr/bin/osascript -l JavaScript ~/Projects/sleight/bench/textedit-save-lock-cleanup.js /private/tmp/sleight-save-lock-Uew2AR/trial.txt 73602 1791671714290 1791671714988\n~/Projects/sleight/bench/textedit-save-lock-cleanup.js: execution error: Error: Error: AXEdited failed: -25205 (-2700)\n"
+  },
+  "lockRetained": "Owned temporary document cleanup unconfirmed; operator inspection required",
+  "documentMayRemain": true,
+  "bank": "/private/tmp/sleight-save-lock-Uew2AR",
+  "finished": "2026-10-10T22:35:15.158Z",
+  "completed": 0,
+  "saveTests": 0
+}

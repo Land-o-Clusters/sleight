@@ -144,12 +144,14 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
    browsers, and one-run real-site smoke tasks.
 4. Electron and Gecko: tasks for VS Code, Cursor, Firefox, and read-only Slack, Discord and
    WhatsApp. iPhone Mirroring with the owner at the Mac.
-5. A head-to-head with LCU again after these are merged.
+5. A head-to-head with LCU again after these are merged. The owner approved installing a newer
+   LCU if one exists (2026-10-10).
 6. Anthropic's directory listing (owner, 2026-10-10). Submission is at claude.ai/directory/manage
    from the public repo. The plugin folder passes the mechanical checks (50 files, the largest 142
    KB, an MIT license field). Unknown: how review treats the ChatGPT engine dependency, and whether
    the mod's self-approval of its own pane snapshot reads as changing Claude's permissions. A
-   privacy policy link is required. Asking Anthropic first is the owner's call.
+   privacy policy link is required: `docs/privacy.md` (2026-10-10). The owner chose not to ask
+   Anthropic for now (2026-10-10).
 7. Less setup in the ChatGPT app (owner, 2026-10-10). Today a user installs ChatGPT and turns on
    Computer Use in Codex once, which installs the helper and gets macOS permissions. The app
    needn't run after that. Found 2026-10-10: `codex plugin add` can't install the computer-use

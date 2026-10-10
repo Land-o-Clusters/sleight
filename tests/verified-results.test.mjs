@@ -66,7 +66,7 @@ test('Save opens a sheet without a saved field, and Save in the sheet makes no c
 
 test('a save action cannot confirm a new file without a named target', () => {
   const before = tree(rows, 'Untitled', null), after = tree(rows);
-  for (const code of ['await app.pressKey("super+s")', 'await app.click({ label: "Save" })', 'await app.click(2)']) {
+  for (const code of ['await app.pressKey("super+s")', 'await app.click({ label: "Save" })', 'await app.click("Save")', 'await app.click(2)']) {
     assert.match(run(before, after, code), /saved: not confirmed/);
   }
   assert.match(run(tree(rows), tree(rows), 'await app.pressKey("super+s")'), /saved: not confirmed \(no document save state change seen\)/);

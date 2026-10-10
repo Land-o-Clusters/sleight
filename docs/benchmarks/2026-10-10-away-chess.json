@@ -1,0 +1,147 @@
+{
+  "stamp": "2026-10-10T22-30-59-506Z",
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 84.5,
+      "turns": 18,
+      "costUsd": 0.0294138,
+      "reportedCostUsd": 0.9042002000000002,
+      "usage": {
+        "input": 36,
+        "cacheRead": 1361761,
+        "cacheWrite": 56783,
+        "output": 8872
+      },
+      "timing": {
+        "totalMs": 81396,
+        "modelMs": 53369,
+        "calls": 17,
+        "refused": 0,
+        "toolMs": 24630,
+        "engineMs": 23763,
+        "relayMs": 61,
+        "localMs": 806,
+        "guardReads": 12,
+        "guardReadMs": 8414.06729099999,
+        "guardReadFailures": 0,
+        "otherMs": 3397
+      },
+      "footprint": {
+        "cpuSeconds": 17.21,
+        "group": {
+          "claude": 2.95,
+          "engine node": 1.91,
+          "mcp@latest": 0.63,
+          "codex": 0.49,
+          "node": 0.24,
+          "osascript": 0.26,
+          "(bash)": 0.01,
+          "(vibe-island-brid)": 0.01,
+          "(sh)": 0
+        },
+        "outside": {
+          "Chess": 4.01,
+          "engine helper": 6.7
+        },
+        "split": {
+          "sleight": 0.5,
+          "engine": 8.61,
+          "client": 2.95,
+          "other": 1.14
+        }
+      },
+      "appWindows": {
+        "samples": 17,
+        "onScreen": 17,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I played 1. e4 in a new Game 2 against the computer, saved it as `884b426b.game` in `sleight-chess-drag-1`, and closed that window. The computer answered 1...e6, and the game was saved in that position.\n\nThe save sheet closed without an error, but I didn't check the file on disk. Game 1, which was a",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 2,
+      "passed": true,
+      "seconds": 66,
+      "turns": 12,
+      "costUsd": 0.0276174,
+      "reportedCostUsd": 0.9209291999999999,
+      "usage": {
+        "input": 24,
+        "cacheRead": 918826,
+        "cacheWrite": 74171,
+        "output": 7185
+      },
+      "timing": {
+        "totalMs": 62919,
+        "modelMs": 40941,
+        "calls": 11,
+        "refused": 0,
+        "toolMs": 17931,
+        "engineMs": 17938,
+        "relayMs": -7,
+        "localMs": 0,
+        "guardReads": 11,
+        "guardReadMs": 1999.0338760000013,
+        "guardReadFailures": 0,
+        "otherMs": 4047
+      },
+      "footprint": {
+        "cpuSeconds": 13.43,
+        "group": {
+          "claude": 2.25,
+          "engine node": 1.71,
+          "mcp@latest": 0.58,
+          "codex": 0.46,
+          "node": 0.23,
+          "osascript": 0.4,
+          "(sh)": 0.01,
+          "(AgentPeekBridge)": 0.01
+        },
+        "outside": {
+          "Chess": 2.8,
+          "engine helper": 4.98
+        },
+        "split": {
+          "sleight": 0.63,
+          "engine": 6.69,
+          "client": 2.25,
+          "other": 1.06
+        }
+      },
+      "appWindows": {
+        "samples": 13,
+        "onScreen": 13,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I played 1. e4 by dragging the e2 pawn in Chess, and the computer answered 1...e5. I saved the game as `05925d71.game` in the `sleight-chess-drag-2` folder and closed the Game 2 window.\n\nI could not directly confirm the file on disk. The save sheet closed normally, and a second Cmd+S did not reopen ",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    }
+  ]
+}

@@ -372,11 +372,17 @@ function guardSetup(update, { reuseSetup = false, acknowledge = false } = {}) {
           const spec = args[0] && typeof args[0] === 'object' && !Array.isArray(args[0]) ? args[0] : undefined;
           // ({ line: "Scientific, ID: menuAction:" }) is the element whose whole line, after its number,
           // is exactly that: a replayed step names an element this way when no ID or label is unique.
-          const byId = typeof spec?.id === 'string' || typeof spec?.label === 'string' || typeof spec?.line === 'string';
+          // click("Multiply"): the engine takes only numbers or points, and a bare name failed there, so
+          // Claude redid the batch over two calls (calculator-click, 2026-10-10). It is the one element
+          // with that label, else with that ID.
+          const bare = name === 'click' && typeof args[0] === 'string' && !/^\\d+$/.test(args[0]) ? args[0] : undefined;
+          const byId = typeof spec?.id === 'string' || typeof spec?.label === 'string' || typeof spec?.line === 'string' || bare !== undefined;
           if (byId) {
-            const [kind, value, match] = typeof spec.id === 'string' ? ['ID', spec.id, hasIdentifier]
+            const [kind, value, match] = bare !== undefined ? ['label or ID', bare, hasLabel]
+              : typeof spec.id === 'string' ? ['ID', spec.id, hasIdentifier]
               : typeof spec.label === 'string' ? ['label', spec.label, hasLabel] : ['line', spec.line, (line, value) => line === value];
             let found = [...elements(text)].filter(([, line]) => match(line, value));
+            if (bare !== undefined && !found.length) found = [...elements(text)].filter(([, line]) => hasIdentifier(line, value));
             // A read on a busy Mac can drop attributes: "button One" for "button Description: 1,
             // ID: One" (2026-10-09). With no match at all, one bare line named exactly that is it.
             if (!found.length && kind !== 'line') found = [...elements(text)].filter(([, line]) => /^[a-z][a-z ]* /.test(line) &&

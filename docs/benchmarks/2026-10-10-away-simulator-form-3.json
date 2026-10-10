@@ -1,0 +1,29 @@
+{
+  "stamp": "2026-10-10T22-53-11-032Z",
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 1,
+      "permissionPrompt": true,
+      "permissionWindow": {
+        "process": "UserNotificationCenter",
+        "title": "(untitled)"
+      },
+      "passed": false,
+      "reason": "macOS permission prompt: stopped",
+      "cleanupError": "Fixture cleanup stopped by permission observation",
+      "fixtureDir": "<temp>/sleight-bench/2026-10-10T22-53-11-032Z/sleight-simulator-form-1",
+      "models": []
+    }
+  ]
+}

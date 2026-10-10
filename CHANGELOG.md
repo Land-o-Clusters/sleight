@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- A call that acted and ended on exactly the window Claude last saw gets the whole tree instead of
+  "no change since the last full tree you saw", which read as if the actions hadn't run. In
+  calculator-click, Calculator still showed the previous run's 391, and Claude read again in 2 of 9
+  traced runs. In 6 runs after the change it got the tree every time.
+- `click("Multiply")` with a bare name clicks the one element with that label, or else with that
+  ID, as `click({ label })` does. The engine rejects a bare name, and Claude redid a batch over two
+  calls when it wrote one.
 - `sleight-mcp setup` (`--dry-run` prints the steps) runs OpenAI's helper installer from
   ChatGPT.app when its status isn't OK. Then it opens the Accessibility and Screen Recording panes
   and runs the doctor. With no Codex plugin under `~/.codex`, sleight starts the engine from

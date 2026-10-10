@@ -23,6 +23,17 @@ test('a guard read after a full tree Claude saw becomes the changed lines', () =
   assert.doesNotMatch(out, /Chat 7/, 'the unchanged sidebar is left out');
 });
 
+test('a call that acted and ended on the window Claude last saw gets the whole tree, not "no change"', () => {
+  // calculator-click, 2026-10-10: Calculator still showed 17 × 23 = 391 from the run before, so the
+  // batch that computed it ended on an identical tree, and "no change" sent Claude to read again.
+  const c = createReadCompactor();
+  apply(c, tree(sidebar));
+  const after = tree(sidebar);
+  const [out] = c.process([text(GUARD_MARK + after)], { action: c.beginAction('await app.click({ id: "Equals" })') }).map(i => i.text);
+  assert.doesNotMatch(out, /no change since/);
+  assert.match(out, /Chat 49/);
+});
+
 test('an unchanged window says so, and the next diff starts from the guard read', () => {
   const c = createReadCompactor();
   apply(c, tree(sidebar));

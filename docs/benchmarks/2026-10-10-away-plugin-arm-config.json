@@ -1,0 +1,28 @@
+{
+  "stamp": "2026-10-10T22-34-49-246Z",
+  "fixturePolicy": "retained app observers for every arm",
+  "ownerAway": true,
+  "arms": [
+    "mcp:sleight-plain",
+    "sleight"
+  ],
+  "armMetadata": {
+    "mcp:sleight-plain": {
+      "rejected": true
+    }
+  },
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "login",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "mcp:sleight-plain",
+      "phase": "configuration",
+      "passed": false,
+      "reason": "mcp:sleight-plain requires MCP_ARM_SLEIGHT_PLAIN_CONFIG"
+    }
+  ],
+  "liveConditions": []
+}

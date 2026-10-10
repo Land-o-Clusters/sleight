@@ -1,0 +1,181 @@
+{
+  "stamp": "2026-10-10T22-33-38-659Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "safari-form",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 6.64,
+        "group": {
+          "claude": 1.85,
+          "engine node": 0.71,
+          "mcp@latest": 0.57,
+          "node": 0.22,
+          "osascript": 0.22,
+          "codex": 0.42
+        },
+        "outside": {
+          "Safari": 0.74,
+          "engine helper": 1.91
+        },
+        "split": {
+          "sleight": 0.44,
+          "engine": 2.62,
+          "client": 1.85,
+          "other": 0.99
+        }
+      },
+      "timing": {
+        "totalMs": 31172,
+        "modelMs": 22727,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 6299,
+        "engineMs": 6091,
+        "relayMs": 25,
+        "localMs": 183,
+        "guardReads": 8,
+        "guardReadMs": 1376.0827079999972,
+        "guardReadFailures": 0,
+        "otherMs": 2146
+      },
+      "passed": true,
+      "seconds": 32.9,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 8,
+      "costUsd": 0.0205894,
+      "reportedCostUsd": 0.7366801999999999,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 16,
+        "cacheRead": 434481,
+        "cacheWrite": 71220,
+        "output": 3998
+      },
+      "exitCode": 0,
+      "answer": "The form is submitted. The Safari window (Form e38fc54a) now shows \"Submitted\", and I left it open as you asked.\n\nI filled in Name \"Morgan Reed\", Email \"morgan@example.test\", Team \"Design\", checked \"Send updates\", and Code \"e38fc54a\" before clicking Submit. I didn't read, switch to, or close any oth"
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-form",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 7.12,
+        "group": {
+          "claude": 2.07,
+          "engine node": 0.81,
+          "mcp@latest": 0.54,
+          "node": 0.21,
+          "osascript": 0.09,
+          "codex": 0.38,
+          "(bash)": 0.01,
+          "(zsh)": 0
+        },
+        "outside": {
+          "Safari": 0.82,
+          "engine helper": 2.19
+        },
+        "split": {
+          "sleight": 0.3,
+          "engine": 3,
+          "client": 2.07,
+          "other": 0.93
+        }
+      },
+      "timing": {
+        "totalMs": 29394,
+        "modelMs": 19693,
+        "calls": 9,
+        "refused": 0,
+        "toolMs": 6909,
+        "engineMs": 6878,
+        "relayMs": 31,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 1254.1146239999998,
+        "guardReadFailures": 0,
+        "otherMs": 2792
+      },
+      "passed": true,
+      "seconds": 31.4,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 10,
+      "costUsd": 0.0143563,
+      "reportedCostUsd": 0.4470814,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 20,
+        "cacheRead": 635847,
+        "cacheWrite": 31214,
+        "output": 3506
+      },
+      "exitCode": 0,
+      "answer": "The form is submitted. The page in the `b93f159c` Safari window now reads \"Submitted\". I filled in Name \"Morgan Reed\", Email \"morgan@example.test\", Team \"Design\", checked \"Send updates\", and entered Code \"b93f159c\" before submitting.\n\nSome clicks and fills were interrupted by renumbered elements, bu"
+    }
+  ]
+}

@@ -16,6 +16,7 @@
   <a href="#why-sleight">Why sleight</a> ·
   <a href="#watch-and-stop-it">Watch and stop it</a> ·
   <a href="docs/settings.md">Settings</a> ·
+  <a href="docs/privacy.md">Privacy</a> ·
   <a href="docs/how-it-works.md">How it works</a> ·
   <a href="docs/known-problems.md">Known problems</a> ·
   <a href="docs/benchmark.md">Benchmark</a>

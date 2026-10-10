@@ -1,0 +1,98 @@
+{
+  "stamp": "2026-10-10T22-40-31-014Z",
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 1,
+      "passed": false,
+      "reason": "Fixture setup failed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25202 (AXFocusedWindow) (-2700)",
+      "fixtureDiagnostics": [
+        {
+          "app": "DeviceHub",
+          "bundle": "com.apple.dt.Devices",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "pid": -1,
+          "observedBundle": "com.apple.dt.Devices",
+          "pids": [
+            -1
+          ],
+          "running": true,
+          "fresh": false,
+          "cleanup": "unconfirmed",
+          "setupCase": "already-running"
+        }
+      ],
+      "cleanupUnconfirmed": true,
+      "fixtureDir": "<temp>/sleight-bench/2026-10-10T22-40-31-014Z/sleight-simulator-form-1",
+      "models": []
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 2,
+      "passed": false,
+      "reason": "Fixture setup failed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25202 (AXFocusedWindow) (-2700)",
+      "fixtureDiagnostics": [
+        {
+          "app": "DeviceHub",
+          "bundle": "com.apple.dt.Devices",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "pid": -1,
+          "observedBundle": "com.apple.dt.Devices",
+          "pids": [
+            -1
+          ],
+          "running": true,
+          "fresh": false,
+          "cleanup": "unconfirmed",
+          "setupCase": "already-running"
+        }
+      ],
+      "cleanupUnconfirmed": true,
+      "fixtureDir": "<temp>/sleight-bench/2026-10-10T22-40-31-014Z/sleight-simulator-form-2",
+      "models": []
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 3,
+      "passed": false,
+      "reason": "Fixture setup failed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25202 (AXFocusedWindow) (-2700)",
+      "fixtureDiagnostics": [
+        {
+          "app": "DeviceHub",
+          "bundle": "com.apple.dt.Devices",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "pid": -1,
+          "observedBundle": "com.apple.dt.Devices",
+          "pids": [
+            -1
+          ],
+          "running": true,
+          "fresh": false,
+          "cleanup": "unconfirmed",
+          "setupCase": "already-running"
+        }
+      ],
+      "cleanupUnconfirmed": true,
+      "fixtureDir": "<temp>/sleight-bench/2026-10-10T22-40-31-014Z/sleight-simulator-form-3",
+      "models": []
+    }
+  ]
+}

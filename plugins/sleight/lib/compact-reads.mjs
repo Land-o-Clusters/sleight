@@ -109,7 +109,7 @@ function actionKind(code, before) {
       const number = /^\s*(\d+)\s*(?:,|$)/.exec(args)?.[1];
       const line = number && before?.lines.find(line => parse(line).num === Number(number));
       isSave = (!!line && hasLabel(parse(line).key.trim(), 'Save')) ||
-        /^\s*\{\s*(?:label|id|line)\s*:\s*['"](?:Save|button Save)['"]\s*\}/.test(args);
+        /^\s*(?:\{\s*(?:label|id|line)\s*:\s*)?['"](?:Save|button Save)['"]\s*\}?\s*$/.test(args);
       navigates ||= !isSave;
     }
     if (savePanel && call[1] === 'typeText' && folderHandle && receiver(call) === folderHandle) {
@@ -345,7 +345,11 @@ export function createReadCompactor() {
           if (at < 0) break;
           const start = at + GUARD_MARK.length, end = item.text.indexOf(GUARD_END, start);
           const tree = item.text.slice(start, end < 0 ? undefined : end);
-          const sent = forceFull ? tree : compact(tree, seenText);
+          let sent = forceFull ? tree : compact(tree, seenText);
+          // A call that acted and ended on exactly the tree Claude saw before it gets that tree whole:
+          // "no change" read as if the actions hadn't run, and Claude read again in 2 of 9 traced
+          // calculator-click runs (2026-10-10). Claude's own full read earlier in this result is enough.
+          if (action && !forceFull && sent !== tree && /sleight: no change since/.test(sent) && !/^Window: /m.test(seenText)) sent = tree;
           if (forceFull) remember(tree);
           if (end < 0 && observedInResult && !observedInResult.invalid) observedInResult.incomplete = true;
           add(sent); seenText += '\n' + sent;

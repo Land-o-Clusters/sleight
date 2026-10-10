@@ -57,6 +57,9 @@ belong in [STATE.md](STATE.md).
 - The benchmark's Claude arms run on the owner's Anthropic API key, paid from the $200 monthly API
   credit of their Max plan, which has no other use (owner, 2026-10-10). Spend it freely. A pass
   stops at $200 of spend in a month, because anything past the credit is billed to the owner's card.
+- Routines and replay acquire an app by bundle ID and then confirm the window's exact title (and
+  URL when present) from the read, because this engine rejects `getApp({ windowId })`. The owner
+  followed sleight-arch's recommendation to keep it (2026-10-10).
 - Bigger releases, less often (owner, 2026-10-10), so competitors have less to copy or benchmark
   against between releases. Work in progress goes to the private `Land-o-Clusters/sleight-dev`
   (`remote.pushDefault private`), and the public repo gets pushes only at release (owner, 2026-10-10).

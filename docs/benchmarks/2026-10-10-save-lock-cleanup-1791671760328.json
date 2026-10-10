@@ -1,0 +1,11 @@
+{
+  "started": "2026-10-10T22:36:00.202Z",
+  "source": "docs/benchmarks/2026-10-10-save-lock-1791671715159.json",
+  "cleanupOnly": true,
+  "testInput": false,
+  "readOnly": false,
+  "lockHeld": true,
+  "error": "Command failed: /usr/bin/osascript -l JavaScript ~/Projects/sleight/bench/textedit-save-lock-cleanup.js /private/tmp/sleight-save-lock-Uew2AR/trial.txt 73602 1791671714290 1791671715158\n~/Projects/sleight/bench/textedit-save-lock-cleanup.js: execution error: Error: Error: AXEdited failed: -25205 (-2700)\n",
+  "lockRetained": true,
+  "finished": "2026-10-10T22:36:00.328Z"
+}
