@@ -15,10 +15,8 @@ open PRs.
 repo has `remote.pushDefault private`, which sends every worktree's pushes to the private
 `Land-o-Clusters/sleight-dev` (Actions off, since spending is the owner's). Public
 `origin/pane/auto-mode` stays at `332e3ca` and gets pushes only at release.
-Open for the owner: these Sol branches were pushed to the public repo before the switch (02:18 to
-03:25 UTC) and are still there: `codex/replay-desktop`, `codex/verified-results`, `codex/waits-targeting`,
-`codex/textedit-fixes`, `codex/windows-research`, `codex/lease-close-tests` and earlier `codex/*`.
-Deleting them from public is the owner's call.
+The `codex/*` branches already on the public repo (pushed 02:18 to 03:25 UTC, and `0d24316` at
+07:10) stay there: the owner said to leave them (2026-10-10).
 
 **Other projects.** Puddle arch messages this session before each timed window; when it says HOLD,
 create `/tmp/sleight-hold` (stops live probes, and `npm run check` waits on it since `890faed`),
@@ -146,9 +144,6 @@ Branches and worktrees (`~/Projects/sleight-wt/<name>`):
   OpenUsage's hourly retry passing after the next pass would confirm the cause.
 
 - Watching the Mail and Mimestream tasks (about 10 minutes).
-- Whether to delete the pre-switch `codex/*` branches from the public repo. Sol pushed
-  `codex/real-use-tasks` `0d24316` there at about 07:10 UTC, after the switch, since that branch
-  tracks `origin`. The pre-push hook (LAWS) now refuses such pushes.
 - Which of the unstarted briefs above to run.
 - Left on their screen from 2026-10-09, Safari fixture windows, Helium, Preview `Pages-*.pdf`, Word
   and Excel fixture documents, a TextEdit "Untitled 6" in their iCloud TextEdit folder (check it only
