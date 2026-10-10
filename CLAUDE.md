@@ -7,6 +7,8 @@ bundled with the ChatGPT desktop app. See README.md for how it fits together.
 
 Run `npm run check` before committing: relay tests, `claude plugin validate`, and the mod's tests.
 `npm run typecheck` needs the types Claude Code writes when it loads the mod.
+`npm run check` waits while `/tmp/sleight-hold` exists, which marks another project's timed window
+on this Mac (`SLEIGHT_IGNORE_HOLD=1` skips the wait). Live probes stop while it exists too.
 
 ## Writing
 

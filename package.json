@@ -7,7 +7,7 @@
     "test:mod": "claude plugin test plugins/sleight",
     "validate": "claude plugin validate . && claude plugin validate plugins/sleight",
     "typecheck": "tsc -p plugins/sleight/tsconfig.json",
-    "check": "npm test && npm run validate && npm run test:mod",
+    "check": "scripts/wait-hold.sh && npm test && npm run validate && npm run test:mod",
     "doctor": "plugins/sleight/bin/sleight-mcp --doctor",
     "bench": "node bench/run.mjs",
     "build:hover-fixture": "node bench/hover-build.mjs",
