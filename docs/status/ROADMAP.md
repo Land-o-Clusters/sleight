@@ -158,8 +158,10 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
    asked for administrator access (Touch ID or password), then exited 0 without creating
    `~/.codex/computer-use`. The engine didn't start there, because the probe left out its
    node_repl path. Probe v2 sets the engine's whole environment and uses the helper inside
-   ChatGPT.app where it is. It started the engine for the owner's user. Still unknown: whether it
-   works without ChatGPT ever signed in. macOS permissions always need the user's click.
+   ChatGPT.app where it is. In puddle-census, never signed in, it initialized the engine, listed
+   its tools and answered the first call (the engine's docs). Probe v3 adds a `listApps` call,
+   which tells whether the helper reads apps there too. macOS permissions always need the user's
+   click.
 
 ## 6. Features after replay
 
