@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `app.waitFor({ id | label | line }, { timeoutMs })` waits for one element in the same window,
+  with full engine reads at least 250 ms apart and a 10 s polling deadline. Each poll appears in
+  the guard timing trace. It doesn't start a timer until called. The skill now asks Claude to use it for
+  loading elements, so affected-task benchmarks belong to sleight-arch before release.
 - Paste keeps the user's clipboard with one helper per session instead of a spawn per paste, and
   reads large clipboards in linear time (a mocked 40 MiB transfer fell from about 5 s to 31 to 88 ms).
   `blocked_app` also refuses a settings window by its Accessibility metadata, so a localized title or

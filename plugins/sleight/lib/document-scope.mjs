@@ -1,3 +1,4 @@
+import { elementWait } from './element-wait.mjs';
 // Header identity is a cooperative runtime observation, not an OS capability.
 // Mark full trees the guard writes, which the relay compacts (compact-reads.mjs).
 export const GUARD_MARK = '[sleight:guard-read]\n';
@@ -176,6 +177,7 @@ function guardSetup(update) {
     const hasIdentifier = ${hasIdentifier.toString()};
     const hasLabel = ${hasLabel.toString()};
     const sameElement = ${sameElement.toString()};
+    const wait = ${elementWait.toString()};
     const checkNative = () => { if (state.nativeDenied) throw new Error(state.nativeDenied); };
     const checkLease = async () => {
       if (!state.lease) return;
@@ -191,6 +193,48 @@ function guardSetup(update) {
       if (state.proxies.has(target)) return target;
       if (state.wrapped.has(target)) return state.wrapped.get(target);
       const proxy = new Proxy(target, { get(raw, name) {
+        if (name === 'waitFor') return (() => {
+          let pending;
+          const checkCurrent = () => {
+            if (state.reads !== pending.reads || pending.reads.get(proxy) !== pending.reading) {
+              throw new Error('waitFor stopped: another action or read superseded this poll. Read the window again.');
+            }
+          };
+          return wait({
+          read: () => {
+            checkNative();
+            const reads = state.reads, reading = {};
+            reads.set(proxy, reading); pending = { reads, reading };
+            return timedRead(raw, 'wait');
+          },
+          parse, elements, hasIdentifier, hasLabel, expected: state.guarded ? state.expected : undefined,
+          acceptWindow: (current, text) => {
+            checkCurrent();
+            const before = state.previous.get(proxy);
+            const opener = before && (before.name === 'click' || (before.name === 'pressKey' && typeof before.key === 'string' &&
+              (before.key.includes('+') || /^(?:return|enter)$/i.test(before.key))));
+            if (!state.adoptUrl || current.app !== state.expected?.app) return false;
+            const adoptedUrl = state.expected.url == null && current.url && current.title === state.expected.title;
+            const panel = current.title === '' && !current.url;
+            const named = state.typed.some(typed => {
+              const base = typed.trim().split('/').pop();
+              if (base.length < 3) return false;
+              let file;
+              try { file = current.url?.startsWith('file://') ? decodeURIComponent(new URL(current.url).pathname).split('/').pop() : undefined; } catch {}
+              return current.title === base || file === base;
+            });
+            if (!adoptedUrl && !panel && !(opener && (/^0 [^\\n]*\\bID: (?:save|open)-panel\\b/m.test(text) ||
+                (!current.url && /^Untitled(?: \\d+)?$/.test(current.title)) || named))) return false;
+            state.expected = current;
+            return true;
+          },
+          observe: text => {
+            checkCurrent();
+            state.activeApp = proxy;
+            state.reads.set(proxy, { text, emitted: true });
+            nodeRepl.write(${JSON.stringify(GUARD_MARK)} + text + ${JSON.stringify(GUARD_END)});
+          }
+        }); })();
         const value = Reflect.get(raw, name);
         if (typeof value !== 'function') return value;
         // Claude's tree reads are full reads the relay turns into changed lines,
