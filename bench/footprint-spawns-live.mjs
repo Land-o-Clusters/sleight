@@ -13,7 +13,7 @@ const scrub = value => String(value).replace(/\/Users\/[^/\s"']+/g, '~');
 const available = () => { if (existsSync('/tmp/sleight-hold')) throw new Error('/tmp/sleight-hold exists; live probe refused'); };
 const currentRoot = fileURLToPath(new URL('../', import.meta.url));
 
-async function worker(root, output, cancelFile) {
+async function worker(root, output, cancelFile, helpersOnly = false) {
   const report = { root: scrub(root), started: new Date().toISOString(), load: loadavg(), calls: [], failures: [] };
   let unlock, helper, client, bank, cleanup = true;
   const children = [], handles = [];
@@ -69,27 +69,29 @@ async function worker(root, output, cancelFile) {
     const before = await timed('helper cold health', () => helper.probe('Calculator'));
     assert.ok(['responding', 'absent'].includes(before.status), `native health unavailable (${before.status})`);
     report.appStatus = before.status;
-    ready();
-    const started = performance.now();
-    client = await probeClient({ command: process.execPath, args: [join(root, 'tests/fixtures/lease-launcher.mjs'), join(bank, 'leases')],
-      env: { SLEIGHT_SURFACES: 'computer', SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_TRACE: join(bank, 'trace') } },
-    { relay: false, label: 'footprint', record: () => {} });
-    report.initializeMs = performance.now() - started;
-    async function call(name, code) {
-      const result = await timed(name, () => client.call('js', { code, timeout_ms: 60000 }));
-      assert.ok(!result.isError, scrub(JSON.stringify(result.content).slice(0, 500)));
-      return result;
-    }
-    if (before.status === 'responding') {
-      await call('acquisition', 'var app = await cua.getApp("com.apple.calculator")');
-      await call('read', 'await app.getAXState({ disableDiffing: true })');
-      // Read only an existing app; no launch, activation, input or pointer work.
-      const taps = await timed('turn end', () => client.call('turn_ended', { hook_event_name: 'Stop' }));
-      assert.ok(!taps.isError);
-    } else {
-      report.acquisitionSkipped = 'Calculator was absent; startup and helper queries only';
-      const result = await call('runtime readiness', 'nodeRepl.write("footprint-ready")');
-      assert.ok(result.content?.some(block => block.type === 'text' && block.text.includes('footprint-ready')), 'engine did not execute the readiness marker');
+    if (!helpersOnly) {
+      ready();
+      const started = performance.now();
+      client = await probeClient({ command: process.execPath, args: [join(root, 'tests/fixtures/lease-launcher.mjs'), join(bank, 'leases')],
+        env: { SLEIGHT_SURFACES: 'computer', SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_TRACE: join(bank, 'trace') } },
+      { relay: false, label: 'footprint', record: () => {} });
+      report.initializeMs = performance.now() - started;
+      async function call(name, code) {
+        const result = await timed(name, () => client.call('js', { code, timeout_ms: 60000 }));
+        assert.ok(!result.isError, scrub(JSON.stringify(result.content).slice(0, 500)));
+        return result;
+      }
+      if (before.status === 'responding') {
+        await call('acquisition', 'var app = await cua.getApp("com.apple.calculator")');
+        await call('read', 'await app.getAXState({ disableDiffing: true })');
+        // Read only an existing app; no launch, activation, input or pointer work.
+        const taps = await timed('turn end', () => client.call('turn_ended', { hook_event_name: 'Stop' }));
+        assert.ok(!taps.isError);
+      } else {
+        report.acquisitionSkipped = 'Calculator was absent; startup and helper queries only';
+        const result = await call('runtime readiness', 'nodeRepl.write("footprint-ready")');
+        assert.ok(result.content?.some(block => block.type === 'text' && block.text.includes('footprint-ready')), 'engine did not execute the readiness marker');
+      }
     }
     report.queries = [];
     let oneShotSpawns = 0;
@@ -176,9 +178,9 @@ async function surfaceWorker(surfaces, output, cancelFile) {
   return report.failures.length ? 1 : 0;
 }
 
-async function pairs(baseline, output, surfaces = false) {
+async function pairs(baseline, output, surfaces = false, helpersOnly = false) {
   available();
-  const report = { started: new Date().toISOString(), mode: surfaces ? 'session engine surfaces' : 'live helper pairs; computer surface', runs: [] };
+  const report = { started: new Date().toISOString(), mode: surfaces ? 'session engine surfaces' : helpersOnly ? 'native helpers without engine acquisition' : 'live helper pairs; computer surface', runs: [] };
   const bank = mkdtempSync('/private/tmp/sleight-footprint-pairs-');
   const cancelFile = join(bank, 'cancel');
   let interrupted = false;
@@ -192,7 +194,8 @@ async function pairs(baseline, output, surfaces = false) {
       for (const [arm, root] of repetition % 2 ? arms : arms.toReversed()) {
         available(); if (interrupted) return 1;
         const target = join(bank, `${arm}-${repetition}.json`);
-        const child = spawn('/usr/bin/time', ['-p', process.execPath, fileURLToPath(import.meta.url), surfaces ? 'surface-worker' : 'worker', root, target, cancelFile], { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+        const child = spawn('/usr/bin/time', ['-p', process.execPath, fileURLToPath(import.meta.url), surfaces ? 'surface-worker' : 'worker', root, target, cancelFile,
+          ...(helpersOnly ? ['helpers'] : [])], { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
         let stderr = ''; child.stdout.resume(); child.stderr.on('data', data => { stderr += data; });
         const exit = await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal })); });
         const result = existsSync(target) ? JSON.parse(readFileSync(target, 'utf8')) : { failures: ['worker produced no report'] };
@@ -209,7 +212,8 @@ async function pairs(baseline, output, surfaces = false) {
   } finally { process.removeListener('SIGINT', cancel); rmSync(bank, { recursive: true, force: true }); }
 }
 try {
-  process.exitCode = process.argv[2] === 'worker' ? await worker(resolve(process.argv[3]), process.argv[4], process.argv[5])
+  process.exitCode = process.argv[2] === 'worker' ? await worker(resolve(process.argv[3]), process.argv[4], process.argv[5], process.argv[6] === 'helpers')
     : process.argv[2] === 'surface-worker' ? await surfaceWorker(process.argv[3], process.argv[4], process.argv[5])
-      : process.argv[2] === 'surfaces' ? await pairs(undefined, process.argv[3], true) : await pairs(resolve(process.argv[2]), process.argv[3]);
+      : process.argv[2] === 'surfaces' ? await pairs(undefined, process.argv[3], true)
+        : process.argv[2] === 'helpers' ? await pairs(resolve(process.argv[3]), process.argv[4], false, true) : await pairs(resolve(process.argv[2]), process.argv[3]);
 } catch (error) { console.error(scrub(error.message)); process.exitCode = 1; }

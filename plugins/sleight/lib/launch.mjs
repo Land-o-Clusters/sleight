@@ -467,8 +467,8 @@ export async function run({ leaseDirectory } = {}) {
     env: { ...process.env, ...s.env },
   });
   child.on('error', err => fail(`could not start server: ${err.message}`));
-  // Refresh after the session engine initializes. Keep its current description fixed; a fresh
-  // inventory affects the next session only. A valid cache needs no second engine at all.
+  // Refresh every automatic session after initialization. Keep this description fixed;
+  // the background inventory affects the next session only.
   const stopObservingInitialization = refreshAfterInitialize(child.stdout, surfaceCache);
   child.on('close', async code => {
     stopObservingInitialization(); await surfaceCache?.close();

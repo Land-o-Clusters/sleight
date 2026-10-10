@@ -27,7 +27,7 @@ test('automatic launch without a cached extension stays computer-only without a 
   assert.equal(server.env.BROWSER_USE_AVAILABLE_BACKENDS, 'chrome');
 });
 
-test('health and slow operations reuse two session helpers and retain reply identity', async () => {
+test('health, targets and taps reuse three session helpers and retain reply identity', async () => {
   let spawned = 0;
   const script = `require('readline').createInterface({input:process.stdin}).on('line',line=>{
     const r=JSON.parse(line); const reply=r.op==='keyboard-taps'?{ok:true,taps:[{pid:42,app:'Calculator'}]}:
@@ -40,7 +40,7 @@ test('health and slow operations reuse two session helpers and retain reply iden
     assert.equal((await helper.probe('Calculator')).status, 'responding');
     assert.deepEqual(await helper.keyboardTaps(), [{ pid: 42, app: 'Calculator' }]);
     assert.deepEqual(await helper.target({ app: 'Calculator' }), { ok: true, target: { appId: 'com.apple.calculator', pid: 42 } });
-    assert.equal(spawned, 2);
+    assert.equal(spawned, 3);
   } finally { await helper.close(); }
   assert.deepEqual(await helper.keyboardTaps(), []);
   assert.equal((await helper.target({ app: 'Calculator' })).ok, false, 'closed helpers cannot grant a target');
@@ -55,14 +55,17 @@ test('a stalled target refuses and a new helper can answer the next request', as
     spawned++; return spawn(process.execPath, ['-e', script], { stdio: ['pipe', 'pipe', 'ignore'] });
   } });
   try {
-    assert.equal((await helper.target({ app: 'stuck' })).ok, false);
+    const failure = await helper.target({ app: 'stuck' });
+    assert.equal(failure.ok, false);
+    assert.match(failure.error, /lease.target resolution/i);
+    assert.match(failure.error, /reading.*won.t help/i);
     assert.deepEqual(await helper.target({ app: 'Calculator' }), { ok: true, target: { appId: 'com.apple.calculator', pid: 42 } });
     assert.equal(spawned, 2);
   } finally { await helper.close(); }
 });
 
 function fakeHelpers() {
-  const lanes = { probe: [], slow: [] };
+  const lanes = { probe: [], target: [], taps: [] };
   return { lanes, spawnHelper(kind) {
     const child = new EventEmitter();
     child.stdout = new PassThrough(); child.requests = [];
@@ -85,32 +88,50 @@ test('a probe deadline cannot interrupt a slow target with its own 30 second dea
   t.mock.timers.tick(2000);
   assert.deepEqual(await probe, { status: 'unknown' });
   assert.equal(fake.lanes.probe[0].killed, true);
-  assert.equal(fake.lanes.slow[0].killed, undefined);
+  assert.equal(fake.lanes.target[0].killed, undefined);
   t.mock.timers.tick(27999); await Promise.resolve();
   assert.equal(targetFinished, false);
-  fake.lanes.slow[0].reply({ ok: true, target: { appId: 'com.apple.calculator', pid: 42 } });
+  fake.lanes.target[0].reply({ ok: true, target: { appId: 'com.apple.calculator', pid: 42 } });
   assert.equal((await target).ok, true);
   await helper.close();
 });
 
-test('a timed-out slow operation leaves queued taps intact with their full deadline', async t => {
+test('a timed-out target leaves the next queued target its full deadline', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const fake = fakeHelpers();
   const helper = createAppHealthHelper({ spawnHelper: kind => fake.spawnHelper(kind) });
   const target = helper.target({ app: 'Calculator' });
-  let tapsFinished = false;
-  const taps = helper.keyboardTaps().then(value => { tapsFinished = true; return value; });
-  assert.equal(fake.lanes.slow[0].requests.length, 1);
+  let nextFinished = false;
+  const next = helper.target({ app: 'TextEdit' }).then(value => { nextFinished = true; return value; });
+  assert.equal(fake.lanes.target[0].requests.length, 1);
   t.mock.timers.tick(30000);
   assert.equal((await target).ok, false);
   // Collection of the timed-out process precedes dispatch on its replacement.
   for (let i = 0; i < 6; i++) await Promise.resolve();
-  assert.equal(fake.lanes.slow.length, 2);
-  assert.equal(fake.lanes.slow[1].requests[0].op, 'keyboard-taps');
+  assert.equal(fake.lanes.target.length, 2);
+  assert.equal(fake.lanes.target[1].requests[0].op, 'lease-target');
+  t.mock.timers.tick(29999); await Promise.resolve();
+  assert.equal(nextFinished, false);
+  fake.lanes.target[1].reply({ ok: true, target: { appId: 'com.apple.TextEdit', pid: 43 } });
+  assert.equal((await next).target.appId, 'com.apple.TextEdit');
+  await helper.close();
+});
+
+test('a stuck tap scan cannot delay target resolution or lose its own deadline', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fake = fakeHelpers();
+  const helper = createAppHealthHelper({ spawnHelper: kind => fake.spawnHelper(kind) });
+  let tapsFinished = false;
+  const taps = helper.keyboardTaps().then(value => { tapsFinished = true; return value; });
+  const target = helper.target({ app: 'Calculator' });
+  assert.equal(fake.lanes.taps[0].requests[0].op, 'keyboard-taps');
+  assert.equal(fake.lanes.target[0].requests[0].op, 'lease-target');
+  fake.lanes.target[0].reply({ ok: true, target: { appId: 'com.apple.calculator', pid: 42 } });
+  assert.equal((await target).ok, true);
   t.mock.timers.tick(29999); await Promise.resolve();
   assert.equal(tapsFinished, false);
-  fake.lanes.slow[1].reply({ ok: true, taps: [{ pid: 42 }] });
-  assert.deepEqual(await taps, [{ pid: 42 }]);
+  t.mock.timers.tick(1);
+  assert.deepEqual(await taps, []);
   await helper.close();
 });
 

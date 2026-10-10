@@ -16,14 +16,21 @@ our own runs. Dates and engine versions are given where they matter.
   recorded-header unit coverage, with live checks held on 2026-10-09. Clipboard transfers and runtime
   strings remain outside those checks. Native
   document scope and saved-file change review do not cover browser tabs. Automatic mode uses a
-  connected-extension result cached for one minute. A disconnect can leave it stale until expiry;
-  connecting an extension requires a later session after background discovery completes. An installed
+  connected-extension result cached for six hours, or a negative for 24 hours. Every automatic
+  session refreshes it after initialization. A newly connected extension leaves the current session
+  on `computer`. Browser control starts in a new session after a successful background refresh.
+  Discovery has a four-second reply deadline and up to 2.5 seconds for process collection. A timeout
+  leaves the prior timestamp unchanged, so under load there is no guaranteed discovery delay.
+  Existing sessions keep their description. If refresh fails, later sessions may use a positive
+  result for up to six hours. An installed
   extension can be absent from the engine's inventory. Browser approvals still use their normal route.
 - [Input leases](design/input-lease.md) let one sleight session act on a window at a time.
   Another session gets the holder's name and time left, while reads remain available. Leases expire
   after 30 seconds without renewal and end with the turn or session. Local drag and hover reserve the app,
   while menu and notification actions reserve the desktop. Other tools, including Codex,
   do not take these leases, and arbitrary JavaScript can bypass the injected guard.
+  Never delete the SQLite coordinator during live use. Replacement between transactions is detected
+  and reopened, but metadata checks cannot prevent arbitrary filesystem replacement during an action.
 - Change review covers saved files observed before `js` actions. A file first seen after an action
   needs a fresh standalone read before editing. Undo then starts at that later copy.
   Unsaved buffers, Save As targets,
@@ -283,7 +290,10 @@ our own runs. Dates and engine versions are given where they matter.
   answered in 0.27 to 0.52 s with a 6 s deadline. A read failure then can be diagnosed as a hung app,
   with advice to quit and reopen it. Not fixed yet.
 - The 29.475 s first Calculator acquisition on 2026-10-09 spent 27.683 s inside the engine after
-  approval. Browser discovery had already ended; its removal does not explain or fix that wait.
+  approval. Browser discovery had already ended, so its removal does not explain or fix that wait.
+  On 2026-10-10 a follow-up engine acquisition failed with ScreenCaptureKit error `-3811`;
+  the historical delay's native cause remains unknown. Separate target and tap helper probes passed.
+  The [third footprint report](benchmarks/2026-10-09-footprint-spawns-3.md) records both.
   [The footprint probes](benchmarks/2026-10-09-footprint-spawns.md) separate startup and acquisition.
   Terminal pane snapshots and desktop images over the embedding limit still decode all pixels.
   Small desktop images can skip decoding, though these probes do not establish Codex footprint parity.

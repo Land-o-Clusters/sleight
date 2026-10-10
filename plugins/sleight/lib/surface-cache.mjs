@@ -2,9 +2,10 @@ import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSy
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { discoverExtensions } from './browser-discovery.mjs';
 
-const owned = stat => (!process.getuid || stat.uid === process.getuid()) && (stat.mode & 0o022) === 0;
+const owned = stat => (!process.getuid || Number(stat.uid) === process.getuid()) && (Number(stat.mode) & 0o022) === 0;
 function ownedDirectory(file) {
   const stat = lstatSync(dirname(file));
   if (!stat.isDirectory() || !owned(stat)) throw new Error('unsafe cache directory');
@@ -43,8 +44,8 @@ export function refreshAfterInitialize(output, cache) {
   return dispose;
 }
 
-// Cache only the inventory outcome, never browser profiles, tabs or approvals. A short TTL bounds
-// disconnect staleness; missing/expired entries keep this session's description computer-only.
+// Cache only the inventory outcome, never browser profiles, tabs or approvals. Refresh every
+// automatic session, but keep its initial description fixed until the next session.
 export function createSurfaceCache(server, { file = join(homedir(), 'Library/Caches/sleight/extensions.json'),
   now = Date.now, discover = discoverExtensions } = {}) {
   const engine = createHash('sha256').update(JSON.stringify([server.version, server.command, server.args])).digest('hex');
@@ -53,28 +54,46 @@ export function createSurfaceCache(server, { file = join(homedir(), 'Library/Cac
     const value = readCache(file);
     const age = now() - value?.checkedAt;
     if (value?.schema === 1 && value.engine === engine && typeof value.connected === 'boolean' &&
-      Number.isFinite(value.checkedAt) && age >= 0 && age < 60000) cached = value;
+      Number.isFinite(value.checkedAt) && age >= 0 && age < (value.connected ? 6 : 24) * 60 * 60 * 1000) cached = value;
   } catch { /* No usable cache: computer-only. */ }
   const controller = new AbortController();
   let pending;
   return {
     connected: cached?.connected === true,
     refresh() {
-      if (cached || controller.signal.aborted) return Promise.resolve();
+      if (controller.signal.aborted) return Promise.resolve();
       return pending ??= (async () => {
         const checkedAt = now();
-        let browsers = [];
-        try { browsers = await discover(server, { signal: controller.signal }); } catch { /* Negative result. */ }
-        if (controller.signal.aborted) return;
-        const connected = Array.isArray(browsers) && browsers.some(b => b?.type === 'extension' && b.metadata?.extensionInstanceId);
+        let browsers;
+        try { browsers = await discover(server, { signal: controller.signal, strict: true }); }
+        catch { return; } // Failure must neither extend a positive nor manufacture a day-long negative.
+        if (controller.signal.aborted || !Array.isArray(browsers)) return;
+        const connected = browsers.some(b => b?.type === 'extension' && b.metadata?.extensionInstanceId);
         const temporary = `${file}.${randomUUID()}.tmp`;
+        const lock = `${file}.publish.sqlite`;
+        let publisher;
         try {
           mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
           ownedDirectory(file);
+          // Only publication is serialized. SQLite releases its lock even on process death.
+          try { writeFileSync(lock, '', { mode: 0o600, flag: 'wx' }); }
+          catch (err) { if (err.code !== 'EEXIST') throw err; }
+          const before = lstatSync(lock, { bigint: true });
+          if (!before.isFile() || !owned(before)) throw new Error('unsafe cache coordinator');
+          publisher = new DatabaseSync(lock);
+          publisher.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE');
+          const after = lstatSync(lock, { bigint: true });
+          if (before.dev !== after.dev || before.ino !== after.ino) throw new Error('cache coordinator changed');
+          let latest; try { latest = readCache(file); } catch { /* First or invalid entry. */ }
+          if (latest?.schema === 1 && latest.engine === engine && Number.isFinite(latest.checkedAt) &&
+            latest.checkedAt > checkedAt && latest.checkedAt <= now()) return;
           writeFileSync(temporary, JSON.stringify({ schema: 1, engine, checkedAt, connected }), { mode: 0o600, flag: 'wx' });
           renameSync(temporary, file);
         } catch { /* Cache failures must not fail a session. */ }
-        finally { try { rmSync(temporary, { force: true }); } catch { /* Unwritable cache directory. */ } }
+        finally {
+          try { publisher?.close(); } catch { /* Failed publication must not fail a session. */ }
+          try { rmSync(temporary, { force: true }); } catch { /* Unwritable cache directory. */ }
+        }
       })();
     },
     close() { controller.abort(); return pending; },

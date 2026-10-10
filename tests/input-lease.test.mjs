@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { InputLease, isLeaseRead, leaseKey } from '../plugins/sleight/lib/input-lease.mjs';
 import { guardedCode } from '../plugins/sleight/lib/document-scope.mjs';
@@ -33,9 +33,9 @@ for (const code of [
   'await cua.listApps(); await app.click(1)',
   '(await cua.listApps()).forEach(a => app.click(1))',
 ]) test('read/action mixture stays an action: ' + code, () => assert.equal(isLeaseRead(code), false));
-function bank(t) {
+function bank(t, cleanup = () => {}) {
   const directory = mkdtempSync(join(tmpdir(), 'sleight-lease-test-'));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  t.after(() => { try { cleanup(); } finally { rmSync(directory, { recursive: true, force: true }); } });
   return directory;
 }
 test('second holder is refused with its name and remaining time; reads have a narrow grammar', t => {
@@ -90,6 +90,87 @@ test('corrupt lease fails closed and a busy coordinator refuses without waiting'
   db.exec('BEGIN IMMEDIATE');
   assert.throws(() => b.acquire(window), /A.*s remaining/);
   db.exec('ROLLBACK'); db.close(); a.close();
+});
+
+test('a removed lease directory is recreated and its new coordinator excludes another holder', t => {
+  const directory = bank(t, () => { try { a.close(); } finally { b.close(); } });
+  const a = new InputLease({ directory, holder: 'A' }), b = new InputLease({ directory, holder: 'B' });
+  const key = a.acquire(window), previous = a.grant(key).token;
+  rmSync(directory, { recursive: true });
+  a.acquire(window);
+  assert.notEqual(a.grant(key).token, previous);
+  assert.throws(() => b.acquire(window), /A.*s remaining/);
+});
+
+for (const replacement of ['unlink', 'rename']) test(`a coordinator ${replacement} reopens the connection before another lease operation`, t => {
+  const directory = bank(t, () => { replacementDb?.close(); try { a.close(); } finally { b.close(); } });
+  const coordinator = join(directory, '.coordinator.sqlite');
+  const a = new InputLease({ directory, holder: 'A' }), b = new InputLease({ directory, holder: 'B' });
+  let replacementDb;
+  a.acquire(window);
+  if (replacement === 'unlink') rmSync(coordinator);
+  else renameSync(coordinator, `${coordinator}.previous`);
+  replacementDb = new DatabaseSync(coordinator);
+  replacementDb.exec('BEGIN IMMEDIATE');
+  const other = { ...window, url: 'file:///tmp/b.txt' };
+  assert.throws(() => a.acquire(other), error => error.leaseBusy === true, 'the replacement coordinator owns exclusion');
+  replacementDb.exec('ROLLBACK'); replacementDb.close(); replacementDb = undefined;
+  a.acquire(other);
+  assert.throws(() => b.acquire(other), /A.*s remaining/);
+});
+
+test('a failed rollback disposes its lock and the next operation reopens a connection', t => {
+  const directory = bank(t, () => { try { a.close(); } finally { b.close(); } }), coordinator = join(directory, '.coordinator.sqlite');
+  const a = new InputLease({ directory, holder: 'A' }), b = new InputLease({ directory, holder: 'B' });
+  a.acquire(window);
+  const original = a.db, exec = original.exec.bind(original);
+  let fail = true;
+  original.exec = sql => { if (sql === 'ROLLBACK' && fail) { fail = false; throw new Error('rollback failed'); } return exec(sql); };
+  assert.throws(() => a.renew(), /rollback failed/);
+  const independent = new DatabaseSync(coordinator);
+  try { independent.exec('BEGIN IMMEDIATE'); independent.exec('ROLLBACK'); }
+  finally { independent.close(); }
+  a.renew();
+  assert.notEqual(a.db, original);
+  assert.throws(() => b.acquire(window), /A.*s remaining/);
+});
+
+test('replacement after BEGIN refuses before the lease callback changes its record', t => {
+  const directory = bank(t, () => a.close()), coordinator = join(directory, '.coordinator.sqlite');
+  const a = new InputLease({ directory, holder: 'A' });
+  a.acquire(window);
+  const path = join(directory, leaseKey(window) + '.json'), previous = readFileSync(path, 'utf8');
+  const original = a.db, exec = original.exec.bind(original);
+  let replace = true;
+  original.exec = sql => {
+    const value = exec(sql);
+    if (sql.includes('BEGIN IMMEDIATE') && replace) {
+      replace = false; renameSync(coordinator, `${coordinator}.previous`);
+      const next = new DatabaseSync(coordinator); next.close();
+    }
+    return value;
+  };
+  assert.throws(() => a.renew(), /coordinator.*changed/i);
+  assert.equal(readFileSync(path, 'utf8'), previous);
+  a.renew();
+  assert.notEqual(a.db, original);
+});
+
+test('a cached and then replaced coordinator both retain kernel exclusion against another process', t => {
+  const directory = bank(t, () => a.close()), coordinator = join(directory, '.coordinator.sqlite');
+  const a = new InputLease({ directory, holder: 'A' });
+  const key = a.acquire(window);
+  const code = `import {DatabaseSync} from 'node:sqlite'; const db=new DatabaseSync(process.argv[1]);
+    try {db.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE'); console.log('won'); db.exec('ROLLBACK');}
+    catch(error) {if(error.errcode!==5)throw error; console.log('busy');} finally {db.close();}`;
+  for (const replace of [false, true]) {
+    if (replace) renameSync(coordinator, `${coordinator}.previous`);
+    a.transact(key, () => {
+      const child = spawnSync(process.execPath, ['--input-type=module', '-e', code, coordinator], { encoding: 'utf8', timeout: 10000 });
+      assert.equal(child.status, 0, child.error?.message ?? child.stderr);
+      assert.equal(child.stdout.trim(), 'busy');
+    });
+  }
 });
 test('independent processes racing one file admit exactly one action owner', async t => {
   const directory = bank(t);

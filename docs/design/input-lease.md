@@ -38,7 +38,11 @@ actions. Each acquired handle receives the guard, including alternate and
 Leases live in `~/Library/Application Support/sleight/leases/`. Each JSON file
 stores a random ownership token, session name, target and expiry. A shared SQLite
 coordinator serializes file changes with zero busy timeout. Each lease manager keeps one connection
-until close, with a rollback after every transaction, including refusals. The manager ends each
+until close, with a rollback after every transaction, including refusals. Each transaction recreates
+a missing directory and compares the coordinator's device and inode with those recorded when it
+opened. A changed path closes and reopens the connection. Another check after taking the lock
+refuses replacement before the lease callback runs. Rollback failure closes the connection; failed
+close blocks further transactions. Callbacks never replay after starting. The manager ends each
 transaction before returning to the caller. The coordinator remains on disk
 after JSON removal so processes always lock the same inode. This needs `node:sqlite`,
 available in the current ChatGPT bundled Node 24 runtime.
@@ -55,10 +59,11 @@ engine action. With change review on, same-app dialogs without file URLs pass th
 window check, including sheets opened during a call. Token checks still apply.
 Document approval mode retains its strict window check. Local drag reserves its resolved app since its helper can select
 another window. A native read resolves the name or path to one running bundle ID.
-Local target resolution and keyboard-tap scans reuse a lazy helper, with a separate 30-second
-deadline for each dispatched request. A second helper handles app-health probes with a two-second
+Local target resolution and keyboard-tap scans each reuse their own lazy helper, with a 30-second
+deadline for each dispatched request. A third helper handles app-health probes with a two-second
 deadline. Each helper serializes its requests; a timeout collects only the active process and leaves
-queued work for its replacement. A slow target cannot block or be killed by an app-health probe.
+queued work for its replacement. A stuck tap scan cannot delay a target. App-health probes cannot
+interrupt either slow operation. A failed target reports its helper's failure and says rereading will not help.
 Menu and notification actions reserve the desktop and conflict with all leases.
 Change review reserves the desktop while the user decides, then releases it.
 Inventory reads still pass. These broader reservations can block unrelated work.
@@ -66,6 +71,8 @@ Inventory reads still pass. These broader reservations can block unrelated work.
 Only cooperating sleight relays using this directory participate. Codex computer
 use, other tools, older relays and the user do not take these leases. The guard
 runs in mutable JavaScript and can be bypassed or its observations forged.
+Never remove or replace the coordinator during live use. Metadata checks recover replacement
+between transactions, but they cannot prevent arbitrary filesystem changes throughout an operation.
 Blank titles are valid full headers and share a conservative window key.
 Equal unsaved titles share a key; Save As, dialogs and window changes can stop
 valid actions. Checks cannot undo an event already delivered to the native helper.
