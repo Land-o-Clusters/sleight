@@ -116,8 +116,10 @@ build what nobody has. Sources are `.dev/research/2026-10-04-competitors.md` and
 - One lease and consent broker shared by Claude, Codex and other runtimes (without leases, two
   sessions typing into one document doubled the text 5/5).
 - Review unsaved changes and app state, not only saved files.
-- Approvals scoped to read, control or sensitive actions, with expiry, and a required confirm for
-  anything irreversible.
+- Shelved (owner, 2026-10-10): scoped approvals (separate read and control grants, expiry, and a
+  required confirm for anything irreversible). The design (`docs/design/scoped-approvals.md`)
+  found a guard in Claude's JavaScript can't guarantee the confirm, and a TextEdit save would need 3
+  prompts instead of 1.
 - Scheduled routines built on replay.
 - A published table of what works in the background, and receipts of each run's actions with
   redaction.
