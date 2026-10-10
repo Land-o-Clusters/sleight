@@ -473,14 +473,20 @@ function run(argv) {
   function emit(value) {
     $.NSFileHandle.fileHandleWithStandardOutput.writeData($(JSON.stringify(value) + '\n').dataUsingEncoding($.NSUTF8StringEncoding));
   }
-  function command() {
+  function controlData() {
     var data = $.NSData.dataWithContentsOfFile(request.control);
-    if (data.isNil()) return '';
+    if (data.isNil()) return {};
     var string = $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding);
-    try { return JSON.parse(ObjC.unwrap(string)).command; } catch (error) { return ''; }
+    try { return JSON.parse(ObjC.unwrap(string)); } catch (error) { return {}; }
   }
+  function command() { return controlData().command || ''; }
   function application() {
     var matches = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(request.bundle);
+    // During a launch handoff the original and its successor can both be listed for a moment:
+    // keep the original until it exits rather than failing setup.
+    if (Number(matches.count) === 2 && state.setup && pid && !running && controlData().launched === true) {
+      for (var i = 0; i < 2; i++) if (Number(matches.objectAtIndex(i).processIdentifier) === pid) return matches.objectAtIndex(i);
+    }
     if (Number(matches.count) > 1) throw new Error('Ambiguous fixture process');
     return Number(matches.count) === 1 ? matches.objectAtIndex(0) : null;
   }
@@ -489,6 +495,37 @@ function run(argv) {
     cleanupRequested: function () { return command() === 'close'; } };
   var api = nativeAX(state, clock);
   var target, running, pid, app, previous, owned, observedDialogs = [];
+  var pids = [], processHandoff, launchStarted = clock.now();
+  function recordProcess(value) {
+    var nextPid = Number(value.processIdentifier);
+    if (pid === nextPid) return;
+    if (pid) {
+      if (!state.setup || running || controlData().launched !== true || processHandoff || owned || state.actionTaken ||
+        String(ObjC.unwrap(value.bundleIdentifier)) !== request.bundle) throw new Error('Fixture process changed');
+      var original = $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid);
+      if (!original.isNil() && !original.isTerminated) throw new Error('Fixture process changed while original is running');
+      // Adopt only a successor launched after this setup began, never an app someone opened before.
+      var launched = value.launchDate;
+      if (launched.isNil() || Number(launched.timeIntervalSince1970) * 1000 < launchStarted) throw new Error('Fixture successor predates this launch');
+      processHandoff = { fromPid: pid, toPid: nextPid, elapsedMs: clock.now() - launchStarted };
+      previous = null;
+    }
+    pid = nextPid;
+    pids.push(pid);
+    emit({ stage: processHandoff ? 'process-handoff' : 'identified-process', pid: pid,
+      pids: pids.slice(), processHandoff: processHandoff });
+  }
+  function checkOpening() {
+    var control = controlData();
+    if (control.command !== 'close') return;
+    // Ordinary cancellation may coincide with the launcher's exit. Record only
+    // an eligible owned successor before ending setup, without any AX action.
+    if (control.launched === true && !running) {
+      var current = application();
+      if (current) recordProcess(current);
+    }
+    throw new Error('Fixture opening interrupted before identity was recorded');
+  }
   function checkAppDialog() {
     var found = app && api.dialog(app, owned, request) || [];
     var blocking;
@@ -514,7 +551,7 @@ function run(argv) {
     target = waitForApplication(application, waitForLaunch);
   }
   if (target) {
-    pid = Number(target.processIdentifier); app = $.AXUIElementCreateApplication(pid);
+    recordProcess(target); app = $.AXUIElementCreateApplication(pid);
     $.AXUIElementSetMessagingTimeout(app, 0.5);
     if (!state.office || running) previous = api.focused(app);
   }
@@ -536,27 +573,23 @@ function run(argv) {
   emit({ stage: 'armed', running: running, pid: pid });
   var inherited = request.mode === 'inherit';
   while (command() !== 'opened') {
-    if (command() === 'close') throw new Error('Fixture opening interrupted before identity was recorded');
+    checkOpening();
     // A launch can open the app, then fail before its remaining setup finishes.
     // Record that process while launch is pending, before cleanup can interrupt it.
-    if (!pid && command() === 'launching') {
+    if (command() === 'launching') {
       target = application();
-      if (target) {
-        pid = Number(target.processIdentifier);
-        emit({ stage: 'launched', pid: pid });
-      }
+      if (target) recordProcess(target);
     }
     waitForLaunch();
   }
   function probeReadiness(attempt) {
-    if (command() === 'close') throw new Error('Fixture opening interrupted before identity was recorded');
+    checkOpening();
     target = application();
     if (!target) return false;
-    if (pid && Number(target.processIdentifier) !== pid) throw new Error('Fixture process changed');
-    pid = Number(target.processIdentifier); app = $.AXUIElementCreateApplication(pid);
+    recordProcess(target); app = $.AXUIElementCreateApplication(pid);
     $.AXUIElementSetMessagingTimeout(app, 0.5);
     checkAppDialog();
-    if (inherited) { api.focused(app); return true; }
+    if (inherited) return !!target.isFinishedLaunching && !!api.focused(app);
     if (attempt === 0 || attempt === 199) emit({ stage: 'readiness', readiness: api.readiness(app, request) });
     var current = owned || api.focused(app);
     if (!current) return false;
@@ -579,7 +612,8 @@ function run(argv) {
   if (!applicationReady) throw new Error('Fixture application readiness unconfirmed');
   if (!inherited && !owned) throw new Error('Fixture identity could not be established without a window inventory');
   if (!inherited && !api.matches(owned, request)) throw new Error('Fixture document identity unconfirmed');
-  emit({ stage: 'ready', pid: pid, fresh: state.fresh, totalWaitMs: state.retryWaitMs, setupCase: state.setupCase });
+  emit({ stage: 'ready', pid: pid, pids: pids.slice(), processHandoff: processHandoff,
+    fresh: state.fresh, totalWaitMs: state.retryWaitMs, setupCase: state.setupCase });
   state.setup = false;
   while (command() !== 'close') {
     state.observation = {};
@@ -604,7 +638,8 @@ function run(argv) {
         cleanup = error.appDialog ? 'unconfirmed' : recoverSetup(owned, request, api);
       } catch (failure) { cleanupError = [cleanupError, failure.message].filter(Boolean).join('; '); }
       emit({ stage: 'setup-failure', fresh: state.fresh, running: running, setupCase: state.setupCase, actionTaken: state.actionTaken, pid: pid,
-        cleanup: cleanup, cleanupError: cleanupError, totalWaitMs: state.retryWaitMs, readWait: state.readWait, launchWait: state.launchWait });
+        pids: pids.slice(), processHandoff: processHandoff, cleanup: cleanup, cleanupError: cleanupError,
+        totalWaitMs: state.retryWaitMs, readWait: state.readWait, launchWait: state.launchWait });
     }
     throw error;
   }
