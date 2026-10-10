@@ -3,17 +3,38 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-10 08:45 UTC, owner asleep: overnight run)
+## Banner (2026-10-10 11:00 UTC, owner asleep: overnight run)
 
-The owner went to bed at about 08:15 UTC and said to handle things overnight. Owner away means live
-runs that can take the pointer are allowed (LAWS), once Puddle's window is closed.
+The owner went to bed at about 08:15 UTC and said to handle things overnight, so live runs that
+can take the pointer are allowed (LAWS). Puddle's window 1010b ran 08:19 to 10:15 UTC under
+`/tmp/sleight-hold`, lifted at its CLOSE. No other Puddle window today unless it asks.
 
-The owner's bar (ROADMAP track 3): lightning quick under any load, no noticeable load on the Mac,
-measured against Codex on the same engine. Engine 26.1007.21159 since 05:44 UTC: the API docs are
-identical to 26.1002.52244 once sleight's skill is left out, and the watch's calculator-click
-passed (08:19 UTC). The 42 A/B runs ran on it too. `/tmp/sleight-hold` is set since 08:19 UTC for
-Puddle's window 1010b (R16 pairs, attribution, OCR, about 100 to 120 min from ~08:45 UTC); lift it
-at puddle arch's CLOSE message. The live lock is free. No open PRs.
+Engine 26.1007.21159 since 05:44 UTC. Its API docs are identical to 26.1002.52244 once sleight's
+skill is left out, and the watch's calculator-click passed. No open PRs.
+
+**Overnight results** (all published in `docs/benchmarks/`, Haiku 5.5 high on the API key):
+- Merged: footprint parity (`4082ae9`), real-use round 12 with launch-date and overlap fixes
+  (`f8aae8b`), review receipts, opt-in, with the Shift-key fix (`6be06b8`), textedit-fixes rounds
+  1 to 3, opt-in, with sleight-arch's app-health and notice fixes (`e2d5c01`), the guard's
+  first-action reuse and echo-read (`12042e8`).
+- Head-to-head with Codex (`26f64b8`): 6/6 each, 263 s against 257 s, 61 turns each, but sleight's
+  own CPU 76.5 s against 60.2 s. The excess is guard reads, 23.6 s of them on TextEdit's Save sheet
+  (trees of about 54,000 characters, 1.4 to 2.3 s a read). Release gate not met.
+- Passes: `release-haiku-1` 5/7 and `release-haiku-2` 6/7. Both failures were harness gaps, both
+  fixed (`4a43726`), except simulator-form, which regressed with round 12 (brief
+  `sol-real-use-tasks-13.md`). No app came to the front in any pass after `open_file`.
+- Rich TextEdit move: JXA couldn't build the attributed string (fixed, `cf009c8`). The last trial
+  stopped at the clipboard write check with text and clipboard intact (known problems).
+
+**For the owner in the morning:** decide the two reads in the Save sheet below, and paste the
+briefs (`sol-waits-targeting-3.md`, `sol-sim-savelock-2.md`, `sol-plugin-arm-3.md`,
+`sol-real-use-tasks-13.md`, and `sol-verified-results-3.md` if it isn't started).
+- In textedit-save, Return after `setValue({ id })` reads the 54,000-character sheet first (1.85 s),
+  because only keys after typing, paste or a plain key skip that read. Treating `setValue` like
+  typing would skip it.
+- A first action by ID or label (`setValue({ id: "saveAsNameTextField" })`) reads the sheet first
+  (1.4 s). Reusing a recent full read there, as keys now do, would skip it. The engine still
+  resolves the ID itself.
 
 **Where work goes.** Work in progress is private between releases (owner, 2026-10-10, LAWS): this
 repo has `remote.pushDefault private`, which sends every worktree's pushes to the private
@@ -43,23 +64,13 @@ merged), `sol-verified-results-3.md` (no round 3 pushed yet). In review: `codex/
 `65a641b` (a Shift or Option key with a printable key is kept verbatim: record it as text).
 
 Next, in order:
-1. At Puddle's CLOSE: lift the hold, run `npm run check`, and commit the staged
-   `codex/real-use-tasks` squash with sleight-arch's launch-date and overlap fixes, then the engine
-   docs capture that leaves out sleight's skill.
-2. Merge `codex/review-receipts` with the Shift fix. Merge `codex/textedit-fixes` `cc1d7e6`
-   (reviewed: five of seven fixes) after sleight-arch's own round: resolve the `app-health.js`
-   conflict with `4082ae9` (window names from the pid-filtered windows only), report the
-   unconfirmed-paste recovery in Claude's next tool result instead of only on stderr, then the live
-   trials listed in its review.
-3. Live, owner away: textedit-fixes trials (`bench/textedit-fixes.mjs`), the select-all probe
-   (`bench/small-fixes-textedit.mjs --quick`), the TextEdit tasks with `open_file`, the 1.1.0 live
-   checks, simulator-flow and the DeviceHub handoff, waits-targeting and plugin-arm live checks if
-   their Sol rounds are pushed.
-4. The footprint head-to-head on `4082ae9` or later: `--arm sleight,codex --tasks
-   calculator-click,textedit-edit,textedit-save --runs 2`.
-5. A full release pass with the owner away, reread README whole, release (LAWS). Recheck the README
-   lines tied to a release: the pass result and the 13/21 and Chess 0/3 mentions. Add replay,
-   `open_file` and other hosts to its roadmap checklist, and confirm the Claude Code minimums.
+1. Pass `release-haiku-3` (six non-simulator tasks, 3 runs each, started 10:55 UTC) on `12042e8`.
+2. The owner's two read decisions above, then the footprint head-to-head again.
+3. Merge Sol's next rounds as they're pushed (waits-targeting 3, sim-savelock 2, plugin-arm 3,
+   real-use-tasks 13, verified-results 3, routines-demo after the owner's call on window IDs).
+4. A full release pass with the owner away once simulator-form passes and the gate is met. Recheck
+   the README lines tied to a release: the pass result and the 13/21 and Chess 0/3 mentions. Add
+   replay, `open_file` and other hosts to its roadmap checklist, and confirm the Claude Code minimums.
 
 Read first: `docs/known-problems.md`, `docs/benchmark.md`, `docs/design/guard-reads.md`.
 
