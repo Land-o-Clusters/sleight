@@ -52,7 +52,7 @@ function run(argv) {
       if (matches.length !== 1) throw new Error('Expected one owned document');
       doc = matches[0];
       const running = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.TextEdit');
-      if (running.count !== 1) throw new Error('Ambiguous TextEdit process');
+      if (Number(running.count) !== 1) throw new Error('Ambiguous TextEdit process');
       ax = $.AXUIElementCreateApplication(Number(running.objectAtIndex(0).processIdentifier));
       if (Number($.AXUIElementSetMessagingTimeout(ax, 1)) !== 0) throw new Error('Could not bound fixture AX messaging');
       const windows = attribute(ax, 'AXWindows'), candidates = [];

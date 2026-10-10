@@ -53,7 +53,7 @@ function write(board, request) {
     // AppKit can otherwise expose only the first file item after the helper exits.
     const actual = read(board);
     const canonical = items => JSON.stringify(items.map(reps => reps.slice().sort((a, b) => a.type.localeCompare(b.type))));
-    if (actual.count !== ownedCount || canonical(actual.items) !== canonical(request.items)) throw new Error('Clipboard write verification failed');
+    if (actual.count !== ownedCount || canonical(actual.items) !== canonical(request.items)) throw new Error('Clipboard write verification failed'); // read() returns count as a JS number
   } catch (error) { throw Object.assign(error, { clipboardMutation: true, clipboardCount: ownedCount }); }
   return { ok: true, count: Number(board.changeCount) };
 }
