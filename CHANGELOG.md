@@ -2,12 +2,12 @@
 
 ## Unreleased
 
-- `sleight-mcp setup` (`--dry-run` prints the steps): runs OpenAI's helper installer from ChatGPT.app
-  when its status isn't OK, opens the Accessibility and Screen Recording panes, and runs the doctor.
-  With no Codex plugin under `~/.codex`, sleight starts the engine from ChatGPT.app directly, computer
-  surface only, since its browser surface needs a Codex sign-in. In a
-  macOS user that never signed in to ChatGPT, that engine listed apps (2026-10-10). A full setup
-  run hasn't been tried live.
+- `sleight-mcp setup` (`--dry-run` prints the steps) runs OpenAI's helper installer from
+  ChatGPT.app when its status isn't OK. Then it opens the Accessibility and Screen Recording panes
+  and runs the doctor. With no Codex plugin under `~/.codex`, sleight starts the engine from
+  ChatGPT.app directly, driving Mac apps only (`CUA_REPL_ENABLED_SURFACES=computer`), because its
+  browser extension API needs a Codex sign-in. In a macOS user that never signed in to ChatGPT, that engine listed apps (2026-10-10).
+  A full setup run hasn't been tried live.
 - Trace settings for diagnosis on this Mac: `SLEIGHT_TRACE_CODE=1` keeps Claude's code in the
   trace, up to 4,000 characters (the trace's 300-character cut used to drop the end of every
   batch), and `SLEIGHT_TRACE_CUT` sets that cut for everything else, such as whole UI trees.
