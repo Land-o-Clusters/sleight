@@ -138,4 +138,6 @@ build what nobody has. Sources are `.dev/research/2026-10-04-competitors.md` and
   Windows on 2026-05-29, foreground only. First check, in a free UTM VM, whether that engine runs on
   ARM and exposes the same `cua_repl` API. The relay, guards, mod and benchmark could carry over.
   `drag.js`, `menu_bar`, `notifications`, `blocked_app`, the keyboard-tap check and the launchd watch
-  are macOS-only. Paid VM software is the owner's call.
+  are macOS-only. Paid VM software is the owner's call. Research done (`docs/design/windows.md`):
+  public docs don't show the Windows engine's API, so the next step is a bounded spike in a UTM VM,
+  which needs the owner's OK on a Windows license and about 120 GB of disk.
