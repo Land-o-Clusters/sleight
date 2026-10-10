@@ -1,0 +1,153 @@
+{
+  "started": "2026-10-10T10:24:37.244Z",
+  "bank": "/private/tmp/sleight-textedit-fixes-D8NtVU",
+  "plain": false,
+  "legacy": false,
+  "move": true,
+  "orphan": false,
+  "misspelled": false,
+  "openBackground": true,
+  "richTextMoveEnabled": true,
+  "load": [
+    12.775390625,
+    13.80029296875,
+    11.791015625
+  ],
+  "trials": [
+    {
+      "op": "preflight",
+      "result": {
+        "id": 0,
+        "ok": true,
+        "running": true,
+        "foregroundTextEdit": false,
+        "documents": 0,
+        "frontPid": 1303,
+        "hidden": false,
+        "onScreenWindows": 0
+      }
+    },
+    {
+      "op": "open",
+      "result": {
+        "id": 1,
+        "ok": true,
+        "text": "alpha beta gamma\n",
+        "selected": "",
+        "foregroundSame": true,
+        "attributedText": "alpha beta gamma\n",
+        "spellingAnnotations": [
+          {
+            "key": "AXMisspelled",
+            "marked": false
+          },
+          {
+            "key": "AXMarkedMisspelled",
+            "marked": false
+          }
+        ],
+        "characters": [
+          {
+            "index": 0,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1",
+            "rgba": [
+              0.86275,
+              0,
+              0,
+              1
+            ]
+          },
+          {
+            "index": 4,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1",
+            "rgba": [
+              0.86275,
+              0,
+              0,
+              1
+            ]
+          },
+          {
+            "index": 6,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          },
+          {
+            "index": 11,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          },
+          {
+            "index": 15,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          }
+        ]
+      }
+    },
+    {
+      "op": "prepare",
+      "error": "Fixture is uncovered; foreground probe refused",
+      "result": {
+        "id": 2,
+        "ok": false,
+        "error": "Fixture is uncovered; foreground probe refused"
+      }
+    },
+    {
+      "op": "close",
+      "result": {
+        "id": 3,
+        "ok": true,
+        "closed": true,
+        "foregroundSame": true
+      }
+    }
+  ],
+  "source": {
+    "bench/textedit-fixes.mjs": "3b90883285af049b23443ef244d6386ff1947b58227653c0a65bac2196ce948a",
+    "bench/textedit-fixes-fixture.js": "9b88b7c41bdaf1a5fe9ff01339e5aa126463cb126e94007a3f5c9bf890f5d1b9",
+    "bench/textedit-fixes-drag.js": "10da9678ac0b0853a39850b1adeef9060267fd72484cced8a8a1c06698a12edc",
+    "bench/textedit-fixes-check.mjs": "33d7617c66feafcfe8b80d3da7077628940c3f26e2ba6ab09252d3eeb35f81f9",
+    "plugins/sleight/lib/drag.js": "ece5d71a88cf1212914217a56f25377a25e614937570db288ddd0cbc369c2433",
+    "plugins/sleight/lib/rich-text-drag.mjs": "eba8402684aff2ced94ab278950e3ae815cbdbff844a166094e3f16c2e4ae62a",
+    "plugins/sleight/lib/clipboard.mjs": "ec9ef8529386028b0a721718486726fe81fb10930ac43d7e257f68a94b9adf00",
+    "plugins/sleight/lib/clipboard.js": "4d50c43948c13fd2d834dc2cfb9ceacbd2eb69ab07f4b8baf78dcd49e0fa2955",
+    "plugins/sleight/lib/app-health.js": "46948549d0b9a5a44d58f737b550c563b16a13d8224472973f076f6c6e72c1f3"
+  },
+  "health": {
+    "status": "responding",
+    "pid": 71515,
+    "windows": 0,
+    "minimized": 0,
+    "hidden": false,
+    "onScreen": 0,
+    "allWindows": 3,
+    "fullScreenSpace": false
+  },
+  "backgroundOpen": true,
+  "documentClosed": true,
+  "error": "Fixture is uncovered; foreground probe refused",
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixtureCollected": true,
+  "lockReleased": true,
+  "finished": "2026-10-10T10:24:38.875Z",
+  "loadAfter": [
+    12.775390625,
+    13.80029296875,
+    11.791015625
+  ]
+}

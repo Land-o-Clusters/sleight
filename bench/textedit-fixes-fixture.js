@@ -66,7 +66,17 @@ function run(argv) {
       if (request.frontPid !== originalFront) throw new Error('Foreground changed before fixture open');
       if (!app.running() || ObjC.unwrap($.NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier) === 'com.apple.TextEdit') throw new Error('Requires already-running background TextEdit');
       openedWithNoDocuments = app.documents().length === 0 || request.backgroundOpen && request.initiallyEmpty && app.documents().every(d => String(d.path()) === path);
-      doc = app.open(Path(path));
+      // `open -g` already opened it. A scripted open of the same file activated TextEdit
+      // (10:24:37 UTC, 2026-10-10, WindowServer log), so find the document instead.
+      if (request.backgroundOpen) {
+        let found = [];
+        for (let i = 0; i < 20 && found.length === 0; i++) {
+          found = app.documents().filter(d => { try { return String(d.path()) === path; } catch { return false; } });
+          if (found.length === 0) delay(0.25);
+        }
+        if (found.length !== 1) throw new Error('Background-opened fixture document not found');
+        doc = found[0];
+      } else doc = app.open(Path(path));
       const running = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.TextEdit');
       if (Number(running.count) !== 1) throw new Error('Ambiguous TextEdit process');
       pid = Number(running.objectAtIndex(0).processIdentifier);

@@ -342,10 +342,18 @@ function axTextArea(pid, point, deadline) {
       const data = ObjC.castRefToObject(ask(el, 'AXRTFForRange', range(location, length)));
       const source = $.NSAttributedString.alloc.initWithRTFDocumentAttributes(data, null);
       if (source.isNil() || ObjC.unwrap(source.string) !== text.slice(location, location + length)) throw new Error('TextEdit did not supply the selected rich text; nothing was changed');
-      const rich = $.NSMutableAttributedString.alloc.initWithAttributedString(source);
+      // JXA doesn't bridge NSAttributedString's initializers that take a string or attributed string
+      // (initWithAttributedString threw on every live rich move, 2026-10-10): build by appending.
+      const rich = $.NSMutableAttributedString.alloc.init;
+      rich.appendAttributedString(source);
       const word = ObjC.unwrap(source.string), prefix = insert.startsWith(' ') && !word.startsWith(' ') ? ' ' : '';
       const suffix = insert.length > prefix.length + word.length ? ' ' : '';
-      const space = () => $.NSAttributedString.alloc.initWithStringAttributes(' ', source.attributesAtIndexEffectiveRange(0, null));
+      const space = () => {
+        const one = $.NSMutableAttributedString.alloc.init;
+        one.mutableString.appendString($(' '));
+        one.setAttributesRange(source.attributesAtIndexEffectiveRange(0, null), $.NSMakeRange(0, 1));
+        return one;
+      };
       if (prefix) rich.insertAttributedStringAtIndex(space(), 0);
       if (suffix) rich.appendAttributedString(space());
       const rtf = rich.RTFFromRangeDocumentAttributes($.NSMakeRange(0, Number(rich.length)), $({}));
