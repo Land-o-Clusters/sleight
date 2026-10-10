@@ -67,6 +67,12 @@ in `.dev/prompts/`, for Sol threads the owner starts:
   Asked the owner (00:05 UTC) whether the guard may accept a window the call's own shortcut opened or
   renamed in the same app (save and open panels, new untitled windows, a saved name). TextEdit save and edit would
   go from about 6 calls to 3. Risk: a window the user opens in that app at that moment is accepted.
+- Live, 00:37 to 00:38 UTC (Calculator, relay at `e12aef4`, change review off as the launcher sets
+  it): a split acquisition then `click({ id: "One" })` used the acquisition's read (`reused`, no
+  read before the click). A call with only an acquisition wasn't split, so `565f369`'s no-action
+  header is still unit-tested only. Merged: `codex/replay-next` as `e12aef4`. Follow-up for
+  `codex/small-fixes`: `.dev/prompts/sol-small-fixes-2.md`. Puddle's next window 1009r starts about
+  00:50 UTC for about 40 minutes, so `/tmp/sleight-hold` stays.
 - sleight-arch: the guard's reads (`document-scope.mjs`, guard code in `relay.mjs`), with a
   background subagent studying guard-read phases across tonight's traces.
 - `/tmp/sleight-hold` exists while another project's window runs. Every brief stops live probes
