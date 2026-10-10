@@ -6,7 +6,7 @@
     "test": "node --test --test-concurrency=4 tests/*.test.mjs",
     "test:mod": "claude plugin test plugins/sleight",
     "validate": "claude plugin validate . && claude plugin validate plugins/sleight",
-    "typecheck": "tsc -p plugins/sleight/tsconfig.json",
+    "typecheck": "scripts/typecheck.sh",
     "check": "scripts/wait-hold.sh && npm test && npm run validate && npm run test:mod",
     "doctor": "plugins/sleight/bin/sleight-mcp --doctor",
     "bench": "node bench/run.mjs",
@@ -15,5 +15,8 @@
     "watch": "scripts/watch.sh",
     "watch:install": "scripts/watch-install.sh",
     "watch:remove": "scripts/watch-install.sh --remove"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
   }
 }

@@ -114,7 +114,7 @@ describe('sleight mod', () => {
     expect(sent[0]).toMatch(/missing Seven/)
     const refused = await $.tool.call({ tool: JS_TOOL, code: 'await app.click(1);' } as never)
     expect(String(refused.deny)).toMatch(/stopped sleight/)
-    await $.prompt.submit({ text: 'Continue the task', asUser: true })
+    await $.prompt.submit({ text: 'Continue the task', asUser: true } as never)
     expect(sent.at(-1)).toBe('Continue the task')
     const resumed = await $.tool.call({ tool: JS_TOOL, code: 'await app.click(1);' } as never)
     expect(resumed.deny).toBeUndefined()
@@ -177,8 +177,8 @@ describe('sleight mod', () => {
     on('fs.write', async (_$, e) => { writes.push(e); return { value: undefined } })
     const first = await $.command.run({ command: 'sleight', args: 'record' } as never)
     expect(String((first as { text?: string }).text)).toMatch(/Recorded 2 steps/)
-    expect(writes[0].path).toMatch(/\/sleight-session-test\.json$/)
-    expect(JSON.parse(writes[0].text).steps[1].args.code).toBe('await app.click({"id":"Seven"});')
+    expect(writes[0]!.path).toMatch(/\/sleight-session-test\.json$/)
+    expect(JSON.parse(writes[0]!.text).steps[1].args.code).toBe('await app.click({"id":"Seven"});')
     expect((recorderCalls[0] as string[]).slice(1)).toEqual(['record', 'session-test'])
     const second = await $.command.run({ command: 'sleight', args: 'record' } as never)
     expect(String((second as { text?: string }).text)).toMatch(/already exists/)
@@ -198,7 +198,7 @@ describe('sleight mod', () => {
 
   test('replay tool calls keep the normal check and obey Stop', async ($, on) => {
     on('tool.check', async () => ({ decision: 'ask', reason: 'core check' }) as never)
-    on('tool.call', { tool: REPLAY_TOOL }, async () => ({ result: { content: [] } }) as never)
+    on('tool.call', { tool: REPLAY_TOOL as never }, async () => ({ result: { content: [] } }) as never)
     const verdict = await $.tool.check({ tool: REPLAY_TOOL, input: { script } } as never)
     expect((verdict as { reason?: string }).reason).toBe('core check')
     await $.command.run({ command: 'sleight', args: 'stop' } as never)
@@ -226,7 +226,7 @@ describe('sleight mod', () => {
     on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
     on('mcp.call', async (_$, e) => {
       calls.push(e.tool)
-      if (e.tool === 'replay') return await new Promise(resolve => { finish = resolve }) as never
+      if (e.tool === 'replay') return await new Promise<unknown>(resolve => { finish = resolve }) as never
       return { value: { content: [] } } as never
     })
     on('prompt.submit', async (_$, e) => { sent.push(e.text); return { text: e.text } })
@@ -267,7 +267,7 @@ describe('sleight mod', () => {
     const calls: string[] = []
     let finish: ((value: unknown) => void) | undefined
     on('ui.open', async () => ({ value: { isPlaced: true } }) as never)
-    on('fs.read', async () => await new Promise(resolve => { finish = resolve }) as never)
+    on('fs.read', async () => await new Promise<unknown>(resolve => { finish = resolve }) as never)
     on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
     on('mcp.call', async (_$, e) => { calls.push(e.tool); return { value: { content: [{ type: 'text', text: JSON.stringify({ ok: true, steps: 2, waits: [] }) }] } } as never })
     const clock = mock.clock(on)
@@ -286,7 +286,7 @@ describe('sleight mod', () => {
     const calls: string[] = []
     let finish: ((value: unknown) => void) | undefined
     on('ui.open', async () => ({ value: { isPlaced: true } }) as never)
-    on('fs.read', async () => await new Promise(resolve => { finish = resolve }) as never)
+    on('fs.read', async () => await new Promise<unknown>(resolve => { finish = resolve }) as never)
     on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
     on('mcp.call', async (_$, e) => { calls.push(e.tool); return { value: { content: [] } } as never })
     const clock = mock.clock(on)
@@ -309,7 +309,7 @@ describe('sleight mod', () => {
     await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("TextEdit")' } as never)
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { bodyColumns: 60 } as never })
     await ui.press({ key: 'refresh' })
-    expect(await ui.find({ type: 'Link', href: 'file:///private/tmp/receipt%20with%20spaces.json' })).toBeDefined()
+    expect(await ui.find({ type: 'Link', href: 'file:///private/tmp/receipt%20with%20spaces.json' } as never)).toBeDefined()
     expect(await ui.find({ text: /TextEdit: changed\. Leave/ })).toBeDefined()
   })
 
@@ -321,7 +321,7 @@ describe('sleight mod', () => {
     await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("Calculator")' } as never)
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { bodyColumns: 60 } as never })
     await ui.press({ key: 'refresh' })
-    expect(await ui.find({ type: 'Link', href: 'file:///private/tmp/actual-host.json' })).toBeDefined()
+    expect(await ui.find({ type: 'Link', href: 'file:///private/tmp/actual-host.json' } as never)).toBeDefined()
     expect(await ui.find({ text: /Calculator: changed/ })).toBeDefined()
     expect(await ui.find({ key: 'replay' })).toBeDefined()
     expect(await ui.find({ key: 'record' })).toBeDefined()
@@ -474,7 +474,7 @@ describe('sleight mod', () => {
     on('prompt.submit', async (_$, e) => { contexts.push(e.context); return { text: e.text } })
     const result = await $.command.run({ command: 'sleight', args: 'replay task.json' } as never)
     expect(String((result as { text?: string }).text)).toMatch(/Replay finished/)
-    await $.prompt.submit({ text: 'Continue the task', asUser: true })
+    await $.prompt.submit({ text: 'Continue the task', asUser: true } as never)
     expect(JSON.stringify(contexts.at(-1))).toMatch(/Calculator.*disableDiffing/)
   })
 

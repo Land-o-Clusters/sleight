@@ -235,8 +235,9 @@ function ownCallVerdict(e: { tool: string; input: unknown }, origin: { plugin: s
 export const register: Register = on => {
   on('tool.check', async ($, e, next) => ownCallVerdict(e, next.origin) ?? next(e))
     // Failing open to the normal check only ever tightens. A call from inside this mod's own
-    // frame lands here as a re-entry, decided from e and next alone.
-    .catch(($, e, next) => (next.error?.kind === 're-entry' ? ownCallVerdict(e, next.origin) : undefined) ?? next(e))
+    // frame lands here as a re-entry, decided from e and next alone. The host's published
+    // HookFailure kind union is 'throw' | 'timeout' only, so the kind reads through a widening.
+    .catch(($, e, next) => ((next.error?.kind as string | undefined) === 're-entry' ? ownCallVerdict(e, next.origin) : undefined) ?? next(e))
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'sleight',
@@ -297,7 +298,9 @@ export const register: Register = on => {
     return ran
   })
 
-  on('tool.call', { tool: REPLAY_TOOL }, async ($, e, next) => {
+  // The host's tool-name union comes from its last saved capture, which here
+  // predates the replay tool, so the filter's name reads through a widening.
+  on('tool.call', { tool: REPLAY_TOOL as never }, async ($, e, next) => {
     if (next.origin?.plugin === 'sleight') return next(e)
     if (await read($, stopped)) return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
     if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
