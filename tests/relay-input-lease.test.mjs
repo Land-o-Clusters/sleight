@@ -13,39 +13,40 @@ const header = 'Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt';
 const rpc = (id, name, args = {}) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
 const result = (id, text = header) => ({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }],
   _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit' } } } } });
+const windowContent = msg => msg.result.content.filter(item => !item.text?.startsWith('sleight result:'));
 test('normal action results and app acquisitions have no window note', t => {
   const { a } = setup(t);
   a.send(rpc(1, 'js', { code: 'app = await cua.getApp("TextEdit")' })); a.reply(result(1));
-  assert.equal(a.received.at(-1).result.content.length, 1);
+  assert.equal(windowContent(a.received.at(-1)).length, 1);
   a.send(rpc(2, 'js', { code: 'await app.typeText("x")' })); a.reply(result(2));
-  assert.equal(a.received.at(-1).result.content.length, 1);
+  assert.equal(windowContent(a.received.at(-1)).length, 1);
   a.send(rpc(3, 'js', { code: 'await app.typeText("x")' }));
   const failure = result(3); failure.result.isError = true; a.reply(failure);
-  assert.equal(a.received.at(-1).result.content.length, 1);
+  assert.equal(windowContent(a.received.at(-1)).length, 1);
 });
 test('action window mismatch names the intended and observed document only with a selection', async t => {
   const { h: a } = await selectedHarness(t);
   a.send(rpc(1, 'js', { code: 'await app.typeText("x")' }));
   a.reply(result(1, 'Window: "b.txt", App: TextEdit'));
-  assert.match(a.received.at(-1).result.content.at(-1).text, /outcome unconfirmed.*a.txt.*b.txt/);
+  assert.match(windowContent(a.received.at(-1)).at(-1).text, /outcome unconfirmed.*a.txt.*b.txt/);
 });
 test('missing or ambiguous action headers leave a selected outcome unconfirmed', async t => {
   for (const response of ['done', header + '\nWindow: "b.txt", App: TextEdit']) {
     const { h: a } = await selectedHarness(t);
     a.send(rpc(1, 'js', { code: 'await app.typeText("x")' })); a.reply(result(1, response));
-    assert.match(a.received.at(-1).result.content.at(-1).text, /outcome unconfirmed.*a.txt.*missing full window header/);
+    assert.match(windowContent(a.received.at(-1)).at(-1).text, /outcome unconfirmed.*a.txt.*missing full window header/);
   }
 });
 test('an action that leaves another window in front says so; a missing header adds nothing', t => {
   const { a } = setup(t);
   a.send(rpc(1, 'js', { code: 'await app.pressKey("super+w")' })); a.reply(result(1, 'Window: "b.txt", App: TextEdit'));
-  assert.match(a.received.at(-1).result.content.at(-1).text, /acted on .*a\.txt.*now is .*b\.txt/);
+  assert.match(windowContent(a.received.at(-1)).at(-1).text, /acted on .*a\.txt.*now is .*b\.txt/);
   const { a: other } = setup(t);
   other.send(rpc(1, 'js', { code: 'await app.pressKey("super+n")' })); other.reply(result(1, 'done'));
-  assert.equal(other.received.at(-1).result.content.length, 1);
+  assert.equal(windowContent(other.received.at(-1)).length, 1);
   const { a: same } = setup(t);
   same.send(rpc(1, 'js', { code: 'await app.typeText("x")' })); same.reply(result(1));
-  assert.equal(same.received.at(-1).result.content.length, 1, 'the same window adds nothing');
+  assert.equal(windowContent(same.received.at(-1)).length, 1, 'the same window adds no window note');
 });
 function setup(t) {
   const directory = mkdtempSync(join(tmpdir(), 'sleight-relay-lease-'));
@@ -100,7 +101,7 @@ test('hidden recovery for another app keeps the confirmed selected window and it
   h.send(rpc(4, 'js', { code: 'await app.typeText("x")' }));
   assert.equal(h.forwarded.at(-1).id, 4);
   h.reply(result(4, 'Window: "b.txt", App: TextEdit'));
-  assert.match(h.received.at(-1).result.content.at(-1).text, /outcome unconfirmed.*a.txt.*b.txt/);
+  assert.match(windowContent(h.received.at(-1)).at(-1).text, /outcome unconfirmed.*a.txt.*b.txt/);
 });
 
 test('reset releases a selection and a new document read permits later actions', async t => {
@@ -117,7 +118,7 @@ test('Save As and closing a selected window release selection after a confirmed 
     h.send(rpc(2, 'js', { code: 'app = await cua.getApp("TextEdit")' })); h.reply(result(2, 'Window: "b.txt", App: TextEdit'));
     h.send(rpc(3, 'js', { code: 'await app.typeText("x")' }));
     assert.equal(h.forwarded.at(-1).id, 3); h.reply(result(3, 'Window: "b.txt", App: TextEdit'));
-    assert.equal(h.received.at(-1).result.content.length, 1);
+    assert.equal(windowContent(h.received.at(-1)).length, 1);
   }
 });
 test('failed reselection releases the previous selected window', async t => {

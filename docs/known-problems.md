@@ -5,6 +5,13 @@ our own runs. Dates and engine versions are given where they matter.
 
 ## Approvals and guards
 
+- [Verified results](design/verified-results.md) summarize native `js` calls from existing reads.
+  A changed value or window is an observation after input; concurrent user activity can cause it
+  too. Missing or degraded reads leave the result unverified. Saving without an exposed URL or
+  modified-state change remains unconfirmed, and an observed save state does not prove durable
+  storage. Local pointer tools, browser calls and computed action methods have no summary.
+  Unit checks are published in the [report](benchmarks/2026-10-09-verified-results.md); affected
+  Calculator and TextEdit model tasks still need sleight-arch's release checks.
 - Browser call text never turns off native guards. The engine must confirm `browserUse` on its reply
   before sleight learns browser handles. Candidates attempt the known native window lease and
   saved-file checks; when native access is unavailable, their runtime guard denies native access
