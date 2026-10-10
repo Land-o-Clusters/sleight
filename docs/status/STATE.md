@@ -89,6 +89,9 @@ in `.dev/prompts/`, for Sol threads the owner starts:
   tonight's changes passed 15/15 at `7c8e357` (`docs/benchmark.md`): textedit-save 15 turns a round
   against 20 to 23. `docs/background.md` (what works in the background) published. Puddle: no Floati
   install on this host after all.
+- Merged `codex/other-hosts` as `6ca6639` (01:45 UTC), with the claude* name match and the README's
+  Claude Code requirement restored. Still out with Sol: footprint-3, small-fixes-2, doctor-flow-2,
+  replay-desktop, verified-results, scoped-approvals.
 - sleight-arch: the guard's reads (`document-scope.mjs`, guard code in `relay.mjs`), with a
   background subagent studying guard-read phases across tonight's traces.
 - `/tmp/sleight-hold` exists while another project's window runs. Every brief stops live probes
