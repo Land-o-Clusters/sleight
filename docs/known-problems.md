@@ -372,6 +372,12 @@ our own runs. Dates and engine versions are given where they matter.
   saving no`. It still answered AppleScript, but its only window was an orphan "Save Panel Accessory
   View" that Accessibility didn't list. The relay's message again named a stuck helper, while
   `--doctor` passed. Quitting TextEdit fixed it.
+- DeviceHub replaced its launch process during `simulator-flow` setup on 2026-10-10. Setup and
+  cleanup refused the replacement. The architect quit it manually. Setup now accepts
+  one same-bundle handoff after the recorded PID exits, retains both PIDs, and quits the adopted
+  process. Fake-clock regressions pass, including cancellation during the handoff. The default
+  `simulator-form` uses the same ownership checks. The architect's owner-away rerun remains pending.
+  [The report](benchmarks/2026-10-10-real-use-tasks-12.md) retains the failed run.
 - In the simulator, Claude's first tap on the Safari field often doesn't focus it, even at the right
   point, and a second tap does (6 of 6 runs on 2026-10-09 with shrunk screenshots). Claude also
   second-guesses the screenshot's scale there, dividing or multiplying its own coordinates.

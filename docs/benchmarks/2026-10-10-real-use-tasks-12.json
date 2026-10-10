@@ -1,0 +1,321 @@
+{
+  "dateLocal": "2026-10-10",
+  "branch": "codex/real-use-tasks",
+  "base": "332e3ca0260d7eee0b003882d95d8b64ec431dd3",
+  "rebase": {
+    "target": "origin/pane/auto-mode",
+    "exitCode": 0,
+    "result": "Clean rebase; previously applied 1a73515 skipped."
+  },
+  "liveRunsBySol": 0,
+  "loadRunsBySol": 0,
+  "qualification": "Pending sleight-arch simulator-flow rerun while the owner is away. No live qualification claimed.",
+  "sourceAttempt": {
+    "source": "bench/results/2026-10-10T03-30-22-257Z.json on the primary checkout",
+    "ownerAway": true,
+    "exitCode": null,
+    "exitCodeNote": "Architect terminal status was not supplied. The run stopped before Claude received the task; architect reported manually quitting DeviceHub.",
+    "payload": {
+      "stamp": "2026-10-10T03-30-22-257Z",
+      "suite": "real",
+      "surfaces": "computer",
+      "ownerAway": true,
+      "arms": [
+        "sleight"
+      ],
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "claude",
+      "results": [
+        {
+          "arm": "sleight",
+          "task": "simulator-flow",
+          "run": 1,
+          "passed": false,
+          "reason": "Fixture setup failed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Fixture process changed (-2700)",
+          "cleanupError": "Launched DeviceHub quit unconfirmed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Launched app identity changed; quit refused (-2700)",
+          "fixtureDiagnostics": [
+            {
+              "app": "DeviceHub",
+              "bundle": "com.apple.dt.Devices",
+              "retries": [],
+              "totalWaitMs": 0,
+              "actionTaken": false,
+              "running": false,
+              "setupCase": "cold-launch",
+              "launched": true,
+              "pid": 11174,
+              "fresh": true,
+              "cleanup": "unconfirmed",
+              "helperCollectionConfirmed": true
+            }
+          ],
+          "cleanupUnconfirmed": true,
+          "fixtureDir": "<temp>/sleight-bench/2026-10-10T03-30-22-257Z/sleight-simulator-flow-1",
+          "models": []
+        }
+      ],
+      "passCleanupErrors": [
+        {
+          "app": "DeviceHub",
+          "error": "Launched DeviceHub quit unconfirmed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Launched app identity changed; quit refused (-2700)"
+        }
+      ]
+    }
+  },
+  "attempts": [
+    {
+      "command": "node --test tests/bench-real-fixture.test.mjs tests/bench-simulator.test.mjs",
+      "environment": "workspace sandbox",
+      "exitCode": 1,
+      "passed": 68,
+      "failed": 1,
+      "result": "Baseline loopback listen EPERM in simulator form server test."
+    },
+    {
+      "command": "node --test tests/bench-real-fixture.test.mjs tests/bench-simulator.test.mjs",
+      "environment": "host access after denial",
+      "exitCode": 0,
+      "passed": 69,
+      "failed": 0
+    },
+    {
+      "command": "node --test tests/bench-fixture-handoff.test.mjs",
+      "exitCode": 1,
+      "passed": 4,
+      "failed": 5,
+      "result": "RED: both allowed handoffs rejected; second-handoff and post-ready cases stopped at the first handoff; parent did not transmit launch ownership."
+    },
+    {
+      "command": "node --test --test-name-pattern='default simulator' tests/bench-simulator.test.mjs",
+      "exitCode": 1,
+      "passed": 0,
+      "failed": 3,
+      "result": "RED: no retained viewer acquisition or owned cleanup. Initial cleanup assertions used a Promise-only assertion against a synchronous function; corrected to an async callback and reran."
+    },
+    {
+      "command": "node --test --test-name-pattern='default simulator' tests/bench-simulator.test.mjs",
+      "exitCode": 1,
+      "passed": 0,
+      "failed": 3,
+      "result": "RED: missing retained lease and missing cleanup rejection."
+    },
+    {
+      "command": "node --test tests/bench-fixture-handoff.test.mjs tests/bench-real-fixture.test.mjs tests/bench-simulator.test.mjs",
+      "environment": "host access after denial",
+      "exitCode": 0,
+      "passed": 81,
+      "failed": 0
+    },
+    {
+      "command": "npm run check",
+      "environment": "workspace sandbox",
+      "exitCode": 1,
+      "interrupted": true,
+      "result": "Interrupted once with Ctrl-C through the owned terminal; final exit collected. Output confirmed loopback and Unix-socket EPERM, hover fixture output write denial, unfinished native fixture compiles, clipboard-lock failure, and the default cleanup-tail assertion requiring update. Validation and mod stages were not reached."
+    },
+    {
+      "command": "node --test tests/bench-run.test.mjs",
+      "exitCode": 1,
+      "passed": 18,
+      "failed": 1,
+      "result": "RED: default fixture driver still used JSON instead of streaming permission detection. Existing default cleanup-tail expectation updated for retained ownership."
+    },
+    {
+      "command": "node --test --test-name-pattern='inherit setup' tests/bench-fixture-handoff.test.mjs",
+      "exitCode": 1,
+      "passed": 1,
+      "failed": 1,
+      "result": "RED: inherited setup became ready before the launch finished or a focused window appeared, missing a later setup handoff."
+    },
+    {
+      "command": "node --test tests/bench-fixture-handoff.test.mjs tests/bench-run.test.mjs",
+      "exitCode": 0,
+      "passed": 30,
+      "failed": 0
+    },
+    {
+      "command": "node --test tests/bench-fixture-handoff.test.mjs",
+      "exitCode": 1,
+      "passed": 10,
+      "failed": 3,
+      "result": "RED: ordinary setup cancellation at the handoff retained the exited PID; close commands discarded launch ownership."
+    },
+    {
+      "command": "node --test tests/bench-fixture-handoff.test.mjs tests/bench-run.test.mjs",
+      "exitCode": 0,
+      "passed": 32,
+      "failed": 0
+    },
+    {
+      "command": "npm run check",
+      "environment": "host access after denial",
+      "exitCode": 1,
+      "passed": 1143,
+      "failed": 10,
+      "cancelled": 1,
+      "interrupted": true,
+      "loadAverage": [
+        137.43,
+        119.58,
+        95.59
+      ],
+      "result": "Native fixture compiles hit 180-second deadlines. Interrupted once through the original owned TTY, then collected final exit. The next check bounds unit file concurrency to four without dropping tests.",
+      "failures": [
+        "native prototype compiles and validates diagnostic requests without app access",
+        "browser regression: fixture-navigation",
+        "native Mail ownership self-test rejects focus-only and ambiguous creation, and requires local destination proof",
+        "native capability decisions require explicit counts, read proof, and unique creation events",
+        "preview-pdf checks the saved second page rotation and preserves page one",
+        "native Chess fixture accepts the owned private temporary path before Foundation normalizes it",
+        "a stalled target refuses and a new helper can answer the next request",
+        "doctor collects a descendant that retains pipes after its parent exits",
+        "a timeout collects a process group even when the child and descendant ignore TERM",
+        "one app-health helper answers many probes, and a stuck probe resolves unknown and restarts it"
+      ]
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "errors": 5,
+      "result": "Five prose errors in the new report and known-problems entry; wording corrected without suppressions."
+    },
+    {
+      "command": "npm run check",
+      "environment": "host access after denial; file concurrency four",
+      "exitCode": null,
+      "result": "Turn interruption lost terminal handle 78509. No final status recovered; not counted as passing. Nine Swift compiler processes remained in this worktree at resumption."
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": null,
+      "result": "Turn interruption lost terminal handle 89470. No final status recovered; not counted as passing."
+    },
+    {
+      "command": "node --test --test-name-pattern='default simulator' tests/bench-simulator.test.mjs",
+      "exitCode": 1,
+      "passed": 2,
+      "failed": 2,
+      "result": "RED: default simulator setup and preparation did not expose the local server cleanup hook used during a permission stop."
+    },
+    {
+      "command": "node --test --test-name-pattern='default simulator' tests/bench-simulator.test.mjs",
+      "exitCode": 0,
+      "passed": 4,
+      "failed": 0,
+      "result": "GREEN: setup and preparation retain local server cleanup independent of app cleanup."
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "suggestions": 0,
+      "files": 70
+    },
+    {
+      "command": "npm run check",
+      "environment": "host access after denial; file concurrency four",
+      "exitCode": 1,
+      "interrupted": true,
+      "loadAverage": [232.75, 198.59, 151.10],
+      "result": "Native prototype and browser fixture-navigation compilation each exceeded 180 seconds. All 13 handoff tests passed in this run. Interrupted once through retained terminal 84360 and collected exit 1. Validation and mod tests were not reached; no full-suite success claimed.",
+      "compilerCleanup": {
+        "operatorApproved": true,
+        "survivingCompilerProcesses": 8,
+        "signal": "SIGTERM",
+        "signalExitCode": 0,
+        "remainingWorktreeProcesses": 0
+      }
+    },
+    {
+      "command": "npm run validate",
+      "exitCode": 0,
+      "result": "Marketplace and plugin manifests passed validation."
+    },
+    {
+      "command": "npm run test:mod",
+      "exitCode": 0,
+      "passed": 11,
+      "failed": 0
+    },
+    {
+      "command": "node --test --test-name-pattern='local server' tests/bench-real-run.test.mjs",
+      "exitCode": 1,
+      "passed": 0,
+      "failed": 3,
+      "result": "RED: an uncollected driver bypassed local listener cleanup, including during a dialog stop; local cleanup errors also went unreported."
+    },
+    {
+      "command": "node --test tests/bench-real-run.test.mjs",
+      "exitCode": 0,
+      "passed": 24,
+      "failed": 0,
+      "result": "GREEN: local server cleanup runs independently of app cleanup; failed cleanup retains evidence and releases the owned lock."
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "suggestions": 0,
+      "files": 70,
+      "result": "Updated report passed after recording the failed full check and compiler cleanup."
+    },
+    {
+      "command": "npm run check",
+      "environment": "host access after denial; serialized check slot after shared hold cleared; file concurrency four",
+      "exitCode": 0,
+      "passed": 1160,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "unitDurationMs": 162822.099917,
+      "manifestValidation": "both passed",
+      "modPassed": 11,
+      "modFailed": 0,
+      "observedLoadAverageDuringRun": [20.25, 9.08, 16.02],
+      "remainingWorktreeProcesses": 0
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "suggestions": 0,
+      "files": 70,
+      "result": "Final report passed after recording the successful full check."
+    }
+  ],
+  "completion": {
+    "checkExitCode": 0,
+    "proseLintExitCode": 0,
+    "liveQualification": "Pending sleight-arch simulator-flow rerun while the owner is away."
+  },
+  "interruptedCompilerCleanup": {
+    "operatorApproved": true,
+    "originalCompilerProcesses": 9,
+    "exitedBeforeSignal": 2,
+    "remainingSignaled": 7,
+    "signal": "SIGTERM",
+    "sandboxSignalExitCode": 1,
+    "hostSignalExitCode": 0,
+    "result": "After the sandbox denied signaling, the authorized host retry completed. A worktree-scoped open-directory check found no remaining Swift compiler processes."
+  },
+  "review": {
+    "importantFindings": [
+      "Inherited readiness completed too early.",
+      "Ordinary cancellation could lose the eligible successor and erased launch ownership.",
+      "An uncollected driver bypassed local listener cleanup."
+    ],
+    "result": "Findings reproduced RED then fixed GREEN. Final narrow follow-up review reported no actionable Critical or Important findings.",
+    "limits": [
+      "Live DeviceHub qualification belongs to sleight-arch.",
+      "OS-level PID reuse remains outside this change."
+    ]
+  },
+  "testScheduling": {
+    "concurrency": 4,
+    "reason": "The uncapped host check timed out native compilation under a measured load average of 137.43. Every test remains selected."
+  }
+}

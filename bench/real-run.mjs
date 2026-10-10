@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { acquireLiveLock } from './live-lock.mjs';
 
-// Only the real suite uses this lifecycle, preserving older benchmark passes.
+// The real suite and default tasks with retained fixtures use this lifecycle.
 // A cleanup failure preserves its fixture and stops the pass. The cooperative
 // lock is released on exit, as the task brief requires.
 export async function executeRealTask(task, ctx, { drive, dryRun = false, setupOnly = false, signal, permissionCheck, stop, lockHeld = false } = {}) {
@@ -78,7 +78,6 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, setupO
       // Refresh before any app cleanup, including after a short setup failure.
       if (monitor) { await observation; await observe().catch(() => {}); }
       if (cleanupController.signal.aborted) {
-        if (ctx.closeServer) { await ctx.closeServer(); ctx.closeServer = undefined; }
         throw new Error(result.appDialog ? 'Fixture cleanup stopped by application dialog' : 'Fixture cleanup stopped by permission observation');
       }
       await task.cleanup?.(ctx);
@@ -86,6 +85,13 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, setupO
       cleanupConfirmed = true;
     }
     catch (error) { result.passed = false; result.cleanupError = error.message; }
+    // Local listener cleanup does not act on an app and remains safe when the
+    // driver could not be collected or a dialog prevents fixture cleanup.
+    try { if (ctx.closeServer) { await ctx.closeServer(); ctx.closeServer = undefined; } }
+    catch (error) {
+      result.passed = false; cleanupConfirmed = false;
+      result.cleanupError = [result.cleanupError, error.message].filter(Boolean).join('; ');
+    }
     for (const helper of ctx.windowLeases ?? []) {
       try {
         if (!await helper.dispose()) throw new Error('Fixture helper process group cleanup unconfirmed');

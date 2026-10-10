@@ -9,12 +9,13 @@ import { privateDriverEnvironment } from '../bench/driver.mjs';
 
 // Execute the actual runner body with inert dependencies. No app, CLI, approval
 // file, live lock, compiler or filesystem operation reaches the host.
-async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false } = {}) {
+async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false, fixtureLifecycle = false, ownerName = '' } = {}) {
   const calls = [], saved = [], envs = [], tailScopes = [], directories = [];
   const logs = [], driverOptions = [], codexRuns = [];
   const source = readFileSync(new URL('../bench/run.mjs', import.meta.url), 'utf8')
     .replace(/^#!.*\n/, '').replace(/^import .*;\n/gm, '').replaceAll('import.meta.url', '"file:///fixture/bench/run.mjs"');
   const task = { id: 'fixture', app: 'Safari', setup() {}, prompt: () => 'task', check: () => true, cleanup: () => calls.push('task cleanup') };
+  if (fixtureLifecycle) Object.assign(task, { id: 'simulator-form', app: 'Simulator', fixtureLifecycle: true });
   if (privateMail) Object.assign(task, { id: 'mimestream-label', app: 'Mimestream', privateMail: true,
     privateExpected: () => 'private answer', privateTerms: () => ['private label'] });
   const sandbox = {
@@ -28,7 +29,7 @@ async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = []
     publishPrivateMailResults: (_path, value, options) => { calls.push('private audit'); assert.ok(options.terms.every(term => term === 'private label')); saved.push(JSON.parse(value)); },
     execFileSync(command, args) {
       if (command === '/usr/bin/git') throw new Error('outside repo');
-      if (command === 'id') return privateMail ? 'Owner Example' : '';
+      if (command === 'id') return privateMail ? 'Owner Example' : ownerName;
       calls.push('tap check'); return JSON.stringify(taps);
     },
     getTasks: () => [task], BENCH_APPS, REAL_APPS,
@@ -134,6 +135,32 @@ test('permission and driver stops quit a launched Device Hub lease once before u
   }
 });
 
+test('the default simulator uses streaming permission detection and publishes scrubbed fixture diagnostics', async () => {
+  const result = await runner({ suite: 'default', fixtureLifecycle: true, drive: true, ownerName: 'Owner Example',
+    outcome: { fixtureDiagnostics: [{ readiness: { title: 'Owner Example iPhone', path: '/owner/fixture' }, pids: [42, 43] }] } });
+  assert.equal(result.error, undefined);
+  assert.equal(result.calls.filter(call => call === 'real run').length, 3);
+  for (const options of result.driverOptions) assert.equal(options.format, 'stream-json');
+  for (const args of result.calls.filter(call => Array.isArray(call) && call[0] === 'driver')) {
+    assert.equal(args[args.indexOf('--output-format') + 1], 'stream-json');
+    assert.ok(args.includes('--verbose'));
+  }
+  assert.equal(JSON.stringify(result.saved).includes('Owner Example'), false);
+  assert.equal(JSON.stringify(result.saved).includes('/owner/'), false);
+  assert.deepEqual(result.saved.at(-1).results[0].fixtureDiagnostics[0].pids, [42, 43]);
+  assert.equal(result.tailScopes[2]?.ownedOnly, true);
+});
+
+test('a default simulator cleanup failure stops the pass and retries only its retained launched PID', async () => {
+  let quits = 0;
+  const result = await runner({ suite: 'default', fixtureLifecycle: true, outcome: { cleanupError: 'close failed' },
+    leases: [{ app: 'DeviceHub', running: false, launched: true, quit: async () => { quits++; } }] });
+  assert.equal(result.error, undefined);
+  assert.equal(result.calls.filter(call => call === 'real run').length, 1);
+  assert.equal(quits, 1);
+  assert.equal(result.saved.at(-1).results[0].passed, false);
+});
+
 test('pass cleanup preserves pre-existing apps and publishes a failed owned-app quit', async () => {
   const existing = { app: 'Safari', running: true, launched: true, quit: () => assert.fail('preserve pre-existing app') };
   const launched = { app: 'Preview', running: false, launched: true, quit: async () => { throw new Error('quit unconfirmed'); } };
@@ -157,7 +184,7 @@ test('Codex default approvals contain only the five core benchmark bundle IDs', 
   assert.equal(result.error, undefined);
   assert.deepEqual(result.calls.find(c => Array.isArray(c) && c[0] === 'approve'),
     ['approve', 'com.apple.calculator', 'com.apple.TextEdit', 'com.apple.Chess', 'com.apple.iphonesimulator', 'com.apple.dt.Devices']);
-  assert.deepEqual(result.tailScopes, [undefined, undefined, undefined]);
+  assert.deepEqual(result.tailScopes.map(scope => scope?.ownedOnly), [undefined, undefined, true]);
 });
 
 test('a Codex real run drives through Codex with the real apps approved and the pass signal', async () => {
