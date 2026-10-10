@@ -1,0 +1,11 @@
+{
+  "command": "node bench/other-hosts-live.mjs",
+  "exitCode": 1,
+  "passed": false,
+  "holdPresent": true,
+  "engineStarted": false,
+  "appAccess": false,
+  "pointerInput": false,
+  "receiptPublication": "EPERM writing docs/benchmarks/2026-10-09-other-hosts-1791590646959.json",
+  "evidence": "The attempt returned before startup; a read immediately afterward confirmed /tmp/sleight-hold and no /tmp/sleight-live.lock. This receipt was recovered from the terminal result and that read."
+}

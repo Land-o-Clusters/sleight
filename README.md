@@ -36,10 +36,11 @@ and you keep working. sleight gives that engine to Claude Code.
 
 ## Install
 
-You need macOS on Apple Silicon, Claude Code 2.1.275 or later, and the
+You need macOS on Apple Silicon and the
 [ChatGPT desktop app](https://chatgpt.com/download/) with Computer Use turned on in Codex at least
 once. That first run installs the engine's helper and gets macOS to grant it Accessibility and Screen
-Recording. You can sign out of Codex afterwards.
+Recording. You can sign out of Codex afterwards. For the Claude Code plugin, use Claude Code 2.1.275
+or later.
 
 ```bash
 claude plugin marketplace add Land-o-Clusters/sleight
@@ -68,6 +69,45 @@ don't ask, because the engine approves them itself ([settings](docs/settings.md#
 
 To update, run `claude plugin marketplace update sleight` and `claude plugin update sleight@sleight`,
 then start a new session. A running session keeps the version it started with.
+
+### Cursor, Codex CLI and other MCP clients
+
+Clone the repo and use its launcher. It runs on the Node bundled with ChatGPT, without npm install.
+
+```bash
+git clone https://github.com/Land-o-Clusters/sleight.git ~/sleight
+~/sleight/plugins/sleight/bin/sleight-mcp --doctor
+```
+
+For [Cursor](https://cursor.com/help/customization/mcp), put this in `~/.cursor/mcp.json`. The same
+`mcpServers` entry works in a generic client that accepts this JSON format. Replace the command with
+your clone's absolute path. JSON doesn't expand `~` or `${CLAUDE_PLUGIN_ROOT}`.
+
+```json
+{
+  "mcpServers": {
+    "sleight": {
+      "command": "/absolute/path/to/sleight/plugins/sleight/bin/sleight-mcp"
+    }
+  }
+}
+```
+
+For [Codex CLI](https://developers.openai.com/codex/mcp), register the same executable:
+
+```bash
+codex mcp add sleight -- "$HOME/sleight/plugins/sleight/bin/sleight-mcp"
+```
+
+Reconnect the client, then ask it to use sleight's `js` tool. Cursor, Codex CLI and generic clients
+don't get the Claude Code pane, status line, `/sleight stop` or registered skill command. The relay
+still adds the bundled skill's guidance to the first engine documentation reply. Without that file,
+the engine's API docs and tools still work. Approvals use the client's form prompts when supported,
+otherwise sleight's own macOS panel. Without a turn hook, the relay ends a used turn after 30 idle
+seconds and on disconnect. Close the server connection to stop the session.
+
+Update the clone with `git pull --ff-only` and reconnect. The base-protocol check and limits of host
+testing are in [Other hosts](docs/design/other-hosts.md).
 
 ## Why sleight
 
