@@ -204,7 +204,8 @@ export function createReadCompactor() {
   function observe(tree, window, lines) {
     const root = parse(lines[1] ?? '').key;
     const degraded = (ELEMENT.test(lines[1] ?? '') && !/^(?:(?:standard|floating|system|dialog) window|window|sheet|dialog)\b/.test(root)) ||
-      !!(latest?.window.app === window.app && latest.window.url && !window.url);
+      // Only the same window losing its URL: another window or a Save sheet has none of its own.
+      !!(latest?.window.app === window.app && latest.window.title === window.title && latest.window.url && !window.url);
     const observation = { id: ++observationId, window, lines, root, degraded,
       incomplete: !ELEMENT.test(lines[1] ?? '') || /…\(\d+\)|sleight: (?:lines changed|no change since)/.test(tree) };
     observedInResult = observation;

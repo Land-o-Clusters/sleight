@@ -26,7 +26,7 @@ Failed actions, absent observations and ambiguous headers invalidate the observa
 a complete read restores it. Headers without a numeric root and unterminated guard output are incomplete.
 Observation identities are counters, so a comparison cannot retain earlier trees through its baseline.
 Reset and engine restart clear the result observations while preserving the compactor's element
-history for `seenLines`, stale checks and remapping. An unknown root role or a lost URL makes the
+history for `seenLines`, stale checks and remapping. An unknown root role, or a window losing its own URL, makes the
 result unverified with `degraded read`, before any window or element change is considered.
 Degraded observations cannot replace the trusted baseline within a reply, including a reply that
 contains both a plain read and a guard read.

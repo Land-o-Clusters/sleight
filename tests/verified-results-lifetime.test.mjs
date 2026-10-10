@@ -71,6 +71,19 @@ test('repeated URL-less observations in one reply cannot hide the lost URL', () 
   }
 });
 
+// vr-live 2026-10-10: a leftover window with a URL, then the task's Untitled window; Cmd+S then opened a Save sheet.
+test('a URL counts as lost only in the same window, not after a switch or a Save sheet', () => {
+  const before = tree(['\t14 button Fourteen']);
+  const untitled = ['Window: "Untitled 10", App: TextEdit.', '0 standard window Untitled 10, Secondary Actions: Raise', '\t14 button Fourteen'].join('\n');
+  const sheet = ['Window: "Save", App: TextEdit.', '0 sheet Description: save, ID: save-panel, Secondary Actions: Raise', '\t1 text field Value: a.txt'].join('\n');
+  for (const [after, code, expected] of [[untitled, 'await app.click(14)', /UI changed \(window\)/], [sheet, 'await app.pressKey("super+s")', /UI changed \(window\)/]]) {
+    const c = createReadCompactor(); c.process([text(before)]);
+    const result = c.process([text(GUARD_MARK + after + GUARD_END)], { action: c.beginAction(code) });
+    assert.match(result.at(-1).text, expected);
+    assert.doesNotMatch(result.at(-1).text, /degraded read|saved: observed/);
+  }
+});
+
 test('the abbreviated Save fixture retains its root and no sidebar rows', () => {
   const fixture = JSON.parse(readFileSync(new URL('./fixtures/verified-results.json', import.meta.url))).save;
   assert.match(fixture.before, /0 sheet Description: save, ID: save-panel/);
