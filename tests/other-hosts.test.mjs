@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
+import { EventEmitter } from 'node:events';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
-import { approvalOptions } from '../plugins/sleight/lib/launch.mjs';
+import * as launcher from '../plugins/sleight/lib/launch.mjs';
+const { approvalOptions } = launcher;
 import { PreapprovedApps } from '../plugins/sleight/lib/preapproved.mjs';
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -96,9 +98,111 @@ test('an explicit dialog also advertises form support to the engine', async t =>
 test('without any prompt provider a base client cancels instead of hanging', async t => {
   const h = harness(t);
   initialize(h);
+  assert.deepEqual(h.toServer[0].params.capabilities, { elicitation: { form: {} } });
   h.engine(approval('no-ui')); await tick();
   assert.equal(h.toClient.length, 0);
   assert.equal(h.toServer.at(-1).result.action, 'cancel');
+});
+
+test('Claude Code form and URL capabilities reach the engine unchanged', t => {
+  // initialize captured in 2026-10-04T15-03-12-682Z-preapproved-listed.json.
+  const capabilities = { roots: { listChanged: true }, elicitation: { form: {}, url: {} } };
+  const h = harness(t, approvalOptions({}));
+  h.client({ id: 0, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities,
+    clientInfo: { name: 'claude-code', title: 'Claude Code', version: '2.1.289',
+      description: "Anthropic's agentic coding tool", websiteUrl: 'https://claude.com/claude-code' },
+  } });
+  assert.deepEqual(h.toServer[0].params.capabilities, capabilities);
+});
+
+test('dialog wording follows clientInfo before the Claude environment fallback', async t => {
+  for (const [clientInfo, env, want] of [
+    [{ name: 'claude-code' }, {}, true], [{ name: 'cursor' }, { CLAUDE_CODE_ENTRYPOINT: 'claude-desktop' }, false],
+    [undefined, { CLAUDE_CODE_ENTRYPOINT: 'cli' }, true], [undefined, {}, false],
+  ]) {
+    let context;
+    const h = harness(t, approvalOptions(env, async (_message, _scoped, options) => { context = options; return 'decline'; }));
+    h.client({ id: 0, method: 'initialize', params: { capabilities: {}, ...(clientInfo ? { clientInfo } : {}) } });
+    h.engine(approval('wording')); await tick();
+    assert.equal(context?.claudeCode, want);
+  }
+});
+
+// Replace only osascript: formatting and failure handling stay in the real launcher.
+async function panel(message, claudeCode, failure = false) {
+  let args;
+  const result = await launcher.askWithDialog(message, true, { claudeCode }, (_command, argv, callback) => {
+    args = argv;
+    const child = new EventEmitter();
+    queueMicrotask(() => { callback(failure ? new Error('no GUI session') : null, failure ? '' : 'decline', ''); child.emit('close'); });
+    return child;
+  }).then(action => ({ action }), error => ({ error }));
+  return { args, ...result };
+}
+
+test('native panel keeps Claude branding and rewrites other hosts at the prompt boundary', async () => {
+  const claude = await panel('Allow Computer Use to use "Calculator"?', true);
+  assert.equal(claude.args[3], 'Allow Claude to use Calculator?');
+  assert.match(claude.args[4], /Claude can then click.*this Claude session ends/);
+  assert.equal(claude.args.at(-1), 'claude-code');
+  const other = await panel('Allow Claude to read and use your notifications?', false);
+  assert.equal(other.args[3], 'Allow this agent to read and use your notifications?');
+  assert.match(other.args[4], /this sleight server session ends/);
+  assert.equal(other.args.at(-1), 'generic');
+});
+
+test('a failed native panel returns an elicitation error without replacing unrelated successful calls', async t => {
+  const failure = await panel('Allow Computer Use to use "Calculator"?', false, true);
+  assert.equal(failure.error?.code, 'SLEIGHT_PROMPT_UNAVAILABLE');
+  const h = harness(t, { fallbackAsk: async () => { throw failure.error; } });
+  initialize(h);
+  h.client({ id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: '1 + 1' } } });
+  h.client({ id: 2, method: 'tools/call', params: { name: 'js', arguments: { code: '2 + 2' } } });
+  h.engine(approval('panel-failed')); await tick();
+  const refusal = h.toServer.at(-1);
+  h.engine({ id: 2, result: { content: [{ type: 'text', text: '4' }] } });
+  assert.equal(h.toClient.at(-1).result.isError, undefined);
+  assert.equal(h.toClient.at(-1).result.content[0].text, '4');
+  assert.equal(refusal.id, 'panel-failed');
+  assert.equal(refusal.error?.code, -32603);
+  assert.match(refusal.error.message, /prompt couldn't be shown/);
+  // The engine associates its failed elicitation with the originating tool call.
+  h.engine({ id: 1, error: { code: -32603, message: "The approval prompt couldn't be shown." } });
+  assert.match(h.toClient.at(-1).error.message, /prompt couldn't be shown/);
+});
+
+test('a failed native panel for a local tool reports no user decision and grants nothing', async t => {
+  const h = harness(t, { fallbackAsk: async () => {
+    throw Object.assign(new Error('panel unavailable'), { code: 'SLEIGHT_PROMPT_UNAVAILABLE' });
+  }, localTools: { tools: [{ name: 'local', inputSchema: { type: 'object' } }],
+    call: async (_name, _args, approve) => ({ content: [{ type: 'text', text: 'User declined' }], isError: !await approve(['local'], 'Allow Claude to use local?') }),
+  } });
+  initialize(h);
+  h.client({ id: 1, method: 'tools/call', params: { name: 'local', arguments: {} } }); await tick();
+  assert.equal(h.toClient.at(-1).result.isError, true);
+  assert.match(h.toClient.at(-1).result.content[0].text, /prompt couldn't be shown/);
+  assert.doesNotMatch(h.toClient.at(-1).result.content[0].text, /User declined/);
+});
+
+test('an unanswered local form expires and a late acceptance cannot approve the next call', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = harness(t, { localTools: { tools: [{ name: 'local', inputSchema: { type: 'object' } }],
+    call: async (_name, _args, approve) => ({ content: [], isError: !await approve(['local'], 'Allow Claude to use local?') }),
+  } });
+  initialize(h, { elicitation: { form: {} } });
+  const call = id => h.client({ id, method: 'tools/call', params: { name: 'local', arguments: {} } });
+  call(1); await tick();
+  const prompt = h.toClient.at(-1);
+  t.mock.timers.tick(300000); await tick();
+  assert.equal(h.toClient.find(m => m.id === 1)?.result.isError, true, 'timeout refuses the tool');
+  h.client({ id: prompt.id, result: { action: 'accept' } });
+  assert.equal(h.toServer.some(m => m.id === prompt.id), false, 'expired reply stays internal');
+  call(2); await tick();
+  const next = h.toClient.at(-1);
+  assert.equal(next.method, 'elicitation/create');
+  assert.notEqual(next.id, prompt.id);
+  h.client({ id: next.id, result: { action: 'decline' } }); await tick();
+  assert.equal(h.toClient.find(m => m.id === 2)?.result.isError, true);
 });
 
 test('an audit failure cancels when explicit client mode has no form support', async t => {

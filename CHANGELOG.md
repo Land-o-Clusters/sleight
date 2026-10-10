@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Cursor and generic MCP clients can use sleight's native approval panel and idle turn cleanup.
+  The panel still names Claude under Claude Code. Unanswered relay forms expire after five minutes, and a panel
+  that cannot be shown reports a failure. Unit-tested only, with [install notes](docs/other-hosts.md).
 - `sleight-mcp --doctor <app>` reads an app that is already running and reports the read's time and
   whether it had a window header. It never launches the app, sends input or answers an approval.
   Unit-tested with a stand-in engine (Sol, `codex/doctor-flow`).

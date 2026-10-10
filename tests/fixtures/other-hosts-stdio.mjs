@@ -37,7 +37,7 @@ if (mode === 'hang') {
       engineCapabilities = msg.params.capabilities;
       send({ id: msg.id, result: { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'fixture', version: '1' } } });
     } else if (msg.method === 'tools/list') {
-      send({ id: msg.id, result: { tools: ['js', 'turn_ended'].map(name => ({ name, inputSchema: { type: 'object' } })) } });
+      send({ id: msg.id, result: { tools: ['js', 'turn_ended'].map(name => ({ name, inputSchema: { type: 'object' } })), _meta: { fixture: { turnEnds } } } });
     } else if (msg.params?.name === 'turn_ended') {
       turnEnds.push(msg.params.arguments); send({ id: msg.id, result: { content: [] } });
     } else if (msg.params?.name === 'js') {

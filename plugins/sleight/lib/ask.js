@@ -10,7 +10,7 @@
 ObjC.import('Cocoa');
 
 function run(argv) {
-  const [question, detail, iconPath, seconds, mode] = argv;
+  const [question, detail, iconPath, seconds, mode, host] = argv;
   const review = mode === 'review';
   const wide = review || mode === 'flow';
   const app = $.NSApplication.sharedApplication;
@@ -50,7 +50,7 @@ function run(argv) {
     return { field, height: Math.ceil(size.height) };
   };
   // Says who is asking, for people who never saw sleight's icon.
-  const eyebrow = label('sleight \u00b7 Claude Code computer use', $.NSFont.systemFontOfSizeWeight(10, $.NSFontWeightMedium), $.NSColor.tertiaryLabelColor);
+  const eyebrow = label(host === 'generic' ? 'sleight \u00b7 computer use' : 'sleight \u00b7 Claude Code computer use', $.NSFont.systemFontOfSizeWeight(10, $.NSFontWeightMedium), $.NSColor.tertiaryLabelColor);
   const title = label(question, $.NSFont.systemFontOfSizeWeight(13, $.NSFontWeightSemibold), $.NSColor.labelColor);
   const body = wide ? { height: 360 } : label(detail, $.NSFont.systemFontOfSize(11), $.NSColor.secondaryLabelColor);
   const textH = eyebrow.height + 2 + title.height + 4 + body.height;

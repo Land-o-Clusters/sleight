@@ -18,7 +18,11 @@ test('stdio client uses only base MCP and the real relay supplies approvals and 
   const before = first._meta.fixture;
   assert.equal(before.dialogs, 1);
   assert.equal(before.engineCapabilities.elicitation.form !== undefined, true);
-  await tick(70);
+  const deadline = Date.now() + 10000;
+  while (!(await client.request('tools/list', {}))._meta.fixture.turnEnds.length) {
+    assert.ok(Date.now() < deadline, 'idle turn did not end within 10 seconds');
+    await tick(25);
+  }
   const second = await client.call('js', { code: 'await app.getAXState({ disableDiffing: true })' });
   const after = second._meta.fixture;
   assert.equal(after.turnEnds.length, 1);

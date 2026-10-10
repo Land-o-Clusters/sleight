@@ -45,6 +45,36 @@ accepted approval. The client refuses optional server requests and collects its 
 EOF, timeout, spawn failure and interruption.
 
 The native approval callback is replaced only in the protocol fixture. No real panel was shown or
-answered. The hold prevented a live engine result. Cursor and Codex model trials remain with
-sleight-arch. The install instructions were checked against their official documentation and local
-`codex mcp add --help`.
+answered. The hold prevented a live engine result. Cursor model trials remain with sleight-arch.
+The install instructions were checked against Cursor's official documentation.
+
+## Review follow-up
+
+Rebased cleanly onto `origin/pane/auto-mode` at `a64728e`, including `83188cf` and the replay bridge.
+No app or model-host trial was run during this follow-up.
+
+1. The first new regression run exited 1: 11 passed and five failed. Missing form advertisement,
+   host identity, panel failure reporting and form expiry were exposed. The panel cases initially
+   failed because the native callback was not exported for the controlled process runner.
+2. After restoring host wording and form advertisement, 14 passed and two failed, exit 1. Panel
+   failure reporting and form expiry still failed on their expected assertions.
+3. The change-review timeout regression failed, exit 1. An unanswered form left its review pending
+   without returning a result.
+4. After the fixes, relay and host regressions passed 148/148, exit 0. The separate stdio client
+   checks passed 5/5, exit 0, with polling for observed idle cleanup instead of a fixed sleep.
+5. The first follow-up prose check exited 1 with four wording flags. These were revised without
+   suppressing rules.
+6. Bare `npm run check` passed, exit 0: 1059/1059 tests, both plugin validations and 11/11 mod
+   tests. The revised prose check passed, exit 0, across 62 files.
+7. Review found that panel failures replaced unrelated concurrent calls' successful results. The
+   new regression run exited 1 with 16 passes and one failure. Its isolated rerun also exited 1,
+   showing the successful call incorrectly marked as an error.
+8. The engine now gets panel failures as JSON-RPC errors on its elicitation request. It can
+   associate the error with its originating call. Local and document failures use their call IDs.
+   Focused checks passed 154/154, exit 0. Live engine error propagation remains unmeasured.
+
+The branch was then rebased cleanly onto `7c8e357`. That base update changed only `STATE.md`.
+Final bare `npm run check`: exit 0, 1060/1060 tests, both plugin validations and 11/11 mod tests.
+The report update's prose checks exited 1 with two wording flags, then one.
+Final bare `npm run lint:prose`: exit 0 across 62 files.
+Independent review reproduced the passing concurrency case.

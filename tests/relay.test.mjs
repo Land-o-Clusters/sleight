@@ -1475,6 +1475,25 @@ test('review lists two saved documents, asks for each user decision and never fo
   assert.equal(h.toServer.some(m => m.params?.name === 'review_changes'), false);
 });
 
+test('an unanswered review form expires without keeping or undoing and later reviews still prompt', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const path = join(fixtureRoot, 'review-timeout.txt');
+  const h = harness();
+  h.fromClient({ jsonrpc: '2.0', id: 0, method: 'initialize', params: { capabilities: { elicitation: { form: {} } } } });
+  savedEdit(h, 1, path, 'before\n', 'after\n');
+  reviewCall(h, 3); await settle();
+  const first = h.toClient.find(m => m.method === 'elicitation/create');
+  t.mock.timers.tick(300000); await settle();
+  assert.match(h.toClient.find(m => m.id === 3)?.result.content[0].text ?? '', /pending, no user decision/);
+  assert.equal(readFileSync(path, 'utf8'), 'after\n');
+  h.fromClient({ jsonrpc: '2.0', id: first.id, result: { action: 'accept', content: { decision: 'undo' } } });
+  reviewCall(h, 4); await settle();
+  const next = h.toClient.filter(m => m.method === 'elicitation/create').at(-1);
+  assert.notEqual(next.id, first.id);
+  h.fromClient({ jsonrpc: '2.0', id: next.id, result: { action: 'decline' } }); await settle();
+  assert.equal(readFileSync(path, 'utf8'), 'after\n');
+});
+
 test('model decisions and a bare accept cannot undo or keep, and actions wait during review', async () => {
   const path = join(fixtureRoot, 'review-decision.txt');
   const h = harness(); savedEdit(h, 1, path, 'before\n', 'after\n');
