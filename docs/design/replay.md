@@ -53,7 +53,32 @@ refusal omits the snapshot so the user can still approve the pending call throug
 Claude should inspect that window and finish with `js`. A stopped batch may have sent input before
 its failure, so its first step must not be repeated without checking what happened. The result stays
 a normal tool result so Claude receives the takeover context. An invalid script is a tool error.
-The desktop mod does not start replays yet.
+The desktop mod starts replay through this same tool.
+
+## Desktop commands
+
+`/sleight record [file]` gets the current session's ID and runs the plugin's recorder with that ID,
+using an argument vector with no shell. The recorder reads the full saved transcript, including
+calls before compaction. The mod refuses empty recordings, existing output files and stdout cut at
+the host's 4 MiB output limit. Omitting the file argument uses `sleight-<session id>.json`.
+
+`/sleight replay <file>` opens the pane, reads the script and calls `replay` on the session's connected
+MCP server. It starts only while Claude is idle. There is one replay call for the whole script;
+the relay retains its concurrency, waiting and cancellation checks across steps. The pane shows that
+it is running and keeps Stop available. When the call returns it lists every attempted step's outcome
+and `waitedMs`, newest first. The file field and Replay file / Record session buttons do the same work.
+
+On a stop, the mod sends Claude the structured result, including remaining steps, the window or its
+read error, and a reminder to inspect any partial input. It does not snapshot the pane or end the
+engine turn between that stop and handoff, because either could discard a pending flow exception.
+A user Stop sends `turn_ended` and suppresses handoff. Refresh waits until replay finishes.
+Invalid files, refused tools and transport errors are reported without asking Claude to bypass them.
+
+The mod's `tool.check` allowance still covers only its own exact pane snapshot and `turn_ended`.
+Replay uses the normal tool check, and app approvals still go to the user. Positional scripts remain
+refused in the pane. Claude's tool and the CLI keep their explicit opt-in. Recording and replay add no
+transcript reads, file work, timers or engine reads to calls that do not use them. The bridge's existing
+tests still check zero JSON parses and serializations for ordinary messages, including a 1 MiB image.
 
 ## Safety
 

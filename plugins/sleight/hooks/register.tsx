@@ -3,12 +3,15 @@ import type { Register } from 'claude-code'
 
 import type { Frame, LogEntry, ViewStatus } from '../types'
 import { FRAME_MARKER, snapshotCode } from './snapshot'
+import { fileArgument, outcomeOf, resultEntries } from './replay'
+import type { ReplayScript } from './replay'
 
 // The server's own name in plugin.json; the session lists it as
 // plugin:sleight:computer, and its tools as mcp__plugin_sleight_computer__*.
 const SERVER = 'computer'
 const JS_TOOL = 'mcp__plugin_sleight_computer__js'
 const TURN_END_TOOL = 'mcp__plugin_sleight_computer__turn_ended'
+const REPLAY_TOOL = 'mcp__plugin_sleight_computer__replay'
 const PANE = 'sleight'
 const LOG_LIMIT = 200
 
@@ -16,15 +19,17 @@ const log = atom({ plugin: 'sleight', key: 'log' } as const, [] as LogEntry[])
 const frame = atom({ plugin: 'sleight', key: 'frame' } as const, null as Frame | null)
 const view = atom({ plugin: 'sleight', key: 'view' } as const, { kind: 'idle' } as ViewStatus)
 const stopped = atom({ plugin: 'sleight', key: 'stopped' } as const, false)
+const replayFile = atom({ plugin: 'sleight', key: 'replayFile' } as const, 'task.json')
+const replaying = atom({ plugin: 'sleight', key: 'replaying' } as const, false)
+let replayActive = false
+let replayCancelled = false
+let replaySequence = 0
 
 // Not drawn from, so plain module variables (a reload resets them, harmlessly).
 let usedThisTurn = false
 let turnRunning = false
 let actions = 0
 let lastApp: string | undefined
-// Set while one of this mod's own calls is in flight, so its tool.call hooks
-// let the call through and don't log it.
-let ownCall = false
 // The exact snapshot code in flight, for the tool.check below.
 let snapshotInFlight: string | undefined
 // Apps the pane snapshotted since Claude last used sleight. The engine diffs
@@ -51,11 +56,82 @@ function setStatus($: { ui: { status: (text: string | undefined) => void } }) {
 async function call($: any, tool: string, args: Record<string, unknown>) {
   const conn = await $.mcp.connect(SERVER)
   if (!conn.isConnected) throw new Error(conn.message)
-  ownCall = true
+  return $.mcp.call(conn.server, tool, args)
+}
+
+async function recordCurrent($: any, file?: string) {
+  if (turnRunning || replayActive) return { text: 'Wait for the current run to finish before recording.' }
   try {
-    return await $.mcp.call(conn.server, tool, args)
+    const path = file ? fileArgument(file) : `sleight-${await $.session.id()}.json`
+    if (await $.fs.exists(path)) throw new Error(`${path} already exists. Choose another file.`)
+    const session = await $.session.id()
+    // The live API's messages may have been compacted. The CLI reads the saved transcript.
+    const run = await $.process.run([`${$.plugin.root}/bin/sleight-mcp`, 'record', session])
+    if (run.exitCode !== 0) throw new Error(run.stderr || `Recorder exited ${run.exitCode}.`)
+    if (run.isStdoutTruncated) throw new Error('The recorded script exceeds the host output limit. Use sleight-mcp record with an output filename.')
+    const recorded = JSON.parse(run.stdout)
+    if (!recorded.steps?.length) throw new Error('No successful sleight actions in this session yet.')
+    await $.fs.write(path, JSON.stringify(recorded, null, 2) + '\n')
+    await update($, replayFile, () => path)
+    return { text: `Recorded ${recorded.steps.length} steps to ${path}.${recorded.skipped?.length ? ` Skipped tools: ${[...new Set(recorded.skipped)].join(', ')}.` : ''}` }
+  } catch (err) {
+    return { text: `Recording failed: ${(err as Error).message}` }
+  }
+}
+
+async function replayCurrent($: any, file: string) {
+  if (turnRunning || replayActive) return { text: 'Wait for the current run to finish before replaying.' }
+  replayActive = true
+  replayCancelled = false
+  const id = `replay-${++replaySequence}`
+  let engineStarted = false
+  try {
+    await update($, stopped, () => false)
+    const path = fileArgument(file)
+    const script: ReplayScript = JSON.parse(await $.fs.read(path))
+    if (replayCancelled) return { text: 'Replay stopped before starting.' }
+    if (script?.sleightReplay !== 1 || !Array.isArray(script.steps)) throw new Error('Not a sleight replay script.')
+    await update($, replayFile, () => path)
+    await update($, replaying, () => true)
+    snapshottedApps.clear()
+    await update($, log, list => [...list, { id, title: `Replaying ${path}`, status: 'running', at: now() } as LogEntry].slice(-LOG_LIMIT))
+    const conn = await $.mcp.connect(SERVER)
+    if (!conn.isConnected) throw new Error(conn.message)
+    if (await read($, stopped) || replayCancelled) {
+      await update($, log, list => list.map(entry => entry.id === id ? { ...entry, title: 'Replay stopped before starting.', status: 'refused' } : entry))
+      return { text: 'Replay stopped before starting.' }
+    }
+    engineStarted = true
+    const outcome = outcomeOf(await $.mcp.call(conn.server, 'replay', { script }))
+    const entries = resultEntries(script, outcome, id, now())
+    await update($, log, list => [...list.filter(entry => entry.id !== id), ...entries].slice(-LOG_LIMIT))
+    if (await read($, stopped) || replayCancelled) return { text: 'Replay stopped by the user.' }
+    if (!outcome.ok) {
+      // No pane read or turn_ended here: either can discard a pending flow exception.
+      const prompt = 'sleight replay stopped. Inspect the stop details and finish the task with the existing app handles. ' +
+        'The stopped batch may have sent input; check the window before repeating any action. ' +
+        'Respect refusals and ask the user for any required approval. Replay result:\n' + JSON.stringify(outcome)
+      $.clock.after(0, async () => {
+        if (await read($, stopped) || replayCancelled || replayActive || id !== `replay-${replaySequence}`) return
+        await $.prompt.submit({ text: prompt }).catch((err: Error) => $.ui.toast(`sleight: couldn't hand the stop to Claude (${err.message}). Send the stop details from the log.`))
+      })
+      return { text: `Replay stopped at step ${outcome.step}: ${outcome.error}. Sending the stop details to Claude.` }
+    }
+    const app = [...script.steps].reverse().map(step => appFrom(step.args.code ?? '', undefined)).find(Boolean)
+    if (app) lastApp = app
+    actions += outcome.steps ?? 0
+    setStatus($)
+    await endEngineTurn($, 'Stop')
+    return { text: `Replay finished: ${outcome.steps} steps.` }
+  } catch (err) {
+    const message = (err as Error).message
+    await update($, log, list => [...list.filter(entry => entry.id !== id), { id, title: `Replay failed: ${message}`, status: 'error', at: now() } as LogEntry].slice(-LOG_LIMIT))
+    if (engineStarted) await endEngineTurn($, 'Interrupt')
+    return { text: `Replay failed: ${message}` }
   } finally {
-    ownCall = false
+    if (replayCancelled) await update($, stopped, () => true)
+    await update($, replaying, () => false)
+    replayActive = false
   }
 }
 
@@ -78,8 +154,8 @@ async function endEngineTurn($: any, event: 'Stop' | 'Interrupt') {
 async function snapshot($: any, app: string) {
   await update($, view, () => ({ kind: 'snapshotting', app }) as ViewStatus)
   try {
-    // Leave rows for the status line, buttons, "Actions" and three log lines.
-    const code = snapshotCode(app, Math.max(8, paneColumns - 2), Math.max(4, paneRows - 7), paneSurface === 'terminal')
+    // Leave rows for the status, controls, file input, "Actions" and three log lines.
+    const code = snapshotCode(app, Math.max(8, paneColumns - 2), Math.max(4, paneRows - 9), paneSurface === 'terminal')
     snapshotInFlight = code
     const result = await call($, 'js', { code, title: 'sleight pane snapshot' }).finally(() => { snapshotInFlight = undefined })
     const text = result.content.map((block: { text?: string }) => block.text ?? '').join('\n')
@@ -123,8 +199,8 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'sleight',
-      description: 'Open the sleight pane, and send any text after it to Claude; `stop` halts its computer use',
-      argumentHint: '[stop | prompt]',
+      description: 'Open the sleight pane; replay a JSON file, record this session, or stop computer use',
+      argumentHint: '[replay <file> | record [file] | stop | prompt]',
       immediate: true,
     })
     return next(e)
@@ -150,7 +226,8 @@ export const register: Register = on => {
   })
 
   on('tool.call', { tool: JS_TOOL }, async ($, e, next) => {
-    if (ownCall) return next(e)
+    if (next.origin?.plugin === 'sleight') return next(e)
+    if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     if (await read($, stopped)) {
       return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
     }
@@ -174,9 +251,17 @@ export const register: Register = on => {
     return ran
   })
 
+  on('tool.call', { tool: REPLAY_TOOL }, async ($, e, next) => {
+    if (next.origin?.plugin === 'sleight') return next(e)
+    if (await read($, stopped)) return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
+    if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
+    usedThisTurn = true
+    return next(e)
+  })
+
   // turn_ended stays listed so this mod can call it; Claude may not.
   on('tool.call', { tool: TURN_END_TOOL }, async ($, e, next) =>
-    ownCall ? next(e) : { deny: 'turn_ended is internal to sleight; its hooks call it when a turn ends.' },
+    next.origin?.plugin === 'sleight' ? next(e) : { deny: 'turn_ended is internal to sleight; its hooks call it when a turn ends.' },
   )
 
   on('turn.complete', async ($, e, next) => {
@@ -192,13 +277,17 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'sleight' }, async ($, e) => {
+    const args = e.args.trim()
+    if (args === 'record' || args.startsWith('record ')) return recordCurrent($, args.slice(6).trim() || undefined)
     if (e.args.trim() === 'stop') {
+      if (replayActive) replayCancelled = true
       await update($, stopped, () => true)
       await endEngineTurn($, 'Interrupt')
       $.ui.status('sleight · stopped')
       return { text: 'sleight stopped: Claude can’t use it again until your next message. Press Esc to stop the rest of the turn.' }
     }
     await $.ui.open({ id: PANE, title: 'sleight' })
+    if (args === 'replay' || args.startsWith('replay ')) return replayCurrent($, args.slice(6))
     // `/sleight do this` opens the pane and sends "do this" to Claude, as if
     // typed on its own line. The engine refuses a submit from inside this hook
     // (the prompt would wait on the command submitting it), so it goes out
@@ -226,7 +315,7 @@ export const register: Register = on => {
     // log out of view.
     paneRows = Math.max(10, Math.min(40, e.props.scroll?.bodyRows ?? Math.floor((e.viewport?.rows ?? 30) / 2)))
 
-    const [entries, shot, status, isStopped] = await Promise.all([read($, log), read($, frame), read($, view), read($, stopped)])
+    const [entries, shot, status, isStopped, file, isReplaying] = await Promise.all([read($, log), read($, frame), read($, view), read($, stopped), read($, replayFile), read($, replaying)])
 
     const picture = (() => {
       if (!shot) return <Text dimColor>No picture yet. It appears after Claude uses an app, or press Refresh.</Text>
@@ -248,14 +337,15 @@ export const register: Register = on => {
     })()
 
     const statusLine =
-      status.kind === 'snapshotting' ? `Refreshing ${status.app}…`
+      isReplaying ? 'Replay running. Stop ends it after the current call.'
+      : status.kind === 'snapshotting' ? `Refreshing ${status.app}…`
       : status.kind === 'error' ? `Couldn't refresh: ${status.message}`
       : shot ? `${shot.app} at ${shot.at}`
       : ''
     // Size the log to the rows the pane shows, not the whole terminal: picture,
     // status line, buttons and the "Actions" heading take the rest.
     const bodyRows = e.props.scroll?.bodyRows ?? e.viewport?.rows ?? 30
-    const room = Math.max(3, bodyRows - (shot?.rows ?? 1) - 4)
+    const room = Math.max(3, bodyRows - (shot?.rows ?? 1) - 6)
     const mark = { running: '…', done: '✓', error: '✗', refused: '⊘' } as const
 
     return (
@@ -268,7 +358,7 @@ export const register: Register = on => {
             label={turnRunning ? 'Refresh (after this turn)' : 'Refresh'}
             hotkey="r"
             onPress={() => {
-              if (turnRunning || !lastApp) return
+              if (turnRunning || replayActive || !lastApp) return
               const app = lastApp
               void snapshot($, app).then(() => endEngineTurn($, 'Stop'))
             }}
@@ -278,11 +368,26 @@ export const register: Register = on => {
             label="Stop"
             hotkey="s"
             onPress={() => {
+              if (replayActive) replayCancelled = true
               void update($, stopped, () => true)
               void endEngineTurn($, 'Interrupt')
               $.ui.status('sleight · stopped')
             }}
           />
+        </Box>
+        {'Input' in els && (() => {
+          const { Input } = els as any
+          return <Input key="replay-file" value={file} placeholder="Replay JSON file" onInput={(value: string) => update($, replayFile, () => value)} onSubmit={(value: string) => update($, replayFile, () => value)} />
+        })()}
+        <Box flexDirection="row">
+          <Button key="replay" label="Replay file" onPress={async () => {
+            const result = await replayCurrent($, await read($, replayFile))
+            $.ui.toast(result.text)
+          }} />
+          <Button key="record" label="Record session" onPress={async () => {
+            const result = await recordCurrent($, await read($, replayFile))
+            $.ui.toast(result.text)
+          }} />
         </Box>
         <Text bold>Actions</Text>
         {entries.length === 0 && <Text dimColor>None yet.</Text>}
