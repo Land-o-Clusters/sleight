@@ -67,12 +67,15 @@ export function closeBenchTextEdit({ quit = false, ownedOnly = false } = {}) {
   // windows and quit, so the next launch doesn't bring the documents back.
   try { execFileSync('pkill', ['-x', 'TextEdit']); } catch {}
   if (!waitTextEditGone()) return false;
-  try {
-    execFileSync('open', ['-g', '-a', 'TextEdit', '--args', '-ApplePersistenceIgnoreState', 'YES'], { timeout: 15000, stdio: 'ignore' });
+  try { execFileSync('open', ['-g', '-a', 'TextEdit', '--args', '-ApplePersistenceIgnoreState', 'YES'], { timeout: 15000, stdio: 'ignore' }); } catch {}
+  // A quit sent while TextEdit is still launching can be dropped, which left an empty TextEdit
+  // running after three passes on 2026-10-10. Ask again until it's gone, for up to five tries.
+  for (let attempt = 0; attempt < 5; attempt++) {
     execFileSync('sleep', ['2']);
-    execFileSync('osascript', ['-e', 'tell application "TextEdit" to quit saving no'], { timeout: 15000, stdio: 'ignore' });
-  } catch {}
-  return waitTextEditGone();
+    try { execFileSync('osascript', ['-e', 'tell application "TextEdit" to quit saving no'], { timeout: 15000, stdio: 'ignore' }); } catch {}
+    if (waitTextEditGone()) return true;
+  }
+  return false;
 }
 
 // TextEdit opens a document next to its other windows, which can sit on another

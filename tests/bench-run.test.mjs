@@ -405,6 +405,27 @@ test('a TextEdit task refuses to start next to a document the pass did not open'
   }
 });
 
+test('the last TextEdit quit after a forced relaunch is retried until TextEdit is gone', () => {
+  const source = readFileSync(new URL('../bench/tasks.mjs', import.meta.url), 'utf8')
+    .replace(/^import .*;\n/gm, '').replace(/^export \{.*\} from .*;\n/gm, '').replace(/^export /gm, '');
+  // Every quit is ignored until the relaunch, and the first quit after it is dropped too.
+  let running = true, relaunched = false, quitsAfter = 0;
+  const tasks = runInNewContext(`${source}\n({ closeBenchTextEdit })`, {
+    join, tmpdir: () => '/private/tmp', realpathSync: path => path,
+    execFileSync: (command, args) => {
+      if (command === 'pgrep') { if (running) return ''; throw new Error('none'); }
+      if (command === 'osascript' && args.some(a => String(a).includes('documents().map'))) return running ? JSON.stringify([{ name: 'a', path: '/private/tmp/sleight-bench/a.txt' }]) : '[]';
+      if (command === 'osascript' && args.some(a => String(a).includes('to quit'))) { if (relaunched && ++quitsAfter === 2) running = false; return ''; }
+      if (command === 'pkill') { running = false; return ''; }
+      if (command === 'open') { running = true; relaunched = true; return ''; }
+      return '';
+    },
+  });
+  assert.equal(tasks.closeBenchTextEdit({ quit: true }), true);
+  assert.equal(running, false);
+  assert.equal(quitsAfter, 2);
+});
+
 const apiAuth = { mode: 'api', env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, unset: ['ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'], spent: 0, capUsd: 150 };
 
 test('API mode gives every Claude run the key, drops other tokens, and checks the preflight used it', async () => {
