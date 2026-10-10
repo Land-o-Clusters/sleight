@@ -133,8 +133,31 @@ our own runs. Dates and engine versions are given where they matter.
   same hang as `setValue` on 2026-10-05. One Shift press and release posted to TextEdit's process after
   the write prevents it: 0 hangs in 10 trials that edited, against 5 in 8 without it, and then 10
   `drag` moves in a row saved with no hang (2026-10-09). We don't know why the event helps, or what
-  held the lock. The move inserts plain text, so a moved word in a rich text document takes the
-  formatting at the drop point, and undoing it takes two Cmd+Z. Since 2026-10-09 it also applies to a
+  held the lock. A bold red word lost both attributes in 1/1 covered RTF trials of the old move.
+  The opt-in fix (`SLEIGHT_RICH_TEXT_MOVE=1`) prepares RTF when the selection and destination have different visual character attributes. It checks
+  the pasted attributes before source deletion and preserves readable clipboard formats.
+  Unit tests pass. Live attempts stopped at off-Space windows and an occupied shared lock.
+  Undoing a completed move still takes two Cmd+Z.
+  [Original attempts](benchmarks/2026-10-09-textedit-fixes.md) and
+  [review follow-up](benchmarks/2026-10-10-textedit-fixes-2.md).
+  Rich preservation stays off pending live qualification. The default uses the existing plain
+  move. A collected child killed before its Paste receipt restores immediately. An unconfirmed
+  Paste retains the private original and clipboard reservation for at most ten seconds. At the
+  limit it restores only the exact staged bytes and generation, leaves other contents alone,
+  releases the lock and reports the result. A queued Paste may still consume the restored
+  original. Read the document before continuing. The child refuses Paste with less than five
+  seconds left and sets a one-second AX timeout. These checks cannot confirm consumption.
+  Shutdown gives recovery three seconds, then collects its clipboard helper, releases the
+  reservation and reports any clipboard left. The original snapshot is discarded at the recovery
+  limit or on exit. A clipboard write that fails without a mutation receipt has an uncertain generation.
+  Within the same time limit, recovery waits for either the original bytes or a later
+  explicit Copy. It cannot restore over that uncertain generation. A later copy ends recovery
+  with the new contents intact. These failure paths have unit coverage but have not been exercised live.
+  Spelling annotations do not select RTF, and initial RTF preparation failure uses the existing
+  plain move, which can lose rich formatting. Missing foreground color equals opaque black.
+  The direct Edit-menu lookup is not qualified on
+  localized macOS.
+  Since 2026-10-09 it also applies to a
   selection in another app's text area or field, and there it runs first. Safari's web text areas
   ignore Accessibility text writes (1/1), so `drag` falls back to its mouse paths there, as before.
   Other apps' native text views should behave like TextEdit's, but none has been tried. The foreground drag is the last resort. On 2026-10-08 it took the owner's focus mid-sentence
@@ -396,7 +419,13 @@ our own runs. Dates and engine versions are given where they matter.
 - On 2026-10-06 TextEdit timed out every engine read after an AppleScript `close every document
   saving no`. It still answered AppleScript, but its only window was an orphan "Save Panel Accessory
   View" that Accessibility didn't list. The relay's message again named a stuck helper, while
-  `--doctor` passed. Quitting TextEdit fixed it.
+  `--doctor` passed. Quitting TextEdit fixed it. A read now identifies a possible orphan when macOS
+  lists only `Save Panel Accessory View` and TextEdit has zero AX windows. It asks the user to
+  close a visible panel with Cancel or Escape, or save other work and quit and reopen TextEdit
+  if the panel is hidden or will not close. Normal document windows and failed AX reads prevent
+  that diagnosis. It also depends on Screen Recording permission: macOS otherwise omits the CG
+  window names used to recognize the panel. Missing names prevent the orphan note. Unit tests pass.
+  The temporary-file reproduction and localized titles remain unchecked.
 - DeviceHub replaced its launch process during `simulator-flow` setup on 2026-10-10. Setup and
   cleanup refused the replacement. The architect quit it manually. Setup now accepts
   one same-bundle handoff after the recorded PID exits, retains both PIDs, and quits the adopted

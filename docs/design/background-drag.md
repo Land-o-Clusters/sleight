@@ -29,3 +29,45 @@ because foreground fallback can still take the pointer. Leases continue to reser
 The [product report](../benchmarks/2026-10-04-background-drag-product.md) contains live evidence,
 failed attempts and limits. Unit tests cover path choice, lost and unreadable text, spacing repair,
 owner edits during settling, release failure, approval refusal and launcher focus handling.
+
+## Rich TextEdit moves through Accessibility
+
+With `SLEIGHT_RICH_TEXT_MOVE=1`, when the selected text's font, size, color or underline differs from the destination, the first child prepares RTF
+without editing. The launcher reserves the same clipboard coordinator as `clipboard.mjs` and
+snapshots the readable clipboard items and formats. It stages RTF for a second child, which
+rechecks the text, source RTF, process, window and drop plan. It looks directly in Edit and invokes
+`AXPress` on the first enabled menu item with Command-V alone, after another text, caret, focus and clipboard check. Insertion
+must match in text and attributes before source deletion. The whole text and
+moved attributes must match after deletion too. Prepared moves never fall back to pointer input.
+Restoration requires the clipboard generation the launcher installed. A newer copy is left alone.
+The setting is off pending live qualification. Without it, the existing plain Accessibility
+move runs. Missing foreground color compares equal to opaque black.
+
+The launcher supplies a deadline before spawning each 30-second child. The second child refuses
+Paste with less than five seconds left, including process startup and preparation. It sets a
+one-second AX messaging timeout on the application and Paste item; `-25204` remains an
+unconfirmed Paste result rather than waiting for the parent to kill a hung message.
+
+The child writes a synchronous stderr receipt immediately before `AXPress`. Collection without
+that receipt permits immediate restoration. A kill between the receipt and action counts as
+possibly posted. Collecting a child does not acknowledge a Paste still pending in TextEdit.
+Unconfirmed posted Paste retains the original snapshot and clipboard reservation for at most
+ten seconds. Recovery can restore sooner after the target process exits. At nine seconds,
+final recovery gets 250 ms to read and restore only if both bytes and generation still match
+the staged RTF. Helper collection has the remaining 750 ms before reservation release. The
+relay reports restored or left contents and discards the snapshot. A Paste still queued in
+TextEdit can consume the restored original. Exact clipboard ownership cannot prove consumption.
+Shutdown allows three seconds for recovery, then collects the helper and reports contents left.
+A restoration failure with a mutation receipt can retry
+without another app action. An unreceipted write retains the snapshot and a generation fence.
+Recovery ends if the original bytes are already present or a later copy replaces that uncertain
+generation, within the same bounded reservation. It cannot safely overwrite the uncertain generation. Forced process death loses the
+in-memory snapshot. These recovery paths have unit coverage and need live qualification.
+
+The rich path ignores spelling and paragraph annotations, leaving plain moves on their existing
+edits. Bold and italic faces are compared through their font names. If initial RTF preparation
+fails, the old plain move remains available after checking the full text and selection again.
+A prepared child still refuses changed or unavailable
+rich text. Edit-menu localization is unqualified. Unit tests pass. Live qualification remains
+pending. The [investigation](../benchmarks/2026-10-09-textedit-fixes.md) includes the original
+format-loss reproduction and every stopped attempt.

@@ -1,0 +1,12 @@
+{
+  "kind": "live-skip",
+  "observed": "2026-10-10T08:04:04.645Z",
+  "load": [11.28271484375, 13.55859375, 20.44580078125],
+  "liveLock": true,
+  "hold": false,
+  "lockModified": "2026-10-10T08:03:51.598Z",
+  "reason": "Shared live lock occupied; round-3 brief requires skipping live trials",
+  "appOperations": 0,
+  "pasteWaitMs": null,
+  "trials": []
+}

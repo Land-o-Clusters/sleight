@@ -188,7 +188,7 @@ export function createNativeClipboardIO(helper, { timeoutMs = 10000,
       child.stdin.write(line);
     });
   };
-  io.close = async () => {
+  io.close = async ({ timeoutMs: closeTimeoutMs = timeoutMs } = {}) => {
     closed = true;
     const current = child;
     if (current) {
@@ -196,8 +196,9 @@ export function createNativeClipboardIO(helper, { timeoutMs = 10000,
       current.stopping = true;
       for (const p of pending.values()) clearTimeout(p.timer);
       current.stdin.end();
-      const timer = setTimeout(() => { current.stopping = true; current.kill(); }, timeoutMs);
-      try { await current.collected; } finally { clearTimeout(timer); }
+      const timer = setTimeout(() => current.kill(), closeTimeoutMs);
+      const force = setTimeout(() => current.kill('SIGKILL'), closeTimeoutMs + 500);
+      try { await current.collected; } finally { clearTimeout(timer); clearTimeout(force); }
     } else fail(new Error('Clipboard guard: session closed.'));
     coordinator?.release();
   };

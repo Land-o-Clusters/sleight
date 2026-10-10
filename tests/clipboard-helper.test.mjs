@@ -68,6 +68,19 @@ test('a timed out helper refuses new work until its process is collected', async
   const closing = f.io.close();
   f.children[0].emit('close', null, 'SIGTERM'); await closing; await failure;
 });
+test('shutdown can bound clipboard helper collection and force only that owned child', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture({ holdClose: true }), pending = f.io({ op: 'read' });
+  f.children[0].reply({ id: f.requests[0].id, ok: true, count: 4 }); await pending;
+  const signals = [];
+  f.children[0].kill = signal => { signals.push(signal ?? 'SIGTERM'); if (signal === 'SIGKILL') f.children[0].emit('close', null, signal); };
+  const closing = f.io.close({ timeoutMs: 20 });
+  try {
+    t.mock.timers.tick(20); assert.deepEqual(signals, ['SIGTERM']);
+    t.mock.timers.tick(500); await closing;
+    assert.deepEqual(signals, ['SIGTERM', 'SIGKILL']);
+  } finally { f.children[0].emit('close', null, 'SIGTERM'); await closing; }
+});
 
 test('a failed clipboard transaction releases only after the helper process closes', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });

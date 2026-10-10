@@ -69,7 +69,7 @@ import { isInventoryRead } from './inventory-read.mjs';
 import { createReadCompactor } from './compact-reads.mjs';
 import { forbiddenTargetWarning, isForbiddenSettingsWindow, refusedApp } from './blocked-apps.mjs';
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
-import { offSpace, offSpaceNote, readFailureAdvice } from './read-failure.mjs';
+import { offSpace, offSpaceNote, readFailureAdvice, savePanelNote } from './read-failure.mjs';
 import { TurnJournal, writeReceipt } from './turn-receipts.mjs';
 
 // `app.click(3); …` with no await and more code after it: the call goes on without the action,
@@ -244,6 +244,9 @@ export function createRelay({
   firstCallBatch = false,
   firstCallRules,
   diagnoseRead,
+  // Notices from work that finished between calls (rich-text clipboard recovery), added to the next
+  // tool result Claude gets, so they don't stay on stderr where Claude never looks.
+  takeNotices,
   // Probes an app's windows outside the engine ({ status, windows, minimized, hidden, onScreen }).
   spaceProbe,
   trace: writeTrace = () => {},
@@ -345,13 +348,25 @@ export function createRelay({
   const helperDiagnosticReplies = new Map();
   const lateDiagnosticControls = new Map();
   let diagnosisGeneration = 0;
-  const helperAdvice = key => readFailureAdvice(key, helperStates.get(key)?.diagnosis);
+  const diagnosisAdvice = (key, diagnosis) => diagnosis?.kind === 'app-save-panel'
+    ? panelAdvice(diagnosis.target, key) ?? 'Read or input refused while the same Save panel remains. Follow the earlier recovery advice, then read the app again.'
+    : readFailureAdvice(key, diagnosis);
+  const helperAdvice = key => diagnosisAdvice(key, helperStates.get(key)?.diagnosis);
   // Apps Claude was told this turn are off the current Space, and the reads that wait on that
   // check: call id -> { key, health }.
   const spaceNoted = new Set(), spaceChecks = new Map();
   // What the probe found before each read went to the engine. An app that was already running with
   // a window wasn't launched by that read, which lets a split acquisition's read stand in below.
   const preHealth = new Map();
+  const savePanelsNoted = new Set();
+  function panelAdvice(health, app) {
+    if (health?.savePanelOnly !== true) return;
+    const panels = (health.savePanelWindowIds?.length ? health.savePanelWindowIds : ['unknown'])
+      .map(id => `${health.pid ?? 'TextEdit'}:${id}`);
+    if (panels.every(id => savePanelsNoted.has(id))) return;
+    panels.forEach(id => savePanelsNoted.add(id));
+    return savePanelNote(app);
+  }
 
   function invalidateDiagnostics() {
     diagnosisGeneration++;
@@ -806,6 +821,10 @@ export function createRelay({
     serverIn.write(JSON.stringify(msg) + '\n');
   };
   const toClient = msg => {
+    if (msg.method === undefined && msg.id !== undefined && Array.isArray(msg.result?.content) && takeNotices) {
+      const notices = takeNotices();
+      if (notices?.length) msg = { ...msg, result: { ...msg.result, content: [...msg.result.content, ...notices.map(text => ({ type: 'text', text }))] } };
+    }
     const ending = receiptEnds.get(msg.id);
     if (msg.method === undefined && ending?.pending) { ending.replies.push(msg); return; }
     if (msg.method === undefined && promptFailures.has(msg.id)) {
@@ -817,7 +836,7 @@ export function createRelay({
       const state = helperDiagnosticReplies.get(msg.id); helperDiagnosticReplies.delete(msg.id);
       state.diagnosing.finally(() => {
         if (disposed || closing) return;
-        const advice = helperStates.get(state.key) === state ? readFailureAdvice(state.key, state.diagnosis)
+        const advice = helperStates.get(state.key) === state ? diagnosisAdvice(state.key, state.diagnosis)
           : `A read of ${state.key} succeeded while sleight checked the fault. Read that app again before continuing.`;
         if (msg.error) msg.error.message += `\n\n${advice}`;
         else msg.result = { ...msg.result, isError: true, content: [...(msg.result?.content ?? []), { type: 'text', text: advice }] };
@@ -1473,6 +1492,9 @@ export function createRelay({
       });
       return;
     }
+    const panelHealth = preHealth.get(msg.id);
+    const panelNote = Array.isArray(msg.result?.content) || typeof msg.error?.message === 'string'
+      ? panelAdvice(panelHealth) : undefined;
     if (msg.method === undefined && Array.isArray(msg.result?.content)) {
       msg.result.content = stripGuardTiming(msg.result.content, metric => trace('guard-read', { id: msg.id, ...metric }));
     }
@@ -1776,6 +1798,10 @@ export function createRelay({
         // again before the first drag (3/3 textedit-drag runs, 2026-10-08). sleight's descriptions
         // are short, so all but the internal turn_ended load up front, local tools included.
         .map(t => (t.name !== TURN_END_TOOL ? { ...t, _meta: { ...t._meta, 'anthropic/alwaysLoad': true } } : t));
+    }
+    if (panelNote) {
+      if (Array.isArray(msg.result?.content)) msg.result.content.push({ type: 'text', text: panelNote });
+      else if (msg.error && typeof msg.error.message === 'string') msg.error.message += '\n' + panelNote;
     }
     // Last, after every check above has read the full tree.
     if (msg.method === undefined && Array.isArray(msg.result?.content)) {

@@ -1,6 +1,6 @@
 # Settings
 
-You don't need any of these. They change approvals, guards, receipts or review.
+You don't need any of these. They change approvals, guards, receipts, review or experimental behavior.
 
 ## Receipts and unsaved review
 
@@ -25,6 +25,20 @@ observed. The review tells you which control was available. You use it in the ap
 Missing reads, failed or overlapping calls, and turns over 2,000 calls report uncertainty.
 An accessibility change doesn't prove that a file is saved or unsaved. See the
 [design and limits](design/review-receipts.md).
+
+## Rich TextEdit moves
+
+Set `SLEIGHT_RICH_TEXT_MOVE=1` in the relay's environment to try rich text preservation for
+covered TextEdit moves. Only the exact value `1` enables it. It is off until live qualification
+passes. Without it, covered rich moves use the existing Accessibility text edits, which can
+lose formatting. The opt-in stages RTF on the clipboard and verifies the pasted text and
+attributes before removing the source.
+
+After an unconfirmed Paste, the shared clipboard reservation lasts at most ten seconds. Recovery
+restores the original only while the clipboard still has the exact staged bytes and generation;
+otherwise it leaves the current contents alone. The relay reports restoration or contents left,
+then discards its private snapshot. A queued Paste can still run after restoration, so read the
+document before continuing. See the [third review](benchmarks/2026-10-10-textedit-fixes-3.md).
 
 ## Approval scope
 

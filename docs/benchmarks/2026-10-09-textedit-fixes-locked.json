@@ -1,0 +1,13 @@
+{
+  "started": "2026-10-10T02:17:17.494Z",
+  "bank": "/private/tmp/sleight-textedit-fixes-xJqVXH",
+  "trials": [],
+  "source": {
+    "bench/textedit-fixes.mjs": "d3c45a9f13ee158c049cc30cce87157064012674225c83fdcf49f23c72be08ff",
+    "bench/textedit-fixes-fixture.js": "ab5a5eb0a62cfea1657144852f1794b2f0f8e31c80b7696dd5b13eb2ae2f7bb1",
+    "plugins/sleight/lib/drag.js": "56592ccd41a3c307a1f61ab5185dd5826ab92f485b73893a59c8a86296c61284"
+  },
+  "error": "Another live run holds /tmp/sleight-live.lock. Wait for it to finish.",
+  "publicationError": "Sandbox refused writing the report in ~/Projects/sleight-wt/textedit-fixes; recovered from the private report with apply_patch.",
+  "finished": "2026-10-10T02:17:17.501Z"
+}

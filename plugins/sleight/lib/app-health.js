@@ -39,6 +39,18 @@ function matchingApps(apps, selector) {
   return matches;
 }
 
+// This process's document-sized windows, unwrapped only after the native filter: the Save panel
+// check needs each window's id and name, and other apps' titles never cross into JavaScript.
+function ownWindows(pid) {
+  const list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionAll | $.kCGWindowListExcludeDesktopElements, 0));
+  const own = documentWindows(list, pid), windows = [];
+  for (let i = 0; i < own.count; i++) {
+    const info = ObjC.deepUnwrap(own.objectAtIndex(i));
+    windows.push({ id: info.kCGWindowNumber, savePanel: info.kCGWindowName === 'Save Panel Accessory View' });
+  }
+  return windows;
+}
+
 // Whether the frontmost app's focused window is in full screen, which Split View windows are too.
 // A full-screen window on a notched display has the same frame as a zoomed one, so its size can't tell.
 function frontFullScreen() {
@@ -55,9 +67,12 @@ function frontFullScreen() {
 // On another Space, an app's windows leave AXWindows too (Calculator, 2026-10-09), so CGWindowList
 // is the only count of them.
 function spaces(pid) {
+  const all = ownWindows(pid);
   return {
     onScreen: cgWindows(true, pid),
-    allWindows: cgWindows(false, pid),
+    allWindows: all.length,
+    onlySavePanel: all.length > 0 && all.every(w => w.savePanel),
+    savePanelWindowIds: all.filter(w => w.savePanel).map(w => w.id).filter(id => Number.isInteger(id) && id > 0),
     fullScreenSpace: frontFullScreen(),
   };
 }
@@ -117,11 +132,13 @@ function probe(selector) {
   if (apps.length === 0) return { status: 'absent' };
   const target = apps[0];
   const pid = Number(target.processIdentifier), app = $.AXUIElementCreateApplication(pid);
-  const space = { hidden: target.hidden === true, ...spaces(pid) };
+  const { onlySavePanel, savePanelWindowIds, ...counts } = spaces(pid);
+  const space = { hidden: target.hidden === true, ...counts };
   if (Number($.AXUIElementSetMessagingTimeout(app, 0.5)) !== 0) return { status: 'unknown', ...space };
   const value = Ref();
   const error = Number($.AXUIElementCopyAttributeValue(app, $('AXWindows'), value));
   if (error !== 0) return { status: error === -25204 ? 'timeout' : error === -25211 ? 'denied' : 'unknown', error, pid, ...space };
   const windows = ObjC.castRefToObject(value[0]);
-  return { status: 'responding', pid, windows: Number(windows.count), minimized: minimizedCount(windows), ...space };
+  return { status: 'responding', pid, windows: Number(windows.count), minimized: minimizedCount(windows), ...space,
+    ...(ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit' && Number(windows.count) === 0 && onlySavePanel ? { savePanelOnly: true, savePanelWindowIds } : {}) };
 }

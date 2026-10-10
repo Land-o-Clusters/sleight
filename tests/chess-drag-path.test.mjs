@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { swiftModuleCache } from '../bench/swift-cache.mjs';
 
 test('native Chess fixture accepts the owned private temporary path before Foundation normalizes it', { skip: process.platform !== 'darwin' }, () => {
   const dir = mkdtempSync('/private/tmp/sleight-chess-path-test-');
   try {
     const helper = join(dir, 'fixture');
     // Parallel native tests can spend over 60 s in cold module compilation.
-    execFileSync('swiftc', ['-module-cache-path', join(dir, 'cache'), '-o', helper, 'bench/chess-drag-fixture.swift'], { timeout: 180000 });
+    execFileSync('swiftc', ['-module-cache-path', swiftModuleCache(), '-o', helper, 'bench/chess-drag-fixture.swift'], { timeout: 180000 });
     const request = args => JSON.parse(execFileSync(helper, [JSON.stringify(args)], { encoding: 'utf8' }));
     const check = path => request({ op: 'path-check', path });
     const owned = '/private/tmp/sleight-chess-stacked-test/target.game';

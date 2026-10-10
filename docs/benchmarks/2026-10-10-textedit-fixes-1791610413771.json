@@ -1,0 +1,34 @@
+{
+  "started": "2026-10-10T05:33:33.651Z",
+  "bank": "/private/tmp/sleight-textedit-fixes-dFyXV5",
+  "plain": false,
+  "legacy": false,
+  "move": true,
+  "orphan": false,
+  "misspelled": false,
+  "openBackground": false,
+  "load": [
+    187.193359375,
+    174.107421875,
+    99.24560546875
+  ],
+  "trials": [],
+  "source": {
+    "bench/textedit-fixes.mjs": "73e7c8169a5d65de10004c8da22d25c6fd42acbc51cee75d187ca0c626b66080",
+    "bench/textedit-fixes-fixture.js": "9b88b7c41bdaf1a5fe9ff01339e5aa126463cb126e94007a3f5c9bf890f5d1b9",
+    "bench/textedit-fixes-drag.js": "10da9678ac0b0853a39850b1adeef9060267fd72484cced8a8a1c06698a12edc",
+    "bench/textedit-fixes-check.mjs": "33d7617c66feafcfe8b80d3da7077628940c3f26e2ba6ab09252d3eeb35f81f9",
+    "plugins/sleight/lib/drag.js": "91d43a9c4aed9b0de4e6d6f626bd4fc6d260a015a66e2c281a26af9d253cd2c6",
+    "plugins/sleight/lib/rich-text-drag.mjs": "e153d783485fa8fee3cb8f05d6d7b87704463f9df1b03ec1e72b457b4549633a",
+    "plugins/sleight/lib/clipboard.mjs": "ec9ef8529386028b0a721718486726fe81fb10930ac43d7e257f68a94b9adf00",
+    "plugins/sleight/lib/clipboard.js": "2f111a9aa5cfedc7fa60d35c3f41bafaa31cea78e83c5d2c7465122eaff51645",
+    "plugins/sleight/lib/app-health.js": "caedb4c01677bf43115df037fdab194faad1ca139aed4458f77cb79ae1d7849a"
+  },
+  "error": "Another live run holds /tmp/sleight-live.lock. Wait for it to finish.",
+  "finished": "2026-10-10T05:33:33.672Z",
+  "loadAfter": [
+    187.193359375,
+    174.107421875,
+    99.24560546875
+  ]
+}

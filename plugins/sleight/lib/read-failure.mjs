@@ -102,8 +102,12 @@ export function probeAppHealth(app) {
 // none of them on it (8 of 21 runs failed that way, 2026-10-08). A hidden app's windows are off
 // screen too, which isn't this.
 export function offSpace(health) {
-  return health?.fullScreenSpace === true && health.hidden === false && health.onScreen === 0 &&
+  return health?.savePanelOnly !== true && health?.fullScreenSpace === true && health.hidden === false && health.onScreen === 0 &&
     health.allWindows - (health.minimized ?? 0) > 0;
+}
+
+export function savePanelNote(app = 'TextEdit') {
+  return `sleight: ${app} has no Accessibility document windows, but macOS still lists "Save Panel Accessory View", a possible orphan Save panel. Ask the user to close the panel with Cancel or Escape if it is visible. If it is hidden or won't close, save any other work, then quit and reopen ${app}. Read the app again afterwards. This observation alone does not identify a helper fault.`;
 }
 
 export function offSpaceNote(app) {
@@ -111,6 +115,7 @@ export function offSpaceNote(app) {
 }
 
 export function classifyReadFailure({ target, control, read }) {
+  if (target?.savePanelOnly === true) return 'app-save-panel';
   if (offSpace(target)) return 'app-off-space';
   if (read?.status === 'responding') {
     if (target?.status === 'timeout') return 'app-hung';
@@ -124,6 +129,7 @@ export function classifyReadFailure({ target, control, read }) {
 export async function diagnoseReadFailure(app, control, { probeApp = probeAppHealth, readControl } = {}) {
   const safe = async fn => { try { return await fn(); } catch { return { status: 'unknown' }; } };
   const target = await safe(() => probeApp(app));
+  if (target?.savePanelOnly === true) return { kind: 'app-save-panel', target };
   if (offSpace(target)) return { kind: 'app-off-space', target };
   if (!control || !readControl) return { kind: 'unknown', target };
   const other = await safe(() => probeApp(control));
@@ -133,6 +139,7 @@ export async function diagnoseReadFailure(app, control, { probeApp = probeAppHea
 
 export function readFailureAdvice(app, diagnosis = { kind: 'unknown' }) {
   const recovery = 'Stop retrying. sleight will retry by itself with one standalone read every 20 s and resume this app after a successful read.';
+  if (diagnosis.kind === 'app-save-panel') return savePanelNote(app);
   if (diagnosis.kind === 'app-off-space') return `${offSpaceNote(app)} ${recovery}`;
   if (diagnosis.kind === 'helper-stuck') return `The SkyComputerUseService read path appears stuck: ${app} and ${diagnosis.control} answer Accessibility, but the control app's engine read also timed out. ${recovery} Tell the user to restart ChatGPT to recover computer use. Restarting ends their Codex sessions; never restart or quit ChatGPT yourself.`;
   if (['app-hung', 'app-windows', 'app-read'].includes(diagnosis.kind)) {

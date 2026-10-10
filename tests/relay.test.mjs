@@ -1834,6 +1834,60 @@ test('a read with an open menu in front says how to close it', async () => {
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: 'Window: "", App: TextEdit.\n0 menu Secondary Actions: Cancel\n\t1 menu item Undo' }] } }); await tick();
   assert.match(h.toClient.find(m => m.id === 1).result.content.at(-1).text, /a menu is open/);
 });
+test('a read with only a native Save accessory panel names it even on an engine error', async () => {
+  for (const rpcError of [false, true]) {
+    const h = harness({ spaceProbe: async () => ({ status: 'responding', windows: 0, savePanelOnly: true }) });
+    h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("TextEdit")' } } }); await tick();
+    h.fromServer({ jsonrpc: '2.0', id: 1, ...(rpcError ? { error: { code: -32000, message: 'noWindowsAvailable' } }
+      : { result: { isError: true, content: [{ type: 'text', text: 'noWindowsAvailable' }] } }) }); await tick(); await tick();
+    const reply = h.toClient.find(m => m.id === 1), text = rpcError ? reply.error.message : reply.result.content.at(-1).text;
+    assert.match(text, /Save Panel Accessory View/); assert.match(text, /quit and reopen TextEdit/);
+    assert.doesNotMatch(text, /restart ChatGPT/);
+  }
+});
+
+test('Save-panel advice appears once per process and native window across calls', async () => {
+  let health = { status: 'responding', pid: 42, windows: 0, savePanelOnly: true, savePanelWindowIds: [11] };
+  const h = harness({ spaceProbe: async () => health });
+  const read = async id => {
+    helperRead(h, id, 'let app = await cua.getApp("TextEdit")'); await tick();
+    helperReply(h, id, 'noWindowsAvailable'); await tick(); await tick();
+    return JSON.stringify(h.toClient.find(m => m.id === id));
+  };
+  assert.match(await read(1), /Save Panel Accessory View/);
+  assert.doesNotMatch(await read(2), /Save Panel Accessory View/);
+  health = { ...health, savePanelWindowIds: [12] };
+  assert.match(await read(3), /Save Panel Accessory View/);
+  assert.doesNotMatch(await read(4), /Save Panel Accessory View/);
+  health = { ...health, pid: 43 };
+  assert.match(await read(5), /Save Panel Accessory View/);
+});
+test('Save-panel diagnosis and later blocked input share the read-note deduplication', async () => {
+  const health = { status: 'responding', pid: 42, windows: 0, savePanelOnly: true, savePanelWindowIds: [11] };
+  const h = harness({ spaceProbe: async () => health, diagnoseRead: async () => ({ kind: 'app-save-panel', target: health }) });
+  for (const [id, code] of [[1, 'var te = await cua.getApp("TextEdit")'], [2, 'await te.getAXState()']]) {
+    helperRead(h, id, code); await tick(); helperReply(h, id); await tick(); await tick();
+  }
+  helperRead(h, 3, 'await te.click(1)'); await tick(); await tick();
+  const replies = h.toClient.filter(m => [1, 2, 3].includes(m.id));
+  assert.equal(replies.length, 3);
+  assert.equal((JSON.stringify(replies).match(/Save Panel Accessory View/g) ?? []).length, 1);
+  assert.equal(h.toServer.some(m => m.id === 3), false);
+  assert.match(JSON.stringify(replies.at(-1)), /same Save panel|earlier recovery/);
+});
+
+test('queued notices from work between calls join the next tool result once', async () => {
+  const queue = ['sleight: clipboard left as it is after the ten-second recovery limit.'];
+  const h = harness({ takeNotices: () => queue.splice(0) });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }); await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { tools: [] } }); await tick();
+  assert.equal(queue.length, 1, 'a reply without content keeps the notice');
+  h.fromClient({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("TextEdit")' } } }); await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 2, result: { content: [{ type: 'text', text: 'ok' }] } }); await tick();
+  const texts = h.toClient.find(m => m.id === 2).result.content.map(c => c.text);
+  assert.ok(texts.includes('sleight: clipboard left as it is after the ten-second recovery limit.'));
+  assert.equal(queue.length, 0);
+});
 
 test('SLEIGHT_FIRST_CALL_BATCH rewrites only the engine\'s first-call rule, only when it matches exactly', async () => {
   const { batchingDescription } = await import('../plugins/sleight/lib/relay.mjs');

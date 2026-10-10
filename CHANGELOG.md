@@ -24,6 +24,19 @@
   controls for the user to use in the app. It is off by default. Receipts use existing reads;
   parsing runs after forwarding turn cleanup. stderr contains counts only.
   [Evidence and limits](docs/benchmarks/2026-10-10-review-receipts-2.md).
+- With `SLEIGHT_RICH_TEXT_MOVE=1`, covered TextEdit text moves prepare RTF when the selection and destination have different
+  formatting. They preserve readable clipboard items and formats, with attribute verification
+  before source deletion. Spelling annotations keep the plain path; initial RTF preparation
+  failure uses the existing plain move. Collected children report whether Paste may have been
+  pressed. A second child refuses Paste with less than five seconds remaining and bounds AX
+  messages to one second. Unconfirmed Paste recovery releases the clipboard reservation within
+  ten seconds. Restoration requires the exact staged generation and bytes, with a report of contents left.
+  The rich path stays off pending live qualification. The default keeps the existing plain move.
+  A read identifies a possible orphan Save panel once per window when only `Save Panel Accessory View` remains without
+  AX windows. Unit tests pass. Live qualification remains incomplete.
+  [Investigation and every attempt](docs/benchmarks/2026-10-09-textedit-fixes.md).
+  [Review follow-up](docs/benchmarks/2026-10-10-textedit-fixes-2.md).
+  [Third review](docs/benchmarks/2026-10-10-textedit-fixes-3.md).
 - Paste keeps the user's clipboard with one helper per session instead of a spawn per paste, and
   reads large clipboards in linear time (a mocked 40 MiB transfer fell from about 5 s to 31 to 88 ms).
   `blocked_app` also refuses a settings window by its Accessibility metadata, so a localized title or

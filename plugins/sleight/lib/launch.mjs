@@ -26,6 +26,7 @@ import { createGrantAudit } from './preapproved-audit.mjs';
 import { BLOCKED_APP_TOOL, callBlockedApp, forbiddenTargetsAllowed, matchBlockedApp } from './blocked-apps.mjs';
 import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
 import { probeHelper, staleHelperJobs } from './helper-health.mjs';
+import { runRichTextMove, drainRichTextMoves, richPasteChildState, takeRichTextNotices } from './rich-text-drag.mjs';
 import { replayBridge } from './replay.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
@@ -215,6 +216,8 @@ export async function stopHelpers() {
   // A cancelled drag may start its restoration helper after the child snapshot.
   // The whole operation owns that cleanup, so drain it before the launcher exits.
   await Promise.allSettled([...pendingDrags]);
+  // Give clipboard recovery a bounded window, then report any contents left on shutdown.
+  await drainRichTextMoves();
 }
 
 export function askWithDialog(message, sessionScoped, options = {}, launch = execFile) {
@@ -414,17 +417,21 @@ export function runScript(script, request, options = {}) {
   if (helpersClosing && !cleanup) return Promise.resolve({ ok: false, error: 'sleight session is closing' });
   // Base64 PNGs from ordinary app windows can exceed execFile's 1 MiB default.
   const execOptions = { timeout: cleanup ? 3000 : 30000, ...(script === 'hover.js' ? { maxBuffer: 16 * 1024 * 1024 } : {}) };
+  if (script === 'drag.js') request = { ...request, deadline: Date.now() + execOptions.timeout };
   return new Promise(resolve => {
     ownHelper(run('osascript', ['-l', 'JavaScript', join(LIB, script), JSON.stringify(request)], execOptions, (err, stdout, stderr) => {
+      const rich = script === 'drag.js' && !!request.richTextMove;
+      const pasteState = rich ? richPasteChildState(stderr, err?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') : undefined;
+      const diagnostic = String(stderr ?? '').split(/\r?\n/).filter(line => line !== 'sleight:rich-paste-posted').join('\n').trim();
       try {
         resolve(JSON.parse(stdout));
       } catch {
         // A killed child prints nothing, and execFile's message is only the command line
         // (chess-drag, 2026-10-09). Say what happened instead.
-        const timedOut = err?.killed && !stderr.trim();
-        resolve({ ok: false, timedOut: !!timedOut, error: timedOut
+        const timedOut = err?.killed && !diagnostic;
+        resolve({ ok: false, timedOut: !!timedOut, ...(rich ? { path: 'accessibility', richPasteState: pasteState } : {}), error: timedOut
           ? `${script} timed out after ${execOptions.timeout / 1000} s and was stopped; whether it pressed anything is unknown. Read the window again before acting`
-          : stderr.trim() || err?.message || 'no output' });
+          : diagnostic || err?.message || 'no output' });
       }
     }));
   });
@@ -440,7 +447,10 @@ async function performDrag(args, runLocal) {
   const focus = await runLocal('drag-focus.js', { op: 'capture', app: args.app });
   if (!focus.ok) return text(focus.error, true);
   let result;
-  try { result = await runLocal('drag.js', args); }
+  try {
+    result = await runLocal('drag.js', args);
+    if (result.richTextMove) result = await runRichTextMove(args, result.richTextMove, runLocal);
+  }
   catch (e) { result = { ok: false, error: String(e.message || e) }; }
   finally {
     // A completed background or Accessibility attempt never owned focus, including lost text.
@@ -583,6 +593,7 @@ export async function run({ leaseDirectory } = {}) {
     diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, { readControl, probeApp: appHealth.probe }),
     spaceProbe: appHealth.probe,
     guardMode: process.env.SLEIGHT_GUARD,
+    takeNotices: takeRichTextNotices,
     firstCallBatch: process.env.SLEIGHT_FIRST_CALL_BATCH === 'merge' ? 'merge' : process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
     clientIn: replayClient.clientIn,
     clientOut: replayClient.clientOut,
