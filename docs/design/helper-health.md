@@ -39,7 +39,11 @@ does not establish that an app's accessibility tree is responsive.
 it as running. An app name or bundle ID selects one exact inventory entry. Missing or ambiguous
 entries and entries without an explicit running status are skipped. Doctor declines app approval
 requests without showing a prompt, reports
-that approval is required, and skips the read. It never grants approval or sends input.
+that approval is required, and skips the read unless the user's pre-approved list covers it.
+Doctor uses the session's fixed-path list loader and grant audit. Only a computer-use approval for
+the selected running app, within the listed risk ceiling, can be accepted. The audit is written
+before acceptance. An audit failure skips the read, and no engine persistence is requested.
+Doctor never sends input or asks the person for a new approval.
 The app read has the same five-second execution timeout and 500 ms response allowance. It reports
 elapsed milliseconds and whether the result contained a window header, without printing the tree.
 A failed read reports an error class, including timeouts, rather than partial UI text from the error.

@@ -12,8 +12,9 @@
   The panel still names Claude under Claude Code. Unanswered relay forms expire after five minutes, and a panel
   that cannot be shown reports a failure. Unit-tested only, with [install notes](docs/other-hosts.md).
 - `sleight-mcp --doctor <app>` reads an app that is already running and reports the read's time and
-  whether it had a window header. It never launches the app, sends input or answers an approval.
-  Unit-tested with a stand-in engine (Sol, `codex/doctor-flow`).
+  whether it had a window header. It never launches the app or sends input. An app on the user's
+  pre-approved list is read, with the grant audited; any other app needing approval is skipped without
+  a prompt. A live run read Calculator in 156 ms with a header (2026-10-10).
 - A flow rule's source or destination can be a site (`site:example.com`, `site:*.example.com`),
   matched from the window's URL. Existing rules keep their meaning. Unit-tested.
 - Claude can run a recorded script itself with the new `replay` tool. On a stop it gets the step,

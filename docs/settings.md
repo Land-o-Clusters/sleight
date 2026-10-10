@@ -147,7 +147,9 @@ keep the engine's wording.
 `sleight-mcp --doctor` checks the helper's inventory. Add a running app name or bundle ID, such as
 `sleight-mcp --doctor Calculator`, to check that app's accessibility read too. Doctor reports elapsed
 milliseconds and whether it received a window header. It skips missing or ambiguous apps and declines
-approval requests without showing a prompt. Doctor only reads. A failed app read exits 1; a skipped
+approval requests without showing a prompt, except when the user's pre-approved list covers that
+app and risk. It uses the same fixed list and grant audit as a session, without engine persistence.
+Doctor only reads. A failed app read exits 1; a skipped
 app read leaves a successful inventory check at exit 0.
 
 ## Flow rules

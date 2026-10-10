@@ -1,0 +1,25 @@
+{
+  "started": "2026-10-10T01:42:57.968Z",
+  "app": "Calculator",
+  "engine": "26.1002.52244",
+  "invocation": "node bench/doctor-app-read.mjs --doctor Calculator",
+  "logs": [
+    "Codex computer-use 26.1002.52244",
+    "config    ~/.codex/plugins/cache/openai-bundled/unified-computer-use/26.1002.52244/.mcp.json",
+    "surfaces  computer",
+    "refused apps  allowed through the engine (ComputerUseAllowForbiddenTargets is on)",
+    "ok        node: /Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node",
+    "ok        server script: /Applications/ChatGPT.app/Contents/Resources/cua_node/lib/node_modules/@oai/cua-repl/bin/cua-repl.mjs",
+    "ok        node_repl: /Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node_repl",
+    "ok        computer-use helper: ~/.codex/computer-use/Codex Computer Use.app",
+    "live read FAILED: node_repl kernel exited unexpectedly\n\nnode_repl diagnostics: {\"kernel_pid\":85892,\"kernel_status\":\"exited(code=71)\",\"kernel_stderr_tail\":\"WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1) | sandbox-exec: sandbox_apply: Operation not permitted\",\"reason\":\"stdout_eof\",\"stream_error\":null}"
+  ],
+  "grants": [],
+  "lockAcquired": true,
+  "lockReleased": true,
+  "interrupted": false,
+  "doctorExit": 1,
+  "exitCode": 1,
+  "finished": "2026-10-10T01:42:58.144Z",
+  "publicationError": "EPERM: operation not permitted, open '~/Projects/sleight-wt/doctor-flow/docs/benchmarks/2026-10-09-doctor-preapproved-sleight-doctor-read-S3ApBG.json'"
+}
