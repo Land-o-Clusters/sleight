@@ -1,0 +1,166 @@
+{
+  "stamp": "2026-10-10T19-52-02-278Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "arms": [
+    "sleight",
+    "codex"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "safari-shop",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 13.84,
+        "group": {
+          "claude": 2.9,
+          "engine node": 0.86,
+          "mcp@latest": 0.5,
+          "node": 0.19,
+          "Python": 0.06,
+          "osascript": 0.06,
+          "codex": 0.44
+        },
+        "outside": {
+          "Safari": 2.04,
+          "engine helper": 6.79
+        },
+        "split": {
+          "sleight": 0.25,
+          "engine": 7.65,
+          "client": 2.9,
+          "other": 1
+        }
+      },
+      "timing": {
+        "totalMs": 93602,
+        "modelMs": 67716,
+        "calls": 21,
+        "refused": 0,
+        "toolMs": 22179,
+        "engineMs": 22118,
+        "relayMs": 61,
+        "localMs": 0,
+        "guardReads": 25,
+        "guardReadMs": 2868.9250830000183,
+        "guardReadFailures": 0,
+        "otherMs": 3707
+      },
+      "passed": true,
+      "seconds": 95,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 22,
+      "costUsd": 0.0303161,
+      "reportedCostUsd": 0.877673,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 44,
+        "cacheRead": 1674845,
+        "cacheWrite": 54096,
+        "output": 5488
+      },
+      "exitCode": 0,
+      "answer": "All three items are in the cart at Lakeside Superstore (store set for ZIP 55401), and the cart is showing in the Harbor Market window.\n\n- Cedar Desk Lamp, Brass × 1\n- Trail Running Shoes, size 10 × 1\n- Canvas Tote, Navy × 1\n\nI declined the cookie banner and dismissed the newsletter prompt along the "
+    },
+    {
+      "arm": "codex",
+      "task": "safari-shop",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 23,
+      "engineMs": 16629,
+      "footprint": {
+        "cpuSeconds": 11.24,
+        "group": {
+          "codex": 1.78,
+          "engine node": 0.83,
+          "node": 0.12,
+          "codex-code-mode-host": 0.18
+        },
+        "outside": {
+          "Safari": 1.86,
+          "engine helper": 6.47
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 7.3,
+          "client": 1.78,
+          "other": 0.3
+        }
+      },
+      "passed": true,
+      "seconds": 84.2,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 25,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 1007431,
+        "cacheRead": 951808,
+        "cacheWrite": 0,
+        "output": 1386
+      },
+      "exitCode": 0,
+      "answer": "Set ZIP 55401 to Lakeside Superstore and added one of each:\n\n- Cedar Desk Lamp — Brass\n- Trail Running Shoes — size 10\n- Canvas Tote — Navy\n\nThe cart is visible, and the Safari window remains open."
+    }
+  ]
+}

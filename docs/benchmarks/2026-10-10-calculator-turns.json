@@ -1,0 +1,200 @@
+{
+  "stamp": "2026-10-10T19-02-19-594Z",
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 18.6,
+      "turns": 5,
+      "costUsd": 0.0179369,
+      "reportedCostUsd": 0.6678986,
+      "usage": {
+        "input": 10,
+        "cacheRead": 247893,
+        "cacheWrite": 73265,
+        "output": 1608
+      },
+      "timing": {
+        "totalMs": 16922,
+        "modelMs": 9697,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 5715,
+        "engineMs": 5659,
+        "relayMs": 56,
+        "localMs": 0,
+        "guardReads": 7,
+        "guardReadMs": 2575.376585,
+        "guardReadFailures": 0,
+        "otherMs": 1510
+      },
+      "footprint": {
+        "cpuSeconds": 6.45,
+        "group": {
+          "claude": 1.62,
+          "engine node": 1.32,
+          "mcp@latest": 0.59,
+          "codex": 0.31,
+          "node": 0.26,
+          "osascript": 0.14,
+          "uv": 0.01,
+          "Python": 0.01,
+          "python3": 0.02,
+          "(bash)": 0,
+          "(python3.9)": 0
+        },
+        "outside": {
+          "Calculator": 0.74,
+          "engine helper": 1.43
+        }
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "391",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 2,
+      "passed": true,
+      "seconds": 45.2,
+      "turns": 9,
+      "costUsd": 0.0245605,
+      "reportedCostUsd": 0.8879585999999999,
+      "usage": {
+        "input": 18,
+        "cacheRead": 472313,
+        "cacheWrite": 84438,
+        "output": 5896
+      },
+      "timing": {
+        "totalMs": 43194,
+        "modelMs": 32171,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 8907,
+        "engineMs": 8871,
+        "relayMs": 36,
+        "localMs": 0,
+        "guardReads": 9,
+        "guardReadMs": 3252.0742490000002,
+        "guardReadFailures": 0,
+        "otherMs": 2116
+      },
+      "footprint": {
+        "cpuSeconds": 10.56,
+        "group": {
+          "claude": 2.35,
+          "engine node": 1.14,
+          "mcp@latest": 0.69,
+          "codex": 0.41,
+          "node": 0.24,
+          "osascript": 0.11,
+          "(bash)": 0.01,
+          "(vibe-island-brid)": 0.01
+        },
+        "outside": {
+          "Calculator": 1.73,
+          "engine helper": 3.87
+        }
+      },
+      "appWindows": {
+        "samples": 9,
+        "onScreen": 1,
+        "offScreenOnly": 8,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "391",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 3,
+      "passed": true,
+      "seconds": 27.6,
+      "turns": 8,
+      "costUsd": 0.0131656,
+      "reportedCostUsd": 0.4283296,
+      "usage": {
+        "input": 16,
+        "cacheRead": 491468,
+        "cacheWrite": 34979,
+        "output": 2507
+      },
+      "timing": {
+        "totalMs": 26050,
+        "modelMs": 14972,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 8854,
+        "engineMs": 8828,
+        "relayMs": 26,
+        "localMs": 0,
+        "guardReads": 14,
+        "guardReadMs": 5230.021708000006,
+        "guardReadFailures": 0,
+        "otherMs": 2224
+      },
+      "footprint": {
+        "cpuSeconds": 8.77,
+        "group": {
+          "claude": 1.9,
+          "engine node": 1.27,
+          "mcp@latest": 0.55,
+          "node": 0.2,
+          "codex": 0.38,
+          "osascript": 0.08,
+          "(bash)": 0.01,
+          "(vibe-island-brid)": 0.02,
+          "(sh)": 0,
+          "uv": 0.02,
+          "Python": 0.06,
+          "python3": 0.07
+        },
+        "outside": {
+          "Calculator": 1.8,
+          "engine helper": 2.41
+        }
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 0,
+        "offScreenOnly": 6,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "391",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    }
+  ]
+}

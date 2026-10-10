@@ -17,7 +17,10 @@ that tab is gone, run `plugins/sleight/bin/sleight-mcp routine remove 535e98589e
 terminal and type `remove`.
 
 Head-to-head at `d575dcf` (3 runs a task a side): sleight 313.3 s and 79 turns, Codex 340.2 s and 83,
-9/9 each. sleight still loses calculator-click (24.3 s against 15.1 s, about 8 s a run of startup).
+9/9 each. sleight still loses calculator-click (24.3 s against 15.1 s median). sleight took 4 to 6
+turns against Codex's 4, and its 3 to 5 calls held 7 to 13 guard reads (2.7 to 5.1 s). Only one of
+its three runs had a startup-sized gap (7.1 s outside model and tool time). The afternoon's runs, unpublished until now, are in
+`docs/benchmarks/2026-10-10-h2h-afternoon.md`.
 Shop tasks at `1421cf0`, 1 run each, all passed: helium-shop sleight 53 s and 19 turns, Codex 82 s
 and 23; safari-shop sleight 95 s and 22 turns, Codex 84.2 s and 25. The CPU split puts sleight's own
 processes at 0.25 to 0.29 s a run. The engine is about even, and the rest is the claude client and
@@ -28,7 +31,7 @@ The 2026-10-10 lanes and turn fixes are merged (`git log` has the list), and no 
 Next, in order:
 1. The owner runs `zsh /Users/Shared/sleight-setup-probe.sh` as puddle-census. It writes its log to
    `/Users/Shared/sleight-setup-probe-puddle-census.log`. If it works, build `sleight-mcp setup`.
-2. The calculator-click startup gap.
+2. Why sleight takes extra turns and guard reads on calculator-click.
 3. A quiet-box CPU run with `--clean-arms` and with the normal setup.
 4. Live runs of the Electron and Firefox tasks, and the real-site shop smoke.
 5. Owner-away runs (Chess, simulator, plugin-arm pair, the release pass, LCU), then the release

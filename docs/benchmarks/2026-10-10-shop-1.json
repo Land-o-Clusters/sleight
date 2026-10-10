@@ -1,0 +1,213 @@
+{
+  "stamp": "2026-10-10T19-47-34-662Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "arms": [
+    "sleight",
+    "codex"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "safari-shop",
+      "run": 1,
+      "passed": false,
+      "reason": "Fixture setup failed: New Helium fixture identity unconfirmed",
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false,
+          "cleanup": "closed retained fixture"
+        }
+      ],
+      "models": []
+    },
+    {
+      "arm": "codex",
+      "task": "safari-shop",
+      "run": 1,
+      "passed": false,
+      "reason": "Fixture setup failed: New Helium fixture identity unconfirmed",
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false,
+          "cleanup": "closed retained fixture"
+        }
+      ],
+      "models": []
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-shop",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 10.76,
+        "group": {
+          "claude": 2.31,
+          "engine node": 0.76,
+          "mcp@latest": 0.51,
+          "node": 0.19,
+          "Python": 0.05,
+          "<defunct>": 0,
+          "osascript": 0.1,
+          "codex": 0.32,
+          "(bash)": 0.01,
+          "(AgentPeekBridge)": 0.01
+        },
+        "outside": {
+          "Helium": 2.37,
+          "engine helper": 4.13
+        },
+        "split": {
+          "sleight": 0.29,
+          "engine": 4.89,
+          "client": 2.31,
+          "other": 0.9
+        }
+      },
+      "timing": {
+        "totalMs": 51674,
+        "modelMs": 33492,
+        "calls": 18,
+        "refused": 0,
+        "toolMs": 15233,
+        "engineMs": 15181,
+        "relayMs": 52,
+        "localMs": 0,
+        "guardReads": 20,
+        "guardReadMs": 3370.7771269999976,
+        "guardReadFailures": 0,
+        "otherMs": 2949
+      },
+      "passed": true,
+      "seconds": 53,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 19,
+      "costUsd": 0.0254925,
+      "reportedCostUsd": 0.7435682,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 38,
+        "cacheRead": 1380661,
+        "cacheWrite": 45488,
+        "output": 5169
+      },
+      "exitCode": 0,
+      "answer": "All three items are in the cart at Lakeside Superstore (ZIP 55401), and the cart is showing in the Harbor Market window, which I've left open.\n\n- Cedar Desk Lamp, Brass × 1\n- Trail Running Shoes, size 10 × 1\n- Canvas Tote, Navy × 1\n\nThe shoes defaulted to size 8, so I changed it to 10 before adding."
+    },
+    {
+      "arm": "codex",
+      "task": "helium-shop",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 20,
+      "engineMs": 12425,
+      "footprint": {
+        "cpuSeconds": 10.06,
+        "group": {
+          "codex": 1.83,
+          "node": 0.13,
+          "engine node": 0.78,
+          "codex-code-mode-host": 0.17
+        },
+        "outside": {
+          "Helium": 2.24,
+          "engine helper": 4.91
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 5.69,
+          "client": 1.83,
+          "other": 0.3
+        }
+      },
+      "passed": true,
+      "seconds": 82,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 23,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 945459,
+        "cacheRead": 891136,
+        "cacheWrite": 0,
+        "output": 1888
+      },
+      "exitCode": 0,
+      "answer": "Set ZIP 55401 to Lakeside Superstore and added:\n\n- Cedar Desk Lamp — Brass\n- Trail Running Shoes — size 10\n- Canvas Tote — Navy\n\nThe cart is visible, and the Helium window remains open."
+    }
+  ]
+}

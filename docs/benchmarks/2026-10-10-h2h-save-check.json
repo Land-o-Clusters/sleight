@@ -1,0 +1,224 @@
+{
+  "stamp": "2026-10-10T16-35-52-064Z",
+  "arms": [
+    "sleight",
+    "codex"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 69,
+      "turns": 15,
+      "costUsd": 0.0281206,
+      "reportedCostUsd": 0.9061526,
+      "usage": {
+        "input": 30,
+        "cacheRead": 1093363,
+        "cacheWrite": 64650,
+        "output": 8508
+      },
+      "timing": {
+        "totalMs": 67604,
+        "modelMs": 45976,
+        "calls": 13,
+        "refused": 0,
+        "toolMs": 16513,
+        "engineMs": 16441,
+        "relayMs": 72,
+        "localMs": 0,
+        "guardReads": 14,
+        "guardReadMs": 1767.083040999998,
+        "guardReadFailures": 0,
+        "otherMs": 5115
+      },
+      "footprint": {
+        "cpuSeconds": 13.83,
+        "group": {
+          "claude": 2.58,
+          "engine node": 1.3,
+          "mcp@latest": 0.55,
+          "node": 0.21,
+          "(bash)": 0.01,
+          "bash": 0.02,
+          "(vibe-island-brid)": 0.01,
+          "(python3.9)": 0.01,
+          "codex": 0.39,
+          "open": 0,
+          "osascript": 0.24
+        },
+        "outside": {
+          "engine helper": 4.96,
+          "TextEdit": 3.55
+        }
+      },
+      "appWindows": {
+        "samples": 14,
+        "onScreen": 12,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "Created the TextEdit document, made it plain text, typed \"sleight bench 2b7ac8b7\", saved it to `<temp>/sleight-bench/2026-10-10T16-35-52-064Z/sleight-textedit-save-1/2b7ac8b7.txt`, and closed it.\n\nThe saved window's title and URL confirmed the path and text.",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 46.8,
+      "turns": 11,
+      "costUsd": 0,
+      "usage": {
+        "input": 449681,
+        "cacheRead": 391040,
+        "cacheWrite": 0,
+        "output": 699
+      },
+      "footprint": {
+        "cpuSeconds": 6.86,
+        "group": {
+          "codex": 1.49,
+          "engine node": 0.66,
+          "node": 0.13,
+          "codex-code-mode-host": 0.1
+        },
+        "outside": {
+          "engine helper": 2.62,
+          "TextEdit": 1.86
+        }
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 7,
+        "offScreenOnly": 0,
+        "none": 3
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "Created the plain text document with exactly `sleight bench 15f32788`, saved it to the specified path as `15f32788.txt`, and closed it.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 9,
+      "engineMs": 11004
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 38.7,
+      "turns": 11,
+      "costUsd": 0.0175288,
+      "reportedCostUsd": 0.557746,
+      "usage": {
+        "input": 22,
+        "cacheRead": 717030,
+        "cacheWrite": 42019,
+        "output": 3905
+      },
+      "timing": {
+        "totalMs": 36982,
+        "modelMs": 24300,
+        "calls": 10,
+        "refused": 1,
+        "toolMs": 10275,
+        "engineMs": 10243,
+        "relayMs": 32,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 1835.1248760000012,
+        "guardReadFailures": 0,
+        "otherMs": 2407
+      },
+      "footprint": {
+        "cpuSeconds": 8.25,
+        "group": {
+          "claude": 2.02,
+          "engine node": 1.01,
+          "mcp@latest": 0.54,
+          "(node)": 0.03,
+          "(node_repl)": 0.1,
+          "<defunct>": 0,
+          "node": 0.24,
+          "codex": 0.37,
+          "osascript": 0.08
+        },
+        "outside": {
+          "engine helper": 2.38,
+          "TextEdit": 1.48
+        }
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 6,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "The document is saved at `<temp>/sleight-bench/2026-10-10T16-35-52-064Z/sleight-textedit-save-2/bceb2d18.txt` as plain text containing `sleight bench bceb2d18`, and I closed it.\n\nI used paste rather than typing so the lowercase \"s\" wasn't auto-capitalized. T",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "codex",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 38,
+      "turns": 10,
+      "costUsd": 0,
+      "usage": {
+        "input": 292817,
+        "cacheRead": 247424,
+        "cacheWrite": 0,
+        "output": 576
+      },
+      "footprint": {
+        "cpuSeconds": 6.3,
+        "group": {
+          "codex": 1.39,
+          "engine node": 0.71,
+          "node": 0.12,
+          "codex-code-mode-host": 0.09
+        },
+        "outside": {
+          "engine helper": 2.39,
+          "TextEdit": 1.6
+        }
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 6,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "Saved the exact text as plain text to the requested path and closed the document.",
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "toolCalls": 8,
+      "engineMs": 10261
+    }
+  ]
+}
