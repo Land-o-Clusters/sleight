@@ -1,0 +1,17 @@
+{
+  "calculator": {
+    "source": "2026-10-09T21-55-22-621Z/sleight-calculator-click-1/trace-54387.jsonl, replies 3 and 4",
+    "before": "Window: \"Calculator\", App: Calculator.\n0 standard window Calculator, ID: main, Secondary Actions: Raise\n\t1 split group main, SidebarNavigationSplitView\n\t\t2 splitter (disabled, settable, float) -1\n\t\t3 container CalculatorKeypadView\n\t\t\t4 scroll area ID: StandardInputView;value:1, Secondary Actions: Co…(1529)",
+    "after": "Window: \"Calculator\", App: Calculator.\n0 standard window Calculator, ID: main, Secondary Actions: Raise\nsleight: lines changed since the last full tree you saw for this window (- removed, + added; numbers on + lines are current):\n- \t\t\tscroll area ID: StandardInputView;value:1, Secondary Actions: Cop…(911)"
+  },
+  "save": {
+    "source": "2026-10-09T22-25-01-496Z/sleight-textedit-save-1/trace-34270.jsonl, replies 4 and 5",
+    "before": "Window: \"Save\", App: TextEdit.\n0 sheet Description: save, ID: save-panel, Secondary Actions: Raise\n\t1 split group\n\t\t2 scroll area Secondary Actions: Scroll Up, Scroll Down\n\t\t\t3 outline sidebar\n\t\t\t\t4 row (selectable) Description: move, Value: TextEdit\n\t\t\t\t5 row (selectable) Description: Two people, V…(50554)",
+    "after": "Window: \"28ec75ee.txt\", App: TextEdit.\n0 standard window 28ec75ee.txt, Secondary Actions: Raise, URL: file:///tmp/sleight-bench/2026-10-09T22-25-01-496Z/sleight-textedit-save-1/28ec75ee.txt\n\t1 scroll area Secondary Actions: Scroll Left, Scroll Righ…(956)"
+  },
+  "edit": {
+    "source": "2026-10-09T22-25-01-496Z/sleight-textedit-edit-1/trace-34955.jsonl, replies 6 and 7",
+    "before": "Window: \"99d1b606-edit.txt\", App: TextEdit.\n0 standard window 99d1b606-edit.txt, Secondary Actions: Raise, URL: file:///tmp/sleight-bench/2026-10-09T22-25-01-496Z/sleight-textedit-edit-1/99d1b606-edit.txt\n\t1 scroll area Secondary Actions: Scroll Le…(971)",
+    "after": "Window: \"99d1b606-edit.txt\", App: TextEdit.\n0 standard window 99d1b606-edit.txt, Secondary Actions: Raise, URL: file:///tmp/sleight-bench/2026-10-09T22-25-01-496Z/sleight-textedit-edit-1/99d1b606-edit.txt\n\t1 scroll area Secondary Actions: Scroll Le…(973)"
+  }
+}

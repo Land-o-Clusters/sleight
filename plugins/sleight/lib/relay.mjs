@@ -238,6 +238,7 @@ export function createRelay({
   trace: writeTrace = () => {},
 }) {
   const compactor = createReadCompactor();
+  const resultCalls = new Map(); // forwarded native actions, with the read available before input
   const remapNotes = new Map(); // call id -> what remapStale changed, told to Claude with the result
   // Apps this session drove (names and bundle IDs), and turn_ended calls whose reply should say
   // when one of them holds a keyboard filter tap: the mod shows that to the user.
@@ -1143,7 +1144,11 @@ export function createRelay({
       toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: `Computer use recovered for ${needsFullRead}. Send a standalone app read before acting. sleight will make it a full read because automatic recovery consumed the engine's UI diff.` }] } });
       return;
     }
-    if (msg.method === 'tools/call' && msg.params?.name === 'js_reset') { invalidateDiagnostics(); helperHandles.clear(); helperControls.clear(); helperActive = undefined; docsShown = false; }
+    if (msg.method === 'tools/call' && msg.params?.name === 'js_reset') {
+      compactor.reset();
+      for (const action of resultCalls.values()) { action.before = undefined; action.overlap = true; }
+      invalidateDiagnostics(); helperHandles.clear(); helperControls.clear(); helperActive = undefined; docsShown = false;
+    }
     if (msg.method === 'tools/call' && msg.params?.name === 'js' && msg.id !== undefined) jsCalls.set(msg.id, originalCode ?? '');
     let flowPlan, clipboardAction;
     if (clipboard && msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name) && clipboard.pending) {
@@ -1312,6 +1317,11 @@ export function createRelay({
       msg.params._meta = { ...msg.params._meta, [META_KEY]: turnMeta() };
       turnUsed = true;
       clearTimeout(idleTimer);
+      if (running.size) for (const action of resultCalls.values()) action.overlap = true;
+      if (name === 'js' && !browser && msg.id !== undefined) {
+        const action = compactor.beginAction(originalCode);
+        if (action) { action.overlap = running.size > 0; resultCalls.set(msg.id, action); }
+      }
       if (msg.id !== undefined) running.add(msg.id);
       if (flowPlan) { flowRules.forward(flowPlan); flowCalls.set(msg.id, flowPlan); }
     }
@@ -1384,6 +1394,8 @@ export function createRelay({
     observeServerMessage(msg);
   });
   function observeServerMessage(msg) {
+    // Keep the original engine verdict even when close recovery rewrites noWindowsAvailable.
+    const resultFailed = !!msg.error || !!msg.result?.isError;
     if (msg.method === undefined && spaceChecks.has(msg.id)) {
       // The probe takes about 150 ms against the engine's 400 ms or more, so this rarely waits.
       const check = spaceChecks.get(msg.id); spaceChecks.delete(msg.id);
@@ -1456,6 +1468,8 @@ export function createRelay({
       if (docs && docsShown) {
         // An un-awaited action that fails can end the engine's session (reproduced 2026-10-07).
         invalidateDiagnostics(); forgetHandles(); helperHandles.clear(); helperControls.clear(); helperActive = undefined;
+        compactor.reset();
+        for (const action of resultCalls.values()) { action.before = undefined; action.overlap = true; }
         trace('engine-session-restarted', { id: msg.id });
         msg.result.content.push({ type: 'text', text: "sleight: the engine's JavaScript session restarted before this call, so handles from earlier calls (such as `app`) are gone. An action that fails without `await` can end the session. Acquire the app again with `let app = await cua.getApp(…)`, and await every action." });
       }
@@ -1725,7 +1739,12 @@ export function createRelay({
       // it to "no change" sent Claude to a screenshot instead (2026-10-08). Recovery's visible read
       // is full too.
       if (!automatic) msg.result.content = compactor.process(dropRepeatedImages(msg.result.content),
-        { forceFull: healthPlan?.fullVisible === true || /\bdisableDiffing\s*:\s*true\b/.test(jsCode ?? '') });
+        { forceFull: healthPlan?.fullVisible === true || /\bdisableDiffing\s*:\s*true\b/.test(jsCode ?? ''),
+          action: resultCalls.get(msg.id), failed: resultFailed || !!msg.result?.isError });
+    }
+    if (msg.method === undefined && resultCalls.has(msg.id)) {
+      if (msg.error) msg.error.message += '\n' + compactor.process([], { action: resultCalls.get(msg.id), failed: true })[0].text;
+      resultCalls.delete(msg.id);
     }
     toClient(msg);
   }
