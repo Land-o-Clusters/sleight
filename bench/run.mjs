@@ -40,6 +40,7 @@ import { acquireLiveLock } from './live-lock.mjs';
 import { runDriver, privateDriverEnvironment } from './driver.mjs';
 import { privateMailResult, publicPrivateMailRow, publishPrivateMailResults } from './private-mail.mjs';
 import { assertPrivateClaudePolicy } from './private-policy.mjs';
+import { DEFAULT_CAP_USD, addSpend, benchAuth } from './api-auth.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TIMEOUT_MS = 5 * 60 * 1000;
@@ -125,8 +126,21 @@ if (privatePass && (selected.some(task => !task.privateMail) || armNames.some(na
 
 // SLEIGHT_APPROVAL_PROMPT=client keeps approvals going to approve.mjs, even
 // when the benchmark runs from a desktop app session.
-const armEnv = (arm, extra = {}) => ({ ...process.env, BENCH_ROOT: ROOT, SLEIGHT_APPROVAL_PROMPT: 'client',
-  ...arm.env, ...extra, BENCH_SUITE: suite, ...(suite === 'real' ? { SLEIGHT_SURFACES: 'computer' } : {}) });
+// No claude.ai connectors: an arm loads only its own tool, and each connector listing is one more
+// account request on the owner's login, which shares a rate limit with their usage meter (2026-10-10).
+// Claude arms run on the owner's API key when ~/.config/sleight-bench/anthropic-api-key exists
+// (--auth api|login|auto), up to a monthly cap (bench/api-auth.mjs).
+const auth = armNames.some(name => !ARMS[name].codex)
+  ? benchAuth({ mode: option('auth', 'auto'), capUsd: Number(process.env.SLEIGHT_BENCH_API_CAP_USD || DEFAULT_CAP_USD) })
+  : { mode: 'login', env: {}, unset: [] };
+if (auth.mode === 'api') console.log(`Claude arms run on the API key: $${auth.spent.toFixed(2)} of the $${auth.capUsd} monthly cap spent.`);
+const armEnv = (arm, extra = {}) => {
+  const env = { ...process.env, BENCH_ROOT: ROOT, SLEIGHT_APPROVAL_PROMPT: 'client',
+    ...arm.env, ...extra, BENCH_SUITE: suite, ENABLE_CLAUDEAI_MCP_SERVERS: 'false', ...auth.env,
+    ...(suite === 'real' ? { SLEIGHT_SURFACES: 'computer' } : {}) };
+  for (const key of auth.unset) delete env[key];
+  return env;
+};
 
 // The MCP servers an arm's Claude Code starts, read from its init event and
 // stopped before any model call.
@@ -137,7 +151,7 @@ function armServers(arm) {
     '--settings', join(ROOT, 'bench', privatePass ? 'private-settings.json' : 'settings.json')];
   {
     const initialized = new AbortController();
-    let buffer = '', servers;
+    let buffer = '', servers, keySource;
     return runOwned(claudeBin, args, { cwd: arm.cwd, env: privatePass ? privateDriverEnvironment(armEnv(arm)) : armEnv(arm), timeoutMs: 60000,
       signal: AbortSignal.any([initialized.signal, controller.signal]),
       onStdout: data => {
@@ -146,12 +160,13 @@ function armServers(arm) {
         while ((i = buffer.indexOf('\n')) >= 0) {
           const line = buffer.slice(0, i); buffer = buffer.slice(i + 1);
           let event; try { event = JSON.parse(line); } catch { continue; }
-          if (event.type === 'system' && event.subtype === 'init') { servers = event.mcp_servers; initialized.abort(); }
+          if (event.type === 'system' && event.subtype === 'init') { servers = event.mcp_servers; keySource = event.apiKeySource; initialized.abort(); }
         }
       },
     }).then(result => {
       if (!result.groupClean) throw new Error('Arm preflight process group cleanup unconfirmed');
       if (!servers) throw new Error('Arm preflight returned no init event');
+      if (auth.mode === 'api' && keySource !== 'ANTHROPIC_API_KEY') throw new Error(`Arm preflight used ${keySource ?? 'an unknown credential'}, not the benchmark API key`);
       if (privatePass) assertPrivateClaudePolicy();
       controller.signal.throwIfAborted();
       return servers;
@@ -244,7 +259,7 @@ const save = () => {
     return;
   }
   const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite, surfaces: 'computer', ownerAway } : {}),
-    arms: armNames, model, effort, claude: claudeBin, results,
+    arms: armNames, model, effort, claude: claudeBin, auth: auth.mode, results,
     ...(passCleanupErrors.length && { passCleanupErrors }) }, null, 2);
   writeFileSync(file, (suite === 'real' ? scrub(json) : json) + '\n');
 };
@@ -253,6 +268,14 @@ const save = () => {
 let unlock, lockIdentity;
 function finishRun(result) {
   if (isDryRun) return;
+  if (auth.mode === 'api' && Number.isFinite(result.costUsd)) {
+    const spent = addSpend(result.costUsd);
+    if (spent >= auth.capUsd) {
+      controller.abort(new Error(`benchmark API spend reached the $${auth.capUsd} monthly cap`));
+      process.exitCode = 1;
+      console.error(`STOP: benchmark API spend this month is $${spent.toFixed(2)}, at the $${auth.capUsd} cap.`);
+    }
+  }
   const taps = benchKeyboardTaps();
   if (!taps.length) return;
   if (!privatePass) result.keyboardTaps = taps;

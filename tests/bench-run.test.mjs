@@ -9,7 +9,7 @@ import { privateDriverEnvironment } from '../bench/driver.mjs';
 
 // Execute the actual runner body with inert dependencies. No app, CLI, approval
 // file, live lock, compiler or filesystem operation reaches the host.
-async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false } = {}) {
+async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false, auth = { mode: 'login', env: {}, unset: [] }, keySource = 'none', spend = () => 0 } = {}) {
   const calls = [], saved = [], envs = [], tailScopes = [], directories = [];
   const logs = [], driverOptions = [], codexRuns = [];
   const source = readFileSync(new URL('../bench/run.mjs', import.meta.url), 'utf8')
@@ -25,6 +25,7 @@ async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = []
     writeFileSync: (_path, value) => saved.push(JSON.parse(value)), randomBytes: () => ({ toString: () => 'nonce' }),
     privateMailResult, publicPrivateMailRow,
     privateDriverEnvironment, assertPrivateClaudePolicy: () => calls.push('policy audit'),
+    DEFAULT_CAP_USD: 200, benchAuth: () => auth, addSpend: usd => { calls.push(['spend', usd]); return spend(usd); },
     publishPrivateMailResults: (_path, value, options) => { calls.push('private audit'); assert.ok(options.terms.every(term => term === 'private label')); saved.push(JSON.parse(value)); },
     execFileSync(command, args) {
       if (command === '/usr/bin/git') throw new Error('outside repo');
@@ -41,10 +42,10 @@ async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = []
     acquireLiveLock: async () => { calls.push('lock'); return async () => calls.push('unlock'); },
     runTiming: () => ({}), traceTiming: () => ({}), observePermission: () => false,
     runOwned: async (_command, _args, options) => {
-      envs.push(options.env); options.onStdout('{"type":"system","subtype":"init","mcp_servers":[{"name":"plugin:sleight:computer","status":"connected"}]}\n');
+      envs.push(options.env); options.onStdout(JSON.stringify({ type: 'system', subtype: 'init', apiKeySource: keySource, mcp_servers: [{ name: 'plugin:sleight:computer', status: 'connected' }] }) + '\n');
       return { groupClean: true };
     },
-    runDriver: async (_command, args, options) => { calls.push(['driver', ...args]); envs.push(options.env); driverOptions.push(options); return { code: 0, out: {}, groupClean: true }; },
+    runDriver: async (_command, args, options) => { calls.push(['driver', ...args]); envs.push(options.env); driverOptions.push(options); return { code: 0, out: { total_cost_usd: 0.25 }, groupClean: true }; },
     executeRealTask: async (_task, ctx, options) => {
       ctx.windowLeases = leases;
       if (setupOnly) assert.equal(options.setupOnly, true);
@@ -146,7 +147,10 @@ test('runner binds suite approvals and forces real computer access in preflight 
   const real = await runner({ base: { BENCH_SUITE: 'default', SLEIGHT_SURFACES: 'browser' }, drive: true });
   assert.equal(real.error, undefined);
   assert.equal(real.envs.length, 4);
-  for (const env of real.envs) { assert.equal(env.BENCH_SUITE, 'real'); assert.equal(env.SLEIGHT_SURFACES, 'computer'); }
+  for (const env of real.envs) {
+    assert.equal(env.BENCH_SUITE, 'real'); assert.equal(env.SLEIGHT_SURFACES, 'computer');
+    assert.equal(env.ENABLE_CLAUDEAI_MCP_SERVERS, 'false');
+  }
   const standard = await runner({ suite: 'default', base: { BENCH_SUITE: 'real', SLEIGHT_SURFACES: 'browser' } });
   assert.equal(standard.error, undefined);
   for (const env of standard.envs) { assert.equal(env.BENCH_SUITE, 'default'); assert.equal(env.SLEIGHT_SURFACES, 'browser'); }
@@ -216,4 +220,35 @@ test('real cleanup tails never inspect unrelated apps and Simulator awaits only 
   let quit = false;
   await cleanup.quitSimApp({ ownedOnly: true, lease: { quit: async () => { await Promise.resolve(); quit = true; } } });
   assert.equal(quit, true);
+});
+
+const apiAuth = { mode: 'api', env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, unset: ['ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'], spent: 0, capUsd: 150 };
+
+test('API mode gives every Claude run the key, drops other tokens, and checks the preflight used it', async () => {
+  const result = await runner({ suite: 'default', auth: apiAuth, keySource: 'ANTHROPIC_API_KEY',
+    base: { CLAUDE_CODE_OAUTH_TOKEN: 'oauth', ANTHROPIC_AUTH_TOKEN: 'token' } });
+  assert.equal(result.error, undefined);
+  assert.ok(result.envs.length > 1);
+  for (const env of result.envs) {
+    assert.equal(env.ANTHROPIC_API_KEY, 'sk-ant-test');
+    assert.ok(!('CLAUDE_CODE_OAUTH_TOKEN' in env) && !('ANTHROPIC_AUTH_TOKEN' in env));
+  }
+  assert.equal(result.saved.at(-1).auth, 'api');
+  assert.ok(result.calls.some(c => Array.isArray(c) && c[0] === 'spend' && c[1] === 0.25));
+  const wrong = await runner({ suite: 'default', auth: apiAuth, keySource: 'none' });
+  assert.match(String(wrong.error?.message), /not the benchmark API key/);
+});
+
+test('a run that reaches the API cap stops the pass', async () => {
+  const result = await runner({ suite: 'default', auth: apiAuth, keySource: 'ANTHROPIC_API_KEY', spend: () => 150 });
+  assert.ok(result.logs.some(line => /at the \$150 cap/.test(line)));
+  assert.equal(result.calls.filter(c => Array.isArray(c) && c[0] === 'spend').length, 1);
+});
+
+test('login mode records no spend and passes no key', async () => {
+  const result = await runner({ suite: 'default' });
+  assert.equal(result.error, undefined);
+  assert.ok(!result.calls.some(c => Array.isArray(c) && c[0] === 'spend'));
+  for (const env of result.envs) assert.ok(!('ANTHROPIC_API_KEY' in env));
+  assert.equal(result.saved.at(-1).auth, 'login');
 });
