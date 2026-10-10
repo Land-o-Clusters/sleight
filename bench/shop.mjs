@@ -165,7 +165,7 @@ export function checkRealShop(ctx) {
   return true;
 }
 
-function shell(title, body) {
+function page(title, body) {
   return `<!doctype html><meta name="viewport" content="width=device-width"><title>${escape(title)}</title>
 <style>
 body{font:16px system-ui;margin:0;color:#1b2430;background:#f4f1ea}
@@ -211,6 +211,9 @@ function productForm(product, prefix) {
 }
 
 function render(state, prefix, route, query) {
+  // Safari exposes no document URL, so the fixture finds its new window by the run's nonce in the
+  // title, as the other web fixtures do (safari-shop setup failed without it, 2026-10-10).
+  const shell = (title, body) => page(`${title} · ${prefix.slice(1, -1)}`, body);
   if (route === 'cart') {
     const rows = state.cart.map(item => {
       const product = PRODUCTS.find(entry => entry.id === item.id);

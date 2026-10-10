@@ -132,3 +132,14 @@ test('a supplied cart screenshot attaches without capturing the screen', () => {
   assert.equal(attached.bytes, shot.bytes);
   assert.equal(ctx.cartShot.bytes, shot.bytes);
 });
+
+// Safari exposes no document URL, so the fixture finds the window by the nonce in its title.
+test('every shop page title carries the run nonce', async t => {
+  const ctx = { nonce: 'nonce42' };
+  await serveShopPage(ctx);
+  t.after(() => ctx.closeServer());
+  for (const path of ['', 'cart', `product/${listedProducts().items[0].id}`]) {
+    const html = await (await fetch(ctx.url + path)).text();
+    assert.match(html, /<title>[^<]*nonce42<\/title>/, path || 'home');
+  }
+});
