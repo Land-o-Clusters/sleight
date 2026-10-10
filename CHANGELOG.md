@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- App approval prompts offer "Always allow" (owner's call). It adds the app to your pre-approved
+  list with its risk level and the date, so later sessions don't ask. Only your click writes it,
+  and terminals and OpenAI's apps never offer it. `sleight-mcp allow list` and
+  `sleight-mcp allow remove <app>` show and edit the list. Unit-tested.
 - A call's first action that sends keys, text or coordinates uses Claude's full read from the call
   just before when it's under 10 s old, however fast that read was (owner's call). Before, only a
   read over 2 s qualified. A window that comes to the front between the two calls isn't caught

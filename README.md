@@ -63,8 +63,9 @@ Use sleight to open Calculator in the background and work out 12 × 12 by clicki
 ```
 
 The first time Claude touches an app, you get a prompt like *Allow Computer Use to use "Calculator"?*
-A yes covers that app for the rest of the session. Apps you marked "Always allow" in Codex or ChatGPT
-don't ask, because the engine approves them itself ([settings](docs/settings.md#approval-scope)).
+A yes covers that app for the rest of the session, and "Always allow" covers it from then on. Apps you
+marked "Always allow" in Codex or ChatGPT don't ask, because the engine approves them itself
+([settings](docs/settings.md#approval-scope)).
 
 To update, run `claude plugin marketplace update sleight` and `claude plugin update sleight@sleight`,
 then start a new session. A running session keeps the version it started with.
@@ -85,8 +86,8 @@ Also runs as a plain MCP server: see [other hosts](docs/other-hosts.md).
   intended one.
 - It's light on context. After each action Claude gets only what changed. On the CNN front page,
   scrolling down five times sent 39,655 characters instead of 203,160.
-- It asks once per app per session, except for apps you marked "Always allow" in Codex or ChatGPT,
-  which the engine approves itself. A list you write yourself can pre-approve apps. Terminals and
+- It asks once per app per session, unless you chose "Always allow" in its prompt or in Codex or
+  ChatGPT. Terminals and
   OpenAI's apps stay off until you opt in, and sleight shows you each terminal command first unless
   you turn that off too.
 - The benchmark results are published with their failures. Its tasks in Calculator, TextEdit, Chess

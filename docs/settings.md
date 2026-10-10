@@ -53,6 +53,11 @@ has accept and decline, so without help you'd get asked on every click. The rela
   the rest of the session.
 - A different app, a riskier request for the same app, or a new Claude Code session asks you again.
 - It never remembers a decline or a cancel.
+
+You can also pick "Always allow", with the third button in sleight's panel or the *Always* option
+of *Remember this choice* in Claude Code's form. It adds the app, at that risk level and with the date, to your
+pre-approved list, so later sessions don't ask. Terminals and OpenAI's apps never offer it.
+`sleight-mcp allow list` shows the list and `sleight-mcp allow remove <app>` takes an app off.
 - Approval memory stays in the relay and ends with the session.
 
 Apps you marked "Always allow" in Codex or ChatGPT are the exception. The engine keeps that list in

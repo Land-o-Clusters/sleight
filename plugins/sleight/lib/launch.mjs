@@ -21,7 +21,7 @@ import { createRelay } from './relay.mjs';
 import { createAppHealthHelper, diagnoseReadFailure } from './read-failure.mjs';
 import { loadFlowRules } from './flow-rules.mjs';
 import { InputLease } from './input-lease.mjs';
-import { loadPreapproved } from './preapproved.mjs';
+import { addPreapproved, listPreapproved, loadPreapproved, removePreapproved } from './preapproved.mjs';
 import { createGrantAudit } from './preapproved-audit.mjs';
 import { BLOCKED_APP_TOOL, callBlockedApp, forbiddenTargetsAllowed, matchBlockedApp } from './blocked-apps.mjs';
 import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
@@ -231,12 +231,12 @@ export function askWithDialog(message, sessionScoped, options = {}, launch = exe
   const flow = options?.kind === 'flow';
   // Blocked-app consent and terminal sends bring their own plain-words detail.
   const detail = flow || options?.kind === 'blocked' ? options.detail : review ? `${options.detail}\n\nUndo restores the saved copy shown above. Reopen it in the app afterward. Later leaves the decision pending.` : (app ? `${claudeCode ? 'Claude' : 'The agent'} can then click and type in ${app} in the background. ` : '') +
-    (sessionScoped ? `A yes lasts until ${claudeCode ? 'this Claude session' : 'this sleight server session'} ends.` : 'It asks again next time.');
-  const args = ['-l', 'JavaScript', join(LIB, 'ask.js'), question, detail, ICON, String(ASK_SECONDS), flow ? 'flow' : review ? 'review' : 'approval', claudeCode ? 'claude-code' : 'generic'];
+    (sessionScoped ? `Allow lasts until ${claudeCode ? 'this Claude session' : 'this sleight server session'} ends.${options?.always ? ' Always Allow adds it to your pre-approved list.' : ''}` : 'It asks again next time.');
+  const args = ['-l', 'JavaScript', join(LIB, 'ask.js'), question, detail, ICON, String(ASK_SECONDS), flow ? 'flow' : review ? 'review' : 'approval', claudeCode ? 'claude-code' : 'generic', ...(options?.always ? ['always'] : [])];
   return new Promise((resolve, reject) => {
     ownHelper(launch('osascript', args, (err, stdout, stderr) => {
       const answer = stdout.trim();
-      if (!err && (review ? ['keep', 'undo', 'cancel'] : ['accept', 'decline', 'cancel']).includes(answer)) return resolve(answer);
+      if (!err && (review ? ['keep', 'undo', 'cancel'] : ['accept', 'decline', 'cancel', ...(options?.always ? ['always'] : [])]).includes(answer)) return resolve(answer);
       // Logged, so a broken prompt doesn't pass for a decline.
       process.stderr.write(`sleight: approval prompt failed: ${stderr || err?.message || answer}\n`);
       reject(Object.assign(new Error("The approval prompt couldn't be shown. The user made no decision. Stop and tell them."), { code: 'SLEIGHT_PROMPT_UNAVAILABLE' }));
@@ -606,6 +606,7 @@ export async function run({ leaseDirectory } = {}) {
     approvalScope: ['once', 'document'].includes(process.env.SLEIGHT_APPROVAL_SCOPE) ? process.env.SLEIGHT_APPROVAL_SCOPE : 'session',
     ...approvalOptions(),
     preapproved,
+    alwaysAllow: (app, riskLevel) => { addPreapproved(app, riskLevel); preapproved.add(app, riskLevel); },
     grantAudit,
     flowRules,
     changeReview: process.env.SLEIGHT_CHANGE_REVIEW === '1',
@@ -688,8 +689,27 @@ async function replayCommand(args) {
   return result.ok ? 0 : 1;
 }
 
+// `allow list` and `allow remove <app>`: the user's pre-approved list, which "Always allow" adds to.
+export function allowCommand(args, { list = listPreapproved, remove = removePreapproved, out = text => process.stdout.write(text) } = {}) {
+  const [, op, app] = args;
+  if (op === 'list') {
+    const apps = list();
+    out(apps.length ? apps.map(a => `${a.app}  ${a.riskLevel}${a.added ? `  added ${a.added}${a.source === 'always-allow' ? ' by Always allow' : ''}` : ''}`).join('\n') + '\n' : 'No pre-approved apps.\n');
+    return 0;
+  }
+  if (op === 'remove' && app) {
+    out(remove(app) ? `Removed ${app}. It asks again from the next session.\n` : `${app} isn't on the list.\n`);
+    return 0;
+  }
+  out('usage: sleight-mcp allow list\n       sleight-mcp allow remove <app>\n');
+  return 2;
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  if (process.argv.includes('--doctor')) process.exitCode = await doctor();
+  if (process.argv[2] === 'allow') {
+    try { process.exitCode = allowCommand(process.argv.slice(2)); }
+    catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
+  } else if (process.argv.includes('--doctor')) process.exitCode = await doctor();
   else if (['record', 'replay'].includes(process.argv[2])) {
     try { process.exitCode = await replayCommand(process.argv.slice(2)); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }

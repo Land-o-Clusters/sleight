@@ -58,6 +58,9 @@ belong in [STATE.md](STATE.md).
 
 - An accepted app approval lasts for one Claude Code session, kept in the relay's memory. The relay never
   sends `persist: "always"` and never remembers a decline. `SLEIGHT_APPROVAL_SCOPE=once` turns it off.
+  The prompt also offers "Always allow", which adds that app to the user's pre-approved list with the
+  date (owner, 2026-10-10). Only the user's own click writes it, never Claude, and terminals and
+  OpenAI's apps never get the choice.
 - Apps get approved without a person at the moment of use only two ways: the benchmark's allowlist
   (Calculator, TextEdit, Chess, and Simulator or DeviceHub since 2026-10-07, by name or bundle ID) in benchmark runs,
   plus Safari, Preview, Finder and Helium for the real-use tasks (owner, 2026-10-08) and Word,

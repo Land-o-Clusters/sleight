@@ -67,7 +67,7 @@ import { isLeaseRead } from './input-lease.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
 import { createReadCompactor } from './compact-reads.mjs';
-import { forbiddenTargetWarning, isForbiddenSettingsWindow, refusedApp } from './blocked-apps.mjs';
+import { forbiddenTargetWarning, isForbiddenSettingsWindow, matchBlockedApp, refusedApp } from './blocked-apps.mjs';
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
 import { offSpace, offSpaceNote, readFailureAdvice, savePanelNote } from './read-failure.mjs';
 import { TurnJournal, writeReceipt } from './turn-receipts.mjs';
@@ -225,6 +225,8 @@ export function createRelay({
   fallbackAsk,
   onInitialize = () => {},
   preapproved,
+  // Adds an app to the user's pre-approved list when they click "Always allow" (owner, 2026-10-10).
+  alwaysAllow,
   grantAudit = () => {},
   stderr = process.stderr,
   localTools,
@@ -302,6 +304,21 @@ export function createRelay({
   const listRequests = new Set();
   const internalRequests = new Map();
   const approvalRequests = new Map(); // server request id -> approval key
+  const alwaysOffered = new Map(); // server request id -> { app, riskLevel } offered "Always allow"
+  // "Always allow" is offered only for a session-scoped engine app approval, never for terminals or
+  // OpenAI's apps, and only the user's answer to sleight's prompt or Claude Code's form can pick it.
+  function alwaysChoice(msg) {
+    const meta = msg.params?._meta;
+    const app = meta?.tool_params?.app, riskLevel = meta?.riskLevel ?? 'high';
+    // The engine names an app by bundle ID or by name, so check both ways.
+    if (!alwaysAllow || approvalScope !== 'session' || approvalKey(msg) === undefined || matchBlockedApp(app) || matchBlockedApp(app, app)) return undefined;
+    if (!['low', 'medium', 'high'].includes(riskLevel)) return undefined;
+    return { app, riskLevel };
+  }
+  function rememberAlways(choice) {
+    try { alwaysAllow(choice.app, choice.riskLevel); trace('always-allow', choice); }
+    catch (error) { process.stderr.write(`sleight: couldn't add ${choice.app} to the pre-approved list: ${error.message}\n`); }
+  }
   const approved = new Set(); // approval keys the user accepted this session
   let asking = Promise.resolve(); // `ask` prompts, one at a time
   let clientCanElicit; // undefined until initialize (legacy in-process callers)
@@ -942,14 +959,16 @@ export function createRelay({
         return { action: 'accept', content: {}, _meta: { persist: 'session' } };
       }
       let action;
+      const always = alwaysChoice(msg);
       try {
-        action = await ask(msg.params?.message ?? 'Allow Computer Use?', key !== undefined);
+        action = await ask(msg.params?.message ?? 'Allow Computer Use?', key !== undefined, always ? { always: true } : undefined);
       } catch (error) {
         // The engine owns the elicitation's parent call. Return its error there rather than
         // attributing one failed panel to every concurrent call waiting on the engine.
         if (error?.code === 'SLEIGHT_PROMPT_UNAVAILABLE') return { error: { code: -32603, message: error.message } };
         action = 'cancel';
       }
+      if (action === 'always' && always) { rememberAlways(always); action = 'accept'; }
       if (action !== 'accept') return { action };
       if (key === undefined) return { action, content: {} };
       approved.add(key);
@@ -1290,6 +1309,14 @@ export function createRelay({
     if (msg.method === undefined && approvalRequests.has(msg.id)) {
       const key = approvalRequests.get(msg.id);
       approvalRequests.delete(msg.id);
+      const always = alwaysOffered.get(msg.id);
+      alwaysOffered.delete(msg.id);
+      // The engine didn't ask for this field: answer it here and pass the engine an empty form.
+      if (msg.result?.content && 'remember' in msg.result.content) {
+        if (always && msg.result.action === 'accept' && msg.result.content.remember === 'Always') rememberAlways(always);
+        const { remember: _remember, ...content } = msg.result.content;
+        msg.result = { ...msg.result, content };
+      }
       if (msg.result?.action === 'accept') {
         approved.add(key);
         if (msg.result._meta?.persist === undefined) {
@@ -1803,6 +1830,14 @@ export function createRelay({
         return;
       }
       approvalRequests.set(msg.id, key);
+      const always = alwaysChoice(msg);
+      if (always) {
+        alwaysOffered.set(msg.id, always);
+        const schema = msg.params.requestedSchema ?? { type: 'object', properties: {} };
+        msg.params.requestedSchema = { ...schema, properties: { ...schema.properties,
+          remember: { type: 'string', title: 'Remember this choice', enum: ['This session', 'Always'], default: 'This session',
+            description: 'Always adds the app to your pre-approved list (sleight-mcp allow remove takes it off).' } } };
+      }
     }
     if (msg.method === undefined && listRequests.delete(msg.id) && Array.isArray(msg.result?.tools)) {
       msg.result.tools = msg.result.tools

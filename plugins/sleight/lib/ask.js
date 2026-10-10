@@ -10,7 +10,9 @@
 ObjC.import('Cocoa');
 
 function run(argv) {
-  const [question, detail, iconPath, seconds, mode, host] = argv;
+  const [question, detail, iconPath, seconds, mode, host, offer] = argv;
+  // An app approval can offer "Always Allow", which adds the app to the user's pre-approved list.
+  const always = mode === 'approval' && offer === 'always';
   const review = mode === 'review';
   const wide = review || mode === 'flow';
   const app = $.NSApplication.sharedApplication;
@@ -25,6 +27,7 @@ function run(argv) {
     name: 'SleightAskTarget',
     methods: {
       'allow:': { types: ['void', ['id']], implementation: finish('accept') },
+      'always:': { types: ['void', ['id']], implementation: finish('always') },
       'deny:': { types: ['void', ['id']], implementation: finish('decline') },
       'giveUp:': { types: ['void', ['id']], implementation: finish('cancel') },
       'keep:': { types: ['void', ['id']], implementation: finish('keep') },
@@ -131,7 +134,7 @@ function run(argv) {
     content.addSubview(scroll);
   } else content.addSubview(body.field);
 
-  const buttonW = review ? (TEXT_W - 16) / 3 : (TEXT_W - 8) / 2;
+  const buttonW = review || always ? (TEXT_W - 16) / 3 : (TEXT_W - 8) / 2;
   const button = (text, action, x) => {
     const b = $.NSButton.buttonWithTitleTargetAction(text, target, action);
     b.frame = $.NSMakeRect(x, PAD, buttonW, BUTTON_H);
@@ -142,7 +145,8 @@ function run(argv) {
   const deny = button(review ? 'Later' : "Don't Allow", review ? 'giveUp:' : 'deny:', TEXT_X);
   deny.keyEquivalent = '\u001b';
   if (review) button('Undo', 'undo:', TEXT_X + buttonW + 8);
-  const allow = button(review ? 'Keep' : mode === 'flow' ? 'Allow Once' : 'Allow', review ? 'keep:' : 'allow:', TEXT_X + (buttonW + 8) * (review ? 2 : 1));
+  if (always) button('Always Allow', 'always:', TEXT_X + buttonW + 8);
+  const allow = button(review ? 'Keep' : mode === 'flow' ? 'Allow Once' : 'Allow', review ? 'keep:' : 'allow:', TEXT_X + (buttonW + 8) * (review || always ? 2 : 1));
   // macOS 26 fills a button with the accent color at primary prominence.
   if (allow.respondsToSelector('setTintProminence:')) allow.tintProminence = 3;
   else allow.bezelColor = $.NSColor.controlAccentColor;

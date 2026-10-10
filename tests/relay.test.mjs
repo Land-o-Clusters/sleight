@@ -832,6 +832,38 @@ for (const approvalScope of ['session', 'once']) {
     assert.doesNotMatch(h.toClient.find(m => m.id === 2).result.content.at(-1).text, /pre-approved/);
   });
 }
+test('Always allow in sleight\'s dialog adds the app to the user\'s list; terminals and once mode never offer it', async () => {
+  const added = [], offers = [];
+  const h = harness({ alwaysAllow: (app, risk) => added.push([app, risk]),
+    ask: async (_message, _scoped, options) => { offers.push(!!options?.always); return offers.length === 1 ? 'always' : 'accept'; } });
+  h.fromServer(appApproval(1, undefined, 'com.apple.TextEdit', 'medium')); await tick(); await tick();
+  assert.deepEqual(added, [['com.apple.TextEdit', 'medium']]);
+  assert.equal(h.toServer.find(m => m.id === 1).result.action, 'accept');
+  assert.equal(h.toServer.find(m => m.id === 1).result._meta.persist, 'session');
+  h.fromServer(appApproval(2, undefined, 'com.apple.Terminal')); await tick(); await tick();
+  assert.deepEqual(offers, [true, false]);
+  const once = harness({ approvalScope: 'once', alwaysAllow: () => assert.fail('once mode never remembers'),
+    ask: async (_m, _s, options) => { assert.equal(options?.always, undefined); return 'accept'; } });
+  once.fromServer(appApproval(3, undefined, 'com.apple.TextEdit')); await tick(); await tick();
+});
+
+test('Claude Code\'s form offers Always; only an accepted Always adds the app, and the engine never sees the field', async () => {
+  for (const [remember, action, adds] of [['Always', 'accept', true], ['This session', 'accept', false], ['Always', 'decline', false]]) {
+    const added = [];
+    const h = harness({ alwaysAllow: (app, risk) => added.push([app, risk]) });
+    h.fromServer(appApproval(1, undefined, 'com.apple.TextEdit', 'medium')); await tick();
+    const forwarded = h.toClient.find(m => m.id === 1);
+    assert.deepEqual(forwarded.params.requestedSchema.properties.remember.enum, ['This session', 'Always']);
+    h.fromClient({ jsonrpc: '2.0', id: 1, result: { action, content: { remember } } }); await tick();
+    assert.deepEqual(added, adds ? [['com.apple.TextEdit', 'medium']] : []);
+    const answer = h.toServer.find(m => m.id === 1).result;
+    assert.equal('remember' in (answer.content ?? {}), false);
+  }
+  const terminal = harness({ alwaysAllow: () => assert.fail('terminals never offer Always') });
+  terminal.fromServer(appApproval(1, undefined, 'com.apple.Terminal')); await tick();
+  assert.equal(terminal.toClient.find(m => m.id === 1).params.requestedSchema.properties.remember, undefined);
+});
+
 test('unlisted and higher or unknown engine risk still prompt, including without session persistence', async () => {
   const h = harness({ preapproved: preapproved() });
   h.fromServer(appApproval(1, undefined, 'Mail'));
