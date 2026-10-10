@@ -84,6 +84,11 @@ in `.dev/prompts/`, for Sol threads the owner starts:
   read, control and sensitive scopes, expiry, irreversible confirms). sleight-arch: a published table of
   what works in the background. Puddle reruns any pair a Sol test burst touches, and installs Floati
   v0.1.3 (the `floati-codex-wait` CPU fix, a shared `~/.codex` hook) after 1009r.
+- After 1009r (01:17 UTC on 2026-10-10): `--doctor Calculator` live declined without a prompt but ignored
+  the user's pre-approved list (follow-up `sol-doctor-flow-2.md`). Affected tasks with Claude driving
+  tonight's changes passed 15/15 at `7c8e357` (`docs/benchmark.md`): textedit-save 15 turns a round
+  against 20 to 23. `docs/background.md` (what works in the background) published. Puddle: no Floati
+  install on this host after all.
 - sleight-arch: the guard's reads (`document-scope.mjs`, guard code in `relay.mjs`), with a
   background subagent studying guard-read phases across tonight's traces.
 - `/tmp/sleight-hold` exists while another project's window runs. Every brief stops live probes

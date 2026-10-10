@@ -1,0 +1,926 @@
+{
+  "stamp": "2026-10-10T01-18-07-983Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 16.1,
+      "turns": 3,
+      "costUsd": 0.2706238,
+      "usage": {
+        "input": 6,
+        "cacheRead": 101539,
+        "cacheWrite": 61756,
+        "output": 328
+      },
+      "timing": {
+        "totalMs": 14421,
+        "modelMs": 5149,
+        "calls": 2,
+        "refused": 0,
+        "toolMs": 4725,
+        "engineMs": 4707,
+        "relayMs": 18,
+        "localMs": 0,
+        "guardReads": 7,
+        "guardReadMs": 2595.5422090000006,
+        "guardReadFailures": 0,
+        "otherMs": 4547
+      },
+      "footprint": {
+        "cpuSeconds": 5.71,
+        "group": {
+          "claude": 1.47,
+          "engine node": 1.04,
+          "mcp@latest": 0.64,
+          "(node)": 0.04,
+          "(node_repl)": 0.14,
+          "<defunct>": 0,
+          "node": 0.27,
+          "osascript": 0.21,
+          "codex": 0.3
+        },
+        "outside": {
+          "Calculator": 0.62,
+          "engine helper": 0.98
+        }
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 1,
+      "passed": true,
+      "seconds": 15.2,
+      "turns": 4,
+      "costUsd": 0.15781759999999997,
+      "usage": {
+        "input": 8,
+        "cacheRead": 195858,
+        "cacheWrite": 28485,
+        "output": 469
+      },
+      "timing": {
+        "totalMs": 13588,
+        "modelMs": 6968,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 4903,
+        "engineMs": 4881,
+        "relayMs": 22,
+        "localMs": 0,
+        "guardReads": 8,
+        "guardReadMs": 2639.7847080000006,
+        "guardReadFailures": 0,
+        "otherMs": 1717
+      },
+      "footprint": {
+        "cpuSeconds": 5.41,
+        "group": {
+          "claude": 1.43,
+          "engine node": 1.08,
+          "mcp@latest": 0.62,
+          "node": 0.28,
+          "osascript": 0.13,
+          "codex": 0.27
+        },
+        "outside": {
+          "Calculator": 0.68,
+          "engine helper": 0.92
+        }
+      },
+      "appWindows": {
+        "samples": 3,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 26.3,
+      "turns": 5,
+      "costUsd": 0.1660826,
+      "usage": {
+        "input": 10,
+        "cacheRead": 251543,
+        "cacheWrite": 26626,
+        "output": 925
+      },
+      "timing": {
+        "totalMs": 24595,
+        "modelMs": 9634,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 12769,
+        "engineMs": 12583,
+        "relayMs": 186,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 7061.546959000001,
+        "guardReadFailures": 0,
+        "otherMs": 2192
+      },
+      "footprint": {
+        "cpuSeconds": 8.25,
+        "group": {
+          "claude": 1.77,
+          "engine node": 1.21,
+          "mcp@latest": 0.61,
+          "node": 0.29,
+          "osascript": 0.18,
+          "codex": 0.33,
+          "(sh)": 0,
+          "(bash)": 0.01,
+          "(vibe-island-brid)": 0.01
+        },
+        "outside": {
+          "engine helper": 1.85,
+          "TextEdit": 1.99
+        }
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I created the TextEdit document, made it plain text, typed `sleight bench 141adc6c`, and saved it as `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-10T01-18-07-983Z/sleight-textedit-save-1/141adc6c.txt`. The saved window showed that exact text and file path. I then closed th",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 20.3,
+      "turns": 6,
+      "costUsd": 0.1683684,
+      "usage": {
+        "input": 12,
+        "cacheRead": 304812,
+        "cacheWrite": 24783,
+        "output": 825
+      },
+      "timing": {
+        "totalMs": 18601,
+        "modelMs": 9578,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 7311,
+        "engineMs": 7130,
+        "relayMs": 181,
+        "localMs": 0,
+        "guardReads": 9,
+        "guardReadMs": 2767.918165,
+        "guardReadFailures": 0,
+        "otherMs": 1712
+      },
+      "footprint": {
+        "cpuSeconds": 4.27,
+        "group": {
+          "claude": 1.61,
+          "engine node": 1.06,
+          "mcp@latest": 0,
+          "node": 0.25,
+          "osascript": 0.17,
+          "codex": 0.27
+        },
+        "outside": {
+          "engine helper": 0,
+          "TextEdit": 0.91
+        }
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I replaced \"beta\" with \"delta\" in the file, so it now reads \"alpha delta gamma\". I saved it and closed the document. The close went through without a save prompt, which means the save had already happened. I didn't reopen the file to check its contents on disk.\n\nThe original \"Untitled 6\" window that",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 77.2,
+      "turns": 16,
+      "costUsd": 0.4472312000000001,
+      "usage": {
+        "input": 32,
+        "cacheRead": 1083816,
+        "cacheWrite": 48706,
+        "output": 3558
+      },
+      "timing": {
+        "totalMs": 74390,
+        "modelMs": 56452,
+        "calls": 15,
+        "refused": 0,
+        "toolMs": 15060,
+        "engineMs": 14234,
+        "relayMs": 75,
+        "localMs": 751,
+        "guardReads": 16,
+        "guardReadMs": 2715.0195020000137,
+        "guardReadFailures": 0,
+        "otherMs": 2878
+      },
+      "footprint": {
+        "cpuSeconds": 14.35,
+        "group": {
+          "claude": 2.54,
+          "engine node": 1.94,
+          "mcp@latest": 0.61,
+          "node": 0.27,
+          "osascript": 0.74,
+          "codex": 0.39,
+          "(bash)": 0.02,
+          "(vibe-island-brid)": 0.02
+        },
+        "outside": {
+          "Chess": 3.4,
+          "engine helper": 4.42
+        }
+      },
+      "appWindows": {
+        "samples": 16,
+        "onScreen": 16,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "The game is saved at `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-10T01-18-07-983Z/sleight-chess-drag-1/397c0c97.game`. The e-pawn is on e4, but I got it there by clicking, not dragging.\n\n- **Drag:** the drag attempts didn't visibly move the pawn. I tried several start poi",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 2,
+      "passed": true,
+      "seconds": 12,
+      "turns": 3,
+      "costUsd": 0.139609,
+      "usage": {
+        "input": 6,
+        "cacheRead": 135865,
+        "cacheWrite": 27336,
+        "output": 308
+      },
+      "timing": {
+        "totalMs": 10453,
+        "modelMs": 4613,
+        "calls": 2,
+        "refused": 0,
+        "toolMs": 4598,
+        "engineMs": 4584,
+        "relayMs": 14,
+        "localMs": 0,
+        "guardReads": 7,
+        "guardReadMs": 2760.0590839999995,
+        "guardReadFailures": 0,
+        "otherMs": 1242
+      },
+      "footprint": {
+        "cpuSeconds": 4.71,
+        "group": {
+          "claude": 1.18,
+          "engine node": 0.88,
+          "mcp@latest": 0.57,
+          "node": 0.22,
+          "osascript": 0.12,
+          "codex": 0.2
+        },
+        "outside": {
+          "Calculator": 0.74,
+          "engine helper": 0.8
+        }
+      },
+      "appWindows": {
+        "samples": 3,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 2,
+      "passed": true,
+      "seconds": 18.6,
+      "turns": 5,
+      "costUsd": 0.1894108,
+      "usage": {
+        "input": 10,
+        "cacheRead": 261184,
+        "cacheWrite": 32741,
+        "output": 619
+      },
+      "timing": {
+        "totalMs": 17262,
+        "modelMs": 9407,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 5372,
+        "engineMs": 5353,
+        "relayMs": 19,
+        "localMs": 0,
+        "guardReads": 8,
+        "guardReadMs": 2375.1574579999997,
+        "guardReadFailures": 0,
+        "otherMs": 2483
+      },
+      "footprint": {
+        "cpuSeconds": 5.58,
+        "group": {
+          "claude": 1.37,
+          "engine node": 0.97,
+          "mcp@latest": 0.59,
+          "node": 0.24,
+          "(bash)": 0.01,
+          "(AgentPeekBridge)": 0.01,
+          "bash": 0.02,
+          "(tr)": 0,
+          "(zsh)": 0,
+          "osascript": 0.11,
+          "codex": 0.23
+        },
+        "outside": {
+          "Calculator": 0.9,
+          "engine helper": 1.13
+        }
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 28.8,
+      "turns": 5,
+      "costUsd": 0.16567420000000002,
+      "usage": {
+        "input": 10,
+        "cacheRead": 251021,
+        "cacheWrite": 26505,
+        "output": 943
+      },
+      "timing": {
+        "totalMs": 27137,
+        "modelMs": 9372,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 15930,
+        "engineMs": 15781,
+        "relayMs": 149,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 6331.590084000001,
+        "guardReadFailures": 0,
+        "otherMs": 1835
+      },
+      "footprint": {
+        "cpuSeconds": 8.21,
+        "group": {
+          "claude": 1.55,
+          "engine node": 0.93,
+          "mcp@latest": 0.6,
+          "node": 0.2,
+          "bash": 0.01,
+          "python3": 0.01,
+          "(bash)": 0.01,
+          "(Python)": 0.1,
+          "(grep)": 0,
+          "osascript": 0.14,
+          "codex": 0.35,
+          "(vibe-island-brid)": 0.01,
+          "(uv)": 0.02,
+          "(python3.14)": 0.12,
+          "(git)": 0.01
+        },
+        "outside": {
+          "engine helper": 2.23,
+          "TextEdit": 1.92
+        }
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I created a new TextEdit document, made it plain text, typed `sleight bench 1dd38d0f` and saved it as `1dd38d0f.txt` in the `sleight-textedit-save-2` folder you gave. I then closed it.\n\nThe save window's title and URL showed the saved path, and the text area held the exact text. I didn't open the fi",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 2,
+      "passed": true,
+      "seconds": 27.9,
+      "turns": 6,
+      "costUsd": 0.153339,
+      "usage": {
+        "input": 12,
+        "cacheRead": 275995,
+        "cacheWrite": 21824,
+        "output": 1082
+      },
+      "timing": {
+        "totalMs": 24036,
+        "modelMs": 10831,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 10574,
+        "engineMs": 10334,
+        "relayMs": 240,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 2335.0301259999987,
+        "guardReadFailures": 0,
+        "otherMs": 2631
+      },
+      "footprint": {
+        "cpuSeconds": 8.74,
+        "group": {
+          "claude": 2.04,
+          "engine node": 1.97,
+          "mcp@latest": 0.69,
+          "(AgentPeekBridge)": 0.01,
+          "(bash)": 0.03,
+          "sh": 0.01,
+          "bash": 0.01,
+          "vibe-island-bridge": 0.01,
+          "(python3)": 0,
+          "<defunct>": 0,
+          "codex": 0.42,
+          "node": 0.29,
+          "(vibe-island-brid)": 0.01,
+          "osascript": 0.3,
+          "Python": 0.09,
+          "uv": 0.02,
+          "(python3.14)": 0.12
+        },
+        "outside": {
+          "engine helper": 1.67,
+          "TextEdit": 1.05
+        }
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I replaced \"beta\" with \"delta\" in the file, so it now reads \"alpha delta gamma\". I saved it and closed the document.\n\nThe save and close both went through without a prompt. I didn't reopen the file afterward to check the saved contents. TextEdit is still running, with an \"Untitled 6\" window that was",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 2,
+      "passed": true,
+      "seconds": 83.9,
+      "turns": 18,
+      "costUsd": 0.46187619999999996,
+      "usage": {
+        "input": 36,
+        "cacheRead": 1086081,
+        "cacheWrite": 49507,
+        "output": 4656
+      },
+      "timing": {
+        "totalMs": 78690,
+        "modelMs": 43491,
+        "calls": 17,
+        "refused": 0,
+        "toolMs": 31282,
+        "engineMs": 30240,
+        "relayMs": 280,
+        "localMs": 762,
+        "guardReads": 19,
+        "guardReadMs": 6706.167294999968,
+        "guardReadFailures": 0,
+        "otherMs": 3917
+      },
+      "footprint": {
+        "cpuSeconds": 20.28,
+        "group": {
+          "claude": 3.51,
+          "engine node": 2.86,
+          "mcp@latest": 0.7,
+          "codex": 0.58,
+          "node": 0.33,
+          "bash": 0.03,
+          "Python": 0.09,
+          "(git)": 0.01,
+          "(bash)": 0,
+          "osascript": 1.38,
+          "(Python)": 0.1
+        },
+        "outside": {
+          "Chess": 4.75,
+          "engine helper": 5.94
+        }
+      },
+      "appWindows": {
+        "samples": 17,
+        "onScreen": 17,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I played e2–e4 and saved the game to the path you gave, but I couldn't make the move by dragging. The saved file is `dacb1049.game`.\n\n- **Drag attempts failed:** I tried the drag about eight times, from different parts of the pawn and with the window raised. The pawn never moved. I switched to selec",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 3,
+      "passed": true,
+      "seconds": 87.8,
+      "turns": 3,
+      "costUsd": 0.124691,
+      "usage": {
+        "input": 6,
+        "cacheRead": 130975,
+        "cacheWrite": 23901,
+        "output": 288
+      },
+      "timing": {
+        "totalMs": 84386,
+        "modelMs": 4580,
+        "calls": 2,
+        "refused": 0,
+        "toolMs": 77638,
+        "engineMs": 77614,
+        "relayMs": 24,
+        "localMs": 0,
+        "guardReads": 8,
+        "guardReadMs": 44450.71224900002,
+        "guardReadFailures": 0,
+        "otherMs": 2168
+      },
+      "footprint": {
+        "cpuSeconds": 10.37,
+        "group": {
+          "claude": 2.05,
+          "engine node": 2,
+          "mcp@latest": 0.73,
+          "Python": 0.01,
+          "(bash)": 0.01,
+          "codex": 0.71,
+          "node": 0.3,
+          "bash": 0.01,
+          "python3": 0.01,
+          "(Python)": 0.02,
+          "<defunct>": 0,
+          "osascript": 0.23,
+          "(AgentPeekBridge)": 0.01,
+          "(zsh)": 0
+        },
+        "outside": {
+          "Calculator": 1.06,
+          "engine helper": 3.22
+        }
+      },
+      "appWindows": {
+        "samples": 18,
+        "onScreen": 18,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "391",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 3,
+      "passed": true,
+      "seconds": 18.5,
+      "turns": 5,
+      "costUsd": 0.195555,
+      "usage": {
+        "input": 10,
+        "cacheRead": 261175,
+        "cacheWrite": 34315,
+        "output": 604
+      },
+      "timing": {
+        "totalMs": 16287,
+        "modelMs": 8902,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 5134,
+        "engineMs": 5112,
+        "relayMs": 22,
+        "localMs": 0,
+        "guardReads": 8,
+        "guardReadMs": 2313.1190829999987,
+        "guardReadFailures": 0,
+        "otherMs": 2251
+      },
+      "footprint": {
+        "cpuSeconds": 6.44,
+        "group": {
+          "claude": 1.67,
+          "engine node": 1.34,
+          "mcp@latest": 0.65,
+          "codex": 0.3,
+          "node": 0.28,
+          "(Python)": 0.17,
+          "(git)": 0,
+          "osascript": 0.14
+        },
+        "outside": {
+          "Calculator": 0.77,
+          "engine helper": 1.12
+        }
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "1,024",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 3,
+      "passed": true,
+      "seconds": 25.3,
+      "turns": 5,
+      "costUsd": 0.16524919999999998,
+      "usage": {
+        "input": 10,
+        "cacheRead": 251476,
+        "cacheWrite": 26551,
+        "output": 873
+      },
+      "timing": {
+        "totalMs": 23566,
+        "modelMs": 9272,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 11883,
+        "engineMs": 11680,
+        "relayMs": 203,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 6248.977332000002,
+        "guardReadFailures": 0,
+        "otherMs": 2411
+      },
+      "footprint": {
+        "cpuSeconds": 8.24,
+        "group": {
+          "claude": 1.8,
+          "engine node": 1.26,
+          "mcp@latest": 0.63,
+          "node": 0.28,
+          "osascript": 0.22,
+          "codex": 0.33,
+          "(bash)": 0.02,
+          "(vibe-island-brid)": 0.02,
+          "(AgentPeekBridge)": 0
+        },
+        "outside": {
+          "engine helper": 1.82,
+          "TextEdit": 1.86
+        }
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I created a new TextEdit document, made it plain text, and typed \"sleight bench a654d01f\". I saved it as `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-10T01-18-07-983Z/sleight-textedit-save-3/a654d01f.txt`, then closed it. Before closing, the window title and URL showed the",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 3,
+      "passed": true,
+      "seconds": 27.3,
+      "turns": 7,
+      "costUsd": 0.14626,
+      "usage": {
+        "input": 14,
+        "cacheRead": 322840,
+        "cacheWrite": 18201,
+        "output": 886
+      },
+      "timing": {
+        "totalMs": 24181,
+        "modelMs": 13337,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 7798,
+        "engineMs": 7563,
+        "relayMs": 235,
+        "localMs": 0,
+        "guardReads": 13,
+        "guardReadMs": 4510.2062510000005,
+        "guardReadFailures": 0,
+        "otherMs": 3046
+      },
+      "footprint": {
+        "cpuSeconds": 8.38,
+        "group": {
+          "claude": 2.14,
+          "engine node": 1.49,
+          "mcp@latest": 0.67,
+          "codex": 0.35,
+          "(node)": 0.43,
+          "(codex)": 0.19,
+          "node": 0.27,
+          "(bash)": 0.01,
+          "(vibe-island-brid)": 0.01,
+          "osascript": 0.26
+        },
+        "outside": {
+          "engine helper": 1.48,
+          "TextEdit": 1.08
+        }
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I opened the file in TextEdit and changed \"alpha beta gamma\" to \"alpha delta gamma\". I then saved it and closed the document. TextEdit showed no save prompt when it closed, and I didn't re-read the file from disk. The \"Untitled 6\" window that was already open is still there.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 3,
+      "passed": true,
+      "seconds": 36.6,
+      "turns": 9,
+      "costUsd": 0.29291160000000005,
+      "usage": {
+        "input": 18,
+        "cacheRead": 546518,
+        "cacheWrite": 41888,
+        "output": 1602
+      },
+      "timing": {
+        "totalMs": 33282,
+        "modelMs": 15923,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 14219,
+        "engineMs": 14095,
+        "relayMs": 124,
+        "localMs": 0,
+        "guardReads": 11,
+        "guardReadMs": 2181.3323749999945,
+        "guardReadFailures": 0,
+        "otherMs": 3140
+      },
+      "footprint": {
+        "cpuSeconds": 10.33,
+        "group": {
+          "claude": 2.23,
+          "engine node": 1.92,
+          "mcp@latest": 0.64,
+          "codex": 0.46,
+          "node": 0.33,
+          "Python": 0.07,
+          "bash": 0.02,
+          "(bash)": 0,
+          "osascript": 0.63,
+          "uv": 0.02,
+          "python3": 0.05
+        },
+        "outside": {
+          "Chess": 1.77,
+          "engine helper": 2.19
+        }
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 7,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I started a new game in Chess, dragged the e2 pawn to e4 as White, saved the game, and closed that window. I didn't check the saved file on disk. The Save dialog accepted the path and the window closed with no unsaved-changes prompt.\n\n- **Black's reply:** the computer answered with ...e5 before I sa",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

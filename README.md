@@ -72,7 +72,8 @@ then start a new session. A running session keeps the version it started with.
 ## Why sleight
 
 - Your Mac stays yours. Clicks, typing and drags go to the app itself, behind your other windows.
-  Only a few fallbacks borrow the pointer, and each asks first.
+  Only a few fallbacks borrow the pointer, and each asks first. [What works in the background](docs/background.md)
+  lists each kind of action with the runs that measured it.
 - Several agents can share one Mac. Input leases give one session a window at a time and tell the
   others who holds it. With two sessions typing into one document, text doubled in 5/5 trials
   without leases and appeared once in 5/5 with them.

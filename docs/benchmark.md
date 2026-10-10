@@ -331,6 +331,14 @@ calculator-menu run on took 81.6 s: the relay's first acquisition of Calculator 
 call of seven numbered actions spent 18.6 s in the guard's reads before them. It's the default
 since this pass.
 
+With the batching wording's last clause, windows a call opens itself and the split read's reuse
+(`7c8e357`, 2026-10-10 01:18 to 01:27 UTC, the owner away, load 7 to 11 with another project's CI
+on the Mac), five tasks ran 3 times each and passed 15/15
+([`tonight-affected`](benchmarks/2026-10-10-tonight-affected.json)). Per round of the four tasks
+above, turns were 48 without Chess against 58 with batching off and 56 with the first wording, and
+textedit-save took 15 against 20 and 23. Chess took 43 turns (16, 18 and 9). One calculator-click
+run took 87.8 s in 3 turns, 44.5 s of it in 8 guard reads.
+
 The head-to-head at the owner's normal load (2026-10-09, the owner away, load 6 to 24, Sonnet 5.5 at
 medium against gpt-6.1-sol at medium) alternated sleight and Codex task by task. The default tasks
 ran 3 times per arm ([`h2h-normal-default`](benchmarks/2026-10-09-h2h-normal-default.json)) and six
