@@ -92,6 +92,8 @@ belong in [STATE.md](STATE.md).
 - The engine refuses terminal apps. Real pointer activity in an app counts as a person taking over.
 - The engine's helper serves every Codex and sleight session on the Mac, and Codex runs inside the
   ChatGPT app. Restarting ChatGPT ends every Codex thread, so it's the owner's call, never a test step.
+- Finishing an app's File > Open panel can bring the app to the front (TextEdit, 3 of about 21 runs,
+  2026-10-10). sleight opens files with `open -g` (`open_file`), which left the front app alone.
 - macOS picks a drag's drop target from what's on screen at the drop point. A drag posted to an app in
   the background never drops into a window another app covers there.
 - An engine read right after input waits for the UI to settle, and that wait is also what lets the

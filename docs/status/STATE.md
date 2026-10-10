@@ -3,88 +3,68 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-10 11:00 UTC, owner asleep: overnight run)
+## Banner (2026-10-10 15:10 UTC, flushed before the owner's clear)
 
-The owner went to bed at about 08:15 UTC and said to handle things overnight, so live runs that
-can take the pointer are allowed (LAWS). Puddle's window 1010b ran 08:19 to 10:15 UTC under
-`/tmp/sleight-hold`, lifted at its CLOSE. No other Puddle window today unless it asks.
+Nothing of sleight's is running: no background jobs, the live lock is free, `/tmp/sleight-hold`
+doesn't exist, no open PRs, clean tree at `2f13ff6` on `pane/auto-mode` (pushed to private).
+Engine 26.1007.21159 since 2026-10-10 05:44 UTC: its API docs match 26.1002.52244 once sleight's
+skill is left out, and the watch's calculator-click passed. Puddle has no window announced; it asks
+first (memory `shared-mac-quiet-windows`).
 
-Engine 26.1007.21159 since 05:44 UTC. Its API docs are identical to 26.1002.52244 once sleight's
-skill is left out, and the watch's calculator-click passed. No open PRs.
-
-**Overnight results** (all published in `docs/benchmarks/`, Haiku 5.5 high on the API key):
-- Merged: footprint parity (`4082ae9`), real-use round 12 with launch-date and overlap fixes
-  (`f8aae8b`), review receipts, opt-in, with the Shift-key fix (`6be06b8`), textedit-fixes rounds
-  1 to 3, opt-in, with sleight-arch's app-health and notice fixes (`e2d5c01`), the guard's
-  first-action reuse and echo-read (`12042e8`).
-- Head-to-head with Codex (`26f64b8`): 6/6 each, 263 s against 257 s, 61 turns each, but sleight's
-  own CPU 76.5 s against 60.2 s. The excess is guard reads, 23.6 s of them on TextEdit's Save sheet
-  (trees of about 54,000 characters, 1.4 to 2.3 s a read). Release gate not met.
-- Passes: `release-haiku-1` 5/7 and `release-haiku-2` 6/7. Both failures were harness gaps, both
-  fixed (`4a43726`), except simulator-form, which regressed with round 12 (brief
-  `sol-real-use-tasks-13.md`). No app came to the front in any pass after `open_file`.
-- Rich TextEdit move: JXA couldn't build the attributed string (fixed, `cf009c8`). The last trial
-  stopped at the clipboard write check with text and clipboard intact (known problems).
-
-**Latest head-to-head** (`2026-10-10-h2h-footprint-haiku-3.json`, 11:28 UTC): 6/6 each, 190 s
-against 176 s, own CPU 58.4 s against 47.2 s. Guard reads were 23.3 s, of which 7.5 s came before
-each click in a Calculator batch (about 430 ms a click).
-
-**For the owner in the morning:** decide the reads below, and paste the
-briefs (`sol-waits-targeting-3.md`, `sol-sim-savelock-2.md`, `sol-plugin-arm-3.md`,
-`sol-real-use-tasks-13.md`, and `sol-verified-results-3.md` if it isn't started).
-- In textedit-save, Return after `setValue({ id })` reads the 54,000-character sheet first (1.85 s),
-  because only keys after typing, paste or a plain key skip that read. Treating `setValue` like
-  typing would skip it.
-- A first action by ID or label (`setValue({ id: "saveAsNameTextField" })`) reads the sheet first
-  (1.4 s). Reusing a recent full read there, as keys now do, would skip it. The engine still
-  resolves the ID itself.
-- Each click after the first in a batch reads the window first (about 430 ms, mostly the engine
-  waiting for the UI to settle), a read Codex doesn't make. Skipping it for clicks by ID or label,
-  which renumbering can't misdirect, would save about 3.5 s in each Calculator run if the owner
-  trades that settle wait for speed.
-- The browser-extension comparison (`docs/benchmarks/2026-10-10-surface-ab.md`): the owner approved
-  site access to the benchmark's local pages (LAWS), but two things block it. The engine says the
-  ChatGPT extension isn't attached to Helium, where the benchmark's pages open. The site prompt
-  isn't sent to the benchmark's approval hook, since the hook didn't log a request, so it appears
-  outside MCP. Next, learn which browser has the extension, and have the owner allow `127.0.0.1`
-  there once.
-- The benchmark left "Untitled 6.txt" and "Untitled 9.txt" in the owner's iCloud TextEdit folder
-  from runs whose save failed, and deleting them is the owner's call.
-
-**Where work goes.** Work in progress is private between releases (owner, 2026-10-10, LAWS): this
-repo has `remote.pushDefault private`, which sends every worktree's pushes to the private
-`Land-o-Clusters/sleight-dev` (Actions off, since spending is the owner's), and a pre-push hook
-refuses the public repo without `SLEIGHT_RELEASE_PUSH=1`. Public `origin/pane/auto-mode` stays at
-`332e3ca`. The `codex/*` branches already public stay there (owner, 2026-10-10).
+**Where work goes.** Work in progress is private between releases (LAWS): `remote.pushDefault
+private` sends pushes to `Land-o-Clusters/sleight-dev`, and a pre-push hook refuses the public repo
+without `SLEIGHT_RELEASE_PUSH=1`. Public `origin/pane/auto-mode` stays at `332e3ca`. The `codex/*`
+branches already public stay there (owner).
 
 **Benchmark.** Claude arms run on the owner's API key, Haiku 5.5 at high, capped at $200 a month
-(LAWS). About $0.80 is spent this month. Runs are priced from token counts.
+(LAWS), priced from token counts. $2.58 is spent in October. Old runs move to
+`~/Library/Caches/sleight-bench/runs-archive` before each pass. `--surfaces browser,computer` runs
+the real suite with the extension browser API.
 
 Released: `v1.1.0` (`0b6a1c0`) on `main`. Unreleased on `pane/auto-mode`, all in `CHANGELOG.md`.
-Landed today: replay from the desktop pane, `open_file` (owner's call, after TextEdit's Open panel
-took focus 3 times in about 21 runs), footprint parity's guard setup and native probe filters,
-the JXA count fix, the shared Swift module cache, and test files 4 at a time.
+Landed 2026-10-10: "Always allow" on app prompts (owner), `open_file` (owner), turn receipts
+(opt-in), the rich TextEdit move (opt-in, not yet working live), footprint parity, the guard's
+first-action reuse and echo-read, replay from the desktop pane, the JXA count fix.
 
-**Release gate (ROADMAP 3.5) not met.** Footprint at `6e21846`: sleight 45.8 CPU s of its own
-against Codex 38.7 over six runs, while sleight was faster (154 s against 239 s). Footprint parity
-(`4082ae9`) cut guard and probe CPU. The task-level head-to-head on it hasn't run.
+**Release gate (ROADMAP 3.5) not met.** Latest head-to-head with Codex (2026-10-10 11:28 UTC,
+`docs/benchmarks/2026-10-10-h2h-footprint-haiku-3.json`): 6/6 each, 190 s against 176 s, 44 turns
+against 45, own CPU 58.4 s against 47.2 s. Guard reads were 23.3 s: 15.0 s on TextEdit's Save sheet
+and 7.5 s before clicks in a Calculator batch. Pass `release-haiku-3`: 18/18 on the six
+non-simulator tasks. simulator-form fails setup (below).
 
-**Sol branches.** Briefs in `.dev/prompts/` wait for the owner to paste:
-`sol-waits-targeting-3.md` (equal-title refusal, `/sleight stop` exits the relay, cost unmeasured),
-`sol-sim-savelock-2.md` (retry cap, simulator note opt-in), `sol-plugin-arm-3.md` (same stop rules
-for both arms, evidence trims), `sol-routines-demo-2.md` was answered by `210423b` (reviewed: routines
-can't run on this engine, since its `getApp` rejects `{ windowId }`; recorder gates done; not
-merged), `sol-verified-results-3.md` (no round 3 pushed yet). In review: `codex/textedit-fixes`
-`cc1d7e6` (round 3, rich move opt-in). Reviewed, to merge with a fix: `codex/review-receipts`
-`65a641b` (a Shift or Option key with a printable key is kept verbatim: record it as text).
+**Waiting on the owner:**
+- Guard reads that could be skipped for speed, the owner's call: the read before Return after
+  `setValue({ id })` (1.85 s a save), the read before a first action by ID or label (1.4 s), and
+  reads before clicks by ID or label in a batch (about 3.5 s each Calculator run).
+- Which browser has the ChatGPT extension, and allowing `127.0.0.1` there once. Then the
+  browser-extension comparison can run (accessibility side 21/21 so far,
+  `docs/benchmarks/2026-10-10-surface-ab.md`). Extension access to local pages is approved in LAWS.
+- Trying "Always allow" in sleight's panel once (unit-tested only).
+- Pasting the briefs in `.dev/prompts/`: `sol-sim-savelock-2.md`, `sol-plugin-arm-3.md`,
+  `sol-real-use-tasks-13.md` (simulator-form setup, the `launched` field that broke Helium, and
+  cleanup of fixture windows after a failed setup).
+- Deleting the benchmark's leftover "Untitled 6.txt" and "Untitled 9.txt" in the owner's iCloud
+  TextEdit folder, from runs whose save failed (2026-10-10).
+
+**Sol branches** (private remote):
+- Pushed and not yet reviewed: `codex/verified-results` `0f0dc8f` (round 3, 2026-10-10 10:57 UTC)
+  and `codex/waits-targeting` `2968a10` (2026-10-10 08:49 UTC, after the `abbb1f4` round-2 review;
+  check whether it answers `sol-waits-targeting-3.md`). verified-results merges first. Both edit
+  `relay.mjs`.
+- Waiting on a new round: `codex/sim-savelock` `6e5e04d`, `codex/plugin-arm` `cddee34`,
+  `codex/real-use-tasks` (round 13 not started), `codex/routines-demo` `210423b` (routines can't run
+  on this engine, which rejects `getApp({ windowId })`. Accepting acquisition by bundle ID instead
+  is the owner's call).
+- Merged on 2026-10-10: footprint-parity, real-use-tasks round 12, review-receipts, textedit-fixes,
+  replay-desktop, lease-close-tests, windows-research.
 
 Next, in order:
-1. Pass `release-haiku-3` (six non-simulator tasks, 3 runs each, started 10:55 UTC) on `12042e8`.
-2. The owner's two read decisions above, then the footprint head-to-head again.
-3. Merge Sol's next rounds as they're pushed (waits-targeting 3, sim-savelock 2, plugin-arm 3,
-   real-use-tasks 13, verified-results 3, routines-demo after the owner's call on window IDs).
-4. A full release pass with the owner away once simulator-form passes and the gate is met. Recheck
+1. Review `codex/verified-results` `0f0dc8f`, merge it, then `codex/waits-targeting` `2968a10`.
+2. The owner's read decisions, then the head-to-head again
+   (`--arm sleight,codex --tasks calculator-click,textedit-edit,textedit-save --runs 2`).
+3. A crowded Save or Open sheet: leave its browser rows out of reads (known problems).
+4. Merge Sol's next rounds as they're pushed. simulator-form must pass before a release.
+5. A full release pass with the owner away once simulator-form passes and the gate is met. Recheck
    the README lines tied to a release: the pass result and the 13/21 and Chess 0/3 mentions. Add
    replay, `open_file` and other hosts to its roadmap checklist, and confirm the Claude Code minimums.
 
@@ -94,17 +74,19 @@ Branches and worktrees (`~/Projects/sleight-wt/<name>`):
 - `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it
   and pushes `origin`.
 - Merged, worktrees safe to remove: `replay-next`, `doctor-flow`, `doctor-preapproved`,
-  `footprint-spawns`, `small-fixes`, `other-hosts`, `scoped-approvals`, `codex-real`, `guard-speed`.
-- `codex/real-use-tasks` (`1a73515`, Sol): applied through `1a73515`. Its brief 12 is pending.
+  `footprint-spawns`, `small-fixes`, `other-hosts`, `scoped-approvals`, `codex-real`, `guard-speed`,
+  `replay-desktop`, `windows-research`, `textedit-fixes`, `review-receipts`, `footprint-parity`.
+- Sol's open worktrees: `waits-targeting`, `verified-results`, `sim-savelock`, `plugin-arm`,
+  `routines-demo`, `real-use-tasks`.
 - `perf/screenshot-scale` (`1aa574b`, `shots`): parked.
 
 ## Machine state outside the repo
 
 - Daily launchd job `com.landoclusters.sleight-watch` (9:00, `scripts/watch.sh`), daily since
   2026-10-10 on the owner's OK because a competitor hinted at an engine change; weekly with
-  `npm run watch:install`. It saves
-  the engine's API docs (`~/Library/Logs/sleight/engine-api-26.1002.52244.md` is the latest) and
-  diffs them on an engine update. Remove with `npm run watch:remove`.
+  `npm run watch:install`. It saves the engine's API docs, without sleight's skill since 2026-10-10
+  (`~/Library/Logs/sleight/engine-api-26.1007.21159.md` is the latest), and diffs them on an engine
+  update. Remove with `npm run watch:remove`.
 - `~/Library/Application Support/sleight/preapproved.json` lists Calculator (owner, 2026-10-04) and
   Helium (`net.imput.helium` and `Helium`, all `high`). Helium was added on the owner's order on
   2026-10-05, and the owner kept it with no end date on 2026-10-08. The list before it is
@@ -132,8 +114,14 @@ Branches and worktrees (`~/Projects/sleight-wt/<name>`):
   The list holds 6 apps of the owner's (TextEdit among them, written 2026-07-26).
 - `~/Library/Caches/sleight-bench/keyboard-taps`: compiled from `bench/keyboard-taps.swift`, lists
   keyboard filter taps. The runner builds it if missing.
-- The watch's baseline (`~/Library/Logs/sleight/watch-engine-version`) is 26.1002.52244, set by hand
-  on 2026-10-08 after the diff was captured.
+- The watch's baseline (`~/Library/Logs/sleight/watch-engine-version`) is 26.1007.21159 (2026-10-10).
+- `~/.config/sleight-bench/anthropic-api-key` (0600): the owner's API key for benchmark runs
+  (2026-10-10). Spend ledger: `~/Library/Logs/sleight/bench-api-spend.json`.
+- `.git/hooks/pre-push` (shared by every worktree): refuses pushes to the public repo without
+  `SLEIGHT_RELEASE_PUSH=1`.
+- `~/Library/Caches/sleight-bench/runs-archive`: benchmark runs older than 6 hours, traces kept.
+  `~/Library/Caches/sleight-bench/swift-module-cache`: the shared module cache for helper compiles.
+- `.dev/passes/front-watch.sh`: logs every frontmost-app change during a pass.
 - `~/Library/Caches/sleight-bench/sleight-arm`: the benchmark's sleight arm folder.
 - Scratch clients are gone after the clear. A relay probe: `bench/double-keys-client.mjs`
   (`probeClient`, `relay: true`, and `relayOptions: { changeReview: false, spaceProbe }` to match the
@@ -155,10 +143,8 @@ Branches and worktrees (`~/Projects/sleight-wt/<name>`):
   OpenUsage's hourly retry passing after the next pass would confirm the cause.
 
 - Watching the Mail and Mimestream tasks (about 10 minutes).
-- Which of the unstarted briefs above to run.
-- Left on their screen from 2026-10-09, Safari fixture windows, Helium, Preview `Pages-*.pdf`, Word
-  and Excel fixture documents, a TextEdit "Untitled 6" in their iCloud TextEdit folder (check it only
-  by exact content, never by browsing their files).
+- Safari fixture windows, Preview `Pages-*.pdf`, Word and Excel fixture documents were left on
+  their screen on 2026-10-09. Check the iCloud TextEdit files only by exact content, never by browsing.
 - The OpenAI key note is theirs to handle. Don't raise it again (owner, 2026-10-09).
 
 ## Reading list
