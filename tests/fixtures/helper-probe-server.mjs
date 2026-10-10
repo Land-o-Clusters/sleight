@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createInterface } from 'node:readline';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 const mode = process.argv[2];
 if (mode === 'orphan') spawn(process.execPath, ['-e', 'setTimeout(() => process.exit(0), 2000); process.on("SIGTERM", () => {});'], { stdio: 'inherit' });
@@ -30,6 +31,12 @@ input.on('line', line => {
         browsers: [], errors: [],
       }) }] } });
       if (mode === 'app-approval') return send({ id: 'approval', method: 'elicitation/create', params: { message: 'Allow Calculator?' } });
+      if (mode.startsWith('app-preapproved')) return send({ id: 'approval', method: 'elicitation/create', params: {
+        message: 'Allow Calculator?', mode: 'form', requestedSchema: { type: 'object', properties: {} },
+        _meta: { connector_id: mode.endsWith('-other') ? 'other' : 'computer-use', persist: ['session', 'always'],
+          riskLevel: mode.endsWith('-high') ? 'high' : mode.endsWith('-unknown') ? 'unknown' : 'low',
+          tool_params: { app: mode.endsWith('-name') ? 'Calculator' : mode.endsWith('-mismatch') ? 'Mail' : 'com.apple.calculator' } },
+      } });
       if (mode === 'app-timeout') return send({ id: read, result: { isError: true, content: [{ type: 'text', text: '-10005 timeoutReached' }] } });
       if (mode === 'app-partial-error') return send({ id: read, result: { isError: true, content: [{ type: 'text', text: 'Window: "PRIVATE WINDOW TITLE", App: Calculator.\n1 text PRIVATE CONTENT\nError: read failed' }] } });
       if (mode === 'app-rpc-private') return send({ id: read, error: { code: -32000, message: 'PRIVATE CONTENT: read failed' } });
@@ -46,6 +53,14 @@ input.on('line', line => {
       { type: 'text', text: '{"apps":[],"browsers":[],"errors":["Native apps: Error: Sky Computer Use service startup request failed"]}' }] } });
     send({ id: read, result: { content: [{ type: 'text', text: 'Apps: Calculator' }] } });
   } else if (msg.id === 'approval') {
+    if (msg.result.action === 'accept') {
+      assert.deepEqual(msg.result, { action: 'accept', content: {} });
+      // The audit must be durable before the engine receives its approval.
+      const records = readFileSync(process.argv[3], 'utf8').trim().split('\n').map(JSON.parse);
+      assert.equal(records.length, 1);
+      assert.equal(records[0].grant.app, mode.endsWith('-name') ? 'Calculator' : 'com.apple.calculator');
+      return send({ id: read, result: { content: [{ type: 'text', text: 'Window: "PRIVATE WINDOW TITLE", App: Calculator.\n0 standard window Calculator' }] } });
+    }
     assert.deepEqual(msg.result, { action: 'decline' });
     send({ id: read, result: { isError: true, content: [{ type: 'text', text: 'approval declined' }] } });
   }

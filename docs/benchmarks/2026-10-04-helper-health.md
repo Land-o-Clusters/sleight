@@ -201,3 +201,48 @@ The next bare full check passed all 1,012 unit tests, both plugin validations an
 (`npm run check`, exit 0). That run overlapped high host load: the one-minute load average was 109.64
 during the check. The next prose check passed all 59 files with zero flags (`npm run lint:prose`,
 exit 0). Review closed the app inventory and private-error findings after the regression fixes.
+
+## Doctor user-list approvals, 2026-10-09
+
+Branch `codex/doctor-preapproved` starts at `origin/pane/auto-mode` commit `11a2893`, in
+`~/Projects/sleight-wt/doctor-flow`. The architect's live check after the first merge found that
+doctor skipped Calculator despite its entry in the owner's pre-approved list. Doctor had a separate
+elicitation handler that declined every request, without loading that list.
+
+Doctor now uses `loadPreapproved` and `createGrantAudit`, the session's existing loader and writer.
+The fixed OS-user path, exact app identifiers and risk ceilings remain. A grant applies only to the
+selected running app's computer-use approval. It is audited before the accept response, without
+engine persistence. Unlisted apps, excessive or unknown risk, unrelated connectors, another app's
+request and failed audits are declined without a prompt. Doctor only reads.
+
+The stand-in engine regression run passed 28/30 tests (exit 1), failing both listed-app reads before
+the fix. After the fix, all 49 focused doctor, list-loader and audit tests passed (exit 0). The
+engine fixture verifies that the private audit file exists before it receives the accept response,
+and that the response has no persistence field. Rejected requests don't write a grant record.
+
+The locked runner was `node bench/doctor-app-read.mjs --doctor Calculator`, with `SLEIGHT_SURFACES=computer`
+and engine 26.1002.52244. `/tmp/sleight-hold` was absent. Each attempt acquired and released
+`/tmp/sleight-live.lock`, without input, dialogs or a ChatGPT restart.
+
+| Attempt | Result | Exit |
+| --- | --- | --- |
+| [Sandbox](2026-10-09-doctor-preapproved-sleight-doctor-read-S3ApBG.json) | Engine startup failed with `sandbox_apply: Operation not permitted`. Receipt publication also needed host access | 1 |
+| [Host](2026-10-09-doctor-preapproved-sleight-doctor-read-G3TZhe.json) | Inventory hit `js execution timed out` before an app acquisition. No grant was requested or written | 1 |
+
+The failed publication's private staged receipt was copied into this report's directory without
+changing its contents. The host attempt began at 21:43:31 EDT on 2026-10-09 and lasted 5,481 ms.
+Calculator's read time and window header remain unmeasured because inventory failed first.
+The timeout does not establish a native cause. The fix has stand-in engine evidence, and its app
+read still needs a live result. The review covered the list, app scope, audit and persistence paths.
+The first prose check on this follow-up found four flags in the receipt text (exit 1). Those
+sentences were revised.
+The next prose pass found one wording flag (exit 1), which was removed. The bare full check passed
+all 1,045 unit tests, both plugin validations and 11 mod tests (`npm run check`, exit 0).
+Prose lint then passed all 60 files with zero flags (`npm run lint:prose`, exit 0). The live runner's
+syntax check passed (exit 0), and both raw receipts passed the home-path and private-text scan.
+Before push, `origin/pane/auto-mode` advanced to `06f52d8` with the other-hosts merge. The doctor fix
+rebased onto it without conflicts (exit 0), retaining the host's approval negotiation and turn
+handling. The required checks were repeated on that combined code.
+The rebased full check passed all 1,068 unit tests, both plugin validations and 11 mod tests
+(`npm run check`, exit 0). The rebased prose check passed all 63 files with zero flags
+(`npm run lint:prose`, exit 0).

@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import * as fs from 'node:fs';
 import { doctor } from '../plugins/sleight/lib/launch.mjs';
 import { probeHelper, staleHelperJobs } from '../plugins/sleight/lib/helper-health.mjs';
 
@@ -37,6 +38,52 @@ for (const [mode, code, message] of [
     assert.equal(await doctor({ env: { CODEX_HOME: bank, SLEIGHT_SURFACES: 'computer' }, log: line => lines.push(line), timeoutMs, startupTimeoutMs,
       launchctlList: async () => STALE_LISTING }), code);
     assert.match(lines.join('\n'), message);
+  });
+}
+
+for (const [mode, entries, auditFails, expected] of [
+  ['app-preapproved', [{ app: 'com.apple.calculator', riskLevel: 'low' }], false, 'ok'],
+  ['app-preapproved-name', [{ app: 'Calculator', riskLevel: 'medium' }], false, 'ok'],
+  ['app-preapproved', [], false, 'skipped'],
+  ['app-preapproved-high', [{ app: 'com.apple.calculator', riskLevel: 'low' }], false, 'skipped'],
+  ['app-preapproved-unknown', [{ app: 'com.apple.calculator', riskLevel: 'high' }], false, 'skipped'],
+  ['app-preapproved-other', [{ app: 'com.apple.calculator', riskLevel: 'low' }], false, 'skipped'],
+  ['app-preapproved-mismatch', [{ app: 'Mail', riskLevel: 'low' }], false, 'skipped'],
+  ['app-preapproved', [{ app: 'com.apple.calculator', riskLevel: 'low' }], true, 'skipped'],
+]) {
+  test(`doctor applies the user list before app approval: ${mode}, ${entries.length} entries, audit failure ${auditFails}`, async t => {
+    const bank = await mkdtemp(join(tmpdir(), 'sleight-doctor-list-'));
+    t.after(() => rm(bank, { recursive: true, force: true }));
+    const listFile = join(bank, 'user-list.json');
+    await writeFile(listFile, JSON.stringify({ version: 1, apps: entries }), { mode: 0o600 });
+    const preapprovedIO = { ...fs, lstatSync: () => fs.lstatSync(listFile), realpathSync: path => path,
+      openSync: (_path, flags) => fs.openSync(listFile, flags) };
+    const auditDirectory = join(bank, 'audit');
+    if (auditFails) await writeFile(auditDirectory, 'not a directory');
+    const auditFile = join(auditDirectory, `preapproved-${process.pid}.jsonl`);
+    const config = join(bank, 'plugins/cache/openai-bundled/unified-computer-use/1.0');
+    await mkdir(config, { recursive: true });
+    const script = fileURLToPath(new URL('fixtures/helper-probe-server.mjs', import.meta.url));
+    await writeFile(join(config, '.mcp.json'), JSON.stringify({ mcpServers: { cua_repl: {
+      command: process.execPath, args: [script, mode, auditFile], env: { CUA_REPL_NODE_REPL_PATH: script, SKY_CUA_SERVICE_PATH: script },
+    } } }));
+    const lines = [];
+    assert.equal(await doctor({ app: 'Calculator', preapprovedIO, auditDirectory,
+      env: { CODEX_HOME: bank, SLEIGHT_SURFACES: 'computer' }, log: line => lines.push(line),
+      timeoutMs: 2000, forbiddenTargets: () => '0' }), 0);
+    assert.match(lines.join('\n'), new RegExp(`app read ${expected}`));
+    assert.doesNotMatch(lines.join('\n'), /PRIVATE WINDOW TITLE|PRIVATE CONTENT/);
+    if (expected === 'ok') {
+      assert.match(lines.join('\n'), /\d+ ms, window header: yes/);
+      const records = fs.readFileSync(auditFile, 'utf8').trim().split('\n').map(JSON.parse);
+      assert.equal(records.length, 1);
+      assert.deepEqual(records[0].grant, { app: mode.endsWith('-name') ? 'Calculator' : 'com.apple.calculator',
+        riskLevel: 'low', tool: 'engine', source: '~/Library/Application Support/sleight/preapproved.json' });
+      assert.equal(fs.statSync(auditFile).mode & 0o777, 0o600);
+    } else {
+      assert.match(lines.join('\n'), /declined without a prompt/);
+      assert.equal(fs.existsSync(auditFile), false);
+    }
   });
 }
 

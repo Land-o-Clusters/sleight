@@ -1,4 +1,4 @@
-// Doctor reads inventory and optionally one running app, never actions or approval.
+// Doctor reads inventory and optionally one running app, without input or prompts.
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
@@ -24,7 +24,7 @@ export function stateErrors(result) {
   return errors;
 }
 
-export async function probeHelper(server, { app, timeoutMs = 5000, startupTimeoutMs = 10000, cleanupGraceMs = 2000, cleanupForceMs = 5000 } = {}) {
+export async function probeHelper(server, { app, preapproved, grantAudit, timeoutMs = 5000, startupTimeoutMs = 10000, cleanupGraceMs = 2000, cleanupForceMs = 5000 } = {}) {
   const child = spawn(server.command, server.args, {
     detached: true, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...server.env },
   });
@@ -36,7 +36,9 @@ export async function probeHelper(server, { app, timeoutMs = 5000, startupTimeou
   let reading = false;
   let inventoryOk = false;
   let appStarted;
+  let appTarget;
   let approvalDeclined = false;
+  let approvalSkipReason = 'approval required (declined without a prompt)';
   const metadata = { 'x-codex-turn-metadata': JSON.stringify({ session_id: randomUUID(), turn_id: randomUUID() }) };
   child.stderr.setEncoding('utf8').on('data', chunk => { stderr = (stderr + chunk).slice(-1000); });
   const fail = err => { if (pending) { clearTimeout(pending.timer); pending.reject(err); pending = undefined; } };
@@ -53,8 +55,21 @@ export async function probeHelper(server, { app, timeoutMs = 5000, startupTimeou
     let msg;
     try { msg = JSON.parse(line); } catch { fail(new Error('computer-use server returned invalid JSON')); return; }
     if (msg.method && msg.id !== undefined) {
-      if (msg.method === 'elicitation/create') approvalDeclined = true;
-      send({ id: msg.id, ...(msg.method === 'elicitation/create' ? { result: { action: 'decline' } }
+      let allowed = false;
+      if (msg.method === 'elicitation/create') {
+        const meta = msg.params?._meta;
+        const requestedApp = meta?.tool_params?.app;
+        if (pending && appStarted !== undefined && meta?.connector_id === 'computer-use' &&
+            [appTarget?.id, appTarget?.displayName].includes(requestedApp) && preapproved?.allows(requestedApp, meta.riskLevel)) {
+          try {
+            grantAudit({ app: requestedApp, riskLevel: meta.riskLevel, tool: 'engine',
+              source: '~/Library/Application Support/sleight/preapproved.json' });
+            allowed = true;
+          } catch { approvalSkipReason = 'pre-approval audit failed (declined without a prompt)'; }
+        }
+        if (!allowed) approvalDeclined = true;
+      }
+      send({ id: msg.id, ...(msg.method === 'elicitation/create' ? { result: allowed ? { action: 'accept', content: {} } : { action: 'decline' } }
         : { error: { code: -32601, message: 'Method not found' } }) });
     } else if (!msg.method && pending?.id === msg.id) {
       const reply = pending; pending = undefined; clearTimeout(reply.timer);
@@ -91,13 +106,14 @@ export async function probeHelper(server, { app, timeoutMs = 5000, startupTimeou
     if (matches[0].isRunning !== true) return { ok: true, appRead: { status: 'skipped',
       reason: matches[0].isRunning === false ? 'app not running' : 'running status unknown in helper inventory' } };
     // Use only the inventory's exact ID. A missing app is never acquired or launched.
+    appTarget = matches[0];
     approvalDeclined = false;
     appStarted = performance.now();
     const read = await request('tools/call', { name: 'js', arguments: {
       code: `await cua.getApp(${JSON.stringify(matches[0].id)})`, timeout_ms: timeoutMs,
     }, _meta: metadata }, timeoutMs + 500, 'app read timed out');
     const ms = Math.round(performance.now() - appStarted);
-    if (approvalDeclined) return { ok: true, appRead: { status: 'skipped', reason: 'approval required (declined without a prompt)', ms } };
+    if (approvalDeclined) return { ok: true, appRead: { status: 'skipped', reason: approvalSkipReason, ms } };
     const appText = (read?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
     const hasWindowHeader = /^Window: "(?:[^"\\\n]|\\.)*", App: [^\n]+/m.test(appText);
     const ok = !read?.isError && hasWindowHeader;
@@ -106,7 +122,7 @@ export async function probeHelper(server, { app, timeoutMs = 5000, startupTimeou
   } catch (err) {
     if (appStarted !== undefined) return { ok: approvalDeclined, inventoryOk, appRead: {
       status: approvalDeclined ? 'skipped' : 'failed', ms: Math.round(performance.now() - appStarted),
-      ...(approvalDeclined ? { reason: 'approval required (declined without a prompt)' } : { error: appReadError(err.message), hasWindowHeader: false }),
+      ...(approvalDeclined ? { reason: approvalSkipReason } : { error: appReadError(err.message), hasWindowHeader: false }),
     } };
     const stuck = reading && /timeoutReached|timed out|timeout/i.test(err.message);
     return { ok: false, stuck, error: err.message };
