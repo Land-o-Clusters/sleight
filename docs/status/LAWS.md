@@ -40,6 +40,9 @@ belong in [STATE.md](STATE.md).
   SUPERSEDED (2026-10-09): "one benchmark pass per merge that changes default behavior". The owner
   now wants several fixes and features batched into each release, with one full pass per release. In
   development only the affected tasks run.
+- Bigger releases, less often (owner, 2026-10-10), so competitors have less to copy or benchmark
+  against between releases. Whether work in progress stays on the public repo between releases is
+  open: the working branch is public today.
 
 ## Approvals and safety
 
