@@ -208,6 +208,9 @@ export function createRelay({
   sessionId = randomUUID(),
   approvalScope = 'session',
   ask,
+  // The launcher supplies its native dialog for clients without form elicitation.
+  fallbackAsk,
+  onInitialize = () => {},
   preapproved,
   grantAudit = () => {},
   stderr = process.stderr,
@@ -263,8 +266,10 @@ export function createRelay({
   const approvalRequests = new Map(); // server request id -> approval key
   const approved = new Set(); // approval keys the user accepted this session
   let asking = Promise.resolve(); // `ask` prompts, one at a time
+  let clientCanElicit; // undefined until initialize (legacy in-process callers)
   const localNames = new Set(localTools?.tools.map(t => t.name) ?? []);
   const elicitations = new Map(); // our elicitation id -> resolve
+  const promptFailures = new Map(); // call id -> native panel failure, distinct from a user decline
   const running = new Set(); // ids of engine calls waiting for a result
   const localRunning = new Set();
   const preapprovalNotes = new Map(); // call id -> grants made during that call
@@ -469,7 +474,7 @@ export function createRelay({
     flowAsking = true;
     const detail = `${pending.reason}\n\nTool: ${pending.name}\nArguments:\n${JSON.stringify(pending.args, null, 2)}\n\nAllow this exact call once? The rule stays active afterward.`;
     try {
-      const answer = asking.then(() => ask ? ask('Allow one flow-rule exception?', false, { kind: 'flow', detail }) : elicit(detail));
+      const answer = asking.then(() => ask ? askPrompt([msg.id], 'Allow one flow-rule exception?', false, { kind: 'flow', detail }) : elicit(detail));
       asking = answer.catch(() => 'cancel');
       const action = await answer.catch(() => 'cancel');
       if (disposed) return;
@@ -515,7 +520,7 @@ export function createRelay({
       for (const entry of entries) {
         const detail = changes.describe(entry);
         const answer = asking.then(() => ask
-          ? ask(`Review ${entry.title}`, false, { kind: 'review', detail })
+          ? askPrompt([msg.id], `Review ${entry.title}`, false, { kind: 'review', detail })
           : elicitReview(`Review ${entry.title}\n${detail}\nChoose Keep, Undo or Later. Undo restores the saved copy shown above. Reopen it in the app afterward.`));
         asking = answer.catch(() => 'cancel');
         const decision = await answer.catch(() => 'cancel');
@@ -705,8 +710,8 @@ export function createRelay({
       'Stop actions. Read the intended window with one standalone cua.getApp call, then ask the user with document_scope.' }] } });
   }
 
-  function askDocument(message, scoped) {
-    const answer = asking.then(() => ask ? ask(message, scoped) : elicit(message));
+  function askDocument(message, scoped, callIds) {
+    const answer = asking.then(() => ask ? askPrompt(callIds, message, scoped) : elicit(message));
     asking = answer.catch(() => 'cancel');
     return answer.catch(() => 'cancel');
   }
@@ -721,7 +726,7 @@ export function createRelay({
     if (!documentGrants.has(key)) {
       documentAsking = true;
       const action = await askDocument(`Allow Claude to use ${documentLabel(target)} for this session? ` +
-        'Scope checks read window contents. This guards mistakes, not malicious JavaScript.', true);
+        'Scope checks read window contents. This guards mistakes, not malicious JavaScript.', true, [msg.id]);
       documentAsking = false;
       if (action !== 'accept') { documentStop(msg, 'the user did not approve this document'); return; }
       documentGrants.add(key);
@@ -731,20 +736,20 @@ export function createRelay({
   }
 
   async function documentEngineApproval(msg) {
-    const call = [...documentCalls.values()][0];
+    const [callId, call] = [...documentCalls.entries()][0] ?? [];
     const engine = msg.params?._meta?.tool_params?.app;
     const risk = approvalKey(msg);
     let action = 'decline';
     if (call?.read && typeof engine === 'string') {
       call.engines.add(engine);
       if (risk) call.risks.add(risk);
-      action = await askDocument(`Read one window in ${engine} to identify its document? This read does not approve actions.`, false);
+      action = await askDocument(`Read one window in ${engine} to identify its document? This read does not approve actions.`, false, [callId]);
     } else if (call && documentAllowed() && observedEngines.has(engine) && risk) {
       const key = JSON.stringify([documentKey(observedDocument), risk]);
       if (documentRisks.has(key)) action = 'accept';
       else {
         action = await askDocument(`Allow Claude to use ${documentLabel(observedDocument)} at risk level ` +
-          `${msg.params?._meta?.riskLevel ?? 'unspecified'} for this session?`, true);
+          `${msg.params?._meta?.riskLevel ?? 'unspecified'} for this session?`, true, [callId]);
         if (action === 'accept') documentRisks.add(key);
       }
     }
@@ -769,6 +774,11 @@ export function createRelay({
     serverIn.write(JSON.stringify(msg) + '\n');
   };
   const toClient = msg => {
+    if (msg.method === undefined && promptFailures.has(msg.id)) {
+      const message = promptFailures.get(msg.id); promptFailures.delete(msg.id);
+      if (msg.error) msg = { ...msg, error: { ...msg.error, message } };
+      else msg = { ...msg, result: { ...msg.result, isError: true, content: [{ type: 'text', text: message }] } };
+    }
     if (msg.method === undefined && helperDiagnosticReplies.has(msg.id)) {
       const state = helperDiagnosticReplies.get(msg.id); helperDiagnosticReplies.delete(msg.id);
       state.diagnosing.finally(() => {
@@ -844,6 +854,16 @@ export function createRelay({
 
   // Answers an app approval through `ask`. Prompts queue, so a second request
   // for an app the user is still being asked about waits for that answer.
+  async function askPrompt(callIds, ...args) {
+    try { return await ask(...args); }
+    catch (error) {
+      if (error?.code === 'SLEIGHT_PROMPT_UNAVAILABLE') {
+        for (const id of callIds) promptFailures.set(id, "The approval prompt couldn't be shown. The user made no decision. Stop and tell them.");
+      }
+      throw error;
+    }
+  }
+
   function askUser(msg, ignoreMemory = false) {
     const key = approvalScope === 'session' ? approvalKey(msg) : undefined;
     asking = asking.then(async () => {
@@ -854,7 +874,10 @@ export function createRelay({
       let action;
       try {
         action = await ask(msg.params?.message ?? 'Allow Computer Use?', key !== undefined);
-      } catch {
+      } catch (error) {
+        // The engine owns the elicitation's parent call. Return its error there rather than
+        // attributing one failed panel to every concurrent call waiting on the engine.
+        if (error?.code === 'SLEIGHT_PROMPT_UNAVAILABLE') return { error: { code: -32603, message: error.message } };
         action = 'cancel';
       }
       if (action !== 'accept') return { action };
@@ -863,25 +886,34 @@ export function createRelay({
       return { action, content: {}, _meta: { persist: 'session' } };
     }).then(result => {
       trace('answered-by-ask', { id: msg.id, result });
-      toServer({ jsonrpc: '2.0', id: msg.id, result });
+      toServer({ jsonrpc: '2.0', id: msg.id, ...(result.error ? result : { result }) });
     });
   }
 
-  // Asks Claude Code's user through an elicitation of our own.
-  function elicit(message) {
+  // A claimed form capability can still fail to answer. Expire without granting anything.
+  function requestElicitation(params) {
     const id = `sleight-elicit-${nextElicitId++}`;
-    const answer = new Promise(resolve => elicitations.set(id, resolve));
-    toClient({ jsonrpc: '2.0', id, method: 'elicitation/create', params: { message, mode: 'form', requestedSchema: { type: 'object', properties: {} } } });
-    return answer.then(msg => msg.result?.action ?? 'cancel');
+    return new Promise(resolve => {
+      const finish = msg => { clearTimeout(timer); elicitations.delete(id); resolve(msg); };
+      const timer = setTimeout(() => finish({ result: { action: 'decline' } }), 300000);
+      timer.unref?.();
+      elicitations.set(id, finish);
+      toClient({ jsonrpc: '2.0', id, method: 'elicitation/create', params });
+    });
+  }
+
+  // Asks the client's user through an elicitation of our own.
+  function elicit(message) {
+    if (clientCanElicit === false) return Promise.resolve('cancel');
+    return requestElicitation({ message, mode: 'form', requestedSchema: { type: 'object', properties: {} } })
+      .then(msg => msg.result?.action ?? 'cancel');
   }
 
   function elicitReview(message) {
-    const id = `sleight-elicit-${nextElicitId++}`;
-    const answer = new Promise(resolve => elicitations.set(id, resolve));
-    toClient({ jsonrpc: '2.0', id, method: 'elicitation/create', params: { message, mode: 'form', requestedSchema: {
+    if (clientCanElicit === false) return Promise.resolve('cancel');
+    return requestElicitation({ message, mode: 'form', requestedSchema: {
       type: 'object', properties: { decision: { type: 'string', enum: ['keep', 'undo', 'later'], title: 'Your decision' } }, required: ['decision'],
-    } } });
-    return answer.then(msg => msg.result?.action === 'accept' ? msg.result.content?.decision : 'cancel');
+    } }).then(msg => msg.result?.action === 'accept' ? msg.result.content?.decision : 'cancel');
   }
 
   // Approval for a local tool: once per key and session, like app approvals.
@@ -905,7 +937,7 @@ export function createRelay({
       let action;
       try {
         action = ask
-          ? await ask(message, scoped, options.kind ? { kind: options.kind, detail: options.detail } : undefined)
+          ? await askPrompt([callId], message, scoped, options.kind ? { kind: options.kind, detail: options.detail } : undefined)
           : await elicit(options.detail ? `${message} ${options.detail}` : message);
       } catch {
         action = 'cancel';
@@ -1038,13 +1070,28 @@ export function createRelay({
     return true;
   }
   function handleClient(msg) {
+    if (msg.method === 'initialize') {
+      onInitialize(msg.params?.clientInfo);
+      const capabilities = msg.params?.capabilities ?? {};
+      const elicitation = capabilities.elicitation;
+      // MCP 2025-06-18 used {}; later versions distinguish form and URL prompts.
+      clientCanElicit = !!elicitation && typeof elicitation === 'object' &&
+        !Array.isArray(elicitation) && (Object.keys(elicitation).length === 0 ||
+          (elicitation.form !== null && typeof elicitation.form === 'object' && !Array.isArray(elicitation.form)));
+      if (!ask && !clientCanElicit) ask = fallbackAsk;
+      if (ask || !clientCanElicit) {
+        // The relay, rather than the client, can answer the engine's form requests.
+        msg = { ...msg, params: { ...msg.params, capabilities: {
+          ...capabilities, elicitation: { ...elicitation, form: {} },
+        } } };
+      }
+    }
     if (msg.method === 'server/discover' && msg.id !== undefined) {
       toClient({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'Method not found' } });
       return;
     }
-    if (msg.method === undefined && elicitations.has(msg.id)) {
-      elicitations.get(msg.id)(msg);
-      elicitations.delete(msg.id);
+    if (msg.method === undefined && typeof msg.id === 'string' && msg.id.startsWith('sleight-elicit-')) {
+      elicitations.get(msg.id)?.(msg);
       return;
     }
     if (closing && msg.method === 'tools/call') { leaseStop(msg, 'this session is closing.'); return; }
@@ -1618,6 +1665,7 @@ export function createRelay({
       } catch {
         // An audit failure must reach a person, even with a remembered approval.
         if (ask) askUser(msg, true);
+        else if (clientCanElicit === false) toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } });
         else {
           const key = approvalScope === 'session' ? approvalKey(msg) : undefined;
           if (key !== undefined) approvalRequests.set(msg.id, key);
@@ -1633,6 +1681,10 @@ export function createRelay({
     }
     if (ask && (isAppApproval(msg) || (msg.method === 'elicitation/create' && msg.params?._meta?.connector_id === 'browser-use'))) {
       askUser(msg);
+      return;
+    }
+    if (clientCanElicit === false && msg.method === 'elicitation/create') {
+      toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } });
       return;
     }
     const key = approvalScope === 'session' ? approvalKey(msg) : undefined;
@@ -1704,6 +1756,7 @@ export function createRelay({
     clearTimeout(idleTimer);
     for (const resolve of elicitations.values()) resolve({ result: { action: 'cancel' } });
     elicitations.clear();
+    promptFailures.clear();
     flowRules?.dispose();
     flowCalls.clear(); flowPending = undefined; flowPermit = undefined;
     preapprovalNotes.clear();

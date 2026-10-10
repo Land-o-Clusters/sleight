@@ -69,6 +69,8 @@ don't ask, because the engine approves them itself ([settings](docs/settings.md#
 To update, run `claude plugin marketplace update sleight` and `claude plugin update sleight@sleight`,
 then start a new session. A running session keeps the version it started with.
 
+Also runs as a plain MCP server: see [other hosts](docs/other-hosts.md).
+
 ## Why sleight
 
 - Your Mac stays yours. Clicks, typing and drags go to the app itself, behind your other windows.

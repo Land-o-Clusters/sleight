@@ -457,6 +457,15 @@ our own runs. Dates and engine versions are given where they matter.
   [Round-4 results](benchmarks/2026-10-08-real-use-tasks-4.json) retain that attempt. Title-based
   recovery has since been removed. A missing owned reference leaves cleanup unconfirmed.
 
+## Tests
+
+- On a heavily loaded Mac, two tests can fail on timing: the one where a timeout collects a process
+  group (`tests/preapproved-process.test.mjs`), and the one where a stuck probe restarts the
+  app-health helper. At load averages of 102
+  to 107 (2026-10-10), the first failed 1 of 3 runs alone and both failed in a full check. At load 23
+  the full check passed. Rerun `npm run check` when the load drops before reading a failure there as
+  a bug.
+
 ## Hosts and platform
 
 - The desktop app's Code tab runs Claude Code 2.1.293 (2026-10-08), new enough for the mod. The owner

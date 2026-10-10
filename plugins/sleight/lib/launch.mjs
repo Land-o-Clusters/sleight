@@ -192,24 +192,26 @@ export async function stopHelpers() {
   await Promise.allSettled([...pendingDrags]);
 }
 
-function askWithDialog(message, sessionScoped, options) {
+export function askWithDialog(message, sessionScoped, options = {}, launch = execFile) {
   if (helpersClosing) return Promise.resolve('cancel');
   // The engine asks 'Allow Computer Use to use "App"?'; sleight's own tools ask in plain words.
   const app = /^Allow Computer Use to use "(.+)"\?$/.exec(message)?.[1];
-  const question = app ? `Allow Claude to use ${app}?` : message;
+  const claudeCode = options.claudeCode !== false;
+  let question = app ? `Allow Claude to use ${app}?` : message;
+  if (!claudeCode) question = question.replace(/^Allow Claude to /, 'Allow this agent to ');
   const review = options?.kind === 'review';
   const flow = options?.kind === 'flow';
   // Blocked-app consent and terminal sends bring their own plain-words detail.
-  const detail = flow || options?.kind === 'blocked' ? options.detail : review ? `${options.detail}\n\nUndo restores the saved copy shown above. Reopen it in the app afterward. Later leaves the decision pending.` : (app ? `Claude can then click and type in ${app} in the background. ` : '') +
-    (sessionScoped ? 'A yes lasts until this Claude session ends.' : 'It asks again next time.');
-  const args = ['-l', 'JavaScript', join(LIB, 'ask.js'), question, detail, ICON, String(ASK_SECONDS), flow ? 'flow' : review ? 'review' : 'approval'];
-  return new Promise(resolve => {
-    ownHelper(execFile('osascript', args, (err, stdout, stderr) => {
+  const detail = flow || options?.kind === 'blocked' ? options.detail : review ? `${options.detail}\n\nUndo restores the saved copy shown above. Reopen it in the app afterward. Later leaves the decision pending.` : (app ? `${claudeCode ? 'Claude' : 'The agent'} can then click and type in ${app} in the background. ` : '') +
+    (sessionScoped ? `A yes lasts until ${claudeCode ? 'this Claude session' : 'this sleight server session'} ends.` : 'It asks again next time.');
+  const args = ['-l', 'JavaScript', join(LIB, 'ask.js'), question, detail, ICON, String(ASK_SECONDS), flow ? 'flow' : review ? 'review' : 'approval', claudeCode ? 'claude-code' : 'generic'];
+  return new Promise((resolve, reject) => {
+    ownHelper(launch('osascript', args, (err, stdout, stderr) => {
       const answer = stdout.trim();
       if (!err && (review ? ['keep', 'undo', 'cancel'] : ['accept', 'decline', 'cancel']).includes(answer)) return resolve(answer);
       // Logged, so a broken prompt doesn't pass for a decline.
       process.stderr.write(`sleight: approval prompt failed: ${stderr || err?.message || answer}\n`);
-      resolve('decline');
+      reject(Object.assign(new Error("The approval prompt couldn't be shown. The user made no decision. Stop and tell them."), { code: 'SLEIGHT_PROMPT_UNAVAILABLE' }));
     }));
   });
 }
@@ -433,10 +435,15 @@ export async function callLocalTool(name, args, approve, runLocal = runScript, t
 }
 
 // SLEIGHT_APPROVAL_PROMPT=dialog or client picks how approvals reach the user;
-// by default the desktop app gets the dialog and everything else Claude Code's prompt.
-function approvalPrompt(env = process.env) {
-  const setting = env.SLEIGHT_APPROVAL_PROMPT || (env.CLAUDE_CODE_ENTRYPOINT === 'claude-desktop' ? 'dialog' : 'client');
-  return setting === 'dialog' ? askWithDialog : undefined;
+// Otherwise the relay selects the dialog when initialize advertises no form support.
+export function approvalOptions(env = process.env, dialog = askWithDialog) {
+  const setting = env.SLEIGHT_APPROVAL_PROMPT;
+  let claudeCode = !!env.CLAUDE_CODE_ENTRYPOINT;
+  // Claude Code's CLI names itself claude-code; the desktop app's Code tab may name itself otherwise.
+  const onInitialize = info => { claudeCode = info ? /^claude/i.test(info.name ?? '') : !!env.CLAUDE_CODE_ENTRYPOINT; };
+  const prompt = (message, scoped, options) => dialog(message, scoped, { ...options, claudeCode });
+  if (setting === 'dialog' || (!setting && env.CLAUDE_CODE_ENTRYPOINT === 'claude-desktop')) return { ask: prompt, onInitialize };
+  return { fallbackAsk: setting === 'client' ? undefined : prompt, onInitialize };
 }
 
 export async function run({ leaseDirectory } = {}) {
@@ -484,7 +491,7 @@ export async function run({ leaseDirectory } = {}) {
     clipboardMode: process.env.SLEIGHT_CLIPBOARD,
     // SLEIGHT_APPROVAL_SCOPE=once asks again on every action instead.
     approvalScope: ['once', 'document'].includes(process.env.SLEIGHT_APPROVAL_SCOPE) ? process.env.SLEIGHT_APPROVAL_SCOPE : 'session',
-    ask: approvalPrompt(),
+    ...approvalOptions(),
     preapproved,
     grantAudit,
     flowRules,
