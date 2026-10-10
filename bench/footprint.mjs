@@ -21,6 +21,25 @@ export function label(command) {
   return command.split('/').pop();
 }
 
+// The published CPU split (clean arms, LAWS 2026-10-10): sleight's processes, the engine (its node
+// and the shared helper), the client CLI, and anything else in the group. ps comm shows only the
+// executable, so in a normal-setup Claude arm a user MCP server that runs under plain node counts
+// as sleight's; a clean arm has none. Labels in parentheses are processes ps saw already exited.
+export function cpuSplit(footprint, { client = 'claude' } = {}) {
+  const bare = name => /^\(.*\)$/.test(name) ? name.slice(1, -1) : name;
+  const split = { sleight: 0, engine: 0, client: 0, other: 0 };
+  for (const [name, seconds] of Object.entries(footprint?.group ?? {})) {
+    const who = bare(name);
+    if (who === client) split.client += seconds;
+    else if (who === 'engine node') split.engine += seconds;
+    else if (client === 'claude' && (who === 'node' || who === 'osascript')) split.sleight += seconds;
+    else split.other += seconds;
+  }
+  split.engine += footprint?.outside?.['engine helper'] ?? 0;
+  for (const key of Object.keys(split)) split[key] = Math.round(split[key] * 100) / 100;
+  return split;
+}
+
 export function startFootprint({ pgid, rootPid, apps = [], intervalMs = 1000, ps = defaultPs, baselineGroup = false }) {
   const seen = new Map(); // pid -> { label, group, first, last }
   let sampling = Promise.resolve(), firstSample = true;

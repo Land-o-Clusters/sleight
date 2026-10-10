@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpuSeconds, label, startFootprint } from '../bench/footprint.mjs';
+import { cpuSeconds, label, startFootprint, cpuSplit } from '../bench/footprint.mjs';
 
 test('ps times and process labels', () => {
   assert.equal(cpuSeconds('0:01.50'), 1.5);
@@ -79,4 +79,12 @@ test('a failed final warm sample cannot publish a zero CPU result', async () => 
     ps: async () => call++ ? '' : '100 1 100 10:00.00 /x/node' });
   await stop.ready;
   await assert.rejects(stop(), /final sample/);
+});
+
+test('the CPU split buckets sleight, the engine, the client and other from footprint labels', () => {
+  const footprint = { cpuSeconds: 6.41, group: { claude: 1, 'engine node': 2, node: 0.5, osascript: 0.25, 'mcp@latest': 0.4, '(bash)': 0.01 },
+    outside: { 'engine helper': 1.5, Calculator: 0.75 } };
+  assert.deepEqual(cpuSplit(footprint), { sleight: 0.75, engine: 3.5, client: 1, other: 0.41 });
+  assert.deepEqual(cpuSplit(footprint, { client: 'codex' }), { sleight: 0, engine: 3.5, client: 0, other: 2.16 });
+  assert.deepEqual(cpuSplit({ group: {}, outside: {} }), { sleight: 0, engine: 0, client: 0, other: 0 });
 });

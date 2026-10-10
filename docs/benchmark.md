@@ -489,6 +489,12 @@ npm run bench -- --arm all --runs 3   # sleight and LCU
 
 The LCU arm needs LCU registered for Claude Code in a separate folder. `bench/run.mjs` has the steps.
 
+`--clean-arms` publishes the CPU comparison without the owner's setup, which LAWS says runs
+alongside the normal one: the sleight arm loads only sleight's server and mod (strict MCP
+configuration, empty setting sources) against the Codex home's engine-only server list, and the
+results record `armSetup: "clean"` or `"normal"`. The summary table splits each arm's own CPU into
+sleight's processes, the engine, the client CLI and other group processes.
+
 ## Benchmarking another plugin
 
 Point at a local Claude Code plugin or an MCP configuration for an already installed server:

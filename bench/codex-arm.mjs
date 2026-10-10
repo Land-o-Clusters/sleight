@@ -14,6 +14,14 @@ export function codexReady() {
     `no Codex login in ${CODEX_HOME}: run CODEX_HOME=${CODEX_HOME} codex login`;
 }
 
+// The [mcp_servers.<name>] tables in the bench Codex home's config. A clean-arm pass publishes
+// this list to confirm the home configures only the engine server, so the owner's MCP servers
+// stay out of the comparison.
+export function codexConfigServers(home = CODEX_HOME) {
+  const text = readFileSync(join(home, 'config.toml'), 'utf8');
+  return [...text.matchAll(/^\[mcp_servers\.([^\].]+)\]/gm)].map(match => match[1]);
+}
+
 // Headless Codex cancels the engine's app prompts, so apps are approved only through the engine's
 // own "Always allow" list (the owner allowed setting it to the benchmark apps, 2026-10-08). The
 // runner saves the list first and puts it back on exit; both arms see the same list.

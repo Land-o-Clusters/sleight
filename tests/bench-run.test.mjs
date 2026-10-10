@@ -8,10 +8,11 @@ import { privateMailResult, publicPrivateMailRow } from '../bench/private-mail.m
 import { privateDriverEnvironment } from '../bench/driver.mjs';
 import { guardGenericOperation } from '../bench/generic-approval.mjs';
 import { genericSettings } from '../bench/plugin-arm.mjs';
+import { cpuSplit } from '../bench/footprint.mjs';
 
 // Execute the actual runner body with inert dependencies. No app, CLI, approval
 // file, live lock, compiler or filesystem operation reaches the host.
-async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false, fixtureLifecycle = false, ownerName = '', auth = { mode: 'login', env: {}, unset: [] }, keySource = 'none', spend = () => 0, holdAfterPreflight = false, dryRun = false, preparationError, extraServer, driverOut = {}, calculatorGate = false, calculatorFailureAt } = {}) {
+async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false, fixtureLifecycle = false, ownerName = '', auth = { mode: 'login', env: {}, unset: [] }, keySource = 'none', spend = () => 0, holdAfterPreflight = false, dryRun = false, preparationError, extraServer, driverOut = {}, calculatorGate = false, calculatorFailureAt, cleanArms = false, footprint = { cpuSeconds: 0, group: {}, outside: {} }, codexServers } = {}) {
   const calls = [], saved = [], envs = [], tailScopes = [], directories = [];
   const logs = [], driverOptions = [], codexRuns = [], files = new Map();
   let preflightDone = false, calculatorObservations = 0;
@@ -23,7 +24,7 @@ async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome
   if (privateMail) Object.assign(task, { id: 'mimestream-label', app: 'Mimestream', privateMail: true,
     privateExpected: () => 'private answer', privateTerms: () => ['private label'] });
   const sandbox = {
-    process: { argv: ['node', 'run', '--suite', suite, '--arm', arm, '--runs', '3', ...(setupOnly ? ['--setup-only'] : []), ...(dryRun ? ['--dry-run'] : []), ...(calculatorGate ? ['--calculator-gate'] : []), ...extraArgs], env: base, on() {}, once() {} },
+    process: { argv: ['node', 'run', '--suite', suite, '--arm', arm, '--runs', '3', ...(setupOnly ? ['--setup-only'] : []), ...(dryRun ? ['--dry-run'] : []), ...(calculatorGate ? ['--calculator-gate'] : []), ...(cleanArms ? ['--clean-arms'] : []), ...extraArgs], env: base, on() {}, once() {} },
     console: { log: text => logs.push(text), error: text => logs.push(text) }, AbortController, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval,
     dirname, join, fileURLToPath: () => '/fixture/bench/run.mjs', homedir: () => '/owner', tmpdir: () => '/private/tmp/unit',
     existsSync: path => path === '/tmp/sleight-hold' ? holdAfterPreflight && preflightDone : true, realpathSync: path => path, mkdirSync: path => directories.push(path), rmdirSync() {}, statSync: () => ({ dev: 1, ino: 1 }),
@@ -49,8 +50,10 @@ async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome
     quitChess: options => { calls.push('Chess tail'); tailScopes.push(options); },
     quitSimApp: options => { calls.push('Simulator tail'); tailScopes.push(options); },
     approveOnly: ids => { calls.push(['approve', ...ids]); return () => {}; }, codexReady: () => true,
-    startFootprint: () => async () => ({ cpuSeconds: 0, group: {}, outside: {} }),
-    runCodex: async (prompt, options) => { codexRuns.push({ prompt, options }); return { code: 0, out: {}, forbidden: [] }; }, watchAppWindows: () => async () => [],
+    codexConfigServers: () => codexServers ?? [],
+    cpuSplit,
+    startFootprint: () => async () => footprint,
+    runCodex: async (prompt, options) => { codexRuns.push({ prompt, options }); options.onSpawn?.(4321); return { code: 0, out: {}, forbidden: [] }; }, watchAppWindows: () => async () => [],
     acquireLiveLock: async () => { calls.push('lock'); return async () => calls.push('unlock'); },
     runTiming: () => ({}), traceTiming: () => ({}), observePermission: () => { if (dryRun) assert.fail('no host permission observation in initialization-only discovery'); return false; },
     assertCalculatorReady: async () => {
@@ -64,7 +67,7 @@ async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome
       preflightDone = true;
       return { groupClean: true };
     },
-    runDriver: async (_command, args, options) => { calls.push(['driver', ...args]); envs.push(options.env); driverOptions.push(options); return { code: 0, out: { total_cost_usd: 0.25, ...driverOut }, groupClean: true }; },
+    runDriver: async (_command, args, options) => { calls.push(['driver', ...args]); envs.push(options.env); driverOptions.push(options); options.onSpawn?.(1234); return { code: 0, out: { total_cost_usd: 0.25, ...driverOut }, groupClean: true }; },
     executeRealTask: async (_task, ctx, options) => {
       ctx.windowLeases = leases;
       if (setupOnly) assert.equal(options.setupOnly, true);
@@ -114,6 +117,43 @@ test('generic comparisons use the same strict Claude options and stream format f
   }
   assert.ok(result.driverOptions.every(options => options.format === 'stream-json'));
   assert.ok(result.envs.every(env => env.BENCH_APPROVAL_STOP && env.BENCH_ARM_SERVERS));
+});
+
+test('clean arms strip the sleight arm to strict MCP and empty setting sources and record the setup', async () => {
+  const clean = await runner({ suite: 'real', arm: 'sleight', cleanArms: true, drive: true, outcome: { passed: true } });
+  assert.equal(clean.error, undefined);
+  assert.equal(clean.saved.at(-1).armSetup, 'clean');
+  const args = clean.calls.filter(call => Array.isArray(call) && call[0] === 'driver').at(-1).slice(1);
+  assert.ok(args.includes('--strict-mcp-config'));
+  assert.equal(args[args.indexOf('--setting-sources') + 1], '');
+  const config = clean.files.get(args[args.indexOf('--mcp-config') + 1]);
+  assert.deepEqual(Object.keys(config.mcpServers), ['plugin:sleight:computer']);
+  assert.equal(config.mcpServers['plugin:sleight:computer'].command, '/fixture/plugins/sleight/bin/sleight-mcp');
+  const normal = await runner({ suite: 'real', arm: 'sleight', drive: true, outcome: { passed: true } });
+  assert.equal(normal.saved.at(-1).armSetup, 'normal');
+  assert.equal(normal.calls.filter(call => Array.isArray(call) && call[0] === 'driver').at(-1).includes('--strict-mcp-config'), false);
+});
+
+test('clean arms confirm the codex bench home configures only the engine server', async () => {
+  const clean = await runner({ suite: 'real', arm: 'codex', cleanArms: true, drive: true, outcome: { passed: true }, codexServers: ['cua_repl'] });
+  assert.equal(clean.error, undefined);
+  assert.equal(clean.saved.at(-1).armSetup, 'clean');
+  assert.deepEqual(clean.saved.at(-1).codexConfig, ['cua_repl']);
+  const extra = await runner({ suite: 'real', arm: 'codex', cleanArms: true, codexServers: ['cua_repl', 'notes'] });
+  assert.equal(extra.exitCode, 1);
+  assert.match(extra.saved.at(-1).results[0].reason, /engine server/);
+});
+
+test('the summary table splits each arm\'s own CPU into sleight, the engine, the client and other', async () => {
+  const footprint = { cpuSeconds: 6.41, group: { claude: 1, 'engine node': 2, node: 0.5, osascript: 0.25, 'mcp@latest': 0.4 },
+    outside: { 'engine helper': 1.5, Calculator: 0.75 } };
+  const result = await runner({ suite: 'default', arm: 'sleight,codex', footprint });
+  assert.equal(result.error, undefined);
+  assert.match(result.logs.join('\n'), /\| CPU sleight s \| CPU engine s \| CPU client s \| CPU other s \|/);
+  const rows = result.logs.filter(log => /^\| (sleight|codex) \| fixture \|/.test(log));
+  assert.equal(rows.length, 2);
+  assert.match(rows[0], /\| 0\.75 \| 3\.5 \| 1 \| 0\.4 \|/);
+  assert.match(rows[1], /\| 0 \| 3\.5 \| 0 \| 2\.15 \|/);
 });
 
 test('sleight preflight refuses servers belonging to a generic comparison arm', async () => {

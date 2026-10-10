@@ -4,7 +4,12 @@
 // and prints a table.
 //
 //   node bench/run.mjs [--arm sleight|lcu|codex|all|a,b] [--suite default|real] [--tasks id,id] [--runs N] [--model M] [--effort E]
-//     [--codex-model M] [--codex-effort E] [--dry-run] [--setup-only] [--owner-away]
+//     [--codex-model M] [--codex-effort E] [--dry-run] [--setup-only] [--owner-away] [--clean-arms]
+//
+// --clean-arms publishes the CPU comparison without the owner's setup (LAWS, 2026-10-10): the
+// sleight arm runs with strict MCP configuration and empty setting sources, so only sleight's
+// server and mod load, and the pass confirms the Codex home configures only the engine server.
+// The results record armSetup: clean or normal, and the summary table splits each arm's own CPU.
 //
 // Model and effort default to Haiku 5.5 at high (owner, 2026-10-10), and before that to Sonnet 5.5
 // at medium (2026-10-03 to 2026-10-10). Runs before 2026-10-03 used Claude Code's default, Opus 5.5.
@@ -29,8 +34,8 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BENCH_APPS, REAL_APPS, closeBenchTextEdit, quitChess, quitSimApp, getTasks } from './tasks.mjs';
-import { approveOnly, codexReady, runCodex } from './codex-arm.mjs';
-import { startFootprint } from './footprint.mjs';
+import { approveOnly, codexReady, codexConfigServers, runCodex } from './codex-arm.mjs';
+import { startFootprint, cpuSplit } from './footprint.mjs';
 import { watchAppWindows } from './app-windows.mjs';
 import { runTiming, traceTiming } from './timing.mjs';
 import { executeRealTask } from './real-run.mjs';
@@ -63,6 +68,7 @@ const isDryRun = process.argv.includes('--dry-run');
 const isSetupOnly = process.argv.includes('--setup-only');
 const ownerAway = process.argv.includes('--owner-away');
 const calculatorGate = process.argv.includes('--calculator-gate');
+const cleanArms = process.argv.includes('--clean-arms');
 const suite = option('suite', 'default');
 if (isSetupOnly && (suite !== 'real' || isDryRun)) throw new Error('--setup-only requires --suite real without --dry-run');
 const suiteTasks = getTasks(suite);
@@ -110,6 +116,7 @@ const ARMS = {
 const armNames = armOption === 'all' ? ['sleight', 'lcu'] : armOption.split(',');
 const guardedPass = armNames.some(name => /^(plugin|mcp):/.test(name));
 const preparationErrors = [];
+let codexCleanConfig;
 for (const name of armNames.filter(name => /^(plugin|mcp):/.test(name))) {
   try {
     ARMS[name] = prepareGenericArm(name, { root: ROOT, armHome: ARM_HOME });
@@ -140,8 +147,24 @@ for (const name of armNames) {
     arm.settings = join(arm.cwd, 'bench-settings.json');
     writeFileSync(arm.settings, JSON.stringify(genericSettings(arm, ROOT)), { mode: 0o600 });
   }
+  if (cleanArms && name === 'sleight' && !guardedPass) {
+    // Clean arms keep the owner's user plugins, settings and MCP servers out of the CPU comparison:
+    // strict MCP with only sleight's server, the mod still loaded through --plugin-dir.
+    const mcp = join(arm.cwd, 'bench-mcp.json');
+    writeFileSync(mcp, JSON.stringify({ mcpServers: { [arm.server]: { command: join(ROOT, 'plugins/sleight/bin/sleight-mcp') } } }), { mode: 0o600 });
+    arm.args.push('--mcp-config', mcp, '--strict-mcp-config', '--setting-sources', '');
+  }
   const ok = ARMS[name].check?.() ?? true;
   if (ok !== true) throw new Error(ok);
+  if (cleanArms && arm.codex) {
+    try {
+      const servers = codexConfigServers();
+      if (servers.length !== 1) throw new Error(`the bench Codex home must configure only the engine server for clean arms, found ${servers.length ? servers.join(', ') : 'none'}`);
+      codexCleanConfig = servers;
+    } catch (error) {
+      preparationErrors.push({ arm: name, phase: 'configuration', passed: false, reason: error.message });
+    }
+  }
   const repo = gitRoot(ARMS[name].cwd);
   if (repo) throw new Error(`${name} arm folder ${ARMS[name].cwd} is inside the git repo ${repo}, so its runs would load that repo's CLAUDE.md and project memory. Use a folder outside any repo.`);
 }
@@ -272,9 +295,10 @@ function benchKeyboardTaps() {
 const OUTSIDE_TOOLS = ['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Glob', 'Grep', 'Read', 'Skill'];
 
 // CPU a run costs the Mac (footprint.mjs), sampled from when the driver starts until it exits.
-function footprint(apps) {
+function footprint(apps, client) {
   let stop;
-  return { onSpawn: pgid => { stop = startFootprint({ pgid, apps: apps.filter(Boolean) }); }, finish: async () => stop?.() };
+  return { onSpawn: pgid => { stop = startFootprint({ pgid, apps: apps.filter(Boolean) }); },
+    finish: async () => { const used = await stop?.(); return used && { ...used, split: cpuSplit(used, { client }) }; } };
 }
 
 async function runClaude(prompt, arm, env = {}, { signal, evidenceDir, onPermissionRefusal, privateMail = false, onSpawn, fixtureLifecycle = false } = {}) {
@@ -335,7 +359,8 @@ const save = () => {
   }
   const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite, surfaces: realSurfaces, ownerAway } : {}),
     ...(guardedPass && { fixturePolicy: 'retained app observers for every arm', ownerAway }),
-    arms: armNames, armMetadata: Object.fromEntries(armNames.filter(name => ARMS[name].generic).map(name => [name, ARMS[name].identity])), model, effort, claude: claudeBin, auth: auth.mode, results,
+    arms: armNames, armMetadata: Object.fromEntries(armNames.filter(name => ARMS[name].generic).map(name => [name, ARMS[name].identity])), model, effort, claude: claudeBin, auth: auth.mode,
+    armSetup: cleanArms ? 'clean' : 'normal', ...(codexCleanConfig && { codexConfig: codexCleanConfig }), results,
     ...(calculatorGate && { liveConditions }), ...(passCleanupErrors.length && { passCleanupErrors }) }, null, 2);
   writeFileSync(file, scrub(json) + '\n');
 };
@@ -417,7 +442,7 @@ pass: for (let run = 1; run <= runs; run++) {
           permissionCheck: guardedPass ? guardedPermissionCheck : observePermission,
           drive: async (prompt, _ctx, callbacks) => {
             if (calculatorGate) await calculatorReady(armName);
-            const cpu = footprint(task.privateMail ? [] : [ctx.sim?.app ?? task.app]);
+            const cpu = footprint(task.privateMail ? [] : [ctx.sim?.app ?? task.app], ARMS[armName].codex ? 'codex' : 'claude');
             const stopWatching = guardedPass ? watchAppWindows(ctx.sim?.app ?? task.app) : undefined;
             if (ARMS[armName].codex) {
               const response = await runCodex(prompt, { cwd: ARMS[armName].cwd, model: codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS, signal: controller.signal, onSpawn: cpu.onSpawn });
@@ -487,7 +512,7 @@ pass: for (let run = 1; run <= runs; run++) {
       const stopWatching = watchAppWindows(ctx.sim?.app ?? task.app);
       // sleight traces into the run's scratch folder, so its timing comes from this run alone.
       const arm = ARMS[armName];
-      const cpu = footprint([ctx.sim?.app ?? task.app]);
+      const cpu = footprint([ctx.sim?.app ?? task.app], arm.codex ? 'codex' : 'claude');
       const codexRun = arm.codex ? await runCodex(prompt, { cwd: arm.cwd, model: codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS, signal: controller.signal, onSpawn: cpu.onSpawn }) : undefined;
       const { code, out, stderr, groupClean = true, cancelled } = codexRun ?? await runClaude(prompt, arm, armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {}, { onSpawn: cpu.onSpawn });
       const cpuUsed = await cpu.finish();
@@ -561,15 +586,18 @@ if (!isDryRun && privatePass) {
   for (const row of results) console.log(`| ${row.arm} | ${row.task} | ${row.run} | ${row.passed} | ${row.seconds} | ${row.turns ?? '–'} | ${row.expectedHash ?? '–'} | ${row.actualHash ?? '–'} |`);
 }
 if (!isDryRun && !privatePass) {
-  console.log('\n| Arm | Task | Passed | Median s | Model s | Engine s | Local tools s | Relay ms | Median turns | CPU s | API-price cost |');
-  console.log('|---|---|---|---|---|---|---|---|---|---|---|');
+  console.log('\n| Arm | Task | Passed | Median s | Model s | Engine s | Local tools s | Relay ms | Median turns | CPU sleight s | CPU engine s | CPU client s | CPU other s | API-price cost |');
+  console.log('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
   const median = xs => { const s = xs.filter(x => x != null).sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : '–'; };
   for (const task of selected) {
     for (const armName of armNames) {
       const rs = results.filter(r => r.task === task.id && r.arm === armName && !r.skipped);
       const cost = rs.reduce((sum, r) => sum + (r.costUsd ?? 0), 0);
       const ms = (key, scale) => { const m = median(rs.map(r => r.timing?.[key])); return m === '–' ? m : Math.round(m / scale * 10) / 10; };
-      console.log(`| ${armName} | ${task.id} | ${rs.filter(r => r.passed).length}/${rs.length} | ${median(rs.map(r => r.seconds))} | ${ms('modelMs', 1000)} | ${ms('engineMs', 1000)} | ${ms('localMs', 1000)} | ${ms('relayMs', 1)} | ${median(rs.map(r => r.turns))} | ${median(rs.map(r => r.footprint?.cpuSeconds))} | $${cost.toFixed(2)} |`);
+      // Each arm's own CPU (footprint split): sleight's processes, the engine, the client, other
+      // group processes. The driven app and the shared totals stay in the results file.
+      const own = key => median(rs.map(r => r.footprint?.split?.[key]));
+      console.log(`| ${armName} | ${task.id} | ${rs.filter(r => r.passed).length}/${rs.length} | ${median(rs.map(r => r.seconds))} | ${ms('modelMs', 1000)} | ${ms('engineMs', 1000)} | ${ms('localMs', 1000)} | ${ms('relayMs', 1)} | ${median(rs.map(r => r.turns))} | ${own('sleight')} | ${own('engine')} | ${own('client')} | ${own('other')} | $${cost.toFixed(2)} |`);
     }
   }
 }
