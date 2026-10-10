@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Input admission for windows without a URL now checks one native AX match and retains the
+  AX reference with the app's PID and launch time. Same-title replacements and duplicate
+  untitled windows refuse input. `select_window` also rechecks identity after raising its match.
+  The engine doesn't expose an exact macOS window ID, so duplicate headers remain refused.
 - `app.waitFor({ id | label | line }, { timeoutMs })` waits for one element in the same window,
   with full engine reads at least 250 ms apart and a 10 s polling deadline. Each poll appears in
   the guard timing trace. It doesn't start a timer until called. The skill now asks Claude to use it for

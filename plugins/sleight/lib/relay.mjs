@@ -64,6 +64,7 @@ import { ChangeReview, REVIEW_TOOL, isChangeCancel } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
 import { browserCall, browserReply } from './browser-call.mjs';
 import { isLeaseRead } from './input-lease.mjs';
+import { verifyWindowIdentity } from './window-identity.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
 import { createReadCompactor } from './compact-reads.mjs';
@@ -204,6 +205,7 @@ function internalTurnEnd(tool) {
 export function createRelay({
   // Lists apps holding keyboard filter taps ([{ app, bundleId }]), checked when a turn ends.
   keyboardTaps,
+  windowIdentity,
   clientIn, clientOut, serverIn, serverOut,
   sessionId = randomUUID(),
   approvalScope = 'session',
@@ -271,6 +273,7 @@ export function createRelay({
   const elicitations = new Map(); // our elicitation id -> resolve
   const promptFailures = new Map(); // call id -> native panel failure, distinct from a user decline
   const running = new Set(); // ids of engine calls waiting for a result
+  const nativeChecked = new Set();
   const localRunning = new Set();
   const preapprovalNotes = new Map(); // call id -> grants made during that call
   let idleTimer;
@@ -566,6 +569,14 @@ export function createRelay({
   const handleBundles = new Map();
   const handleSelectors = new Map();
   const selectorWindows = new Map();
+  function observedAppId(call, window, result) {
+    const appId = result?._meta?.['codex/toolSurface']?.app?.appId;
+    const cached = call.acquisition ? selectorWindows.get(call.selector)
+      : call.handle ? handleBundles.get(call.handle) : leaseWindow;
+    const matches = window && cached && (call.acquisition
+      ? documentKey(cached.window) === documentKey(window) : cached.app === window.app);
+    return window && (typeof appId === 'string' && appId ? appId : matches ? cached.appId : undefined);
+  }
   let leaseFault;
   let leaseTimer;
   let closing;
@@ -642,7 +653,7 @@ export function createRelay({
       // A candidate can browse without a native target, but cannot inherit an
       // earlier native grant. The injected guard denies native access in that case.
       let key, nativeDenied;
-      if (leaseFault || !leaseWindow?.appId || (selectedWindow &&
+      if (leaseFault || leaseWindow?.identityError || (windowIdentity && !leaseWindow?.url) || !leaseWindow?.appId || (selectedWindow &&
           (!selectionVerified || !sameWindow(leaseWindow, selectedWindow) || leaseWindow.appId !== selectedWindow.appId))) {
         nativeDenied = 'Native access stopped: send a standalone native app read before acting. ' + (leaseFault ?? 'No confirmed native window.');
       } else {
@@ -684,6 +695,7 @@ export function createRelay({
         leaseStop(msg, `a bundle ID and full window header are required. Send exactly \u0060${recovery}\u0060 in js, then read the intended window before acting.${inventory}`);
         return false;
       }
+      if (leaseWindow.identityError) { leaseStop(msg, leaseWindow.identityError); return false; }
       const stale = name === 'js' ? compactor.staleIndex(leaseWindow, code) : undefined;
       if (stale) {
         leaseStop(msg, stale.number !== undefined
@@ -1016,7 +1028,7 @@ export function createRelay({
     spaceNoted.clear();
   }
 
-  lines(clientIn, line => {
+  lines(clientIn, function clientLine(line) {
     let msg;
     try {
       msg = JSON.parse(line);
@@ -1095,6 +1107,21 @@ export function createRelay({
       return;
     }
     if (closing && msg.method === 'tools/call') { leaseStop(msg, 'this session is closing.'); return; }
+    if (windowIdentity && inputLease && msg.method === 'tools/call' && msg.params?.name === 'js' &&
+        !isLeaseRead(msg.params.arguments?.code) && !browserCall(msg.params.arguments?.code ?? '', browserHandles) &&
+        leaseWindow?.appId && !leaseWindow.url && !nativeChecked.delete(msg.id)) {
+      if (running.size) { leaseStop(msg, 'another call in this session is pending.'); return; }
+      if (leaseWindow.identityError) { leaseStop(msg, leaseWindow.identityError); return; }
+      if (!leaseWindow.nativeIdentity) { leaseStop(msg, 'native window identity has no successful baseline. Read the app again.'); return; }
+      const expected = leaseWindow;
+      running.add(msg.id);
+      Promise.resolve().then(() => windowIdentity(expected)).then(observed => {
+        verifyWindowIdentity(expected, observed);
+        if (leaseWindow !== expected || closing || disposed) throw new Error('Input lease: window changed while checking. Read again.');
+        running.delete(msg.id); nativeChecked.add(msg.id); handleClient(msg);
+      }).catch(error => { finishedCall(msg.id); leaseStop(msg, error.message); });
+      return;
+    }
     if (msg.method === 'tools/call') {
       if (disposed) { changeStop(msg, 'session has ended'); return; }
       if (flowAsking) { flowStop(msg, 'wait for the user decision'); return; }
@@ -1367,6 +1394,19 @@ export function createRelay({
       const pending = clipboardReplies.get(msg.id); clipboardReplies.delete(msg.id); pending.receive(msg); return;
     }
     if (retriedHelperStart(msg)) return;
+    const identityCall = msg.method === undefined && leaseCalls.get(msg.id);
+    if (windowIdentity && identityCall?.observe && !identityCall.identityChecked) {
+      const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+      const window = !msg.result?.isError && windowFromText(text);
+      const appId = observedAppId(identityCall, window, msg.result);
+      if (window && !window.url && appId) {
+        identityCall.identityChecked = true;
+        Promise.resolve().then(() => windowIdentity({ ...window, appId })).then(observed => {
+          identityCall.nativeIdentity = verifyWindowIdentity({ ...window, appId }, observed);
+        }).catch(error => { identityCall.identityError = error.message; }).finally(() => observeServerMessage(msg));
+        return;
+      }
+    }
     if (msg.method === undefined && turnEnds.delete(msg.id)) {
       // Device Hub, left open after simulator runs, held a keyboard tap that stalled every key on the
       // Mac (2026-10-09). Name such an app once per session so the user knows what to quit.
@@ -1574,12 +1614,7 @@ export function createRelay({
       // window still refuses if another session holds it.
       const guardStop = msg.result?.isError && /^(?:sleight stopped before |Input lease stopped this action: window or URL changed)/m.test(text);
       const window = !msg.error && (!msg.result?.isError || guardStop) && windowFromText(text);
-      const appId = msg.result?._meta?.['codex/toolSurface']?.app?.appId;
-      const cached = call.acquisition ? selectorWindows.get(call.selector)
-        : call.handle ? handleBundles.get(call.handle) : leaseWindow;
-      const matches = window && cached && (call.acquisition
-        ? documentKey(cached.window) === documentKey(window) : cached.app === window.app);
-      const known = window && (typeof appId === 'string' && appId ? appId : matches ? cached.appId : undefined);
+      const known = observedAppId(call, window, msg.result);
       // An action whose result shows another window of the same app (a close, a new window). Said
       // plainly, or a "no change" about the window now in front reads as a failed action: Claude
       // probed after closing a Chess game in 4/6 runs (2026-10-08).
@@ -1588,6 +1623,8 @@ export function createRelay({
         windowNote = `sleight: this call acted on ${documentLabel(leaseWindow)}. The window it shows now is ${documentLabel(window)}.`;
       }
       leaseWindow = window ? { ...window, ...(known ? { appId: known } : {}) } : undefined;
+      if (leaseWindow && call.nativeIdentity) leaseWindow.nativeIdentity = call.nativeIdentity;
+      if (leaseWindow && call.identityError) leaseWindow.identityError = call.identityError;
       if (window?.app) drivenApps.add(window.app);
       if (known) drivenApps.add(known);
       if (call.handle) {

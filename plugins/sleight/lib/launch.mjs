@@ -546,6 +546,7 @@ export async function run({ leaseDirectory } = {}) {
     guardTiming: !!process.env.SLEIGHT_TRACE,
     firstCallRules: skillRules(),
     keyboardTaps: appHealth.keyboardTaps,
+    windowIdentity: appHealth.windowIdentity,
   });
   process.once('exit', () => relay.close());
 

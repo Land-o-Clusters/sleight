@@ -77,6 +77,20 @@ Blank titles are valid full headers and share a conservative window key.
 Equal unsaved titles share a key; Save As, dialogs and window changes can stop
 valid actions. Checks cannot undo an event already delivered to the native helper.
 
+Windows without a URL also require a native AX identity check at call admission. The existing
+target helper retains AX window references, compared with `CFEqual`, and records its own epoch
+plus the app's PID and launch time. A new helper or process cannot reuse the old identity. A full
+engine read establishes the identity, and the next action call must still match it. The helper
+loads this query only when needed. A failed observation refuses input.
+
+Windows with the same title and no URL remain ambiguous, even after `select_window`: the
+engine's tree doesn't identify which one it read. The selection helper reports AXWindowNumber
+when available, but its absence is common and position alone cannot distinguish a same-frame
+replacement. Selection requires one match and rechecks its title and document after AXRaise.
+The shared lease key still groups equal titles across sessions. The native check is at each call
+boundary, with the existing cooperative tree guard inside a batch. It cannot prevent a window
+change between that observation and an event already dispatched.
+
 `node bench/input-lease.mjs` uses two relays and a temporary TextEdit document
 for five races. `--extended` also checks renewal, expiry, handoff and cleanup.
 `--baseline` omits enforcement. Earlier attempts and raw replies are retained in

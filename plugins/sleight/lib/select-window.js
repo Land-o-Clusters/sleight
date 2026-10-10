@@ -45,9 +45,15 @@ function run(argv) {
     target.window.actions.byName('AXRaise').perform();
     target.window.attributes.byName('AXMain').value = true;
     if (!attribute(target.window, 'AXMain')) throw new Error('Window selection unconfirmed: AXMain is false');
+    if (attribute(target.window, 'AXTitle') !== target.title || (attribute(target.window, 'AXDocument') || null) !== target.url) {
+      throw new Error('Window selection unconfirmed: identity changed during selection');
+    }
     if (!active && (app.active || $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier !== frontmost)) {
       throw new Error('Window selection changed the foreground app');
     }
-    return JSON.stringify({ ok: true, target: { appId, app: name, title: target.title, url: target.url } });
+    // AXWindowNumber is optional on macOS; title and AXDocument alone cannot resolve duplicates.
+    const number = attribute(target.window, 'AXWindowNumber');
+    return JSON.stringify({ ok: true, target: { appId, app: name, title: target.title, url: target.url },
+      identity: { pid: Number(app.processIdentifier), windowNumber: typeof number === 'number' ? number : null } });
   } catch (err) { return JSON.stringify({ ok: false, error: String(err.message || err) }); }
 }
