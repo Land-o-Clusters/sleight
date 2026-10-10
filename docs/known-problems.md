@@ -529,3 +529,12 @@ our own runs. Dates and engine versions are given where they matter.
 - It's macOS on Apple Silicon only. The engine's JavaScript has Linux and Windows instructions, but
   the helper that clicks and types comes only with the Mac ChatGPT app, and there's no ChatGPT desktop
   app for Linux (checked 2026-10-04). We haven't checked the Windows app.
+
+## Desktop replay
+
+The pane logs replay step outcomes when the replay tool returns, showing a running entry and Stop
+until then. Desktop button delivery and automatic handoff still need the owner's check in the Code tab.
+A recorded script over
+4 MiB exceeds the mod's process-output limit. Use the CLI with an output filename for that script.
+Refresh gets its replay target from a literal `getApp` name. A script that acquires only an object
+or window ID may leave Refresh targeting the earlier app.
