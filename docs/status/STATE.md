@@ -3,16 +3,19 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-10 20:25 UTC, re-hydrated after the owner's clear)
+## Banner (2026-10-10 21:05 UTC, re-hydrated after the owner's clear)
 
-Nothing of sleight-arch's is running, and the live lock is free. `pane/auto-mode` is pushed to
-private. The waits live attempts from 16:11 to 16:14 UTC were left uncommitted. They're published
+Nothing of sleight-arch's is running, and the live lock is free. `pane/auto-mode` is at `4cae28e`,
+pushed to private. Every benchmark result from 2026-10-10 is now in `docs/benchmarks/`.
+`SLEIGHT_TRACE_CODE` now keeps the code it records, and `SLEIGHT_TRACE_CUT` lengthens the trace's
+cut (`4cae28e`). The waits live attempts from 16:11 to 16:14 UTC were left uncommitted. They're published
 now in `docs/benchmarks/2026-10-10-waits-targeting-4.md`, and all failed setup. The Chess move
 points in `bench/reliability-chess-points.json` are for a 1223 by 949 board, and a fresh Chess
 opened at 667 by 532. The next try runs with `--inspect-chess`. STATE's Sol section was a round
 behind and is corrected: every lane branch is merged. The test routine's launchd job
 `com.landoclusters.sleight-routine-535e98589ef1a23ab711` is still installed and fires every 5 minutes and fails harmlessly
-(the installed plugin is 1.1.0). `routine remove` waits in the owner's Terminal tab for `remove`. If
+(the installed plugin is 1.1.0). `routine remove` waits in the owner's Terminal tab for `remove` (pid
+90569 at 21:00 UTC). If
 that tab is gone, run `plugins/sleight/bin/sleight-mcp routine remove 535e98589ef1a23ab711` in a
 terminal and type `remove`.
 
