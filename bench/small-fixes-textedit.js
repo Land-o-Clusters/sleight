@@ -9,6 +9,23 @@ function attribute(el, name) {
   return ObjC.castRefToObject(out[0]);
 }
 function frontPid() { return Number($.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier); }
+function liveTextEditApps(running) {
+  const live = [];
+  for (let i = 0; i < Number(running.count); i++) {
+    const app = running.objectAtIndex(i);
+    if (Number(app.isTerminated) === 1) continue;
+    live.push(app);
+  }
+  return live;
+}
+function oneLiveTextEdit(running) {
+  const live = liveTextEditApps(running);
+  if (live.length !== 1) {
+    const extras = live.map(app => (ObjC.unwrap(app.localizedName) || 'TextEdit') + ' pid ' + Number(app.processIdentifier)).join(', ');
+    throw new Error(live.length ? 'Ambiguous TextEdit process: ' + extras : 'Ambiguous TextEdit process');
+  }
+  return live[0];
+}
 function run(argv) {
   const path = argv[0];
   if (!/^\/private\/tmp\/sleight-exact-[A-Za-z0-9]+\/exact\.txt$/.test(path)) throw new Error('Expected an owned temporary file');
@@ -51,9 +68,8 @@ function run(argv) {
       const matches = app.documents().filter(d => { try { return String(d.path()) === path; } catch { return false; } });
       if (matches.length !== 1) throw new Error('Expected one owned document');
       doc = matches[0];
-      const running = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.TextEdit');
-      if (Number(running.count) !== 1) throw new Error('Ambiguous TextEdit process');
-      ax = $.AXUIElementCreateApplication(Number(running.objectAtIndex(0).processIdentifier));
+      const running = oneLiveTextEdit($.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.TextEdit'));
+      ax = $.AXUIElementCreateApplication(Number(running.processIdentifier));
       if (Number($.AXUIElementSetMessagingTimeout(ax, 1)) !== 0) throw new Error('Could not bound fixture AX messaging');
       const windows = attribute(ax, 'AXWindows'), candidates = [];
       for (let i = 0; i < windows.count; i++) {

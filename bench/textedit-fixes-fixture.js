@@ -1,6 +1,23 @@
 // Retains only this run's temporary TextEdit document. No activation or dialog answers.
 ObjC.import('AppKit');
 ObjC.import('ApplicationServices');
+function liveTextEditApps(running) {
+  const live = [];
+  for (let i = 0; i < Number(running.count); i++) {
+    const app = running.objectAtIndex(i);
+    if (Number(app.isTerminated) === 1) continue;
+    live.push(app);
+  }
+  return live;
+}
+function oneLiveTextEdit(running) {
+  const live = liveTextEditApps(running);
+  if (live.length !== 1) {
+    const extras = live.map(app => (ObjC.unwrap(app.localizedName) || 'TextEdit') + ' pid ' + Number(app.processIdentifier)).join(', ');
+    throw new Error(live.length ? 'Ambiguous TextEdit process: ' + extras : 'Ambiguous TextEdit process');
+  }
+  return live[0];
+}
 function run(argv) {
   const path = argv[0];
   if (!/^\/private\/tmp\/sleight-textedit-fixes-[A-Za-z0-9]+\/fixture\.(rtf|txt)$/.test(path)) throw new Error('Expected an owned temporary fixture');
@@ -56,10 +73,10 @@ function run(argv) {
   function act(request) {
     if (!$.AXIsProcessTrusted()) throw new Error('Accessibility unavailable; no prompt requested');
     if (request.op === 'preflight') {
-      const apps = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.TextEdit');
+      const apps = liveTextEditApps($.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.TextEdit'));
       return { running: app.running(), foregroundTextEdit: ObjC.unwrap($.NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier) === 'com.apple.TextEdit', documents: app.running() ? app.documents().length : null,
-        frontPid: front(), hidden: Number(apps.count) === 1 ? apps.objectAtIndex(0).hidden === true : null,
-        onScreenWindows: Number(apps.count) === 1 ? cgWindows().filter(w => w.kCGWindowOwnerPID === Number(apps.objectAtIndex(0).processIdentifier) && w.kCGWindowLayer === 0 && w.kCGWindowBounds.Height > 50).length : null };
+        frontPid: front(), hidden: apps.length === 1 ? apps[0].hidden === true : null,
+        onScreenWindows: apps.length === 1 ? cgWindows().filter(w => w.kCGWindowOwnerPID === Number(apps[0].processIdentifier) && w.kCGWindowLayer === 0 && w.kCGWindowBounds.Height > 50).length : null };
     }
     if (request.op === 'open') {
       originalFront = front();
@@ -77,12 +94,11 @@ function run(argv) {
         if (found.length !== 1) throw new Error('Background-opened fixture document not found');
         doc = found[0];
       } else doc = app.open(Path(path));
-      const running = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.TextEdit');
-      if (Number(running.count) !== 1) throw new Error('Ambiguous TextEdit process');
-      pid = Number(running.objectAtIndex(0).processIdentifier);
-      if (running.objectAtIndex(0).hidden === true) {
+      const running = oneLiveTextEdit($.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.TextEdit'));
+      pid = Number(running.processIdentifier);
+      if (running.hidden === true) {
         if (!openedWithNoDocuments) throw new Error('TextEdit is hidden and has other documents; no unhide attempted');
-        running.objectAtIndex(0).unhide();
+        running.unhide();
         if (front() !== originalFront) throw new Error('Foreground changed while unhiding the owned fixture');
       }
       ax = $.AXUIElementCreateApplication(pid);
