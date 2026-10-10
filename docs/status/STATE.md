@@ -105,6 +105,14 @@ in `.dev/prompts/`, for Sol threads the owner starts:
 - Briefs for the remaining rows: `sol-sim-savelock.md`, `sol-lease-broker.md`,
   `sol-review-receipts.md`, `sol-routines-demo.md`. Removing the helper's stale launchd job stays
   manual (doctor prints the command): it would change OpenAI's helper state (LAWS).
+- Private between releases (owner chose B, 03:35 UTC on 2026-10-10): `Land-o-Clusters/sleight-dev`
+  (private, Actions off: spending is the owner's). `git config remote.pushDefault private` in this
+  repo points every worktree's pushes there. The org ruleset `no-workflow-edits-without-disabling-this-ruleset`
+  declined the first push (history has workflow files). Waiting on the owner to exclude `sleight-dev`
+  or toggle the ruleset. Until then commits are local only. The public repo gets pushes only at release.
+- simulator-flow failed setup at 03:30 UTC (DeviceHub replaced its process during launch; the
+  fixture refused to adopt or quit it; sleight-arch quit it. The tap scan listed only Magnet and Siri). Brief:
+  `sol-real-use-tasks-12.md`.
 - sleight-arch: the guard's reads (`document-scope.mjs`, guard code in `relay.mjs`), with a
   background subagent studying guard-read phases across tonight's traces.
 - `/tmp/sleight-hold` exists while another project's window runs. Every brief stops live probes
