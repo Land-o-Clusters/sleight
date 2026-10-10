@@ -144,6 +144,20 @@ test('a window that only gains a URL mid-call stays the same window, unless docu
     'a different title is still a different window');
 });
 
+// h2h-3, 2026-10-10: "Cannot access 'app' before initialization" when a guarded call declared
+// `let app` itself, because the guard's prelude read app before that declaration.
+test('a guarded call that declares app itself runs, and its app is still guarded', async () => {
+  const pressed = [];
+  const raw = { getAXState: async () => 'Window: "a.txt", App: TextEdit.\n0 standard window a.txt, URL: file:///tmp/a.txt', pressKey: async key => { pressed.push(key); } };
+  const context = { cua: { getApp: async () => raw }, nodeRepl: { write: () => {} } };
+  const window = { title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' };
+  await runInNewContext(`(async () => { ${readCode('await cua.getApp("TextEdit");')} })()`, context);
+  for (const declaration of ['let', 'const']) {
+    await runInNewContext(`(async () => { ${guardedCode(`${declaration} app = await cua.getApp("com.apple.TextEdit"); await app.pressKey("a");`, window)} })()`, context);
+  }
+  assert.deepEqual(pressed, ['a', 'a']);
+});
+
 test('an element given by its AX ID is found in the read before each action, even after a renumber', async () => {
   let shifted = false; const clicked = [];
   const keys = [['AllClear', 'All Clear'], ['Seven', '7'], ['Equals', '=']];

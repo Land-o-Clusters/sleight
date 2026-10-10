@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- A call that declares `app` itself (`let app = await cua.getApp(…)` with actions after it) no
+  longer fails with "Cannot access 'app' before initialization". The guard's setup read `app`
+  before that declaration (4 of 29 TextEdit runs on 2026-10-10).
+- An action after a failed call or a reset no longer gets refused with "send the acquisition
+  first" (13 refusals in 29 TextEdit runs, a turn each). The relay acquires the app the lease last
+  confirmed and runs the call when the window is still the same one. If the window changed,
+  nothing runs, and the refusal includes the new read.
 - Return after `setValue` no longer reads the window first, as after typing (owner's call). In a
   Save sheet that read took 1.85 s a save. `SLEIGHT_GUARD=careful` keeps it. The first action of a
   session no longer says "UI unverified (no earlier read)" because of the engine's docs on that call.

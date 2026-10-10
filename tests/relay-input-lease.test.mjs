@@ -950,7 +950,10 @@ test('window selection holds the app lease and needs a matching standalone acqui
   h.reply(result(6));
   h.send(rpc(7, 'js_reset')); h.reply(result(7, 'reset'));
   h.send(rpc(8, 'js', { code: 'await app.typeText("x")' }));
-  assert.doesNotMatch(h.received.at(-1).result.content[0].text, /select_window/);
+  const acquisition = h.forwarded.at(-1);
+  assert.match(String(acquisition.id), /^sleight-acquire/);
+  h.reply(result(acquisition.id)); h.reply(result(8));
+  assert.doesNotMatch(h.received.at(-1).result.content.map(c => c.text).join('\n'), /select_window/);
   h.send(rpc(10, 'js', { code: 'app = await cua.getApp("Calculator")' }));
   const other = result(10, 'Window: "Calculator", App: Calculator');
   other.result._meta['codex/toolSurface'].app.appId = 'com.apple.calculator'; h.reply(other);
@@ -1075,17 +1078,33 @@ test('a trailing name that is not the acquired handle is left alone', t => {
   assert.match(a.forwarded[1].params.arguments.code, /\bother;?\s*$/m, 'the rest follows under the lease');
 });
 
-test('missing identity refusal supplies an executable recovery assignment', t => {
+// 13 refusals in 29 TextEdit runs cost a turn each (2026-10-10): the relay now acquires first.
+test('after a reset an action re-acquires the confirmed app, and runs when the window is the same', t => {
   const { a } = setup(t);
   a.send(rpc(1, 'js_reset')); a.reply(result(1, 'reset'));
   a.send(rpc(2, 'js', { code: 'await app.typeText("x")' }));
-  const message = a.received.at(-1).result.content[0].text;
-  const recovery = message.match(/`([^`]+)`/)?.[1];
-  assert.equal(recovery, 'let app = await cua.getApp("com.apple.TextEdit")');
-  a.send(rpc(3, 'js', { code: recovery })); a.reply(result(3));
-  a.send(rpc(4, 'js', { code: 'await app.typeText("x")' }));
-  assert.equal(a.forwarded.length, 3, JSON.stringify(a.received));
-  a.reply(result(4));
+  const acquisition = a.forwarded.at(-1);
+  assert.match(acquisition.params.arguments.code, /\nlet app = await cua\.getApp\("com\.apple\.TextEdit"\)$/);
+  a.reply(result(acquisition.id));
+  assert.equal(a.forwarded.at(-1).id, 2, JSON.stringify(a.received));
+  a.reply(result(2));
+  assert.equal(a.received.at(-1).id, 2);
+  assert.ok(!a.received.at(-1).result.isError);
+});
+test('after an error drops the lease, a changed window refuses the action and shows the new read', t => {
+  const { a } = setup(t);
+  a.send(rpc(1, 'js', { code: 'await app.click(2)' }));
+  a.reply({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [{ type: 'text', text: 'Computer Use server error -10005: timeoutReached' }],
+    _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit' } } } } });
+  a.send(rpc(2, 'js', { code: 'await app.typeText("x")' }));
+  const acquisition = a.forwarded.at(-1);
+  assert.match(acquisition.params.arguments.code, /cua\.getApp\("com\.apple\.TextEdit"\)/);
+  a.reply(result(acquisition.id, 'Window: "b.txt", App: TextEdit'));
+  assert.notEqual(a.forwarded.at(-1).id, 2, 'the typing never reaches the engine');
+  const reply = a.received.at(-1);
+  assert.equal(reply.id, 2); assert.equal(reply.result.isError, true);
+  assert.match(reply.result.content.at(-1).text, /nothing from this call ran/);
+  assert.ok(reply.result.content.some(c => /b\.txt/.test(c.text)), 'the new read comes with the refusal');
 });
 
 test('bundle identity is not inherited by an unrelated window or another session', t => {
@@ -1116,7 +1135,8 @@ test('a const app recovery uses a bare acquisition instead of reassigning the bi
   a.send(rpc(2, 'js', { code: 'await app.pressKey("super+s")' }));
   a.reply({ jsonrpc: '2.0', id: 2, result: { isError: true, content: [{ type: 'text', text: 'stopped' }] } });
   a.send(rpc(3, 'js', { code: 'await app.click(1)' }));
-  assert.match(a.received.at(-1).result.content[0].text, /`await cua.getApp\("com.apple.TextEdit"\)`/);
+  // Never `let app = …` over a const binding: a bare acquisition, which the relay assigns to globalThis.app.
+  assert.match(a.forwarded.at(-1).params.arguments.code, /\n(?:globalThis\.app = )?await cua\.getApp\("com\.apple\.TextEdit"\)$/);
 });
 
 test('interleaving known and unknown same-name handles never lends the known bundle ID', t => {
@@ -1150,16 +1170,18 @@ test('a failed acquisition never becomes the recovery advice; the last good app 
   a.send(rpc(1, 'js', { code: 'let app = await cua.getApp("nosuchapp")' }));
   a.reply({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [{ type: 'text', text: 'Invalid app: nosuchapp' }] } });
   a.send(rpc(2, 'js', { code: 'await app.click(1)' }));
-  const message = a.received.at(-1).result.content[0].text;
-  assert.doesNotMatch(message, /nosuchapp/);
-  assert.match(message, /`let app = await cua\.getApp\("com\.apple\.TextEdit"\)`/);
+  const acquisition = a.forwarded.at(-1).params.arguments.code;
+  assert.doesNotMatch(acquisition, /nosuchapp/);
+  assert.match(acquisition, /\nlet app = await cua\.getApp\("com\.apple\.TextEdit"\)$/);
 });
 
 test('a refused inventory statement is told the one-expression form that passes', t => {
   const { a } = setup(t);
   a.send(rpc(1, 'js_reset')); a.reply(result(1, 'reset'));
-  a.send(rpc(2, 'js', { code: 'let apps = await cua.listApps(); apps.length' }));
-  assert.match(a.received.at(-1).result.content[0].text, /one expression, such as `\(await cua\.listApps\(\)\)\.map/);
+  // With no app this session ever confirmed, there's nothing to acquire for it.
+  const fresh = setup(t).harness('fresh', { fresh: true });
+  fresh.send(rpc(2, 'js', { code: 'let apps = await cua.listApps(); apps.length' }));
+  assert.match(fresh.received.at(-1).result.content[0].text, /one expression, such as `\(await cua\.listApps\(\)\)\.map/);
 });
 
 test('first-call docs without a js_reset mean the engine session restarted: handles are forgotten', t => {
@@ -1171,7 +1193,9 @@ test('first-call docs without a js_reset mean the engine session restarted: hand
   a.reply({ jsonrpc: '2.0', id: 2, result: { isError: true, content: [{ type: 'text', text: 'app is not defined\n' + docs }] } });
   assert.match(a.received.at(-1).result.content.at(-1).text, /session restarted.*`let app = await cua\.getApp/);
   a.send(rpc(3, 'js', { code: 'await app.click(1)' }));
-  assert.equal(a.forwarded.length, 2, 'the action waits for a new acquisition');
+  const acquisition = a.forwarded.at(-1);
+  assert.match(String(acquisition.id), /^sleight-acquire/, 'the action waits for a new acquisition');
+  a.reply(result(acquisition.id, header)); a.reply(result(3));
   a.send(rpc(4, 'js_reset')); a.reply(result(4, 'js kernel reset'));
   a.send(rpc(5, 'js', { code: 'let app = await cua.getApp("TextEdit")' })); a.reply(result(5, docs + header));
   assert.doesNotMatch(a.received.at(-1).result.content.at(-1).text, /session restarted/, 'docs after js_reset are expected');
@@ -1186,7 +1210,9 @@ test('a guard stop keeps the lease from the header it read; any other error drop
     a.reply({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [{ type: 'text', text }],
       _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit' } } } } });
     a.send(rpc(2, 'js', { code: 'await app.click({ id: "Save" })' }));
-    assert.equal(a.forwarded.length, kept ? 3 : 2, JSON.stringify(a.received.at(-1)));
+    // Without the lease the click waits for an acquisition read first.
+    assert.equal(String(a.forwarded.at(-1).id), kept ? '2' : String(a.forwarded.at(-1).id).startsWith('sleight-acquire') ? a.forwarded.at(-1).id : 'missing acquisition', JSON.stringify(a.received.at(-1)));
+    assert.equal(a.forwarded.length, 3);
     if (kept) a.reply(result(2));
   }
 });
@@ -1295,11 +1321,12 @@ test('missing or ambiguous observation refuses actions and reset clears the targ
   const { a } = setup(t);
   a.send(rpc(1, 'js_reset')); a.reply(result(1, 'reset'));
   a.send(rpc(2, 'js', { code: 'await app.typeText("x")' }));
-  assert.equal(a.forwarded.length, 1);
-  assert.match(a.received.at(-1).result.content[0].text, /read/i);
-  a.send(rpc(3, 'js', { code: 'await cua.getState()' })); a.reply(result(3, header + '\nWindow: "b.txt", App: TextEdit'));
-  a.send(rpc(4, 'js', { code: 'await app.typeText("x")' }));
+  const acquisition = a.forwarded.at(-1);
+  assert.match(String(acquisition.id), /^sleight-acquire/);
+  // An ambiguous read (two windows) confirms nothing, so the typing never goes out.
+  a.reply(result(acquisition.id, header + '\nWindow: "b.txt", App: TextEdit'));
   assert.equal(a.forwarded.length, 2);
+  assert.equal(a.received.at(-1).id, 2); assert.equal(a.received.at(-1).result.isError, true);
 });
 test('active calls renew every 5 s; completed calls stop renewing and close removes leases', t => {
   t.mock.timers.enable({ apis: ['setInterval', 'Date'] });

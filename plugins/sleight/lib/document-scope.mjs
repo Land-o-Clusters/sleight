@@ -461,7 +461,10 @@ function guardSetup(update, { reuseSetup = false, acknowledge = false } = {}) {
     throw new Error('Sleight guard setup is missing. Send a standalone app acquisition before acting.');
   }
   globalThis.__sleightDocumentGuardSetup(${JSON.stringify(update) ?? 'undefined'});
-  ${update && !update.skipAppWrap ? "const state = globalThis.__sleightDocumentGuard; if (typeof app !== 'undefined' && app && typeof app.getAXState === 'function' && !state.proxies.has(app)) { app = state.wrap(app); state.activeApp ||= app; }" : ''}
+  ${/* A call that declares app itself (let app = await cua.getApp(…)) has it in its temporal dead zone
+     here, and even typeof throws: "Cannot access 'app' before initialization" cost turns in h2h-3
+     (2026-10-10). That app comes from cua.getApp, which is already wrapped, so skip it. */
+    update && !update.skipAppWrap ? "const state = globalThis.__sleightDocumentGuard; try { if (typeof app !== 'undefined' && app && typeof app.getAXState === 'function' && !state.proxies.has(app)) { app = state.wrap(app); state.activeApp ||= app; } } catch (error) { if (!(error instanceof ReferenceError)) throw error; }" : ''}
   ${acknowledge && !reuseSetup ? `nodeRepl.write(${JSON.stringify(GUARD_READY + '\n')});` : ''}
 }`;
 }

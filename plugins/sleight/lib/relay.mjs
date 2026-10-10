@@ -712,7 +712,8 @@ export function createRelay({
     }
   }
   let leaseWindow;
-  let recoveryTarget;
+  let recoveryTarget, recoveryKnown = false; // recoveryKnown: the target is a bundle ID the engine confirmed
+  let lastConfirmedWindow; // the lease's last window with a confirmed bundle ID, kept when the lease drops
   let selectedWindow;
   let selectionVerified = false;
   function clearSelection() { selectedWindow = undefined; selectionVerified = false; }
@@ -1299,7 +1300,17 @@ export function createRelay({
         msg.id === undefined || typeof msg.params.arguments?.code !== 'string') return false;
     const code = msg.params.arguments.code;
     const m = code.match(/^\s*((?:let|const|var)\s+[A-Za-z_$][\w$]*\s*=\s*await\s+cua\.getApp\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*\)\s*;?)/);
-    const rest = m && code.slice(m[0].length).trim();
+    let acquire = m?.[1], rest = m && code.slice(m[0].length).trim();
+    // An action with no confirmed window yet, such as the call after a failed one, used to be
+    // refused with the acquisition to send first: 13 refusals in 29 TextEdit runs, a turn each
+    // (2026-10-10). The relay now sends that acquisition and then the call.
+    // Only for a bundle ID the engine confirmed: an unconfirmed name keeps the refusal.
+    // The call goes on only when the acquisition shows the window the lease last had: after an
+    // error the front window may have changed, and keys or text would land in it unseen.
+    let expected;
+    if (!rest && !leaseWindow?.appId && recoveryKnown && lastConfirmedWindow && !isLeaseRead(code)) {
+      acquire = `${constApp ? '' : 'let app = '}await ${recoveryTarget}`; rest = code; expected = lastConfirmedWindow;
+    }
     if (!rest) return false;
     // Split even for the app the lease holds: the guard's setup refers to `app` before a `let app`
     // in the same script, which throws (2/3 simulator-form runs, 2026-10-08).
@@ -1311,6 +1322,11 @@ export function createRelay({
         leaseStop(msg, 'this call was stopped.'); stoppedClients.add(msg.id); return;
       }
       if (reply.error || reply.result?.isError) { toClient({ ...reply, id: msg.id }); return; }
+      if (expected && !(leaseWindow?.appId === expected.appId && sameWindow(leaseWindow, expected))) {
+        toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [...(reply.result?.content ?? []),
+          { type: 'text', text: `sleight: nothing from this call ran. ${expected.app}'s window changed since the last call (it was ${documentLabel(expected)}). Act on the window above.` }] } });
+        return;
+      }
       splitHeads.set(msg.id, reply.result?.content ?? []);
       handleClient({ ...msg, params: { ...msg.params, arguments: { ...msg.params.arguments, code: rest } } });
     });
@@ -1318,7 +1334,7 @@ export function createRelay({
     // The acquisition takes this call's place in the sequence and the actions the next, so the
     // guard can reuse the acquisition's read for the first action as it does across two calls.
     callSeqs.set(prefixId, callSeqs.get(msg.id)); callSeqs.set(msg.id, ++callSeq);
-    handleClient({ ...msg, id: prefixId, params: { ...msg.params, arguments: { ...msg.params.arguments, code: m[1] } } });
+    handleClient({ ...msg, id: prefixId, params: { ...msg.params, arguments: { ...msg.params.arguments, code: acquire } } });
     return true;
   }
   function handleClient(msg) {
@@ -2034,6 +2050,7 @@ export function createRelay({
       }
       const previous = leaseWindow;
       leaseWindow = window ? { ...window, ...(known ? { appId: known } : {}) } : undefined;
+      if (leaseWindow?.appId) lastConfirmedWindow = leaseWindow;
       if (leaseWindow && !call.read && sameWindow(previous, window)) {
         for (const key of ['nativeCandidates', 'nativeIdentity', 'identityRequired', 'identityError']) {
           if (previous[key] !== undefined) leaseWindow[key] = previous[key];
@@ -2050,13 +2067,13 @@ export function createRelay({
         else if (call.acquisition) handleBundles.delete(call.handle);
       }
       if (known) {
-        recoveryTarget = `cua.getApp(${JSON.stringify(known)})`;
+        recoveryTarget = `cua.getApp(${JSON.stringify(known)})`; recoveryKnown = true;
         if (call.selector) selectorWindows.set(call.selector, { window, appId: known });
         selectorWindows.set(JSON.stringify(known), { window, appId: known });
       } else if (window) {
         // A failed acquisition (an invalid app name) never becomes the advice.
         const selector = call.selector ?? handleSelectors.get(call.handle);
-        recoveryTarget = selector ? `cua.getApp(${selector})` : `cua.getApp(${JSON.stringify(window.app)})`;
+        recoveryTarget = selector ? `cua.getApp(${selector})` : `cua.getApp(${JSON.stringify(window.app)})`; recoveryKnown = false;
       }
       if (selectedWindow && call.acquisition) {
         if (known && known !== selectedWindow.appId) {
