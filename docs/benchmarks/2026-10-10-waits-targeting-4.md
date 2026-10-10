@@ -35,3 +35,15 @@ Esc during a turn, `/sleight stop` followed by a new message in a real Claude Co
 TextEdit Cmd+S with `waitFor`, and two equal-title TextEdit windows still need a live check. The
 script's live mode (`node bench/waits-targeting-live.mjs live --owner-away`) asks for the owner to
 be away.
+
+The live attempts between 16:11 and 16:14 UTC, one-minute load 7.3 to 7.9, all failed setup
+before reaching a stop or a save. Calculator passed its 7*8 step. The Chess board was 667 by 532
+points, and the recorded move points were for 1223 by 949, so no drag was sent
+([raw](2026-10-10-waits-targeting-live-1791648688709.json)). TextEdit was already running with an
+Open panel up, which the script leaves alone. In the next attempt the fixture couldn't list
+TextEdit's documents ([raw](2026-10-10-waits-targeting-live-1791648741525.json)), and in the one
+after, the fixture didn't see a new document after Cmd+N
+([raw](2026-10-10-waits-targeting-live-1791648832672.json)). One attempt found the live lock held
+and didn't start ([raw](2026-10-10-waits-targeting-live-1791648821872.json)). `fbc179c` then
+launched TextEdit without restored windows, as it already launched Chess. No live run since that
+change is recorded.
