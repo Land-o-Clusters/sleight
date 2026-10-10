@@ -79,6 +79,11 @@ in `.dev/prompts/`, for Sol threads the owner starts:
   no live check of the JXA loader) and `sol-other-hosts-2.md` (the owner's Claude-first wording and
   README move, no Codex CLI, plus six fixes). `sol-small-fixes-2.md` from before still applies.
   Puddle's 1009r runs about 00:55 to 01:50 UTC.
+- More briefs (00:15 UTC on 2026-10-10): `sol-replay-desktop.md` (replay from the `/sleight` pane),
+  `sol-verified-results.md` (input sent, UI changed, saved), `sol-scoped-approvals.md` (design only:
+  read, control and sensitive scopes, expiry, irreversible confirms). sleight-arch: a published table of
+  what works in the background. Puddle reruns any pair a Sol test burst touches, and installs Floati
+  v0.1.3 (the `floati-codex-wait` CPU fix, a shared `~/.codex` hook) after 1009r.
 - sleight-arch: the guard's reads (`document-scope.mjs`, guard code in `relay.mjs`), with a
   background subagent studying guard-read phases across tonight's traces.
 - `/tmp/sleight-hold` exists while another project's window runs. Every brief stops live probes
