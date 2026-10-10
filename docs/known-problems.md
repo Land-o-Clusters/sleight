@@ -9,9 +9,12 @@ our own runs. Dates and engine versions are given where they matter.
   before sleight learns browser handles. Candidates attempt the known native window lease and
   saved-file checks; when native access is unavailable, their runtime guard denies native access
   while browser operations remain usable. These guards remain cooperative, not JavaScript isolation.
-  Flow rules use one `browser` source and destination
-  for all tabs, with literal fills, typing and navigation URLs checked. They do not distinguish
-  sites or tabs. Clipboard transfers and runtime strings remain outside those checks. Native
+  Flow rules accept site selectors from window and tab URL headers, with literal fills, typing and
+  navigation URLs checked. Saved browser tabs retain separate site observations, while native
+  browsers share one window observation per app. Missing or conflicting headers clear the current
+  site. A person's navigation between calls can still leave a stale site. The site checks have
+  recorded-header unit coverage, with live checks held on 2026-10-09. Clipboard transfers and runtime
+  strings remain outside those checks. Native
   document scope and saved-file change review do not cover browser tabs. Browser discovery runs
   once at startup; connecting an extension later requires a new sleight session or an explicit
   `SLEIGHT_SURFACES` override. An installed extension can be absent from the engine's live inventory.
@@ -258,7 +261,10 @@ our own runs. Dates and engine versions are given where they matter.
   App identity comes from literal acquisitions, known handles and learned bundle aliases. Arbitrary
   JavaScript can bypass this advisory check. Independent checks establish evidence for the advice,
   not the native cause of a shared helper fault.
-  Doctor probes inventory, which does not prove that every app's accessibility read works. Before
+  Doctor probes inventory by default, which does not prove that every app's accessibility read works.
+  `sleight-mcp --doctor Calculator` also checks that running app's read, reporting its time and window
+  header. It skips apps that need approval or are missing or ambiguous in inventory. The app probe
+  has stand-in engine coverage; live checks on 2026-10-09 were held by `/tmp/sleight-hold`. Before
   0.7.0 it also reported "ok" when the helper couldn't start at all.
   [The investigation](benchmarks/2026-10-04-helper-health.md) records each live attempt.
 - On a busy Mac the guard can stop a call that clicks several element numbers. With 20 CPU-bound

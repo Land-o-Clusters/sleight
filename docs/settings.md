@@ -115,6 +115,14 @@ sleight rewrites that sentence so Claude can put the first actions after the acq
 same call, since the guard checks the window before they run. Set `SLEIGHT_FIRST_CALL_BATCH=0` to
 keep the engine's wording.
 
+## Doctor app reads
+
+`sleight-mcp --doctor` checks the helper's inventory. Add a running app name or bundle ID, such as
+`sleight-mcp --doctor Calculator`, to check that app's accessibility read too. Doctor reports elapsed
+milliseconds and whether it received a window header. It skips missing or ambiguous apps and declines
+approval requests without showing a prompt. Doctor only reads. A failed app read exits 1; a skipped
+app read leaves a successful inventory check at exit 0.
+
 ## Flow rules
 
 Write `~/Library/Application Support/sleight/flow-rules.json` yourself, outside the project, then set
@@ -126,6 +134,7 @@ The relay reads it once before starting. Edits take effect in the next session. 
   "version": 1,
   "rules": [
     { "id": "contacts-mail", "kind": "source", "sources": ["Contacts"], "destinations": ["Mail"] },
+    { "id": "private-site", "kind": "source", "sources": ["site:*.internal.example.com"], "destinations": ["site:public.example.com"] },
     { "id": "ssns", "kind": "pattern", "pattern": "\\b\\d{3}-\\d{2}-\\d{4}\\b", "destinations": ["*"], "except": ["1Password"] },
     { "id": "cards", "kind": "pattern", "pattern": "\\b(?:\\d[ -]?){13,19}\\b", "destinations": ["*"], "except": ["1Password"] }
   ]
@@ -137,6 +146,17 @@ Rules stop matching literal transfers before forwarding and tell Claude which ru
 retry. Another call cancels it. Claude cannot grant an exception through tool arguments. Pattern
 rules accept optional regex `flags` (i/m/s/u). App names and observed bundle IDs ignore case.
 Source rules remember text fields and emitted values, then match exact substrings sent later.
+Use `site:example.com` in `sources`, `destinations` or `except` to select one HTTP or HTTPS host,
+across schemes and ports. `site:*.example.com` selects subdomains, excluding the bare host. Site
+names ignore case and use ASCII DNS labels (or punycode) or canonical IPv4 addresses. Other wildcard
+forms, URLs, paths and ports in selectors are refused. App names, bundle IDs, `browser` and `*` keep
+their existing meaning.
+
+Sites come from the engine's window or tab URL header. Saved tab handles keep separate observations,
+and source text keeps the host where it was read. Unknown browser sites remain subject to site
+destination rules and cannot use a site exception. Missing or conflicting headers clear the current
+site. A navigation call clears its earlier site until the next header arrives. Native browsers share
+one observed window per app. A person's navigation between reads can leave an observation stale.
 [The design](design/flow-rules.md) explains the gaps in literal checks and source attribution.
 
 ## Driving apps the engine refuses

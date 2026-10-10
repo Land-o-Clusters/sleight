@@ -92,7 +92,10 @@ const readForbiddenTargets = () => execFileSync('/usr/bin/defaults', ['read', '-
 const listLaunchdJobs = () => new Promise((resolve, reject) =>
   execFile('/bin/launchctl', ['list'], { timeout: 5000 }, (err, stdout) => (err ? reject(err) : resolve(stdout))));
 
-export async function doctor({ env = process.env, log = console.log, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs, forbiddenTargets = readForbiddenTargets } = {}) {
+export async function doctor({ env = process.env, log = console.log, app = process.argv.includes('--doctor') ? process.argv[process.argv.indexOf('--doctor') + 1] : undefined, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs, forbiddenTargets = readForbiddenTargets } = {}) {
+  if (app !== undefined && (typeof app !== 'string' || !app.trim() || app.startsWith('-'))) {
+    log('usage: sleight-mcp --doctor [running app name or bundle ID]'); return 1;
+  }
   const s = resolveServer(env);
   if (s.error) { log(`sleight: ${s.error}`); return 1; }
   await selectSurfaces(s, env);
@@ -114,9 +117,16 @@ export async function doctor({ env = process.env, log = console.log, timeoutMs =
   }
   if (!ok) return 1;
   let probe;
-  try { probe = await probeHelper(s, { timeoutMs, startupTimeoutMs }); }
+  try { probe = await probeHelper(s, { app, timeoutMs, startupTimeoutMs }); }
   catch (err) { log(`live read cleanup FAILED: ${err.message}`); return 1; }
-  if (probe.ok) { log('live read ok (helper inventory)'); return 0; }
+  if (probe.ok || probe.inventoryOk) log('live read ok (helper inventory)');
+  if (probe.appRead) {
+    const read = probe.appRead;
+    log(read.status === 'skipped' ? `app read skipped (${app}): ${read.reason}`
+      : `app read ${read.status === 'ok' ? 'ok' : 'FAILED'} (${app}): ${read.ms} ms, window header: ${read.hasWindowHeader ? 'yes' : 'no'}${read.error ? `; ${read.error}` : ''}`);
+    return probe.ok ? 0 : 1;
+  }
+  if (probe.ok) return 0;
   log(`live read FAILED: ${probe.error}`);
   if (/startup request failed/i.test(probe.error)) {
     const jobs = staleHelperJobs(await launchctlList().catch(() => ''));

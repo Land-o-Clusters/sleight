@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `sleight-mcp --doctor <app>` reads an app that is already running and reports the read's time and
+  whether it had a window header. It never launches the app, sends input or answers an approval.
+  Unit-tested with a stand-in engine (Sol, `codex/doctor-flow`).
+- A flow rule's source or destination can be a site (`site:example.com`, `site:*.example.com`),
+  matched from the window's URL. Existing rules keep their meaning. Unit-tested.
 - Claude can run a recorded script itself with the new `replay` tool. On a stop it gets the step,
   the error, the steps left and the window as it is now, and finishes the task from there. A step
   whose element isn't there yet waits up to 5 s (`--wait-ms` on the command line) when nothing in
