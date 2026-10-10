@@ -507,7 +507,7 @@ export async function run({ leaseDirectory } = {}) {
     diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, { readControl, probeApp: appHealth.probe }),
     spaceProbe: appHealth.probe,
     guardMode: process.env.SLEIGHT_GUARD,
-    firstCallBatch: process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
+    firstCallBatch: process.env.SLEIGHT_FIRST_CALL_BATCH === 'merge' ? 'merge' : process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
     clientIn: replayClient.clientIn,
     clientOut: replayClient.clientOut,
     serverIn: child.stdin,

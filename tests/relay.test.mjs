@@ -1778,12 +1778,17 @@ test('SLEIGHT_FIRST_CALL_BATCH rewrites only the engine\'s first-call rule, only
   assert.doesNotMatch(rewritten, /exactly one of the API calls/);
   assert.ok(rewritten.startsWith('Control apps.') && rewritten.endsWith('The tool result will include documentation.'));
   assert.equal(batchingDescription('a changed engine sentence'), 'a changed engine sentence');
-  for (const [firstCallBatch, rewrites] of [[false, false], [true, true]]) {
+  const merged = batchingDescription(engine, 'merge');
+  assert.match(merged, /Cmd\+W after Cmd\+S/);
+  assert.doesNotMatch(merged, /end the call after a shortcut/);
+  assert.ok(merged.startsWith('Control apps.') && merged.endsWith('The tool result will include documentation.'));
+  for (const [firstCallBatch, rewrites] of [[false, false], [true, true], ['merge', true]]) {
     const h = harness({ firstCallBatch });
     h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }); await tick();
     h.fromServer({ jsonrpc: '2.0', id: 1, result: { tools: [{ name: 'js', description: engine, inputSchema: { type: 'object' } }] } }); await tick();
     const js = h.toClient.find(m => m.id === 1).result.tools.find(t => t.name === 'js');
     assert.equal(js.description === engine, !rewrites);
+    if (firstCallBatch === 'merge') assert.match(js.description, /Cmd\+W after Cmd\+S/);
   }
 });
 

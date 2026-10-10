@@ -102,8 +102,13 @@ export function openMenuNote(text) {
   return menu ? `sleight: a menu is open (element ${menu[1]}). Escape doesn't always close a menu in a background app; \`await app.performSecondaryAction(${menu[1]}, "Cancel")\` does.` : undefined;
 }
 
-export function batchingDescription(description) {
-  return typeof description === 'string' && description.includes(FIRST_CALL_RULE) ? description.replace(FIRST_CALL_RULE, FIRST_CALL_BATCH) : description;
+// SLEIGHT_FIRST_CALL_BATCH=merge, under A/B. Since 668b462 a call continues into a window its own
+// shortcut opens, but the clause above still ends the call there: save and close were split in 14 of
+// 15 TextEdit runs, and no first call in 617 runs held an action (study, 2026-10-10).
+const FIRST_CALL_MERGE = 'start with one of the API calls shown below, assigning the app to a variable. When you already know the first actions on that app, put them after it in the same call (`let app = await cua.getApp("TextEdit"); await app.pressKey("super+n")`): sleight acquires the app and checks its window before they run. Chain every later action whose target you already know (keys, text, `{ id }` or `{ label }` clicks) in one call too, such as typing after the click that focuses a field, or Cmd+W after Cmd+S when the task closes the document. Do not end a call only to read the window before an action you already know: sleight waits for the app after each click, shortcut or Return, follows a Save or Open panel, a new window or a document saved under a name the call typed, and stops the rest of the call if any other window appears.';
+export function batchingDescription(description, variant = true) {
+  const text = variant === 'merge' ? FIRST_CALL_MERGE : FIRST_CALL_BATCH;
+  return typeof description === 'string' && description.includes(FIRST_CALL_RULE) ? description.replace(FIRST_CALL_RULE, text) : description;
 }
 const TURN_END_DESCRIPTION = 'Internal to sleight: its hooks call this when a Claude turn ends. Never call it yourself.';
 const SHUTDOWN_GRACE_MS = 3000;
@@ -229,7 +234,8 @@ export function createRelay({
   // a call, which skip it by default (owner, 2026-10-09). Document scope is always careful.
   guardMode,
   // Rewrites the engine's first-call rule in the js tool description. The launcher turns it on unless
-  // SLEIGHT_FIRST_CALL_BATCH=0: in 24 runs a side it cut turns 208 to 168 (2026-10-09).
+  // SLEIGHT_FIRST_CALL_BATCH=0: in 24 runs a side it cut turns 208 to 168 (2026-10-09). 'merge' picks
+  // the wording under A/B.
   firstCallBatch = false,
   firstCallRules,
   diagnoseRead,
@@ -1701,7 +1707,7 @@ export function createRelay({
         .filter(t => !HIDDEN_TOOLS.has(t.name))
         .filter(t => !documentMode || t.name === 'js' || t.name === TURN_END_TOOL)
         .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t))
-        .map(t => (firstCallBatch && t.name === 'js' ? { ...t, description: batchingDescription(t.description) } : t))
+        .map(t => (firstCallBatch && t.name === 'js' ? { ...t, description: batchingDescription(t.description, firstCallBatch) } : t))
         .concat(documentMode ? [DOCUMENT_TOOL, ...(localTools?.tools ?? []).filter(t => t.name === 'select_window')] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : [])
         // Claude Code defers MCP tools behind a search, which cost a turn before the first call, and
         // again before the first drag (3/3 textedit-drag runs, 2026-10-08). sleight's descriptions
