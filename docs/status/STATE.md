@@ -3,14 +3,15 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-10 15:35 UTC)
+## Banner (2026-10-10 16:00 UTC)
 
 Nothing of sleight's is running. The live lock is free, `/tmp/sleight-hold` doesn't exist, and the
-tree is clean at `8646071` on `pane/auto-mode` (pushed to private). `codex/verified-results` is
-merged (`f3d2790`). Its first live run passed 6/6 on calculator-click, textedit-edit and
-textedit-save (`docs/benchmarks/2026-10-10-verified-results-live.md`), and a false "degraded read"
-it showed is fixed (`8646071`). A leftover "Untitled 9" TextEdit window from an earlier failed run
-is still open. Engine 26.1007.21159. Puddle has no window announced, and it asks first (memory
+tree is clean at `082212e` on `pane/auto-mode` (pushed to private). Merged today by sleight-arch,
+since Codex is out of quota until later: verified results (`f3d2790`, live 6/6), waits and stop
+(`6291251`, background tasks 6/6, loaded identity cost equal with one window) and the generic
+benchmark arms (`5b7a16e`). `codex/sim-savelock` round 2 is committed and pushed (`ae3a8fb`),
+not merged. The owner is running `sol-real-use-tasks-13.md` through Grok in the `real-use-tasks`
+worktree. Engine 26.1007.21159. Puddle has no window announced, and it asks first (memory
 `shared-mac-quiet-windows`).
 
 **Where work goes.** Work in progress is private between releases (LAWS): `remote.pushDefault
@@ -42,34 +43,34 @@ non-simulator tasks. simulator-form fails setup (below).
   browser-extension comparison can run (accessibility side 21/21 so far,
   `docs/benchmarks/2026-10-10-surface-ab.md`). Extension access to local pages is approved in LAWS.
 - Trying "Always allow" in sleight's panel once (unit-tested only).
-- Pasting the briefs in `.dev/prompts/`: `sol-sim-savelock-2.md`, `sol-plugin-arm-3.md`,
-  `sol-real-use-tasks-13.md` (simulator-form setup, the `launched` field that broke Helium, and
-  cleanup of fixture windows after a failed setup), and `sol-waits-targeting-4.md`.
+- Being away for the live runs in Next, step 2, and being at the Mac for Esc and `/sleight stop`.
+- Whether `routines-demo` may acquire apps by bundle ID (this engine rejects `getApp({ windowId })`).
 - Deleting the benchmark's leftover "Untitled 6.txt" and "Untitled 9.txt" in the owner's iCloud
   TextEdit folder, from runs whose save failed (2026-10-10).
 
 **Sol branches** (private remote):
-- Reviewed, needs a rebase: `codex/waits-targeting` `2968a10` (brief `sol-waits-targeting-4.md`).
-- Waiting on a new round: `codex/sim-savelock` `6e5e04d`, `codex/plugin-arm` `cddee34`,
-  `codex/real-use-tasks` (round 13 not started), `codex/routines-demo` `210423b` (routines can't run
+- Pushed, not yet reviewed: `codex/sim-savelock` `ae3a8fb` (round 2, committed by sleight-arch).
+- Waiting on a new round: `codex/real-use-tasks` (round 13 not started), `codex/routines-demo` `210423b` (routines can't run
   on this engine, which rejects `getApp({ windowId })`. Accepting acquisition by bundle ID instead
   is the owner's call).
-- Merged on 2026-10-10: verified-results, footprint-parity, real-use-tasks round 12, review-receipts, textedit-fixes,
+- Merged on 2026-10-10: waits-targeting, plugin-arm, verified-results, footprint-parity, real-use-tasks round 12, review-receipts, textedit-fixes,
   replay-desktop, lease-close-tests, windows-research.
 
 Next, in order:
-1. `codex/waits-targeting` `2968a10` answers round 3 in code but conflicts in nine files (relay,
-   launcher, mod). Brief `.dev/prompts/sol-waits-targeting-4.md` (rebase onto `f3d2790`, clean
-   stop for results and receipts, cost runs) is for the owner to paste. Its live checks are
-   sleight-arch's after the rebase. Chess and Safari-form runs with verified results wait for the
-   owner to be away.
-2. The owner's read decisions, then the head-to-head again
+1. Review and squash `codex/sim-savelock` `ae3a8fb`. Review real-use-tasks round 13 when Grok
+   pushes it.
+2. With the owner away, Chess and Safari-form with verified results, the waits live checks
+   (`node bench/waits-targeting-live.mjs live --owner-away`), the paired plugin-arm Calculator run
+   (`--arm mcp:sleight-plain,sleight --calculator-gate`, Calculator's window on the current Space),
+   and sim-savelock's owner-away commands. With the owner at the Mac, Esc and `/sleight stop` in a
+   real session.
+3. The owner's read decisions, then the head-to-head again
    (`--arm sleight,codex --tasks calculator-click,textedit-edit,textedit-save --runs 2`).
-3. A crowded Save or Open sheet: leave its browser rows out of reads (known problems).
-4. Merge Sol's next rounds as they're pushed. simulator-form must pass before a release.
-5. A full release pass with the owner away once simulator-form passes and the gate is met. Recheck
-   the README lines tied to a release: the pass result and the 13/21 and Chess 0/3 mentions. Add
-   replay, `open_file` and other hosts to its roadmap checklist, and confirm the Claude Code minimums.
+4. A crowded Save or Open sheet: leave its browser rows out of reads (known problems).
+5. simulator-form must pass before a release. Then a full release pass with the owner away once
+   the gate is met. Recheck the README lines tied to a release: the pass result and the 13/21 and
+   Chess 0/3 mentions. Add replay, `open_file` and other hosts to its roadmap checklist, and confirm
+   the Claude Code minimums.
 
 Read first: `docs/known-problems.md`, `docs/benchmark.md`, `docs/design/guard-reads.md`.
 
@@ -78,9 +79,8 @@ Branches and worktrees (`~/Projects/sleight-wt/<name>`):
   and pushes `origin`.
 - Merged, worktrees safe to remove: `replay-next`, `doctor-flow`, `doctor-preapproved`,
   `footprint-spawns`, `small-fixes`, `other-hosts`, `scoped-approvals`, `codex-real`, `guard-speed`,
-  `replay-desktop`, `windows-research`, `textedit-fixes`, `review-receipts`, `footprint-parity`, `verified-results`.
-- Sol's open worktrees: `waits-targeting`, `sim-savelock`, `plugin-arm`,
-  `routines-demo`, `real-use-tasks`.
+  `replay-desktop`, `windows-research`, `textedit-fixes`, `review-receipts`, `footprint-parity`, `verified-results`, `waits-targeting`, `plugin-arm` (its stash is applied and committed).
+- Sol's open worktrees: `sim-savelock`, `routines-demo`, `real-use-tasks` (Grok, round 13).
 - `perf/screenshot-scale` (`1aa574b`, `shots`): parked.
 
 ## Machine state outside the repo

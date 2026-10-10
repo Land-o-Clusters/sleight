@@ -134,7 +134,7 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
 
 When a competing plugin is released (the owner expects one, 2026-10-10), sleight answers with a same-day
 head-to-head, published in full, through a generic benchmark arm for any plugin or MCP server
-(`.dev/prompts/sol-plugin-arm.md`). Whether to release on speed before footprint parity is the
+(merged 2026-10-10, `5b7a16e`). Its paired live run waits for the owner to be away. Whether to release on speed before footprint parity is the
 owner's call at that moment.
 
 The owner's rule, in order: do what competitors do but better, then improve where they haven't, then
@@ -155,8 +155,9 @@ build what nobody has. Sources are `.dev/research/2026-10-04-competitors.md` and
 - Scheduled routines built on replay.
 - Done 2026-10-10: a published table of what works in the background (`docs/background.md`).
   Receipts of each run's actions with redaction: `codex/review-receipts`.
-- Stop that confirms the Mac stopped, element waits, exact window targeting for untitled windows,
-  and recording a task from the user's demonstration.
+- Stop that confirms the Mac stopped, element waits and exact window targeting for untitled windows
+  merged 2026-10-10 (`6291251`), with their live checks before release. Recording a task from the
+  user's demonstration is open.
 - Windows, tested in a Windows 11 ARM VM (owner's idea, 2026-10-09). Codex computer use reached
   Windows on 2026-05-29, foreground only. First check, in a free UTM VM, whether that engine runs on
   ARM and exposes the same `cua_repl` API. The relay, guards, mod and benchmark could carry over.
