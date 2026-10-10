@@ -29,7 +29,11 @@ Open, in order of user impact (full list in [known-problems.md](../known-problem
 - In the simulator, Claude's first tap on a Safari field often doesn't focus it (6 of 6 runs with shrunk
   screenshots), and Claude second-guesses the screenshot's scale there.
 - `typeText` after select-all wrote `Engine01engine01`. The skill now says to paste and compare
-  (`05903fa`, 6/6 on the TextEdit tasks). Why select-all didn't replace the text is still unknown.
+  (`05903fa`, 6/6 on the TextEdit tasks). Likely cause (2026-10-10, inferred from tree sizes, not
+  confirmed): a pending TextEdit capitalization suggestion took Cmd+A, so nothing was selected. The
+  relay's settle read was there, so it isn't sleight's. Confirm with
+  `bench/small-fixes-textedit.mjs --quick` (background) after Puddle's window
+  (`.dev/research/2026-10-10-select-all-typetext.md`).
 - The TextEdit save lock: the Shift-event fix measured 0/10 hangs, but we don't know why it works.
 - Live checks for the unit-tested 1.1.0 changes: the helper resend, the stale-number remap and the
   keyboard-tap notice.

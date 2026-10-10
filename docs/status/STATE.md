@@ -3,16 +3,18 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-10 04:25 UTC, flushed before the owner's clear)
+## Banner (2026-10-10 05:40 UTC, Sol branches reviewed)
 
 The owner's bar (ROADMAP track 3): lightning quick under any load, no noticeable load on the Mac,
-measured against Codex on the same engine. Engine 26.1002.52244. Nothing of sleight's is running:
-no background jobs, the live lock is free, `/tmp/sleight-hold` doesn't exist. No open PRs.
+measured against Codex on the same engine. Engine 26.1002.52244. The owner started every Sol brief
+at 05:20 UTC, and their checks pushed load past 200. `/tmp/sleight-hold` was set from 06:15 to
+07:02 UTC at Puddle's request, then lifted when its window was cancelled. The live lock is free. No
+open PRs.
 
 **Where work goes.** Work in progress is private between releases (owner, 2026-10-10, LAWS): this
 repo has `remote.pushDefault private`, which sends every worktree's pushes to the private
-`Land-o-Clusters/sleight-dev` (Actions off, since spending is the owner's). `pane/auto-mode` is at
-`bdf86e7` there. Public `origin/pane/auto-mode` is 2 commits behind and gets pushes only at release.
+`Land-o-Clusters/sleight-dev` (Actions off, since spending is the owner's). Public
+`origin/pane/auto-mode` stays at `332e3ca` and gets pushes only at release.
 Open for the owner: these Sol branches were pushed to the public repo before the switch (02:18 to
 03:25 UTC) and are still there: `codex/replay-desktop`, `codex/verified-results`, `codex/waits-targeting`,
 `codex/textedit-fixes`, `codex/windows-research`, `codex/lease-close-tests` and earlier `codex/*`.
@@ -36,14 +38,19 @@ CPU s of its own against Codex 38.7 over six runs, while sleight was faster (154
 Brief for it: `.dev/prompts/astra-footprint-parity.md` (Astra, deep perf). If a competing plugin is
 released first, releasing on speed is the owner's call (ROADMAP track 6).
 
-**Sol branches waiting for review** (pushed, unreviewed, newest first): `codex/textedit-fixes`
-`72437b7` (rich-text moves, orphan Save panel), `codex/waits-targeting` `e3f5a0b` (element waits,
-untitled-window targeting, a stop that confirms), `codex/verified-results` `62207a6` (round 2 of
-`sol-verified-results-2.md`), `codex/replay-desktop` `013b14b` (round 2 of `sol-replay-desktop-2.md`),
-`codex/windows-research` `bdac879` (design note), `codex/lease-close-tests` `d8cafde` (tests for a
-failed lease-database close). Review each with a code-review subagent, squash onto `pane/auto-mode`,
-and run the affected tasks: verified-results and waits change what Claude reads, so they need
-Calculator, TextEdit, Chess and a Safari form before release.
+**Sol branches, reviewed 2026-10-10 05:30 UTC.** Merged: `codex/lease-close-tests` (`0125ca7`),
+`codex/windows-research` (`33c4ddd`), `codex/replay-desktop` with sleight-arch's fix for the
+full-read note after a pane replay. Sent back, briefs for the owner to paste to Sol:
+- `codex/textedit-fixes` `72437b7` → `sol-textedit-fixes-2.md`: the rich move is on by default,
+  writes the clipboard, never finished live, and a timed-out paste holds the clipboard lock.
+- `codex/waits-targeting` `e3f5a0b` → `sol-waits-targeting-2.md`, because Esc runs the checked stop and
+  exits the relay (traced by sleight-arch), and window identity needs sleight's own Accessibility.
+- `codex/verified-results` `62207a6` → `sol-verified-results-3.md`: retains every tree (heap 4.4 to
+  110.6 MB over 400 actions, reproduced by the reviewer), and the stale guard is off after a reset.
+  Merges before waits-targeting. Both edit `relay.mjs`.
+Verified-results and waits change what Claude reads, so they need Calculator, TextEdit, Chess and a
+Safari form before release. Replay-desktop needs the owner's check of the pane buttons in the Code
+tab.
 
 **Briefs written, not known to be started** (`.dev/prompts/`): `sol-sim-savelock.md`,
 `sol-lease-broker.md`, `sol-review-receipts.md`, `sol-routines-demo.md`, `sol-plugin-arm.md`,
@@ -51,13 +58,24 @@ Calculator, TextEdit, Chess and a Safari form before release.
 03:30 UTC), `astra-footprint-parity.md`. Ask the owner which are running.
 
 Next, in order:
-1. Review and merge the six Sol branches above.
+0. When Puddle's window closes: lift the hold, run `npm run check` once, and commit (in this order)
+   the replay merge with the full-read fix, the benchmark's API key mode and connector switch, the
+   shared Swift module cache, and the `SLEIGHT_FIRST_CALL_BATCH=merge` wording. Then, in the
+   background with TextEdit only, run `bench/small-fixes-textedit.mjs --quick` (the select-all
+   question) and the merge A/B on textedit-edit and textedit-save, 12 runs a side, about $14. The
+   plan is in `.dev/research/2026-10-10-merged-calls.md`. Chess and simulator-form wait for the
+   owner to be away.
+1. Review Sol's next rounds of the three branches above as they land, and merge them.
 2. The 1.1.0 live checks (helper resend, stale-number remap, keyboard-tap notice) and
    simulator-flow, with the owner away: they can take the pointer or keyboard.
 3. The footprint gap (Astra's branch, then rerun `--arm sleight,codex --tasks
    calculator-click,textedit-edit,textedit-save --runs 2`).
 4. A full release pass with the owner away, reread README whole, release (LAWS). Push the public
-   repo only then.
+   repo only then. README lines tied to a release (checked 2026-10-10): the pass result and the
+   13/21 and Chess 0/3 head-to-head mentions (lines 93 to 95), the roadmap checklist (add replay,
+   verified results, other hosts; Windows now has `docs/design/windows.md`), and whether the
+   Claude Code minimums (2.1.275, and 2.1.287 for the pane) still hold. The replay section was
+   tightened on 2026-10-10.
 
 Read first: `docs/known-problems.md`, `docs/benchmark.md`, `docs/design/guard-reads.md`.
 
@@ -117,6 +135,13 @@ Branches and worktrees (`~/Projects/sleight-wt/<name>`):
   `select` drops in the title bar.
 
 ## Waiting on the owner
+
+- OpenUsage's usage reads get 429s, and all 6 throttle starts since 2026-10-08 came 1 to 5 minutes
+  after a `bench/run.mjs` run began (the owner's other agent, 2026-10-10). Claude Code's docs don't
+  mention a usage call from `claude -p`. Benchmark arms now run with
+  `ENABLE_CLAUDEAI_MCP_SERVERS=false` and on the owner's API key (LAWS), checked 2026-10-10 06:00 UTC:
+  `/v1/models` answered 200, and a stopped `claude -p` reported `apiKeySource: ANTHROPIC_API_KEY`.
+  OpenUsage's hourly retry passing after the next pass would confirm the cause.
 
 - Watching the Mail and Mimestream tasks (about 10 minutes).
 - Whether to delete the pre-switch `codex/*` branches from the public repo.
