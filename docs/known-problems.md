@@ -10,6 +10,20 @@ our own runs. Dates and engine versions are given where they matter.
   changing Space visibility. Full AX reads remain, and no large-tree scaling result is available.
   A reset discards the retained setup. If the runtime loses it without notice, the next compact call
   stops before input and requires a standalone app acquisition. Input is never retried automatically.
+- Turn receipts recognize literal native actions. Arbitrary JavaScript remains opaque. A returned
+  batch doesn't prove that each action ran. Review compares accessibility reads, so a changed tree
+  doesn't prove saved or unsaved state. Missing, failed, overlapping or omitted observations show
+  unknown state. The 2,000-call limit makes a longer turn's review partial. Window titles are
+  hidden by default. Explicitly keeping them can expose private computed input. Document file
+  names remain visible after owner-name scrubbing. The host doesn't forward its mod-hook origin
+  over MCP, so pane snapshots remain included rather than trusting a title to hide calls.
+  Native Undo and Revert controls are named for the user to use in the app;
+  sleight doesn't activate them. The recorded October trace corpus truncated every code field
+  before its input literals. That audit can't verify input redaction. Synthetic tests cover
+  known inputs. [The design](design/review-receipts.md) describes the scope.
+  The full-name scrub matches the name as `id -F` gives it, exact case, and fails open if `id -F`
+  fails. A turn's read text is kept until its receipt is built (13.1 MB at 200 reads of 64 KiB,
+  measured by the branch).
 - Browser call text never turns off native guards. The engine must confirm `browserUse` on its reply
   before sleight learns browser handles. Candidates attempt the known native window lease and
   saved-file checks; when native access is unavailable, their runtime guard denies native access

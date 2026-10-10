@@ -70,6 +70,7 @@ import { createReadCompactor } from './compact-reads.mjs';
 import { forbiddenTargetWarning, isForbiddenSettingsWindow, refusedApp } from './blocked-apps.mjs';
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
 import { offSpace, offSpaceNote, readFailureAdvice } from './read-failure.mjs';
+import { TurnJournal, writeReceipt } from './turn-receipts.mjs';
 
 // `app.click(3); …` with no await and more code after it: the call goes on without the action,
 // and a failure then ends the session. A last statement is fine, since the call returns its promise.
@@ -225,6 +226,10 @@ export function createRelay({
   clipboardMode,
   flowRules,
   changeReview = true,
+  receipts = false,
+  stateReview = false,
+  redactReceiptTitles = true,
+  receiptWriter = writeReceipt,
   idleTurnEndMs,
   inputLease,
   onLeaseFault = () => {},
@@ -244,6 +249,23 @@ export function createRelay({
   trace: writeTrace = () => {},
 }) {
   const compactor = createReadCompactor();
+  const journal = receipts || stateReview ? new TurnJournal({ redactTitles: redactReceiptTitles }) : undefined;
+  const receiptEnds = new Map();
+  let latestReceipt;
+  function finishReceipt() {
+    if (!journal) return;
+    let receipt;
+    try { receipt = journal.finish({ session: sessionId, turn: turnId, review: stateReview }); }
+    catch { journal.last = undefined; return latestReceipt = { unavailable: true }; }
+    if (!receipt.calls.length && !receipt.omitted) return latestReceipt;
+    let path, unavailable = false;
+    if (receipts) {
+      try { path = receiptWriter(receipt); }
+      catch { unavailable = true; }
+    }
+    stderr.write(`sleight: receipt ${receipt.calls.length} calls, ${receipt.windows.length} windows, ${receipt.omitted} omitted, ${unavailable ? 1 : 0} write failures\n`);
+    return latestReceipt = { ...(path ? { path } : {}), ...(unavailable ? { unavailable } : {}), ...(receipt.review ? { review: receipt.review } : {}) };
+  }
   const remapNotes = new Map(); // call id -> what remapStale changed, told to Claude with the result
   // Apps this session drove (names and bundle IDs), and turn_ended calls whose reply should say
   // when one of them holds a keyboard filter tap: the mod shows that to the user.
@@ -784,6 +806,8 @@ export function createRelay({
     serverIn.write(JSON.stringify(msg) + '\n');
   };
   const toClient = msg => {
+    const ending = receiptEnds.get(msg.id);
+    if (msg.method === undefined && ending?.pending) { ending.replies.push(msg); return; }
     if (msg.method === undefined && promptFailures.has(msg.id)) {
       const message = promptFailures.get(msg.id); promptFailures.delete(msg.id);
       if (msg.error) msg = { ...msg, error: { ...msg.error, message } };
@@ -815,6 +839,16 @@ export function createRelay({
       trace('helper-recovery-result', msg); return;
     }
     if (clientOut.writableEnded || clientOut.destroyed) { trace('client-output-closed', { id: msg.id }); return; }
+    if (receiptEnds.has(msg.id) && msg.method === undefined) {
+      const receipt = receiptEnds.get(msg.id); receiptEnds.delete(msg.id);
+      if (receipt && msg.result) msg.result = { ...msg.result,
+        _meta: { ...msg.result._meta, 'sleight/receipt': receipt },
+        // Claude Code's $.mcp.call currently drops result _meta. Keep a bounded structured copy
+        // in content for the mod, including write failures, without putting review prose on stderr.
+        content: [...(msg.result.content ?? []), { type: 'text', text: 'sleight-receipt: ' + JSON.stringify({ ...receipt,
+          ...(receipt.review?.length > 32000 ? { review: receipt.review.slice(0, 32000) + '\nReview truncated; open the receipt for the full review.' } : {}) }) }] };
+    }
+    journal?.reply(msg);
     trace('to-client', msg);
     clientOut.write(JSON.stringify(msg) + '\n');
   };
@@ -1049,6 +1083,7 @@ export function createRelay({
     const echo = typeof msg.params?.arguments?.code === 'string' && jsArgs &&
       msg.params.arguments.code.trim().match(/^((?:let|const|var)\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.getApp\([^;]*\))\s*;\s*([A-Za-z_$][\w$]*)\s*;?$/);
     if (echo && echo[2] === echo[3]) msg.params.arguments.code = echo[1];
+    journal?.request(msg);
     if (!splitAcquisition(msg)) handleClient(msg);
   });
 
@@ -1233,9 +1268,16 @@ export function createRelay({
       const { name } = msg.params;
       if (clipboard && name === 'js_reset') clipboardResets.add(msg.id);
       if (name === TURN_END_TOOL) {
+        // Buffer even an immediate engine reply until the private metadata is ready. Send cleanup
+        // first so parsing and synchronous file I/O cannot delay the engine receiving it.
+        const ending = { pending: true, replies: [] };
+        if (journal) receiptEnds.set(msg.id, ending);
         msg.params.arguments = endTurnArgs(msg.params.arguments);
         if (keyboardTaps && msg.id !== undefined && drivenApps.size) turnEnds.add(msg.id);
         toServer(msg);
+        const receipt = finishReceipt();
+        if (journal) receiptEnds.set(msg.id, receipt);
+        for (const reply of ending.replies) toClient(reply);
         rotateTurn();
         return;
       }
@@ -1520,6 +1562,7 @@ export function createRelay({
         }).join('\n');
       }
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+      if (!automatic) journal?.observe(msg.id, text);
       if (call.observe && !automatic && !confirmedBrowser) { lastWindowText = text; lastWindow = windowFromText(text); }
       // The app's windows before the acquisition; none when the acquisition launched it.
       const appId = msg.result?._meta?.['codex/toolSurface']?.app?.appId;
@@ -1772,12 +1815,14 @@ export function createRelay({
       method: 'tools/call',
       params: { name: TURN_END_TOOL, arguments: endTurnArgs() },
     });
+    finishReceipt();
     rotateTurn();
     return done;
   }
 
   function dispose() {
     if (disposed) return;
+    finishReceipt();
     disposed = true;
     clearTimeout(idleTimer);
     for (const resolve of elicitations.values()) resolve({ result: { action: 'cancel' } });

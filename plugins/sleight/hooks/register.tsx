@@ -24,6 +24,7 @@ const replaying = atom({ plugin: 'sleight', key: 'replaying' } as const, false)
 let replayActive = false
 let replayCancelled = false
 let replaySequence = 0
+const receipt = atom({ plugin: 'sleight', key: 'receipt' } as const, null as { path?: string; review?: string; unavailable?: boolean } | null)
 
 // Not drawn from, so plain module variables (a reload resets them, harmlessly).
 let usedThisTurn = false
@@ -158,6 +159,23 @@ async function replayCurrent($: any, file: string) {
 async function endEngineTurn($: any, event: 'Stop' | 'Interrupt') {
   try {
     const ended = await call($, 'turn_ended', { hook_event_name: event })
+    let latest = (ended as { _meta?: { 'sleight/receipt'?: { path?: string; review?: string; unavailable?: boolean } } })._meta?.['sleight/receipt']
+    // The installed host's $.mcp.call keeps content but drops _meta. The relay supplies JSON
+    // in one fixed marker so paths with spaces and multi-line reviews don't need a prose parser.
+    if (!latest) for (const block of ended.content ?? []) {
+      const text = block?.type === 'text' && typeof block.text === 'string' ? block.text : ''
+      if (!text.startsWith('sleight-receipt: ') || text.length > 262144) continue
+      try {
+        const value = JSON.parse(text.slice('sleight-receipt: '.length))
+        if (!value || typeof value !== 'object' || Array.isArray(value)) continue
+        latest = {
+          ...(typeof value.path === 'string' && value.path.startsWith('/') && value.path.length <= 4096 ? { path: value.path } : {}),
+          ...(typeof value.review === 'string' && value.review.length <= 32100 ? { review: value.review } : {}),
+          ...(value.unavailable === true ? { unavailable: true } : {}),
+        }
+      } catch {}
+    }
+    if (latest) await update($, receipt, () => latest)
     $.ui.log(`sleight: turn_ended ${ended.isError ? `failed: ${JSON.stringify(ended.content)}` : 'sent'}`, { to: 'debug' })
     // The relay names an app sleight drove that holds a keyboard event tap, once per session.
     for (const block of ended.content ?? []) {
@@ -326,7 +344,7 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e)
-    const { Box, Text, Button } = els
+    const { Box, Text, Button, Link } = els
     paneSurface = e.surface
     paneColumns = Math.max(8, Math.min(120, e.props.bodyColumns ?? 48))
     // The rows the surface gave the pane: about a third of the terminal inline,
@@ -334,7 +352,7 @@ export const register: Register = on => {
     // log out of view.
     paneRows = Math.max(10, Math.min(40, e.props.scroll?.bodyRows ?? Math.floor((e.viewport?.rows ?? 30) / 2)))
 
-    const [entries, shot, status, isStopped, file, isReplaying] = await Promise.all([read($, log), read($, frame), read($, view), read($, stopped), read($, replayFile), read($, replaying)])
+    const [entries, shot, status, isStopped, file, isReplaying, latest] = await Promise.all([read($, log), read($, frame), read($, view), read($, stopped), read($, replayFile), read($, replaying), read($, receipt)])
 
     const picture = (() => {
       if (!shot) return <Text dimColor>No picture yet. It appears after Claude uses an app, or press Refresh.</Text>
@@ -408,6 +426,9 @@ export const register: Register = on => {
             $.ui.toast(result.text)
           }} />
         </Box>
+        {latest?.path?.startsWith('/') && <Link href={`file://${latest.path.split('/').map(encodeURIComponent).join('/')}`} label="Open latest receipt" />}
+        {latest?.unavailable && <Text>Receipt unavailable; the private file could not be written.</Text>}
+        {latest?.review && <Text wrap="truncate-end">{latest.review}</Text>}
         <Text bold>Actions</Text>
         {entries.length === 0 && <Text dimColor>None yet.</Text>}
         {/* Newest first, so the latest action stays visible however short the pane is. */}

@@ -16,6 +16,14 @@
   rules. Handle reads retain their app selector so each read gets its required Space probe. Previously
   only acquisitions did. The [CPU report](docs/benchmarks/2026-10-10-footprint-parity.md) records the measurements.
   The Codex head-to-head is pending.
+- `SLEIGHT_RECEIPTS=1` writes a private action receipt with a link in the pane; receipts are off
+  by default. Text inputs, typed characters (a printable key alone or with Shift or Option) and window titles
+  are redacted. Each write prunes
+  files to seven days or 200 receipts, whichever is fewer. Account usernames and full names are scrubbed.
+  `SLEIGHT_STATE_REVIEW=1` also lists changed or modified windows and observed native Undo or Revert
+  controls for the user to use in the app. It is off by default. Receipts use existing reads;
+  parsing runs after forwarding turn cleanup. stderr contains counts only.
+  [Evidence and limits](docs/benchmarks/2026-10-10-review-receipts-2.md).
 - Paste keeps the user's clipboard with one helper per session instead of a spawn per paste, and
   reads large clipboards in linear time (a mocked 40 MiB transfer fell from about 5 s to 31 to 88 ms).
   `blocked_app` also refuses a settings window by its Accessibility metadata, so a localized title or

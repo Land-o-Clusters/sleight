@@ -300,6 +300,33 @@ describe('sleight mod', () => {
     expect(String((result as { text?: string }).text)).toMatch(/stopped before starting/)
   })
 
+  test('the pane links the latest turn receipt and shows its unsaved review', async ($, on) => {
+    on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [{ type: 'text', text: 'App: TextEdit.' }] } }) as never)
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async (_$, e) => ({ value: { content: [], ...(e.tool === 'turn_ended' ? {
+      _meta: { 'sleight/receipt': { path: '/private/tmp/receipt with spaces.json', review: 'TextEdit: changed. Leave it as it is.' } },
+    } : {}) } }) as never)
+    await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("TextEdit")' } as never)
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { bodyColumns: 60 } as never })
+    await ui.press({ key: 'refresh' })
+    expect(await ui.find({ type: 'Link', href: 'file:///private/tmp/receipt%20with%20spaces.json' })).toBeDefined()
+    expect(await ui.find({ text: /TextEdit: changed\. Leave/ })).toBeDefined()
+  })
+
+  test('the pane reads receipt content when the host drops MCP result metadata', async ($, on) => {
+    on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [{ type: 'text', text: 'App: Calculator.' }] } }) as never)
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async (_$, e) => ({ value: { content: e.tool === 'turn_ended' ? [{ type: 'text',
+      text: 'sleight-receipt: ' + JSON.stringify({ path: '/private/tmp/actual-host.json', review: 'Calculator: changed.' }) }] : [] } }) as never)
+    await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("Calculator")' } as never)
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { bodyColumns: 60 } as never })
+    await ui.press({ key: 'refresh' })
+    expect(await ui.find({ type: 'Link', href: 'file:///private/tmp/actual-host.json' })).toBeDefined()
+    expect(await ui.find({ text: /Calculator: changed/ })).toBeDefined()
+    expect(await ui.find({ key: 'replay' })).toBeDefined()
+    expect(await ui.find({ key: 'record' })).toBeDefined()
+  })
+
   test('a js call this mod didn\'t raise never gets its snapshot allowance', async ($, on) => {
     // Stands in for the engine's own check. The test's query is not sleight's origin, so this decides.
     on('tool.check', async () => ({ decision: 'ask', reason: 'core check' }) as never)

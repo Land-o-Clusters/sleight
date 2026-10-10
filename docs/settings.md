@@ -1,6 +1,30 @@
 # Settings
 
-You don't need any of these. Each one changes how approvals or guards behave.
+You don't need any of these. They change approvals, guards, receipts or review.
+
+## Receipts and unsaved review
+
+Set `SLEIGHT_RECEIPTS=1` to write a private JSON receipt after each used turn to
+`~/Library/Logs/sleight/receipts/`. The pane links the latest receipt. It lists the observed app
+and window, recognized actions and targets, the call's outcome and changes in the returned reads.
+Typed and pasted text and literal values become length markers. Raw code, accessibility trees,
+screenshots and error text stay out of the file. A computed input has an unknown length.
+
+Receipts are off by default. Window titles become length markers by default; the app name and
+a document's file name from its `file://` URL remain, with the account's username and full name scrubbed.
+`SLEIGHT_RECEIPT_REDACT_TITLES=0` keeps scrubbed titles, which can contain other private data.
+Single printable keys become length markers too. Named keys and shortcuts with modifiers remain.
+Each write prunes writer-owned receipt files to seven days or 200 files, whichever is fewer.
+The directory is private to your account (0700), and each
+file is readable and writable only by you (0600).
+
+Set `SLEIGHT_STATE_REVIEW=1` to show changed or modified windows at turn end. This is off by
+default and independent of saved-file change review. It uses reads the relay already received.
+You can leave the window as it is, or use a native Undo or Revert To Saved control when one was
+observed. The review tells you which control was available. You use it in the app yourself.
+Missing reads, failed or overlapping calls, and turns over 2,000 calls report uncertainty.
+An accessibility change doesn't prove that a file is saved or unsaved. See the
+[design and limits](design/review-receipts.md).
 
 ## Approval scope
 

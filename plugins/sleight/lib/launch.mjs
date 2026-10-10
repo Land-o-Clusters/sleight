@@ -31,6 +31,11 @@ import { replayBridge } from './replay.mjs';
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
 const SERVER_KEY = 'cua_repl';
 
+export function receiptOptions(env = process.env) {
+  return { receipts: env.SLEIGHT_RECEIPTS === '1', stateReview: env.SLEIGHT_STATE_REVIEW === '1',
+    redactReceiptTitles: env.SLEIGHT_RECEIPT_REDACT_TITLES !== '0' };
+}
+
 function fail(message) {
   process.stderr.write(`sleight: ${message}\n`);
   process.exit(1);
@@ -593,6 +598,7 @@ export async function run({ leaseDirectory } = {}) {
     grantAudit,
     flowRules,
     changeReview: process.env.SLEIGHT_CHANGE_REVIEW === '1',
+    ...receiptOptions(),
     // End the engine's turn after 30 s without a running call, so the app it
     // holds is released even where the mod doesn't run. 0 turns this off.
     idleTurnEndMs: Number(process.env.SLEIGHT_IDLE_TURN_END_MS ?? 30000),

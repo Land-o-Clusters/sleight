@@ -127,6 +127,13 @@ screenshot itself.
 
 The status line shows which app Claude is working in and how many actions it has taken.
 
+Set `SLEIGHT_RECEIPTS=1` to write private receipts in `~/Library/Logs/sleight/receipts/` and link
+the latest in the pane. Receipts are off by default. They list actions, targets, call outcomes
+and observed changes, with text inputs, single printable keys and window titles redacted.
+Each write keeps at most seven days or 200 receipt files, whichever is fewer.
+Optional unsaved review lists changed windows and observed native Undo or Revert controls.
+The [settings](docs/settings.md#receipts-and-unsaved-review) explain title redaction and review.
+
 `/sleight stop`, or Stop (`s`) in the pane, works mid-turn. It ends the engine's turn and refuses every
 further sleight call until your next message. Press Esc too if you want the rest of Claude's turn gone.
 

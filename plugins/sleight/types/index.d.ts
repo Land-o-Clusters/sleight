@@ -39,6 +39,7 @@ declare module 'claude-code' {
       stopped: boolean
       replayFile: string
       replaying: boolean
+      receipt: { path?: string; review?: string; unavailable?: boolean } | null
     }
   }
 }

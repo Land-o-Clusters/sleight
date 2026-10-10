@@ -1088,6 +1088,37 @@ test('document cleanup does not inspect or discard the document exposed after it
   });
 });
 
+test('a fixture can forbid answering save dialogs during retained-window cleanup', () => {
+  const { closeOwnedWindow } = nativeSource(), owned = {};
+  let discarded = false;
+  assert.throws(() => closeOwnedWindow(owned, { mode: 'document', refuseDialogs: true }, {}, {
+    exists: () => true, matches: () => true, focused: () => owned, equal: (a, b) => a === b,
+    closeDocument() {}, wait() {}, dialog: () => [], discard() { discarded = true; },
+  }), /still open/);
+  assert.equal(discarded, false);
+});
+
+test('refuseDialogs blocks every app dialog category and stops before closing a document', () => {
+  const { appDialogInfo, closeOwnedWindow } = nativeSource(), owned = {};
+  assert.equal(appDialogInfo({ subrole: 'AXDialog', title: 'Save changes' }, 'TextEdit', true).stop, true);
+  assert.throws(() => closeOwnedWindow(owned, { mode: 'document', refuseDialogs: true }, {}, {
+    exists: () => true, matches: () => true, focused: () => owned, equal: (a, b) => a === b,
+    dialog: () => [{ category: 'application-result' }],
+    closeDocument: () => assert.fail('must not act while an app dialog is present'),
+  }), /dialog/);
+});
+
+test('strict fixture menu cancellation never sends Escape or targets a dialog', () => {
+  const { cancelFixtureMenu } = nativeSource();
+  let cancels = 0, escapes = 0;
+  const api = { role: () => 'AXMenu', cancel: () => { cancels++; return false; }, escape: () => { escapes++; } };
+  assert.throws(() => cancelFixtureMenu({}, api, true), /Escape/);
+  assert.equal(escapes, 0);
+  api.role = () => 'AXSheet';
+  assert.throws(() => cancelFixtureMenu({}, api, true), /menu/);
+  assert.equal(cancels, 1);
+});
+
 test('document menu closure prefers the enabled per-document command over window closure', () => {
   const { chooseFileMenu } = nativeSource(), file = {}, menu = {}, selected = { title: 'Close Selected PDF Document' },
     wholeWindow = { title: 'Close Window' }, disabled = { title: 'Close Selected PDF Document', disabled: true }, presses = [];

@@ -1,0 +1,1288 @@
+{
+  "date": "2026-10-10",
+  "branch": "codex/review-receipts",
+  "base": "332e3ca0260d7eee0b003882d95d8b64ec431dd3",
+  "currentGate": {
+    "checkExitCode": 0,
+    "proseExitCode": 0,
+    "commitAndPush": "Both required checks passed. Publication is authorized only to private/codex/review-receipts.",
+    "hold": null,
+    "lastReadOnlyRecheck": {
+      "at": "2026-10-10T06:21:59Z",
+      "holdPresent": true,
+      "liveLockPresent": false,
+      "newTestsOrLiveRuns": 0,
+      "diffCheckExitCode": 0,
+      "inspectorHelpAttempt": {
+        "command": "codex-macos-inspect --help",
+        "exitCode": 64,
+        "refusal": "CODEX_MACOS_INSPECT_APPROVAL_REQUIRED: use one documented read-only inspector operation with bounded arguments",
+        "fallbackAttempted": false
+      }
+    },
+    "liveExitCode": 0,
+    "checkQueue": "Receipt-review slot released; remaining checks handed off in the operator-authorized queue.",
+    "cpuRequirement": "Latest synthetic median is 0.3555 microseconds per call; no added engine reads. The bookkeeping cost is nonzero.",
+    "pushRemote": "private (Land-o-Clusters/sleight-dev), per current primary LAWS and STATE",
+    "baseVerification": "Fetched origin/pane/auto-mode remains 332e3ca0260d7eee0b003882d95d8b64ec431dd3. The successful code remains on that requested base; no private upstream cache changes were adopted."
+  },
+  "traceAudit": {
+    "command": "node bench/receipt-traces.mjs",
+    "exitCode": 0,
+    "files": 27,
+    "calls": 229,
+    "literalInputs": 0,
+    "checkedInputs": 0,
+    "leaks": 0,
+    "truncatedCode": 229,
+    "parseFailures": 0,
+    "caveat": "Every code field was truncated before the input literal; this corpus provides no typed-input redaction coverage."
+  },
+  "cost": {
+    "command": "node bench/receipt-cost.mjs",
+    "exitCode": 0,
+    "kind": "offline journal cost, no engine or model",
+    "callsPerSample": 2000,
+    "samples": [
+      {
+        "calls": 2000,
+        "captureMs": 0.8295829999999569,
+        "captureCPUus": 816,
+        "captureCPUusPerCall": 0.408,
+        "turnEndMs": 1063.891625,
+        "turnEndCPUus": 95148
+      },
+      {
+        "calls": 2000,
+        "captureMs": 4.089832999999999,
+        "captureCPUus": 1185,
+        "captureCPUusPerCall": 0.5925,
+        "turnEndMs": 894.4172079999998,
+        "turnEndCPUus": 69781
+      },
+      {
+        "calls": 2000,
+        "captureMs": 0.8587499999998727,
+        "captureCPUus": 1203,
+        "captureCPUusPerCall": 0.6015,
+        "turnEndMs": 1250.3358749999998,
+        "turnEndCPUus": 75366
+      },
+      {
+        "calls": 2000,
+        "captureMs": 0.9240409999993062,
+        "captureCPUus": 413,
+        "captureCPUusPerCall": 0.2065,
+        "turnEndMs": 1172.6621670000004,
+        "turnEndCPUus": 80475
+      },
+      {
+        "calls": 2000,
+        "captureMs": 0.3099999999994907,
+        "captureCPUus": 300,
+        "captureCPUusPerCall": 0.15,
+        "turnEndMs": 1531.839,
+        "turnEndCPUus": 55666
+      },
+      {
+        "calls": 2000,
+        "captureMs": 0.40025000000059663,
+        "captureCPUus": 391,
+        "captureCPUusPerCall": 0.1955,
+        "turnEndMs": 1232.1589169999997,
+        "turnEndCPUus": 58917
+      },
+      {
+        "calls": 2000,
+        "captureMs": 52.94337500000074,
+        "captureCPUus": 322,
+        "captureCPUusPerCall": 0.161,
+        "turnEndMs": 619.8638339999998,
+        "turnEndCPUus": 54994
+      }
+    ],
+    "medianCaptureCPUusPerCall": 0.2065,
+    "extraEngineReads": 0,
+    "caveat": "Synthetic reference capture and turn-end parsing only; excludes file I/O, engine work and Codex comparison. Another run held the live lock during this measurement; wall times include host scheduling delay."
+  },
+  "liveAttempts": [
+    {
+      "command": "node bench/review-receipts-live.mjs",
+      "exitCode": 1,
+      "at": "2026-10-10T05:51:30.846Z",
+      "kind": "review-receipts-live",
+      "engineCalls": [],
+      "receipts": [],
+      "checks": {},
+      "result": {
+        "passed": false,
+        "reason": "Another live run holds /tmp/sleight-live.lock. Wait for it to finish."
+      }
+    },
+    {
+      "command": "node bench/review-receipts-live.mjs",
+      "exitCode": 1,
+      "at": "2026-10-10T07:03:26.492Z",
+      "kind": "review-receipts-live",
+      "engineCalls": [],
+      "receipts": [],
+      "checks": {},
+      "result": {
+        "observerError": "Command failed: /usr/bin/pgrep -x UserNotificationCenter\nsysmon request failed with error: sysmond service not found\npgrep: Cannot get process list\n",
+        "passed": false,
+        "reason": "macOS permission observer failed: Command failed: /usr/bin/pgrep -x UserNotificationCenter\nsysmon request failed with error: sysmond service not found\npgrep: Cannot get process list\n",
+        "cleanupError": "Fixture cleanup stopped by permission observation",
+        "fixtureDir": "/private/tmp/sleight-receipts-live-IVDpRy"
+      }
+    },
+    {
+      "command": "node bench/review-receipts-live.mjs",
+      "exitCode": 0,
+      "at": "2026-10-10T07:03:50.218Z",
+      "kind": "review-receipts-live",
+      "engineCalls": [
+        "js",
+        "js",
+        "js",
+        "js",
+        "turn_ended",
+        "js",
+        "js",
+        "turn_ended"
+      ],
+      "receipts": [
+        {
+          "path": "~/Library/Logs/sleight/receipts/turn-1791615837592-ca531566-68a5-4063-94da-0c2b92834a1d.json",
+          "receipt": {
+            "version": 1,
+            "session": "1cc9680d-449d-4ef6-849a-26b08a9ce07b",
+            "turn": "b6f9e29a-2986-4226-87e4-11cb639521c9",
+            "at": "2026-10-10T07:03:57.592Z",
+            "calls": [
+              {
+                "tool": "js",
+                "app": null,
+                "window": null,
+                "actions": [
+                  {
+                    "action": "read",
+                    "result": "unknown"
+                  }
+                ],
+                "result": "returned",
+                "change": "unknown",
+                "detail": "No matching before and after window observation."
+              },
+              {
+                "tool": "js",
+                "app": "Calculator",
+                "window": "[redacted window]",
+                "actions": [
+                  {
+                    "action": "read",
+                    "result": "unknown"
+                  }
+                ],
+                "result": "returned",
+                "change": "unknown",
+                "detail": "No matching before and after window observation."
+              },
+              {
+                "tool": "js",
+                "app": "TextEdit",
+                "window": "[redacted window]",
+                "actions": [
+                  {
+                    "action": "read",
+                    "result": "unknown"
+                  }
+                ],
+                "result": "returned",
+                "change": "unknown",
+                "detail": "No matching before and after window observation."
+              },
+              {
+                "tool": "js",
+                "app": "TextEdit",
+                "window": "[redacted window]",
+                "actions": [
+                  {
+                    "action": "pressKey",
+                    "result": "unknown",
+                    "key": "super+a"
+                  },
+                  {
+                    "action": "typeText",
+                    "result": "unknown",
+                    "input": {
+                      "redacted": true,
+                      "length": 30
+                    }
+                  }
+                ],
+                "result": "returned",
+                "change": "changed",
+                "detail": "3 accessibility lines changed; 1 value fields changed (contents redacted)."
+              }
+            ],
+            "windows": [
+              {
+                "app": "TextEdit",
+                "window": "[redacted window]",
+                "change": "changed",
+                "detail": "3 accessibility lines changed; 1 value fields changed (contents redacted).",
+                "modified": false,
+                "revert": []
+              }
+            ],
+            "omitted": 0,
+            "review": "[review retained in private receipt]"
+          },
+          "mode": 384
+        },
+        {
+          "path": "~/Library/Logs/sleight/receipts/turn-1791615838836-77b9f4db-1388-4bc1-8602-3fecbce032df.json",
+          "receipt": {
+            "version": 1,
+            "session": "1cc9680d-449d-4ef6-849a-26b08a9ce07b",
+            "turn": "5cd7c3b8-0a44-4163-b077-fd60f5439d58",
+            "at": "2026-10-10T07:03:58.836Z",
+            "calls": [
+              {
+                "tool": "js",
+                "app": "TextEdit",
+                "window": "[redacted window]",
+                "actions": [
+                  {
+                    "action": "read",
+                    "result": "unknown"
+                  }
+                ],
+                "result": "returned",
+                "change": "unchanged",
+                "detail": "0 accessibility lines changed; 0 value fields changed (contents redacted)."
+              },
+              {
+                "tool": "js",
+                "app": "TextEdit",
+                "window": "[redacted window]",
+                "actions": [
+                  {
+                    "action": "pressKey",
+                    "result": "unknown",
+                    "key": "super+z"
+                  }
+                ],
+                "result": "returned",
+                "change": "changed",
+                "detail": "3 accessibility lines changed; 1 value fields changed (contents redacted)."
+              }
+            ],
+            "windows": [
+              {
+                "app": "TextEdit",
+                "window": "[redacted window]",
+                "change": "changed",
+                "detail": "3 accessibility lines changed; 1 value fields changed (contents redacted).",
+                "modified": false,
+                "revert": []
+              }
+            ],
+            "omitted": 0,
+            "review": "[review retained in private receipt]"
+          },
+          "mode": 384
+        }
+      ],
+      "checks": {
+        "calculatorHeader": true,
+        "fixtureIdentity": true,
+        "inputObserved": true,
+        "privateFile": true,
+        "receiptInputRedacted": true,
+        "inputLength": true,
+        "changedWindow": true,
+        "paneMetadata": true,
+        "restoredBuffer": true
+      },
+      "engine": "26.1007.21159",
+      "engineExit": {
+        "code": 0,
+        "signal": null
+      },
+      "result": {
+        "code": 0,
+        "groupClean": true,
+        "passed": true,
+        "seconds": 6,
+        "fixtureDiagnostics": [
+          {
+            "app": "TextEdit",
+            "bundle": "com.apple.TextEdit",
+            "retries": [],
+            "totalWaitMs": 0,
+            "actionTaken": false,
+            "running": true,
+            "pid": 86808,
+            "setupCase": "already-running",
+            "launched": true,
+            "readiness": {
+              "focused": {
+                "present": true,
+                "matches": true,
+                "documentKind": "file-url",
+                "titleMatches": true,
+                "pathAvailable": true,
+                "pathMatchesNormalizedTarget": true
+              },
+              "main": {
+                "present": true,
+                "matches": true,
+                "documentKind": "file-url",
+                "titleMatches": true,
+                "pathAvailable": true,
+                "pathMatchesNormalizedTarget": true
+              }
+            },
+            "fresh": false,
+            "menuItems": [
+              "New",
+              "Open…",
+              "Open Recent",
+              "",
+              "Close",
+              "Close All",
+              "Save",
+              "Save As…",
+              "Duplicate",
+              "Rename…",
+              "Move To…",
+              "Revert To",
+              "Export as PDF…",
+              "",
+              "Show Properties",
+              "",
+              "Insert from iPhone",
+              "",
+              "Share",
+              "",
+              "Page Setup…",
+              "Print…"
+            ],
+            "menuCommands": [
+              {
+                "title": "New",
+                "enabled": true
+              },
+              {
+                "title": "Open…",
+                "enabled": true
+              },
+              {
+                "title": "Open Recent",
+                "enabled": true
+              },
+              {
+                "title": "",
+                "enabled": false
+              },
+              {
+                "title": "Close",
+                "enabled": true
+              },
+              {
+                "title": "Close All",
+                "enabled": true
+              },
+              {
+                "title": "Save",
+                "enabled": true
+              },
+              {
+                "title": "Save As…",
+                "enabled": true
+              },
+              {
+                "title": "Duplicate",
+                "enabled": true
+              },
+              {
+                "title": "Rename…",
+                "enabled": true
+              },
+              {
+                "title": "Move To…",
+                "enabled": true
+              },
+              {
+                "title": "Revert To",
+                "enabled": true
+              },
+              {
+                "title": "Export as PDF…",
+                "enabled": true
+              },
+              {
+                "title": "",
+                "enabled": false
+              },
+              {
+                "title": "Show Properties",
+                "enabled": true
+              },
+              {
+                "title": "",
+                "enabled": false
+              },
+              {
+                "title": "Insert from iPhone",
+                "enabled": true
+              },
+              {
+                "title": "",
+                "enabled": false
+              },
+              {
+                "title": "Share",
+                "enabled": true
+              },
+              {
+                "title": "",
+                "enabled": false
+              },
+              {
+                "title": "Page Setup…",
+                "enabled": true
+              },
+              {
+                "title": "Print…",
+                "enabled": true
+              }
+            ]
+          },
+          {
+            "app": "Calculator",
+            "bundle": "com.apple.calculator",
+            "retries": [],
+            "totalWaitMs": 106,
+            "actionTaken": false,
+            "running": true,
+            "pid": 75145,
+            "setupCase": "already-running",
+            "launched": true,
+            "fresh": false,
+            "observationRetries": [
+              {
+                "code": -25204,
+                "waitMs": 106,
+                "totalWaitMs": 106,
+                "setupCase": "already-running"
+              }
+            ],
+            "observationTotalWaitMs": 106,
+            "observationReadWait": {
+              "reason": "ready",
+              "setupCase": "already-running",
+              "elapsedMs": 359,
+              "code": -25204,
+              "attribute": "AXFocusedWindow"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "command": "node bench/review-receipts-live.mjs",
+      "exitCode": 0,
+      "stage": "after retention bound correction",
+      "at": "2026-10-10T07:07:51.340Z",
+      "kind": "review-receipts-live",
+      "engineCalls": [
+        "js",
+        "js",
+        "js",
+        "js",
+        "turn_ended",
+        "js",
+        "js",
+        "turn_ended"
+      ],
+      "receipts": [
+        {
+          "path": "~/Library/Logs/sleight/receipts/turn-1791616077410-40efcd21-cf4b-4090-a23b-ab330979ba5b.json",
+          "receipt": {
+            "version": 1,
+            "session": "5cbf71cd-5365-41f2-b95d-b38a373016f8",
+            "turn": "d8f5b09c-b444-4837-9869-9b62afc3e55d",
+            "at": "2026-10-10T07:07:57.409Z",
+            "calls": [
+              {
+                "tool": "js",
+                "app": null,
+                "window": null,
+                "actions": [
+                  {
+                    "action": "read",
+                    "result": "unknown"
+                  }
+                ],
+                "result": "returned",
+                "change": "unknown",
+                "detail": "No matching before and after window observation."
+              },
+              {
+                "tool": "js",
+                "app": "Calculator",
+                "window": "[redacted window]",
+                "actions": [
+                  {
+                    "action": "read",
+                    "result": "unknown"
+                  }
+                ],
+                "result": "returned",
+                "change": "unknown",
+                "detail": "No matching before and after window observation."
+              },
+              {
+                "tool": "js",
+                "app": "TextEdit",
+                "window": "[redacted window]",
+                "actions": [
+                  {
+                    "action": "read",
+                    "result": "unknown"
+                  }
+                ],
+                "result": "returned",
+                "change": "unknown",
+                "detail": "No matching before and after window observation."
+              },
+              {
+                "tool": "js",
+                "app": "TextEdit",
+                "window": "[redacted window]",
+                "actions": [
+                  {
+                    "action": "pressKey",
+                    "result": "unknown",
+                    "key": "super+a"
+                  },
+                  {
+                    "action": "typeText",
+                    "result": "unknown",
+                    "input": {
+                      "redacted": true,
+                      "length": 30
+                    }
+                  }
+                ],
+                "result": "returned",
+                "change": "changed",
+                "detail": "3 accessibility lines changed; 1 value fields changed (contents redacted)."
+              }
+            ],
+            "windows": [
+              {
+                "app": "TextEdit",
+                "window": "[redacted window]",
+                "change": "changed",
+                "detail": "3 accessibility lines changed; 1 value fields changed (contents redacted).",
+                "modified": false,
+                "revert": []
+              }
+            ],
+            "omitted": 0,
+            "review": "[review retained in private receipt]"
+          },
+          "mode": 384
+        },
+        {
+          "path": "~/Library/Logs/sleight/receipts/turn-1791616078217-00570d07-a79d-4f44-9dbd-1e868a9cd91e.json",
+          "receipt": {
+            "version": 1,
+            "session": "5cbf71cd-5365-41f2-b95d-b38a373016f8",
+            "turn": "73ef6901-bfae-4a54-a55b-688f101ff37c",
+            "at": "2026-10-10T07:07:58.217Z",
+            "calls": [
+              {
+                "tool": "js",
+                "app": "TextEdit",
+                "window": "[redacted window]",
+                "actions": [
+                  {
+                    "action": "read",
+                    "result": "unknown"
+                  }
+                ],
+                "result": "returned",
+                "change": "unchanged",
+                "detail": "0 accessibility lines changed; 0 value fields changed (contents redacted)."
+              },
+              {
+                "tool": "js",
+                "app": "TextEdit",
+                "window": "[redacted window]",
+                "actions": [
+                  {
+                    "action": "pressKey",
+                    "result": "unknown",
+                    "key": "super+z"
+                  }
+                ],
+                "result": "returned",
+                "change": "changed",
+                "detail": "3 accessibility lines changed; 1 value fields changed (contents redacted)."
+              }
+            ],
+            "windows": [
+              {
+                "app": "TextEdit",
+                "window": "[redacted window]",
+                "change": "changed",
+                "detail": "3 accessibility lines changed; 1 value fields changed (contents redacted).",
+                "modified": false,
+                "revert": []
+              }
+            ],
+            "omitted": 0,
+            "review": "[review retained in private receipt]"
+          },
+          "mode": 384
+        }
+      ],
+      "checks": {
+        "calculatorHeader": true,
+        "fixtureIdentity": true,
+        "inputObserved": true,
+        "privateFile": true,
+        "receiptInputRedacted": true,
+        "inputLength": true,
+        "changedWindow": true,
+        "paneMetadata": true,
+        "restoredBuffer": true
+      },
+      "engine": "26.1007.21159",
+      "engineExit": {
+        "code": 0,
+        "signal": null
+      },
+      "result": {
+        "code": 0,
+        "groupClean": true,
+        "passed": true,
+        "seconds": 3.9,
+        "fixtureDiagnostics": [
+          {
+            "app": "TextEdit",
+            "bundle": "com.apple.TextEdit",
+            "retries": [],
+            "totalWaitMs": 0,
+            "actionTaken": false,
+            "running": true,
+            "pid": 69602,
+            "setupCase": "already-running",
+            "launched": true,
+            "readiness": {
+              "focused": {
+                "present": false
+              },
+              "main": {
+                "present": false
+              }
+            },
+            "fresh": false,
+            "menuItems": [
+              "New",
+              "Open…",
+              "Open Recent",
+              "",
+              "Close",
+              "Close All",
+              "Save",
+              "Save As…",
+              "Duplicate",
+              "Rename…",
+              "Move To…",
+              "Revert To",
+              "Export as PDF…",
+              "",
+              "Show Properties",
+              "",
+              "Insert from iPhone",
+              "",
+              "Share",
+              "",
+              "Page Setup…",
+              "Print…"
+            ],
+            "menuCommands": [
+              {
+                "title": "New",
+                "enabled": true
+              },
+              {
+                "title": "Open…",
+                "enabled": true
+              },
+              {
+                "title": "Open Recent",
+                "enabled": true
+              },
+              {
+                "title": "",
+                "enabled": false
+              },
+              {
+                "title": "Close",
+                "enabled": true
+              },
+              {
+                "title": "Close All",
+                "enabled": true
+              },
+              {
+                "title": "Save",
+                "enabled": true
+              },
+              {
+                "title": "Save As…",
+                "enabled": true
+              },
+              {
+                "title": "Duplicate",
+                "enabled": true
+              },
+              {
+                "title": "Rename…",
+                "enabled": true
+              },
+              {
+                "title": "Move To…",
+                "enabled": true
+              },
+              {
+                "title": "Revert To",
+                "enabled": true
+              },
+              {
+                "title": "Export as PDF…",
+                "enabled": true
+              },
+              {
+                "title": "",
+                "enabled": false
+              },
+              {
+                "title": "Show Properties",
+                "enabled": true
+              },
+              {
+                "title": "",
+                "enabled": false
+              },
+              {
+                "title": "Insert from iPhone",
+                "enabled": true
+              },
+              {
+                "title": "",
+                "enabled": false
+              },
+              {
+                "title": "Share",
+                "enabled": true
+              },
+              {
+                "title": "",
+                "enabled": false
+              },
+              {
+                "title": "Page Setup…",
+                "enabled": true
+              },
+              {
+                "title": "Print…",
+                "enabled": true
+              }
+            ]
+          },
+          {
+            "app": "Calculator",
+            "bundle": "com.apple.calculator",
+            "retries": [],
+            "totalWaitMs": 0,
+            "actionTaken": false,
+            "running": true,
+            "pid": 75145,
+            "setupCase": "already-running",
+            "launched": true,
+            "fresh": false
+          }
+        ]
+      }
+    }
+  ],
+  "checks": [
+    {
+      "command": "npm run check",
+      "stage": "initial sandbox baseline",
+      "exitCode": 1,
+      "interrupted": true,
+      "reason": "Native compilation timed out and worktree writes and sockets were denied with EPERM. One Ctrl-C sent through the original terminal; final exit collected. Output truncated, so no total is claimed."
+    },
+    {
+      "command": "npm run test:mod",
+      "stage": "pane regression red",
+      "exitCode": 1
+    },
+    {
+      "command": "npm run test:mod",
+      "stage": "pane regression green",
+      "exitCode": 0,
+      "passed": 12
+    },
+    {
+      "command": "node --test tests/turn-receipts.test.mjs tests/relay-receipts.test.mjs tests/relay.test.mjs tests/compact-reads.test.mjs",
+      "exitCode": 0,
+      "passed": 174
+    },
+    {
+      "command": "node --test tests/turn-receipts.test.mjs",
+      "stage": "final-review regressions red",
+      "exitCode": 1,
+      "passed": 18,
+      "failed": 3
+    },
+    {
+      "command": "node --test tests/turn-receipts.test.mjs tests/relay-receipts.test.mjs",
+      "stage": "final-review regressions green",
+      "exitCode": 0,
+      "passed": 27
+    },
+    {
+      "command": "node --test --test-name-pattern 'forbid answering' tests/bench-real-fixture.test.mjs",
+      "stage": "dialog-cleanup red",
+      "exitCode": 1,
+      "passed": 0,
+      "failed": 1
+    },
+    {
+      "command": "node --test --test-name-pattern 'forbid answering' tests/bench-real-fixture.test.mjs",
+      "stage": "dialog-cleanup green",
+      "exitCode": 0,
+      "passed": 1
+    },
+    {
+      "command": "npm run check",
+      "stage": "host check before final review fixes",
+      "exitCode": 1,
+      "interrupted": true,
+      "reason": "Stopped once through the retained terminal to apply the idle metadata and strict-dialog fixes. Final exit collected. Output included timing assertions and interruption cancellations; no total is claimed."
+    },
+    {
+      "command": "npm run lint:prose",
+      "stage": "first worktree lint",
+      "exitCode": 2,
+      "reason": "The worktree had no .vale/styles. The repository-pinned style package was installed with vale sync after the ordinary sandbox attempt failed."
+    },
+    {
+      "command": "node --test --test-name-pattern 'after idle' tests/relay-receipts.test.mjs",
+      "stage": "idle metadata red",
+      "exitCode": 1,
+      "failed": 1
+    },
+    {
+      "command": "node --test --test-name-pattern 'refuseDialogs|strict fixture menu' tests/bench-real-fixture.test.mjs",
+      "stage": "strict dialog red",
+      "exitCode": 1,
+      "failed": 2
+    },
+    {
+      "command": "node --test tests/relay-receipts.test.mjs tests/turn-receipts.test.mjs",
+      "stage": "idle metadata green",
+      "exitCode": 0,
+      "passed": 28
+    },
+    {
+      "command": "node --test --test-name-pattern 'forbid answering|refuseDialogs|strict fixture menu' tests/bench-real-fixture.test.mjs",
+      "stage": "strict dialog green",
+      "exitCode": 0,
+      "passed": 3
+    },
+    {
+      "command": "npm run lint:prose",
+      "stage": "first lint with styles",
+      "exitCode": 1,
+      "errors": 22
+    },
+    {
+      "command": "vale docs/known-problems.md docs/settings.md docs/design/review-receipts.md docs/benchmarks/2026-10-10-review-receipts.md",
+      "stage": "prose revision",
+      "exitCode": 1,
+      "errors": 1
+    },
+    {
+      "command": "vale docs/known-problems.md docs/settings.md docs/design/review-receipts.md docs/benchmarks/2026-10-10-review-receipts.md",
+      "stage": "prose revision",
+      "exitCode": 0,
+      "errors": 0
+    },
+    {
+      "command": "npm run check",
+      "stage": "completed host run under concurrent load",
+      "exitCode": 1,
+      "tests": 1169,
+      "passed": 1151,
+      "failed": 18,
+      "cancelled": 0,
+      "durationMs": 725362.187084,
+      "context": "Another Sleight chat reported one-minute load near 301 and concurrent native compile timeouts. Local managed inspection returned memory-pressure level 2. No timeout or assertion was weakened.",
+      "failures": [
+        {
+          "location": "tests/background-drag-native.test.mjs:7:1",
+          "test": "native prototype compiles and validates diagnostic requests without app access",
+          "durationMs": 180075.532375,
+          "diagnostic": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:"
+        },
+        {
+          "location": "tests/bench-driver.test.mjs:87:1",
+          "test": "private driver rechecks policy at initialization and collects before any later action",
+          "durationMs": 1087.697667,
+          "diagnostic": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:"
+        },
+        {
+          "location": "tests/bench-real-helium.test.mjs:7:3",
+          "test": "browser regression: fixture-navigation",
+          "durationMs": 180464.429708,
+          "diagnostic": "Error: Helium helper compilation failed: null"
+        },
+        {
+          "location": "tests/bench-real-helium.test.mjs:7:3",
+          "test": "browser regression: safari-address",
+          "durationMs": 180091.704125,
+          "diagnostic": "Error: Helium helper compilation failed: null"
+        },
+        {
+          "location": "tests/bench-real-helium.test.mjs:7:3",
+          "test": "browser regression: safari-recovery",
+          "durationMs": 180150.796125,
+          "diagnostic": "Error: Helium helper compilation failed: null"
+        },
+        {
+          "location": "tests/bench-real-helium.test.mjs:17:1",
+          "test": "Helium acquires creation events and recovers only a retained window reference",
+          "durationMs": 180059.0805,
+          "diagnostic": "Error: Helium helper compilation failed: null"
+        },
+        {
+          "location": "tests/bench-real-mail.test.mjs:257:1",
+          "test": "native Mail ownership self-test rejects focus-only and ambiguous creation, and requires local destination proof",
+          "durationMs": 181191.533959,
+          "diagnostic": "Error: Mail helper compilation failed:"
+        },
+        {
+          "location": "tests/bench-real-mimestream.test.mjs:255:1",
+          "test": "native capability decisions require explicit counts, read proof, and unique creation events",
+          "durationMs": 180182.098458,
+          "diagnostic": "Error: MIMESTREAM_COMPILATION_FAILED"
+        },
+        {
+          "location": "tests/bench-real.test.mjs:68:1",
+          "test": "preview-pdf checks the saved second page rotation and preserves page one",
+          "durationMs": 180228.2415,
+          "diagnostic": "Error: PDF helper timed out"
+        },
+        {
+          "location": "tests/chess-drag-path.test.mjs:7:1",
+          "test": "native Chess fixture accepts the owned private temporary path before Foundation normalizes it",
+          "durationMs": 180075.630167,
+          "diagnostic": "Error: spawnSync swiftc ETIMEDOUT"
+        },
+        {
+          "location": "tests/clipboard-lock.test.mjs:22:1",
+          "test": "a process exit releases the transaction without stale-lock takeover",
+          "durationMs": 646.616166,
+          "diagnostic": "AssertionError [ERR_ASSERTION]: Missing expected exception."
+        },
+        {
+          "location": "tests/footprint-spawns.test.mjs:49:1",
+          "test": "a stalled target refuses and a new helper can answer the next request",
+          "durationMs": 815.445375,
+          "diagnostic": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:"
+        },
+        {
+          "location": "tests/helper-doctor.test.mjs:96:1",
+          "test": "doctor collects a descendant that retains pipes after its parent exits",
+          "durationMs": 409.176584,
+          "diagnostic": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:"
+        },
+        {
+          "location": "tests/hover-fixture.test.mjs:5:1",
+          "test": "hover fixture refuses other apps, unknown operations and unnamed Chess windows before access",
+          "durationMs": 60053.32025,
+          "diagnostic": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:"
+        },
+        {
+          "location": "tests/preapproved-process.test.mjs:21:1",
+          "test": "a timeout collects a process group even when the child and descendant ignore TERM",
+          "durationMs": 374.718875,
+          "diagnostic": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:"
+        },
+        {
+          "location": "tests/preapproved-process.test.mjs:28:1",
+          "test": "cancellation collects the same owned group before returning its evidence",
+          "durationMs": 2134.2965,
+          "diagnostic": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:"
+        },
+        {
+          "location": "tests/read-failure.test.mjs:61:1",
+          "test": "one app-health helper answers many probes, and a stuck probe resolves unknown and restarts it",
+          "durationMs": 755.155875,
+          "diagnostic": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:"
+        },
+        {
+          "location": "tests/window-observer.test.mjs:38:1",
+          "test": "socket bridge authorizes its token, correlates replies and collects its child and private socket",
+          "durationMs": 1639.213916,
+          "diagnostic": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:"
+        }
+      ]
+    },
+    {
+      "command": "npm run lint:prose",
+      "stage": "full prose after revision",
+      "exitCode": 0,
+      "files": 71,
+      "errors": 0,
+      "warnings": 0,
+      "suggestions": 0
+    },
+    {
+      "command": "node --test --test-name-pattern='reused request IDs|duplicate replies' tests/turn-receipts.test.mjs",
+      "stage": "retention bound regressions red",
+      "exitCode": 1,
+      "tests": 2,
+      "pass": 0,
+      "fail": 2
+    },
+    {
+      "command": "node --test tests/turn-receipts.test.mjs tests/relay-receipts.test.mjs",
+      "stage": "retention bound regressions green",
+      "exitCode": 0,
+      "tests": 30,
+      "pass": 30,
+      "fail": 0
+    },
+    {
+      "command": "node --test tests/turn-receipts.test.mjs tests/relay-receipts.test.mjs",
+      "stage": "independent review of retention bound correction",
+      "exitCode": 0,
+      "tests": 30,
+      "pass": 30,
+      "fail": 0
+    },
+    {
+      "command": "npm run lint:prose",
+      "stage": "updated live evidence report before prose fixes",
+      "exitCode": 1,
+      "files": 71,
+      "errors": 5
+    },
+    {
+      "command": "npm run lint:prose",
+      "stage": "live report wording corrected",
+      "exitCode": 0,
+      "files": 71,
+      "errors": 0
+    },
+    {
+      "command": "node --test tests/clipboard-lock.test.mjs",
+      "stage": "existing fixture failure reproduced",
+      "exitCode": 1,
+      "tests": 2,
+      "pass": 1,
+      "fail": 1,
+      "error": "Missing expected Clipboard busy exception at tests/clipboard-lock.test.mjs:29."
+    },
+    {
+      "command": "node --test tests/clipboard-lock.test.mjs",
+      "stage": "retain SQLite coordinator until child exit",
+      "exitCode": 0,
+      "tests": 2,
+      "pass": 2,
+      "fail": 0
+    },
+    {
+      "command": "npm run check",
+      "stage": "retry overlapped suites that restarted in other chats",
+      "exitCode": 1,
+      "interrupted": false,
+      "tests": 1171,
+      "pass": 1159,
+      "fail": 12,
+      "cancelled": 0,
+      "durationMs": 702961.510167,
+      "failures": [
+        {
+          "location": "tests/background-drag-native.test.mjs:7:1",
+          "test": "native prototype compiles and validates diagnostic requests without app access (180020.348458ms)",
+          "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:"
+        },
+        {
+          "location": "tests/bench-real-helium.test.mjs:7:3",
+          "test": "browser regression: fixture-navigation (180018.728917ms)",
+          "error": "Error: Helium helper compilation failed: null"
+        },
+        {
+          "location": "tests/bench-real-helium.test.mjs:7:3",
+          "test": "browser regression: safari-address (180025.1955ms)",
+          "error": "Error: Helium helper compilation failed: null"
+        },
+        {
+          "location": "tests/bench-real-helium.test.mjs:7:3",
+          "test": "browser regression: safari-recovery (180028.728375ms)",
+          "error": "Error: Helium helper compilation failed: null"
+        },
+        {
+          "location": "tests/bench-real-mail.test.mjs:257:1",
+          "test": "native Mail ownership self-test rejects focus-only and ambiguous creation, and requires local destination proof (180022.68175ms)",
+          "error": "Error: Mail helper compilation failed: "
+        },
+        {
+          "location": "tests/bench-real-mimestream.test.mjs:255:1",
+          "test": "native capability decisions require explicit counts, read proof, and unique creation events (180012.1225ms)",
+          "error": "Error: MIMESTREAM_COMPILATION_FAILED"
+        },
+        {
+          "location": "tests/bench-real.test.mjs:68:1",
+          "test": "preview-pdf checks the saved second page rotation and preserves page one (180057.375709ms)",
+          "error": "Error: ENOTEMPTY, Directory not empty: [private temporary path] '[private temporary path]'"
+        },
+        {
+          "location": "tests/chess-drag-path.test.mjs:7:1",
+          "test": "native Chess fixture accepts the owned private temporary path before Foundation normalizes it (180016.861666ms)",
+          "error": "Error: spawnSync swiftc ETIMEDOUT"
+        },
+        {
+          "location": "tests/footprint-spawns.test.mjs:49:1",
+          "test": "a stalled target refuses and a new helper can answer the next request (642.977209ms)",
+          "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:"
+        },
+        {
+          "location": "tests/helper-doctor.test.mjs:96:1",
+          "test": "doctor collects a descendant that retains pipes after its parent exits (329.709167ms)",
+          "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:"
+        },
+        {
+          "location": "tests/preapproved-process.test.mjs:21:1",
+          "test": "a timeout collects a process group even when the child and descendant ignore TERM (415.253459ms)",
+          "error": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /ready/. Input:"
+        },
+        {
+          "location": "tests/read-failure.test.mjs:61:1",
+          "test": "one app-health helper answers many probes, and a stuck probe resolves unknown and restarts it (266.307959ms)",
+          "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:"
+        }
+      ]
+    },
+    {
+      "command": "npm run check",
+      "stage": "serialized retry after all other known full suites finished",
+      "exitCode": 0,
+      "tests": 1171,
+      "pass": 1171,
+      "fail": 0,
+      "cancelled": 0,
+      "durationMs": 140485.644,
+      "manifestValidations": 2,
+      "modTests": 12,
+      "modPass": 12,
+      "modFail": 0,
+      "terminalCollection": "One Ctrl-C input was requested when collecting this terminal. The returned result showed full successful completion, exit 0 and zero cancelled tests; no interruption is claimed."
+    },
+    {
+      "command": "npm run lint:prose",
+      "stage": "final evidence report",
+      "exitCode": 0,
+      "files": 71,
+      "errors": 0,
+      "warnings": 0,
+      "suggestions": 0
+    }
+  ],
+  "costFollowUp": {
+    "command": "node bench/receipt-cost.mjs",
+    "exitCode": 0,
+    "stage": "after bounding reused IDs and duplicate replies",
+    "kind": "offline journal cost, no engine or model",
+    "callsPerSample": 2000,
+    "samples": [
+      {
+        "calls": 2000,
+        "captureMs": 1.1678329999999875,
+        "captureCPUus": 2552,
+        "captureCPUusPerCall": 1.276,
+        "turnEndMs": 45.97408300000001,
+        "turnEndCPUus": 79928
+      },
+      {
+        "calls": 2000,
+        "captureMs": 0.6136669999999924,
+        "captureCPUus": 2256,
+        "captureCPUusPerCall": 1.128,
+        "turnEndMs": 78.69004199999998,
+        "turnEndCPUus": 51354
+      },
+      {
+        "calls": 2000,
+        "captureMs": 0.8349999999999795,
+        "captureCPUus": 830,
+        "captureCPUusPerCall": 0.415,
+        "turnEndMs": 111.594291,
+        "turnEndCPUus": 67606
+      },
+      {
+        "calls": 2000,
+        "captureMs": 0.4141670000000204,
+        "captureCPUus": 409,
+        "captureCPUusPerCall": 0.2045,
+        "turnEndMs": 70.30795799999999,
+        "turnEndCPUus": 58257
+      },
+      {
+        "calls": 2000,
+        "captureMs": 0.4333340000000021,
+        "captureCPUus": 711,
+        "captureCPUusPerCall": 0.3555,
+        "turnEndMs": 84.257833,
+        "turnEndCPUus": 62517
+      },
+      {
+        "calls": 2000,
+        "captureMs": 0.15100000000001046,
+        "captureCPUus": 171,
+        "captureCPUusPerCall": 0.0855,
+        "turnEndMs": 77.255,
+        "turnEndCPUus": 54226
+      },
+      {
+        "calls": 2000,
+        "captureMs": 0.40145799999993415,
+        "captureCPUus": 349,
+        "captureCPUusPerCall": 0.1745,
+        "turnEndMs": 100.02195800000004,
+        "turnEndCPUus": 45075
+      }
+    ],
+    "medianCaptureCPUusPerCall": 0.3555,
+    "extraEngineReads": 0,
+    "caveat": "Synthetic capture references and turn-end parsing only; excludes receipt file I/O, engine work and Codex comparison."
+  },
+  "testFixtureCorrection": {
+    "source": "codex/verified-results working-tree fix",
+    "path": "tests/fixtures/clipboard-lock.mjs",
+    "description": "Keep the SQLite transaction owner reachable until child exit; no assertions or deadlines changed.",
+    "appliedDuring": "The current full check was already failing native compile deadlines and still collecting; its earlier clipboard result is not proof for this correction. The focused test verifies the correction, and the next full check will test the final tree."
+  }
+}

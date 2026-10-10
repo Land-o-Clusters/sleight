@@ -224,9 +224,12 @@ function chooseFileMenu(file, titles, api) {
 function closeOwnedWindow(window, request, app, api) {
   if (!window || !api.exists(window)) return;
   if (!api.matches(window, request, true)) throw new Error('Owned fixture document identity changed');
-  var identity = function () { validateOwnedFixture(window, request, app, api, false); };
+  var noDialog = function () {
+    if (request.refuseDialogs && api.dialog(app, window, request).length) throw new Error('Application dialog present; fixture cleanup refused');
+  };
+  var identity = function () { noDialog(); validateOwnedFixture(window, request, app, api, false); };
   if (request.mode === 'document') {
-    var validate = function () { validateOwnedFixture(window, request, app, api, true); };
+    var validate = function () { noDialog(); validateOwnedFixture(window, request, app, api, true); };
     validate();
     api.closeDocument(app, validate, request);
   } else api.closeButton(window, identity);
@@ -234,7 +237,7 @@ function closeOwnedWindow(window, request, app, api) {
     api.wait();
     if (!api.exists(window)) return;
     if (request.mode === 'document' && !api.matches(window, request, true)) return;
-    api.discard(window, identity);
+    if (!request.refuseDialogs) api.discard(window, identity);
   }
   throw new Error('Owned fixture window is still open');
 }
@@ -262,12 +265,20 @@ function appDialogCategory(info) {
   return modal ? 'application-result' : null;
 }
 
-function appDialogInfo(info, app) {
+function appDialogInfo(info, app, refuseDialogs) {
   var category = appDialogCategory(info);
   if (!category) return null;
   return { app: app, category: category, title: info.title || '', buttons: info.buttons || [],
-    stop: ['activation', 'sign-in', 'permission'].indexOf(category) !== -1,
+    stop: refuseDialogs === true || ['activation', 'sign-in', 'permission'].indexOf(category) !== -1,
     description: category + ' application dialog' };
+}
+
+function cancelFixtureMenu(menu, api, refuseDialogs) {
+  if (refuseDialogs && api.role(menu) !== 'AXMenu') throw new Error('Fixture cancellation target is not an observed menu');
+  if (api.cancel(menu)) return 'AXCancel';
+  if (refuseDialogs) throw new Error('Fixture menu cancellation failed; Escape refused');
+  api.escape();
+  return 'Escape';
 }
 
 function dialogContents(element, api) {
@@ -327,7 +338,7 @@ function nativeAX(state, clock) {
     return result;
   }
   function dialog(app, owned, request) {
-    if (!request.stopOnAppDialog) return [];
+    if (!request.stopOnAppDialog && !request.refuseDialogs) return [];
     var focused = read(app, 'AXFocusedWindow');
     var candidates = [];
     if (owned) candidates = candidates.concat(children(owned, 'AXSheets'));
@@ -346,26 +357,26 @@ function nativeAX(state, clock) {
         var content = dialogContents(candidate, { children: children, text: text });
         info.buttons = content.buttons; info.text = content.text;
       }
-      var record = appDialogInfo(info, request.app);
+      var record = appDialogInfo(info, request.app, request.refuseDialogs);
       if (record) found.push(record);
     }
     return found;
   }
-  function fileMenu(app, titles, beforePress) {
+  function fileMenu(app, titles, beforePress, refuseDialogs) {
     var bar = read(app, 'AXMenuBar');
     var files = children(bar).filter(function (item) { return text(item, 'AXTitle') === 'File'; });
     if (files.length !== 1) throw new Error('Fixture needs the File menu');
     chooseFileMenu(files[0], titles, { press: press, children: children, text: text, beforePress: beforePress,
       enabled: function (item) { return Number(ObjC.unwrap(read(item, 'AXEnabled'))) === 1; }, cancel: function (menu) {
-      var method = 'AXCancel';
-      if (Number($.AXUIElementPerformAction(menu, $('AXCancel'))) !== 0) {
+      var method = cancelFixtureMenu(menu, { role: function (target) { return text(target, 'AXRole'); },
+        cancel: function (target) { return Number($.AXUIElementPerformAction(target, $('AXCancel'))) === 0; },
+        escape: function () {
         var pidRef = Ref();
         if (Number($.AXUIElementGetPid(app, pidRef)) !== 0) throw new Error('File-menu cancellation lost the app identity');
         var down = $.CGEventCreateKeyboardEvent(null, 53, true), up = $.CGEventCreateKeyboardEvent(null, 53, false);
         if (!down || down.isNil() || !up || up.isNil()) throw new Error('File-menu Escape could not be created');
         $.CGEventPostToPid(Number(pidRef[0]), down); $.CGEventPostToPid(Number(pidRef[0]), up);
-        method = 'Escape';
-      }
+      } }, refuseDialogs === true || state.refuseDialogs);
       clock.emit({ stage: 'menu-cancel', menuCancelled: true, menuCancelMethod: method });
     }, inspect: function (items) {
       clock.emit({ stage: 'menu-items', menuItems: items.map(function (item) {
@@ -425,7 +436,7 @@ function nativeAX(state, clock) {
     },
     closeDocument: function (app, validate, request) {
       closeDocumentSafely(app, request, validate, {
-        menu: function (target, beforePress) { fileMenu(target, ['Close Selected PDF Document', 'Close'], beforePress); },
+        menu: function (target, beforePress) { fileMenu(target, ['Close Selected PDF Document', 'Close'], beforePress, request.refuseDialogs); },
         activate: function (target) {
           var pidRef = Ref();
           if (Number($.AXUIElementGetPid(target, pidRef)) !== 0) throw new Error('Document activation lost the app identity');
@@ -490,7 +501,7 @@ function run(argv) {
     if (Number(matches.count) > 1) throw new Error('Ambiguous fixture process');
     return Number(matches.count) === 1 ? matches.objectAtIndex(0) : null;
   }
-  var state = { setup: true, fresh: false, fixtureExists: false, actionTaken: false, retryWaitMs: 0 };
+  var state = { setup: true, fresh: false, fixtureExists: false, actionTaken: false, retryWaitMs: 0, refuseDialogs: request.refuseDialogs === true };
   var clock = { now: function () { return Date.now(); }, wait: function (ms) { waitForLaunch(ms / 1000); }, emit: emit,
     cleanupRequested: function () { return command() === 'close'; } };
   var api = nativeAX(state, clock);

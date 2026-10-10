@@ -1,0 +1,352 @@
+{
+  "at": "2026-10-10",
+  "base": "e42b974",
+  "branch": "codex/review-receipts",
+  "attempts": [
+    {
+      "kind": "focused regression before fixes",
+      "command": "node --test tests/turn-receipts.test.mjs tests/relay-receipts.test.mjs",
+      "exit": 1,
+      "tests": 28,
+      "passed": 19,
+      "failed": 9,
+      "notes": "One file failed to load the new receiptOptions export; eight journal assertions failed. Export then added with the old defaults to test launcher behavior."
+    },
+    {
+      "kind": "relay regression before fixes",
+      "command": "node --test tests/relay-receipts.test.mjs",
+      "exit": 1,
+      "tests": 11,
+      "passed": 7,
+      "failed": 4,
+      "failures": [
+        "launcher opt-in and default title redaction",
+        "explicit cleanup forwarding before receipt writer",
+        "idle cleanup forwarding before receipt writer",
+        "stderr count-only privacy"
+      ]
+    },
+    {
+      "kind": "focused after fixes",
+      "exit": 0,
+      "tests": 40,
+      "passed": 40,
+      "failed": 0
+    },
+    {
+      "kind": "review retention reproduction",
+      "workers": 4,
+      "writes": 120,
+      "thrownENOENT": 102,
+      "notes": "Reviewer used only temporary receipt files, no apps or engine."
+    },
+    {
+      "kind": "retention race regression before fix",
+      "command": "node --test --test-name-pattern='concurrent receipt' tests/turn-receipts.test.mjs",
+      "exit": 1,
+      "tests": 1,
+      "failed": 1,
+      "error": "ENOENT during candidate lstat"
+    },
+    {
+      "kind": "mod content-only regression before fix",
+      "command": "npm run test:mod",
+      "exit": 1,
+      "tests": 28,
+      "passed": 27,
+      "failed": 1
+    },
+    {
+      "kind": "focused including concurrent writers after fix",
+      "command": "node --test tests/turn-receipts.test.mjs tests/relay-receipts.test.mjs",
+      "exit": 0,
+      "tests": 41,
+      "passed": 41,
+      "failed": 0
+    },
+    {
+      "kind": "mod including content-only receipt and replay controls after fix",
+      "command": "npm run test:mod",
+      "exit": 0,
+      "tests": 28,
+      "passed": 28,
+      "failed": 0
+    },
+    {
+      "kind": "memory",
+      "command": "node --expose-gc bench/receipt-memory.mjs",
+      "exit": 0,
+      "calls": 200,
+      "bytesPerRead": 65536,
+      "readBytes": 13107200,
+      "samples": [
+        {
+          "heldHeapBytes": 13194952,
+          "afterFinishHeapBytes": 580816,
+          "finishMs": 60.387625,
+          "rawReadBytesAfterFinish": 0
+        },
+        {
+          "heldHeapBytes": 13165272,
+          "afterFinishHeapBytes": 265432,
+          "finishMs": 65.559708,
+          "rawReadBytesAfterFinish": 0
+        },
+        {
+          "heldHeapBytes": 13175744,
+          "afterFinishHeapBytes": 293040,
+          "finishMs": 64.161542,
+          "rawReadBytesAfterFinish": 0
+        },
+        {
+          "heldHeapBytes": 13166424,
+          "afterFinishHeapBytes": 259512,
+          "finishMs": 53.821916,
+          "rawReadBytesAfterFinish": 0
+        },
+        {
+          "heldHeapBytes": 13164784,
+          "afterFinishHeapBytes": 268160,
+          "finishMs": 55.336917,
+          "rawReadBytesAfterFinish": 0
+        }
+      ],
+      "limits": "Synthetic journal-only heap deltas include GC noise; exclude engine/relay allocations and file I/O. Call objects remain externally referenced."
+    },
+    {
+      "kind": "live blocked by lock",
+      "command": "node bench/review-receipts-opt-in-live.mjs",
+      "exit": 1,
+      "engineCalls": 0,
+      "evidence": "/private/tmp/sleight-receipts-opt-in-2ac5d477-a4d8-44a7-afbe-c05ba664b0f6.json",
+      "reason": "Another live run holds /tmp/sleight-live.lock"
+    },
+    {
+      "kind": "modified punctuation shortcut regression before fix",
+      "command": "node --test --test-name-pattern='single printable' tests/turn-receipts.test.mjs",
+      "exit": 1,
+      "tests": 1,
+      "failed": 1
+    },
+    {
+      "kind": "modified punctuation shortcut after fix",
+      "exit": 0,
+      "tests": 1,
+      "passed": 1
+    },
+    {
+      "kind": "first prose lint",
+      "command": "npm run lint:prose",
+      "exit": 1,
+      "errors": 5,
+      "files": 75
+    },
+    {
+      "kind": "corrected prose lint",
+      "command": "npm run lint:prose",
+      "exit": 0,
+      "errors": 0,
+      "files": 75
+    },
+    {
+      "kind": "report privacy scan",
+      "exit": 0,
+      "files": 4,
+      "fullNameMatches": 0,
+      "usernameMatches": 0,
+      "homeMatches": 0
+    },
+    {
+      "kind": "first-write directory race regression before fix",
+      "exit": 1,
+      "tests": 1,
+      "failed": 1,
+      "error": "EEXIST during concurrent first directory creation"
+    },
+    {
+      "kind": "first-write directory race after fix",
+      "exit": 0,
+      "tests": 1,
+      "passed": 1
+    },
+    {
+      "kind": "sandbox full check",
+      "command": "npm run check",
+      "exit": 1,
+      "notes": "Local TCP and Unix fixture sockets were denied with EPERM; native fixture linker could not write in the owned worktree. Output was truncated, so no total is claimed."
+    },
+    {
+      "kind": "sandbox live permission observer denial",
+      "command": "node bench/review-receipts-opt-in-live.mjs",
+      "exit": 1,
+      "engineCalls": 0,
+      "evidence": "/private/tmp/sleight-receipts-opt-in-b4ae3539-18e9-4fa1-874a-ad61d744111c.json",
+      "notes": "The sandbox denied the process-list permission observer before fixture acquisition or engine calls. The owned lock was released."
+    },
+    {
+      "kind": "host full check",
+      "command": "npm run check",
+      "exit": 0,
+      "tests": 1194,
+      "passed": 1194,
+      "failed": 0,
+      "validations": 2,
+      "modTests": 28,
+      "modPassed": 28,
+      "modFailed": 0
+    },
+    {
+      "kind": "host live enabled and absent-setting Calculator checks",
+      "command": "node bench/review-receipts-opt-in-live.mjs",
+      "exit": 0,
+      "evidence": "/private/tmp/sleight-receipts-opt-in-f66dc96a-6d6f-4a30-a536-a5f9081635f4.json",
+      "result": {
+        "at": "2026-10-10T08:07:26.001Z",
+        "kind": "receipt opt-in Calculator checks",
+        "cases": [
+          {
+            "enabled": true,
+            "environment": "SLEIGHT_RECEIPTS=1",
+            "engineCalls": [
+              "js",
+              "js",
+              "turn_ended"
+            ],
+            "checks": {
+              "calculatorHeader": true,
+              "fileCount": true,
+              "metadata": true,
+              "privateFile": true,
+              "titleHidden": true,
+              "engineCollected": true
+            },
+            "receipts": [
+              {
+                "path": "~/Library/Logs/sleight/receipts/turn-1791619647856-0b9fde1d-6878-4c09-899f-c83793a04460.json",
+                "receipt": {
+                  "version": 1,
+                  "session": "1f065d67-7391-4cc6-add2-5342e474fc7e",
+                  "turn": "b74a9c2b-6c3e-4907-8e49-c09416399e4d",
+                  "at": "2026-10-10T08:07:27.856Z",
+                  "calls": [
+                    {
+                      "tool": "js",
+                      "app": null,
+                      "window": null,
+                      "actions": [
+                        {
+                          "action": "read",
+                          "result": "unknown"
+                        }
+                      ],
+                      "result": "returned",
+                      "change": "unknown",
+                      "detail": "No matching before and after window observation."
+                    },
+                    {
+                      "tool": "js",
+                      "app": "Calculator",
+                      "window": {
+                        "redacted": true,
+                        "length": 10
+                      },
+                      "actions": [
+                        {
+                          "action": "read",
+                          "result": "unknown"
+                        }
+                      ],
+                      "result": "returned",
+                      "change": "unknown",
+                      "detail": "No matching before and after window observation."
+                    }
+                  ],
+                  "windows": [],
+                  "omitted": 0
+                },
+                "mode": 384
+              }
+            ],
+            "engine": "26.1007.21159",
+            "engineExit": {
+              "code": 0,
+              "signal": null
+            }
+          },
+          {
+            "enabled": false,
+            "environment": "SLEIGHT_RECEIPTS absent",
+            "engineCalls": [
+              "js",
+              "js",
+              "turn_ended"
+            ],
+            "checks": {
+              "calculatorHeader": true,
+              "fileCount": true,
+              "metadata": true,
+              "engineCollected": true
+            },
+            "receipts": [],
+            "engine": "26.1007.21159",
+            "engineExit": {
+              "code": 0,
+              "signal": null
+            }
+          }
+        ],
+        "result": {
+          "code": 0,
+          "groupClean": true,
+          "passed": true,
+          "seconds": 1.1,
+          "fixtureDiagnostics": [
+            {
+              "app": "Calculator",
+              "bundle": "com.apple.calculator",
+              "retries": [],
+              "totalWaitMs": 0,
+              "actionTaken": false,
+              "running": true,
+              "pid": 75145,
+              "setupCase": "already-running",
+              "launched": true,
+              "fresh": false
+            }
+          ]
+        },
+        "cleanupConfirmed": true
+      }
+    },
+    {
+      "kind": "final-report prose lint before corrections",
+      "command": "npm run lint:prose",
+      "exit": 1,
+      "files": 75,
+      "errors": 6
+    },
+    {
+      "kind": "final-report prose lint after corrections",
+      "command": "npm run lint:prose",
+      "exit": 0,
+      "files": 75,
+      "errors": 0
+    }
+  ],
+  "originLimitation": "Installed Claude Code exposes next.origin only inside mod hooks; MCP calls carry no trustworthy plugin origin. Title-based exclusion was removed. All calls, including pane snapshots, are retained until authenticated transport provenance exists.",
+  "requiredChecks": {
+    "check": {
+      "exit": 0,
+      "tests": 1194,
+      "failed": 0,
+      "validations": 2,
+      "modTests": 28,
+      "modFailed": 0
+    },
+    "prose": {
+      "exit": 0,
+      "files": 75,
+      "errors": 0
+    }
+  }
+}
