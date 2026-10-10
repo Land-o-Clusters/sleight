@@ -1,5 +1,18 @@
 # Known problems
 
+Generic benchmark arms accept only the existing benchmark approval messages and empty forms or a
+`choice` field offering `session` or `once`. Other competitors' approval schemas stop with an
+unsupported-approval result. Remote MCP servers and installer commands are unsupported. The initial
+plain-MCP Calculator proof finished 0/1. Calculator was off-screen in all 15 samples. Acquisition
+returned `cgWindowNotFound`. Permission observation later failed. The driver stopped and its process group
+was collected. The later retained-fixture setup has unit coverage and dry discovery evidence, but no
+live qualification. The committed generic-MCP plus sleight comparison stopped before either driver
+because another run held the shared live lock. Plugins declaring hooks, LSP servers or agents are refused,
+as are plugin settings that select an agent or agent status command. App-dialog
+classification and periodic observation cannot prevent a competitor's single tool call from acting
+before the next observation. Competitor code runs as the user with full file and network access.
+Its scrubbed environment is a forwarding control. This harness is not a sandbox for untrusted plugins.
+
 What doesn't work, or works only partly, with the measurements behind it. We found all of these in
 our own runs. Dates and engine versions are given where they matter.
 

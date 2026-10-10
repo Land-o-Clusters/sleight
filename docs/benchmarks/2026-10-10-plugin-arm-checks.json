@@ -1,0 +1,198 @@
+{
+  "status": "round-three-edits-prepared-required-check-and-live-held",
+  "branch": "codex/plugin-arm",
+  "worktree": "~/Projects/sleight-wt/plugin-arm",
+  "requiredChecks": [
+    {
+      "command": "npm run check",
+      "mode": "parallel test files",
+      "exitCode": 1,
+      "result": "native compile timeouts and short process deadline failures during severe shared-host load"
+    },
+    {
+      "command": "npm run check",
+      "mode": "serial test files",
+      "exitCode": 1,
+      "durationSeconds": 227.2,
+      "passed": 19,
+      "failed": 1,
+      "cancelled": 91,
+      "result": "first native compilation timed out at 180 seconds; one Ctrl-C sent through original TTY and final exit collected"
+    },
+    {
+      "command": "npm run lint:prose",
+      "attempt": 1,
+      "exitCode": 2,
+      "result": "worktree lacked local Vale styles"
+    },
+    {
+      "command": "npm run lint:prose",
+      "attempt": 2,
+      "exitCode": 1,
+      "flags": 22
+    },
+    {
+      "command": "npm run lint:prose",
+      "attempt": 3,
+      "exitCode": 1,
+      "flags": 1
+    },
+    {
+      "command": "npm run lint:prose",
+      "attempt": 4,
+      "exitCode": 1,
+      "flags": 1,
+      "result": "Report wording corrected after this result; rerun held."
+    },
+    {
+      "command": "npm run check",
+      "mode": "original parallel test files after hold clearance",
+      "exitCode": 0,
+      "testDurationSeconds": 95.935,
+      "passed": 1160,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "validation": "marketplace and plugin passed",
+      "modTestsPassed": 11,
+      "modTestsFailed": 0
+    },
+    {
+      "command": "npm run lint:prose",
+      "attempt": 5,
+      "exitCode": 0,
+      "files": 71,
+      "flags": 0
+    },
+    {
+      "command": "npm run lint:prose",
+      "attempt": 6,
+      "exitCode": 1,
+      "flags": 1,
+      "result": "Final report update introduced a wording flag; sentence corrected."
+    },
+    {
+      "command": "npm run lint:prose",
+      "attempt": 7,
+      "exitCode": 0,
+      "files": 71,
+      "flags": 0,
+      "result": "Final report wording passed."
+    }
+  ],
+  "focusedCheck": {
+    "command": "node --test --test-concurrency=1 tests/bench-plugin-arm.test.mjs tests/bench-generic-approval.test.mjs tests/bench-generic-task.test.mjs tests/bench-run.test.mjs tests/bench-driver.test.mjs",
+    "exitCode": 0,
+    "passed": 44,
+    "failed": 0
+  },
+  "validation": {
+    "command": "npm run validate",
+    "exitCode": 0,
+    "result": "marketplace and plugin validation passed"
+  },
+  "modTests": {
+    "state": "passed as part of the final bare npm run check after boundary review",
+    "passed": 26,
+    "failed": 0
+  },
+  "hold": {
+    "path": "/tmp/sleight-hold",
+    "setAt": "2026-10-10T06:15:30Z",
+    "by": "sleight-arch",
+    "reason": "load hold for <filtered private identity>'s Spend gate and lanes (load 204)",
+    "releaseCondition": "load under 20 or <filtered private identity> architect clearance",
+    "observed": true,
+    "clearedBeforeFinalCheck": true,
+    "clearanceEvidence": "User said window is up; /tmp/sleight-hold was absent before resuming the required check.",
+    "overlap": "The serial check was already running when the hold was created. Later focused tests, prose lint and validation also overlapped it before this chat observed the hold. Further builds stopped after confirmation."
+  },
+  "publication": {
+    "verificationStage": "round-three-uncommitted-required-check-held",
+    "destination": "private branch codex/plugin-arm",
+    "mergeRequested": false,
+    "gate": "Round-three prose lint passed. Its full check and paired live run await closure of the Puddle hold. No new commit or push."
+  },
+  "testScheduling": "Original parallel package script restored after serialized diagnostic attempt failed.",
+  "boundaryReview": {
+    "base": "e42b9746d73cde9ace3904d86937636bea4b2b49",
+    "requiredChecks": [
+      { "command": "npm run check", "mode": "ordinary sandbox", "exitCode": 1, "result": "Local socket EPERM and compiled-output write denials; scoped host retry required." },
+      { "command": "npm run check", "mode": "host retry", "exitCode": 1, "passed": 1187, "failed": 1, "cancelled": 0, "durationSeconds": 143.764, "result": "Existing cross-process clipboard-lock overlap assertion failed; no generic-arm tests failed." },
+      { "command": "node --test tests/clipboard-lock.test.mjs", "exitCode": 0, "passed": 2, "failed": 0, "result": "Unchanged clipboard-lock tests passed in isolation; combined-suite failure remains unconfirmed." },
+      { "command": "npm run check", "mode": "second host retry", "exitCode": 1, "passed": 1187, "failed": 1, "cancelled": 0, "durationSeconds": 93.909, "result": "The same existing clipboard-lock overlap assertion failed." },
+      { "command": "node --test tests/clipboard-lock.test.mjs tests/clipboard.test.mjs tests/clipboard-benchmark.test.mjs", "exitCode": 0, "passed": 27, "failed": 0, "result": "Original fixture passed with the nearby clipboard tests." },
+      { "command": "node --test tests/clipboard-lock.test.mjs", "exitCode": 1, "passed": 1, "failed": 1, "result": "Forced child GC reproduced the overlap failure because the fixture did not retain its coordinator." },
+      { "command": "node --test tests/clipboard-lock.test.mjs tests/clipboard.test.mjs tests/clipboard-benchmark.test.mjs", "exitCode": 0, "passed": 27, "failed": 0, "result": "Fixture retains its coordinator until process exit; forced GC preserves the reservation. Production clipboard code unchanged." },
+      { "command": "npm run lint:prose", "attempt": 1, "exitCode": 1, "flags": 28, "files": 75, "result": "Flagged wording corrected, including the saved plan." },
+      { "command": "npm run lint:prose", "attempt": 2, "exitCode": 0, "flags": 0, "files": 75 },
+      { "command": "npm run lint:prose", "attempt": 3, "exitCode": 1, "flags": 2, "files": 75, "result": "Fixture-repair note introduced two wording flags; corrected." },
+      { "command": "npm run lint:prose", "attempt": 4, "exitCode": 0, "flags": 0, "files": 75 },
+      { "command": "npm run check", "mode": "final serialized host check after fixture repair", "exitCode": 0, "passed": 1188, "failed": 0, "cancelled": 0, "skipped": 0, "durationSeconds": 56.291, "validation": "Both manifests passed.", "modTestsPassed": 26, "modTestsFailed": 0 },
+      { "command": "npm run lint:prose", "attempt": 5, "exitCode": 0, "flags": 0, "files": 75 },
+      { "command": "npm run lint:prose", "attempt": 6, "exitCode": 1, "flags": 1, "files": 75, "result": "Live-result wording flag corrected." },
+      { "command": "npm run lint:prose", "attempt": 7, "exitCode": 0, "flags": 0, "files": 75, "result": "Final published report and plan passed." }
+    ],
+    "branchFilePrivacyAudit": { "auditedFiles": 48, "forbiddenIdentities": 19, "violations": 0, "scope": "Changed and new files against the exact rebased upstream commit, followed by the same audit of staged blobs." },
+    "candidateReview": { "codeBypassesOrRegressions": 0, "offlineTestsPassed": 64, "exitCode": 0, "historyRepair": "Sanitized implementation squashed as 6dadc43 onto the exact upstream base." },
+    "liveProof": { "file": "2026-10-10T07-59-27-338Z-plugin-arm-mcp-live.json", "sourceCommit": "6dadc43bc1642569e19e613a5ee1bcf4c1248f0f", "exitCode": 1, "groupClean": true, "arms": ["mcp:sleight-plain", "sleight"], "driversStarted": 0, "reason": "Another live run held /tmp/sleight-live.lock.", "hold": false, "loadAndCurrentSpaceObserved": false, "appInputSent": false, "qualification": "pending" },
+    "focusedAttempts": [
+      { "selection": "server boundary", "exitCode": 1, "passed": 13, "failed": 4, "result": "New credential, interpolation, hook and fsmonitor assertions reproduced the reported gaps." },
+      { "selection": "server boundary after fix", "exitCode": 1, "passed": 16, "failed": 1, "result": "Node rejected a fixture entry path containing a backslash; literal plugin-root data retained in the corrected fixture." },
+      { "selection": "server boundary", "exitCode": 0, "passed": 17, "failed": 0 },
+      { "selection": "runner and driver", "exitCode": 1, "passed": 31, "failed": 5, "result": "New assertions reproduced unequal flags, server leakage, missing refusal rows and wording stops." },
+      { "selection": "runner, driver and server", "exitCode": 0, "passed": 53, "failed": 0 },
+      { "selection": "evidence filter before implementation", "exitCode": 1, "passed": 0, "failed": 3 },
+      { "selection": "evidence filter", "exitCode": 0, "passed": 3, "failed": 0 },
+      { "selection": "Calculator gate before implementation", "exitCode": 1, "passed": 0, "failed": 2 },
+      { "selection": "Calculator gate", "exitCode": 0, "passed": 2, "failed": 0 },
+      { "command": "node --test tests/bench-run.test.mjs tests/bench-driver.test.mjs tests/bench-plugin-arm.test.mjs tests/bench-plugin-evidence.test.mjs tests/bench-plugin-live.test.mjs", "exitCode": 0, "passed": 59, "failed": 0, "durationSeconds": 4.537 }
+    ],
+    "migration": {
+      "files": 14,
+      "filteredOccurrences": { "connectorServerRecords": 28, "connectorToolNames": 32, "appInventoryEntries": 72, "catalogFields": 152, "thinkingBlocks": 1, "privateTermOccurrences": 3 },
+      "countMeaning": "Occurrences across duplicate evidence copies; not unique connector or app counts.",
+      "sandboxAttemptExitCode": 1,
+      "approvedRetryExitCode": 0
+    },
+    "dryDiscovery": [
+      { "file": "2026-10-10T07-39-45-897Z-plugin-arm-plugin-dry.json", "exitCode": 1, "result": "Sandbox denied the benchmark result and evidence writes; filtered backup published separately." },
+      { "file": "2026-10-10T07-40-00-994Z-plugin-arm-mcp-dry.json", "exitCode": 1, "result": "Sandbox attempt preserved before scoped host retry." },
+      { "file": "2026-10-10T07-40-34-193Z-plugin-arm-mcp-dry.json", "exitCode": 0, "result": "Ten own tools discovered; process group clean." },
+      { "file": "2026-10-10T07-41-32-433Z-plugin-arm-plugin-dry.json", "exitCode": 1, "result": "Expected configuration refusal: plugin hooks are unsupported. No Claude process or live lock." }
+    ]
+  },
+  "finalReview": {
+    "requestedBase": "cddee348954a9597ec71617dde949e0d2a85359c",
+    "changes": ["Shared strict MCP config and PermissionRequest stop policy for all Claude arms in generic comparisons", "Removed the generic-only tool-error wording classifier", "Refused manifest and automatic LSP servers and agents, plus agent selection/status settings", "Removed rate-limit metadata, review working notes and unrelated clipboard test changes", "Shortened the benchmark report"],
+    "focusedAttempts": [
+      { "selection": "server, evidence, driver and runner", "exitCode": 1, "passed": 56, "failed": 5, "result": "New assertions reproduced missing component refusals, rate metadata and unequal stops/flags. The wording test threw from an asynchronous callback; its assertion was changed to a collected counter." },
+      { "selection": "server, evidence, driver, runner and approval guard", "exitCode": 1, "passed": 63, "failed": 1, "result": "Rate-event filtering changed a trailing newline on its second pass; corrected to preserve published JSONL." },
+      { "selection": "server, evidence, driver, runner and approval guard", "exitCode": 0, "passed": 64, "failed": 0, "durationSeconds": 1.951 },
+      { "command": "node --test tests/bench-plugin-live.test.mjs", "exitCode": 0, "passed": 2, "failed": 0 }
+    ],
+    "evidenceMigration": { "command": "node bench/plugin-arm-proof.mjs filter-rate-limits", "sandboxExitCode": 1, "result": "Evidence write denied in attached worktree; backup preserved in private temporary storage.", "hostRetryExitCode": 0, "filesInspected": 19, "rateLimitEventsRemoved": 1, "previousFilterCountsPreserved": true },
+    "privacyAudit": { "command": "node bench/plugin-arm-proof.mjs audit", "exitCode": 0, "files": 19, "remainingRateLimitEvents": 0 },
+    "candidateReview": { "actionableFindings": 0, "mode": "Fresh independent read-only source review", "testsRunByReviewer": false, "limits": "Full package checks and paired Calculator runtime proof remain pending. Ordinary transcript correlation fields are outside the removed rate-limit event." },
+    "requiredChecks": [
+      { "command": "npm run lint:prose", "exitCode": 1, "flags": 3, "files": 74, "result": "Three semicolon flags corrected." },
+      { "command": "npm run lint:prose", "exitCode": 0, "flags": 0, "files": 74 },
+      { "command": "npm run lint:prose", "exitCode": 1, "flags": 3, "files": 74, "result": "Source-review result paragraph introduced three wording flags; corrected." },
+      { "command": "npm run lint:prose", "exitCode": 0, "flags": 0, "files": 74, "result": "Final round-three report passed." },
+      { "command": "npm run check", "state": "not started: active hold", "exitCode": null }
+    ],
+    "hold": { "path": "/tmp/sleight-hold", "setAt": "2026-10-10T08:19:00Z", "by": "sleight-arch", "observedAt": "2026-10-10T08:23:37Z", "reason": "Puddle window 1010b, expected start around 08:45Z and duration 100-120 minutes; lift only at Puddle architect CLOSE", "overlap": "Focused tests overlapped the new hold before it was observed. Further tests and live work stopped. Prose lint and read-only review continued." },
+    "liveProof": { "state": "not launched: active hold", "arms": ["mcp:sleight-plain", "sleight"], "driversStarted": 0, "appInputSent": false, "lockPresentAtObservation": false, "qualification": "pending" },
+    "publication": { "newCommit": false, "pushed": false, "merged": false }
+  },
+  "privacy": {
+    "filteredOccurrences": {
+      "connectorServerRecords": 0,
+      "connectorToolNames": 0,
+      "appInventoryEntries": 0,
+      "catalogFields": 0,
+      "thinkingBlocks": 0,
+      "privateTermOccurrences": 3
+    }
+  }
+}

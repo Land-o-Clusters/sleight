@@ -13,6 +13,13 @@ function nativeSource() {
   return sandbox;
 }
 
+test('the generic Chess fixture reaches the accessibility gate without acting', () => {
+  const sandbox = nativeSource();
+  sandbox.$ = { AXIsProcessTrusted: () => false };
+  assert.throws(() => sandbox.run([JSON.stringify({ app: 'Chess', bundle: 'com.apple.Chess', mode: 'inherit', control: '/fixture/control' })]),
+    /Accessibility is unavailable/);
+});
+
 test('cold Office readiness polls both startup AX errors until the fixture arrives after twelve seconds', () => {
   const { waitForOfficeFixture } = nativeSource();
   assert.equal(typeof waitForOfficeFixture, 'function');
@@ -358,10 +365,11 @@ test('parent cleanup retains retry receipts and allows the helper to finish beyo
   const dir = mkdtempSync(join(tmpdir(), 'real-cleanup-read-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const ctx = { dir }, done = Promise.withResolvers();
+  const ctx = { dir, stopOnAppDialog: true }, done = Promise.withResolvers();
   let publish;
   const lease = await openFixture(ctx, { app: 'Microsoft Excel', bundle: 'com.microsoft.Excel', mode: 'document' }, {
     run: (_command, _args, options) => {
+      assert.equal(JSON.parse(_args.at(-1)).stopOnAppDialog, true, 'a guarded pass enables native app observation centrally');
       publish = options.onStdout;
       publish('{"stage":"armed","running":true,"pid":42}\n{"stage":"ready","setupCase":"already-running"}\n');
       return done.promise;

@@ -21,7 +21,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
   if (request.bundle === 'com.apple.Safari' && ctx.ownerAway !== true) {
     throw Object.assign(new Error('Safari blank-window setup requires an explicit owner-away boundary'), { noMutation: true });
   }
-  request = { ...request, ownerAway: ctx.ownerAway === true };
+  request = { ...request, stopOnAppDialog: ctx.stopOnAppDialog || request.stopOnAppDialog, ownerAway: ctx.ownerAway === true };
   ctx.signal?.throwIfAborted();
   ctx.cleanupSignal?.throwIfAborted();
   const startedAtMs = Date.now();

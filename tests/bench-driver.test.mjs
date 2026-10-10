@@ -125,3 +125,34 @@ test('explicit native and local approval refusals stop, while ordinary tool erro
     if (ordinary) assert.equal(response.out.result, 'continued');
   }
 });
+
+test('approval wording alone does not stop a tool error without a structured refusal', async () => {
+  const { runDriver } = await import('../bench/driver.mjs');
+  for (const content of ['Permission denied: enable Accessibility in System Settings',
+    'Authorization required. Open the app to grant access.', 'Approval declined by user']) {
+    let refusals = 0;
+    const event = { message: { content: [{ type: 'tool_result', is_error: true, content }] } };
+    const response = await runDriver(process.execPath, ['-e', `
+      console.log(${JSON.stringify(JSON.stringify(event))});
+      console.log(JSON.stringify({type:'result',result:'check decides'}));
+    `], { format: 'stream-json', timeoutMs: 2000,
+      onPermissionRefusal: () => refusals++ });
+    assert.equal(refusals, 0);
+    assert.equal(response.code, 0, content);
+    assert.equal(response.groupClean, true);
+    assert.equal(response.out.result, 'check decides');
+  }
+});
+
+test('successful tool content and final answers mentioning permission prompts do not stop generic runs', async () => {
+  const { runDriver } = await import('../bench/driver.mjs');
+  const event = { message: { content: [{ type: 'tool_result', is_error: false, content: 'Document says: permission required; enable Accessibility.' }] } };
+  const response = await runDriver(process.execPath, ['-e', `
+    console.log(${JSON.stringify(JSON.stringify(event))});
+    console.log(JSON.stringify({type:'result',result:'No approval dialog was required. 391.'}));
+  `], { format: 'stream-json', timeoutMs: 2000,
+    onPermissionRefusal: () => assert.fail('successful content is not an approval refusal') });
+  assert.equal(response.code, 0);
+  assert.equal(response.groupClean, true);
+  assert.match(response.out.result, /391/);
+});

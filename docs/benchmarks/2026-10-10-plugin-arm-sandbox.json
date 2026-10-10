@@ -1,0 +1,42 @@
+{
+  "attempts": [
+    {
+      "command": "npm test",
+      "context": "ordinary workspace sandbox, initial baseline",
+      "exitCode": 1,
+      "cancelled": true,
+      "reason": "Native compilation timed out; socket tests reported listen EPERM. Interrupted once through the owned terminal and collected its final exit.",
+      "observedFailures": [
+        "native prototype compiles and validates diagnostic requests without app access",
+        "browser regression: fixture-navigation",
+        "browser regression: safari-address",
+        "socket bridge authorizes its token, correlates replies and collects its child and private socket",
+        "a starved helper cannot authorize a late reply or a queued request after its deadline",
+        "a timeout collects a process group even when the child and descendant ignore TERM",
+        "one app-health helper answers many probes, and a stuck probe resolves unknown and restarts it"
+      ]
+    },
+    {
+      "command": "node bench/plugin-arm-proof.mjs plugin-dry",
+      "exitCode": 1,
+      "modelStarted": false,
+      "reason": "EPERM writing the result in ~/Projects/sleight-wt/plugin-arm/docs/benchmarks from the ordinary sandbox"
+    },
+    {
+      "command": "node bench/plugin-arm-proof.mjs mcp-live",
+      "exitCode": 1,
+      "modelStarted": false,
+      "reason": "EPERM writing the result in ~/Projects/sleight-wt/plugin-arm/docs/benchmarks from the ordinary sandbox"
+    }
+  ],
+  "privacy": {
+    "filteredOccurrences": {
+      "connectorServerRecords": 0,
+      "connectorToolNames": 0,
+      "appInventoryEntries": 0,
+      "catalogFields": 0,
+      "thinkingBlocks": 0,
+      "privateTermOccurrences": 0
+    }
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "mode": "plugin-dry",
+  "command": [
+    "node",
+    "bench/run.mjs",
+    "--arm",
+    "plugin:sleight",
+    "--tasks",
+    "calculator-click",
+    "--runs",
+    "1",
+    "--dry-run"
+  ],
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "timedOut": false,
+  "cancelled": false,
+  "stdout": "\nresults: ~/Projects/sleight-wt/plugin-arm/bench/results/2026-10-10T05-59-20-439Z-dry.json\n",
+  "stderr": "DRY plugin:sleight calculator-click #1 0s\n",
+  "groupClean": true,
+  "raw": {
+    "stamp": "2026-10-10T05-59-20-439Z",
+    "fixturePolicy": "retained app observers for every arm",
+    "ownerAway": false,
+    "arms": [
+      "plugin:sleight"
+    ],
+    "armMetadata": {
+      "plugin:sleight": {
+        "kind": "plugin",
+        "name": "sleight",
+        "version": "1.1.0",
+        "source": "~/Projects/sleight-wt/plugin-arm/plugins/sleight",
+        "commit": "332e3ca0260d7eee0b003882d95d8b64ec431dd3",
+        "dirty": false,
+        "packageHash": "ec336580b6a88bd89fac3bef66996d7a16676984453e4a7ca848367a092d5acf",
+        "pluginHash": "3d7a5e94dc63f491889e15a4b7f7caea187a02250c063a6d6cfdc8cd0e09adcf",
+        "servers": {
+          "computer": {
+            "transport": "stdio",
+            "artifacts": [
+              {
+                "name": "sleight",
+                "version": "1.1.0",
+                "extent": "package-directory",
+                "source": "~/Projects/sleight-wt/plugin-arm/plugins/sleight",
+                "commit": "332e3ca0260d7eee0b003882d95d8b64ec431dd3",
+                "dirty": false,
+                "packageHash": "3d7a5e94dc63f491889e15a4b7f7caea187a02250c063a6d6cfdc8cd0e09adcf"
+              }
+            ],
+            "executable": "~/Projects/sleight-wt/plugin-arm/plugins/sleight/bin/sleight-mcp"
+          }
+        },
+        "discovery": {
+          "servers": [
+            {
+              "name": "plugin:sleight:computer",
+              "status": "connected"
+            }
+          ],
+          "tools": [
+            "mcp__plugin_sleight_computer__blocked_app",
+            "mcp__plugin_sleight_computer__drag",
+            "mcp__plugin_sleight_computer__hover",
+            "mcp__plugin_sleight_computer__js",
+            "mcp__plugin_sleight_computer__js_reset",
+            "mcp__plugin_sleight_computer__menu_bar",
+            "mcp__plugin_sleight_computer__notifications",
+            "mcp__plugin_sleight_computer__replay",
+            "mcp__plugin_sleight_computer__select_window",
+            "mcp__plugin_sleight_computer__turn_ended"
+          ]
+        },
+        "tools": [
+          "mcp__plugin_sleight_computer__blocked_app",
+          "mcp__plugin_sleight_computer__drag",
+          "mcp__plugin_sleight_computer__hover",
+          "mcp__plugin_sleight_computer__js",
+          "mcp__plugin_sleight_computer__js_reset",
+          "mcp__plugin_sleight_computer__menu_bar",
+          "mcp__plugin_sleight_computer__notifications",
+          "mcp__plugin_sleight_computer__replay",
+          "mcp__plugin_sleight_computer__select_window",
+          "mcp__plugin_sleight_computer__turn_ended"
+        ]
+      }
+    },
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "claude": "claude",
+    "results": [
+      {
+        "arm": "plugin:sleight",
+        "task": "calculator-click",
+        "run": 1,
+        "dryRun": true,
+        "prompt": "Using computer use in the background, work out 17 × 23 in Calculator by clicking its buttons. Reply with only the number the display shows.",
+        "check": "answer does not contain 391",
+        "command": [
+          "claude",
+          "--plugin-dir",
+          "~/Projects/sleight-wt/plugin-arm/plugins/sleight",
+          "--mcp-config",
+          "/private/tmp/sleight-plugin-arm-f3VqQk/arms/plugin-sleight-arm/plugin-mcp.json",
+          "--strict-mcp-config",
+          "--setting-sources",
+          "",
+          "--tools",
+          "",
+          "--disable-slash-commands",
+          "--permission-prompts",
+          "none",
+          "--no-session-persistence",
+          "--allowedTools",
+          "mcp__plugin_sleight_computer__blocked_app,mcp__plugin_sleight_computer__drag,mcp__plugin_sleight_computer__hover,mcp__plugin_sleight_computer__js,mcp__plugin_sleight_computer__js_reset,mcp__plugin_sleight_computer__menu_bar,mcp__plugin_sleight_computer__notifications,mcp__plugin_sleight_computer__replay,mcp__plugin_sleight_computer__select_window,mcp__plugin_sleight_computer__turn_ended",
+          "--disallowedTools",
+          "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch,Glob,Grep,Read,Skill",
+          "--settings",
+          "/private/tmp/sleight-plugin-arm-f3VqQk/arms/plugin-sleight-arm/bench-settings.json"
+        ],
+        "models": []
+      }
+    ]
+  },
+  "traces": [],
+  "transcripts": [],
+  "privacy": {
+    "filteredOccurrences": {
+      "connectorServerRecords": 0,
+      "connectorToolNames": 0,
+      "appInventoryEntries": 0,
+      "catalogFields": 0,
+      "thinkingBlocks": 0,
+      "privateTermOccurrences": 0
+    }
+  }
+}

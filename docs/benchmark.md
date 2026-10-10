@@ -489,6 +489,58 @@ npm run bench -- --arm all --runs 3   # sleight and LCU
 
 The LCU arm needs LCU registered for Claude Code in a separate folder. `bench/run.mjs` has the steps.
 
+## Benchmarking another plugin
+
+Point at a local Claude Code plugin or an MCP configuration for an already installed server:
+
+```bash
+PLUGIN_ARM_RIVAL_DIR=/absolute/path/to/plugin node bench/run.mjs --arm plugin:rival,sleight --tasks calculator-click --runs 1
+MCP_ARM_RIVAL_CONFIG=/absolute/path/to/mcp.json node bench/run.mjs --arm mcp:rival,sleight --tasks calculator-click --runs 1
+```
+
+Names use lowercase letters, digits, hyphens or `_`. Environment variable names replace
+hyphens with `_`, so `mcp:sleight-plain` reads `MCP_ARM_SLEIGHT_PLAIN_CONFIG`. Add `--dry-run`
+to discover tools and record the command without a model call. Use absolute executable and script
+paths in an MCP configuration's `mcpServers` object.
+
+Each arm gets its own folder outside any git repo. User settings, built-in tools, skills and unrelated
+MCP servers are excluded. Every Claude arm in these comparisons uses empty setting sources and built-in
+tools, strict MCP configuration, disabled slash commands and streaming JSON. Session persistence is disabled.
+Each arm gets the same PermissionRequest deny hook and approval stop marker. Plugins declaring hooks,
+LSP servers or agents through manifest fields or automatic paths are refused, as are plugin settings
+that select an agent or agent status command. Other plugins load from their local folder; their MCP registrations are also
+passed explicitly because Claude Code's strict MCP option suppresses plugin registrations. Setup
+reads the servers' `tools/list` catalogs through Claude Code's initialization event. It rejects other
+servers or tools. Only discovered names are allowed. Task prompts, external checks, five-minute
+limits, disallowed tools and per-run CPU sampling use the same runner as sleight.
+Server processes receive only `PATH`, `HOME`, `TMPDIR`, `LANG` and their declared variables. Claude
+keeps its benchmark API authentication. Its key and OAuth variables are excluded from those servers.
+Account connectors are disabled. Only plugin-root interpolation is supported. Competitor code still
+runs as the user with full file and network access. The harness is not a security sandbox.
+Comparisons containing a generic arm use retained app observers for every arm. Default tasks keep
+their prompts and checks, seed their files, and preserve existing app windows. They omit the older
+TextEdit and Chess reset routines. Chess and Simulator require `--owner-away`.
+
+The existing app allowlist handles MCP elicitation requests. Unknown forms, URL approvals and ordinary
+tool permission requests stop the run. App and macOS permission observers also stop it. Approval
+records and task checks decide other tool errors. Wording alone does not stop one arm differently.
+Approval dialogs must be left for the operator. A live run takes `/tmp/sleight-live.lock`
+and stops if `/tmp/sleight-hold` appears.
+
+The result's `armMetadata` records the plugin's manifest name and version, source commit
+when available, a SHA-256 of its local package, and the discovered server and tool names. Provenance
+uses `git rev-parse` only to avoid competitor fsmonitors. The result omits dirty state. MCP
+arms record a configuration hash and hashes of the installed executable and local script packages,
+including their versions and commits when available. Plugin hashes also cover external configured
+server packages. Dependencies and build output inside those packages are included; only Git metadata
+is excluded. Each artifact records whether the hash covers a package directory or an entry file.
+External system libraries and programs selected at runtime by a launcher are outside these hashes.
+Configuration secrets are excluded. Remote MCP servers and installer commands are refused because
+the runner cannot identify their installed code. Configure a local stdio executable instead.
+Dry runs include the isolated command. Preflight failures are retained as failed rows. Final-answer
+wording does not decide a verdict. The task check and approval records do. The publication helper
+replaces foreign catalogs, app inventories and private identities with counts.
+
 Claude arms run with Bash, Write, Edit, Glob, Grep, Read, Skill and the web tools disallowed, since a user's settings can
 allow them and a check could then pass without the app. Until 2026-10-09 they were allowed: no run
 wrote a checked file through them (716 transcripts checked), but Claude often opened the task's file

@@ -1,0 +1,61 @@
+{
+  "mode": "plugin-dry",
+  "sourceCommit": "18a8ccb8ea24620fe8f478904d3527e68e5237ce",
+  "command": [
+    "node",
+    "bench/run.mjs",
+    "--arm",
+    "plugin:sleight",
+    "--tasks",
+    "calculator-click",
+    "--runs",
+    "1",
+    "--dry-run"
+  ],
+  "exit": {
+    "code": 1,
+    "signal": null
+  },
+  "timedOut": false,
+  "cancelled": false,
+  "stdout": "\nresults: ~/Projects/sleight-wt/plugin-arm/bench/results/2026-10-10T07-41-32-845Z-dry.json\n",
+  "stderr": "",
+  "groupClean": true,
+  "raw": {
+    "stamp": "2026-10-10T07-41-32-845Z",
+    "fixturePolicy": "retained app observers for every arm",
+    "ownerAway": false,
+    "arms": [
+      "plugin:sleight"
+    ],
+    "armMetadata": {
+      "plugin:sleight": {
+        "rejected": true
+      }
+    },
+    "model": "claude-haiku-5-5",
+    "effort": "high",
+    "claude": "claude",
+    "auth": "login",
+    "results": [
+      {
+        "arm": "plugin:sleight",
+        "phase": "configuration",
+        "passed": false,
+        "reason": "plugin hooks are unsupported in benchmark arms"
+      }
+    ]
+  },
+  "traces": [],
+  "transcripts": [],
+  "privacy": {
+    "filteredOccurrences": {
+      "connectorServerRecords": 0,
+      "connectorToolNames": 0,
+      "appInventoryEntries": 0,
+      "catalogFields": 0,
+      "thinkingBlocks": 0,
+      "privateTermOccurrences": 0
+    }
+  }
+}

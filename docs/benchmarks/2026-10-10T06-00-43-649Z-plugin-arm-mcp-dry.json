@@ -1,0 +1,140 @@
+{
+  "mode": "mcp-dry",
+  "command": [
+    "node",
+    "bench/run.mjs",
+    "--arm",
+    "mcp:sleight-plain",
+    "--tasks",
+    "calculator-click",
+    "--runs",
+    "1",
+    "--dry-run"
+  ],
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "timedOut": false,
+  "cancelled": false,
+  "stdout": "\nresults: ~/Projects/sleight-wt/plugin-arm/bench/results/2026-10-10T06-00-46-776Z-dry.json\n",
+  "stderr": "DRY mcp:sleight-plain calculator-click #1 0s\n",
+  "groupClean": true,
+  "raw": {
+    "stamp": "2026-10-10T06-00-46-776Z",
+    "fixturePolicy": "retained app observers for every arm",
+    "ownerAway": false,
+    "arms": [
+      "mcp:sleight-plain"
+    ],
+    "armMetadata": {
+      "mcp:sleight-plain": {
+        "kind": "mcp",
+        "name": "sleight-plain",
+        "source": "/private/tmp/sleight-plugin-arm-xPhwh4/plain.json",
+        "configHash": "4c1eaa7dacc422c72ba88cae7e294c01c75c29b32fbf56d03a67502fbea4abc4",
+        "packageHash": "3c4579cf22d118f947d01dce0af5f88791bb1898ecda720606d68f7245473437",
+        "servers": {
+          "sleight-plain": {
+            "transport": "stdio",
+            "artifacts": [
+              {
+                "name": "sleight",
+                "version": "1.1.0",
+                "extent": "package-directory",
+                "source": "~/Projects/sleight-wt/plugin-arm/plugins/sleight",
+                "commit": "332e3ca0260d7eee0b003882d95d8b64ec431dd3",
+                "dirty": false,
+                "packageHash": "fe3b422879bf512657bf4d64ec845a2f016c6beae57eb5857dd8fea4ca70ea10"
+              }
+            ],
+            "executable": "~/Projects/sleight-wt/plugin-arm/plugins/sleight/bin/sleight-mcp"
+          }
+        },
+        "discovery": {
+          "servers": [
+            {
+              "name": "sleight-plain",
+              "status": "connected"
+            }
+          ],
+          "tools": [
+            "mcp__sleight-plain__blocked_app",
+            "mcp__sleight-plain__drag",
+            "mcp__sleight-plain__hover",
+            "mcp__sleight-plain__js",
+            "mcp__sleight-plain__js_reset",
+            "mcp__sleight-plain__menu_bar",
+            "mcp__sleight-plain__notifications",
+            "mcp__sleight-plain__replay",
+            "mcp__sleight-plain__select_window",
+            "mcp__sleight-plain__turn_ended"
+          ]
+        },
+        "tools": [
+          "mcp__sleight-plain__blocked_app",
+          "mcp__sleight-plain__drag",
+          "mcp__sleight-plain__hover",
+          "mcp__sleight-plain__js",
+          "mcp__sleight-plain__js_reset",
+          "mcp__sleight-plain__menu_bar",
+          "mcp__sleight-plain__notifications",
+          "mcp__sleight-plain__replay",
+          "mcp__sleight-plain__select_window",
+          "mcp__sleight-plain__turn_ended"
+        ]
+      }
+    },
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "claude": "claude",
+    "results": [
+      {
+        "arm": "mcp:sleight-plain",
+        "task": "calculator-click",
+        "run": 1,
+        "dryRun": true,
+        "prompt": "Using computer use in the background, work out 17 × 23 in Calculator by clicking its buttons. Reply with only the number the display shows.",
+        "check": "answer does not contain 391",
+        "command": [
+          "claude",
+          "--mcp-config",
+          "/private/tmp/sleight-plugin-arm-xPhwh4/arms/mcp-sleight-plain-arm/mcp.json",
+          "--strict-mcp-config",
+          "--setting-sources",
+          "",
+          "--tools",
+          "",
+          "--disable-slash-commands",
+          "--permission-prompts",
+          "none",
+          "--no-session-persistence",
+          "--allowedTools",
+          "mcp__sleight-plain__blocked_app,mcp__sleight-plain__drag,mcp__sleight-plain__hover,mcp__sleight-plain__js,mcp__sleight-plain__js_reset,mcp__sleight-plain__menu_bar,mcp__sleight-plain__notifications,mcp__sleight-plain__replay,mcp__sleight-plain__select_window,mcp__sleight-plain__turn_ended",
+          "--disallowedTools",
+          "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch,Glob,Grep,Read,Skill",
+          "--settings",
+          "/private/tmp/sleight-plugin-arm-xPhwh4/arms/mcp-sleight-plain-arm/bench-settings.json"
+        ],
+        "models": []
+      }
+    ]
+  },
+  "traces": [
+    {
+      "file": "trace-33532.jsonl",
+      "text": "{\"t\":\"2026-10-10T06:00:58.445Z\",\"direction\":\"to-client\",\"msg\":{\"jsonrpc\":\"2\",\"id\":\"server-discover-probe-1\",\"error\":{\"code\":-32601,\"message\":\"Method not found\"}}}\n{\"t\":\"2026-10-10T06:00:58.805Z\",\"direction\":\"to-server\",\"msg\":{\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"roots\":{\"listChanged\":true},\"elicitation\":{\"form\":{},\"url\":{}}},\"clientInfo\":{\"name\":\"claude-code\",\"title\":\"Claude Code\",\"version\":\"2.1.289\",\"description\":\"Anthropic's agentic coding tool\",\"websiteUrl\":\"https://claude.com/claude-code\"}},\"jsonrpc\":\"2\",\"id\":0}}\n{\"t\":\"2026-10-10T06:01:02.687Z\",\"direction\":\"from-server\",\"msg\":{\"id\":0}}\n{\"t\":\"2026-10-10T06:01:02.688Z\",\"direction\":\"to-client\",\"msg\":{\"jsonrpc\":\"2\",\"id\":0,\"result\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"experimental\":{\"codex/sandbox-state-meta\":{}},\"tools\":{\"listChanged\":true}},\"serverInfo\":{\"name\":\"rmcp\",\"version\":\"1.5.0\"},\"instructions\":\"UI automation through cua_repl using the initialized cua API.\"}}}\n{\"t\":\"2026-10-10T06:01:02.907Z\",\"direction\":\"to-server\",\"msg\":{\"jsonrpc\":\"2\",\"method\":\"notifications/initialized\"}}\n{\"t\":\"2026-10-10T06:01:02.913Z\",\"direction\":\"to-server\",\"msg\":{\"method\":\"tools/list\",\"jsonrpc\":\"2\",\"id\":1}}\n{\"t\":\"2026-10-10T06:01:02.940Z\",\"direction\":\"from-server\",\"msg\":{\"id\":1}}\n{\"t\":\"2026-10-10T06:01:02.940Z\",\"direction\":\"to-client\",\"msg\":{\"jsonrpc\":\"2\",\"id\":1,\"result\":{\"tools\":[{\"name\":\"js\",\"description\":\"Control native apps or browsers on the user’s computer by reading or operating UI. Prefer purpose-built skills, connectors, APIs, or CLIs when available.\\n\\nOn the first invocation of `cua_repl`, or after resetting it, start with one of the API calls shown below, assigning the app to a variable. When …(1865)\",\"inputSchema\":{\"additionalProperties\":false,\"properties\":{\"code\":{\"description\":\"JavaScript to execute using the initialized cua_repl runtime.\",\"type\":\"string\"},\"timeout_ms\":{\"description\":\"Optional execution timeout in milliseconds. Defaults to 30000 (30 seconds) when omitted.\",\"minimum\":1,\"type\":\"integer\"},\"title\":{\"description\":\"Short user-facing description of what the code does.\",\"maxLength\":80,\"minLength\":1,\"type\":\"string\"}},\"required\":[\"code\"],\"type\":\"object\"},\"annotations\":{\"readOnlyHint\":true,\"destructiveHint\":false,\"openWorldHint\":false},\"_meta\":{\"anthropic/alwaysLoad\":true}},{\"name\":\"js_reset\",\"description\":\"Reset the persistent cua_repl JavaScript session. All JavaScript bindings are discarded. The next cua_repl.js call initializes a fresh runtime for the enabled surfaces. This does not close browser tabs or native apps, or erase their state.\",\"inputSchema\":{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"},\"annotations\":{\"readOnlyHint\":true,\"destructiveHint\":false,\"openWorldHint\":false},\"_meta\":{\"anthropic/alwaysLoad\":true}},{\"name\":\"turn_ended\",\"description\":\"Internal to sleight: its hooks call this when a Claude turn ends. Never call it yourself.\",\"inputSchema\":{\"additionalProperties\":false,\"properties\":{\"hook_event_name\":{\"minLength\":1,\"type\":\"string\"},\"session_id\":{\"minLength\":1,\"type\":\"string\"},\"turn_id\":{\"minLength\":1,\"type\":\"string\"}},\"required\":[\"hook_event_name\",\"session_id\",\"turn_id\"],\"type\":\"object\"},\"annotations\":{\"idempotentHint\":true}},{\"name\":\"select_window\",\"description\":\"Choose one running app window by exact title or file URL through AXRaise/AXMain, without activating the app. Then use one standalone js call to acquire the app and verify its full Window/URL header before acting. Missing or duplicate matches stop selection. The user approves window selection once pe…(318)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"app\":{\"type\":\"string\",\"description\":\"Running app name, bundle ID or path\"},\"title\":{\"type\":\"string\",\"description\":\"Exact window title, use when no file URL is known\"},\"url\":{\"type\":\"string\",\"description\":\"Exact file URL from AXDocument, preferred over title\"}},\"required\":[\"app\"],\"additionalProperties\":false},\"_meta\":{\"anthropic/alwaysLoad\":true}},{\"name\":\"menu_bar\",\"description\":\"Use apps' status items in the macOS menu bar (the icons at the right end), which the js tool can't reach. Not for an app's own menus (File, Edit, Format, View): those are in its tree, so use js. op \\\"apps\\\" lists the apps that have one. \\\"open\\\" clicks an app's item and returns its menu (read, then clos…(612)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"op\":{\"type\":\"string\",\"enum\":[\"apps\",\"open\",\"choose\",\"press\",\"close\"]},\"app\":{\"type\":\"string\",\"description\":\"The app, as \\\"apps\\\" names it\"},\"path\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"element\":{\"type\":\"integer\"},\"item\":{\"type\":\"integer\"}},\"required\":[\"op\"],\"additionalProperties\":false},\"_meta\":{\"anthropic/alwaysLoad\":true}},{\"name\":\"notifications\",\"description\":\"Read the notification banners on screen and press their buttons (such as Close or Snooze), which the js tool can't reach. op \\\"list\\\" returns each banner's texts and button names; \\\"press\\\" presses `button` on `banner`. The user approves notifications once per session.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"op\":{\"type\":\"string\",\"enum\":[\"list\",\"press\"]},\"banner\":{\"type\":\"integer\"},\"button\":{\"type\":\"string\"}},\"required\":[\"op\"],\"additionalProperties\":false},\"_meta\":{\"anthropic/alwaysLoad\":true}},{\"name\":\"hover\",\"description\":\"Hover with the real pointer only after Help text, secondary actions, right-click and keys fail. Tell the user first that it will move their pointer and bring the app forward for about N seconds: the dwell plus capture and restoration (about two seconds with the default dwell). `at` is relative to th…(732)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"app\":{\"type\":\"string\",\"minLength\":1,\"description\":\"App name, bundle ID or path\"},\"windowTitle\":{\"type\":\"string\",\"minLength\":1,\"description\":\"Exact on-screen window title; required when the app has several windows. Missing or duplicate matches refuse.\"},\"at\":{\"type\":\"array\",\"items\":{\"type\":\"number\",\"minimum\":0},\"minItems\":2,\"maxItems\":2},\"waitMs\":{\"type\":\"integer\",\"minimum\":100,\"maximum\":4000,\"description\":\"Hover dwell, default 1500 ms; increase only if needed\"}},\"required\":[\"app\",\"at\"],\"additionalProperties\":false},\"_meta\":{\"anthropic/alwaysLoad\":true}},{\"name\":\"blocked_app\",\"description\":\"Drive an app the engine refuses (Terminal, iTerm2, ChatGPT, Codex, Atlas) through macOS Accessibility, which the js tool cannot reach. op \\\"read\\\" returns the window as numbered elements plus a screenshot file; \\\"click\\\" presses `element` (or a window-relative `point`, which brings the app to the front)…(629)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"op\":{\"type\":\"string\",\"enum\":[\"read\",\"click\",\"type\",\"key\",\"scroll\"]},\"app\":{\"type\":\"string\",\"description\":\"App name, bundle ID or path\"},\"element\":{\"type\":\"integer\",\"description\":\"click: the element number from read\"},\"point\":{\"type\":\"array\",\"items\":{\"type\":\"number\"},\"minItems\":2,\"maxItems\":2,\"description\":\"click: window-relative [x, y]\"},\"text\":{\"type\":\"string\",\"description\":\"type: the exact text to send\"},\"key\":{\"type\":\"string\",\"description\":\"key: Return, Tab, Escape, super+v, …\"},\"amount\":{\"type\":\"integer\",\"description\":\"scroll: lines, positive up\"}},\"required\":[\"op\",\"app\"],\"additionalProperties\":false},\"_meta\":{\"anthropic/alwaysLoad\":true}},{\"name\":\"drag\",\"description\":\"A drag that holds the mouse down and moves in steps, for what app.drag in the js tool can't do, such as moving selected text (select it with js first). `from` and `to` are in the same frame as the app's engine screenshot, from that window's top-left corner. Pass `windowId` when several windows fit; …(1169)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"app\":{\"type\":\"string\",\"description\":\"App name, bundle ID or path\"},\"windowId\":{\"type\":\"integer\",\"minimum\":1,\"description\":\"Exact window ID from the engine inventory or app state\"},\"from\":{\"type\":\"array\",\"items\":{\"type\":\"number\"},\"minItems\":2,\"maxItems\":2},\"to\":{\"type\":\"array\",\"items\":{\"type\":\"number\"},\"minItems\":2,\"maxItems\":2},\"holdMs\":{\"type\":\"integer\",\"description\":\"How long to hold before moving (default 500)\"},\"steps\":{\"type\":\"integer\",\"description\":\"Moves between start and end (default 25)\"}},\"required\":[\"app\",\"from\",\"to\"],\"additionalProperties\":false},\"_meta\":{\"anthropic/alwaysLoad\":true}}]}}}\n{\"t\":\"2026-10-10T06:01:04.898Z\",\"direction\":\"change-snapshots-deleted\",\"msg\":{}}\n"
+    }
+  ],
+  "transcripts": [],
+  "privacy": {
+    "filteredOccurrences": {
+      "connectorServerRecords": 0,
+      "connectorToolNames": 0,
+      "appInventoryEntries": 0,
+      "catalogFields": 0,
+      "thinkingBlocks": 0,
+      "privateTermOccurrences": 0
+    }
+  }
+}

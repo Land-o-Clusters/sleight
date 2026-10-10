@@ -187,6 +187,11 @@ export function bootedIPhone({ trackOwnership = false, beforeViewerLaunch } = {}
 // Mac's network. The page turns off autocapitalization and autocorrect, so
 // what arrives is what Claude typed. Each run gets its own server; check closes it.
 const forms = new Map();
+export async function closeForm(nonce) {
+  const form = forms.get(nonce);
+  forms.delete(nonce);
+  if (form?.server.listening) await new Promise(resolve => form.server.close(resolve));
+}
 export async function serveForm(nonce) {
   const form = { received: [] };
   form.server = createServer((req, res) => {

@@ -1,0 +1,38 @@
+{
+  "mode": "mcp-live",
+  "sourceCommit": "6dadc43bc1642569e19e613a5ee1bcf4c1248f0f",
+  "command": [
+    "node",
+    "bench/run.mjs",
+    "--arm",
+    "mcp:sleight-plain,sleight",
+    "--tasks",
+    "calculator-click",
+    "--runs",
+    "1",
+    "--calculator-gate",
+    "--auth",
+    "api"
+  ],
+  "exit": {
+    "code": 1,
+    "signal": null
+  },
+  "timedOut": false,
+  "cancelled": false,
+  "stdout": "Claude arms run on the API key: $1.19 of the $200 monthly cap spent.\n",
+  "stderr": "Acquiring /tmp/sleight-live.lock.\nfile://~/Projects/sleight-wt/plugin-arm/bench/live-lock.mjs:13\n      if (!wait) throw new Error(`Another live run holds ${path}. Wait for it to finish.`);\n                       ^\n\nError: Another live run holds /tmp/sleight-live.lock. Wait for it to finish.\n    at acquireLiveLock (file://~/Projects/sleight-wt/plugin-arm/bench/live-lock.mjs:13:24)\n    at async file://~/Projects/sleight-wt/plugin-arm/bench/run.mjs:355:12\n\nNode.js v26.4.0\n",
+  "groupClean": true,
+  "traces": [],
+  "transcripts": [],
+  "privacy": {
+    "filteredOccurrences": {
+      "connectorServerRecords": 0,
+      "connectorToolNames": 0,
+      "appInventoryEntries": 0,
+      "catalogFields": 0,
+      "thinkingBlocks": 0,
+      "privateTermOccurrences": 0
+    }
+  }
+}

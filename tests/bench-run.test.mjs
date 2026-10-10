@@ -6,27 +6,38 @@ import { runInNewContext } from 'node:vm';
 import { BENCH_APPS, REAL_APPS } from '../bench/tasks.mjs';
 import { privateMailResult, publicPrivateMailRow } from '../bench/private-mail.mjs';
 import { privateDriverEnvironment } from '../bench/driver.mjs';
+import { guardGenericOperation } from '../bench/generic-approval.mjs';
+import { genericSettings } from '../bench/plugin-arm.mjs';
 
 // Execute the actual runner body with inert dependencies. No app, CLI, approval
 // file, live lock, compiler or filesystem operation reaches the host.
-async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false, fixtureLifecycle = false, ownerName = '', auth = { mode: 'login', env: {}, unset: [] }, keySource = 'none', spend = () => 0 } = {}) {
+async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false, fixtureLifecycle = false, ownerName = '', auth = { mode: 'login', env: {}, unset: [] }, keySource = 'none', spend = () => 0, holdAfterPreflight = false, dryRun = false, preparationError, extraServer, driverOut = {}, calculatorGate = false, calculatorFailureAt } = {}) {
   const calls = [], saved = [], envs = [], tailScopes = [], directories = [];
-  const logs = [], driverOptions = [], codexRuns = [];
+  const logs = [], driverOptions = [], codexRuns = [], files = new Map();
+  let preflightDone = false, calculatorObservations = 0;
   const source = readFileSync(new URL('../bench/run.mjs', import.meta.url), 'utf8')
     .replace(/^#!.*\n/, '').replace(/^import .*;\n/gm, '').replaceAll('import.meta.url', '"file:///fixture/bench/run.mjs"');
   const task = { id: 'fixture', app: 'Safari', setup() {}, prompt: () => 'task', check: () => true, cleanup: () => calls.push('task cleanup') };
   if (fixtureLifecycle) Object.assign(task, { id: 'simulator-form', app: 'Simulator', fixtureLifecycle: true });
+  if (calculatorGate) Object.assign(task, { id: 'calculator-click', app: 'Calculator' });
   if (privateMail) Object.assign(task, { id: 'mimestream-label', app: 'Mimestream', privateMail: true,
     privateExpected: () => 'private answer', privateTerms: () => ['private label'] });
   const sandbox = {
-    process: { argv: ['node', 'run', '--suite', suite, '--arm', arm, '--runs', '3', ...(setupOnly ? ['--setup-only'] : []), ...extraArgs], env: base, on() {}, once() {} },
-    console: { log: text => logs.push(text), error: text => logs.push(text) }, AbortController, AbortSignal, setTimeout, clearTimeout,
+    process: { argv: ['node', 'run', '--suite', suite, '--arm', arm, '--runs', '3', ...(setupOnly ? ['--setup-only'] : []), ...(dryRun ? ['--dry-run'] : []), ...(calculatorGate ? ['--calculator-gate'] : []), ...extraArgs], env: base, on() {}, once() {} },
+    console: { log: text => logs.push(text), error: text => logs.push(text) }, AbortController, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval,
     dirname, join, fileURLToPath: () => '/fixture/bench/run.mjs', homedir: () => '/owner', tmpdir: () => '/private/tmp/unit',
-    existsSync: () => true, realpathSync: path => path, mkdirSync: path => directories.push(path), rmdirSync() {}, statSync: () => ({ dev: 1, ino: 1 }),
-    writeFileSync: (_path, value) => saved.push(JSON.parse(value)), randomBytes: () => ({ toString: () => 'nonce' }),
+    existsSync: path => path === '/tmp/sleight-hold' ? holdAfterPreflight && preflightDone : true, realpathSync: path => path, mkdirSync: path => directories.push(path), rmdirSync() {}, statSync: () => ({ dev: 1, ino: 1 }),
+    writeFileSync: (path, value) => { files.set(path, JSON.parse(value)); saved.push(JSON.parse(value)); }, randomBytes: () => ({ toString: () => 'nonce' }),
     privateMailResult, publicPrivateMailRow,
     privateDriverEnvironment, assertPrivateClaudePolicy: () => calls.push('policy audit'),
     DEFAULT_CAP_USD: 200, runCost: out => out?.total_cost_usd, archiveOldRuns: () => [], benchAuth: () => auth, addSpend: usd => { calls.push(['spend', usd]); return spend(usd); },
+    prepareGenericArm: () => {
+      if (preparationError) throw new Error(preparationError);
+      return { generic: true, cwd: '/private/tmp/own-arm', args: ['--strict-mcp-config', '--setting-sources', '', '--tools', '', '--disable-slash-commands', '--permission-prompts', 'none', '--no-session-persistence'], env: {}, identity: {}, servers: ['rival'] };
+    },
+    genericSettings, acceptGenericCatalog() {},
+    guardGenericOperation: (operation, options) => guardGenericOperation(operation, { ...options, stopFile: undefined, held: () => false }),
+    genericTask: task => { calls.push('retained setup'); return task; },
     publishPrivateMailResults: (_path, value, options) => { calls.push('private audit'); assert.ok(options.terms.every(term => term === 'private label')); saved.push(JSON.parse(value)); },
     execFileSync(command, args) {
       if (command === '/usr/bin/git') throw new Error('outside repo');
@@ -41,24 +52,141 @@ async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome
     startFootprint: () => async () => ({ cpuSeconds: 0, group: {}, outside: {} }),
     runCodex: async (prompt, options) => { codexRuns.push({ prompt, options }); return { code: 0, out: {}, forbidden: [] }; }, watchAppWindows: () => async () => [],
     acquireLiveLock: async () => { calls.push('lock'); return async () => calls.push('unlock'); },
-    runTiming: () => ({}), traceTiming: () => ({}), observePermission: () => false,
+    runTiming: () => ({}), traceTiming: () => ({}), observePermission: () => { if (dryRun) assert.fail('no host permission observation in initialization-only discovery'); return false; },
+    assertCalculatorReady: async () => {
+      assert.ok(calls.includes('lock'), 'Calculator observation requires the shared lock');
+      calls.push('Calculator observation');
+      if (++calculatorObservations === calculatorFailureAt) throw new Error('Calculator has no visible window on the current Space');
+      return { load: [1, 2, 3], calculatorPid: 123, onScreenWindows: 1 };
+    },
     runOwned: async (_command, _args, options) => {
-      envs.push(options.env); options.onStdout(JSON.stringify({ type: 'system', subtype: 'init', apiKeySource: keySource, mcp_servers: [{ name: 'plugin:sleight:computer', status: 'connected' }] }) + '\n');
+      envs.push(options.env); options.onStdout(JSON.stringify({ type: 'system', subtype: 'init', apiKeySource: keySource, mcp_servers: [{ name: 'plugin:sleight:computer', status: 'connected' }, ...(extraServer ? [{ name: extraServer, status: 'connected' }] : [])] }) + '\n');
+      preflightDone = true;
       return { groupClean: true };
     },
-    runDriver: async (_command, args, options) => { calls.push(['driver', ...args]); envs.push(options.env); driverOptions.push(options); return { code: 0, out: { total_cost_usd: 0.25 }, groupClean: true }; },
+    runDriver: async (_command, args, options) => { calls.push(['driver', ...args]); envs.push(options.env); driverOptions.push(options); return { code: 0, out: { total_cost_usd: 0.25, ...driverOut }, groupClean: true }; },
     executeRealTask: async (_task, ctx, options) => {
       ctx.windowLeases = leases;
       if (setupOnly) assert.equal(options.setupOnly, true);
+      if (dryRun) assert.equal(options.dryRun, true);
       calls.push('real run'); if (throws) throw new Error('unexpected run failure');
-      if (drive) await options.drive('task', ctx, {});
-      return { passed: false, groupClean: true, ...outcome };
+      if (holdAfterPreflight) {
+        try { await options.permissionCheck(); } catch (error) { options.stop(); return { passed: false, observerError: error.message, reason: error.message }; }
+      }
+      const response = drive ? await options.drive('task', ctx, {}) : {};
+      return { passed: false, groupClean: true, ...response, ...outcome };
     },
   };
   let error;
   try { await runInNewContext(`(async () => { ${source}\n})()`, sandbox); } catch (caught) { error = caught; }
-  return { calls, saved, envs, tailScopes, directories, error, logs, driverOptions, codexRuns };
+  return { calls, saved, envs, tailScopes, directories, error, logs, driverOptions, codexRuns, files, exitCode: sandbox.process.exitCode };
 }
+
+test('generic default comparisons use the guarded lifecycle for every arm and propagate failures', async () => {
+  const result = await runner({ suite: 'default', arm: 'sleight,mcp:rival', drive: true, outcome: { passed: false, code: 1 } });
+  assert.equal(result.error, undefined);
+  assert.equal(result.calls.filter(call => call === 'real run').length, 6);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.tailScopes.every(scope => scope.ownedOnly));
+  assert.ok(result.calls.filter(Array.isArray).filter(call => call[0] === 'driver').every(args => args.includes('--disallowedTools')));
+});
+
+test('generic comparisons use the same strict Claude options and stream format for both arms', async () => {
+  const result = await runner({ suite: 'default', arm: 'sleight,mcp:rival', drive: true, outcome: { passed: true } });
+  assert.equal(result.error, undefined);
+  const commands = result.calls.filter(call => Array.isArray(call) && call[0] === 'driver');
+  assert.equal(commands.length, 6);
+  for (const args of commands) {
+    for (const flag of ['--strict-mcp-config', '--disable-slash-commands', '--no-session-persistence']) assert.ok(args.includes(flag), flag);
+    for (const flag of ['--setting-sources', '--tools']) { assert.ok(args.includes(flag)); assert.equal(args[args.indexOf(flag) + 1], ''); }
+    assert.equal(args[args.indexOf('--output-format') + 1], 'stream-json');
+    assert.equal(args.includes('--append-system-prompt'), false);
+    assert.equal(args[args.indexOf('--model') + 1], 'claude-haiku-5-5');
+    assert.equal(args[args.indexOf('--effort') + 1], 'high');
+    assert.equal(args[args.indexOf('--permission-prompts') + 1], 'none');
+    const settings = result.files.get(args[args.indexOf('--settings') + 1]);
+    assert.match(settings.hooks.PermissionRequest[0].hooks[0].command, /deny-approval.mjs/);
+    if (args.includes('--plugin-dir')) {
+      const config = result.files.get(args[args.indexOf('--mcp-config') + 1]);
+      assert.equal(config.mcpServers['plugin:sleight:computer'].command, '/fixture/plugins/sleight/bin/sleight-mcp');
+      assert.equal(settings.hooks.Elicitation[0].matcher, '^plugin:sleight:computer$');
+    }
+  }
+  assert.ok(result.driverOptions.every(options => options.format === 'stream-json'));
+  assert.ok(result.envs.every(env => env.BENCH_APPROVAL_STOP && env.BENCH_ARM_SERVERS));
+});
+
+test('sleight preflight refuses servers belonging to a generic comparison arm', async () => {
+  const result = await runner({ arm: 'sleight,mcp:rival', drive: true, extraServer: 'rival' });
+  assert.equal(result.driverOptions.length, 0);
+  assert.equal(result.exitCode, 1);
+  assert.match(result.saved.at(-1).results[0].reason, /also loads/);
+});
+
+for (const surface of ['hooks', 'LSP servers', 'agents']) test(`${surface} rejection is recorded before any preflight, fixture or live lock`, async () => {
+  const result = await runner({ arm: 'plugin:rival', preparationError: `plugin ${surface} are unsupported in benchmark arms` });
+  assert.equal(result.error, undefined);
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.envs.length, 0);
+  assert.equal(result.calls.includes('lock'), false);
+  assert.equal(result.calls.includes('real run'), false);
+  assert.ok(result.saved.at(-1).results[0].reason.includes(`plugin ${surface}`));
+});
+
+test('final answer wording does not override checks while structured approval denials stop', async () => {
+  const normal = await runner({ arm: 'mcp:rival', drive: true, outcome: { passed: true }, driverOut: { result: '391. No permission dialog was required.' } });
+  assert.equal(normal.error, undefined);
+  assert.equal(normal.driverOptions.length, 3);
+  assert.ok(normal.saved.at(-1).results.every(row => row.passed));
+  for (const arm of ['mcp:rival,sleight', 'sleight,mcp:rival']) {
+    const denial = await runner({ arm, drive: true, outcome: { passed: true }, driverOut: { permission_denials: [{ tool_name: 'fixture' }] } });
+    assert.equal(denial.driverOptions.length, 1);
+    assert.equal(denial.exitCode, 1);
+    assert.match(denial.saved.at(-1).results[0].reason, /approval/);
+  }
+});
+
+test('API credential preflight applies to generic and sleight arms alike', async () => {
+  for (const arm of ['sleight', 'mcp:rival']) {
+    const rejected = await runner({ arm, auth: apiAuth, keySource: 'oauth', drive: true });
+    assert.equal(rejected.driverOptions.length, 0);
+    assert.equal(rejected.exitCode, 1);
+    assert.match(rejected.saved.at(-1).results[0].reason, /not the benchmark API key/);
+    const accepted = await runner({ arm, auth: apiAuth, keySource: 'ANTHROPIC_API_KEY', drive: true });
+    assert.equal(accepted.error, undefined);
+    assert.ok(accepted.envs.every(env => env.ANTHROPIC_API_KEY === 'sk-ant-test' && env.ENABLE_CLAUDEAI_MCP_SERVERS === 'false'));
+  }
+});
+
+test('a hold appearing during preflight stops before a task driver', async () => {
+  const result = await runner({ suite: 'default', arm: 'mcp:rival', holdAfterPreflight: true });
+  assert.equal(result.error, undefined); assert.equal(result.exitCode, 1);
+  assert.equal(result.driverOptions.length, 0);
+  assert.match(result.saved.at(-1).results[0].reason, /sleight-hold/);
+});
+
+test('generic dry discovery records commands without a model, live lock or host fixture', async () => {
+  const result = await runner({ suite: 'default', arm: 'mcp:rival', dryRun: true, outcome: { dryRun: true } });
+  assert.equal(result.error, undefined); assert.equal(result.driverOptions.length, 0);
+  assert.equal(result.calls.includes('lock'), false);
+  assert.ok(result.saved.at(-1).results.every(row => row.dryRun && row.command.includes('--disallowedTools')));
+});
+
+test('Calculator live conditions are checked under the lock before preflight and every arm driver', async () => {
+  const result = await runner({ suite: 'default', arm: 'mcp:rival,sleight', calculatorGate: true, drive: true, outcome: { passed: true } });
+  assert.equal(result.error, undefined);
+  assert.equal(result.calls.filter(call => call === 'Calculator observation').length, 7);
+  assert.equal(result.saved.at(-1).liveConditions.length, 7);
+  assert.equal(result.saved.at(-1).liveConditions[0].stage, 'preflight');
+  assert.equal(result.calls.at(-1), 'unlock');
+  const refusal = await runner({ arm: 'mcp:rival,sleight', calculatorGate: true, calculatorFailureAt: 1, drive: true });
+  assert.equal(refusal.error, undefined);
+  assert.equal(refusal.driverOptions.length, 0);
+  assert.equal(refusal.envs.length, 0);
+  assert.equal(refusal.exitCode, 1);
+  assert.match(refusal.saved.at(-1).results[0].reason, /current Space/);
+  assert.equal(refusal.calls.at(-1), 'unlock');
+});
 
 test('private mail runner publishes only hashed rows and keeps the driver ephemeral', async () => {
   const result = await runner({ privateMail: true, drive: true, base: { SLEIGHT_TRACE: '/private/trace' },
@@ -272,7 +400,7 @@ test('API mode gives every Claude run the key, drops other tokens, and checks th
   assert.equal(result.saved.at(-1).auth, 'api');
   assert.ok(result.calls.some(c => Array.isArray(c) && c[0] === 'spend' && c[1] === 0.25));
   const wrong = await runner({ suite: 'default', auth: apiAuth, keySource: 'none' });
-  assert.match(String(wrong.error?.message), /not the benchmark API key/);
+  assert.match(wrong.saved.at(-1).results[0].reason, /not the benchmark API key/);
 });
 
 test('a run that reaches the API cap stops the pass', async () => {
