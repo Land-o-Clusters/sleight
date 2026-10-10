@@ -59,7 +59,7 @@
 // `trace`, when given, receives every message as it passes, for debugging.
 
 import { randomUUID } from 'node:crypto';
-import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRead, readCode, guardedCode, WINDOWS_MARK, GUARD_READY } from './document-scope.mjs';
+import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRead, withoutEcho, readCode, guardedCode, WINDOWS_MARK, GUARD_READY } from './document-scope.mjs';
 import { ChangeReview, REVIEW_TOOL, isChangeCancel } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
 import { browserCall, browserReply } from './browser-call.mjs';
@@ -107,6 +107,13 @@ export function openMenuNote(text) {
 // shortcut opens, but the clause above still ends the call there: save and close were split in 14 of
 // 15 TextEdit runs, and no first call in 617 runs held an action (study, 2026-10-10).
 const FIRST_CALL_MERGE = 'start with one of the API calls shown below, assigning the app to a variable. When you already know the first actions on that app, put them after it in the same call (`let app = await cua.getApp("TextEdit"); await app.pressKey("super+n")`): sleight acquires the app and checks its window before they run. Chain every later action whose target you already know (keys, text, `{ id }` or `{ label }` clicks) in one call too, such as typing after the click that focuses a field, or Cmd+W after Cmd+S when the task closes the document. Do not end a call only to read the window before an action you already know: sleight waits for the app after each click, shortcut or Return, follows a Save or Open panel, a new window or a document saved under a name the call typed, and stops the rest of the call if any other window appears.';
+// Whether a call's first action needs no element from the tree: keys, typing, paste, or a click,
+// scroll or drag at coordinates.
+const ACTION = /\.(pressKey|typeText|paste|click|doubleClick|rightClick|scroll|drag|setValue|selectText|performSecondaryAction|performAction)\(\s*(\[)?/;
+export function treeFreeFirstAction(code) {
+  const first = ACTION.exec(typeof code === 'string' ? code : '');
+  return !!first && (['pressKey', 'typeText', 'paste'].includes(first[1]) || (!!first[2] && ['click', 'doubleClick', 'rightClick', 'scroll', 'drag'].includes(first[1])));
+}
 export function batchingDescription(description, variant = true) {
   const text = variant === 'merge' ? FIRST_CALL_MERGE : FIRST_CALL_BATCH;
   return typeof description === 'string' && description.includes(FIRST_CALL_RULE) ? description.replace(FIRST_CALL_RULE, text) : description;
@@ -702,7 +709,7 @@ export function createRelay({
     const read = name === 'js' ? typeof code === 'string' && isLeaseRead(code)
       : (name === 'menu_bar' && args.op === 'apps') || (name === 'notifications' && args.op === 'list') ||
         (name === 'blocked_app' && args.op === 'read');
-    const acquisition = read && code?.trim().match(/^(?:(?:(let|const|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*)?await\s+cua\.getApp\(\s*(.*?)\s*\)\s*;?$/s);
+    const acquisition = read && withoutEcho(code ?? '').match(/^(?:(?:(let|const|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*)?await\s+cua\.getApp\(\s*(.*?)\s*\)\s*;?$/s);
     const handle = acquisition ? acquisition[2] ?? (constApp ? undefined : 'app')
       : read && code?.match(/([A-Za-z_$][\w$]*)\.(?:getAXState|getAXStateAndScreenshot|getScreenshot)\(/)?.[1];
     const selector = acquisition?.[3];
@@ -1367,7 +1374,10 @@ export function createRelay({
             // takes about 50 ms, but 17 to 57 s on a loaded Mac (2026-10-09), and without it a window
             // that renumbered after Claude's read went unnoticed (textedit-save, the same day). Document
             // scope, change review and careful reads always read before acting.
-            const prior = !documentMode && !changeReview && guardMode !== 'careful' && priorRead && (priorRead.split || priorRead.ms > 2000) && priorRead.seq + 1 === callSeqs.get(msg.id) && Date.now() - priorRead.at < 10000 &&
+            // A first action that sends keys, text or coordinates reuses it whatever the read took
+            // (owner, 2026-10-10, for about 0.35 s a run): a window switch between calls isn't caught
+            // before that action. Numbered, ID and label actions keep the read unless reads are slow.
+            const prior = !documentMode && !changeReview && guardMode !== 'careful' && priorRead && (priorRead.split || priorRead.ms > 2000 || treeFreeFirstAction(originalCode)) && priorRead.seq + 1 === callSeqs.get(msg.id) && Date.now() - priorRead.at < 10000 &&
               target?.app === priorRead.app ? { text: priorRead.text, id: priorRead.id, title: priorRead.title, windows: priorRead.windows, split: priorRead.split } : undefined;
             msg.params.arguments.code = guardedCode(originalCode, target, reason,
               inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,

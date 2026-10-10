@@ -1813,6 +1813,26 @@ test('Claude\'s own read stands in for the next call\'s first read in the defaul
   }
 });
 
+test('a first action with keys, text or coordinates reuses a fast read too; a numbered first action reads again', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1000 });
+  const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
+  const { mkdtempSync } = await import('node:fs');
+  const h = harness({ changeReview: false, inputLease: new InputLease({ directory: mkdtempSync(join(tmpdir(), 'sleight-prior-')), holder: 'A' }) });
+  const state = 'Window: "Calculator", App: Calculator\n0 standard window Calculator\n\t1 button Description: 1, ID: One';
+  flowCall(h, 1, 'let app = await cua.getApp("Calculator")'); await tick();
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: state }], _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.calculator' } } } } }); await tick();
+  for (const [id, code, reused] of [[3, 'await app.typeText("12")', true], [5, 'await app.click([40, 60])', true], [7, 'await app.pressKey("Return")', true],
+    [9, 'await app.click(1)', false], [11, 'await app.click({ id: "One" })', false]]) {
+    flowCall(h, id - 1, 'await app.getAXState()'); t.mock.timers.tick(50); flowAnswer(h, id - 1, state); await tick();
+    flowCall(h, id, code); await tick();
+    assert.equal(/"prior":\{/.test(h.toServer.find(m => m.id === id).params.arguments.code), reused, code);
+    flowAnswer(h, id, state); await tick();
+  }
+  const { treeFreeFirstAction } = await import('../plugins/sleight/lib/relay.mjs');
+  assert.equal(treeFreeFirstAction('await app.paste("x"); await app.click(3)'), true);
+  assert.equal(treeFreeFirstAction('await app.setValue({ id: "f" }, "x"); await app.pressKey("Return")'), false);
+});
+
 test('the relay passes the lines Claude last saw for the numbers a call acts on', async () => {
   const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
   const { mkdtempSync } = await import('node:fs');

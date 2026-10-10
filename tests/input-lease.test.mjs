@@ -21,6 +21,9 @@ for (const code of [
   'await cua.listWindows()',
   'await cua.getState()',
   'await te.getAXState({disableDiffing:true})',
+  'let app = await cua.getApp("TextEdit"); app',
+  'const te = await cua.getApp("TextEdit"); console.log(te);',
+  'let app = await cua.getApp("Calculator"); nodeRepl.write(app)',
 ]) test('standalone read passes: ' + code, () => assert.equal(isLeaseRead(code), true));
 
 for (const code of [
@@ -32,6 +35,9 @@ for (const code of [
   'cua.listApps = () => []',
   'await cua.listApps(); await app.click(1)',
   '(await cua.listApps()).forEach(a => app.click(1))',
+  'let app = await cua.getApp("TextEdit"); other',
+  'let app = await cua.getApp("TextEdit"); console.log(app.click(1))',
+  'let app = await cua.getApp("TextEdit"); app; await app.click(1)',
 ]) test('read/action mixture stays an action: ' + code, () => assert.equal(isLeaseRead(code), false));
 function bank(t, cleanup = () => {}) {
   const directory = mkdtempSync(join(tmpdir(), 'sleight-lease-test-'));

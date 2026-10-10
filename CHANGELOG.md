@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- A call's first action that sends keys, text or coordinates uses Claude's full read from the call
+  just before when it's under 10 s old, however fast that read was (owner's call). Before, only a
+  read over 2 s qualified. A window that comes to the front between the two calls isn't caught
+  before that first action. A call that only acquires an app and prints it (`let app = await
+  cua.getApp("X"); app`) now counts as a read, as a bare acquisition did, so the guard doesn't read
+  the window again after it. A study of 93 runs put both at about 0.9 s a run.
 - `open_file` opens an existing file in an app with the app left in the background (`open -g`),
   instead of the File > Open panel. Finishing that panel brought TextEdit to the front for about a
   second in 3 of about 21 textedit-edit runs while the owner worked (2026-10-10). The skill points

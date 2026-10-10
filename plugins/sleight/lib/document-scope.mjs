@@ -88,7 +88,17 @@ export function isCancelAction(name, args, text = '') {
 
 // Only a standalone acquisition or inventory read can cross a closed gate.
 // No comments, arbitrary acquisition arguments or extra statements.
+// An acquisition followed only by printing its own handle (`let app = await cua.getApp("X"); app`,
+// or console.log(app)) is still just a read: 42 of 101 guard reads after a call followed one of
+// these, though the engine's output already had the window header (2026-10-10 study).
+export function withoutEcho(code = '') {
+  const text = String(code).trim();
+  const m = /^((?:(?:let|const|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.getApp\([^;]*\))\s*;\s*(?:console\.log\(\s*([A-Za-z_$][\w$]*)\s*\)|nodeRepl\.write\(\s*([A-Za-z_$][\w$]*)\s*\)|([A-Za-z_$][\w$]*))\s*;?$/.exec(text);
+  return m && [m[3], m[4], m[5]].includes(m[2]) ? m[1] : text;
+}
+
 export function isDocumentRead(code = '') {
+  code = withoutEcho(code);
   return /^(?:(?:(?:let|const|var)\s+)?[A-Za-z_$][\w$]*\s*=\s*)?await\s+cua\.getApp\(\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\{\s*(?:windowId|"windowId")\s*:\s*\d+\s*\})\s*\)\s*;?$/.test(code.trim()) ||
     /^await\s+cua\.(?:getState|listApps|listWindows)\(\s*\)\s*;?$/.test(code.trim());
 }
@@ -104,7 +114,7 @@ export function readCode(code, options = {}) {
   // Before an acquisition, the windows of every app as the inventory lists them (about 11 ms), so
   // the next call's guard can reuse this read if they haven't changed. It goes first: listApps after
   // getApp drops the app from the result's metadata, where the relay finds its bundle ID.
-  const inventory = ACQUISITION.test(code.trim()) ? `try { nodeRepl.write(${JSON.stringify(WINDOWS_MARK)} + JSON.stringify((await cua.listApps({ emit: false })).filter(a => a.windows?.length).map(a => ({ id: a.id, windows: a.windows }))) + '\\n'); } catch {}\n` : '';
+  const inventory = ACQUISITION.test(withoutEcho(code)) ? `try { nodeRepl.write(${JSON.stringify(WINDOWS_MARK)} + JSON.stringify((await cua.listApps({ emit: false })).filter(a => a.windows?.length).map(a => ({ id: a.id, windows: a.windows }))) + '\\n'); } catch {}\n` : '';
   return guardSetup(undefined, options) + '\n' + inventory + read;
 }
 
