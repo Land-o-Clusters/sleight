@@ -28,15 +28,17 @@ Open, in order of user impact (full list in [known-problems.md](../known-problem
   app read says so. Left: a pass in real Split View with the Claude app, at release.
 - In the simulator, Claude's first tap on a Safari field often doesn't focus it (6 of 6 runs with shrunk
   screenshots), and Claude second-guesses the screenshot's scale there.
-- `typeText` after select-all wrote `Engine01engine01`. Send exact text by paste and verify it.
+- `typeText` after select-all wrote `Engine01engine01`. The skill now says to paste and compare
+  (`05903fa`, 6/6 on the TextEdit tasks). Why select-all didn't replace the text is still unknown.
 - The TextEdit save lock: the Shift-event fix measured 0/10 hangs, but we don't know why it works.
 - Live checks for the unit-tested 1.1.0 changes: the helper resend, the stale-number remap and the
   keyboard-tap notice.
 - Smaller ones: a moved word in rich text should keep the formatting it had, `/sleight stop` in the
-  desktop app, TextEdit's orphan Save Panel diagnosis, the doctor probing a per-app read, removing a
-  stale launchd job without help, per-site flow rules, the `blocked_app` check missing a localized
-  Settings title, a live `menu_bar` check, clipboard preservation's 205 to 236 ms, and desktop
-  sessions that stay busy.
+  desktop app, TextEdit's orphan Save Panel diagnosis, a live `menu_bar` check, and desktop sessions
+  that stay busy. Done 2026-10-10: the doctor's per-app read (`83188cf`, `ac9f0d2`), per-site flow
+  rules (`83188cf`), localized Settings titles in `blocked_app` and the clipboard helper (`05903fa`).
+  Stays manual: removing the helper's stale launchd job, since that changes OpenAI's helper state
+  (doctor prints the command).
 
 ## 3. Performance (owner's goal: lightning fast)
 
@@ -102,17 +104,19 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
    2026-10-09 with the real-use head-to-head).
 3. Replay: a successful run turns into a script that replays through the engine with no model,
    keeping sleight's guards, so it stops when the app isn't in the state the script expects. First
-   version built 2026-10-09 (`sleight-mcp record` and `replay`, `docs/design/replay.md`). Next: replay
-   from the desktop app, steps that wait for the app instead of failing, and Claude taking over at
-   the step that stopped.
+   version built 2026-10-09 (`sleight-mcp record` and `replay`, `docs/design/replay.md`). Done
+   2026-10-10 (`e12aef4`): steps that wait for the app, and Claude taking over at the step that
+   stopped. Replay from the desktop app is in review
+   (`codex/replay-desktop`).
 
 ## 6. Features after replay
 
 The owner's rule, in order: do what competitors do but better, then improve where they haven't, then
 build what nobody has. Sources are `.dev/research/2026-10-04-competitors.md` and the README roadmap.
 
-- Separate results for "input sent", "the UI changed" and "saved", with a reason when unverified.
-- Other hosts, such as Codex CLI, Cursor and any MCP client (LCU's main advantage).
+- Separate results for "input sent", "the UI changed" and "saved", with a reason when unverified
+  (`codex/verified-results`, in review).
+- Done 2026-10-10 (`6ca6639`): sleight runs from Cursor or any MCP client, with Claude first in the docs.
 - One lease and consent broker shared by Claude, Codex and other runtimes (without leases, two
   sessions typing into one document doubled the text 5/5).
 - Review unsaved changes and app state, not only saved files.
@@ -121,8 +125,8 @@ build what nobody has. Sources are `.dev/research/2026-10-04-competitors.md` and
   found a guard in Claude's JavaScript can't guarantee the confirm, and a TextEdit save would need 3
   prompts instead of 1.
 - Scheduled routines built on replay.
-- A published table of what works in the background, and receipts of each run's actions with
-  redaction.
+- Done 2026-10-10: a published table of what works in the background (`docs/background.md`).
+  Receipts of each run's actions with redaction: `codex/review-receipts`.
 - Stop that confirms the Mac stopped, element waits, exact window targeting for untitled windows,
   and recording a task from the user's demonstration.
 - Windows, tested in a Windows 11 ARM VM (owner's idea, 2026-10-09). Codex computer use reached
