@@ -82,7 +82,10 @@ only with a measured reason. In order:
    (`docs/benchmarks/2026-10-10-merge-ab.md`). The cost of guard reads before each numbered action
    in a batch is open too.
 5. A release only when the head-to-head shows sleight at Codex's speed and footprint, with the numbers
-   published.
+   published. On 2026-10-10 (Haiku, engine 26.1007.21159) time and turns were at
+   parity (263 s against 257 s, 61 turns each) and CPU wasn't (76.5 s against 60.2 s over six runs),
+   with the excess in the engine helper and engine node, where guard reads land
+   (`docs/benchmarks/2026-10-10-h2h-footprint-haiku.md`).
 
 Done: the relay "spike" was a timing bug (real relay time is about 0.4 s a pass). Measured and
 dropped: a first-call hint (8/12 runs still called `getState` first), trimming the engine's docs
