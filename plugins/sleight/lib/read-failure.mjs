@@ -5,58 +5,79 @@ import { dirname } from 'node:path';
 
 const HEALTH_SCRIPT = fileURLToPath(new URL('./app-health.js', import.meta.url));
 
-// One long-lived app-health helper per session, started on first use. A probe that doesn't answer
-// in time resolves 'unknown' and stops the helper, so a stuck Accessibility call can't hold up the
-// next one, which starts a fresh helper.
-export function createAppHealthHelper({ timeoutMs = 2000,
-  spawnHelper = () => spawn('/usr/bin/osascript', ['-l', 'JavaScript', HEALTH_SCRIPT, '--session', dirname(HEALTH_SCRIPT)], { stdio: ['pipe', 'pipe', 'ignore'] }) } = {}) {
-  let child, nextId = 0, closed = false;
-  const pending = new Map();
-  const stopping = new Set();
-  const settleAll = () => { for (const finish of pending.values()) finish(); pending.clear(); };
-  function stop() {
+// Each lane dispatches one operation at a time. Its deadline starts at dispatch, so killing a
+// timed-out helper cannot interrupt queued work. Probes never share a process with slow queries.
+function helperLane(kind, timeoutMs, spawnHelper) {
+  let child, active, retiring, nextId = 0, closed = false;
+  const queue = [];
+  function retire() {
     if (!child) return;
     const old = child; child = undefined;
     // An idle helper is unref'd. Collection must keep the caller alive even after the force
     // timer fires, until libuv has reaped the child and closed its pipes.
     old.ref?.(); old.stdin.ref?.(); old.stdout.ref?.();
-    const done = new Promise(resolve => {
+    retiring = new Promise(resolve => {
       const force = setTimeout(() => old.kill('SIGKILL'), 2000);
       old.once('close', () => { clearTimeout(force); resolve(); });
     });
-    stopping.add(done); done.then(() => stopping.delete(done));
-    old.stdin.end(); old.kill(); settleAll();
+    retiring.then(() => { retiring = undefined; pump(); });
+    old.stdin.end(); old.kill();
+  }
+  function finish(reply, replace = false) {
+    if (!active) return;
+    const request = active; active = undefined;
+    clearTimeout(request.timer); request.resolve(reply ?? request.fallback);
+    if (replace) retire();
+    pump();
   }
   function start() {
-    const current = child = spawnHelper();
-    current.once('error', () => { if (child === current) stop(); });
-    current.once('exit', () => { if (child === current) { child = undefined; settleAll(); } });
-    current.stdin.on('error', () => {});
+    const current = child = spawnHelper(kind);
+    current.once('error', () => { if (child === current) finish(undefined, true); });
+    current.once('close', () => { if (child === current) { child = undefined; finish(); } });
+    current.stdin.on('error', () => { if (child === current) finish(undefined, true); });
     current.unref?.(); current.stdin.unref?.(); current.stdout.unref?.();
     createInterface({ input: current.stdout }).on('line', line => {
       let reply;
       try { reply = JSON.parse(line); } catch { return; }
-      const finish = pending.get(reply?.id);
-      if (!finish) return;
-      pending.delete(reply.id); delete reply.id; finish(reply);
+      if (child !== current || reply?.id !== active?.id) return;
+      delete reply.id; finish(reply);
     });
+  }
+  function pump() {
+    if (closed || active || retiring || !queue.length) return;
+    active = queue.shift();
+    try {
+      if (!child) start();
+      active.id = nextId++;
+      active.timer = setTimeout(() => finish(undefined, true), timeoutMs);
+      child.stdin.write(JSON.stringify({ id: active.id, ...active.payload }) + '\n');
+    } catch { finish(undefined, true); }
   }
   function request(payload, fallback) {
     if (closed) return Promise.resolve(fallback);
-    if (!child) start();
     return new Promise(resolve => {
-      const id = nextId++;
-      // A pending probe keeps the process alive until its reply or deadline; the idle helper doesn't.
-      const timer = setTimeout(() => { if (pending.delete(id)) { resolve(fallback); stop(); } }, timeoutMs);
-      pending.set(id, reply => { clearTimeout(timer); resolve(reply ?? fallback); });
-      child.stdin.write(JSON.stringify({ id, ...payload }) + '\n');
+      queue.push({ payload, fallback, resolve }); pump();
     });
   }
+  return { request, close() {
+    closed = true;
+    for (const item of queue.splice(0)) item.resolve(item.fallback);
+    finish(); retire();
+    return retiring;
+  } };
+}
+
+// At most two live helpers, both lazy: 2 s probes, and the original 30 s target/tap deadlines.
+export function createAppHealthHelper({ timeoutMs = 2000, operationTimeoutMs = 30000,
+  spawnHelper = kind => spawn('/usr/bin/osascript', ['-l', 'JavaScript', HEALTH_SCRIPT,
+    ...(kind === 'slow' ? ['--session', dirname(HEALTH_SCRIPT)] : [])], { stdio: ['pipe', 'pipe', 'ignore'] }) } = {}) {
+  const probe = helperLane('probe', timeoutMs, spawnHelper);
+  const slow = helperLane('slow', operationTimeoutMs, spawnHelper);
   return {
-    probe: app => request({ app }, { status: 'unknown' }),
-    target: args => request({ op: 'lease-target', app: args.app }, { ok: false, error: 'session helper unavailable; read the app again' }),
-    keyboardTaps: async () => { const r = await request({ op: 'keyboard-taps' }, { ok: false }); return r.ok ? r.taps : []; },
-    close() { closed = true; stop(); return Promise.all([...stopping]); },
+    probe: app => probe.request({ app }, { status: 'unknown' }),
+    target: args => slow.request({ op: 'lease-target', app: args.app }, { ok: false, error: 'session helper unavailable; read the app again' }),
+    keyboardTaps: async () => { const r = await slow.request({ op: 'keyboard-taps' }, { ok: false }); return r.ok ? r.taps : []; },
+    close: () => Promise.all([probe.close(), slow.close()]),
   };
 }
 

@@ -55,6 +55,10 @@ engine action. With change review on, same-app dialogs without file URLs pass th
 window check, including sheets opened during a call. Token checks still apply.
 Document approval mode retains its strict window check. Local drag reserves its resolved app since its helper can select
 another window. A native read resolves the name or path to one running bundle ID.
+Local target resolution and keyboard-tap scans reuse a lazy helper, with a separate 30-second
+deadline for each dispatched request. A second helper handles app-health probes with a two-second
+deadline. Each helper serializes its requests; a timeout collects only the active process and leaves
+queued work for its replacement. A slow target cannot block or be killed by an app-health probe.
 Menu and notification actions reserve the desktop and conflict with all leases.
 Change review reserves the desktop while the user decides, then releases it.
 Inventory reads still pass. These broader reservations can block unrelated work.

@@ -4,7 +4,8 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-export async function discoverExtensions(server, { timeoutMs = 4000 } = {}) {
+export async function discoverExtensions(server, { timeoutMs = 4000, signal } = {}) {
+  if (signal?.aborted) return [];
   const child = spawn(server.command, server.args, { stdio: ['pipe', 'pipe', 'ignore'],
     env: { ...process.env, ...server.env, CUA_REPL_ENABLED_SURFACES: 'browser', BROWSER_USE_AVAILABLE_BACKENDS: 'chrome' } });
   const stopped = new Promise(resolve => child.once('close', resolve));
@@ -12,6 +13,8 @@ export async function discoverExtensions(server, { timeoutMs = 4000 } = {}) {
   const marker = 'sleight-browser-discovery:';
   let finish, timer;
   const answer = new Promise(resolve => { finish = resolve; timer = setTimeout(() => resolve([]), timeoutMs); });
+  const abort = () => finish([]);
+  signal?.addEventListener('abort', abort, { once: true });
   const send = msg => { if (!child.stdin.destroyed && !child.stdin.writableEnded) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\n'); };
   child.on('error', () => finish([]));
   child.stdin.on('error', () => finish([]));
@@ -43,6 +46,7 @@ export async function discoverExtensions(server, { timeoutMs = 4000 } = {}) {
   send({ id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: { elicitation: { form: {} } }, clientInfo: { name: 'sleight-browser-discovery', version: '1' } } });
   try { return await answer; }
   finally {
+    signal?.removeEventListener('abort', abort);
     clearTimeout(timer); child.stdin.end();
     // cua-repl propagates these signals to its owned node_repl child.
     const gentle = setTimeout(() => child.kill('SIGTERM'), 500);

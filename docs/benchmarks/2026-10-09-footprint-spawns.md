@@ -1,5 +1,9 @@
 # Session and call footprint
 
+This records the first patch at `2e3b887`. Review rejected unconditional browser startup
+and the shared two-second deadline. The [follow-up](2026-10-09-footprint-spawns-2.md) records their
+replacements and later checks. The measurements below remain the original receipts.
+
 Branch `codex/footprint-spawns`, based on `37c6561`, engine 26.1002.52244. No model calls.
 The [raw results](2026-10-09-footprint-spawns.json) include every measurement and historical
 acquisition interval. The owner was away, according to the dispatch. These are development probes,
