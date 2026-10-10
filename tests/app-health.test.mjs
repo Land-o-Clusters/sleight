@@ -10,15 +10,22 @@ function probe({ trusted = true, error = 0, count = 1, apps = ['com.apple.TextEd
   minimized = [], cg = [window(42, true)], fullScreen = false } = {}) {
   const calls = [];
   const $ = value => value;
+  const array = values => ({ count: values.length, objectAtIndex: i => values[i],
+    filteredArrayUsingPredicate: ({ format, args }) => array(values.filter(value => format.startsWith('localizedName')
+      ? [value.localizedName, value.bundleIdentifier, value.bundleURL?.path].some(s => s?.toLowerCase() === args[0].toLowerCase())
+      : value.kCGWindowOwnerPID === args[0] && value.kCGWindowLayer === 0 && (value.kCGWindowAlpha ?? 1) > 0 &&
+        value.kCGWindowBounds?.Width >= 100 && value.kCGWindowBounds?.Height >= 100)) });
   Object.assign($, {
+    NSPredicate: { predicateWithFormatArgumentArray: (format, args) => ({ format, args }) },
     AXIsProcessTrusted: () => trusted,
-    NSWorkspace: { sharedWorkspace: { frontmostApplication: { processIdentifier: 9, isNil: () => false }, runningApplications: { count: apps.length, objectAtIndex: i => ({
-      localizedName: 'TextEdit', bundleIdentifier: apps[i], bundleURL: { path: '/System/Applications/TextEdit.app' }, processIdentifier: 42, hidden,
-    }) } } },
+    NSWorkspace: { sharedWorkspace: { frontmostApplication: { processIdentifier: 9, isNil: () => false }, runningApplications: array(apps.map(id => ({
+      localizedName: 'TextEdit', bundleIdentifier: id, bundleURL: { path: '/System/Applications/TextEdit.app' }, processIdentifier: 42, hidden,
+      valueForKeyPath(key) { return key.split('.').reduce((value, part) => value?.[part], this); },
+    }))) } },
     kCGWindowListOptionOnScreenOnly: 1, kCGWindowListOptionAll: 0, kCGWindowListExcludeDesktopElements: 16,
     CGWindowListCopyWindowInfo: options => {
       const list = cg.filter(w => !(options & 1) || w.onScreen).map(w => w.info);
-      return { count: list.length, objectAtIndex: i => list[i] };
+      return array(list);
     },
     AXUIElementCreateApplication: pid => { if (pid !== 9) calls.push(['create', pid]); return pid; },
     AXUIElementSetMessagingTimeout: (app, deadline) => { if (app !== 9) calls.push(['deadline', deadline]); return app === 9 ? 0 : timeoutError; },

@@ -1,0 +1,61 @@
+{
+  "started": "2026-10-10T05:29:41.608Z",
+  "mode": "profile",
+  "modelTurns": 0,
+  "modelMs": 0,
+  "loadStart": [
+    185.00146484375,
+    123.68798828125,
+    61.404296875
+  ],
+  "trials": [
+    {
+      "name": "plain",
+      "iterations": 10,
+      "codeBytes": 7,
+      "load": [
+        185.00146484375,
+        123.68798828125,
+        61.404296875
+      ]
+    }
+  ],
+  "failures": [
+    "Importing module \"node:process\" is not allowed in node_repl"
+  ],
+  "apps": {
+    "com.apple.calculator": {
+      "status": "timeout",
+      "error": -25204,
+      "pid": 75145,
+      "hidden": false,
+      "onScreen": 0,
+      "allWindows": 1,
+      "fullScreenSpace": false
+    },
+    "com.apple.TextEdit": {
+      "status": "timeout",
+      "error": -25204,
+      "pid": 52188,
+      "hidden": false,
+      "onScreen": 0,
+      "allWindows": 1,
+      "fullScreenSpace": false
+    }
+  },
+  "engine": "26.1002.52244",
+  "engineExit": {
+    "code": 0,
+    "signal": null
+  },
+  "engineCollected": true,
+  "helpersCollected": true,
+  "lockReleased": true,
+  "cancelled": false,
+  "finished": "2026-10-10T05:29:45.726Z",
+  "loadEnd": [
+    185.00146484375,
+    123.68798828125,
+    61.404296875
+  ]
+}

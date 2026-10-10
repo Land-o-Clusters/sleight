@@ -27,3 +27,20 @@ test('the driver group counts all its time; outside processes count what they us
   assert.deepEqual(result.outside, { 'engine helper': 1.5, TextEdit: 0.25, Calculator: 2 }, 'Calculator launched during the run counts whole');
   assert.equal(result.cpuSeconds, 8.45);
 });
+
+test('snapshots track only the owned root and descendants without stopping sampling', async () => {
+  let call = 0;
+  const frames = [
+    '100 1 5 0:01.00 /usr/bin/codex\n200 1 5 0:09.00 /usr/bin/unrelated',
+    '100 1 5 0:01.20 /usr/bin/codex\n101 100 8 0:00.30 /cua_node/bin/node',
+    '100 1 5 0:01.25 /usr/bin/codex\n101 100 8 0:00.80 /cua_node/bin/node',
+  ];
+  const stop = startFootprint({ rootPid: 100, intervalMs: 1e6,
+    ps: async () => frames[Math.min(call++, frames.length - 1)] });
+  try {
+    const first = await stop.snapshot();
+    const second = await stop.snapshot();
+    assert.deepEqual(first.group, { codex: 1.2, 'engine node': 0.3 });
+    assert.deepEqual(second.group, { codex: 1.25, 'engine node': 0.8 });
+  } finally { await stop(); }
+});

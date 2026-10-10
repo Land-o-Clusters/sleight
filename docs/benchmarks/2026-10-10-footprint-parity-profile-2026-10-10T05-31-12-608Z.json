@@ -1,0 +1,1322 @@
+{
+  "started": "2026-10-10T05:31:12.608Z",
+  "mode": "profile",
+  "modelTurns": 0,
+  "modelMs": 0,
+  "loadStart": [
+    214.83837890625,
+    148.97021484375,
+    77.35498046875
+  ],
+  "trials": [
+    {
+      "name": "plain",
+      "iterations": 10,
+      "codeBytes": 7,
+      "load": [
+        214.83837890625,
+        148.97021484375,
+        77.35498046875
+      ],
+      "ms": 370.85254199999963,
+      "cpu": {
+        "group": {
+          "engine node": 0.06,
+          "(node)": 0,
+          "codex": 0.06
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0
+        }
+      },
+      "probeCpuSeconds": 0.014807,
+      "passed": true,
+      "loadEnd": [
+        214.83837890625,
+        148.97021484375,
+        77.35498046875
+      ]
+    },
+    {
+      "name": "guard-setup",
+      "iterations": 10,
+      "codeBytes": 21974,
+      "load": [
+        214.83837890625,
+        148.97021484375,
+        77.35498046875
+      ],
+      "ms": 1223.0205,
+      "cpu": {
+        "group": {
+          "engine node": 0.26,
+          "(node)": 0,
+          "codex": 0.1
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0
+        }
+      },
+      "probeCpuSeconds": 0.030478,
+      "passed": true,
+      "loadEnd": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ]
+    },
+    {
+      "name": "guarded-empty",
+      "iterations": 10,
+      "codeBytes": 23184,
+      "load": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ],
+      "ms": 252.11945800000012,
+      "cpu": {
+        "group": {
+          "engine node": 0.1,
+          "(node)": 0,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0
+        }
+      },
+      "probeCpuSeconds": 0.013263,
+      "passed": true,
+      "loadEnd": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ]
+    },
+    {
+      "name": "guarded-empty",
+      "iterations": 10,
+      "codeBytes": 23184,
+      "load": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ],
+      "ms": 390.5972090000005,
+      "cpu": {
+        "group": {
+          "engine node": 0.13,
+          "(node)": 0,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0
+        }
+      },
+      "probeCpuSeconds": 0.016269,
+      "passed": true,
+      "loadEnd": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ]
+    },
+    {
+      "name": "guard-setup",
+      "iterations": 10,
+      "codeBytes": 21974,
+      "load": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ],
+      "ms": 169.50945800000045,
+      "cpu": {
+        "group": {
+          "engine node": 0.08,
+          "(node)": 0,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0
+        }
+      },
+      "probeCpuSeconds": 0.010143,
+      "passed": true,
+      "loadEnd": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ]
+    },
+    {
+      "name": "plain",
+      "iterations": 10,
+      "codeBytes": 7,
+      "load": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ],
+      "ms": 6.009500000000116,
+      "cpu": {
+        "group": {
+          "engine node": 0,
+          "(node)": 0,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0
+        }
+      },
+      "probeCpuSeconds": 0.003867,
+      "passed": true,
+      "loadEnd": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ]
+    },
+    {
+      "name": "plain",
+      "iterations": 10,
+      "codeBytes": 7,
+      "load": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ],
+      "ms": 5.005334000000403,
+      "cpu": {
+        "group": {
+          "engine node": 0,
+          "(node)": 0,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0
+        }
+      },
+      "probeCpuSeconds": 0.002314,
+      "passed": true,
+      "loadEnd": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ]
+    },
+    {
+      "name": "guard-setup",
+      "iterations": 10,
+      "codeBytes": 21974,
+      "load": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ],
+      "ms": 142.68545799999993,
+      "cpu": {
+        "group": {
+          "engine node": 0.08,
+          "(node)": 0,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0
+        }
+      },
+      "probeCpuSeconds": 0.009442,
+      "passed": true,
+      "loadEnd": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ]
+    },
+    {
+      "name": "guarded-empty",
+      "iterations": 10,
+      "codeBytes": 23184,
+      "load": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ],
+      "ms": 582.6246249999995,
+      "cpu": {
+        "group": {
+          "engine node": 0.09,
+          "(node)": 0,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0
+        }
+      },
+      "probeCpuSeconds": 0.01401,
+      "passed": true,
+      "loadEnd": [
+        215.33154296875,
+        150.166015625,
+        78.1962890625
+      ]
+    },
+    {
+      "name": "com.apple.calculator-full",
+      "iterations": 10,
+      "codeBytes": 310,
+      "load": [
+        233.03125,
+        156.09033203125,
+        81.13818359375
+      ],
+      "reads": [
+        {
+          "chars": 4493,
+          "ms": 75.41291600000113,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 47.83612499999981,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 50.28308300000026,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 13303.601958000001,
+          "hasWindow": true
+        },
+        {
+          "chars": 3388,
+          "ms": 16052.155208000004,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 1211.9855830000015,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 983.4160839999968,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 1357.0222080000021,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 2155.725041000005,
+          "hasWindow": true
+        },
+        {
+          "chars": 3274,
+          "ms": 34437.55095800001,
+          "hasWindow": true
+        }
+      ],
+      "ms": 69705.54575,
+      "cpu": {
+        "group": {
+          "engine node": 0.12,
+          "(node)": 0,
+          "codex": 0.18,
+          "(open)": 0
+        },
+        "outside": {
+          "TextEdit": 0.01,
+          "Calculator": 0.78,
+          "engine helper": 3.86
+        }
+      },
+      "probeCpuSeconds": 0.872974,
+      "passed": true,
+      "loadEnd": [
+        240.693359375,
+        176.564453125,
+        94.94482421875
+      ]
+    },
+    {
+      "name": "com.apple.calculator-diff",
+      "iterations": 10,
+      "codeBytes": 311,
+      "load": [
+        240.693359375,
+        176.564453125,
+        94.94482421875
+      ],
+      "reads": [
+        {
+          "chars": 98,
+          "ms": 14891.36099999999,
+          "hasWindow": true
+        },
+        {
+          "chars": 3523,
+          "ms": 10575.570542000001,
+          "hasWindow": false
+        },
+        {
+          "chars": 3926,
+          "ms": 1502.3867089999985,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 961.515625,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 1025.4321659999987,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 1045.284667,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 1781.418875000003,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 2241.6849999999977,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 470.34100000000035,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 323.18754199999967,
+          "hasWindow": false
+        }
+      ],
+      "ms": 34851.756250000006,
+      "cpu": {
+        "group": {
+          "engine node": 0.07,
+          "(node)": 0,
+          "codex": 0,
+          "(open)": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0.75,
+          "engine helper": 2.13
+        }
+      },
+      "probeCpuSeconds": 0.419245,
+      "passed": true,
+      "loadEnd": [
+        219.63037109375,
+        178.89013671875,
+        99.109375
+      ]
+    },
+    {
+      "name": "com.apple.calculator-diff",
+      "iterations": 10,
+      "codeBytes": 311,
+      "load": [
+        219.63037109375,
+        178.89013671875,
+        99.109375
+      ],
+      "reads": [
+        {
+          "chars": 76,
+          "ms": 404.2142920000042,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 369.21320800000103,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 265.0989589999954,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 172.7381250000035,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 145.2017499999929,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 225.49183300000732,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 206.08195900000283,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 274.8346659999952,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 288.8640000000014,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 398.562665999998,
+          "hasWindow": false
+        }
+      ],
+      "ms": 2763.7007920000033,
+      "cpu": {
+        "group": {
+          "engine node": 0.05,
+          "(node)": 0,
+          "codex": 0,
+          "(open)": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0.56,
+          "engine helper": 0.49
+        }
+      },
+      "probeCpuSeconds": 0.029922,
+      "passed": true,
+      "loadEnd": [
+        219.63037109375,
+        178.89013671875,
+        99.109375
+      ]
+    },
+    {
+      "name": "com.apple.calculator-full",
+      "iterations": 10,
+      "codeBytes": 310,
+      "load": [
+        219.63037109375,
+        178.89013671875,
+        99.109375
+      ],
+      "reads": [
+        {
+          "chars": 4493,
+          "ms": 181.68845800000418,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 153.13820800000394,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 147.42324999999255,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 168.81287500000326,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 148.3497090000019,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 149.85112500000105,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 260.55620800000906,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 258.307415999996,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 374.83158399999957,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 357.0668749999895,
+          "hasWindow": true
+        }
+      ],
+      "ms": 2218.568750000006,
+      "cpu": {
+        "group": {
+          "engine node": 0.03,
+          "(node)": 0,
+          "codex": 0.01,
+          "(open)": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0.58,
+          "engine helper": 0.44
+        }
+      },
+      "probeCpuSeconds": 0.026755,
+      "passed": true,
+      "loadEnd": [
+        210.77099609375,
+        177.7294921875,
+        99.1669921875
+      ]
+    },
+    {
+      "name": "com.apple.calculator-full",
+      "iterations": 10,
+      "codeBytes": 310,
+      "load": [
+        210.77099609375,
+        177.7294921875,
+        99.1669921875
+      ],
+      "reads": [
+        {
+          "chars": 4493,
+          "ms": 177.6340829999972,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 181.64462500000081,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 241.6258339999913,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 361.7188749999914,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 277.0519159999967,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 244.74837499999558,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 391.83591599999636,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 172.88908300000185,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 782.5636669999949,
+          "hasWindow": true
+        },
+        {
+          "chars": 4493,
+          "ms": 312.9371250000113,
+          "hasWindow": true
+        }
+      ],
+      "ms": 3180.535208000001,
+      "cpu": {
+        "group": {
+          "engine node": 0.05,
+          "(node)": 0,
+          "codex": 0,
+          "(open)": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0.58,
+          "engine helper": 0.57
+        }
+      },
+      "probeCpuSeconds": 0.044147,
+      "passed": true,
+      "loadEnd": [
+        201.259765625,
+        176.30615234375,
+        99.12451171875
+      ]
+    },
+    {
+      "name": "com.apple.calculator-diff",
+      "iterations": 10,
+      "codeBytes": 311,
+      "load": [
+        201.259765625,
+        176.30615234375,
+        99.12451171875
+      ],
+      "reads": [
+        {
+          "chars": 76,
+          "ms": 350.8767089999892,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 431.6034590000054,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 249.2014579999959,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 240.99654100000043,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 176.12733299998217,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 286.3587080000143,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 227.31570800000918,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 169.98212499998044,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 265.3970419999969,
+          "hasWindow": false
+        },
+        {
+          "chars": 76,
+          "ms": 430.83237499999814,
+          "hasWindow": false
+        }
+      ],
+      "ms": 2894.4809999999998,
+      "cpu": {
+        "group": {
+          "engine node": 0.04,
+          "(node)": 0,
+          "codex": 0,
+          "(open)": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0.6,
+          "engine helper": 0.51
+        }
+      },
+      "probeCpuSeconds": 0.052636,
+      "passed": true,
+      "loadEnd": [
+        193.39111328125,
+        175.0888671875,
+        99.14697265625
+      ]
+    },
+    {
+      "name": "com.apple.TextEdit-full",
+      "iterations": 10,
+      "codeBytes": 310,
+      "load": [
+        193.39111328125,
+        175.0888671875,
+        99.14697265625
+      ],
+      "reads": [
+        {
+          "chars": 3732,
+          "ms": 107.0561250000028,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 90.40587499999674,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 106.89220800000476,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 131.18124999999418,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 104.19704100000672,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 113.29216599999927,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 101.11683300000732,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 102.50487499998417,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 96.00691699999152,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 124.71741700000712,
+          "hasWindow": true
+        }
+      ],
+      "ms": 1122.1225830000185,
+      "cpu": {
+        "group": {
+          "engine node": 0.04,
+          "(node)": 0,
+          "codex": 0,
+          "(open)": 0
+        },
+        "outside": {
+          "TextEdit": 0.18,
+          "Calculator": 0,
+          "engine helper": 0.31
+        }
+      },
+      "probeCpuSeconds": 0.017233,
+      "passed": true,
+      "loadEnd": [
+        193.39111328125,
+        175.0888671875,
+        99.14697265625
+      ]
+    },
+    {
+      "name": "com.apple.TextEdit-diff",
+      "iterations": 10,
+      "codeBytes": 311,
+      "load": [
+        193.39111328125,
+        175.0888671875,
+        99.14697265625
+      ],
+      "reads": [
+        {
+          "chars": 144,
+          "ms": 142.78604100001394,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 157.52408400000422,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 100.52704200000153,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 98.68604200001573,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 114.34312500001397,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 102.95545800001128,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 186.1645000000135,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 104.96633299998939,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 98.63716600000043,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 101.0677919999871,
+          "hasWindow": false
+        }
+      ],
+      "ms": 1237.0285830000066,
+      "cpu": {
+        "group": {
+          "engine node": 0.03,
+          "(node)": 0,
+          "codex": 0,
+          "(open)": 0
+        },
+        "outside": {
+          "TextEdit": 0.18,
+          "Calculator": 0,
+          "engine helper": 0.33
+        }
+      },
+      "probeCpuSeconds": 0.018282,
+      "passed": true,
+      "loadEnd": [
+        187.193359375,
+        174.107421875,
+        99.24560546875
+      ]
+    },
+    {
+      "name": "com.apple.TextEdit-diff",
+      "iterations": 10,
+      "codeBytes": 311,
+      "load": [
+        187.193359375,
+        174.107421875,
+        99.24560546875
+      ],
+      "reads": [
+        {
+          "chars": 144,
+          "ms": 91.46233300000313,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 126.31916700000875,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 103.71408400000655,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 99.26666699998896,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 97.14416699999128,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 86.0032910000009,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 107.66883300000336,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 95.61604200000875,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 107.16370799997821,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 95.04212500000722,
+          "hasWindow": false
+        }
+      ],
+      "ms": 1028.1087919999845,
+      "cpu": {
+        "group": {
+          "engine node": 0.04,
+          "(node)": 0,
+          "codex": 0,
+          "(open)": 0
+        },
+        "outside": {
+          "TextEdit": 0.16,
+          "Calculator": 0,
+          "engine helper": 0.3
+        }
+      },
+      "probeCpuSeconds": 0.01435,
+      "passed": true,
+      "loadEnd": [
+        187.193359375,
+        174.107421875,
+        99.24560546875
+      ]
+    },
+    {
+      "name": "com.apple.TextEdit-full",
+      "iterations": 10,
+      "codeBytes": 310,
+      "load": [
+        187.193359375,
+        174.107421875,
+        99.24560546875
+      ],
+      "reads": [
+        {
+          "chars": 3732,
+          "ms": 111.78208400000585,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 89.69008300002315,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 96.65891600001487,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 93.48704199999338,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 94.90441599997575,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 76.50254099999438,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 89.2249170000141,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 88.33954099999391,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 112.18979100001161,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 100.36591699998826,
+          "hasWindow": true
+        }
+      ],
+      "ms": 969.2821249999979,
+      "cpu": {
+        "group": {
+          "engine node": 0.03,
+          "(node)": 0,
+          "codex": 0,
+          "(open)": 0
+        },
+        "outside": {
+          "TextEdit": 0.15,
+          "Calculator": 0,
+          "engine helper": 0.27
+        }
+      },
+      "probeCpuSeconds": 0.015632,
+      "passed": true,
+      "loadEnd": [
+        187.193359375,
+        174.107421875,
+        99.24560546875
+      ]
+    },
+    {
+      "name": "com.apple.TextEdit-full",
+      "iterations": 10,
+      "codeBytes": 310,
+      "load": [
+        187.193359375,
+        174.107421875,
+        99.24560546875
+      ],
+      "reads": [
+        {
+          "chars": 3732,
+          "ms": 110.76266599999508,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 205.17900000000373,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 92.6555829999852,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 159.7966670000169,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 91.71087500001886,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 92.79375000001164,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 109.53283399998327,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 173.1644999999844,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 128.76091700000688,
+          "hasWindow": true
+        },
+        {
+          "chars": 3732,
+          "ms": 130.0194579999952,
+          "hasWindow": true
+        }
+      ],
+      "ms": 1371.5739170000015,
+      "cpu": {
+        "group": {
+          "engine node": 0.03,
+          "(node)": 0,
+          "codex": 0,
+          "(open)": 0
+        },
+        "outside": {
+          "TextEdit": 0.18,
+          "Calculator": 0,
+          "engine helper": 0.32
+        }
+      },
+      "probeCpuSeconds": 0.018671,
+      "passed": true,
+      "loadEnd": [
+        187.193359375,
+        174.107421875,
+        99.24560546875
+      ]
+    },
+    {
+      "name": "com.apple.TextEdit-diff",
+      "iterations": 10,
+      "codeBytes": 311,
+      "load": [
+        187.193359375,
+        174.107421875,
+        99.24560546875
+      ],
+      "reads": [
+        {
+          "chars": 144,
+          "ms": 157.86491699999897,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 126.24533399997745,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 155.390625,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 138.95449999999255,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 148.15366599999834,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 111.15983300001244,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 228.4698330000101,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 107.74754199999734,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 130.15079200000037,
+          "hasWindow": false
+        },
+        {
+          "chars": 144,
+          "ms": 107.64670800001477,
+          "hasWindow": false
+        }
+      ],
+      "ms": 1424.9017920000188,
+      "cpu": {
+        "group": {
+          "engine node": 0.03,
+          "(node)": 0,
+          "codex": 0,
+          "(open)": 0
+        },
+        "outside": {
+          "TextEdit": 0.19,
+          "Calculator": 0,
+          "engine helper": 0.33
+        }
+      },
+      "probeCpuSeconds": 0.01825,
+      "passed": true,
+      "loadEnd": [
+        178.609375,
+        172.544921875,
+        99.1328125
+      ]
+    }
+  ],
+  "failures": [],
+  "apps": {
+    "com.apple.calculator": {
+      "status": "responding",
+      "pid": 75145,
+      "windows": 0,
+      "minimized": 0,
+      "hidden": false,
+      "onScreen": 0,
+      "allWindows": 1,
+      "fullScreenSpace": false
+    },
+    "com.apple.TextEdit": {
+      "status": "responding",
+      "pid": 52188,
+      "windows": 0,
+      "minimized": 0,
+      "hidden": false,
+      "onScreen": 0,
+      "allWindows": 1,
+      "fullScreenSpace": false
+    }
+  },
+  "engine": "26.1002.52244",
+  "footprint": {
+    "cpuSeconds": 18.24,
+    "group": {
+      "engine node": 1.86,
+      "(node)": 0,
+      "codex": 0.55,
+      "(open)": 0
+    },
+    "outside": {
+      "TextEdit": 1.25,
+      "Calculator": 3.93,
+      "engine helper": 10.65
+    }
+  },
+  "engineExit": {
+    "code": 0,
+    "signal": null
+  },
+  "engineCollected": true,
+  "helpersCollected": true,
+  "lockReleased": true,
+  "cancelled": false,
+  "finished": "2026-10-10T05:33:38.419Z",
+  "loadEnd": [
+    178.609375,
+    172.544921875,
+    99.1328125
+  ]
+}

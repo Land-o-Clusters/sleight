@@ -127,6 +127,6 @@ export async function probeClient(server, { relay: throughRelay, record, timeout
     await request('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: { form: {} } },
       clientInfo: { name: `double-keys-${label}`, version: '1' } });
     send({ method: 'notifications/initialized' });
-    return { call, close };
+    return { call, close, pid: child.pid };
   } catch (error) { await close(); throw error; }
 }

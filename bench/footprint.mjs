@@ -21,12 +21,12 @@ export function label(command) {
   return command.split('/').pop();
 }
 
-export function startFootprint({ pgid, apps = [], intervalMs = 1000, ps = defaultPs }) {
+export function startFootprint({ pgid, rootPid, apps = [], intervalMs = 1000, ps = defaultPs }) {
   const seen = new Map(); // pid -> { label, group, first, last }
   let sampling = Promise.resolve(), firstSample = true;
   // Descendants of the group count as the group: Codex starts its engine server in a process group
   // of its own (2026-10-09), which a group-only sample missed.
-  const members = new Set();
+  const members = new Set(rootPid === undefined ? [] : [String(rootPid)]);
   const sample = () => sampling = sampling.then(async () => {
     const rows = [];
     for (const line of (await ps()).split('\n')) {
@@ -53,8 +53,7 @@ export function startFootprint({ pgid, apps = [], intervalMs = 1000, ps = defaul
   });
   sample();
   const timer = setInterval(sample, intervalMs);
-  return async () => {
-    clearInterval(timer);
+  const snapshot = async () => {
     await sample();
     const group = {}, outside = {};
     for (const entry of seen.values()) {
@@ -64,4 +63,7 @@ export function startFootprint({ pgid, apps = [], intervalMs = 1000, ps = defaul
     const total = [...Object.values(group), ...Object.values(outside)].reduce((a, b) => a + b, 0);
     return { cpuSeconds: Math.round(total * 100) / 100, group, outside };
   };
+  const stop = () => { clearInterval(timer); return snapshot(); };
+  stop.snapshot = snapshot;
+  return stop;
 }

@@ -6,16 +6,37 @@ ObjC.import('CoreGraphics');
 
 // Normal windows big enough to be documents, from CGWindowList. With `onScreenOnly` that list
 // holds only the current Space's windows (and leaves out minimized ones).
-function cgWindows(onScreenOnly) {
+function documentWindows(list, pid) {
+  // Filter inside Foundation. Unwrapping every window dictionary in JavaScript costs CPU and
+  // copies unrelated window titles, though the probe needs only a count for this one process.
+  return list.filteredArrayUsingPredicate($.NSPredicate.predicateWithFormatArgumentArray(
+    'kCGWindowOwnerPID == %@ AND kCGWindowLayer == 0 AND (kCGWindowAlpha == nil OR kCGWindowAlpha > 0) AND kCGWindowBounds.Width >= 100 AND kCGWindowBounds.Height >= 100',
+    [pid]));
+}
+
+function cgWindows(onScreenOnly, pid) {
   const options = (onScreenOnly ? $.kCGWindowListOptionOnScreenOnly : $.kCGWindowListOptionAll) | $.kCGWindowListExcludeDesktopElements;
   const list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo(options, 0));
-  const pids = [];
-  for (let i = 0; i < list.count; i++) {
-    const info = ObjC.deepUnwrap(list.objectAtIndex(i));
-    const bounds = info.kCGWindowBounds ?? {};
-    if (info.kCGWindowLayer === 0 && (info.kCGWindowAlpha ?? 1) > 0 && bounds.Width >= 100 && bounds.Height >= 100) pids.push(info.kCGWindowOwnerPID);
+  return Number(documentWindows(list, pid).count);
+}
+
+function matchingApps(apps, selector) {
+  // Bound arguments keep quotes and predicate syntax in a selector literal. The fresh list still
+  // detects duplicate matches, including another process with the same name or bundle ID.
+  const candidates = apps.filteredArrayUsingPredicate($.NSPredicate.predicateWithFormatArgumentArray(
+    'localizedName ==[c] %@ OR bundleIdentifier ==[c] %@ OR bundleURL.path ==[c] %@',
+    [selector, selector, selector]));
+  // Foundation folds more Unicode spellings than JavaScript lowercasing (for example ß and ss).
+  // Keep the original equality rule, but bridge only these candidates rather than every app.
+  const matches = [];
+  for (let i = 0; i < candidates.count; i++) {
+    const app = candidates.objectAtIndex(i);
+    if (['localizedName', 'bundleIdentifier', 'bundleURL.path'].some(key => {
+      const value = ObjC.unwrap(app.valueForKeyPath(key));
+      return typeof value === 'string' && value.toLowerCase() === selector.toLowerCase();
+    })) matches.push(app);
   }
-  return pids;
+  return matches;
 }
 
 // Whether the frontmost app's focused window is in full screen, which Split View windows are too.
@@ -35,8 +56,8 @@ function frontFullScreen() {
 // is the only count of them.
 function spaces(pid) {
   return {
-    onScreen: cgWindows(true).filter(owner => owner === pid).length,
-    allWindows: cgWindows(false).filter(owner => owner === pid).length,
+    onScreen: cgWindows(true, pid),
+    allWindows: cgWindows(false, pid),
     fullScreenSpace: frontFullScreen(),
   };
 }
@@ -91,17 +112,10 @@ function run(argv) {
 function probe(selector) {
   if (!$.AXIsProcessTrusted()) return { status: 'denied' };
   if (typeof selector !== 'string' || !selector) return { status: 'unknown' };
-  const apps = $.NSWorkspace.sharedWorkspace.runningApplications;
-  let target;
-  for (let i = 0; i < apps.count; i++) {
-    const app = apps.objectAtIndex(i);
-    if ([ObjC.unwrap(app.localizedName), ObjC.unwrap(app.bundleIdentifier), ObjC.unwrap(app.bundleURL.path)]
-      .some(value => typeof value === 'string' && value.toLowerCase() === selector.toLowerCase())) {
-      if (target) return { status: 'unknown' };
-      target = app;
-    }
-  }
-  if (!target) return { status: 'absent' };
+  const apps = matchingApps($.NSWorkspace.sharedWorkspace.runningApplications, selector);
+  if (apps.length > 1) return { status: 'unknown' };
+  if (apps.length === 0) return { status: 'absent' };
+  const target = apps[0];
   const pid = Number(target.processIdentifier), app = $.AXUIElementCreateApplication(pid);
   const space = { hidden: target.hidden === true, ...spaces(pid) };
   if (Number($.AXUIElementSetMessagingTimeout(app, 0.5)) !== 0) return { status: 'unknown', ...space };

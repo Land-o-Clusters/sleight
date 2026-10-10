@@ -10,6 +10,12 @@
   that run or install what they open (Python Launcher, Installer), scripts, apps and executable
   files, and anything but an existing regular file. `SLEIGHT_OPEN_FILE=0` turns it off. It's
   unit-tested, and the TextEdit tasks run with it before release.
+- Guard setup stays in the engine after its first successful installation, reducing repeated
+  source processing while retaining each call's checks. App probes filter native window and app
+  lists before converting them to JavaScript, keeping fresh observations and the original matching
+  rules. Handle reads retain their app selector so each read gets its required Space probe. Previously
+  only acquisitions did. The [CPU report](docs/benchmarks/2026-10-10-footprint-parity.md) records the measurements.
+  The Codex head-to-head is pending.
 - Paste keeps the user's clipboard with one helper per session instead of a spawn per paste, and
   reads large clipboards in linear time (a mocked 40 MiB transfer fell from about 5 s to 31 to 88 ms).
   `blocked_app` also refuses a settings window by its Accessibility metadata, so a localized title or

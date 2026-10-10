@@ -1,0 +1,14 @@
+{
+  "command": "npm run check",
+  "exitCode": 0,
+  "nodeTests": 1148,
+  "passed": 1148,
+  "failed": 0,
+  "cancelled": 0,
+  "nodeDurationMs": 160482.066709,
+  "manifestValidationsPassed": 2,
+  "modTestsPassed": 11,
+  "modTestsFailed": 0,
+  "loadAfter": [41.0458984375, 34.34716796875, 33.5703125],
+  "completedBefore": "2026-10-10T07:43:26.364Z"
+}

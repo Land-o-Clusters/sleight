@@ -1,0 +1,277 @@
+{
+  "started": "2026-10-10T05:33:53.538Z",
+  "mode": "helpers",
+  "modelTurns": 0,
+  "modelMs": 0,
+  "loadStart": [
+    147.02978515625,
+    165.85595703125,
+    98.02880859375
+  ],
+  "trials": [
+    {
+      "part": "startup",
+      "app": "com.apple.calculator",
+      "repetitions": 0,
+      "load": [
+        147.02978515625,
+        165.85595703125,
+        98.02880859375
+      ],
+      "code": 0,
+      "signal": null,
+      "realSeconds": 1.49,
+      "osascriptCpuSeconds": 0.21000000000000002,
+      "result": {
+        "ms": 0,
+        "status": "responding",
+        "windows": 0
+      }
+    },
+    {
+      "part": "probe",
+      "app": "com.apple.calculator",
+      "repetitions": 100,
+      "load": [
+        147.02978515625,
+        165.85595703125,
+        98.02880859375
+      ],
+      "code": 0,
+      "signal": null,
+      "realSeconds": 24.51,
+      "osascriptCpuSeconds": 5.99,
+      "result": {
+        "ms": 23873,
+        "status": "responding",
+        "windows": 0,
+        "result": {
+          "status": "responding",
+          "pid": 75145,
+          "windows": 0,
+          "minimized": 0,
+          "hidden": false,
+          "onScreen": 0,
+          "allWindows": 1,
+          "fullScreenSpace": true
+        }
+      }
+    },
+    {
+      "part": "spaces",
+      "app": "com.apple.calculator",
+      "repetitions": 100,
+      "load": [
+        112.2705078125,
+        156.19140625,
+        96.5087890625
+      ],
+      "code": 0,
+      "signal": null,
+      "realSeconds": 11.3,
+      "osascriptCpuSeconds": 2.27,
+      "result": {
+        "ms": 10439,
+        "status": "responding",
+        "windows": 0,
+        "result": {
+          "onScreen": 0,
+          "allWindows": 1,
+          "fullScreenSpace": false
+        }
+      }
+    },
+    {
+      "part": "cg-on",
+      "app": "com.apple.calculator",
+      "repetitions": 100,
+      "load": [
+        95.56640625,
+        150.3642578125,
+        95.47314453125
+      ],
+      "code": 0,
+      "signal": null,
+      "realSeconds": 1.1,
+      "osascriptCpuSeconds": 0.25,
+      "result": {
+        "ms": 309,
+        "status": "responding",
+        "windows": 0,
+        "result": {
+          "count": 2
+        }
+      }
+    },
+    {
+      "part": "cg-all",
+      "app": "com.apple.calculator",
+      "repetitions": 100,
+      "load": [
+        95.56640625,
+        150.3642578125,
+        95.47314453125
+      ],
+      "code": 0,
+      "signal": null,
+      "realSeconds": 12.17,
+      "osascriptCpuSeconds": 2.18,
+      "result": {
+        "ms": 11300,
+        "status": "responding",
+        "windows": 0,
+        "result": {
+          "count": 45
+        }
+      }
+    },
+    {
+      "part": "startup",
+      "app": "com.apple.TextEdit",
+      "repetitions": 0,
+      "load": [
+        86.84375,
+        146.69580078125,
+        94.81298828125
+      ],
+      "code": 0,
+      "signal": null,
+      "realSeconds": 0.96,
+      "osascriptCpuSeconds": 0.18000000000000002,
+      "result": {
+        "ms": 0,
+        "status": "responding",
+        "windows": 1
+      }
+    },
+    {
+      "part": "probe",
+      "app": "com.apple.TextEdit",
+      "repetitions": 100,
+      "load": [
+        86.84375,
+        146.69580078125,
+        94.81298828125
+      ],
+      "code": 0,
+      "signal": null,
+      "realSeconds": 36.33,
+      "osascriptCpuSeconds": 6.16,
+      "result": {
+        "ms": 35712,
+        "status": "responding",
+        "windows": 1,
+        "result": {
+          "status": "responding",
+          "pid": 52188,
+          "windows": 1,
+          "minimized": 0,
+          "hidden": false,
+          "onScreen": 1,
+          "allWindows": 2,
+          "fullScreenSpace": false
+        }
+      }
+    },
+    {
+      "part": "spaces",
+      "app": "com.apple.TextEdit",
+      "repetitions": 100,
+      "load": [
+        80.98974609375,
+        137.88525390625,
+        93.9765625
+      ],
+      "code": 0,
+      "signal": null,
+      "realSeconds": 16.44,
+      "osascriptCpuSeconds": 2.28,
+      "result": {
+        "ms": 15485,
+        "status": "responding",
+        "windows": 1,
+        "result": {
+          "onScreen": 1,
+          "allWindows": 2,
+          "fullScreenSpace": false
+        }
+      }
+    },
+    {
+      "part": "cg-on",
+      "app": "com.apple.TextEdit",
+      "repetitions": 100,
+      "load": [
+        74.658203125,
+        133.6943359375,
+        93.24853515625
+      ],
+      "code": 0,
+      "signal": null,
+      "realSeconds": 3.14,
+      "osascriptCpuSeconds": 0.29,
+      "result": {
+        "ms": 1243,
+        "status": "responding",
+        "windows": 1,
+        "result": {
+          "count": 3
+        }
+      }
+    },
+    {
+      "part": "cg-all",
+      "app": "com.apple.TextEdit",
+      "repetitions": 100,
+      "load": [
+        72.763671875,
+        132.3212890625,
+        93.0009765625
+      ],
+      "code": 0,
+      "signal": null,
+      "realSeconds": 32.08,
+      "osascriptCpuSeconds": 2.3600000000000003,
+      "result": {
+        "ms": 30011,
+        "status": "responding",
+        "windows": 1,
+        "result": {
+          "count": 48
+        }
+      }
+    }
+  ],
+  "failures": [],
+  "apps": {
+    "com.apple.calculator": {
+      "status": "responding",
+      "pid": 75145,
+      "windows": 0,
+      "minimized": 0,
+      "hidden": false,
+      "onScreen": 0,
+      "allWindows": 1,
+      "fullScreenSpace": true
+    },
+    "com.apple.TextEdit": {
+      "status": "responding",
+      "pid": 52188,
+      "windows": 0,
+      "minimized": 0,
+      "hidden": false,
+      "onScreen": 0,
+      "allWindows": 2,
+      "fullScreenSpace": true
+    }
+  },
+  "helpersCollected": true,
+  "lockReleased": true,
+  "cancelled": false,
+  "finished": "2026-10-10T05:36:14.252Z",
+  "loadEnd": [
+    69.40869140625,
+    125.884765625,
+    92.0322265625
+  ]
+}

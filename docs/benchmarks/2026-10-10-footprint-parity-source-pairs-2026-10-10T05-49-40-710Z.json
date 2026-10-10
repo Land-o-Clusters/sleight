@@ -1,0 +1,23 @@
+{
+  "started": "2026-10-10T05:49:40.710Z",
+  "mode": "source-pairs",
+  "modelTurns": 0,
+  "modelMs": 0,
+  "loadStart": [
+    118.91064453125,
+    128.7568359375,
+    111.490234375
+  ],
+  "trials": [],
+  "failures": [
+    "The operation was aborted"
+  ],
+  "helpersCollected": true,
+  "cancelled": true,
+  "finished": "2026-10-10T05:51:43.396Z",
+  "loadEnd": [
+    129.7939453125,
+    124.4052734375,
+    111.78125
+  ]
+}

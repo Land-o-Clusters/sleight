@@ -1,0 +1,304 @@
+{
+  "started": "2026-10-10T07:52:33.474Z",
+  "mode": "relay-reads",
+  "modelTurns": 0,
+  "modelMs": 0,
+  "loadStart": [
+    19.8251953125,
+    29.02001953125,
+    31.1318359375
+  ],
+  "trials": [
+    {
+      "name": "com.apple.calculator-relay-full-read",
+      "iterations": 3,
+      "codeBytes": 47,
+      "load": [
+        12.85107421875,
+        18.478515625,
+        25.50048828125
+      ],
+      "ms": 241.4038329999894,
+      "cpu": {
+        "group": {
+          "engine node": 0.03,
+          "codex": 0.1
+        },
+        "outside": {
+          "TextEdit": 0.02,
+          "Calculator": 0.14,
+          "engine helper": 0.11
+        }
+      },
+      "probeCpuSeconds": 0.020698,
+      "passed": true,
+      "loadEnd": [
+        12.85107421875,
+        18.478515625,
+        25.50048828125
+      ]
+    },
+    {
+      "name": "com.apple.calculator-relay-guarded-no-input",
+      "iterations": 3,
+      "codeBytes": 31,
+      "load": [
+        12.85107421875,
+        18.478515625,
+        25.50048828125
+      ],
+      "ms": 245.18137499998556,
+      "cpu": {
+        "group": {
+          "engine node": 0.04,
+          "codex": 0.01
+        },
+        "outside": {
+          "TextEdit": 0.02,
+          "Calculator": 0.14,
+          "engine helper": 0.1
+        }
+      },
+      "probeCpuSeconds": 0.020834,
+      "passed": true,
+      "loadEnd": [
+        12.85107421875,
+        18.478515625,
+        25.50048828125
+      ]
+    },
+    {
+      "name": "com.apple.TextEdit-relay-full-read",
+      "iterations": 3,
+      "codeBytes": 47,
+      "load": [
+        12.85107421875,
+        18.478515625,
+        25.50048828125
+      ],
+      "ms": 285.7141249999986,
+      "cpu": {
+        "group": {
+          "engine node": 0.01,
+          "codex": 0.01
+        },
+        "outside": {
+          "TextEdit": 0.04,
+          "Calculator": 0,
+          "engine helper": 0.11
+        }
+      },
+      "probeCpuSeconds": 0.008459,
+      "passed": true,
+      "loadEnd": [
+        12.85107421875,
+        18.478515625,
+        25.50048828125
+      ]
+    },
+    {
+      "name": "com.apple.TextEdit-relay-guarded-no-input",
+      "iterations": 3,
+      "codeBytes": 31,
+      "load": [
+        12.85107421875,
+        18.478515625,
+        25.50048828125
+      ],
+      "ms": 294.43687500001397,
+      "cpu": {
+        "group": {
+          "engine node": 0.01,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0.05,
+          "Calculator": 0,
+          "engine helper": 0.11
+        }
+      },
+      "probeCpuSeconds": 0.01466,
+      "passed": true,
+      "loadEnd": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ]
+    }
+  ],
+  "failures": [],
+  "lockAcquired": "2026-10-10T07:57:33.939Z",
+  "loadAtLock": [
+    12.85107421875,
+    18.478515625,
+    25.50048828125
+  ],
+  "baseline": "332e3ca0260d7eee0b003882d95d8b64ec431dd3",
+  "sources": {
+    "app-health.js": "d9a7af1fd34dc7e43a8166f7a2c088f0fa4301724e66d87aad82050bad285908",
+    "document-scope.mjs": "75d7886becba1610886091e5ad981de17cb239c1ca368fceab1003855497c7b3",
+    "relay.mjs": "a494862cd30f956d540abf0be39c1105865815a49e516d78b20127b4d0772e51"
+  },
+  "apps": {
+    "com.apple.calculator": {
+      "status": "responding",
+      "pid": 75145,
+      "windows": 0,
+      "minimized": 0,
+      "hidden": false,
+      "onScreen": 0,
+      "allWindows": 1,
+      "fullScreenSpace": false
+    },
+    "com.apple.TextEdit": {
+      "status": "responding",
+      "pid": 45533,
+      "windows": 1,
+      "minimized": 0,
+      "hidden": false,
+      "onScreen": 1,
+      "allWindows": 2,
+      "fullScreenSpace": false
+    }
+  },
+  "engine": "26.1007.21159",
+  "relay": {
+    "calls": [
+      {
+        "codeBytes": 22867,
+        "installation": true
+      },
+      {
+        "codeBytes": 328,
+        "installation": false
+      },
+      {
+        "codeBytes": 328,
+        "installation": false
+      },
+      {
+        "codeBytes": 328,
+        "installation": false
+      },
+      {
+        "codeBytes": 1743,
+        "installation": false
+      },
+      {
+        "codeBytes": 1743,
+        "installation": false
+      },
+      {
+        "codeBytes": 1743,
+        "installation": false
+      },
+      {
+        "codeBytes": 523,
+        "installation": false
+      },
+      {
+        "codeBytes": 328,
+        "installation": false
+      },
+      {
+        "codeBytes": 328,
+        "installation": false
+      },
+      {
+        "codeBytes": 328,
+        "installation": false
+      },
+      {
+        "codeBytes": 1733,
+        "installation": false
+      },
+      {
+        "codeBytes": 1733,
+        "installation": false
+      },
+      {
+        "codeBytes": 1733,
+        "installation": false
+      },
+      {
+        "codeBytes": 22867,
+        "installation": true
+      },
+      {
+        "codeBytes": 525,
+        "installation": false
+      }
+    ],
+    "probes": 10,
+    "reads": [
+      {
+        "id": 5,
+        "phase": "after-call",
+        "ms": 68.28216600000007,
+        "chars": 4489,
+        "failed": false
+      },
+      {
+        "id": 6,
+        "phase": "after-call",
+        "ms": 81.15770900000007,
+        "chars": 4489,
+        "failed": false
+      },
+      {
+        "id": 7,
+        "phase": "after-call",
+        "ms": 78.95333300000016,
+        "chars": 4489,
+        "failed": false
+      },
+      {
+        "id": 12,
+        "phase": "after-call",
+        "ms": 99.93745899999999,
+        "chars": 4276,
+        "failed": false
+      },
+      {
+        "id": 13,
+        "phase": "after-call",
+        "ms": 91.41691700000024,
+        "chars": 4276,
+        "failed": false
+      },
+      {
+        "id": 14,
+        "phase": "after-call",
+        "ms": 91.37345800000003,
+        "chars": 4276,
+        "failed": false
+      }
+    ]
+  },
+  "footprint": {
+    "cpuSeconds": 2.66,
+    "group": {
+      "engine node": 0.94,
+      "codex": 0.3
+    },
+    "outside": {
+      "TextEdit": 0.2,
+      "Calculator": 0.45,
+      "engine helper": 0.77
+    }
+  },
+  "engineExit": {
+    "code": 0,
+    "signal": null
+  },
+  "engineCollected": true,
+  "helpersCollected": true,
+  "lockReleased": true,
+  "cancelled": false,
+  "finished": "2026-10-10T07:57:37.228Z",
+  "loadEnd": [
+    12.46240234375,
+    18.30419921875,
+    25.3974609375
+  ]
+}

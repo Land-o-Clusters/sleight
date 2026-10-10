@@ -59,7 +59,7 @@
 // `trace`, when given, receives every message as it passes, for debugging.
 
 import { randomUUID } from 'node:crypto';
-import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRead, readCode, guardedCode, WINDOWS_MARK } from './document-scope.mjs';
+import { DOCUMENT_TOOL, documentKey, documentLabel, windowFromText, isDocumentRead, readCode, guardedCode, WINDOWS_MARK, GUARD_READY } from './document-scope.mjs';
 import { ChangeReview, REVIEW_TOOL, isChangeCancel } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
 import { browserCall, browserReply } from './browser-call.mjs';
@@ -301,6 +301,9 @@ export function createRelay({
   // js calls awaiting a reply, and whether this engine session has shown its first-call docs:
   // docs again without a js_reset mean the session restarted and every handle is gone.
   const jsCalls = new Map();
+  let guardReady = false, guardGeneration = 0;
+  const guardCalls = new Map();
+  const forgetGuard = () => { guardReady = false; guardGeneration++; };
   const screenshots = new Map(); // lowercased app name -> { latest, byTitle } pixel sizes of its engine screenshots
   // Every tools/call gets the next number. An acquisition's read can stand in for the guard's
   // first read only in the call right after it (priorRead.seq + 1).
@@ -390,7 +393,7 @@ export function createRelay({
     if (read) {
       const handle = handles.find(h => !['nodeRepl', 'cua'].includes(h));
       const known = helperHandles.get(handle);
-      return { read, handle, key: known?.key ?? `handle:${handle}`, probe: known?.probe ?? code };
+      return { read, handle, selector: known?.selector, key: known?.key ?? `handle:${handle}`, probe: known?.probe ?? code };
     }
     const explicit = [...code.matchAll(new RegExp(String.raw`cua\.getApp\(\s*${literal}\s*\)`, 'g'))].map(m => helperSelector(m[1]));
     const keys = [...explicit, ...handles.map(h => helperHandles.get(h)?.key).filter(Boolean)];
@@ -567,6 +570,7 @@ export function createRelay({
   let constApp = false;
   // After js_reset, or when the engine's session restarts on its own, no handle survives.
   function forgetHandles() {
+    forgetGuard();
     clearSelection(); browserHandles.clear(); leaseWindow = undefined; handleBundles.clear(); handleSelectors.clear(); constApp = false;
   }
   const handleBundles = new Map();
@@ -1149,7 +1153,7 @@ export function createRelay({
       toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: `Computer use recovered for ${needsFullRead}. Send a standalone app read before acting. sleight will make it a full read because automatic recovery consumed the engine's UI diff.` }] } });
       return;
     }
-    if (msg.method === 'tools/call' && msg.params?.name === 'js_reset') { invalidateDiagnostics(); helperHandles.clear(); helperControls.clear(); helperActive = undefined; docsShown = false; }
+    if (msg.method === 'tools/call' && msg.params?.name === 'js_reset') { forgetGuard(); invalidateDiagnostics(); helperHandles.clear(); helperControls.clear(); helperActive = undefined; docsShown = false; }
     if (msg.method === 'tools/call' && msg.params?.name === 'js' && msg.id !== undefined) jsCalls.set(msg.id, originalCode ?? '');
     let flowPlan, clipboardAction;
     if (clipboard && msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name) && clipboard.pending) {
@@ -1271,6 +1275,7 @@ export function createRelay({
         changeCalls.set(msg.id, { read, safe, entry, window: lastWindow, expected: documentKey(lastWindow), target: leaseWindow ?? lastWindow,
           observe: !read || (!isInventoryRead(originalCode) && /cua\.getApp\(|\.(?:getAXState|getAXStateAndScreenshot)\(/.test(originalCode)) });
         if (typeof originalCode === 'string') {
+          const setup = { reuseSetup: guardReady, acknowledge: true };
           const target = documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow;
           const reason = documentMode ? undefined : selectedWindow ? `Selected window changed. ${selectionRecovery()}` : inputLease
             ? 'Input lease stopped this action: window or URL changed. Read the intended window again before acting.'
@@ -1278,7 +1283,7 @@ export function createRelay({
           if (browser && !documentMode) {
             msg.params.arguments.code = guardedCode(originalCode, target, reason,
               inputLease && leaseCalls.get(msg.id)?.key ? inputLease.grant(leaseCalls.get(msg.id).key) : undefined,
-              { timing: guardTiming, careful: guardMode === 'careful', fileOnly: changeReview, browserCandidate: true,
+              { ...setup, timing: guardTiming, careful: guardMode === 'careful', fileOnly: changeReview, browserCandidate: true,
                 skipAppWrap: browserHandles.has('app') || browser.handles.includes('app'),
                 nativeDenied: nativeDenied ?? (!target
                   ? 'Native access stopped: send a standalone native app read before acting. No confirmed native window.' : undefined) });
@@ -1293,7 +1298,7 @@ export function createRelay({
               }
               healthPlan.fullVisible = true;
             }
-            msg.params.arguments.code = readCode(code);
+            msg.params.arguments.code = readCode(code, setup);
           }
           else if (documentMode || inputLease || (changeReview && target)) {
             // The acquisition just before this call, if it read this same app less than 10 s ago.
@@ -1305,12 +1310,13 @@ export function createRelay({
               target?.app === priorRead.app ? { text: priorRead.text, id: priorRead.id, title: priorRead.title, windows: priorRead.windows, split: priorRead.split } : undefined;
             msg.params.arguments.code = guardedCode(originalCode, target, reason,
               inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
-              { timing: guardTiming, careful: guardMode === 'careful' || documentMode, fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
+              { ...setup, timing: guardTiming, careful: guardMode === 'careful' || documentMode, fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
                 adoptUrl: !documentMode && !changeReview, skipAppWrap: browserHandles.has('app'), prior,
                 // The lines Claude last saw for the numbers it acts on, so the first action stops when
                 // the window renumbered between Claude's read and this call.
                 seenLines: compactor.seenLines(target, [...new Set([...originalCode.matchAll(/\.(?:click|setValue|selectText|performSecondaryAction|scroll)\(\s*(\d+)\s*[,)]/g)].map(m => Number(m[1])))]) });
           }
+          if (msg.params.arguments.code !== originalCode) guardCalls.set(msg.id, guardGeneration);
           if (clipboard) msg.params.arguments.code = clipboardCode(msg.params.arguments.code, clipboardAction);
         }
       }
@@ -1390,6 +1396,20 @@ export function createRelay({
     observeServerMessage(msg);
   });
   function observeServerMessage(msg) {
+    if (msg.method === undefined && guardCalls.has(msg.id)) {
+      const generation = guardCalls.get(msg.id); guardCalls.delete(msg.id);
+      let installed = false;
+      if (Array.isArray(msg.result?.content)) msg.result.content = msg.result.content.flatMap(item => {
+        if (item.type !== 'text' || !item.text?.includes(GUARD_READY)) return [item];
+        const text = item.text.split('\n').filter(line => {
+          if (line !== GUARD_READY) return true;
+          installed = true; return false;
+        }).join('\n');
+        return text.trim() ? [{ ...item, text }] : [];
+      });
+      if (msg.error || msg.result?.isError) forgetGuard();
+      else if (installed && generation === guardGeneration) guardReady = true;
+    }
     if (msg.method === undefined && spaceChecks.has(msg.id)) {
       // The probe takes about 150 ms against the engine's 400 ms or more, so this rarely waits.
       const check = spaceChecks.get(msg.id); spaceChecks.delete(msg.id);
@@ -1767,6 +1787,7 @@ export function createRelay({
     flowCalls.clear(); flowPending = undefined; flowPermit = undefined;
     preapprovalNotes.clear();
     helperReads.clear();
+    guardCalls.clear(); forgetGuard();
     for (const state of helperStates.values()) clearTimeout(state.timer);
     for (const probe of helperProbes.values()) { clearTimeout(probe.timer); probe.receive?.({ error: { message: 'session ended' } }); }
     helperControls.clear(); helperDiagnosticReplies.clear(); lateDiagnosticControls.clear();

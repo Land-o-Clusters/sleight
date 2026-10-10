@@ -1,0 +1,12 @@
+{
+  "command": "npm run check",
+  "exitCode": 1,
+  "testsStarted": false,
+  "waitingAt": "scripts/wait-hold.sh",
+  "holdCreated": "2026-10-10T06:15:30Z",
+  "holdReason": "Puddle Spend gate and host load",
+  "cancelledThroughOriginalTerminal": true,
+  "finalTerminalCollected": true,
+  "holdRemoved": false,
+  "loadAtLastRead": [19.1318359375, 106.447265625, 164.005859375]
+}

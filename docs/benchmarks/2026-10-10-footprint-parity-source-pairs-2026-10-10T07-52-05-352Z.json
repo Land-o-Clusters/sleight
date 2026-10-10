@@ -1,0 +1,286 @@
+{
+  "started": "2026-10-10T07:52:05.352Z",
+  "mode": "source-pairs",
+  "modelTurns": 0,
+  "modelMs": 0,
+  "loadStart": [
+    26.21728515625,
+    31.03125,
+    31.8916015625
+  ],
+  "trials": [
+    {
+      "name": "after-install",
+      "iterations": 1,
+      "codeBytes": 22588,
+      "load": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ],
+      "ms": 16.971707999997307,
+      "cpu": {
+        "group": {
+          "engine node": 0.03,
+          "(node)": 0,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0.01,
+          "Calculator": 0,
+          "engine helper": 0.01
+        }
+      },
+      "probeCpuSeconds": 0.006131,
+      "passed": true,
+      "loadEnd": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ]
+    },
+    {
+      "name": "before-1",
+      "iterations": 30,
+      "codeBytes": 23088,
+      "load": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ],
+      "ms": 237.57641600002535,
+      "cpu": {
+        "group": {
+          "engine node": 0.4,
+          "(node)": 0,
+          "codex": 0.17
+        },
+        "outside": {
+          "TextEdit": 0.01,
+          "Calculator": 0,
+          "engine helper": 0.03
+        }
+      },
+      "probeCpuSeconds": 0.015251,
+      "passed": true,
+      "loadEnd": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ]
+    },
+    {
+      "name": "after-1",
+      "iterations": 30,
+      "codeBytes": 1301,
+      "load": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ],
+      "ms": 19.0556660000002,
+      "cpu": {
+        "group": {
+          "engine node": 0.02,
+          "(node)": 0,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0,
+          "engine helper": 0.01
+        }
+      },
+      "probeCpuSeconds": 0.005808,
+      "passed": true,
+      "loadEnd": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ]
+    },
+    {
+      "name": "after-2",
+      "iterations": 30,
+      "codeBytes": 1301,
+      "load": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ],
+      "ms": 23.707750000001397,
+      "cpu": {
+        "group": {
+          "engine node": 0.02,
+          "(node)": 0,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0.01,
+          "Calculator": 0,
+          "engine helper": 0.01
+        }
+      },
+      "probeCpuSeconds": 0.004593,
+      "passed": true,
+      "loadEnd": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ]
+    },
+    {
+      "name": "before-2",
+      "iterations": 30,
+      "codeBytes": 23088,
+      "load": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ],
+      "ms": 159.76554100000067,
+      "cpu": {
+        "group": {
+          "engine node": 0.17,
+          "(node)": 0,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0.01,
+          "Calculator": 0,
+          "engine helper": 0.02
+        }
+      },
+      "probeCpuSeconds": 0.011338,
+      "passed": true,
+      "loadEnd": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ]
+    },
+    {
+      "name": "before-3",
+      "iterations": 30,
+      "codeBytes": 23088,
+      "load": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ],
+      "ms": 146.43962499999907,
+      "cpu": {
+        "group": {
+          "engine node": 0.18,
+          "(node)": 0,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0.01,
+          "Calculator": 0,
+          "engine helper": 0.01
+        }
+      },
+      "probeCpuSeconds": 0.009741,
+      "passed": true,
+      "loadEnd": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ]
+    },
+    {
+      "name": "after-3",
+      "iterations": 30,
+      "codeBytes": 1301,
+      "load": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ],
+      "ms": 15.003665999975055,
+      "cpu": {
+        "group": {
+          "engine node": 0.01,
+          "(node)": 0,
+          "codex": 0
+        },
+        "outside": {
+          "TextEdit": 0,
+          "Calculator": 0,
+          "engine helper": 0
+        }
+      },
+      "probeCpuSeconds": 0.004892,
+      "passed": true,
+      "loadEnd": [
+        12.46240234375,
+        18.30419921875,
+        25.3974609375
+      ]
+    }
+  ],
+  "failures": [],
+  "lockAcquired": "2026-10-10T07:57:37.238Z",
+  "loadAtLock": [
+    12.46240234375,
+    18.30419921875,
+    25.3974609375
+  ],
+  "baseline": "332e3ca0260d7eee0b003882d95d8b64ec431dd3",
+  "sources": {
+    "app-health.js": "d9a7af1fd34dc7e43a8166f7a2c088f0fa4301724e66d87aad82050bad285908",
+    "document-scope.mjs": "75d7886becba1610886091e5ad981de17cb239c1ca368fceab1003855497c7b3",
+    "relay.mjs": "a494862cd30f956d540abf0be39c1105865815a49e516d78b20127b4d0772e51"
+  },
+  "apps": {
+    "com.apple.calculator": {
+      "status": "responding",
+      "pid": 75145,
+      "windows": 0,
+      "minimized": 0,
+      "hidden": false,
+      "onScreen": 0,
+      "allWindows": 1,
+      "fullScreenSpace": false
+    },
+    "com.apple.TextEdit": {
+      "status": "responding",
+      "pid": 45533,
+      "windows": 1,
+      "minimized": 0,
+      "hidden": false,
+      "onScreen": 1,
+      "allWindows": 2,
+      "fullScreenSpace": false
+    }
+  },
+  "engine": "26.1007.21159",
+  "footprint": {
+    "cpuSeconds": 1.64,
+    "group": {
+      "engine node": 1.2,
+      "(node)": 0,
+      "codex": 0.23
+    },
+    "outside": {
+      "TextEdit": 0.08,
+      "Calculator": 0,
+      "engine helper": 0.13
+    }
+  },
+  "engineExit": {
+    "code": 0,
+    "signal": null
+  },
+  "engineCollected": true,
+  "helpersCollected": true,
+  "lockReleased": true,
+  "cancelled": false,
+  "finished": "2026-10-10T07:57:39.098Z",
+  "loadEnd": [
+    12.46240234375,
+    18.30419921875,
+    25.3974609375
+  ]
+}

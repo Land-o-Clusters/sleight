@@ -5,6 +5,11 @@ our own runs. Dates and engine versions are given where they matter.
 
 ## Approvals and guards
 
+- CPU parity with Codex is unverified after the guard setup and native app-probe changes. The
+  [no-model profile](benchmarks/2026-10-10-footprint-parity.md) covers two small native trees and
+  changing Space visibility. Full AX reads remain, and no large-tree scaling result is available.
+  A reset discards the retained setup. If the runtime loses it without notice, the next compact call
+  stops before input and requires a standalone app acquisition. Input is never retried automatically.
 - Browser call text never turns off native guards. The engine must confirm `browserUse` on its reply
   before sleight learns browser handles. Candidates attempt the known native window lease and
   saved-file checks; when native access is unavailable, their runtime guard denies native access

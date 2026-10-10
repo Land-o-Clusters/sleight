@@ -2,6 +2,7 @@
 // Mark full trees the guard writes, which the relay compacts (compact-reads.mjs).
 export const GUARD_MARK = '[sleight:guard-read]\n';
 export const GUARD_END = '\n[/sleight:guard-read]\n';
+export const GUARD_READY = '[sleight:guard-ready]';
 
 export function windowFromText(text) {
   const headers = [...text.matchAll(/^Window: ("(?:[^"\\]|\\.)*"), App: (.+)\r?$/gm)];
@@ -96,7 +97,7 @@ export function isDocumentRead(code = '') {
 export const WINDOWS_MARK = '[sleight:windows]';
 const ACQUISITION = /^(?:(?:let|const|var)\s+)?(?:[A-Za-z_$][\w$]*\s*=\s*)?await\s+cua\.getApp\([^;]*\)\s*;?$/;
 
-export function readCode(code) {
+export function readCode(code, options = {}) {
   // Every acquired handle, including const bindings, must receive the proxy
   // before it escapes. A bare acquisition also restores the conventional handle.
   const read = /^await\s+cua\.getApp\(/.test(code.trim()) ? 'globalThis.app = ' + code.trim() : code;
@@ -104,14 +105,15 @@ export function readCode(code) {
   // the next call's guard can reuse this read if they haven't changed. It goes first: listApps after
   // getApp drops the app from the result's metadata, where the relay finds its bundle ID.
   const inventory = ACQUISITION.test(code.trim()) ? `try { nodeRepl.write(${JSON.stringify(WINDOWS_MARK)} + JSON.stringify((await cua.listApps({ emit: false })).filter(a => a.windows?.length).map(a => ({ id: a.id, windows: a.windows }))) + '\\n'); } catch {}\n` : '';
-  return guardSetup() + '\n' + inventory + read;
+  return guardSetup(undefined, options) + '\n' + inventory + read;
 }
 
 // Advisory only: all of this runs in the same mutable JS realm as Claude's code.
 export function guardedCode(code, window, reason = 'Document scope stopped this action: window or URL changed. Read the window and ask the user with document_scope.', lease, options = {}) {
   // The lease needs a full header after the call. A read Claude made after its
   // last action already wrote one, so the guard reads again only without it.
-  return guardSetup({ window, reason, lease, ...options }) +
+  const { reuseSetup, acknowledge, ...checks } = options;
+  return guardSetup({ window, reason, lease, ...checks }, { reuseSetup, acknowledge }) +
     (options.browserCandidate ? '\nglobalThis.__sleightDocumentGuard.activeApp = undefined;' : '') + `\n${code}
 {
   const guard = globalThis.__sleightDocumentGuard, last = guard.activeApp && guard.reads.get(guard.activeApp);
@@ -125,22 +127,26 @@ export function guardedCode(code, window, reason = 'Document scope stopped this 
 }`;
 }
 
-function guardSetup(update) {
-  return `(() => {
+function guardSetup(update, { reuseSetup = false, acknowledge = false } = {}) {
+  // Keep executable code in the runtime, never observations. The relay selects the small form
+  // only after a completed installation, and a missing setup stops before the caller's code.
+  const install = reuseSetup ? '' : `globalThis.__sleightDocumentGuardSetup = update => {
     const parse = ${windowFromText.toString()};
     const isCancel = ${isCancelAction.toString()};
     const state = globalThis.__sleightDocumentGuard ||= {
       getApp: cua.getApp.bind(cua), proxies: new WeakSet(), wrapped: new WeakMap()
     };
-    ${update ? `state.guarded = true; state.expected = ${JSON.stringify(update.window)}; state.reason = ${JSON.stringify(update.reason)};
-    state.lease = ${JSON.stringify(update.lease) ?? 'undefined'};
-    state.fileOnly = ${!!update.fileOnly}; state.cancelOnly = ${!!update.cancelOnly};
-    state.adoptUrl = ${!!update.adoptUrl};` : ''}
-    state.nativeDenied = ${JSON.stringify(update?.nativeDenied) ?? 'undefined'};
-    state.timing = ${!!update?.timing};
-    state.careful = ${!!update?.careful};
+    if (update) {
+      state.guarded = true; state.expected = update.window; state.reason = update.reason;
+      state.lease = update.lease;
+      state.fileOnly = !!update.fileOnly; state.cancelOnly = !!update.cancelOnly;
+      state.adoptUrl = !!update.adoptUrl;
+    }
+    state.nativeDenied = update?.nativeDenied;
+    state.timing = !!update?.timing;
+    state.careful = !!update?.careful;
     // The previous call's read, when the relay judged it reusable for this call's first action.
-    state.prior = ${JSON.stringify(update?.prior) ?? 'undefined'};
+    state.prior = update?.prior;
     // Whether this call has acted, and the handle it started on. A call that took no action after the
     // relay split off its acquisition takes that read as its header instead of reading again: 53
     // such reads cost 27 s across the benchmark runs of 2026-10-09.
@@ -148,7 +154,7 @@ function guardSetup(update) {
     // Text this call typed, pasted or set, so a window it named (a saved or opened file) is its own.
     state.typed = [];
     // What Claude was last shown for the numbers this call acts on (number -> line).
-    state.seenLines = ${JSON.stringify(update?.seenLines) ?? 'undefined'};
+    state.seenLines = update?.seenLines;
     const clock = () => globalThis.performance?.now() ?? Date.now();
     const timedRead = async (raw, phase) => {
       const start = clock();
@@ -392,8 +398,17 @@ function guardSetup(update) {
       return proxy;
     };
     cua.getApp = async (...args) => { checkNative(); return state.activeApp = wrap(await state.getApp(...args)); };
-    ${update && !update.skipAppWrap ? "if (typeof app !== 'undefined' && app && typeof app.getAXState === 'function' && !state.proxies.has(app)) { app = wrap(app); state.activeApp ||= app; }" : ''}
-  })();`;
+    state.wrap = wrap;
+  };`;
+  return install + `
+{
+  if (typeof globalThis.__sleightDocumentGuardSetup !== 'function'${reuseSetup ? ' || !globalThis.__sleightDocumentGuard' : ''}) {
+    throw new Error('Sleight guard setup is missing. Send a standalone app acquisition before acting.');
+  }
+  globalThis.__sleightDocumentGuardSetup(${JSON.stringify(update) ?? 'undefined'});
+  ${update && !update.skipAppWrap ? "const state = globalThis.__sleightDocumentGuard; if (typeof app !== 'undefined' && app && typeof app.getAXState === 'function' && !state.proxies.has(app)) { app = state.wrap(app); state.activeApp ||= app; }" : ''}
+  ${acknowledge && !reuseSetup ? `nodeRepl.write(${JSON.stringify(GUARD_READY + '\n')});` : ''}
+}`;
 }
 
 export const DOCUMENT_TOOL = {

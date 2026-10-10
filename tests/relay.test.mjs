@@ -45,6 +45,71 @@ const tick = () => new Promise(r => setImmediate(r));
 const helperRead = (h, id, code = 'let app = await cua.getApp("Calculator")') => h.fromClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } });
 const helperReply = (h, id, text = 'Error: -10005 timeoutReached', isError = true) => h.fromServer({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }], isError } });
 
+test('each read through a known native handle keeps its app Space probe', async () => {
+  const probes = [];
+  const h = harness({ changeReview: false, spaceProbe: async key => {
+    probes.push(key); return { status: 'responding', windows: 1, onScreen: 1 };
+  } });
+  for (const [id, code] of [[1, 'var app = await cua.getApp("TextEdit")'],
+    [2, 'await app.getAXState()'], [3, 'await app.getAXState()']]) {
+    helperRead(h, id, code); await settle();
+    helperReply(h, id, 'Window: "a.txt", App: TextEdit.\n0 standard window a.txt', false); await settle();
+  }
+  assert.deepEqual(probes, ['textedit', 'textedit', 'textedit']);
+  helperRead(h, 4, 'await unknown.getAXState()'); await settle();
+  assert.equal(probes.length, 3, 'an unknown handle has no app to probe');
+});
+
+test('the relay uses compact guard setup only after an executed installation, then keeps per-call reads', async () => {
+  const h = harness();
+  const writes = [], actions = [];
+  const header = 'Window: "Calculator", App: Calculator.\n0 standard window\n1 button One';
+  const raw = { getAXState: async () => { actions.push('read'); return header; }, typeText: async () => actions.push('type') };
+  const context = createContext({ cua: { getApp: async () => { writes.push(header); return raw; } }, nodeRepl: { write: text => writes.push(text) } });
+  const execute = async id => {
+    writes.length = 0;
+    const code = h.toServer.at(-1).params.arguments.code;
+    await runInContext(`(async () => { ${code} })()`, context);
+    h.fromServer({ jsonrpc: '2.0', id, result: { content: writes.map(text => ({ type: 'text', text })) } });
+  };
+  helperRead(h, 1, 'await cua.getApp("Calculator")');
+  await execute(1);
+  assert.doesNotMatch(JSON.stringify(h.toClient.at(-1)), /guard-ready/);
+  helperRead(h, 2, 'await app.typeText("x")');
+  assert.ok(Buffer.byteLength(h.toServer.at(-1).params.arguments.code) < 2500);
+  await execute(2);
+  helperRead(h, 3, 'await app.typeText("y")');
+  await execute(3);
+  assert.deepEqual(actions, ['read', 'type', 'read', 'read', 'type', 'read']);
+});
+
+test('docs alone and an installation reply from before reset cannot enable compact setup', () => {
+  const h = harness();
+  helperRead(h, 1);
+  helperReply(h, 1, '## Computer Use\nFirst-call docs only', false);
+  helperRead(h, 2);
+  assert.ok(Buffer.byteLength(h.toServer.at(-1).params.arguments.code) > 5000);
+  h.fromClient({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'js_reset', arguments: {} } });
+  helperReply(h, 2, '[sleight:guard-ready]\nWindow: "Calculator", App: Calculator.', false);
+  helperReply(h, 3, 'reset', false);
+  helperRead(h, 4);
+  assert.ok(Buffer.byteLength(h.toServer.at(-1).params.arguments.code) > 5000);
+});
+
+test('a missing warm setup is reported without replaying input and the next read reinstalls it', () => {
+  const h = harness();
+  helperRead(h, 1);
+  helperReply(h, 1, '[sleight:guard-ready]\nWindow: "Calculator", App: Calculator.', false);
+  helperRead(h, 2, 'await app.typeText("x")');
+  assert.ok(Buffer.byteLength(h.toServer.at(-1).params.arguments.code) < 2500);
+  const sent = h.toServer.length;
+  helperReply(h, 2, 'Sleight guard setup is missing. Send a standalone app acquisition before acting.');
+  assert.equal(h.toServer.length, sent);
+  assert.equal(h.toClient.at(-1).result.isError, true);
+  helperRead(h, 3);
+  assert.ok(Buffer.byteLength(h.toServer.at(-1).params.arguments.code) > 5000);
+});
+
 test('two timeouts from one app do not advise restarting ChatGPT without independent evidence', () => {
   const h = harness();
   for (const id of [1, 2]) { helperRead(h, id); helperReply(h, id); }
@@ -1719,11 +1784,11 @@ test('an acquisition\'s read stands in for the guard\'s first read in the next c
   assert.doesNotMatch(JSON.stringify(h.toClient.find(m => m.id === 1)), /sleight:windows/);
   flowCall(h, 2, 'await app.typeText("x")'); await tick();
   const second = h.toServer.find(m => m.id === 2).params.arguments.code;
-  assert.match(second, /state\.prior = \{"text":"Window: \\"a\.txt\\"/); assert.match(second, /"id":"com\.apple\.TextEdit","title":"a\.txt"/);
+  assert.match(second, /"prior":\{"text":"Window: \\"a\.txt\\"/); assert.match(second, /"id":"com\.apple\.TextEdit","title":"a\.txt"/);
   assert.match(second, /"windows":\[\{"id":5,"app":"TextEdit","title":"a\.txt"\}\]/);
   flowAnswer(h, 2, state); await tick();
   flowCall(h, 3, 'await app.typeText("y")'); await tick();
-  assert.match(h.toServer.find(m => m.id === 3).params.arguments.code, /state\.prior = undefined/);
+  assert.doesNotMatch(h.toServer.find(m => m.id === 3).params.arguments.code, /"prior":/);
 });
 
 test('Claude\'s own read stands in for the next call\'s first read in the default mode when reads are slow, never in careful mode', async t => {
@@ -1738,13 +1803,13 @@ test('Claude\'s own read stands in for the next call\'s first read in the defaul
     flowCall(h, 2, 'await app.getAXState()'); t.mock.timers.tick(2500); flowAnswer(h, 2, state); await tick();
     flowCall(h, 3, 'await app.click(1)'); await tick();
     const code = h.toServer.find(m => m.id === 3).params.arguments.code;
-    if (reused) { assert.match(code, /state\.prior = \{"text":"Window: \\"Calculator\\"/); assert.match(code, /"windows":null/); }
-    else assert.match(code, /state\.prior = undefined/);
+    if (reused) { assert.match(code, /"prior":\{"text":"Window: \\"Calculator\\"/); assert.match(code, /"windows":null/); }
+    else assert.doesNotMatch(code, /"prior":/);
     // A fast read is read again: about 50 ms, and it catches a window that renumbered since.
     flowAnswer(h, 3, state); await tick();
     flowCall(h, 4, 'await app.getAXState()'); flowAnswer(h, 4, state); await tick();
     flowCall(h, 5, 'await app.click(1)'); await tick();
-    assert.match(h.toServer.find(m => m.id === 5).params.arguments.code, /state\.prior = undefined/);
+    assert.doesNotMatch(h.toServer.find(m => m.id === 5).params.arguments.code, /"prior":/);
   }
 });
 
@@ -1756,7 +1821,7 @@ test('the relay passes the lines Claude last saw for the numbers a call acts on'
   flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); await tick();
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: state }], _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit' } } } } }); await tick();
   flowCall(h, 2, 'await app.click(14); await app.click(15); await app.click(99)'); await tick();
-  assert.match(h.toServer.find(m => m.id === 2).params.arguments.code, /state\.seenLines = \{"14":"menu bar item Format","15":"button OK"\};/);
+  assert.match(h.toServer.find(m => m.id === 2).params.arguments.code, /"seenLines":\{"14":"menu bar item Format","15":"button OK"\}/);
 });
 
 test('a read with an open menu in front says how to close it', async () => {
@@ -1801,7 +1866,7 @@ test('SLEIGHT_GUARD=careful reaches the guard sent to the engine; the default sk
     h.fromClient({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'js', arguments: { code: 'await app.click(1); await app.typeText("x")' } } });
     await tick();
     const sent = h.toServer.find(m => m.id === 2)?.params.arguments.code ?? '';
-    assert.match(sent, new RegExp(`state\\.careful = ${careful};`));
+    assert.match(sent, new RegExp(`"careful":${careful}`));
   }
 });
 

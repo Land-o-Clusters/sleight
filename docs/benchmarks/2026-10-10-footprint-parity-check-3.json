@@ -1,0 +1,17 @@
+{
+  "command": "npm run check",
+  "exitCode": 1,
+  "nodeTests": 1148,
+  "passed": 1147,
+  "failed": 1,
+  "cancelled": 0,
+  "durationMs": 134753.296333,
+  "loadAfter": [45.10546875, 34.37841796875, 33.7578125],
+  "failure": {
+    "file": "tests/clipboard-lock.test.mjs",
+    "name": "a process exit releases the transaction without stale-lock takeover",
+    "error": "Missing expected exception: /Clipboard busy/"
+  },
+  "correction": "Keep the fixture coordinator reachable through globalThis until the deliberate child exit; no production clipboard or assertion change.",
+  "focusedRerun": { "command": "node --test tests/clipboard-lock.test.mjs", "exitCode": 0, "passed": 2, "failed": 0 }
+}

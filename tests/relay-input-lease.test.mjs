@@ -905,5 +905,5 @@ test('acquire and act in one call: the split acquisition\'s read reaches the act
   await new Promise(resolve => setImmediate(resolve));
   const action = h.forwarded.at(-1);
   assert.equal(action.id, 1);
-  assert.match(action.params.arguments.code, /state\.prior = \{"text":"Window: \\"Calculator\\"/);
+  assert.match(action.params.arguments.code, /"prior":\{"text":"Window: \\"Calculator\\"/);
 });
