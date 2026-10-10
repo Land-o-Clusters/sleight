@@ -19,14 +19,23 @@ func snapshot() throws -> Snapshot {
 func summary(_ s: Snapshot) -> [String: Any] {
     ["count": s.count, "items": s.items.map { $0.map { ["type": $0.type, "bytes": $0.data.count, "sha256": SHA256.hash(data: $0.data).map { String(format: "%02x", $0) }.joined()] as [String: Any] } }]
 }
-func write(_ items: [[Representation]]) throws {
+@discardableResult func write(_ items: [[Representation]], expectedCount: Int? = nil) throws -> Snapshot {
     let objects = items.map { reps -> NSPasteboardItem in
         let item = NSPasteboardItem()
         for rep in reps { item.setData(rep.data, forType: NSPasteboard.PasteboardType(rep.type)) }
         return item
     }
-    board.clearContents()
+    if let expectedCount, board.changeCount != expectedCount {
+        throw NSError(domain: "clipboard", code: 4, userInfo: [NSLocalizedDescriptionKey: "Clipboard ownership changed; leaving current contents"])
+    }
+    let ownedCount = board.clearContents()
     if !objects.isEmpty && !board.writeObjects(objects) { throw NSError(domain: "clipboard", code: 3, userInfo: [NSLocalizedDescriptionKey: "Clipboard write failed"]) }
+    let actual = try snapshot()
+    guard actual.count == ownedCount, actual.items.count == items.count,
+          zip(actual.items, items).allSatisfy({ left, right in
+              Dictionary(uniqueKeysWithValues: left.map { ($0.type, $0.data) }) == Dictionary(uniqueKeysWithValues: right.map { ($0.type, $0.data) })
+          }) else { throw NSError(domain: "clipboard", code: 7, userInfo: [NSLocalizedDescriptionKey: "Clipboard write verification failed; generation is unconfirmed"]) }
+    return actual
 }
 func output(_ value: [String: Any]) throws { print(String(data: try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]), encoding: .utf8)!) }
 func rep(_ type: String, _ text: String) -> Representation { Representation(type: type, data: Data(text.utf8)) }
@@ -43,8 +52,11 @@ do {
     case "restore":
         guard board.changeCount == Int(args[3]) else { throw NSError(domain: "clipboard", code: 4, userInfo: [NSLocalizedDescriptionKey: "Clipboard ownership changed; leaving current contents"]) }
         let s = try JSONDecoder().decode(Snapshot.self, from: Data(contentsOf: URL(fileURLWithPath: args[2])))
-        try write(s.items); try output(summary(snapshot()))
+        try output(summary(write(s.items, expectedCount: Int(args[3]))))
     case "seed":
+        if args.count > 5 && board.changeCount != Int(args[5]) {
+            throw NSError(domain: "clipboard", code: 4, userInfo: [NSLocalizedDescriptionKey: "Clipboard ownership changed; leaving current contents"])
+        }
         var items: [[Representation]]
         switch args[2] {
         case "text": items = [[rep("public.utf8-plain-text", "SLEIGHT OLD TEXT")]]
@@ -58,7 +70,7 @@ do {
         case "promise": items = [[rep("com.apple.pasteboard.promised-file-url", "synthetic promise")]]
         default: throw NSError(domain: "clipboard", code: 5, userInfo: [NSLocalizedDescriptionKey: "Unknown seed"])
         }
-        try write(items); try output(summary(snapshot()))
+        try output(summary(write(items, expectedCount: args.count > 5 ? Int(args[5]) : nil)))
     case "watch":
         let done = NSLock(); var stopped = false
         DispatchQueue.global().async { _ = FileHandle.standardInput.readDataToEndOfFile(); done.lock(); stopped = true; done.unlock() }
