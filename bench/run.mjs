@@ -6,8 +6,8 @@
 //   node bench/run.mjs [--arm sleight|lcu|codex|all|a,b] [--suite default|real] [--tasks id,id] [--runs N] [--model M] [--effort E]
 //     [--codex-model M] [--codex-effort E] [--dry-run] [--setup-only] [--owner-away]
 //
-// Model and effort default to Sonnet 5.5 at medium (owner, 2026-10-03). Runs
-// before that used Claude Code's default, Opus 5.5.
+// Model and effort default to Haiku 5.5 at high (owner, 2026-10-10), and before that to Sonnet 5.5
+// at medium (2026-10-03 to 2026-10-10). Runs before 2026-10-03 used Claude Code's default, Opus 5.5.
 //
 // Arms: `sleight` loads this repo's plugin. `lcu` runs from a folder where LCU
 // (github.com/amontlabs/lcu) was registered for Claude Code at project scope:
@@ -40,7 +40,7 @@ import { acquireLiveLock } from './live-lock.mjs';
 import { runDriver, privateDriverEnvironment } from './driver.mjs';
 import { privateMailResult, publicPrivateMailRow, publishPrivateMailResults } from './private-mail.mjs';
 import { assertPrivateClaudePolicy } from './private-policy.mjs';
-import { DEFAULT_CAP_USD, addSpend, benchAuth } from './api-auth.mjs';
+import { DEFAULT_CAP_USD, addSpend, benchAuth, runCost } from './api-auth.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TIMEOUT_MS = 5 * 60 * 1000;
@@ -110,8 +110,8 @@ for (const name of armNames) {
   if (repo) throw new Error(`${name} arm folder ${ARMS[name].cwd} is inside the git repo ${repo}, so its runs would load that repo's CLAUDE.md and project memory. Use a folder outside any repo.`);
 }
 const runs = Number(option('runs', '1'));
-const model = option('model', 'claude-sonnet-5-5');
-const effort = option('effort', 'medium');
+const model = option('model', 'claude-haiku-5-5');
+const effort = option('effort', 'high');
 const codexModel = option('codex-model', 'gpt-6.1-sol');
 const codexEffort = option('codex-effort', effort);
 const wanted = option('tasks', undefined)?.split(',');
@@ -354,7 +354,7 @@ pass: for (let run = 1; run <= runs; run++) {
         const { out, code, forbidden: _forbidden, ...rest } = result;
         results.push(task.privateMail ? privateMailResult(task, ctx, result, { arm: armName, run }) : { arm: armName, task: task.id, run, ...rest,
           reason: scrub(result.reason), cleanupError: scrub(result.cleanupError), prompt: scrub(result.prompt),
-          turns: out?.num_turns, costUsd: out?.total_cost_usd, models: Object.keys(out?.modelUsage ?? {}),
+          turns: out?.num_turns, costUsd: runCost(out), reportedCostUsd: out?.total_cost_usd, models: Object.keys(out?.modelUsage ?? {}),
           usage: out?.usage && { input: out.usage.input_tokens, cacheRead: out.usage.cache_read_input_tokens,
             cacheWrite: out.usage.cache_creation_input_tokens, output: out.usage.output_tokens },
           exitCode: code, answer: scrub(out?.result?.slice(0, 300)), stderr: code === 0 ? undefined : scrub(rest.stderr),
@@ -412,7 +412,7 @@ pass: for (let run = 1; run <= runs; run++) {
         reason: verdict === true ? undefined : scrub(verdict),
         seconds: Math.round((Date.now() - started) / 100) / 10,
         turns: out?.num_turns,
-        costUsd: out?.total_cost_usd,
+        costUsd: runCost(out), reportedCostUsd: out?.total_cost_usd,
         // Input, cached and output tokens: what a smaller result would save.
         usage: out?.usage && { input: out.usage.input_tokens, cacheRead: out.usage.cache_read_input_tokens,
           cacheWrite: out.usage.cache_creation_input_tokens, output: out.usage.output_tokens },

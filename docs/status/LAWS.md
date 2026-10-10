@@ -25,8 +25,9 @@ belong in [STATE.md](STATE.md).
 - No benchmark against Claude's own computer use (owner, 2026-10-04): its shortcomings are why sleight
   exists. The README compares the two from Anthropic's documentation.
 - A release means a git tag plus a GitHub release with notes from the changelog (owner, 2026-10-04).
-- Sonnet 5.5 at medium effort is the default driver for the benchmark and the docs (owner,
-  2026-10-08, after the four-model comparison in `docs/benchmark.md`).
+- Haiku 5.5 at high effort is the default driver for the benchmark and the docs (owner, 2026-10-10,
+  once runs moved to the API key). It supersedes Sonnet 5.5 at medium (owner, 2026-10-08, after the
+  four-model comparison in `docs/benchmark.md`). Passes before 2026-10-10 ran on Sonnet.
 - Codex runs on gpt-6.1-sol (owner, 2026-10-04), except deep performance tuning in the code, which
   may run on gpt-6-astra (owner, 2026-10-07).
 - The benchmark grows toward the apps people use (owner, 2026-10-09): varied web pages (sheets,

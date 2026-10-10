@@ -478,7 +478,9 @@ average was about 100 from other processes during both.
 | chess-drag | 15.5 | 13 |
 | simulator-form | 7 | 5 | One pass per model can't separate a model from that hour's API latency.
 
-From 2026-10-04 on, runs default to Sonnet 5.5 at medium effort (`--model`, `--effort`).
+From 2026-10-04 to 2026-10-10, runs defaulted to Sonnet 5.5 at medium effort, and since then to Haiku
+5.5 at high (`--model`, `--effort`). Haiku's costs come from its token counts at API prices, since
+Claude Code 2.1.289 doesn't recognize the model and reported about 60 times its price.
 
 ```bash
 npm run bench -- --runs 3             # sleight only

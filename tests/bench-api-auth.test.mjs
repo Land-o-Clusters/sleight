@@ -57,3 +57,14 @@ test('auto uses the key when present, api requires it, login never uses it, and 
   assert.throws(() => benchAuth({ keyFile: file, ledgerFile: ledger, now, capUsd: 150 }), /\$150 cap/);
   assert.equal(benchAuth({ mode: 'login', keyFile: file, ledgerFile: ledger, now, capUsd: 150 }).mode, 'login');
 });
+
+test('run cost comes from token counts at API prices, and an unknown model keeps the reported cost', async () => {
+  const { runCost } = await import('../bench/api-auth.mjs');
+  // The tiny Haiku run of 2026-10-10: Claude Code reported $0.0639814.
+  const haiku = { total_cost_usd: 0.0639814, modelUsage: { 'claude-haiku-5-5': { inputTokens: 2, outputTokens: 4, cacheReadInputTokens: 3387, cacheCreationInputTokens: 7902, costUSD: 0.0639814 } } };
+  assert.equal(runCost(haiku), 0.0016165);
+  const mixed = { modelUsage: { 'claude-sonnet-5-5': { inputTokens: 1e6, outputTokens: 0 }, 'claude-future-9': { costUSD: 0.5 } } };
+  assert.equal(runCost(mixed), 2.5);
+  assert.equal(runCost({ total_cost_usd: 0.3 }), 0.3);
+  assert.equal(runCost(undefined), undefined);
+});

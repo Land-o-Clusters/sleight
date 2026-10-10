@@ -11,6 +11,30 @@ export const DEFAULT_CAP_USD = 200;
 
 const month = (now = new Date()) => now.toISOString().slice(0, 7);
 
+// API prices in dollars per million tokens (claude-api skill, cached 2026-10-06). Claude Code
+// 2.1.289 doesn't recognize claude-haiku-5-5 and reported about 60 times its price, so a run's cost
+// comes from its token counts. Cache writes use the 1-hour rate (2x input), the higher of the two,
+// and Haiku's rates are its tier for prompts up to 100K tokens.
+export const PRICES = Object.freeze({
+  'claude-haiku-5-5': { input: 0.10, output: 0.50, cacheRead: 0.01 },
+  'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.20 },
+  'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.20 },
+});
+
+// One run's cost from claude -p's modelUsage; a model without a price keeps Claude Code's figure.
+export function runCost(out) {
+  const usage = out?.modelUsage;
+  if (!usage || typeof usage !== 'object' || !Object.keys(usage).length) return out?.total_cost_usd;
+  let total = 0;
+  for (const [model, u] of Object.entries(usage)) {
+    const price = PRICES[model.replace(/\[.*\]$/, '')];
+    if (!price) { total += Number(u.costUSD) || 0; continue; }
+    total += ((u.inputTokens ?? 0) * price.input + (u.outputTokens ?? 0) * price.output +
+      (u.cacheReadInputTokens ?? 0) * price.cacheRead + (u.cacheCreationInputTokens ?? 0) * price.input * 2) / 1e6;
+  }
+  return Math.round(total * 1e7) / 1e7;
+}
+
 // The key file must be the owner's, a regular file, and readable by nobody else.
 export function readKey(file = KEY_FILE, { uid = process.getuid() } = {}) {
   let fd;
