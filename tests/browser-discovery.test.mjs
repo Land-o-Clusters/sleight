@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { selectSurfaces } from '../plugins/sleight/lib/launch.mjs';
+import { probeSurfaces as selectSurfaces } from '../plugins/sleight/lib/launch.mjs';
+import { discoverExtensions } from '../plugins/sleight/lib/browser-discovery.mjs';
 function server(t, browsers, extra = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'sleight-browser-discovery-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
@@ -53,4 +54,11 @@ test('a failed discovery call cannot enable browser control even if it emitted a
   const s = server(t, [{ type: 'extension', metadata: { extensionInstanceId: 'instance-1' } }], { SLEIGHT_TEST_ERROR: '1' });
   await selectSurfaces(s, {});
   assert.equal(s.env.CUA_REPL_ENABLED_SURFACES, 'computer');
+});
+
+test('cache discovery distinguishes a successful empty inventory from failure', async t => {
+  assert.deepEqual(await discoverExtensions(server(t, []), { strict: true }), []);
+  for (const [browsers, extra] of [[{}, {}], [[], { SLEIGHT_TEST_ERROR: '1' }], [[], { SLEIGHT_TEST_HUNG: '1' }]]) {
+    await assert.rejects(discoverExtensions(server(t, browsers, extra), { strict: true, timeoutMs: 1000 }), /discovery/i);
+  }
 });

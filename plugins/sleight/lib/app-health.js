@@ -54,7 +54,14 @@ function minimizedCount(windows) {
 // With an argument, one probe. Without, a long-lived helper: one JSON line in ({ id, app }), one out,
 // so a session spawns osascript once instead of on every app read (about 150 ms of CPU each).
 function run(argv) {
-  if (argv.length) return JSON.stringify(probe(JSON.parse(argv[0])));
+  if (argv.length && argv[0] !== '--session') return JSON.stringify(probe(JSON.parse(argv[0])));
+  // Load the existing read-only queries once, in this helper's JavaScript context.
+  const query = name => {
+    const source = ObjC.unwrap($.NSString.stringWithContentsOfFileEncodingError(`${argv[1]}/${name}.js`, $.NSUTF8StringEncoding, null));
+    return eval(`(function () { ${source}; return run; })()`);
+  };
+  const taps = argv[0] === '--session' ? query('keyboard-taps') : undefined;
+  const target = argv[0] === '--session' ? query('lease-target') : undefined;
   const stdin = $.NSFileHandle.fileHandleWithStandardInput, stdout = $.NSFileHandle.fileHandleWithStandardOutput;
   let buffer = '';
   for (;;) {
@@ -69,7 +76,13 @@ function run(argv) {
       // loop delivers. Blocked on stdin, the helper saw Calculator as absent 3 s after it launched.
       $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.005));
       let reply;
-      try { const request = JSON.parse(line); reply = { id: request.id, ...probe(request.app) }; } catch { reply = { status: 'unknown' }; }
+      let request;
+      try {
+        request = JSON.parse(line);
+        const result = request.op === 'keyboard-taps' ? JSON.parse(taps())
+          : request.op === 'lease-target' ? JSON.parse(target([JSON.stringify({ app: request.app })])) : probe(request.app);
+        reply = { id: request.id, ...result };
+      } catch { reply = { id: request?.id, status: 'unknown', ok: false, error: 'session query failed' }; }
       stdout.writeData($(JSON.stringify(reply) + '\n').dataUsingEncoding($.NSUTF8StringEncoding));
     }
   }

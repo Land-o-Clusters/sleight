@@ -1,0 +1,3200 @@
+{
+  "base": "a64728e0746b726d320344c26945b0918980019b",
+  "rebasedHeadBeforeCorrections": "27f32da",
+  "dateUTC": "2026-10-10",
+  "scope": "No model calls; app/helper probes restricted to existing background Calculator; no pointer, app launch, macOS/app-dialog response, or ChatGPT restart. The user's existing Calculator preapproval handled an engine elicitation.",
+  "hold": "No execution while /tmp/sleight-hold existed. Removed by another owner before the first regression run. First native proof stopped because the live lock was busy.",
+  "cpuMethod": "Offline: process.cpuUsage. Native: /usr/bin/time -p worker plus all collected descendants, 0.01 s printed precision. Discovery child estimate subtracts worker process.cpuUsage; includes the engine's children and rounded total error. This is not an exact per-process sampler.",
+  "validation": [
+    {
+      "command": "node --test tests/input-lease.test.mjs tests/surface-cache.test.mjs tests/browser-discovery.test.mjs tests/footprint-spawns.test.mjs",
+      "phase": "red",
+      "exitCode": 1,
+      "tests": 62,
+      "passed": 48,
+      "failed": 14,
+      "failures": [
+        "strict discovery failure distinction",
+        "three helper lane count",
+        "target failure advice",
+        "probe and target lane independence",
+        "queued target deadline",
+        "stuck taps and target independence",
+        "removed lease directory",
+        "unlinked coordinator exclusion",
+        "renamed coordinator exclusion",
+        "failed rollback retains lock",
+        "replacement after BEGIN",
+        "six hour positive cache and every-session refresh",
+        "discovery failure creates negative",
+        "older discovery overwrites newer"
+      ]
+    },
+    {
+      "phase": "focused green",
+      "exitCode": 0,
+      "tests": 64,
+      "passed": 64
+    },
+    {
+      "command": "node --test tests/surface-cache.test.mjs",
+      "phase": "publication crash regression red",
+      "exitCode": 1,
+      "tests": 11,
+      "passed": 10,
+      "failed": 1,
+      "failure": "abandoned publication directory disables all future refreshes"
+    },
+    {
+      "phase": "focused green after SQLite publication lock",
+      "exitCode": 0,
+      "tests": 65,
+      "passed": 65
+    },
+    {
+      "command": "npm run check",
+      "phase": "workspace sandbox",
+      "exitCode": 1,
+      "tests": 1070,
+      "passed": 1026,
+      "failed": 44,
+      "durationMs": 143163.014584,
+      "diagnostics": [
+        "listen EPERM on loopback and Unix sockets",
+        "linker cannot write bench/results/hover-window-fixture"
+      ],
+      "failures": [
+        "grid checker uses posted state and rejects incomplete, changed and stale outcomes",
+        "grid page has executable script, stays local, rejects foreign state and closes its listener",
+        "editor checker uses posted state and rejects incomplete, changed and stale outcomes",
+        "editor page has executable script, stays local, rejects foreign state and closes its listener",
+        "dense checker uses posted state and rejects incomplete, changed and stale outcomes",
+        "dense page has executable script, stays local, rejects foreign state and closes its listener",
+        "spa checker uses posted state and rejects incomplete, changed and stale outcomes",
+        "spa page has executable script, stays local, rejects foreign state and closes its listener",
+        "nested checker uses posted state and rejects incomplete, changed and stale outcomes",
+        "nested page has executable script, stays local, rejects foreign state and closes its listener",
+        "infinite checker uses posted state and rejects incomplete, changed and stale outcomes",
+        "infinite page has executable script, stays local, rejects foreign state and closes its listener",
+        "dense checker requires a request for the named article, beyond a claimed page snapshot",
+        "all twelve tasks close their server even when owned-window cleanup fails",
+        "grid page controls emit the state the independent checker accepts",
+        "editor page controls emit the state the independent checker accepts",
+        "dense page controls emit the state the independent checker accepts",
+        "spa page controls emit the state the independent checker accepts",
+        "nested page controls emit the state the independent checker accepts",
+        "infinite page controls emit the state the independent checker accepts",
+        "editor actual script rejects extra paragraph",
+        "editor actual script rejects extra heading",
+        "editor actual script rejects extra text outside a block",
+        "editor actual script rejects bold outside the paragraph",
+        "editor actual script rejects bold in a list item",
+        "editor actual script rejects ordered list replacing bullets",
+        "editor actual script rejects paragraph moved after the list",
+        "editor actual script rejects changed paragraph whitespace",
+        "editor actual script rejects bold canceled inside the phrase",
+        "editor actual script accepts ordinary inline strong tag",
+        "editor actual script accepts ordinary inline bold span",
+        "editor actual script accepts ordinary inline split bold runs",
+        "web server refuses unsafe nonce, unknown page kinds and a second server on one context",
+        "all web tasks retain server cleanup when browser acquisition fails without mutation",
+        "safari-form checks submitted fields, select and checkbox, ignoring the agent's answer",
+        "safari-form rejects missing checkbox, changed select and a nonce from another run",
+        "helium-form checks submitted fields, select and checkbox, ignoring the agent's answer",
+        "helium-form rejects missing checkbox, changed select and a nonce from another run",
+        "simulator-flow checks the saved value and the required screen sequence",
+        "simulator-flow rejects wrong saved text and an unordered or incomplete flow",
+        "the simulator form passes only on the exact text, then closes its server",
+        "socket bridge authorizes its token, correlates replies and collects its child and private socket",
+        "a starved helper cannot authorize a late reply or a queued request after its deadline",
+        "hover fixture refuses other apps, unknown operations and unnamed Chess windows before access"
+      ]
+    },
+    {
+      "command": "npm run check",
+      "phase": "host attempt cancelled at load 103.31",
+      "exitCode": 1,
+      "testsReported": 1062,
+      "passed": 1056,
+      "cancelled": 6,
+      "durationMs": 23249.955875,
+      "cleanup": "Exactly one Ctrl-C on original owned TTY 7465; collected exit 1 from that same handle.",
+      "pendingFiles": [
+        "background-drag-native.test.mjs",
+        "bench-real-helium.test.mjs",
+        "bench-real-mail.test.mjs",
+        "bench-real-mimestream.test.mjs",
+        "bench-real.test.mjs",
+        "chess-drag-path.test.mjs"
+      ]
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "errors": 22,
+      "files": 62
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 1,
+      "errors": 2,
+      "files": 62
+    },
+    {
+      "command": "npm run check",
+      "phase": "host at start load 29.77",
+      "exitCode": 1,
+      "tests": 1070,
+      "passed": 1068,
+      "failed": 2,
+      "durationMs": 182252.59775,
+      "failures": [
+        "preview-pdf: PDF helper timed out at 180 seconds",
+        "native Chess fixture: swiftc ETIMEDOUT at 180 seconds"
+      ]
+    },
+    {
+      "command": "npm run lint:prose",
+      "exitCode": 0,
+      "errors": 0,
+      "files": 62
+    },
+    {
+      "command": "npm run lint:prose",
+      "phase": "report includes failed full checks",
+      "exitCode": 1,
+      "errors": 2,
+      "files": 62
+    },
+    {
+      "command": "npm run lint:prose",
+      "phase": "failed check prose repaired",
+      "exitCode": 0,
+      "errors": 0,
+      "files": 62
+    },
+    {
+      "command": "npm run check",
+      "phase": "host at start load 10.90",
+      "exitCode": 0,
+      "tests": 1070,
+      "passed": 1070,
+      "failed": 0,
+      "durationMs": 89952.364125,
+      "manifestValidationsPassed": 2,
+      "modTests": 11,
+      "modPassed": 11,
+      "modFailed": 0
+    },
+    {
+      "command": "npm run lint:prose",
+      "phase": "final check receipt prose",
+      "exitCode": 1,
+      "errors": 1,
+      "files": 62
+    },
+    {
+      "command": "npm run lint:prose",
+      "phase": "final",
+      "exitCode": 0,
+      "errors": 0,
+      "files": 62
+    }
+  ],
+  "medians": [
+    {
+      "kind": "helpers",
+      "arm": "before",
+      "cpu": 0.98,
+      "wallMs": 1230,
+      "spawns": [
+        11,
+        11,
+        11
+      ],
+      "targetMs": 82.79820800000005,
+      "tapsMs": 46.08608400000003
+    },
+    {
+      "kind": "offline",
+      "arm": "before",
+      "name": "lease acquire/renew/release",
+      "cpu": 0.835658,
+      "ms": 857.2830840000001
+    },
+    {
+      "kind": "offline",
+      "arm": "before",
+      "name": "pane png desktop",
+      "cpu": 0.038164,
+      "ms": 30.013292000000547
+    },
+    {
+      "kind": "offline",
+      "arm": "before",
+      "name": "pane png terminal",
+      "cpu": 0.041717,
+      "ms": 35.122832999999446
+    },
+    {
+      "kind": "offline",
+      "arm": "before",
+      "name": "pane jpeg desktop",
+      "cpu": 0.079819,
+      "ms": 69.02149999999983
+    },
+    {
+      "kind": "offline",
+      "arm": "before",
+      "name": "pane jpeg terminal",
+      "cpu": 0.080449,
+      "ms": 72.11962500000027
+    },
+    {
+      "kind": "helpers",
+      "arm": "after",
+      "cpu": 0.61,
+      "wallMs": 860,
+      "spawns": [
+        3,
+        3,
+        3
+      ],
+      "targetMs": 41.509124999999926,
+      "tapsMs": 7.64975000000004
+    },
+    {
+      "kind": "offline",
+      "arm": "after",
+      "name": "lease acquire/renew/release",
+      "cpu": 0.679801,
+      "ms": 731.6522089999999
+    },
+    {
+      "kind": "offline",
+      "arm": "after",
+      "name": "pane png desktop",
+      "cpu": 0.000153,
+      "ms": 0.14945799999986775
+    },
+    {
+      "kind": "offline",
+      "arm": "after",
+      "name": "pane png terminal",
+      "cpu": 0.060526,
+      "ms": 47.17279099999996
+    },
+    {
+      "kind": "offline",
+      "arm": "after",
+      "name": "pane jpeg desktop",
+      "cpu": 0.001257,
+      "ms": 0.7212090000000444
+    },
+    {
+      "kind": "offline",
+      "arm": "after",
+      "name": "pane jpeg terminal",
+      "cpu": 0.083718,
+      "ms": 75.73916699999972
+    },
+    {
+      "kind": "surfaces",
+      "arm": "computer",
+      "cpu": 0.16,
+      "initializeMs": 131.516166,
+      "firstJsMs": 194.725792,
+      "warmJsMs": 0.8811460000000011,
+      "firstTextBytes": [
+        21093,
+        21093,
+        21093
+      ]
+    },
+    {
+      "kind": "surfaces",
+      "arm": "browser,computer",
+      "cpu": 0.15,
+      "initializeMs": 128.014666,
+      "firstJsMs": 167.494375,
+      "warmJsMs": 0.8882289999999955,
+      "firstTextBytes": [
+        21093,
+        21093,
+        21093
+      ]
+    },
+    {
+      "kind": "discovery",
+      "cpu": 0.18000000000000002,
+      "childEstimate": 0.13746200000000003,
+      "ms": 480.46925,
+      "extensions": [
+        1,
+        1,
+        1
+      ]
+    }
+  ],
+  "measurements": {
+    "proof-3a": {
+      "mode": "proof",
+      "started": "2026-10-10T01:26:06.283Z",
+      "runs": [
+        {
+          "repetition": 1,
+          "code": 1,
+          "signal": null,
+          "cpuSeconds": 0.060000000000000005,
+          "realSeconds": 0.08,
+          "childCpuSecondsEstimate": 0,
+          "stderr": "real 0.08\nuser 0.05\nsys 0.01\n",
+          "mode": "proof",
+          "started": "2026-10-10T01:26:06.367Z",
+          "load": [
+            53.22802734375,
+            52.03564453125,
+            29.1201171875
+          ],
+          "calls": [],
+          "failures": [
+            "Another live run holds /tmp/sleight-live.lock. Wait for it to finish."
+          ],
+          "workerCpuSeconds": 0.063988
+        }
+      ]
+    },
+    "proof-3b": {
+      "mode": "proof",
+      "started": "2026-10-10T01:29:03.180Z",
+      "runs": [
+        {
+          "repetition": 1,
+          "code": 1,
+          "signal": null,
+          "cpuSeconds": 0.35,
+          "realSeconds": 0.47,
+          "childCpuSecondsEstimate": 0.30546599999999996,
+          "stderr": "real 0.47\nuser 0.22\nsys 0.13\n",
+          "mode": "proof",
+          "started": "2026-10-10T01:29:03.220Z",
+          "load": [
+            8.955078125,
+            33.5107421875,
+            25.8818359375
+          ],
+          "calls": [
+            {
+              "name": "real Calculator lease-target",
+              "ms": 281.04012500000005,
+              "load": [
+                8.955078125,
+                33.5107421875,
+                25.8818359375
+              ]
+            },
+            {
+              "name": "real keyboard-taps",
+              "ms": 154.02245800000003,
+              "load": [
+                8.955078125,
+                33.5107421875,
+                25.8818359375
+              ]
+            }
+          ],
+          "failures": [
+            "the local tool needs one running app with a bundle ID; launch it first\n\nfalse !== true\n"
+          ],
+          "target": {
+            "ok": false,
+            "error": "the local tool needs one running app with a bundle ID; launch it first"
+          },
+          "taps": {
+            "ok": false,
+            "count": 0
+          },
+          "helpersCollected": true,
+          "helperSpawns": 2,
+          "replies": [
+            {
+              "lane": "target",
+              "id": 0,
+              "ok": false,
+              "error": "the local tool needs one running app with a bundle ID; launch it first"
+            },
+            {
+              "lane": "taps",
+              "id": 0,
+              "ok": false,
+              "error": "CGGetEventTapList failed"
+            }
+          ],
+          "lockReleased": true,
+          "workerCpuSeconds": 0.044534
+        }
+      ]
+    },
+    "proof-3c": {
+      "mode": "proof",
+      "started": "2026-10-10T01:29:35.660Z",
+      "runs": [
+        {
+          "repetition": 1,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.21,
+          "realSeconds": 0.23,
+          "childCpuSecondsEstimate": 0.165719,
+          "stderr": "real 0.23\nuser 0.18\nsys 0.03\n",
+          "mode": "proof",
+          "started": "2026-10-10T01:29:35.698Z",
+          "load": [
+            7.435546875,
+            30.787109375,
+            25.15673828125
+          ],
+          "calls": [
+            {
+              "name": "real Calculator lease-target",
+              "ms": 113.293917,
+              "load": [
+                7.435546875,
+                30.787109375,
+                25.15673828125
+              ]
+            },
+            {
+              "name": "real keyboard-taps",
+              "ms": 80.01250000000002,
+              "load": [
+                7.435546875,
+                30.787109375,
+                25.15673828125
+              ]
+            }
+          ],
+          "failures": [],
+          "target": {
+            "ok": true,
+            "appId": "com.apple.calculator"
+          },
+          "taps": {
+            "ok": true,
+            "count": 3
+          },
+          "helpersCollected": true,
+          "helperSpawns": 2,
+          "replies": [
+            {
+              "lane": "target",
+              "id": 0,
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "id": 0,
+              "ok": true
+            }
+          ],
+          "lockReleased": true,
+          "workerCpuSeconds": 0.044281
+        }
+      ]
+    },
+    "native-3b": {
+      "started": "2026-10-10T01:30:56.483Z",
+      "mode": "live helper pairs; computer surface",
+      "runs": [
+        {
+          "arm": "before",
+          "repetition": 1,
+          "code": 1,
+          "signal": null,
+          "cpuSeconds": 0.33,
+          "realSeconds": 1.48,
+          "stderr": "real 1.48\nuser 0.27\nsys 0.06\n",
+          "root": "/private/tmp/sleight-footprint-baseline-a64728e",
+          "started": "2026-10-10T01:30:56.522Z",
+          "load": [
+            4.6240234375,
+            24.44873046875,
+            23.24169921875
+          ],
+          "calls": [
+            {
+              "name": "helper cold health",
+              "ms": 203.041084,
+              "load": [
+                4.6240234375,
+                24.44873046875,
+                23.24169921875
+              ]
+            },
+            {
+              "name": "acquisition",
+              "ms": 1044.6344159999999,
+              "load": [
+                4.65380859375,
+                24.12548828125,
+                23.134765625
+              ]
+            }
+          ],
+          "failures": [
+            "[{\"type\":\"text\",\"text\":\"Computer Use server error -10005: Error Domain=com.apple.ScreenCaptureKit.SCStreamErrorDomain Code=-3811 \\\"Failed to start stream due to audio/video capture failure\\\" UserInfo={NSLocalizedDescription=Failed to start stream due to audio/video capture failure}\"},{\"type\":\"text\",\"text\":\"## Computer Use\\n\\nControl native apps and browsers on the user’s computer by reading or operating UI. Prefer purpose-built connectors, APIs, or CLIs when available.\\n\\n- Use `cua_repl` (JavaS"
+          ],
+          "appStatus": "responding",
+          "initializeMs": 174.85399999999998,
+          "engineCollected": true,
+          "helpersCollected": true,
+          "helperReplies": [
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            }
+          ],
+          "trace": [
+            {
+              "t": "2026-10-10T01:30:56.779Z",
+              "direction": "to-server",
+              "id": 0,
+              "method": "initialize"
+            },
+            {
+              "t": "2026-10-10T01:30:56.905Z",
+              "direction": "from-server",
+              "id": 0
+            },
+            {
+              "t": "2026-10-10T01:30:56.905Z",
+              "direction": "to-client",
+              "id": 0
+            },
+            {
+              "t": "2026-10-10T01:30:56.906Z",
+              "direction": "to-server",
+              "method": "notifications/initialized"
+            },
+            {
+              "t": "2026-10-10T01:30:56.906Z",
+              "direction": "call-received",
+              "id": 1,
+              "method": "tools/call"
+            },
+            {
+              "t": "2026-10-10T01:30:56.907Z",
+              "direction": "to-server",
+              "id": 1,
+              "method": "tools/call"
+            },
+            {
+              "t": "2026-10-10T01:30:57.838Z",
+              "direction": "from-server",
+              "id": 0,
+              "method": "elicitation/create"
+            },
+            {
+              "t": "2026-10-10T01:30:57.839Z",
+              "direction": "preapproved-app"
+            },
+            {
+              "t": "2026-10-10T01:30:57.839Z",
+              "direction": "to-server",
+              "id": 0
+            },
+            {
+              "t": "2026-10-10T01:30:57.948Z",
+              "direction": "from-server",
+              "id": 1
+            },
+            {
+              "t": "2026-10-10T01:30:57.950Z",
+              "direction": "to-client",
+              "id": 1
+            },
+            {
+              "t": "2026-10-10T01:30:57.951Z",
+              "direction": "call-received",
+              "id": 2,
+              "method": "tools/call"
+            },
+            {
+              "t": "2026-10-10T01:30:57.951Z",
+              "direction": "to-server",
+              "id": 2,
+              "method": "tools/call"
+            },
+            {
+              "t": "2026-10-10T01:30:57.951Z",
+              "direction": "from-server",
+              "id": 2
+            },
+            {
+              "t": "2026-10-10T01:30:57.951Z",
+              "direction": "to-client",
+              "id": 2
+            },
+            {
+              "t": "2026-10-10T01:30:57.952Z",
+              "direction": "change-snapshots-deleted"
+            }
+          ],
+          "lockReleased": true
+        }
+      ]
+    },
+    "offline-3": {
+      "stamp": "2026-10-10T01:30:28.239Z",
+      "mode": "offline pairs",
+      "runs": [
+        {
+          "arm": "before",
+          "repetition": 1,
+          "stamp": "2026-10-10T01:30:29.414Z",
+          "results": [
+            {
+              "name": "lease acquire/renew/release",
+              "repetitions": 1000,
+              "ms": 838.8235410000001,
+              "cpuSeconds": 0.806279,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ]
+            },
+            {
+              "name": "pane png desktop",
+              "repetitions": 12,
+              "ms": 42.77479100000005,
+              "cpuSeconds": 0.057127,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 1817
+            },
+            {
+              "name": "pane png terminal",
+              "repetitions": 12,
+              "ms": 52.80799999999999,
+              "cpuSeconds": 0.073308,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 1817
+            },
+            {
+              "name": "pane jpeg desktop",
+              "repetitions": 12,
+              "ms": 81.20262500000001,
+              "cpuSeconds": 0.132642,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 8197
+            },
+            {
+              "name": "pane jpeg terminal",
+              "repetitions": 12,
+              "ms": 74.98887500000001,
+              "cpuSeconds": 0.099039,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 8197
+            }
+          ]
+        },
+        {
+          "arm": "after",
+          "repetition": 1,
+          "stamp": "2026-10-10T01:30:30.315Z",
+          "results": [
+            {
+              "name": "lease acquire/renew/release",
+              "repetitions": 1000,
+              "ms": 731.6522089999999,
+              "cpuSeconds": 0.679801,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ]
+            },
+            {
+              "name": "pane png desktop",
+              "repetitions": 12,
+              "ms": 0.5385000000001128,
+              "cpuSeconds": 0.000395,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 1817
+            },
+            {
+              "name": "pane png terminal",
+              "repetitions": 12,
+              "ms": 53.19162499999993,
+              "cpuSeconds": 0.060526,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 1817
+            },
+            {
+              "name": "pane jpeg desktop",
+              "repetitions": 12,
+              "ms": 0.7212090000000444,
+              "cpuSeconds": 0.001257,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 8197
+            },
+            {
+              "name": "pane jpeg terminal",
+              "repetitions": 12,
+              "ms": 77.05854099999988,
+              "cpuSeconds": 0.091375,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 8197
+            }
+          ]
+        },
+        {
+          "arm": "after",
+          "repetition": 2,
+          "stamp": "2026-10-10T01:30:31.154Z",
+          "results": [
+            {
+              "name": "lease acquire/renew/release",
+              "repetitions": 1000,
+              "ms": 695.732708,
+              "cpuSeconds": 0.6522,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ]
+            },
+            {
+              "name": "pane png desktop",
+              "repetitions": 12,
+              "ms": 0.13850000000002183,
+              "cpuSeconds": 0.000142,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 1817
+            },
+            {
+              "name": "pane png terminal",
+              "repetitions": 12,
+              "ms": 47.17279099999996,
+              "cpuSeconds": 0.06552,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 1817
+            },
+            {
+              "name": "pane jpeg desktop",
+              "repetitions": 12,
+              "ms": 0.17287499999974898,
+              "cpuSeconds": 0.000174,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 8197
+            },
+            {
+              "name": "pane jpeg terminal",
+              "repetitions": 12,
+              "ms": 68.08095900000035,
+              "cpuSeconds": 0.083151,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 8197
+            }
+          ]
+        },
+        {
+          "arm": "before",
+          "repetition": 2,
+          "stamp": "2026-10-10T01:30:32.225Z",
+          "results": [
+            {
+              "name": "lease acquire/renew/release",
+              "repetitions": 1000,
+              "ms": 857.2830840000001,
+              "cpuSeconds": 0.835658,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ]
+            },
+            {
+              "name": "pane png desktop",
+              "repetitions": 12,
+              "ms": 28.174332999999933,
+              "cpuSeconds": 0.034371,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 1817
+            },
+            {
+              "name": "pane png terminal",
+              "repetitions": 12,
+              "ms": 34.337499999999636,
+              "cpuSeconds": 0.041717,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 1817
+            },
+            {
+              "name": "pane jpeg desktop",
+              "repetitions": 12,
+              "ms": 63.27195800000027,
+              "cpuSeconds": 0.071253,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 8197
+            },
+            {
+              "name": "pane jpeg terminal",
+              "repetitions": 12,
+              "ms": 61.56608300000016,
+              "cpuSeconds": 0.070381,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ],
+              "bytes": 8197
+            }
+          ]
+        },
+        {
+          "arm": "before",
+          "repetition": 3,
+          "stamp": "2026-10-10T01:30:33.430Z",
+          "results": [
+            {
+              "name": "lease acquire/renew/release",
+              "repetitions": 1000,
+              "ms": 962.366125,
+              "cpuSeconds": 0.927405,
+              "load": [
+                5.48876953125,
+                26.3232421875,
+                23.8466796875
+              ]
+            },
+            {
+              "name": "pane png desktop",
+              "repetitions": 12,
+              "ms": 30.013292000000547,
+              "cpuSeconds": 0.038164,
+              "load": [
+                5.529296875,
+                25.98583984375,
+                23.74169921875
+              ],
+              "bytes": 1817
+            },
+            {
+              "name": "pane png terminal",
+              "repetitions": 12,
+              "ms": 35.122832999999446,
+              "cpuSeconds": 0.039899,
+              "load": [
+                5.529296875,
+                25.98583984375,
+                23.74169921875
+              ],
+              "bytes": 1817
+            },
+            {
+              "name": "pane jpeg desktop",
+              "repetitions": 12,
+              "ms": 69.02149999999983,
+              "cpuSeconds": 0.079819,
+              "load": [
+                5.529296875,
+                25.98583984375,
+                23.74169921875
+              ],
+              "bytes": 8197
+            },
+            {
+              "name": "pane jpeg terminal",
+              "repetitions": 12,
+              "ms": 72.11962500000027,
+              "cpuSeconds": 0.080449,
+              "load": [
+                5.529296875,
+                25.98583984375,
+                23.74169921875
+              ],
+              "bytes": 8197
+            }
+          ]
+        },
+        {
+          "arm": "after",
+          "repetition": 3,
+          "stamp": "2026-10-10T01:30:34.647Z",
+          "results": [
+            {
+              "name": "lease acquire/renew/release",
+              "repetitions": 1000,
+              "ms": 1010.1297079999995,
+              "cpuSeconds": 0.858016,
+              "load": [
+                5.529296875,
+                25.98583984375,
+                23.74169921875
+              ]
+            },
+            {
+              "name": "pane png desktop",
+              "repetitions": 12,
+              "ms": 0.14945799999986775,
+              "cpuSeconds": 0.000153,
+              "load": [
+                5.529296875,
+                25.98583984375,
+                23.74169921875
+              ],
+              "bytes": 1817
+            },
+            {
+              "name": "pane png terminal",
+              "repetitions": 12,
+              "ms": 37.60020799999984,
+              "cpuSeconds": 0.042873,
+              "load": [
+                5.529296875,
+                25.98583984375,
+                23.74169921875
+              ],
+              "bytes": 1817
+            },
+            {
+              "name": "pane jpeg desktop",
+              "repetitions": 12,
+              "ms": 0.9042499999995925,
+              "cpuSeconds": 0.002313,
+              "load": [
+                5.529296875,
+                25.98583984375,
+                23.74169921875
+              ],
+              "bytes": 8197
+            },
+            {
+              "name": "pane jpeg terminal",
+              "repetitions": 12,
+              "ms": 75.73916699999972,
+              "cpuSeconds": 0.083718,
+              "load": [
+                5.529296875,
+                25.98583984375,
+                23.74169921875
+              ],
+              "bytes": 8197
+            }
+          ]
+        }
+      ]
+    },
+    "surfaces-3a": {
+      "started": "2026-10-10T01:32:28.173Z",
+      "mode": "session engine surfaces",
+      "runs": [
+        {
+          "arm": "computer",
+          "repetition": 1,
+          "code": 1,
+          "signal": null,
+          "cpuSeconds": 0.14,
+          "realSeconds": 0.13,
+          "stderr": "real 0.13\nuser 0.10\nsys 0.04\n",
+          "surfaces": "computer",
+          "started": "2026-10-10T01:32:28.214Z",
+          "load": [
+            5.82373046875,
+            19.47705078125,
+            21.44189453125
+          ],
+          "calls": [
+            {
+              "name": "first js",
+              "ms": 37.441874999999996,
+              "load": [
+                5.82373046875,
+                19.47705078125,
+                21.44189453125
+              ],
+              "textBytes": 74
+            }
+          ],
+          "failures": [
+            "readiness marker missing"
+          ],
+          "engineVersion": "26.1002.52244",
+          "initializeMs": 47.228583,
+          "engineExit": {
+            "code": 0,
+            "signal": null
+          },
+          "engineCollected": true,
+          "lockReleased": true
+        }
+      ]
+    },
+    "discovery-3b": {
+      "mode": "discovery",
+      "started": "2026-10-10T01:30:01.675Z",
+      "runs": [
+        {
+          "repetition": 1,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.18000000000000002,
+          "realSeconds": 0.52,
+          "childCpuSecondsEstimate": 0.13837800000000003,
+          "stderr": "real 0.52\nuser 0.14\nsys 0.04\n",
+          "mode": "discovery",
+          "started": "2026-10-10T01:30:01.711Z",
+          "load": [
+            6.31787109375,
+            28.65087890625,
+            24.548828125
+          ],
+          "calls": [
+            {
+              "name": "background extension discovery",
+              "ms": 484.047542,
+              "load": [
+                6.31787109375,
+                28.65087890625,
+                24.548828125
+              ]
+            }
+          ],
+          "failures": [],
+          "engineVersion": "26.1002.52244",
+          "timeoutMs": 4000,
+          "connected": true,
+          "extensionCount": 1,
+          "engineCollected": true,
+          "lockReleased": true,
+          "workerCpuSeconds": 0.041622
+        },
+        {
+          "repetition": 2,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.18000000000000002,
+          "realSeconds": 0.51,
+          "childCpuSecondsEstimate": 0.13746200000000003,
+          "stderr": "real 0.51\nuser 0.14\nsys 0.04\n",
+          "mode": "discovery",
+          "started": "2026-10-10T01:30:02.237Z",
+          "load": [
+            6.31787109375,
+            28.65087890625,
+            24.548828125
+          ],
+          "calls": [
+            {
+              "name": "background extension discovery",
+              "ms": 480.46925,
+              "load": [
+                6.2119140625,
+                28.2578125,
+                24.43408203125
+              ]
+            }
+          ],
+          "failures": [],
+          "engineVersion": "26.1002.52244",
+          "timeoutMs": 4000,
+          "connected": true,
+          "extensionCount": 1,
+          "engineCollected": true,
+          "lockReleased": true,
+          "workerCpuSeconds": 0.042538
+        },
+        {
+          "repetition": 3,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.17,
+          "realSeconds": 0.5,
+          "childCpuSecondsEstimate": 0.12584900000000002,
+          "stderr": "real 0.50\nuser 0.13\nsys 0.04\n",
+          "mode": "discovery",
+          "started": "2026-10-10T01:30:02.760Z",
+          "load": [
+            6.2119140625,
+            28.2578125,
+            24.43408203125
+          ],
+          "calls": [
+            {
+              "name": "background extension discovery",
+              "ms": 467.688666,
+              "load": [
+                6.2119140625,
+                28.2578125,
+                24.43408203125
+              ]
+            }
+          ],
+          "failures": [],
+          "engineVersion": "26.1002.52244",
+          "timeoutMs": 4000,
+          "connected": true,
+          "extensionCount": 1,
+          "engineCollected": true,
+          "lockReleased": true,
+          "workerCpuSeconds": 0.044151
+        }
+      ]
+    },
+    "surfaces-3b": {
+      "started": "2026-10-10T01:32:33.839Z",
+      "mode": "session engine surfaces",
+      "runs": [
+        {
+          "arm": "computer",
+          "repetition": 1,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.15,
+          "realSeconds": 0.37,
+          "stderr": "real 0.37\nuser 0.13\nsys 0.02\n",
+          "surfaces": "computer",
+          "started": "2026-10-10T01:32:33.876Z",
+          "load": [
+            5.75732421875,
+            19.236328125,
+            21.34521484375
+          ],
+          "calls": [
+            {
+              "name": "first js",
+              "ms": 195.399625,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 21093
+            },
+            {
+              "name": "warm js",
+              "ms": 0.9885830000000055,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 23
+            },
+            {
+              "name": "warm js",
+              "ms": 0.5875839999999926,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 23
+            }
+          ],
+          "failures": [],
+          "engineVersion": "26.1002.52244",
+          "initializeMs": 134.41075,
+          "engineExit": {
+            "code": 0,
+            "signal": null
+          },
+          "engineCollected": true,
+          "lockReleased": true
+        },
+        {
+          "arm": "browser,computer",
+          "repetition": 1,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.15,
+          "realSeconds": 0.33,
+          "stderr": "real 0.33\nuser 0.13\nsys 0.02\n",
+          "surfaces": "browser,computer",
+          "started": "2026-10-10T01:32:34.259Z",
+          "load": [
+            5.75732421875,
+            19.236328125,
+            21.34521484375
+          ],
+          "calls": [
+            {
+              "name": "first js",
+              "ms": 165.46974999999998,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 21093
+            },
+            {
+              "name": "warm js",
+              "ms": 1.09129200000001,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 23
+            },
+            {
+              "name": "warm js",
+              "ms": 0.5097499999999968,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 23
+            }
+          ],
+          "failures": [],
+          "engineVersion": "26.1002.52244",
+          "initializeMs": 123.913083,
+          "engineExit": {
+            "code": 0,
+            "signal": null
+          },
+          "engineCollected": true,
+          "lockReleased": true
+        },
+        {
+          "arm": "browser,computer",
+          "repetition": 2,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.15,
+          "realSeconds": 0.34,
+          "stderr": "real 0.34\nuser 0.13\nsys 0.02\n",
+          "surfaces": "browser,computer",
+          "started": "2026-10-10T01:32:34.598Z",
+          "load": [
+            5.75732421875,
+            19.236328125,
+            21.34521484375
+          ],
+          "calls": [
+            {
+              "name": "first js",
+              "ms": 167.494375,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 21093
+            },
+            {
+              "name": "warm js",
+              "ms": 1.6885000000000332,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 23
+            },
+            {
+              "name": "warm js",
+              "ms": 0.7731249999999932,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 23
+            }
+          ],
+          "failures": [],
+          "engineVersion": "26.1002.52244",
+          "initializeMs": 128.014666,
+          "engineExit": {
+            "code": 0,
+            "signal": null
+          },
+          "engineCollected": true,
+          "lockReleased": true
+        },
+        {
+          "arm": "computer",
+          "repetition": 2,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.16,
+          "realSeconds": 0.37,
+          "stderr": "real 0.37\nuser 0.13\nsys 0.03\n",
+          "surfaces": "computer",
+          "started": "2026-10-10T01:32:34.946Z",
+          "load": [
+            5.75732421875,
+            19.236328125,
+            21.34521484375
+          ],
+          "calls": [
+            {
+              "name": "first js",
+              "ms": 194.725792,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 21093
+            },
+            {
+              "name": "warm js",
+              "ms": 0.8979580000000169,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 23
+            },
+            {
+              "name": "warm js",
+              "ms": 0.6391249999999786,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 23
+            }
+          ],
+          "failures": [],
+          "engineVersion": "26.1002.52244",
+          "initializeMs": 131.516166,
+          "engineExit": {
+            "code": 0,
+            "signal": null
+          },
+          "engineCollected": true,
+          "lockReleased": true
+        },
+        {
+          "arm": "computer",
+          "repetition": 3,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.16,
+          "realSeconds": 0.37,
+          "stderr": "real 0.37\nuser 0.13\nsys 0.03\n",
+          "surfaces": "computer",
+          "started": "2026-10-10T01:32:35.327Z",
+          "load": [
+            5.75732421875,
+            19.236328125,
+            21.34521484375
+          ],
+          "calls": [
+            {
+              "name": "first js",
+              "ms": 188.84962499999997,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 21093
+            },
+            {
+              "name": "warm js",
+              "ms": 0.8643339999999853,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 23
+            },
+            {
+              "name": "warm js",
+              "ms": 1.0995419999999854,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 23
+            }
+          ],
+          "failures": [],
+          "engineVersion": "26.1002.52244",
+          "initializeMs": 131.27,
+          "engineExit": {
+            "code": 0,
+            "signal": null
+          },
+          "engineCollected": true,
+          "lockReleased": true
+        },
+        {
+          "arm": "browser,computer",
+          "repetition": 3,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.17,
+          "realSeconds": 0.36,
+          "stderr": "real 0.36\nuser 0.14\nsys 0.03\n",
+          "surfaces": "browser,computer",
+          "started": "2026-10-10T01:32:35.703Z",
+          "load": [
+            5.75732421875,
+            19.236328125,
+            21.34521484375
+          ],
+          "calls": [
+            {
+              "name": "first js",
+              "ms": 184.13416599999996,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 21093
+            },
+            {
+              "name": "warm js",
+              "ms": 0.9166250000000105,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 23
+            },
+            {
+              "name": "warm js",
+              "ms": 0.8598329999999805,
+              "load": [
+                5.75732421875,
+                19.236328125,
+                21.34521484375
+              ],
+              "textBytes": 23
+            }
+          ],
+          "failures": [],
+          "engineVersion": "26.1002.52244",
+          "initializeMs": 131.28479199999998,
+          "engineExit": {
+            "code": 0,
+            "signal": null
+          },
+          "engineCollected": true,
+          "lockReleased": true
+        }
+      ]
+    },
+    "discovery-3a": {
+      "mode": "discovery",
+      "started": "2026-10-10T01:29:52.793Z",
+      "runs": [
+        {
+          "repetition": 1,
+          "code": 1,
+          "signal": null,
+          "cpuSeconds": 0.12,
+          "realSeconds": 0.11,
+          "childCpuSecondsEstimate": 0.07682,
+          "stderr": "real 0.11\nuser 0.09\nsys 0.03\n",
+          "mode": "discovery",
+          "started": "2026-10-10T01:29:52.832Z",
+          "load": [
+            6.60693359375,
+            29.083984375,
+            24.67626953125
+          ],
+          "calls": [
+            {
+              "name": "background extension discovery",
+              "ms": 72.48375,
+              "load": [
+                6.60693359375,
+                29.083984375,
+                24.67626953125
+              ]
+            }
+          ],
+          "failures": [
+            "Browser discovery inventory call failed"
+          ],
+          "engineVersion": "26.1002.52244",
+          "timeoutMs": 4000,
+          "engineCollected": true,
+          "lockReleased": true,
+          "workerCpuSeconds": 0.04318
+        },
+        {
+          "repetition": 2,
+          "code": 1,
+          "signal": null,
+          "cpuSeconds": 0.12,
+          "realSeconds": 0.1,
+          "childCpuSecondsEstimate": 0.07628199999999999,
+          "stderr": "real 0.10\nuser 0.09\nsys 0.03\n",
+          "mode": "discovery",
+          "started": "2026-10-10T01:29:52.948Z",
+          "load": [
+            6.60693359375,
+            29.083984375,
+            24.67626953125
+          ],
+          "calls": [
+            {
+              "name": "background extension discovery",
+              "ms": 69.33966699999999,
+              "load": [
+                6.60693359375,
+                29.083984375,
+                24.67626953125
+              ]
+            }
+          ],
+          "failures": [
+            "Browser discovery inventory call failed"
+          ],
+          "engineVersion": "26.1002.52244",
+          "timeoutMs": 4000,
+          "engineCollected": true,
+          "lockReleased": true,
+          "workerCpuSeconds": 0.043718
+        },
+        {
+          "repetition": 3,
+          "code": 1,
+          "signal": null,
+          "cpuSeconds": 0.12,
+          "realSeconds": 0.1,
+          "childCpuSecondsEstimate": 0.076712,
+          "stderr": "real 0.10\nuser 0.09\nsys 0.03\n",
+          "mode": "discovery",
+          "started": "2026-10-10T01:29:53.059Z",
+          "load": [
+            6.60693359375,
+            29.083984375,
+            24.67626953125
+          ],
+          "calls": [
+            {
+              "name": "background extension discovery",
+              "ms": 66.590334,
+              "load": [
+                6.60693359375,
+                29.083984375,
+                24.67626953125
+              ]
+            }
+          ],
+          "failures": [
+            "Browser discovery inventory call failed"
+          ],
+          "engineVersion": "26.1002.52244",
+          "timeoutMs": 4000,
+          "engineCollected": true,
+          "lockReleased": true,
+          "workerCpuSeconds": 0.043288
+        }
+      ]
+    },
+    "native-3a": {
+      "started": "2026-10-10T01:30:50.401Z",
+      "mode": "live helper pairs; computer surface",
+      "runs": [
+        {
+          "arm": "before",
+          "repetition": 1,
+          "code": 1,
+          "signal": null,
+          "cpuSeconds": 0.16999999999999998,
+          "realSeconds": 0.19,
+          "stderr": "real 0.19\nuser 0.11\nsys 0.06\n",
+          "root": "/private/tmp/sleight-footprint-baseline-a64728e",
+          "started": "2026-10-10T01:30:50.440Z",
+          "load": [
+            4.765625,
+            24.81103515625,
+            23.361328125
+          ],
+          "calls": [
+            {
+              "name": "helper cold health",
+              "ms": 146.040208,
+              "load": [
+                4.765625,
+                24.81103515625,
+                23.361328125
+              ]
+            }
+          ],
+          "failures": [
+            "native health unavailable (denied)"
+          ],
+          "helpersCollected": true,
+          "helperReplies": [
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "denied"
+            }
+          ],
+          "trace": [],
+          "lockReleased": true
+        }
+      ]
+    },
+    "helpers-3": {
+      "started": "2026-10-10T01:31:52.094Z",
+      "mode": "native helpers without engine acquisition",
+      "runs": [
+        {
+          "arm": "before",
+          "repetition": 1,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.98,
+          "realSeconds": 1.23,
+          "stderr": "real 1.23\nuser 0.82\nsys 0.16\n",
+          "root": "/private/tmp/sleight-footprint-baseline-a64728e",
+          "started": "2026-10-10T01:31:52.133Z",
+          "load": [
+            5.57470703125,
+            21.4365234375,
+            22.19775390625
+          ],
+          "calls": [
+            {
+              "name": "helper cold health",
+              "ms": 184.72608300000002,
+              "load": [
+                5.57470703125,
+                21.4365234375,
+                22.19775390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 49.846250000000026,
+              "load": [
+                5.57470703125,
+                21.4365234375,
+                22.19775390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 85.48795799999999,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 46.066959,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 50.19820800000002,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 83.62245800000005,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 49.29595799999993,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 46.53054200000008,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 77.6552089999999,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 44.87279100000001,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 57.11341700000003,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 82.79820800000005,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 57.84754200000009,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 91.88545800000009,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 113.05129199999988,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 66.27658300000007,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            }
+          ],
+          "failures": [],
+          "appStatus": "responding",
+          "queries": [
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            }
+          ],
+          "helperSpawns": 11,
+          "helpersCollected": true,
+          "helperReplies": [
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            }
+          ],
+          "trace": [],
+          "lockReleased": true
+        },
+        {
+          "arm": "after",
+          "repetition": 1,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.63,
+          "realSeconds": 0.89,
+          "stderr": "real 0.89\nuser 0.54\nsys 0.09\n",
+          "root": "~/Projects/sleight-wt/footprint-spawns",
+          "started": "2026-10-10T01:31:53.386Z",
+          "load": [
+            5.6083984375,
+            21.18017578125,
+            22.1025390625
+          ],
+          "calls": [
+            {
+              "name": "helper cold health",
+              "ms": 185.18266599999998,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 47.849625,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 120.15616700000004,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 89.54370899999998,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 55.891999999999996,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 42.77641700000004,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 7.668250000000057,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 46.332833999999934,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 39.64199999999994,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 7.524583000000007,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 47.51658300000008,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 40.68399999999997,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 7.604959000000008,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 47.252500000000055,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 41.509124999999926,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 7.348875000000021,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            }
+          ],
+          "failures": [],
+          "appStatus": "responding",
+          "queries": [
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            }
+          ],
+          "helperSpawns": 3,
+          "helpersCollected": true,
+          "helperReplies": [
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            }
+          ],
+          "trace": [],
+          "lockReleased": true
+        },
+        {
+          "arm": "after",
+          "repetition": 2,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.61,
+          "realSeconds": 0.86,
+          "stderr": "real 0.86\nuser 0.53\nsys 0.08\n",
+          "root": "~/Projects/sleight-wt/footprint-spawns",
+          "started": "2026-10-10T01:31:54.270Z",
+          "load": [
+            5.6083984375,
+            21.18017578125,
+            22.1025390625
+          ],
+          "calls": [
+            {
+              "name": "helper cold health",
+              "ms": 183.997917,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 48.974166,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 116.97245799999999,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 80.672125,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 50.92741700000005,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 40.92220800000001,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 7.051625000000058,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 49.06816700000002,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 44.556959000000006,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 7.169208000000026,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 48.21408299999996,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 44.44008300000007,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 7.312249999999949,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 47.66137499999991,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 39.11233399999992,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 7.64975000000004,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            }
+          ],
+          "failures": [],
+          "appStatus": "responding",
+          "queries": [
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            }
+          ],
+          "helperSpawns": 3,
+          "helpersCollected": true,
+          "helperReplies": [
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            }
+          ],
+          "trace": [],
+          "lockReleased": true
+        },
+        {
+          "arm": "before",
+          "repetition": 2,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.9800000000000001,
+          "realSeconds": 1.26,
+          "stderr": "real 1.26\nuser 0.81\nsys 0.17\n",
+          "root": "/private/tmp/sleight-footprint-baseline-a64728e",
+          "started": "2026-10-10T01:31:55.152Z",
+          "load": [
+            5.6083984375,
+            21.18017578125,
+            22.1025390625
+          ],
+          "calls": [
+            {
+              "name": "helper cold health",
+              "ms": 191.263084,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 64.45529099999999,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 91.76929100000001,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 56.52970800000003,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 59.32529100000005,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 91.82245900000004,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 53.09533299999998,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 55.044415999999956,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 78.85591699999998,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 45.553083000000015,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 47.39824999999996,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 83.17920900000001,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 89.66387500000008,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 71.58683300000007,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 84.16512499999999,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 44.51166699999999,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            }
+          ],
+          "failures": [],
+          "appStatus": "responding",
+          "queries": [
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            }
+          ],
+          "helperSpawns": 11,
+          "helpersCollected": true,
+          "helperReplies": [
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            }
+          ],
+          "trace": [],
+          "lockReleased": true
+        },
+        {
+          "arm": "before",
+          "repetition": 3,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.84,
+          "realSeconds": 1.05,
+          "stderr": "real 1.05\nuser 0.72\nsys 0.12\n",
+          "root": "/private/tmp/sleight-footprint-baseline-a64728e",
+          "started": "2026-10-10T01:31:56.411Z",
+          "load": [
+            5.6083984375,
+            21.18017578125,
+            22.1025390625
+          ],
+          "calls": [
+            {
+              "name": "helper cold health",
+              "ms": 181.041417,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 47.42795799999999,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 81.07845799999998,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 43.024208000000044,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 45.560249999999996,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 69.20158300000003,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 44.02716700000002,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 45.53791699999999,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 69.4111660000001,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 49.94133399999998,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 48.148665999999935,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 71.09537499999999,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 44.23266699999999,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 49.19291700000008,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 72.38387499999999,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 46.08608400000003,
+              "load": [
+                5.6083984375,
+                21.18017578125,
+                22.1025390625
+              ]
+            }
+          ],
+          "failures": [],
+          "appStatus": "responding",
+          "queries": [
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            }
+          ],
+          "helperSpawns": 11,
+          "helpersCollected": true,
+          "helperReplies": [
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "original",
+              "op": "health",
+              "status": "responding"
+            }
+          ],
+          "trace": [],
+          "lockReleased": true
+        },
+        {
+          "arm": "after",
+          "repetition": 3,
+          "code": 0,
+          "signal": null,
+          "cpuSeconds": 0.61,
+          "realSeconds": 0.86,
+          "stderr": "real 0.86\nuser 0.53\nsys 0.08\n",
+          "root": "~/Projects/sleight-wt/footprint-spawns",
+          "started": "2026-10-10T01:31:57.465Z",
+          "load": [
+            5.4794921875,
+            20.89453125,
+            21.99609375
+          ],
+          "calls": [
+            {
+              "name": "helper cold health",
+              "ms": 180.052708,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 47.481791999999984,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 113.86237499999999,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 81.150916,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 52.75791600000002,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 45.62041599999998,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 7.89104199999997,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 59.31712500000003,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 40.87337500000001,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 8.158707999999933,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 46.49225000000001,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 40.910833000000025,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 7.7805419999999685,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "helper warm health",
+              "ms": 46.41025000000002,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "target",
+              "ms": 38.82491600000003,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            },
+            {
+              "name": "keyboard taps",
+              "ms": 7.312375000000088,
+              "load": [
+                5.4794921875,
+                20.89453125,
+                21.99609375
+              ]
+            }
+          ],
+          "failures": [],
+          "appStatus": "responding",
+          "queries": [
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            },
+            {
+              "target": "com.apple.calculator",
+              "tapCount": 3
+            }
+          ],
+          "helperSpawns": 3,
+          "helpersCollected": true,
+          "helperReplies": [
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            },
+            {
+              "lane": "probe",
+              "op": "health",
+              "status": "responding"
+            },
+            {
+              "lane": "target",
+              "op": "lease-target",
+              "ok": true
+            },
+            {
+              "lane": "taps",
+              "op": "keyboard-taps",
+              "ok": true
+            }
+          ],
+          "trace": [],
+          "lockReleased": true
+        }
+      ]
+    }
+  }
+}

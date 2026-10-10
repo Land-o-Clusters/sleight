@@ -2,7 +2,7 @@
 // JSON holds the actual lease and is removed on release. Keep the lock sidecar:
 // unlinking an open coordinator would let two processes lock different inodes.
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync, unlinkSync, chmodSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync, unlinkSync, chmodSync, lstatSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -10,6 +10,14 @@ import { isDocumentRead } from './document-scope.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
 
 export const LEASE_MS = 30000;
+const sameFile = (a, b) => Boolean(a && b && a.dev === b.dev && a.ino === b.ino);
+function coordinatorIdentity(path) {
+  try {
+    const stat = lstatSync(path, { bigint: true });
+    if (!stat.isFile()) throw new Error('Input lease: coordinator is not a regular file; stop actions.');
+    return stat;
+  } catch (err) { if (err.code === 'ENOENT') return undefined; throw err; }
+}
 export const leaseKey = (window, scope = 'window') => createHash('sha256')
   .update(JSON.stringify([scope, scope === 'desktop' ? '*' : window.appId || window.app,
     scope === 'window' ? window.url || window.title : '*'])).digest('hex');
@@ -48,23 +56,72 @@ export class InputLease {
       ? `Input lease: held by ${record.holder}; ${Math.max(0, Math.ceil((record.expires - this.now()) / 1000))} s remaining. Stop actions and retry after that turn ends or the lease expires.`
       : 'Input lease: another session is updating this window lease. Stop actions and retry with a fresh read.');
   }
-  transact(key, operation) {
+  disposeCoordinator() {
+    const db = this.db ?? this.failedDb;
+    this.db = undefined; this.dbIdentity = undefined;
+    try { db?.close(); this.failedDb = undefined; this.dbFailure = undefined; }
+    catch (err) { this.failedDb = db; this.dbFailure = err; throw err; }
+  }
+  coordinator() {
+    if (this.dbFailure) throw new Error('Input lease: coordinator cleanup failed; stop actions and close this session.', { cause: this.dbFailure });
     mkdirSync(this.directory, { recursive: true, mode: 0o700 });
-    const path = join(this.directory, key + '.json');
-    const coordinator = join(this.directory, '.coordinator.sqlite');
-    const db = new DatabaseSync(coordinator);
-    chmodSync(coordinator, 0o600);
-    try {
-      try { db.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE'); }
-      catch (err) {
-        if (err.errcode === 5 || /locked|busy/i.test(err.message)) {
-          const refusal = this.refusal(this.read(path)); refusal.leaseBusy = true; throw refusal;
-        }
+    const path = join(this.directory, '.coordinator.sqlite');
+    if (this.db && sameFile(this.dbIdentity, coordinatorIdentity(path))) return this.db;
+    this.disposeCoordinator();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      mkdirSync(this.directory, { recursive: true, mode: 0o700 });
+      // Establish the inode before SQLite opens it. Never open/close a verification fd:
+      // a POSIX close on that inode could release this process's SQLite locks.
+      try { writeFileSync(path, '', { flag: 'wx', mode: 0o600 }); }
+      catch (err) { if (err.code !== 'EEXIST') throw err; }
+      const before = coordinatorIdentity(path);
+      if (!before) continue;
+      const db = new DatabaseSync(path);
+      this.db = db;
+      this.dbIdentity = before;
+      try {
+        chmodSync(path, 0o600);
+        if (sameFile(before, coordinatorIdentity(path))) return db;
+      } catch (err) {
+        try { this.disposeCoordinator(); }
+        catch (closeError) { throw new AggregateError([err, closeError], 'Input lease: coordinator open and cleanup failed; stop actions.'); }
         throw err;
       }
-      try { return operation(path, this.read(path)); }
-      finally { db.exec('ROLLBACK'); }
-    } finally { db.close(); }
+      this.disposeCoordinator();
+    }
+    throw new Error('Input lease: coordinator changed repeatedly while opening; stop actions.');
+  }
+  transact(key, operation) {
+    const path = join(this.directory, key + '.json');
+    const db = this.coordinator();
+    try { db.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE'); }
+    catch (err) {
+      if (err.errcode === 5 || /locked|busy/i.test(err.message)) {
+        const refusal = this.refusal(this.read(path)); refusal.leaseBusy = true; throw refusal;
+      }
+      throw err;
+    }
+    try {
+      if (!sameFile(this.dbIdentity, coordinatorIdentity(join(this.directory, '.coordinator.sqlite')))) {
+        throw new Error('Input lease: coordinator changed while taking its lock; stop actions.');
+      }
+    } catch (err) {
+      try { this.disposeCoordinator(); }
+      catch (closeError) { throw new AggregateError([err, closeError], 'Input lease: coordinator changed and cleanup failed; stop actions.'); }
+      throw err;
+    }
+    let value, failure, failed = false;
+    try { value = operation(path, this.read(path)); }
+    catch (err) { failure = err; failed = true; }
+    try { db.exec('ROLLBACK'); }
+    catch (err) {
+      const errors = failed ? [failure, err] : [err];
+      try { this.disposeCoordinator(); } catch (closeError) { errors.push(closeError); }
+      if (errors.length > 1) throw new AggregateError(errors, 'Input lease: operation or rollback failed; stop actions.', { cause: err });
+      throw err;
+    }
+    if (failed) throw failure;
+    return value;
   }
   store(path, record) {
     const temporary = path + '.' + randomUUID();
@@ -115,5 +172,11 @@ export class InputLease {
     }
     if (errors.length) throw new AggregateError(errors, 'Input lease: release failed; remaining leases expire without renewal.');
   }
-  close() { this.release(); }
+  close() {
+    const errors = [];
+    try { this.release(); } catch (err) { errors.push(err); }
+    try { this.disposeCoordinator(); } catch (err) { errors.push(err); }
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) throw new AggregateError(errors, 'Input lease: release and coordinator cleanup failed.');
+  }
 }

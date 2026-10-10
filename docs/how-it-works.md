@@ -43,11 +43,11 @@ Claude Code ──MCP──▶ bin/sleight-mcp ──▶ ChatGPT.app's cua-repl 
 
 ### Browser surface
 
-At startup sleight asks the installed engine for connected ChatGPT browser extensions. If one is
-available, it enables browser and native control. Empty, failed or timed-out discovery leaves only
-native apps enabled, without adding discovery errors to tool results. `SLEIGHT_SURFACES` overrides
-this choice. Use `computer` or `browser,computer`. Automatic mode excludes the in-app browser,
-which needs ChatGPT host context. Extension discovery adds a short engine launch before the session.
+Startup uses `computer` unless a discovery result less than six hours old reports a connected
+extension. After the engine initializes, background discovery refreshes the cache for the next
+session, including fresh entries. Negative results last 24 hours. `SLEIGHT_SURFACES` overrides this
+choice: use `computer` or `browser,computer`. Automatic mode excludes the in-app browser, which needs
+ChatGPT host context. Doctor still probes extension availability separately.
 
 Use `cua.listBrowsers()`, select by `metadata.extensionInstanceId`, then open the URL with
 `cua.createBrowserTab(browser.browserId, url)`. Helium and Chrome can both report as Chrome.

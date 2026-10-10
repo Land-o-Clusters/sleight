@@ -1,0 +1,1751 @@
+{
+  "baseline": "37c6561cd53ab6af4fc297dbaa7f4669ba7d8736",
+  "verification": {
+    "check": {
+      "exitCode": 0,
+      "unitTests": 997,
+      "modTests": 11,
+      "pluginValidations": 2
+    },
+    "prose": {
+      "exitCode": 0,
+      "files": 60
+    },
+    "focusedTests": {
+      "exitCode": 0,
+      "tests": 52
+    },
+    "diffCheck": 0,
+    "review": "no remaining findings"
+  },
+  "live": {
+    "status": "deferred",
+    "reason": "/tmp/sleight-hold still present",
+    "checked": "2026-10-09T23:45:18Z",
+    "appDriving": false
+  },
+  "measurements": [
+    {
+      "arm": "before",
+      "stamp": "2026-10-09T23:06:33.030Z",
+      "mode": "offline",
+      "results": [
+        {
+          "name": "lease acquire/renew/release",
+          "repetitions": 1000,
+          "ms": 1412.568084,
+          "cpuSeconds": 1.154642,
+          "load": [
+            32.7841796875,
+            14.08740234375,
+            9.72998046875
+          ]
+        },
+        {
+          "name": "pane png desktop",
+          "repetitions": 12,
+          "ms": 114.91058299999986,
+          "cpuSeconds": 0.0877,
+          "load": [
+            33.52197265625,
+            14.55078125,
+            9.9189453125
+          ],
+          "bytes": 1817
+        },
+        {
+          "name": "pane png terminal",
+          "repetitions": 12,
+          "ms": 164.66516699999988,
+          "cpuSeconds": 0.118778,
+          "load": [
+            33.52197265625,
+            14.55078125,
+            9.9189453125
+          ],
+          "bytes": 1817
+        },
+        {
+          "name": "pane jpeg desktop",
+          "repetitions": 12,
+          "ms": 169.27479100000005,
+          "cpuSeconds": 0.221166,
+          "load": [
+            33.52197265625,
+            14.55078125,
+            9.9189453125
+          ],
+          "bytes": 8197
+        },
+        {
+          "name": "pane jpeg terminal",
+          "repetitions": 12,
+          "ms": 167.79741700000022,
+          "cpuSeconds": 0.169377,
+          "load": [
+            33.52197265625,
+            14.55078125,
+            9.9189453125
+          ],
+          "bytes": 8197
+        }
+      ]
+    },
+    {
+      "arm": "after initial",
+      "stamp": "2026-10-09T23:09:08.585Z",
+      "mode": "offline",
+      "results": [
+        {
+          "name": "lease acquire/renew/release",
+          "repetitions": 1000,
+          "ms": 1037.956959,
+          "cpuSeconds": 0.783635,
+          "load": [
+            33.4423828125,
+            21.9560546875,
+            13.78564453125
+          ]
+        },
+        {
+          "name": "pane png desktop",
+          "repetitions": 12,
+          "ms": 3.415207999999893,
+          "cpuSeconds": 0.001379,
+          "load": [
+            33.4423828125,
+            21.9560546875,
+            13.78564453125
+          ],
+          "bytes": 1817
+        },
+        {
+          "name": "pane png terminal",
+          "repetitions": 12,
+          "ms": 124.8967909999999,
+          "cpuSeconds": 0.106924,
+          "load": [
+            33.4423828125,
+            21.9560546875,
+            13.78564453125
+          ],
+          "bytes": 1817
+        },
+        {
+          "name": "pane jpeg desktop",
+          "repetitions": 12,
+          "ms": 0.8177090000001499,
+          "cpuSeconds": 0.000792,
+          "load": [
+            33.4423828125,
+            21.9560546875,
+            13.78564453125
+          ],
+          "bytes": 8197
+        },
+        {
+          "name": "pane jpeg terminal",
+          "repetitions": 12,
+          "ms": 315.709292,
+          "cpuSeconds": 0.235362,
+          "load": [
+            33.4423828125,
+            21.9560546875,
+            13.78564453125
+          ],
+          "bytes": 8197
+        }
+      ]
+    }
+  ],
+  "offlinePairs": {
+    "stamp": "2026-10-09T23:28:04.090Z",
+    "mode": "offline pairs",
+    "runs": [
+      {
+        "arm": "before",
+        "repetition": 1,
+        "stamp": "2026-10-09T23:28:05.717Z",
+        "results": [
+          {
+            "name": "lease acquire/renew/release",
+            "repetitions": 1000,
+            "ms": 1063.993417,
+            "cpuSeconds": 0.941994,
+            "load": [
+              25.0400390625,
+              36.953125,
+              26.755859375
+            ]
+          },
+          {
+            "name": "pane png desktop",
+            "repetitions": 12,
+            "ms": 59.874000000000024,
+            "cpuSeconds": 0.071476,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 1817
+          },
+          {
+            "name": "pane png terminal",
+            "repetitions": 12,
+            "ms": 95.6205829999999,
+            "cpuSeconds": 0.105669,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 1817
+          },
+          {
+            "name": "pane jpeg desktop",
+            "repetitions": 12,
+            "ms": 147.38866600000006,
+            "cpuSeconds": 0.181999,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 8197
+          },
+          {
+            "name": "pane jpeg terminal",
+            "repetitions": 12,
+            "ms": 134.19770799999992,
+            "cpuSeconds": 0.134691,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 8197
+          }
+        ]
+      },
+      {
+        "arm": "after",
+        "repetition": 1,
+        "stamp": "2026-10-09T23:28:06.852Z",
+        "results": [
+          {
+            "name": "lease acquire/renew/release",
+            "repetitions": 1000,
+            "ms": 907.1033749999997,
+            "cpuSeconds": 0.730564,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ]
+          },
+          {
+            "name": "pane png desktop",
+            "repetitions": 12,
+            "ms": 0.3604169999998703,
+            "cpuSeconds": 0.000366,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 1817
+          },
+          {
+            "name": "pane png terminal",
+            "repetitions": 12,
+            "ms": 72.02937500000007,
+            "cpuSeconds": 0.086965,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 1817
+          },
+          {
+            "name": "pane jpeg desktop",
+            "repetitions": 12,
+            "ms": 0.24604200000021592,
+            "cpuSeconds": 0.000332,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 8197
+          },
+          {
+            "name": "pane jpeg terminal",
+            "repetitions": 12,
+            "ms": 101.09966600000007,
+            "cpuSeconds": 0.12507,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 8197
+          }
+        ]
+      },
+      {
+        "arm": "after",
+        "repetition": 2,
+        "stamp": "2026-10-09T23:28:08.003Z",
+        "results": [
+          {
+            "name": "lease acquire/renew/release",
+            "repetitions": 1000,
+            "ms": 913.0481250000003,
+            "cpuSeconds": 0.748136,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ]
+          },
+          {
+            "name": "pane png desktop",
+            "repetitions": 12,
+            "ms": 0.3134580000000824,
+            "cpuSeconds": 0.000318,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 1817
+          },
+          {
+            "name": "pane png terminal",
+            "repetitions": 12,
+            "ms": 84.142875,
+            "cpuSeconds": 0.106218,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 1817
+          },
+          {
+            "name": "pane jpeg desktop",
+            "repetitions": 12,
+            "ms": 0.2227499999999054,
+            "cpuSeconds": 0.000225,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 8197
+          },
+          {
+            "name": "pane jpeg terminal",
+            "repetitions": 12,
+            "ms": 103.22991700000011,
+            "cpuSeconds": 0.113331,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 8197
+          }
+        ]
+      },
+      {
+        "arm": "before",
+        "repetition": 2,
+        "stamp": "2026-10-09T23:28:09.217Z",
+        "results": [
+          {
+            "name": "lease acquire/renew/release",
+            "repetitions": 1000,
+            "ms": 922.1463329999997,
+            "cpuSeconds": 0.891897,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ]
+          },
+          {
+            "name": "pane png desktop",
+            "repetitions": 12,
+            "ms": 38.328333000000384,
+            "cpuSeconds": 0.045716,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 1817
+          },
+          {
+            "name": "pane png terminal",
+            "repetitions": 12,
+            "ms": 42.16333399999985,
+            "cpuSeconds": 0.049883,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 1817
+          },
+          {
+            "name": "pane jpeg desktop",
+            "repetitions": 12,
+            "ms": 83.07566599999973,
+            "cpuSeconds": 0.09648,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 8197
+          },
+          {
+            "name": "pane jpeg terminal",
+            "repetitions": 12,
+            "ms": 89.44895799999995,
+            "cpuSeconds": 0.11947,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ],
+            "bytes": 8197
+          }
+        ]
+      },
+      {
+        "arm": "before",
+        "repetition": 3,
+        "stamp": "2026-10-09T23:28:10.894Z",
+        "results": [
+          {
+            "name": "lease acquire/renew/release",
+            "repetitions": 1000,
+            "ms": 1361.2911670000003,
+            "cpuSeconds": 1.068077,
+            "load": [
+              23.59521484375,
+              36.45556640625,
+              26.6396484375
+            ]
+          },
+          {
+            "name": "pane png desktop",
+            "repetitions": 12,
+            "ms": 35.284875000000284,
+            "cpuSeconds": 0.050327,
+            "load": [
+              22.50634765625,
+              36.01611328125,
+              26.5419921875
+            ],
+            "bytes": 1817
+          },
+          {
+            "name": "pane png terminal",
+            "repetitions": 12,
+            "ms": 39.69770799999969,
+            "cpuSeconds": 0.046985,
+            "load": [
+              22.50634765625,
+              36.01611328125,
+              26.5419921875
+            ],
+            "bytes": 1817
+          },
+          {
+            "name": "pane jpeg desktop",
+            "repetitions": 12,
+            "ms": 83.88508400000046,
+            "cpuSeconds": 0.095153,
+            "load": [
+              22.50634765625,
+              36.01611328125,
+              26.5419921875
+            ],
+            "bytes": 8197
+          },
+          {
+            "name": "pane jpeg terminal",
+            "repetitions": 12,
+            "ms": 112.87795800000004,
+            "cpuSeconds": 0.136653,
+            "load": [
+              22.50634765625,
+              36.01611328125,
+              26.5419921875
+            ],
+            "bytes": 8197
+          }
+        ]
+      },
+      {
+        "arm": "after",
+        "repetition": 3,
+        "stamp": "2026-10-09T23:28:11.850Z",
+        "results": [
+          {
+            "name": "lease acquire/renew/release",
+            "repetitions": 1000,
+            "ms": 753.3837920000005,
+            "cpuSeconds": 0.73851,
+            "load": [
+              22.50634765625,
+              36.01611328125,
+              26.5419921875
+            ]
+          },
+          {
+            "name": "pane png desktop",
+            "repetitions": 12,
+            "ms": 0.32270900000003166,
+            "cpuSeconds": 0.000328,
+            "load": [
+              22.50634765625,
+              36.01611328125,
+              26.5419921875
+            ],
+            "bytes": 1817
+          },
+          {
+            "name": "pane png terminal",
+            "repetitions": 12,
+            "ms": 47.7679590000007,
+            "cpuSeconds": 0.057812,
+            "load": [
+              22.50634765625,
+              36.01611328125,
+              26.5419921875
+            ],
+            "bytes": 1817
+          },
+          {
+            "name": "pane jpeg desktop",
+            "repetitions": 12,
+            "ms": 0.35941600000023755,
+            "cpuSeconds": 0.000359,
+            "load": [
+              22.50634765625,
+              36.01611328125,
+              26.5419921875
+            ],
+            "bytes": 8197
+          },
+          {
+            "name": "pane jpeg terminal",
+            "repetitions": 12,
+            "ms": 108.68341699999928,
+            "cpuSeconds": 0.132536,
+            "load": [
+              22.50634765625,
+              36.01611328125,
+              26.5419921875
+            ],
+            "bytes": 8197
+          }
+        ]
+      }
+    ]
+  },
+  "historicalAcquisitions": [
+    {
+      "trace": "2026-10-09T22-11-00-141Z/sleight-calculator-menu-1/trace-5678.jsonl",
+      "ms": 29475,
+      "events": [
+        {
+          "t": "2026-10-09T22:11:16.336Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:11:18.126Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:11:18.127Z",
+          "direction": "preapproved-app"
+        },
+        {
+          "t": "2026-10-09T22:11:18.128Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:11:45.811Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-11-00-141Z/sleight-calculator-menu-2/trace-11878.jsonl",
+      "ms": 2207,
+      "events": [
+        {
+          "t": "2026-10-09T22:14:41.947Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:14:43.541Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:14:43.542Z",
+          "direction": "preapproved-app"
+        },
+        {
+          "t": "2026-10-09T22:14:43.542Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:14:44.154Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-11-00-141Z/sleight-textedit-edit-1/trace-10021.jsonl",
+      "ms": 2106,
+      "events": [
+        {
+          "t": "2026-10-09T22:13:23.959Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:13:26.065Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-11-00-141Z/sleight-chess-drag-1/trace-11027.jsonl",
+      "ms": 1894,
+      "events": [
+        {
+          "t": "2026-10-09T22:14:02.381Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:14:03.997Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:14:03.997Z",
+          "direction": "to-client",
+          "id": 0,
+          "method": "elicitation/create",
+          "message": "Allow Computer Use to use \"Chess\"?"
+        },
+        {
+          "t": "2026-10-09T22:14:04.113Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:14:04.275Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-03-34-746Z/sleight-textedit-save-2/trace-96456.jsonl",
+      "ms": 1883,
+      "events": [
+        {
+          "t": "2026-10-09T22:06:44.367Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:06:46.250Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-11-00-141Z/sleight-textedit-edit-2/trace-13902.jsonl",
+      "ms": 1673,
+      "events": [
+        {
+          "t": "2026-10-09T22:15:34.320Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:15:35.993Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-03-34-746Z/sleight-textedit-edit-2/trace-97840.jsonl",
+      "ms": 1610,
+      "events": [
+        {
+          "t": "2026-10-09T22:07:19.427Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:07:21.037Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-25-01-496Z/sleight-textedit-save-3/trace-41778.jsonl",
+      "ms": 1609,
+      "events": [
+        {
+          "t": "2026-10-09T22:29:23.821Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:29:25.430Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-11-00-141Z/sleight-textedit-edit-3/trace-17943.jsonl",
+      "ms": 1604,
+      "events": [
+        {
+          "t": "2026-10-09T22:17:41.076Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:17:42.680Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-19-12-251Z/sleight-textedit-edit-3/trace-31774.jsonl",
+      "ms": 1583,
+      "events": [
+        {
+          "t": "2026-10-09T22:23:59.164Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:24:00.747Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-25-01-496Z/sleight-textedit-edit-3/trace-43755.jsonl",
+      "ms": 1578,
+      "events": [
+        {
+          "t": "2026-10-09T22:30:03.899Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:30:05.477Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-11-00-141Z/sleight-textedit-save-3/trace-16774.jsonl",
+      "ms": 1549,
+      "events": [
+        {
+          "t": "2026-10-09T22:16:54.882Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:16:56.431Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-11-00-141Z/sleight-textedit-save-1/trace-7632.jsonl",
+      "ms": 1543,
+      "events": [
+        {
+          "t": "2026-10-09T22:12:28.649Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:12:30.192Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-19-12-251Z/sleight-textedit-edit-1/trace-23487.jsonl",
+      "ms": 1537,
+      "events": [
+        {
+          "t": "2026-10-09T22:20:01.395Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:20:02.932Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-19-12-251Z/sleight-textedit-edit-2/trace-27927.jsonl",
+      "ms": 1450,
+      "events": [
+        {
+          "t": "2026-10-09T22:22:05.716Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:22:07.166Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-11-00-141Z/sleight-textedit-save-2/trace-13041.jsonl",
+      "ms": 1447,
+      "events": [
+        {
+          "t": "2026-10-09T22:15:06.536Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:15:07.983Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-19-12-251Z/sleight-textedit-save-1/trace-22433.jsonl",
+      "ms": 1440,
+      "events": [
+        {
+          "t": "2026-10-09T22:19:31.611Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:19:33.051Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-19-12-251Z/sleight-textedit-save-3/trace-30996.jsonl",
+      "ms": 1436,
+      "events": [
+        {
+          "t": "2026-10-09T22:23:28.949Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:23:30.385Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-25-01-496Z/sleight-textedit-edit-2/trace-37919.jsonl",
+      "ms": 1427,
+      "events": [
+        {
+          "t": "2026-10-09T22:27:30.851Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:27:32.278Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-19-12-251Z/sleight-textedit-save-2/trace-26942.jsonl",
+      "ms": 1417,
+      "events": [
+        {
+          "t": "2026-10-09T22:21:33.535Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:21:34.952Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-11-00-141Z/sleight-chess-drag-3/trace-19087.jsonl",
+      "ms": 1248,
+      "events": [
+        {
+          "t": "2026-10-09T22:18:09.313Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:18:10.381Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:18:10.382Z",
+          "direction": "to-client",
+          "id": 0,
+          "method": "elicitation/create",
+          "message": "Allow Computer Use to use \"Chess\"?"
+        },
+        {
+          "t": "2026-10-09T22:18:10.463Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:18:10.561Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-03-34-746Z/sleight-calculator-menu-3/trace-920.jsonl",
+      "ms": 1233,
+      "events": [
+        {
+          "t": "2026-10-09T22:08:58.871Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:08:59.952Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:08:59.953Z",
+          "direction": "preapproved-app"
+        },
+        {
+          "t": "2026-10-09T22:08:59.953Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:09:00.104Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-19-12-251Z/sleight-chess-drag-1/trace-24396.jsonl",
+      "ms": 1172,
+      "events": [
+        {
+          "t": "2026-10-09T22:20:27.150Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:20:28.156Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:20:28.157Z",
+          "direction": "to-client",
+          "id": 0,
+          "method": "elicitation/create",
+          "message": "Allow Computer Use to use \"Chess\"?"
+        },
+        {
+          "t": "2026-10-09T22:20:28.225Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:20:28.322Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-11-00-141Z/sleight-chess-drag-2/trace-14847.jsonl",
+      "ms": 1171,
+      "events": [
+        {
+          "t": "2026-10-09T22:16:04.110Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:16:05.067Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:16:05.068Z",
+          "direction": "to-client",
+          "id": 0,
+          "method": "elicitation/create",
+          "message": "Allow Computer Use to use \"Chess\"?"
+        },
+        {
+          "t": "2026-10-09T22:16:05.139Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:16:05.281Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-19-12-251Z/sleight-calculator-menu-1/trace-21460.jsonl",
+      "ms": 1160,
+      "events": [
+        {
+          "t": "2026-10-09T22:19:15.814Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:19:16.799Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:19:16.800Z",
+          "direction": "preapproved-app"
+        },
+        {
+          "t": "2026-10-09T22:19:16.800Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:19:16.974Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-19-12-251Z/sleight-chess-drag-2/trace-29398.jsonl",
+      "ms": 1150,
+      "events": [
+        {
+          "t": "2026-10-09T22:22:32.339Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:22:33.332Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:22:33.333Z",
+          "direction": "to-client",
+          "id": 0,
+          "method": "elicitation/create",
+          "message": "Allow Computer Use to use \"Chess\"?"
+        },
+        {
+          "t": "2026-10-09T22:22:33.395Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:22:33.489Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-19-12-251Z/sleight-chess-drag-3/trace-32532.jsonl",
+      "ms": 1150,
+      "events": [
+        {
+          "t": "2026-10-09T22:24:26.619Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:24:27.610Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:24:27.610Z",
+          "direction": "to-client",
+          "id": 0,
+          "method": "elicitation/create",
+          "message": "Allow Computer Use to use \"Chess\"?"
+        },
+        {
+          "t": "2026-10-09T22:24:27.674Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:24:27.769Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-25-01-496Z/sleight-calculator-menu-3/trace-41267.jsonl",
+      "ms": 1146,
+      "events": [
+        {
+          "t": "2026-10-09T22:29:09.053Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:29:10.094Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:29:10.095Z",
+          "direction": "preapproved-app"
+        },
+        {
+          "t": "2026-10-09T22:29:10.095Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:29:10.199Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-25-01-496Z/sleight-calculator-menu-1/trace-33754.jsonl",
+      "ms": 1131,
+      "events": [
+        {
+          "t": "2026-10-09T22:25:04.524Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:25:05.543Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:25:05.543Z",
+          "direction": "preapproved-app"
+        },
+        {
+          "t": "2026-10-09T22:25:05.543Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:25:05.655Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-19-12-251Z/sleight-calculator-menu-3/trace-30377.jsonl",
+      "ms": 1102,
+      "events": [
+        {
+          "t": "2026-10-09T22:23:11.448Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:23:12.453Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:23:12.453Z",
+          "direction": "preapproved-app"
+        },
+        {
+          "t": "2026-10-09T22:23:12.453Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:23:12.550Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-19-12-251Z/sleight-calculator-menu-2/trace-26166.jsonl",
+      "ms": 1074,
+      "events": [
+        {
+          "t": "2026-10-09T22:21:13.901Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:21:14.807Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:21:14.807Z",
+          "direction": "preapproved-app"
+        },
+        {
+          "t": "2026-10-09T22:21:14.807Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:21:14.975Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-11-00-141Z/sleight-calculator-menu-3/trace-15972.jsonl",
+      "ms": 1070,
+      "events": [
+        {
+          "t": "2026-10-09T22:16:36.986Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:16:37.947Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:16:37.948Z",
+          "direction": "preapproved-app"
+        },
+        {
+          "t": "2026-10-09T22:16:37.948Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:16:38.056Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-25-01-496Z/sleight-calculator-menu-2/trace-36602.jsonl",
+      "ms": 999,
+      "events": [
+        {
+          "t": "2026-10-09T22:26:43.156Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:26:44.042Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:26:44.042Z",
+          "direction": "preapproved-app"
+        },
+        {
+          "t": "2026-10-09T22:26:44.042Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:26:44.155Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-03-34-746Z/sleight-textedit-save-1/trace-90915.jsonl",
+      "ms": 753,
+      "events": [
+        {
+          "t": "2026-10-09T22:04:05.147Z",
+          "direction": "acquisition-split",
+          "id": 3
+        },
+        {
+          "t": "2026-10-09T22:04:05.147Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:04:05.900Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-03-34-746Z/sleight-textedit-edit-1/trace-92039.jsonl",
+      "ms": 688,
+      "events": [
+        {
+          "t": "2026-10-09T22:04:45.480Z",
+          "direction": "acquisition-split",
+          "id": 3
+        },
+        {
+          "t": "2026-10-09T22:04:45.480Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:04:46.168Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-03-34-746Z/sleight-textedit-save-3/trace-1997.jsonl",
+      "ms": 668,
+      "events": [
+        {
+          "t": "2026-10-09T22:09:30.628Z",
+          "direction": "acquisition-split",
+          "id": 3
+        },
+        {
+          "t": "2026-10-09T22:09:30.628Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:09:31.296Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-25-01-496Z/sleight-textedit-save-1/trace-34270.jsonl",
+      "ms": 653,
+      "events": [
+        {
+          "t": "2026-10-09T22:25:22.152Z",
+          "direction": "acquisition-split",
+          "id": 3
+        },
+        {
+          "t": "2026-10-09T22:25:22.152Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:25:22.805Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-03-34-746Z/sleight-textedit-edit-3/trace-3005.jsonl",
+      "ms": 641,
+      "events": [
+        {
+          "t": "2026-10-09T22:10:03.875Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:10:04.516Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-25-01-496Z/sleight-textedit-save-2/trace-37137.jsonl",
+      "ms": 619,
+      "events": [
+        {
+          "t": "2026-10-09T22:27:02.454Z",
+          "direction": "acquisition-split",
+          "id": 3
+        },
+        {
+          "t": "2026-10-09T22:27:02.454Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:27:03.073Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-25-01-496Z/sleight-textedit-edit-1/trace-34955.jsonl",
+      "ms": 597,
+      "events": [
+        {
+          "t": "2026-10-09T22:25:50.345Z",
+          "direction": "acquisition-split",
+          "id": 4
+        },
+        {
+          "t": "2026-10-09T22:25:50.345Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:25:50.942Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-03-34-746Z/sleight-chess-drag-2/trace-99130.jsonl",
+      "ms": 272,
+      "events": [
+        {
+          "t": "2026-10-09T22:07:54.271Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:07:54.317Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:07:54.318Z",
+          "direction": "to-client",
+          "id": 0,
+          "method": "elicitation/create",
+          "message": "Allow Computer Use to use \"Chess\"?"
+        },
+        {
+          "t": "2026-10-09T22:07:54.406Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:07:54.543Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-25-01-496Z/sleight-chess-drag-2/trace-38602.jsonl",
+      "ms": 258,
+      "events": [
+        {
+          "t": "2026-10-09T22:27:58.370Z",
+          "direction": "call-received",
+          "id": 3,
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:27:58.370Z",
+          "direction": "acquisition-split",
+          "id": 3
+        },
+        {
+          "t": "2026-10-09T22:27:58.370Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:27:58.413Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:27:58.413Z",
+          "direction": "to-client",
+          "id": 0,
+          "method": "elicitation/create",
+          "message": "Allow Computer Use to use \"Chess\"?"
+        },
+        {
+          "t": "2026-10-09T22:27:58.466Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:27:58.628Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-25-01-496Z/sleight-chess-drag-3/trace-46808.jsonl",
+      "ms": 233,
+      "events": [
+        {
+          "t": "2026-10-09T22:30:33.596Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:30:33.633Z",
+          "direction": "from-server",
+          "id": 0,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:30:33.634Z",
+          "direction": "to-client",
+          "id": 0,
+          "method": "elicitation/create",
+          "message": "Allow Computer Use to use \"Chess\"?"
+        },
+        {
+          "t": "2026-10-09T22:30:33.692Z",
+          "direction": "to-server",
+          "id": 0,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:30:33.829Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-03-34-746Z/sleight-chess-drag-3/trace-3977.jsonl",
+      "ms": 119,
+      "events": [
+        {
+          "t": "2026-10-09T22:10:31.179Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:10:31.239Z",
+          "direction": "from-server",
+          "id": 1,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:10:31.240Z",
+          "direction": "answered-for-session",
+          "id": 1,
+          "method": "elicitation/create",
+          "message": "Allow Computer Use to use \"Chess\"?"
+        },
+        {
+          "t": "2026-10-09T22:10:31.240Z",
+          "direction": "to-server",
+          "id": 1,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:10:31.298Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    },
+    {
+      "trace": "2026-10-09T22-03-34-746Z/sleight-chess-drag-1/trace-93016.jsonl",
+      "ms": 88,
+      "events": [
+        {
+          "t": "2026-10-09T22:05:14.302Z",
+          "direction": "call-received",
+          "id": 3,
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:05:14.302Z",
+          "direction": "acquisition-split",
+          "id": 3
+        },
+        {
+          "t": "2026-10-09T22:05:14.302Z",
+          "direction": "to-server",
+          "id": "sleight-acquire-0",
+          "method": "tools/call"
+        },
+        {
+          "t": "2026-10-09T22:05:14.341Z",
+          "direction": "from-server",
+          "id": 1,
+          "method": "elicitation/create"
+        },
+        {
+          "t": "2026-10-09T22:05:14.341Z",
+          "direction": "answered-for-session",
+          "id": 1,
+          "method": "elicitation/create",
+          "message": "Allow Computer Use to use \"Chess\"?"
+        },
+        {
+          "t": "2026-10-09T22:05:14.341Z",
+          "direction": "to-server",
+          "id": 1,
+          "action": "accept"
+        },
+        {
+          "t": "2026-10-09T22:05:14.390Z",
+          "direction": "from-server",
+          "id": "sleight-acquire-0"
+        }
+      ]
+    }
+  ]
+}

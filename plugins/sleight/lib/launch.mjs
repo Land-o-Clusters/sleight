@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { discoverExtensions } from './browser-discovery.mjs';
+import { createSurfaceCache, refreshAfterInitialize } from './surface-cache.mjs';
 import { createRelay } from './relay.mjs';
 import { createAppHealthHelper, diagnoseReadFailure } from './read-failure.mjs';
 import { loadFlowRules } from './flow-rules.mjs';
@@ -68,13 +69,25 @@ export function resolveServer(env = process.env) {
   if (!server?.command) return { error: `${configPath} has no "${SERVER_KEY}" server` };
 
   const serverEnv = { ...server.env };
-  // run() probes connected extensions before spawning the engine.
+  // Automatic selection below uses only a recent connected-extension inventory.
   serverEnv.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES || 'computer';
 
   return { version, configPath, command: server.command, args: server.args || [], env: serverEnv };
 }
 
-export async function selectSurfaces(server, env = process.env, options) {
+export function selectSurfaces(server, env = process.env, options) {
+  if (env.SLEIGHT_SURFACES) {
+    server.env.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES;
+    return;
+  }
+  const cache = createSurfaceCache(server, options);
+  server.env.CUA_REPL_ENABLED_SURFACES = cache.connected ? 'browser,computer' : 'computer';
+  server.env.BROWSER_USE_AVAILABLE_BACKENDS = 'chrome';
+  return cache;
+}
+
+// Doctor checks live availability; launch uses the cache without a synchronous discovery engine.
+export async function probeSurfaces(server, env = process.env, options) {
   if (env.SLEIGHT_SURFACES) {
     server.env.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES;
     return;
@@ -98,7 +111,7 @@ export async function doctor({ env = process.env, log = console.log, app = proce
   }
   const s = resolveServer(env);
   if (s.error) { log(`sleight: ${s.error}`); return 1; }
-  await selectSurfaces(s, env);
+  await probeSurfaces(s, env);
   const checks = [
     ['node', s.command],
     ['server script', s.args[0]],
@@ -461,14 +474,20 @@ export async function run({ leaseDirectory } = {}) {
   const s = resolveServer();
   if (s.error) fail(s.error);
   if (!existsSync(s.command)) fail(`server runtime missing: ${s.command}`);
-  await selectSurfaces(s);
+  const surfaceCache = selectSurfaces(s);
 
   const child = spawn(s.command, s.args, {
     stdio: ['pipe', 'pipe', 'inherit'],
     env: { ...process.env, ...s.env },
   });
   child.on('error', err => fail(`could not start server: ${err.message}`));
-  child.on('close', async code => { await stopHelpers(); await relay.close(); process.exit(code ?? 0); });
+  // Refresh every automatic session after initialization. Keep this description fixed;
+  // the background inventory affects the next session only.
+  const stopObservingInitialization = refreshAfterInitialize(child.stdout, surfaceCache);
+  child.on('close', async code => {
+    stopObservingInitialization(); await surfaceCache?.close();
+    await stopHelpers(); await appHealth.close(); await relay.close(); process.exit(code ?? 0);
+  });
   let terminating = false;
   function terminateEngine(signal = 'SIGTERM') {
     if (terminating) return;
@@ -518,7 +537,7 @@ export async function run({ leaseDirectory } = {}) {
       tools: localToolDefinitions(),
       call: callLocalTool,
       target: async args => {
-        const result = await runScript('lease-target.js', args);
+        const result = await appHealth.target(args);
         if (!result.ok) throw new Error(`Input lease: ${result.error}`);
         return result.target;
       },
@@ -526,7 +545,7 @@ export async function run({ leaseDirectory } = {}) {
     trace: relayTrace,
     guardTiming: !!process.env.SLEIGHT_TRACE,
     firstCallRules: skillRules(),
-    keyboardTaps: async () => { const r = await runScript('keyboard-taps.js', {}); return r.ok ? r.taps : []; },
+    keyboardTaps: appHealth.keyboardTaps,
   });
   process.once('exit', () => relay.close());
 
