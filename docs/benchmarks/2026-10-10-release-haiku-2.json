@@ -1,0 +1,422 @@
+{
+  "stamp": "2026-10-10T10-34-43-170Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 14.7,
+      "turns": 4,
+      "costUsd": 0.0085125,
+      "reportedCostUsd": 0.2958336,
+      "usage": {
+        "input": 8,
+        "cacheRead": 223328,
+        "cacheWrite": 28462,
+        "output": 1172
+      },
+      "timing": {
+        "totalMs": 13003,
+        "modelMs": 7006,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 4573,
+        "engineMs": 4456,
+        "relayMs": 117,
+        "localMs": 0,
+        "guardReads": 7,
+        "guardReadMs": 2571.2842500000006,
+        "guardReadFailures": 0,
+        "otherMs": 1424
+      },
+      "footprint": {
+        "cpuSeconds": 7.52,
+        "group": {
+          "claude": 1.46,
+          "engine node": 1.7,
+          "mcp@latest": 0.64,
+          "codex": 0.33,
+          "node": 0.26,
+          "osascript": 0.12,
+          "uv": 0.02,
+          "Python": 0.01,
+          "python3": 0.05
+        },
+        "outside": {
+          "Calculator": 0.65,
+          "engine helper": 2.28
+        }
+      },
+      "appWindows": {
+        "samples": 3,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "391",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "calculator-menu",
+      "run": 1,
+      "passed": true,
+      "seconds": 18.8,
+      "turns": 5,
+      "costUsd": 0.0097521,
+      "reportedCostUsd": 0.331366,
+      "usage": {
+        "input": 10,
+        "cacheRead": 293590,
+        "cacheWrite": 29981,
+        "output": 1638
+      },
+      "timing": {
+        "totalMs": 17067,
+        "modelMs": 10463,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 4869,
+        "engineMs": 4797,
+        "relayMs": 72,
+        "localMs": 0,
+        "guardReads": 8,
+        "guardReadMs": 2548.1555430000017,
+        "guardReadFailures": 0,
+        "otherMs": 1735
+      },
+      "footprint": {
+        "cpuSeconds": 8.45,
+        "group": {
+          "claude": 1.57,
+          "engine node": 1.28,
+          "mcp@latest": 0.63,
+          "(node)": 0.37,
+          "(node_repl)": 0.09,
+          "(codex)": 0.11,
+          "node": 0.26,
+          "codex": 0.27,
+          "(bash)": 0.03,
+          "(AgentPeekBridge)": 0.01,
+          "osascript": 0.13,
+          "(vibe-island-brid)": 0.03,
+          "uv": 0.02,
+          "bash": 0.01,
+          "(python3.9)": 0.01
+        },
+        "outside": {
+          "Calculator": 0.7,
+          "engine helper": 2.93
+        }
+      },
+      "appWindows": {
+        "samples": 4,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "1,024",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 108.9,
+      "turns": 17,
+      "costUsd": 0.0263683,
+      "reportedCostUsd": 0.8118703999999999,
+      "usage": {
+        "input": 34,
+        "cacheRead": 1214312,
+        "cacheWrite": 49284,
+        "output": 8730
+      },
+      "timing": {
+        "totalMs": 106962,
+        "modelMs": 49156,
+        "calls": 16,
+        "refused": 1,
+        "toolMs": 54201,
+        "engineMs": 54126,
+        "relayMs": 75,
+        "localMs": 0,
+        "guardReads": 18,
+        "guardReadMs": 11656.199790000002,
+        "guardReadFailures": 0,
+        "otherMs": 3605
+      },
+      "footprint": {
+        "cpuSeconds": 35.14,
+        "group": {
+          "claude": 3.01,
+          "engine node": 1.88,
+          "mcp@latest": 0.79,
+          "codex": 0.44,
+          "node": 0.34,
+          "osascript": 0.08,
+          "sh": 0.01,
+          "vibe-island-bridge": 0.01,
+          "(git)": 0,
+          "(bash)": 0.01,
+          "(vibe-island-brid)": 0,
+          "(sh)": 0,
+          "(AgentPeekBridge)": 0
+        },
+        "outside": {
+          "engine helper": 20.01,
+          "TextEdit": 8.56
+        }
+      },
+      "appWindows": {
+        "samples": 22,
+        "onScreen": 20,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "The document is saved as `<temp>/sleight-bench/2026-10-10T10-34-43-170Z/sleight-textedit-save-1/f6777e6a.txt` with the text \"sleight bench f6777e6a\" in plain text, and it is closed.\n\nI opened the document with a new-window shortcut, so the ordinary TextEdit ",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 25.3,
+      "turns": 10,
+      "costUsd": 0.0127677,
+      "reportedCostUsd": 0.3922570000000001,
+      "usage": {
+        "input": 20,
+        "cacheRead": 592245,
+        "cacheWrite": 27646,
+        "output": 2628
+      },
+      "timing": {
+        "totalMs": 23447,
+        "modelMs": 15680,
+        "calls": 7,
+        "refused": 1,
+        "toolMs": 5271,
+        "engineMs": 5252,
+        "relayMs": 19,
+        "localMs": 0,
+        "guardReads": 4,
+        "guardReadMs": 423.4058329999989,
+        "guardReadFailures": 0,
+        "otherMs": 2496
+      },
+      "footprint": {
+        "cpuSeconds": 10.44,
+        "group": {
+          "claude": 1.98,
+          "engine node": 1.58,
+          "mcp@latest": 0.72,
+          "codex": 0.32,
+          "node": 0.22,
+          "osascript": 0.35,
+          "open": 0.01,
+          "(bash)": 0,
+          "(vibe-island-brid)": 0,
+          "vibe-island-bridge": 0
+        },
+        "outside": {
+          "engine helper": 4.06,
+          "TextEdit": 1.2
+        }
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 3,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I replaced \"beta\" with \"delta\" in `7b484f61-edit.txt`, so the line now reads \"alpha delta gamma\". I saved it, and the window closed without a save prompt.\n\nTextEdit wasn't running, so I launched it in the background by bundle ID. The \"Untitled 6\" window that was already open is still open.",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 39.5,
+      "turns": 13,
+      "costUsd": 0.016672,
+      "reportedCostUsd": 0.5047714000000001,
+      "usage": {
+        "input": 26,
+        "cacheRead": 810537,
+        "cacheWrite": 32380,
+        "output": 4176
+      },
+      "timing": {
+        "totalMs": 37464,
+        "modelMs": 24719,
+        "calls": 10,
+        "refused": 1,
+        "toolMs": 8989,
+        "engineMs": 4737,
+        "relayMs": 28,
+        "localMs": 4224,
+        "guardReads": 3,
+        "guardReadMs": 0.01320899999973335,
+        "guardReadFailures": 0,
+        "otherMs": 3756
+      },
+      "footprint": {
+        "cpuSeconds": 14.31,
+        "group": {
+          "claude": 2.34,
+          "engine node": 1.44,
+          "mcp@latest": 0.7,
+          "codex": 0.38,
+          "node": 0.29,
+          "osascript": 0.74
+        },
+        "outside": {
+          "engine helper": 6.97,
+          "TextEdit": 1.45
+        }
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 6,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "The file now reads \"beta gamma alpha\", is saved, and its window is closed.\n\nThe drag did not go through the normal mouse path. Finder covered the window at the drop point, so the tool fell back to an Accessibility-based move. The text moved as requested, but if you need a true pointer-driven drag, t",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "chess-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 111,
+      "turns": 14,
+      "costUsd": 0.0343436,
+      "reportedCostUsd": 1.1348302,
+      "usage": {
+        "input": 28,
+        "cacheRead": 1194571,
+        "cacheWrite": 89098,
+        "output": 9151
+      },
+      "timing": {
+        "totalMs": 73490,
+        "modelMs": 49268,
+        "calls": 13,
+        "refused": 0,
+        "toolMs": 20714,
+        "engineMs": 20772,
+        "relayMs": -58,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 2702.0321670000085,
+        "guardReadFailures": 0,
+        "otherMs": 3508
+      },
+      "footprint": {
+        "cpuSeconds": 27.31,
+        "group": {
+          "claude": 2.83,
+          "engine node": 1.87,
+          "mcp@latest": 0.73,
+          "codex": 0.39,
+          "node": 0.27,
+          "osascript": 0.3,
+          "(bash)": 0.02,
+          "(vibe-island-brid)": 0.01,
+          "(osascript)": 0.09
+        },
+        "outside": {
+          "Chess": 4.21,
+          "engine helper": 16.59
+        }
+      },
+      "appWindows": {
+        "samples": 15,
+        "onScreen": 15,
+        "offScreenOnly": 0,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I started a new game, dragged e2 to e4, saved it as `7e7f8524.game` in the `sleight-chess-drag-1` folder you named, and closed that window. The save dialog closed without error, but I didn't open the file to confirm it on disk.\n\nTwo things you didn't ask for but should know about:\n- The save capture",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 1,
+      "passed": false,
+      "reason": "Fixture setup failed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "cleanupError": "Launched DeviceHub quit unconfirmed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Launched app identity changed; quit refused (-2700)",
+      "fixtureDiagnostics": [
+        {
+          "app": "DeviceHub",
+          "bundle": "com.apple.dt.Devices",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": false,
+          "setupCase": "cold-launch",
+          "launched": true,
+          "pid": 73541,
+          "pids": [
+            73541
+          ],
+          "fresh": true,
+          "cleanup": "unconfirmed",
+          "helperCollectionConfirmed": true
+        }
+      ],
+      "cleanupUnconfirmed": true,
+      "fixtureDir": "<temp>/sleight-bench/2026-10-10T10-34-43-170Z/sleight-simulator-form-1",
+      "models": []
+    }
+  ],
+  "passCleanupErrors": [
+    {
+      "app": "DeviceHub",
+      "error": "Launched DeviceHub quit unconfirmed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Launched app identity changed; quit refused (-2700)"
+    }
+  ]
+}

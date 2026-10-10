@@ -426,6 +426,11 @@ our own runs. Dates and engine versions are given where they matter.
   that diagnosis. It also depends on Screen Recording permission: macOS otherwise omits the CG
   window names used to recognize the panel. Missing names prevent the orphan note. Unit tests pass.
   The temporary-file reproduction and localized titles remain unchecked.
+- simulator-form has failed setup in both Haiku passes since the round-12 fixture code landed
+  (2026-10-10, owner away): once on a launch handoff, once with "readiness unconfirmed" with one
+  DeviceHub process. Cleanup then refused to quit the DeviceHub the run launched ("Launched app
+  identity changed"), the pass stopped, and sleight-arch quit DeviceHub by hand both times. It
+  passed before that code. A brief for the fix is written.
 - DeviceHub replaced its launch process during `simulator-flow` setup on 2026-10-10. Setup and
   cleanup refused the replacement. The architect quit it manually. Setup now accepts
   one same-bundle handoff after the recorded PID exits, retains both PIDs, and quits the adopted
