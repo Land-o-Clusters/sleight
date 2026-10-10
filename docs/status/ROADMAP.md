@@ -85,7 +85,12 @@ only with a measured reason. In order:
    published. On 2026-10-10 (Haiku, engine 26.1007.21159) time and turns were at
    parity (263 s against 257 s, 61 turns each) and CPU wasn't (76.5 s against 60.2 s over six runs),
    with the excess in the engine helper and engine node, where guard reads land
-   (`docs/benchmarks/2026-10-10-h2h-footprint-haiku.md`).
+   (`docs/benchmarks/2026-10-10-h2h-footprint-haiku.md`). With the benchmark's folder trimmed and
+   the guard's first-action reuse (`a104a0d`): 190 s against 176 s, 44 turns against 45, own CPU
+   58.4 s against 47.2 s (`2026-10-10-h2h-footprint-haiku-3.json`). Guard reads were 23.3 s:
+   15.0 s in textedit-save's sheet and 7.5 s in Calculator, about 430 ms before each click in a
+   batch, which Codex doesn't read. Next: leave a crowded Save or Open sheet's browser rows out of
+   reads (known problems), and the owner's call on reads before clicks and ID actions in a batch.
 
 Done: the relay "spike" was a timing bug (real relay time is about 0.4 s a pass). Measured and
 dropped: a first-call hint (8/12 runs still called `getState` first), trimming the engine's docs

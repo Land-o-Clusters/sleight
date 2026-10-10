@@ -26,7 +26,11 @@ skill is left out, and the watch's calculator-click passed. No open PRs.
 - Rich TextEdit move: JXA couldn't build the attributed string (fixed, `cf009c8`). The last trial
   stopped at the clipboard write check with text and clipboard intact (known problems).
 
-**For the owner in the morning:** decide the two reads in the Save sheet below, and paste the
+**Latest head-to-head** (`2026-10-10-h2h-footprint-haiku-3.json`, 11:28 UTC): 6/6 each, 190 s
+against 176 s, own CPU 58.4 s against 47.2 s. Guard reads were 23.3 s, of which 7.5 s came before
+each click in a Calculator batch (about 430 ms a click).
+
+**For the owner in the morning:** decide the reads below, and paste the
 briefs (`sol-waits-targeting-3.md`, `sol-sim-savelock-2.md`, `sol-plugin-arm-3.md`,
 `sol-real-use-tasks-13.md`, and `sol-verified-results-3.md` if it isn't started).
 - In textedit-save, Return after `setValue({ id })` reads the 54,000-character sheet first (1.85 s),
@@ -35,6 +39,12 @@ briefs (`sol-waits-targeting-3.md`, `sol-sim-savelock-2.md`, `sol-plugin-arm-3.m
 - A first action by ID or label (`setValue({ id: "saveAsNameTextField" })`) reads the sheet first
   (1.4 s). Reusing a recent full read there, as keys now do, would skip it. The engine still
   resolves the ID itself.
+- Each click after the first in a batch reads the window first (about 430 ms, mostly the engine
+  waiting for the UI to settle), a read Codex doesn't make. Skipping it for clicks by ID or label,
+  which renumbering can't misdirect, would save about 3.5 s in each Calculator run if the owner
+  trades that settle wait for speed.
+- The benchmark left "Untitled 6.txt" and "Untitled 9.txt" in the owner's iCloud TextEdit folder
+  from runs whose save failed, and deleting them is the owner's call.
 
 **Where work goes.** Work in progress is private between releases (owner, 2026-10-10, LAWS): this
 repo has `remote.pushDefault private`, which sends every worktree's pushes to the private
