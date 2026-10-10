@@ -794,6 +794,29 @@ test('document identity normalizes both Foundation file URLs and private fixture
     'a matching title must never override another document path');
 });
 
+test('https shop smoke documents match only the allowlisted host', () => {
+  const source = readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8');
+  const native = value => value;
+  native.AXUIElementCopyAttributeValue = (_window, name, output) => {
+    output[0] = name === 'AXDocument' ? native.document : 'Target'; return 0;
+  };
+  native.NSURL = { URLWithString: value => ({
+    isNil: () => !value, host: new URL(value).hostname, scheme: new URL(value).protocol.replace(':', ''),
+  }) };
+  const sandbox = { $: native, Ref: () => [], ObjC: { import() {}, castRefToObject: value => value, unwrap: value => value } };
+  runInNewContext(source, sandbox);
+  const api = sandbox.nativeAX();
+  const request = { mode: 'window', target: 'https://www.target.com/', token: 'Target' };
+  native.document = 'https://www.target.com/s?searchTerm=towels';
+  assert.equal(api.matches({}, request), true);
+  native.document = 'https://www.bestbuy.com/';
+  assert.equal(api.matches({}, request), false);
+  native.document = 'https://evil.test/';
+  assert.equal(api.matches({}, request), false);
+  native.document = 'http://www.target.com/';
+  assert.equal(api.matches({}, request), false);
+});
+
 test('ordinary cancellation retains the helper until its owned window is closed', async t => {
   const { openFixture } = await import('../bench/real-fixture.mjs');
   const dir = mkdtempSync(join(tmpdir(), 'real-fixture-cancel-'));

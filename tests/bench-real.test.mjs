@@ -27,6 +27,7 @@ test('suite selection preserves the default tasks and rejects an unknown suite',
     'word-edit', 'excel-edit', 'powerpoint-edit',
     'mail-folder', 'mail-message', 'mail-thread', 'mail-attachment', 'mail-search',
     'mimestream-label', 'mimestream-message', 'mimestream-thread', 'mimestream-scroll', 'mimestream-search',
+    'safari-shop', 'helium-shop', 'real-shop-target', 'real-shop-bestbuy',
   ]);
   for (const task of benchmark.getTasks('real')) {
     for (const method of ['prepare', 'setup', 'prompt', 'check', 'cleanup']) {

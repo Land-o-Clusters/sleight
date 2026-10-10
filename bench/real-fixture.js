@@ -429,6 +429,13 @@ function nativeAX(state, clock) {
     var document = text(window, 'AXDocument');
     if (document) {
       if (request.target && request.target.indexOf('http://') === 0) return document.indexOf(request.target) === 0;
+      if (request.target && request.target.indexOf('https://') === 0) {
+        var expected = $.NSURL.URLWithString(request.target), current = $.NSURL.URLWithString(document);
+        if (expected.isNil() || current.isNil()) return false;
+        var host = ObjC.unwrap(expected.host), scheme = ObjC.unwrap(expected.scheme);
+        return scheme === 'https' && ObjC.unwrap(current.scheme) === 'https' && ObjC.unwrap(current.host) === host &&
+          (host === 'www.target.com' || host === 'www.bestbuy.com');
+      }
       var current = path(document), expected = request.target && request.target[0] === '/' ?
         path(String(ObjC.unwrap($.NSURL.fileURLWithPath(request.target).absoluteString))) : null;
       if (current && expected) return current === expected ||

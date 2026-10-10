@@ -87,13 +87,27 @@ func recoverRetained<Element>(_ window: Element?, present: (Element) throws -> B
     throw FixtureError("Retained Helium fixture cleanup unconfirmed")
 }
 
+func shopSmokeHost(_ host: String) -> Bool {
+    host == "www.target.com" || host == "www.bestbuy.com"
+}
+
+func allowedFixtureTarget(_ target: String) -> Bool {
+    if target.hasPrefix("http://127.0.0.1:") { return true }
+    guard let url = URLComponents(string: target), url.scheme == "https", shopSmokeHost(url.host ?? ""),
+          url.user == nil, url.password == nil, url.path == "/" || url.path.isEmpty else { return false }
+    return true
+}
+
 func fixtureURL(_ document: String, target: String, token: String) -> Bool {
     guard let expected = URLComponents(string: target), let current = URLComponents(string: document),
-          expected.scheme == "http", expected.host == "127.0.0.1", expected.port != nil,
-          current.scheme == expected.scheme, current.host == expected.host, current.port == expected.port,
-          current.user == nil, current.password == nil, expected.path == "/\(token)/",
-          current.path.hasPrefix(expected.path),
+          current.user == nil, current.password == nil,
           !current.path.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }) else { return false }
+    if shopSmokeHost(expected.host ?? "") {
+        return expected.scheme == "https" && current.scheme == "https" && current.host == expected.host
+    }
+    guard expected.scheme == "http", expected.host == "127.0.0.1", expected.port != nil,
+          current.scheme == expected.scheme, current.host == expected.host, current.port == expected.port,
+          expected.path == "/\(token)/", current.path.hasPrefix(expected.path) else { return false }
     return true
 }
 
@@ -220,6 +234,28 @@ func regression(_ scenario: String) throws {
         foreign.created("https://example.test/")
         guard createdFixtureForRecovery(nil as String?, state: foreign, matches: { $0.contains("abc") }) == nil else {
             throw FixtureError("Unmatched created window recovered")
+        }
+    } else if scenario == "shop-smoke" {
+        guard shopSmokeHost("www.target.com"), shopSmokeHost("www.bestbuy.com"),
+              !shopSmokeHost("target.com"), !shopSmokeHost("www.example.com") else {
+            throw FixtureError("Shop smoke host allowlist misjudged")
+        }
+        guard allowedFixtureTarget("http://127.0.0.1:1234/abc/"),
+              allowedFixtureTarget("https://www.target.com/"),
+              allowedFixtureTarget("https://www.bestbuy.com/"),
+              !allowedFixtureTarget("https://www.target.com/cart"),
+              !allowedFixtureTarget("http://www.target.com/"),
+              !allowedFixtureTarget("https://evil.test/") else {
+            throw FixtureError("Shop smoke target allowlist misjudged")
+        }
+        let target = "https://www.target.com/"
+        guard fixtureURL(target, target: target, token: "Target"),
+              fixtureURL(target + "s?searchTerm=towels", target: target, token: "Target"),
+              navigatedFixture(document: "", title: "Target : Expect More. Pay Less.", target: target, token: "Target"),
+              !fixtureURL("https://www.bestbuy.com/", target: target, token: "Target"),
+              !fixtureURL("http://www.target.com/", target: target, token: "Target"),
+              !fixtureURL("https://evil.test/", target: target, token: "Target") else {
+            throw FixtureError("Shop smoke fixture URL misjudged")
         }
     } else { throw FixtureError("Unknown browser regression") }
     try emit(["scenario": scenario, "passed": true])
@@ -384,12 +420,15 @@ func fixture(_ argument: String) throws {
           let request = try JSONSerialization.jsonObject(with: data) as? [String: Any],
           let bundle = request["bundle"] as? String, ["net.imput.helium", "com.apple.Safari"].contains(bundle),
           request["mode"] as? String == "window",
-          let target = request["target"] as? String, target.hasPrefix("http://127.0.0.1:"),
+          let target = request["target"] as? String, allowedFixtureTarget(target),
           let token = request["token"] as? String, !token.isEmpty,
           let control = request["control"] as? String else { throw FixtureError("Invalid Helium fixture request") }
     guard AXIsProcessTrusted() else { throw FixtureError("Accessibility unavailable; Helium fixture not opened") }
     let safari = bundle == "com.apple.Safari"
     guard !safari || request["ownerAway"] as? Bool == true else { throw FixtureError("Safari setup requires an explicit owner-away boundary") }
+    if let host = URLComponents(string: target)?.host, shopSmokeHost(host) {
+        guard safari else { throw FixtureError("Shop smoke fixtures are Safari only") }
+    }
     var applications = NSRunningApplication.runningApplications(withBundleIdentifier: bundle)
     let running = !applications.isEmpty
     if safari {

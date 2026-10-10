@@ -124,6 +124,17 @@ Their results retain only verdicts, seconds, turns and salted answer hashes. The
 explicit read state and unchanged mailbox counts, preserves Mimestream, and closes only its new
 window. Live qualification waits until the owner can watch it.
 
+### Shop tasks
+
+`safari-shop` and `helium-shop` drive a local Harbor Market page: ZIP and store, search, filters,
+pagination, product options, add to cart, cart, cookie and newsletter popups, and late-loading
+options. The check is the server-side store and cart. Both the sleight and Codex arms can run them.
+
+`real-shop-target` and `real-shop-bestbuy` are smoke tasks. Select them with `--tasks` and
+`--runs 1` only. They are not in the default real suite or the head-to-head. Safari only. The check
+is Claude's answer plus a cart-page screenshot. Sign-in and checkout are out of scope. Decline
+non-essential cookies, and stop at a CAPTCHA or bot check.
+
 ## Time per run
 
 Each run's result now splits its time. Claude Code reports the time spent in the model API, and

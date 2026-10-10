@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { BENCH_APPS, REAL_APPS } from '../bench/tasks.mjs';
+import { selectSuiteTasks, assertShopSmokeRuns } from '../bench/shop.mjs';
 import { privateMailResult, publicPrivateMailRow } from '../bench/private-mail.mjs';
 import { privateDriverEnvironment } from '../bench/driver.mjs';
 import { guardGenericOperation } from '../bench/generic-approval.mjs';
@@ -12,7 +13,7 @@ import { cpuSplit } from '../bench/footprint.mjs';
 
 // Execute the actual runner body with inert dependencies. No app, CLI, approval
 // file, live lock, compiler or filesystem operation reaches the host.
-async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false, fixtureLifecycle = false, ownerName = '', auth = { mode: 'login', env: {}, unset: [] }, keySource = 'none', spend = () => 0, holdAfterPreflight = false, dryRun = false, preparationError, extraServer, driverOut = {}, calculatorGate = false, calculatorFailureAt, cleanArms = false, footprint = { cpuSeconds: 0, group: {}, outside: {} }, codexServers } = {}) {
+async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], setupOnly = false, privateMail = false, fixtureLifecycle = false, ownerName = '', auth = { mode: 'login', env: {}, unset: [] }, keySource = 'none', spend = () => 0, holdAfterPreflight = false, dryRun = false, preparationError, extraServer, driverOut = {}, calculatorGate = false, calculatorFailureAt, cleanArms = false, footprint = { cpuSeconds: 0, group: {}, outside: {} }, codexServers, tasks } = {}) {
   const calls = [], saved = [], envs = [], tailScopes = [], directories = [];
   const logs = [], driverOptions = [], codexRuns = [], files = new Map();
   let preflightDone = false, calculatorObservations = 0;
@@ -45,7 +46,8 @@ async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome
       if (command === 'id') return privateMail ? 'Owner Example' : ownerName;
       calls.push('tap check'); return JSON.stringify(taps);
     },
-    getTasks: () => [task], BENCH_APPS, REAL_APPS,
+    getTasks: () => tasks ?? [task], BENCH_APPS, REAL_APPS,
+    selectSuiteTasks, assertShopSmokeRuns,
     closeBenchTextEdit: options => { calls.push('TextEdit tail'); tailScopes.push(options); },
     quitChess: options => { calls.push('Chess tail'); tailScopes.push(options); },
     quitSimApp: options => { calls.push('Simulator tail'); tailScopes.push(options); },
@@ -495,4 +497,16 @@ test('login mode records no spend and passes no key', async () => {
   assert.ok(!result.calls.some(c => Array.isArray(c) && c[0] === 'spend'));
   for (const env of result.envs) assert.ok(!('ANTHROPIC_API_KEY' in env));
   assert.equal(result.saved.at(-1).auth, 'login');
+});
+
+test('default real selection skips shop smoke tasks, and selecting them requires --runs 1', async () => {
+  const stub = id => ({ id, app: 'Safari', setup() {}, prompt: () => 'task', check: () => true, cleanup() {} });
+  const shop = stub('safari-shop');
+  const smoke = { ...stub('real-shop-target'), smoke: true };
+  const excluded = await runner({ suite: 'real', tasks: [shop, smoke] });
+  assert.equal(excluded.error, undefined);
+  assert.equal(excluded.calls.filter(call => call === 'real run').length, 3);
+  assert.ok(excluded.saved.at(-1).results.every(row => row.task === 'safari-shop'));
+  const refused = await runner({ suite: 'real', tasks: [shop, smoke], extraArgs: ['--tasks', 'real-shop-target'] });
+  assert.match(refused.error?.message ?? '', /runs 1/);
 });

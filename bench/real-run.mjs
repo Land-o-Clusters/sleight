@@ -60,6 +60,7 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, setupO
         stop?.();
       } });
       Object.assign(result, response);
+      if (task.capture) await task.capture(ctx, response);
       const verdict = signal?.aborted || cleanupController.signal.aborted ? dialogReason() || 'run interrupted' :
         await task.check({ ...ctx, answer: response.out?.result ?? '' });
       result.passed = response.code === 0 && verdict === true && !signal?.aborted && !result.permissionPrompt && !result.permissionRefusal && !result.observerError;

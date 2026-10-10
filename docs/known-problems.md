@@ -595,6 +595,11 @@ our own runs. Dates and engine versions are given where they matter.
 
 ## The real-use benchmark harness
 
+- Shop smoke tasks `real-shop-target` and `real-shop-bestbuy` are Safari-only, `--runs 1`, and
+  excluded from default real passes and the head-to-head. They stop at a CAPTCHA or bot check and
+  never sign in or start checkout. This lane did not run them. Live cart-page screenshots and
+  store-ZIP UI on those sites are unverified. The local Harbor Market tasks have unit-tested state
+  checks only.
 - sleight-arch's owner-away Office qualification at `76cf880` passed Excel 1/1 (100.4 s, 29 turns) and
   PowerPoint 1/1 on its second try (51.7 s, 16 turns), with confirmed quits (2026-10-09, load average
   25 to 55 from other projects). PowerPoint's first try failed setup. A first-launch Microsoft 365
