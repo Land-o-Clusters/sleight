@@ -147,11 +147,15 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
    the mod's self-approval of its own pane snapshot reads as changing Claude's permissions. A
    privacy policy link is required. Asking Anthropic first is the owner's call.
 7. Less setup in the ChatGPT app (owner, 2026-10-10). Today a user installs ChatGPT and turns on
-   Computer Use in Codex once, which installs the helper from inside the app and gets macOS
-   permissions. The app needn't run after that. To find out: whether `codex plugin add` installs
-   the bundled computer-use plugin and helper without the app's UI, tested in a clean macOS user
-   or VM. Then `sleight-mcp setup` does what can be done and opens the right Settings panes.
-   macOS permissions always need the user's click.
+   Computer Use in Codex once, which installs the helper and gets macOS permissions. The app
+   needn't run after that. Found 2026-10-10: `codex plugin add` can't install the computer-use
+   plugin (the CLI reserves the `openai-bundled` marketplace, which the ChatGPT app seeds into
+   `~/.codex/.tmp`). The helper is inside ChatGPT.app with OpenAI's own installer
+   (`Codex Computer Use Installer install|uninstall|status`; `status` printed "OK: installed" here),
+   and the engine's command is in the app bundle too. So `sleight-mcp setup` could run that
+   installer and open the two permission panes, with no Codex session. To test in a clean macOS
+   user or VM: whether `install` needs an admin password, and whether the engine works without
+   ChatGPT ever signed in. macOS permissions always need the user's click.
 
 ## 6. Features after replay
 
