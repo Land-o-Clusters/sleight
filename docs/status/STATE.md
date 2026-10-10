@@ -73,6 +73,12 @@ in `.dev/prompts/`, for Sol threads the owner starts:
   header is still unit-tested only. Merged: `codex/replay-next` as `e12aef4`. Follow-up for
   `codex/small-fixes`: `.dev/prompts/sol-small-fixes-2.md`. Puddle's next window 1009r starts about
   00:50 UTC for about 40 minutes, so `/tmp/sleight-hold` stays.
+- Reviews (four code-review subagents, 00:40 UTC): `codex/doctor-flow` merged as `83188cf`, with a fix
+  (a new tab's destination is the browser in the bracket form too). Follow-ups to paste:
+  `sol-footprint-spawns-3.md` (extension cache too short, stale SQLite connection, a shared slow lane,
+  no live check of the JXA loader) and `sol-other-hosts-2.md` (the owner's Claude-first wording and
+  README move, no Codex CLI, plus six fixes). `sol-small-fixes-2.md` from before still applies.
+  Puddle's 1009r runs about 00:55 to 01:50 UTC.
 - sleight-arch: the guard's reads (`document-scope.mjs`, guard code in `relay.mjs`), with a
   background subagent studying guard-read phases across tonight's traces.
 - `/tmp/sleight-hold` exists while another project's window runs. Every brief stops live probes
