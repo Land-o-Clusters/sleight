@@ -164,3 +164,40 @@ The first prose pass on this section found one flag (exit 1), which was correcte
 Both attempts used the locked runner. The host run followed the sandbox denial. Helper signals and
 ChatGPT restarts were absent. The final prose check passed all 34 files with no flags
 (`npm run lint:prose`, exit 0).
+
+## Optional doctor app read, 2026-10-09
+
+Worktree `~/Projects/sleight-wt/doctor-flow`, branch `codex/doctor-flow`, base `7644809`.
+The first baseline `npm test` exited 1: the sandbox denied local test sockets and the generated
+hover fixture directory. The required full check was then run with host access.
+The first doctor test run failed all seven new app assertions (exit 1). The next run
+stopped at a duplicate variable declaration (exit 1); after correcting it, all 18 doctor tests passed
+(exit 0). The stand-in engine checks successful name and bundle-ID selection, missing and ambiguous
+apps, declined approval, a missing window header, and a timeout after inventory succeeds.
+The first prose check exited 2 because the new worktree lacked Vale's styles. `vale sync` also exited
+2 in the sandbox, then succeeded with host access (exit 0).
+
+`/tmp/sleight-hold` prevented live reads, leaving apps, input and dialogs untouched. This run
+establishes the doctor's reporting with a stand-in engine. Its native app read remains unmeasured.
+The first prose pass after style setup reported five flags (exit 1), which were corrected.
+The next prose pass reported one punctuation flag (exit 1). The first host full check passed 993/994
+unit tests (exit 1): the hover fixture's compiler exceeded its 60-second deadline under load.
+The hover fixture then passed alone (1/1, exit 0). The next bare full check hit several 180-second
+compiler deadlines. It was stopped with one Ctrl-C through its original terminal, which returned
+exit 1. Host load afterward was 101.27, with normal memory pressure (level 1).
+
+Review found that the initial inventory fixture used `name`, while the recorded engine contract
+uses `displayName` and an optional `isRunning`. New regression cases failed before the fix (exit 1).
+Doctor now requires `isRunning: true`. All 20 doctor cases passed afterward (exit 0).
+Review also found that partial-error and RPC-error text could expose private UI data. Those two
+regressions and two site regressions failed together (46/50 passed, exit 1). Error reporting now
+uses a fixed class. All 64 combined doctor, flow and browser tests passed (exit 0), including 22
+doctor cases. No app tree, title or field value is printed by the new app failure reports.
+Rebasing onto `origin/pane/auto-mode` at `8aff828` succeeded (exit 0). Restoring the saved changes
+first hit an index-lock sandbox denial (exit 1), then succeeded through direct Git with host access
+(exit 0). Dropping that task-owned stash needed host access after a lock denial (1, then 0).
+The prose pass after these receipt edits found one wording flag (exit 1), which was removed.
+The next bare full check passed all 1,012 unit tests, both plugin validations and 11 mod tests
+(`npm run check`, exit 0). That run overlapped high host load: the one-minute load average was 109.64
+during the check. The next prose check passed all 59 files with zero flags (`npm run lint:prose`,
+exit 0). Review closed the app inventory and private-error findings after the regression fixes.

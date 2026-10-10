@@ -61,3 +61,34 @@ test('only helper jobs without a process count as stale', () => {
   assert.deepEqual(staleHelperJobs('15463\t0\tapplication.com.openai.sky.CUAService.1.2\n-\t0\tapplication.com.example.CUAService.1\n'), []);
   assert.deepEqual(staleHelperJobs('-\t0\tapplication.com.openai.sky.CUAService.1;rm -rf ~\n'), []);
 });
+
+for (const [mode, app, code, message] of [
+  ['app-ok', 'Calculator', 0, /app read ok.*\d+ ms.*window header: yes/],
+  ['app-ok', 'com.apple.calculator', 0, /app read ok.*window header: yes/],
+  ['app-ok', 'TextEdit', 0, /app read skipped.*not running/],
+  ['app-not-running', 'com.apple.calculator', 0, /app read skipped.*not running/],
+  ['app-running-unknown', 'com.apple.calculator', 0, /app read skipped.*running status unknown/],
+  ['app-ambiguous', 'Calculator', 0, /app read skipped.*ambiguous/],
+  ['app-approval', 'Calculator', 0, /app read skipped.*approval required/],
+  ['app-no-header', 'Calculator', 1, /app read FAILED.*\d+ ms.*window header: no/],
+  ['app-timeout', 'Calculator', 1, /app read FAILED.*timeoutReached/],
+  ['app-partial-error', 'Calculator', 1, /app read FAILED.*window header: yes.*engine error/],
+  ['app-rpc-private', 'Calculator', 1, /app read FAILED.*window header: no.*engine error/],
+]) {
+  test(`doctor reports an optional running app read: ${mode}, ${app}`, async t => {
+    const bank = await mkdtemp(join(tmpdir(), 'sleight-doctor-app-'));
+    t.after(() => rm(bank, { recursive: true, force: true }));
+    const config = join(bank, 'plugins/cache/openai-bundled/unified-computer-use/1.0');
+    await mkdir(config, { recursive: true });
+    const script = fileURLToPath(new URL('fixtures/helper-probe-server.mjs', import.meta.url));
+    await writeFile(join(config, '.mcp.json'), JSON.stringify({ mcpServers: { cua_repl: {
+      command: process.execPath, args: [script, mode], env: { CUA_REPL_NODE_REPL_PATH: script, SKY_CUA_SERVICE_PATH: script },
+    } } }));
+    const lines = [];
+    assert.equal(await doctor({ app, env: { CODEX_HOME: bank, SLEIGHT_SURFACES: 'computer' },
+      log: line => lines.push(line), timeoutMs: 2000, forbiddenTargets: () => '0' }), code);
+    assert.match(lines.join('\n'), /live read ok \(helper inventory\)/);
+    assert.match(lines.join('\n'), message);
+    assert.doesNotMatch(lines.join('\n'), /restart ChatGPT|PRIVATE WINDOW TITLE|PRIVATE CONTENT/);
+  });
+}

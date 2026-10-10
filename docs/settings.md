@@ -115,6 +115,14 @@ sleight rewrites that sentence so Claude can put the first actions after the acq
 same call, since the guard checks the window before they run. Set `SLEIGHT_FIRST_CALL_BATCH=0` to
 keep the engine's wording.
 
+## Doctor app reads
+
+`sleight-mcp --doctor` checks the helper's inventory. Add a running app name or bundle ID, such as
+`sleight-mcp --doctor Calculator`, to check that app's accessibility read too. Doctor reports elapsed
+milliseconds and whether it received a window header. It skips missing or ambiguous apps and declines
+approval requests without showing a prompt. Doctor only reads. A failed app read exits 1; a skipped
+app read leaves a successful inventory check at exit 0.
+
 ## Flow rules
 
 Write `~/Library/Application Support/sleight/flow-rules.json` yourself, outside the project, then set
