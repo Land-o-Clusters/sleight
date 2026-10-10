@@ -258,7 +258,10 @@ our own runs. Dates and engine versions are given where they matter.
   App identity comes from literal acquisitions, known handles and learned bundle aliases. Arbitrary
   JavaScript can bypass this advisory check. Independent checks establish evidence for the advice,
   not the native cause of a shared helper fault.
-  Doctor probes inventory, which does not prove that every app's accessibility read works. Before
+  Doctor probes inventory by default, which does not prove that every app's accessibility read works.
+  `sleight-mcp --doctor Calculator` also checks that running app's read, reporting its time and window
+  header. It skips apps that need approval or are missing or ambiguous in inventory. The app probe
+  has stand-in engine coverage; live checks on 2026-10-09 were held by `/tmp/sleight-hold`. Before
   0.7.0 it also reported "ok" when the helper couldn't start at all.
   [The investigation](benchmarks/2026-10-04-helper-health.md) records each live attempt.
 - On a busy Mac the guard can stop a call that clicks several element numbers. With 20 CPU-bound

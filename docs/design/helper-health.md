@@ -35,6 +35,16 @@ for the response. Any approval request is declined. A read timeout prints the st
 and exits 1. Missing files, startup failures, and other engine errors exit 1 with their own reason.
 Doctor uses inventory so it can test the shared helper without app approval. An inventory success
 does not establish that an app's accessibility tree is responsive.
+`sleight-mcp --doctor Calculator` also acquires Calculator through the engine, if the inventory lists
+it as running. An app name or bundle ID selects one exact inventory entry. Missing or ambiguous
+entries and entries without an explicit running status are skipped. Doctor declines app approval
+requests without showing a prompt, reports
+that approval is required, and skips the read. It never grants approval or sends input.
+The app read has the same five-second execution timeout and 500 ms response allowance. It reports
+elapsed milliseconds and whether the result contained a window header, without printing the tree.
+A failed read reports an error class, including timeouts, rather than partial UI text from the error.
+A successful read needs that header. Missing headers and engine errors exit 1, while skipped reads
+exit 0 when inventory passed. Doctor keeps app failures separate from shared-helper restart advice.
 Doctor owns a detached process group, with EOF followed by TERM at two seconds and KILL at five
 seconds if needed. Collection has a six-second limit after EOF. It reports collection failure
 rather than waiting indefinitely for a descendant that retained an output pipe.
