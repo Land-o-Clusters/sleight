@@ -325,8 +325,10 @@ our own runs. Dates and engine versions are given where they matter.
   The intended TextEdit document was edited and sampled foreground state was unchanged. This depends on the app supporting those Accessibility operations and
   exposing a unique title or AXDocument URL. Other apps remain untested. During an active selection, the relay marks changed or missing action
   window headers as "outcome unconfirmed". [Attempt results](benchmarks/2026-10-04-window-targeting.md) include the failures.
-- The native guard still needs full AX reads after preceding actions. Engine 26.1002.52244 exposes
-  no header-only read, and its reply does not split AX, settling, capture and transfer time.
+- The native guard still needs full AX reads after preceding actions. Engine 26.1007.21159's
+  `getAXState` options are still only `emit` and `disableDiffing` (same as 26.1002.52244). The bound
+  App forwards those to Sky `get_app_state({ app, disableDiff? })`. Clicks take `element_index` or
+  coordinates, not an AX ID. The helper's reply does not split AX, settling, capture and transfer time.
   On 2026-10-08, Calculator reads after Escape took median 413 to 437 ms, against 29 to 48 ms idle.
   Even waiting 700 ms first left a 413 ms read. The [engine timing study](design/engine-time.md)
   points to a wait on the next capture, without separating the native phases. Screenshots now reuse
@@ -445,8 +447,9 @@ our own runs. Dates and engine versions are given where they matter.
 - A Save or Open sheet showing a folder with many items reads as a very large tree: 198 file rows
   made one read of TextEdit's Save sheet 57,000 characters (2026-10-10), past Claude Code's tool
   output limit, so Claude saw only a pointer to a file, and every guard read of it took 1.4 to
-  2.3 s. The benchmark now moves runs older than 6 hours out of its folder. For users, a read
-  that leaves out the browser's rows isn't built yet.
+  2.3 s. The benchmark now moves runs older than 6 hours out of its folder. Engine 26.1007.21159
+  still has no root, depth, filter or element-query on `getAXState`, so a read that leaves out the
+  browser rows is unbuilt. Filtering the text after a full walk would not cut the walk.
 - Finishing a File > Open panel brought TextEdit to the front for about a second in 3 of about 21
   textedit-edit runs while the owner worked (2026-10-10, WindowServer log), each time just after the
   panel opened the document. The engine's actions themselves didn't. The skill now sends Claude to

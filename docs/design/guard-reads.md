@@ -62,7 +62,10 @@ TextEdit. Later reads, each after an action, took 407 and 476 ms. Guard reads we
 engine time in these sequences. The engine has no header-only or depth-limited read, and its reply
 doesn't say how long the helper's AX walk, its wait for the UI to settle, the capture or the
 transfer took. That a read after input waits for the UI to settle fits these numbers but isn't
-measured. Parsing the tree in sleight took 0.01 to 0.04 ms.
+measured. Parsing the tree in sleight took 0.01 to 0.04 ms. Reconfirmed on 26.1007.21159:
+`StateOptions` is `{ emit?: boolean, disableDiffing?: boolean }`, Sky `get_app_state` Input is
+`{ app, disableDiff? }`, and `bind_mac_app` copies only `disableDiffing`. The guard's `{ id }`
+lookup parses a full tree.
 
 ## Native observation experiment (2026-10-09)
 
