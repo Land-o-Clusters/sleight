@@ -1,9 +1,16 @@
 # Browser control
 
-Ordinary startup enables native apps and extension browsers in one session engine. The engine's
-browser inventory reports connected extensions when the caller asks for it. There is no preflight
-engine and no startup approval. Automatic mode excludes the in-app browser. An explicit
-`SLEIGHT_SURFACES` preserves the requested surfaces and configured backends.
+Ordinary startup enables extension browsers only when a discovery result less than one minute old
+reports a connected extension. It reads `~/Library/Caches/sleight/extensions.json`, keyed to the
+installed engine. Missing, expired or invalid entries keep the session on `computer`.
+After the session engine initializes, an owned background discovery refreshes a missing or expired
+entry for the next session. A fresh entry avoids that extra engine. The current session keeps its
+tool description. Automatic mode excludes the in-app browser. An explicit `SLEIGHT_SURFACES`
+preserves the requested surfaces and configured backends and skips the cache and discovery.
+
+The cache stores a timestamp and a boolean, with no browser identities or approvals. A disconnect
+can leave a positive result stale for up to one minute. Connecting an extension requires a later
+session after discovery completes. Cache write failures leave native control available.
 
 Doctor still runs one owned discovery engine with only browser control enabled. It calls
 `cua.listBrowsers({emit: false})` with fresh session and turn metadata. Doctor enables browser control

@@ -1,0 +1,46 @@
+{
+  "base": "7644809911e527afe21203063cc14a8d8fa364eb",
+  "reviewedHead": "2e3b887d4a2c911b694bf3f8b2314e3d43236540",
+  "branch": "codex/footprint-spawns",
+  "modelCalls": 0,
+  "cacheTtlMs": 60000,
+  "helperDeadlinesMs": { "probe": 2000, "target": 30000, "keyboardTaps": 30000 },
+  "attempts": [
+    { "command": "node --test tests/footprint-spawns.test.mjs", "exit": 1, "passed": 10, "failed": 4, "phase": "regression red" },
+    { "command": "node --test tests/surface-cache.test.mjs", "exit": 1, "passed": 0, "failed": 3, "phase": "cache regression red" },
+    { "command": "node --test tests/footprint-spawns.test.mjs tests/surface-cache.test.mjs tests/read-failure.test.mjs tests/browser-discovery.test.mjs", "exit": 0, "passed": 31, "phase": "initial fixes" },
+    { "command": "node --test tests/footprint-spawns.test.mjs tests/surface-cache.test.mjs tests/read-failure.test.mjs tests/browser-discovery.test.mjs", "exit": 0, "passed": 32, "phase": "stdout observer fix" },
+    { "command": "node --test tests/surface-cache.test.mjs", "exit": 0, "passed": 6, "phase": "cache filesystem checks" },
+    { "command": "node --test tests/surface-cache.test.mjs", "exit": 0, "passed": 7, "phase": "cache lifetime includes discovery and collection" },
+    { "command": "npm run check", "exit": 1, "phase": "sandbox", "reason": "local TCP/Unix listen EPERM and hover-fixture output denied" },
+    { "command": "npm run check", "exit": 1, "phase": "host access", "reason": "180-second native compiler deadlines under load; interrupted once through original TTY; terminal exit collected", "load": [68.421875, 64.9140625, 41.82275390625] },
+    { "command": "npm run check", "exit": 0, "phase": "final host access", "pluginValidations": 2, "modPassed": 11, "loadBeforeLaunch": [30.58740234375, 64.94873046875, 54.560546875], "nativePrototypeCompileMs": 90692.460583 },
+    { "command": "npm run lint:prose", "exit": 1, "errors": 10, "files": 61 },
+    { "command": "npm run lint:prose", "exit": 1, "errors": 1, "files": 61 },
+    { "command": "npm run lint:prose", "exit": 0, "errors": 0, "files": 61 },
+    { "command": "npm run lint:prose", "exit": 0, "errors": 0, "files": 61, "phase": "verification prose update" },
+    { "command": "node --check bench/footprint-spawns-live.mjs", "exit": 0 },
+    { "command": "git diff --check", "exit": 0 }
+  ],
+  "live": {
+    "status": "deferred",
+    "reason": "/tmp/sleight-hold exists; sleight-arch owns removal",
+    "holdCheckedAt": "2026-10-10T00:15:20Z",
+    "appDriving": false,
+    "liveLockTaken": false,
+    "helperPairs": [],
+    "surfacePairs": []
+  },
+  "historicalAcquisitionMs": { "total": 29475, "beforeElicitation": 1790, "acceptance": 2, "afterAcceptanceInsideEngine": 27683, "nativeCause": "unknown" },
+  "priorMeasurements": "2026-10-09-footprint-spawns.json",
+  "environment": [
+    { "time": "2026-10-10T00:06:26.296Z", "load": [68.421875, 64.9140625, 41.82275390625] },
+    { "time": "2026-10-10T00:07:34.944Z", "load": [111.3916015625, 78.564453125, 48.79443359375] },
+    { "time": "2026-10-10T00:09:17.233Z", "load": [93.84814453125, 82.26025390625, 53.57763671875], "memoryPressure": 2 },
+    { "time": "2026-10-10T00:11:03.120Z", "load": [91.14990234375, 86.63818359375, 58.7470703125], "memoryPressure": 2 },
+    { "time": "2026-10-10T00:12:55.745Z", "load": [44.10107421875, 71.3671875, 56.29443359375] },
+    { "time": "2026-10-10T00:13:31.728Z", "load": [30.58740234375, 64.94873046875, 54.560546875] },
+    { "time": "2026-10-10T00:15:20.723Z", "load": [84.99755859375, 69.599609375, 57.3193359375] }
+  ],
+  "review": { "outcome": "no findings after fixes", "cacheTests": 6, "cacheTestExit": 0, "nativeBenchSyntaxExit": 0 }
+}

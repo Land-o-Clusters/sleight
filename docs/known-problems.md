@@ -15,9 +15,10 @@ our own runs. Dates and engine versions are given where they matter.
   site. A person's navigation between calls can still leave a stale site. The site checks have
   recorded-header unit coverage, with live checks held on 2026-10-09. Clipboard transfers and runtime
   strings remain outside those checks. Native
-  document scope and saved-file change review do not cover browser tabs. Browser discovery runs
-  once at startup; connecting an extension later requires a new sleight session or an explicit
-  `SLEIGHT_SURFACES` override. An installed extension can be absent from the engine's live inventory.
+  document scope and saved-file change review do not cover browser tabs. Automatic mode uses a
+  connected-extension result cached for one minute. A disconnect can leave it stale until expiry;
+  connecting an extension requires a later session after background discovery completes. An installed
+  extension can be absent from the engine's inventory. Browser approvals still use their normal route.
 - [Input leases](design/input-lease.md) let one sleight session act on a window at a time.
   Another session gets the holder's name and time left, while reads remain available. Leases expire
   after 30 seconds without renewal and end with the turn or session. Local drag and hover reserve the app,

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { spawn, execFile } from 'node:child_process';
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { selectSurfaces } from '../plugins/sleight/lib/launch.mjs';
@@ -13,19 +15,19 @@ import { pane, loadCodec } from '../bench/footprint-spawns.mjs';
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAEklEQVR4AWP4z8Dwn4GB4f9/ABH4A/1gtGwYAAAAAElFTkSuQmCC', 'base64');
 const jpeg = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64');
 
-test('automatic launch enables extension inventory without starting a preflight engine', async t => {
+test('automatic launch without a cached extension stays computer-only without a preflight engine', async t => {
   const directory = mkdtempSync(join(tmpdir(), 'sleight-no-discovery-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const requests = join(directory, 'requests');
   const server = { command: process.execPath, args: [new URL('fixtures/browser-discovery-engine.mjs', import.meta.url).pathname],
     env: { SLEIGHT_TEST_REQUESTS: requests, SLEIGHT_TEST_BROWSERS: '[]' } };
-  await selectSurfaces(server, {});
+  await selectSurfaces(server, {}, { file: join(directory, 'cache.json') });
   assert.equal(existsSync(requests), false, 'native startup must not run a separate JS session');
-  assert.equal(server.env.CUA_REPL_ENABLED_SURFACES, 'browser,computer');
+  assert.equal(server.env.CUA_REPL_ENABLED_SURFACES, 'computer');
   assert.equal(server.env.BROWSER_USE_AVAILABLE_BACKENDS, 'chrome');
 });
 
-test('health, target and tap requests share one session helper and retain reply identity', async () => {
+test('health and slow operations reuse two session helpers and retain reply identity', async () => {
   let spawned = 0;
   const script = `require('readline').createInterface({input:process.stdin}).on('line',line=>{
     const r=JSON.parse(line); const reply=r.op==='keyboard-taps'?{ok:true,taps:[{pid:42,app:'Calculator'}]}:
@@ -38,8 +40,8 @@ test('health, target and tap requests share one session helper and retain reply 
     assert.equal((await helper.probe('Calculator')).status, 'responding');
     assert.deepEqual(await helper.keyboardTaps(), [{ pid: 42, app: 'Calculator' }]);
     assert.deepEqual(await helper.target({ app: 'Calculator' }), { ok: true, target: { appId: 'com.apple.calculator', pid: 42 } });
-    assert.equal(spawned, 1);
-  } finally { helper.close(); }
+    assert.equal(spawned, 2);
+  } finally { await helper.close(); }
   assert.deepEqual(await helper.keyboardTaps(), []);
   assert.equal((await helper.target({ app: 'Calculator' })).ok, false, 'closed helpers cannot grant a target');
 });
@@ -49,14 +51,67 @@ test('a stalled target refuses and a new helper can answer the next request', as
   const script = `require('readline').createInterface({input:process.stdin}).on('line',line=>{
     const r=JSON.parse(line); if(r.app==='stuck')return;
     process.stdout.write(JSON.stringify({id:r.id,ok:true,target:{appId:'com.apple.calculator',pid:42}})+'\\n'); });`;
-  const helper = createAppHealthHelper({ timeoutMs: 300, spawnHelper: () => {
+  const helper = createAppHealthHelper({ operationTimeoutMs: 300, spawnHelper: () => {
     spawned++; return spawn(process.execPath, ['-e', script], { stdio: ['pipe', 'pipe', 'ignore'] });
   } });
   try {
     assert.equal((await helper.target({ app: 'stuck' })).ok, false);
     assert.deepEqual(await helper.target({ app: 'Calculator' }), { ok: true, target: { appId: 'com.apple.calculator', pid: 42 } });
     assert.equal(spawned, 2);
-  } finally { helper.close(); }
+  } finally { await helper.close(); }
+});
+
+function fakeHelpers() {
+  const lanes = { probe: [], slow: [] };
+  return { lanes, spawnHelper(kind) {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough(); child.requests = [];
+    child.stdin = new PassThrough();
+    child.stdin.on('data', line => child.requests.push(JSON.parse(line)));
+    child.kill = () => { child.killed = true; queueMicrotask(() => child.emit('close')); };
+    child.reply = value => child.stdout.write(JSON.stringify({ id: child.requests.at(-1).id, ...value }) + '\n');
+    lanes[kind].push(child);
+    return child;
+  } };
+}
+
+test('a probe deadline cannot interrupt a slow target with its own 30 second deadline', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fake = fakeHelpers();
+  const helper = createAppHealthHelper({ spawnHelper: kind => fake.spawnHelper(kind) });
+  let targetFinished = false;
+  const target = helper.target({ app: 'Calculator' }).then(value => { targetFinished = true; return value; });
+  const probe = helper.probe('TextEdit');
+  t.mock.timers.tick(2000);
+  assert.deepEqual(await probe, { status: 'unknown' });
+  assert.equal(fake.lanes.probe[0].killed, true);
+  assert.equal(fake.lanes.slow[0].killed, undefined);
+  t.mock.timers.tick(27999); await Promise.resolve();
+  assert.equal(targetFinished, false);
+  fake.lanes.slow[0].reply({ ok: true, target: { appId: 'com.apple.calculator', pid: 42 } });
+  assert.equal((await target).ok, true);
+  await helper.close();
+});
+
+test('a timed-out slow operation leaves queued taps intact with their full deadline', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fake = fakeHelpers();
+  const helper = createAppHealthHelper({ spawnHelper: kind => fake.spawnHelper(kind) });
+  const target = helper.target({ app: 'Calculator' });
+  let tapsFinished = false;
+  const taps = helper.keyboardTaps().then(value => { tapsFinished = true; return value; });
+  assert.equal(fake.lanes.slow[0].requests.length, 1);
+  t.mock.timers.tick(30000);
+  assert.equal((await target).ok, false);
+  // Collection of the timed-out process precedes dispatch on its replacement.
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+  assert.equal(fake.lanes.slow.length, 2);
+  assert.equal(fake.lanes.slow[1].requests[0].op, 'keyboard-taps');
+  t.mock.timers.tick(29999); await Promise.resolve();
+  assert.equal(tapsFinished, false);
+  fake.lanes.slow[1].reply({ ok: true, taps: [{ pid: 42 }] });
+  assert.deepEqual(await taps, [{ pid: 42 }]);
+  await helper.close();
 });
 
 test('closing the session collects its helper before reporting completion', async () => {

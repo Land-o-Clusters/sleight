@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { discoverExtensions } from './browser-discovery.mjs';
+import { createSurfaceCache, refreshAfterInitialize } from './surface-cache.mjs';
 import { createRelay } from './relay.mjs';
 import { createAppHealthHelper, diagnoseReadFailure } from './read-failure.mjs';
 import { loadFlowRules } from './flow-rules.mjs';
@@ -68,19 +69,24 @@ export function resolveServer(env = process.env) {
   if (!server?.command) return { error: `${configPath} has no "${SERVER_KEY}" server` };
 
   const serverEnv = { ...server.env };
-  // run() exposes extension inventory in the session's own engine.
+  // Automatic selection below uses only a recent connected-extension inventory.
   serverEnv.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES || 'computer';
 
   return { version, configPath, command: server.command, args: server.args || [], env: serverEnv };
 }
 
-export function selectSurfaces(server, env = process.env) {
-  server.env.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES || 'browser,computer';
-  if (!env.SLEIGHT_SURFACES) server.env.BROWSER_USE_AVAILABLE_BACKENDS = 'chrome';
+export function selectSurfaces(server, env = process.env, options) {
+  if (env.SLEIGHT_SURFACES) {
+    server.env.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES;
+    return;
+  }
+  const cache = createSurfaceCache(server, options);
+  server.env.CUA_REPL_ENABLED_SURFACES = cache.connected ? 'browser,computer' : 'computer';
+  server.env.BROWSER_USE_AVAILABLE_BACKENDS = 'chrome';
+  return cache;
 }
 
-// Doctor can still check extension availability. Ordinary launch needs no second engine:
-// the session's browser inventory reports connected extensions when the caller asks for it.
+// Doctor checks live availability; launch uses the cache without a synchronous discovery engine.
 export async function probeSurfaces(server, env = process.env, options) {
   if (env.SLEIGHT_SURFACES) {
     server.env.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES;
@@ -454,14 +460,20 @@ export async function run({ leaseDirectory } = {}) {
   const s = resolveServer();
   if (s.error) fail(s.error);
   if (!existsSync(s.command)) fail(`server runtime missing: ${s.command}`);
-  await selectSurfaces(s);
+  const surfaceCache = selectSurfaces(s);
 
   const child = spawn(s.command, s.args, {
     stdio: ['pipe', 'pipe', 'inherit'],
     env: { ...process.env, ...s.env },
   });
   child.on('error', err => fail(`could not start server: ${err.message}`));
-  child.on('close', async code => { await stopHelpers(); await appHealth.close(); await relay.close(); process.exit(code ?? 0); });
+  // Refresh after the session engine initializes. Keep its current description fixed; a fresh
+  // inventory affects the next session only. A valid cache needs no second engine at all.
+  const stopObservingInitialization = refreshAfterInitialize(child.stdout, surfaceCache);
+  child.on('close', async code => {
+    stopObservingInitialization(); await surfaceCache?.close();
+    await stopHelpers(); await appHealth.close(); await relay.close(); process.exit(code ?? 0);
+  });
   let terminating = false;
   function terminateEngine(signal = 'SIGTERM') {
     if (terminating) return;

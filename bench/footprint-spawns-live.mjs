@@ -17,8 +17,7 @@ async function worker(root, output, cancelFile) {
   const report = { root: scrub(root), started: new Date().toISOString(), load: loadavg(), calls: [], failures: [] };
   let unlock, helper, client, bank, cleanup = true;
   const children = [], handles = [];
-  const helperOps = [], helperReplies = [];
-  const query = (op, run) => { helperOps.push(op); return run(); };
+  const helperReplies = [];
   let interrupted = false;
   const cancel = () => { interrupted = true; void client?.close(); void helper?.close(); };
   process.once('SIGINT', cancel);
@@ -31,10 +30,17 @@ async function worker(root, output, cancelFile) {
     const { createAppHealthHelper } = await import(pathToFileURL(join(root, 'plugins/sleight/lib/read-failure.mjs')));
     const { runScript, stopHelpers } = await import(pathToFileURL(join(root, 'plugins/sleight/lib/launch.mjs')));
     let shared;
-    helper = createAppHealthHelper({ spawnHelper: () => {
+    helper = createAppHealthHelper({ spawnHelper: kind => {
       ready();
       const lib = join(root, 'plugins/sleight/lib');
-      const child = spawn('/usr/bin/osascript', ['-l', 'JavaScript', join(lib, 'app-health.js'), ...(shared ? ['--session', lib] : [])], { stdio: ['pipe', 'pipe', 'pipe'] });
+      const child = spawn('/usr/bin/osascript', ['-l', 'JavaScript', join(lib, 'app-health.js'),
+        ...(shared && kind !== 'probe' ? ['--session', lib] : [])], { stdio: ['pipe', 'pipe', 'pipe'] });
+      const operations = new Map();
+      const write = child.stdin.write.bind(child.stdin);
+      child.stdin.write = (line, ...args) => {
+        const request = JSON.parse(line); operations.set(request.id, request.op ?? 'health');
+        return write(line, ...args);
+      };
       let stderr = '';
       let buffer = '';
       child.stdout.on('data', data => {
@@ -44,7 +50,7 @@ async function worker(root, output, cancelFile) {
           const line = buffer.slice(0, end); buffer = buffer.slice(end + 1);
           try {
             const reply = JSON.parse(line);
-            helperReplies.push({ op: helperOps[reply.id], ok: reply.ok, status: reply.status, error: reply.error });
+            helperReplies.push({ lane: kind ?? 'original', op: operations.get(reply.id), ok: reply.ok, status: reply.status, error: reply.error });
           } catch { /* The helper's own client handles malformed protocol. */ }
         }
       });
@@ -60,13 +66,13 @@ async function worker(root, output, cancelFile) {
       report.calls.push({ name, ms: performance.now() - start, load: loadavg() });
       return result;
     };
-    const before = await timed('helper cold health', () => query('health', () => helper.probe('Calculator')));
+    const before = await timed('helper cold health', () => helper.probe('Calculator'));
     assert.ok(['responding', 'absent'].includes(before.status), `native health unavailable (${before.status})`);
     report.appStatus = before.status;
     ready();
     const started = performance.now();
     client = await probeClient({ command: process.execPath, args: [join(root, 'tests/fixtures/lease-launcher.mjs'), join(bank, 'leases')],
-      env: { SLEIGHT_SURFACES: '', SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_TRACE: join(bank, 'trace') } },
+      env: { SLEIGHT_SURFACES: 'computer', SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_TRACE: join(bank, 'trace') } },
     { relay: false, label: 'footprint', record: () => {} });
     report.initializeMs = performance.now() - started;
     async function call(name, code) {
@@ -77,7 +83,7 @@ async function worker(root, output, cancelFile) {
     if (before.status === 'responding') {
       await call('acquisition', 'var app = await cua.getApp("com.apple.calculator")');
       await call('read', 'await app.getAXState({ disableDiffing: true })');
-      // Check native acquisition in a browser-enabled session without launching an app.
+      // Read only an existing app; no launch, activation, input or pointer work.
       const taps = await timed('turn end', () => client.call('turn_ended', { hook_event_name: 'Stop' }));
       assert.ok(!taps.isError);
     } else {
@@ -91,13 +97,13 @@ async function worker(root, output, cancelFile) {
       ready(); oneShotSpawns++; return execFile(command, argv, options, callback);
     });
     for (let i = 0; i < 5; i++) {
-      const health = await timed('helper warm health', () => query('health', () => helper.probe('Calculator')));
+      const health = await timed('helper warm health', () => helper.probe('Calculator'));
       assert.equal(health.status, before.status, 'Calculator changed during the probe');
-      const target = await timed('target', () => shared ? query('target', () => helper.target({ app: 'Calculator' })) : local('lease-target.js', { app: 'Calculator' }));
+      const target = await timed('target', () => shared ? helper.target({ app: 'Calculator' }) : local('lease-target.js', { app: 'Calculator' }));
       assert.equal(target.ok, before.status === 'responding', target.error);
       if (target.ok) assert.equal(target.target.appId, 'com.apple.calculator');
       else assert.match(target.error, /needs one running app with a bundle ID/);
-      const taps = await timed('keyboard taps', async () => shared ? query('taps', () => helper.keyboardTaps()) : (await local('keyboard-taps.js', {})).taps);
+      const taps = await timed('keyboard taps', async () => shared ? helper.keyboardTaps() : (await local('keyboard-taps.js', {})).taps);
       assert.ok(Array.isArray(taps));
       if (shared) assert.equal(helperReplies.at(-1)?.ok, true, helperReplies.at(-1)?.error);
       report.queries.push({ target: target.target?.appId ?? 'absent', tapCount: taps.length });
@@ -127,9 +133,52 @@ async function worker(root, output, cancelFile) {
   return report.failures.length ? 1 : 0;
 }
 
-async function pairs(baseline, output) {
+async function surfaceWorker(surfaces, output, cancelFile) {
+  const report = { surfaces, started: new Date().toISOString(), load: loadavg(), calls: [], failures: [] };
+  let unlock, client, interrupted = false, cleanup = true;
+  const cancel = () => { interrupted = true; void client?.close(); };
+  process.once('SIGINT', cancel);
+  const cancellation = setInterval(() => { if (existsSync(cancelFile) && !interrupted) cancel(); }, 100);
+  cancellation.unref();
+  try {
+    available(); unlock = await acquireLiveLock(); available();
+    const { resolveServer } = await import('../plugins/sleight/lib/launch.mjs');
+    const server = resolveServer({ ...process.env, SLEIGHT_SURFACES: surfaces });
+    assert.ok(!server.error, server.error);
+    server.env.BROWSER_USE_AVAILABLE_BACKENDS = 'chrome';
+    report.engineVersion = server.version;
+    const start = performance.now();
+    available(); assert.equal(interrupted, false);
+    client = await probeClient(server, { relay: false, label: 'surfaces', record: event => {
+      if (event.event === 'engine-close') report.engineExit = { code: event.code, signal: event.signal };
+    }, approve: async () => ({ action: 'decline' }) });
+    report.initializeMs = performance.now() - start;
+    for (let i = 0; i < 3; i++) {
+      available(); assert.equal(interrupted, false);
+      const callStart = performance.now();
+      const result = await client.call('js', { code: 'nodeRepl.write("footprint-surface-ready")' });
+      report.calls.push({ name: i ? 'warm js' : 'first js', ms: performance.now() - callStart, load: loadavg(),
+        textBytes: result.content?.filter(b => b.type === 'text').reduce((n, b) => n + Buffer.byteLength(b.text), 0) });
+      assert.ok(!result.isError && result.content?.some(b => b.type === 'text' && b.text.includes('footprint-surface-ready')), 'readiness marker missing');
+    }
+  } catch (error) { report.failures.push(scrub(error.message)); }
+  finally {
+    if (client) {
+      try { await client.close(); report.engineCollected = true; }
+      catch (error) { cleanup = false; report.failures.push(scrub(error.message)); }
+    }
+    if (unlock && cleanup) { await unlock(); report.lockReleased = true; }
+    else if (unlock) report.lockRetained = true;
+    clearInterval(cancellation); process.removeListener('SIGINT', cancel);
+    if (interrupted) report.failures.push('interrupted');
+    writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
+  }
+  return report.failures.length ? 1 : 0;
+}
+
+async function pairs(baseline, output, surfaces = false) {
   available();
-  const report = { started: new Date().toISOString(), mode: 'live pairs', runs: [] };
+  const report = { started: new Date().toISOString(), mode: surfaces ? 'session engine surfaces' : 'live helper pairs; computer surface', runs: [] };
   const bank = mkdtempSync('/private/tmp/sleight-footprint-pairs-');
   const cancelFile = join(bank, 'cancel');
   let interrupted = false;
@@ -139,10 +188,11 @@ async function pairs(baseline, output) {
   process.once('SIGINT', cancel);
   try {
     for (let repetition = 1; repetition <= 3; repetition++) {
-      for (const [arm, root] of repetition % 2 ? [['before', baseline], ['after', currentRoot]] : [['after', currentRoot], ['before', baseline]]) {
+      const arms = surfaces ? [['computer', 'computer'], ['browser,computer', 'browser,computer']] : [['before', baseline], ['after', currentRoot]];
+      for (const [arm, root] of repetition % 2 ? arms : arms.toReversed()) {
         available(); if (interrupted) return 1;
         const target = join(bank, `${arm}-${repetition}.json`);
-        const child = spawn('/usr/bin/time', ['-p', process.execPath, fileURLToPath(import.meta.url), 'worker', root, target, cancelFile], { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+        const child = spawn('/usr/bin/time', ['-p', process.execPath, fileURLToPath(import.meta.url), surfaces ? 'surface-worker' : 'worker', root, target, cancelFile], { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
         let stderr = ''; child.stdout.resume(); child.stderr.on('data', data => { stderr += data; });
         const exit = await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal })); });
         const result = existsSync(target) ? JSON.parse(readFileSync(target, 'utf8')) : { failures: ['worker produced no report'] };
@@ -159,5 +209,7 @@ async function pairs(baseline, output) {
   } finally { process.removeListener('SIGINT', cancel); rmSync(bank, { recursive: true, force: true }); }
 }
 try {
-  process.exitCode = process.argv[2] === 'worker' ? await worker(resolve(process.argv[3]), process.argv[4], process.argv[5]) : await pairs(resolve(process.argv[2]), process.argv[3]);
+  process.exitCode = process.argv[2] === 'worker' ? await worker(resolve(process.argv[3]), process.argv[4], process.argv[5])
+    : process.argv[2] === 'surface-worker' ? await surfaceWorker(process.argv[3], process.argv[4], process.argv[5])
+      : process.argv[2] === 'surfaces' ? await pairs(undefined, process.argv[3], true) : await pairs(resolve(process.argv[2]), process.argv[3]);
 } catch (error) { console.error(scrub(error.message)); process.exitCode = 1; }
