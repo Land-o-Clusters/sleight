@@ -1,0 +1,2251 @@
+{
+ "study": "browser surface against the accessibility surface on the Helium web tasks",
+ "sides": [
+  {
+   "attempt": "setup-failed",
+   "round": 1,
+   "surfaces": "computer",
+   "stamp": "2026-10-10T14-01-09-311Z",
+   "suite": "real",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "passed": false,
+     "reason": "Fixture setup readiness timed out",
+     "cleanupError": "Owned fixture window cleanup unconfirmed",
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true
+      }
+     ],
+     "fixtureDir": "<temp>/sleight-bench/2026-10-10T14-01-09-311Z/sleight-helium-form-1",
+     "models": []
+    }
+   ]
+  },
+  {
+   "attempt": "setup-failed",
+   "round": 1,
+   "surfaces": "browser,computer",
+   "stamp": "2026-10-10T14-02-29-064Z",
+   "suite": "real",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "passed": false,
+     "reason": "Fixture setup readiness timed out",
+     "cleanupError": "Owned fixture window cleanup unconfirmed",
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true
+      }
+     ],
+     "fixtureDir": "<temp>/sleight-bench/2026-10-10T14-02-29-064Z/sleight-helium-form-1",
+     "models": []
+    }
+   ]
+  },
+  {
+   "attempt": "setup-failed",
+   "round": 2,
+   "surfaces": "browser,computer",
+   "stamp": "2026-10-10T14-03-44-916Z",
+   "suite": "real",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "passed": false,
+     "reason": "Fixture setup readiness timed out",
+     "cleanupError": "Owned fixture window cleanup unconfirmed",
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true
+      }
+     ],
+     "fixtureDir": "<temp>/sleight-bench/2026-10-10T14-03-44-916Z/sleight-helium-form-1",
+     "models": []
+    }
+   ]
+  },
+  {
+   "attempt": "setup-failed",
+   "round": 2,
+   "surfaces": "computer",
+   "stamp": "2026-10-10T14-05-02-089Z",
+   "suite": "real",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "passed": false,
+     "reason": "Fixture setup readiness timed out",
+     "cleanupError": "Owned fixture window cleanup unconfirmed",
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true
+      }
+     ],
+     "fixtureDir": "<temp>/sleight-bench/2026-10-10T14-05-02-089Z/sleight-helium-form-1",
+     "models": []
+    }
+   ]
+  },
+  {
+   "attempt": "setup-failed",
+   "round": 3,
+   "surfaces": "computer",
+   "stamp": "2026-10-10T14-06-18-218Z",
+   "suite": "real",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "passed": false,
+     "reason": "Fixture setup readiness timed out",
+     "cleanupError": "Owned fixture window cleanup unconfirmed",
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true
+      }
+     ],
+     "fixtureDir": "<temp>/sleight-bench/2026-10-10T14-06-18-218Z/sleight-helium-form-1",
+     "models": []
+    }
+   ]
+  },
+  {
+   "attempt": "setup-failed",
+   "round": 3,
+   "surfaces": "browser,computer",
+   "stamp": "2026-10-10T14-07-35-929Z",
+   "suite": "real",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "passed": false,
+     "reason": "Fixture setup readiness timed out",
+     "cleanupError": "Owned fixture window cleanup unconfirmed",
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true
+      }
+     ],
+     "fixtureDir": "<temp>/sleight-bench/2026-10-10T14-07-35-929Z/sleight-helium-form-1",
+     "models": []
+    }
+   ]
+  },
+  {
+   "attempt": "rerun",
+   "round": 1,
+   "surfaces": "computer",
+   "stamp": "2026-10-10T14-18-31-182Z",
+   "suite": "real",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 9,
+      "group": {
+       "claude": 1.49,
+       "engine node": 0.64,
+       "mcp@latest": 0.52,
+       "node": 0.2,
+       "Python": 0.06,
+       "osascript": 0.11,
+       "codex": 0.27
+      },
+      "outside": {
+       "Helium": 0.86,
+       "engine helper": 4.85
+      }
+     },
+     "timing": {
+      "totalMs": 21620,
+      "modelMs": 12490,
+      "calls": 4,
+      "refused": 0,
+      "toolMs": 6444,
+      "engineMs": 6433,
+      "relayMs": 11,
+      "localMs": 0,
+      "guardReads": 7,
+      "guardReadMs": 2174.068000000001,
+      "guardReadFailures": 0,
+      "otherMs": 2686
+     },
+     "passed": true,
+     "seconds": 23,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 5,
+     "costUsd": 0.0089644,
+     "reportedCostUsd": 0.30165220000000004,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 10,
+      "cacheRead": 284621,
+      "cacheWrite": 25096,
+      "output": 2196
+     },
+     "exitCode": 0,
+     "answer": "The form is submitted. The Helium window at http://127.0.0.1:55711/1e523246/ now shows a \"Submitted\" heading, and I left it open.\n\nBefore submitting, I confirmed these values in the form:\n- Name: Morgan Reed\n- Email: morgan@example.test\n- Team: Design\n- Send updates: checked\n- Code: 1e523246\n\nI didn"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-grid",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 9.82,
+      "group": {
+       "claude": 1.72,
+       "engine node": 0.62,
+       "mcp@latest": 0.5,
+       "node": 0.19,
+       "(Python)": 0.07,
+       "osascript": 0.08,
+       "codex": 0.36,
+       "(bash)": 0.01,
+       "(AgentPeekBridge)": 0.01,
+       "(zsh)": 0
+      },
+      "outside": {
+       "Helium": 0.78,
+       "engine helper": 5.48
+      }
+     },
+     "timing": {
+      "totalMs": 23834,
+      "modelMs": 16450,
+      "calls": 5,
+      "refused": 0,
+      "toolMs": 4904,
+      "engineMs": 4887,
+      "relayMs": 17,
+      "localMs": 0,
+      "guardReads": 6,
+      "guardReadMs": 1755.2622060000003,
+      "guardReadFailures": 0,
+      "otherMs": 2480
+     },
+     "passed": true,
+     "seconds": 25.1,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 6,
+     "costUsd": 0.0119955,
+     "reportedCostUsd": 0.40794240000000004,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 12,
+      "cacheRead": 359392,
+      "cacheWrite": 34877,
+      "output": 2850
+     },
+     "exitCode": 0,
+     "answer": "Orchid's budget is now 125, and the Budget column is sorted ascending. All 12 rows are present with their original values except Orchid.\n\nOrder is Cedar 90, Orchid 125, Harbor 140, Maple 180, Willow 220, Juniper 260, Birch 310, Elm 350, Aspen 390, Pine 430, Spruce 470, Oak 510. The Helium window is "
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-editor",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 13.65,
+      "group": {
+       "claude": 1.78,
+       "engine node": 0.71,
+       "mcp@latest": 0.52,
+       "node": 0.22,
+       "bash": 0.01,
+       "Python": 0.01,
+       "(bash)": 0.01,
+       "(python3)": 0,
+       "(grep)": 0,
+       "osascript": 0.09,
+       "codex": 0.36,
+       "(vibe-island-brid)": 0.01
+      },
+      "outside": {
+       "Helium": 1.69,
+       "engine helper": 8.24
+      }
+     },
+     "timing": {
+      "totalMs": 35521,
+      "modelMs": 19380,
+      "calls": 7,
+      "refused": 0,
+      "toolMs": 12938,
+      "engineMs": 12914,
+      "relayMs": 24,
+      "localMs": 0,
+      "guardReads": 26,
+      "guardReadMs": 8641.968334999998,
+      "guardReadFailures": 0,
+      "otherMs": 3203
+     },
+     "passed": true,
+     "seconds": 36.9,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 8,
+     "costUsd": 0.0126018,
+     "reportedCostUsd": 0.40725180000000005,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 16,
+      "cacheRead": 484099,
+      "cacheWrite": 29841,
+      "output": 3582
+     },
+     "exitCode": 0,
+     "answer": "The planning document is updated in the Helium window, which I left open.\n\n- \"ship carefully\" in the Release checklist paragraph is bold. The screenshot shows only that phrase bolded.\n- A third bullet, \"Archive notes 622daa40\", is appended after \"Publish release\".\n- The title, headings, paragraph te"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-dense",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 9.39,
+      "group": {
+       "claude": 1.62,
+       "engine node": 0.61,
+       "mcp@latest": 0.5,
+       "node": 0.21,
+       "Python": 0.06,
+       "osascript": 0.07,
+       "codex": 0.26
+      },
+      "outside": {
+       "Helium": 0.77,
+       "engine helper": 5.29
+      }
+     },
+     "timing": {
+      "totalMs": 20385,
+      "modelMs": 13680,
+      "calls": 4,
+      "refused": 0,
+      "toolMs": 3529,
+      "engineMs": 3513,
+      "relayMs": 16,
+      "localMs": 0,
+      "guardReads": 2,
+      "guardReadMs": 252.09120800000164,
+      "guardReadFailures": 0,
+      "otherMs": 3176
+     },
+     "passed": true,
+     "seconds": 21.8,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 5,
+     "costUsd": 0.0122121,
+     "reportedCostUsd": 0.4260058,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 10,
+      "cacheRead": 312389,
+      "cacheWrite": 39261,
+      "output": 2470
+     },
+     "exitCode": 0,
+     "answer": "The \"Tidal observatory field notes\" article is open in the Helium window at `127.0.0.1:55990/1895c698/article/link-173`, and it's left visible. The archive list showed 100 items at a time, so I scrolled the list until that link appeared. I didn't touch any other tabs or windows.\n\nThe article has onl"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-spa",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 15.11,
+      "group": {
+       "claude": 2.23,
+       "engine node": 0.78,
+       "mcp@latest": 0.53,
+       "node": 0.24,
+       "osascript": 0.24,
+       "codex": 0.38,
+       "(bash)": 0.01,
+       "(vibe-island-brid)": 0.01
+      },
+      "outside": {
+       "Helium": 1.99,
+       "engine helper": 8.7
+      }
+     },
+     "timing": {
+      "totalMs": 39551,
+      "modelMs": 23941,
+      "calls": 14,
+      "refused": 0,
+      "toolMs": 13232,
+      "engineMs": 13263,
+      "relayMs": -31,
+      "localMs": 0,
+      "guardReads": 15,
+      "guardReadMs": 1276.3703320000013,
+      "guardReadFailures": 0,
+      "otherMs": 2378
+     },
+     "passed": true,
+     "seconds": 41,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 15,
+     "costUsd": 0.0204004,
+     "reportedCostUsd": 0.6100827999999999,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 30,
+      "cacheRead": 1029674,
+      "cacheWrite": 41666,
+      "output": 3535
+     },
+     "exitCode": 0,
+     "answer": "The request was submitted and the window now shows \"Request submitted\" (`#/complete`). I left the window open.\n\nIt was Research for Category, Orchid for Project, and c445998f for Code. One slip along the way: my first click on the Project field landed on the open Category menu and switched it to Ope"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-nested",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 9,
+      "group": {
+       "claude": 1.76,
+       "engine node": 0.68,
+       "mcp@latest": 0.57,
+       "node": 0.2,
+       "bash": 0.02,
+       "Python": 0.03,
+       "(bash)": 0.01,
+       "osascript": 0.07,
+       "codex": 0.31,
+       "(vibe-island-brid)": 0.01
+      },
+      "outside": {
+       "Helium": 1.01,
+       "engine helper": 4.33
+      }
+     },
+     "timing": {
+      "totalMs": 19388,
+      "modelMs": 11708,
+      "calls": 8,
+      "refused": 0,
+      "toolMs": 5618,
+      "engineMs": 5591,
+      "relayMs": 27,
+      "localMs": 0,
+      "guardReads": 6,
+      "guardReadMs": 504.12658399999964,
+      "guardReadFailures": 0,
+      "otherMs": 2062
+     },
+     "passed": true,
+     "seconds": 20.7,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 9,
+     "costUsd": 0.0119035,
+     "reportedCostUsd": 0.3674434,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 18,
+      "cacheRead": 543477,
+      "cacheWrite": 28307,
+      "output": 1611
+     },
+     "exitCode": 0,
+     "answer": "In the Helium window at 127.0.0.1:56178/a5894943/, the full path is expanded: Collections, then Science, Marine, Station and Reports. \"Coral report a5894943\" is selected, and its name appears under the tree as \"Coral report a5894943\". I left the window open and didn't touch any other tabs or windows"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-infinite",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 9.75,
+      "group": {
+       "claude": 1.57,
+       "engine node": 0.6,
+       "mcp@latest": 0.47,
+       "node": 0.2,
+       "Python": 0.07,
+       "osascript": 0.07,
+       "codex": 0.36,
+       "(bash)": 0.02,
+       "(AgentPeekBridge)": 0.02,
+       "uv": 0.01,
+       "bash": 0.01,
+       "(cat)": 0,
+       "(zsh)": 0
+      },
+      "outside": {
+       "Helium": 1.03,
+       "engine helper": 5.32
+      }
+     },
+     "timing": {
+      "totalMs": 23327,
+      "modelMs": 13389,
+      "calls": 5,
+      "refused": 0,
+      "toolMs": 8158,
+      "engineMs": 8141,
+      "relayMs": 17,
+      "localMs": 0,
+      "guardReads": 5,
+      "guardReadMs": 1174.3304580000013,
+      "guardReadFailures": 0,
+      "otherMs": 1780
+     },
+     "passed": true,
+     "seconds": 24.7,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 6,
+     "costUsd": 0.0096838,
+     "reportedCostUsd": 0.3175762,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 12,
+      "cacheRead": 348881,
+      "cacheWrite": 25164,
+      "output": 2322
+     },
+     "exitCode": 0,
+     "answer": "Record 87 is reviewed. I entered \"Reviewed 8781ef57\" as the review note, confirmed it, and the dialog closed. The page now shows \"Record 87 reviewed\" and the Helium window is left open. I only interacted with the one Helium window and did not touch any other tabs or windows."
+    }
+   ]
+  },
+  {
+   "attempt": "rerun",
+   "round": 1,
+   "surfaces": "browser,computer",
+   "stamp": "2026-10-10T14-22-01-997Z",
+   "suite": "real",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "permissionRefusal": true,
+     "stderr": "[claude-code:unrecognized_model] {\"model\":\"claude-haiku-5-5\",\"query_source\":\"sdk\"}\n",
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": true,
+     "footprint": {
+      "cpuSeconds": 4.69,
+      "group": {
+       "claude": 1.27,
+       "engine node": 0.85,
+       "mcp@latest": 0.54,
+       "node": 0.19,
+       "bash": 0.01,
+       "Python": 0.01,
+       "(bash)": 0,
+       "(Python)": 0.01,
+       "codex": 0.19
+      },
+      "outside": {
+       "Helium": 0.07,
+       "engine helper": 1.55
+      }
+     },
+     "passed": false,
+     "reason": "computer-use permission refused: stopped",
+     "seconds": 11.3,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "models": [],
+     "exitCode": 143
+    }
+   ]
+  },
+  {
+   "attempt": "rerun",
+   "round": 2,
+   "surfaces": "browser,computer",
+   "stamp": "2026-10-10T14-22-18-236Z",
+   "suite": "real",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 10.85,
+      "group": {
+       "claude": 1.83,
+       "engine node": 0.92,
+       "mcp@latest": 0.48,
+       "node": 0.19,
+       "(Python)": 0,
+       "codex": 0.33,
+       "osascript": 0.08,
+       "(uv)": 0.02,
+       "(python3.14)": 0.12
+      },
+      "outside": {
+       "Helium": 1.15,
+       "engine helper": 5.73
+      }
+     },
+     "timing": {
+      "totalMs": 26199,
+      "modelMs": 16991,
+      "calls": 8,
+      "refused": 0,
+      "toolMs": 7379,
+      "engineMs": 7355,
+      "relayMs": 24,
+      "localMs": 0,
+      "guardReads": 8,
+      "guardReadMs": 1470.8806239999967,
+      "guardReadFailures": 0,
+      "otherMs": 1829
+     },
+     "passed": true,
+     "seconds": 27.6,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 9,
+     "costUsd": 0.0102633,
+     "reportedCostUsd": 0.3106244,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 18,
+      "cacheRead": 499542,
+      "cacheWrite": 19323,
+      "output": 2803
+     },
+     "exitCode": 0,
+     "answer": "The form is submitted. The Helium window \"Form 68af4fdb\" now shows a \"Submitted\" heading.\n\nI filled Name with \"Morgan Reed\", Email with \"morgan@example.test\", Team with \"Design\", Code with \"68af4fdb\", and checked \"Send updates\" before clicking Submit. I left the window open and did not touch any oth"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-grid",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 6.35,
+      "group": {
+       "claude": 1.38,
+       "engine node": 0.79,
+       "mcp@latest": 0.46,
+       "node": 0.2,
+       "codex": 0.32,
+       "osascript": 0.1
+      },
+      "outside": {
+       "Helium": 0.07,
+       "engine helper": 3.03
+      }
+     },
+     "timing": {
+      "totalMs": 22295,
+      "modelMs": 20187,
+      "calls": 3,
+      "refused": 1,
+      "toolMs": 336,
+      "engineMs": 216,
+      "relayMs": 4,
+      "localMs": 116,
+      "otherMs": 1772
+     },
+     "passed": false,
+     "reason": "page state does not match the grid task",
+     "seconds": 23.9,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 4,
+     "costUsd": 0.0066174,
+     "reportedCostUsd": 0.224219,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 8,
+      "cacheRead": 202375,
+      "cacheWrite": 13399,
+      "output": 3826
+     },
+     "exitCode": 0,
+     "answer": "I couldn't reach the Helium window, so I haven't changed anything yet.\n\nThe computer-use tools need either an inventory read (`cua.getState()`, which lists every browser and tab) or the exact title of the target window. `select_window` also requires an exact title, and I don't have one. The URL alon"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-editor",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 9.81,
+      "group": {
+       "claude": 1.59,
+       "engine node": 0.96,
+       "mcp@latest": 0.57,
+       "node": 0.19,
+       "bash": 0.02,
+       "Python": 0.02,
+       "codex": 0.27,
+       "osascript": 0.11,
+       "uv": 0.02,
+       "python3": 0.03
+      },
+      "outside": {
+       "Helium": 0.64,
+       "engine helper": 5.39
+      }
+     },
+     "timing": {
+      "totalMs": 25227,
+      "modelMs": 18957,
+      "calls": 4,
+      "refused": 0,
+      "toolMs": 4632,
+      "engineMs": 4617,
+      "relayMs": 15,
+      "localMs": 0,
+      "guardReads": 5,
+      "guardReadMs": 1410.5134580000013,
+      "guardReadFailures": 0,
+      "otherMs": 1638
+     },
+     "passed": true,
+     "seconds": 26.6,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 5,
+     "costUsd": 0.0083317,
+     "reportedCostUsd": 0.2805034,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 10,
+      "cacheRead": 263817,
+      "cacheWrite": 19335,
+      "output": 3651
+     },
+     "exitCode": 0,
+     "answer": "I bolded \"ship carefully\" and appended the third bullet in the Helium planning document, which I left open.\n\nThe accessibility tree confirms the new bullet \"Archive notes 9bb46546\" after \"Publish release\". I could not view the rendered page, so the bold is confirmed only indirectly: the paragraph's "
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-dense",
+     "run": 1,
+     "permissionRefusal": true,
+     "stderr": "[claude-code:unrecognized_model] {\"model\":\"claude-haiku-5-5\",\"query_source\":\"sdk\"}\n",
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": true,
+     "footprint": {
+      "cpuSeconds": 3.99,
+      "group": {
+       "claude": 1.09,
+       "engine node": 0.74,
+       "mcp@latest": 0.48,
+       "node": 0.18,
+       "(bash)": 0.02,
+       "Python": 0.04,
+       "codex": 0.18
+      },
+      "outside": {
+       "Helium": 0.07,
+       "engine helper": 1.19
+      }
+     },
+     "passed": false,
+     "reason": "computer-use permission refused: stopped",
+     "seconds": 10.1,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "models": [],
+     "exitCode": 143
+    }
+   ]
+  },
+  {
+   "attempt": "rerun",
+   "round": 2,
+   "surfaces": "computer",
+   "stamp": "2026-10-10T14-23-57-386Z",
+   "suite": "real",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 8.59,
+      "group": {
+       "claude": 1.61,
+       "engine node": 0.62,
+       "mcp@latest": 0.48,
+       "node": 0.19,
+       "Python": 0.07,
+       "(Python)": 0,
+       "osascript": 0.13,
+       "codex": 0.35
+      },
+      "outside": {
+       "Helium": 1.03,
+       "engine helper": 4.11
+      }
+     },
+     "timing": {
+      "totalMs": 23637,
+      "modelMs": 14481,
+      "calls": 6,
+      "refused": 0,
+      "toolMs": 7262,
+      "engineMs": 7241,
+      "relayMs": 21,
+      "localMs": 0,
+      "guardReads": 8,
+      "guardReadMs": 1533.4210420000031,
+      "guardReadFailures": 0,
+      "otherMs": 1894
+     },
+     "passed": true,
+     "seconds": 25,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 7,
+     "costUsd": 0.0112583,
+     "reportedCostUsd": 0.365872,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 14,
+      "cacheRead": 422300,
+      "cacheWrite": 28967,
+      "output": 2481
+     },
+     "exitCode": 0,
+     "answer": "The form is submitted: the page in the \"Form 7fab11e7\" Helium window now shows \"Submitted.\"\n\nI filled in Name \"Morgan Reed\", Email \"morgan@example.test\", Team \"Design\", Code \"7fab11e7\", and checked \"Send updates\" before submitting. The first click on \"Send updates\" only closed the open Team menu, so"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-grid",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 10.03,
+      "group": {
+       "claude": 1.82,
+       "engine node": 0.66,
+       "mcp@latest": 0.55,
+       "node": 0.2,
+       "Python": 0.01,
+       "bash": 0.01,
+       "(bash)": 0,
+       "(Python)": 0.01,
+       "(grep)": 0,
+       "osascript": 0.14,
+       "codex": 0.32
+      },
+      "outside": {
+       "Helium": 0.84,
+       "engine helper": 5.47
+      }
+     },
+     "timing": {
+      "totalMs": 22986,
+      "modelMs": 15454,
+      "calls": 6,
+      "refused": 0,
+      "toolMs": 4879,
+      "engineMs": 4861,
+      "relayMs": 18,
+      "localMs": 0,
+      "guardReads": 6,
+      "guardReadMs": 1819.1950000000002,
+      "guardReadFailures": 0,
+      "otherMs": 2653
+     },
+     "passed": true,
+     "seconds": 24.4,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 7,
+     "costUsd": 0.0116955,
+     "reportedCostUsd": 0.3823250000000001,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 14,
+      "cacheRead": 427465,
+      "cacheWrite": 30322,
+      "output": 2710
+     },
+     "exitCode": 0,
+     "answer": "In the Helium window (`127.0.0.1:57313/c7b5b811/`), Orchid's Budget is now 125, changed from 275, and the table is sorted by Budget ascending.\n\nThe order is Cedar 90, Orchid 125, Harbor 140, Maple 180, Willow 220, Juniper 260, Birch 310, Elm 350, Aspen 390, Pine 430, Spruce 470, Oak 510. All 12 rows"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-editor",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 14.53,
+      "group": {
+       "claude": 1.89,
+       "engine node": 0.83,
+       "mcp@latest": 0.52,
+       "node": 0.19,
+       "Python": 0.06,
+       "(git)": 0,
+       "osascript": 0.19,
+       "codex": 0.39
+      },
+      "outside": {
+       "Helium": 1.74,
+       "engine helper": 8.72
+      }
+     },
+     "timing": {
+      "totalMs": 37509,
+      "modelMs": 21889,
+      "calls": 7,
+      "refused": 0,
+      "toolMs": 13607,
+      "engineMs": 13650,
+      "relayMs": -43,
+      "localMs": 0,
+      "guardReads": 26,
+      "guardReadMs": 8548.09166499999,
+      "guardReadFailures": 0,
+      "otherMs": 2013
+     },
+     "passed": true,
+     "seconds": 38.8,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 8,
+     "costUsd": 0.0141891,
+     "reportedCostUsd": 0.46771419999999997,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 16,
+      "cacheRead": 499251,
+      "cacheWrite": 36085,
+      "output": 3956
+     },
+     "exitCode": 0,
+     "answer": "The planning document in the Helium window now has \"ship carefully\" bolded and a third bullet, \"Archive notes 7a3d26c7\", appended under the existing two bullets. I checked the result in a screenshot: the title, heading, paragraph text and the first two bullets are unchanged. The Helium window is sti"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-dense",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 10.4,
+      "group": {
+       "claude": 1.85,
+       "engine node": 0.64,
+       "mcp@latest": 0.53,
+       "node": 0.19,
+       "(bash)": 0.02,
+       "Python": 0.03,
+       "osascript": 0.15,
+       "codex": 0.35
+      },
+      "outside": {
+       "Helium": 1.03,
+       "engine helper": 5.61
+      }
+     },
+     "timing": {
+      "totalMs": 24033,
+      "modelMs": 17208,
+      "calls": 8,
+      "refused": 0,
+      "toolMs": 4799,
+      "engineMs": 4779,
+      "relayMs": 20,
+      "localMs": 0,
+      "guardReads": 3,
+      "guardReadMs": 238.2088329999974,
+      "guardReadFailures": 0,
+      "otherMs": 2026
+     },
+     "passed": true,
+     "seconds": 25.4,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 9,
+     "costUsd": 0.0179535,
+     "reportedCostUsd": 0.5903316,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 18,
+      "cacheRead": 639038,
+      "cacheWrite": 50569,
+      "output": 2895
+     },
+     "exitCode": 0,
+     "answer": "I opened \"Tidal observatory field notes\" in the Helium window and it is still showing. The article heading and its \"Field notes for the coastal research archive.\" text are visible. The link was item 173 of 240, so I scrolled the archive list down to reach it. I did not touch any other tabs or window"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-spa",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 14.82,
+      "group": {
+       "claude": 2.12,
+       "engine node": 0.77,
+       "mcp@latest": 0.51,
+       "node": 0.21,
+       "Python": 0.06,
+       "(git)": 0,
+       "osascript": 0.24,
+       "codex": 0.37
+      },
+      "outside": {
+       "Helium": 1.79,
+       "engine helper": 8.75
+      }
+     },
+     "timing": {
+      "totalMs": 38455,
+      "modelMs": 24267,
+      "calls": 13,
+      "refused": 0,
+      "toolMs": 11942,
+      "engineMs": 11976,
+      "relayMs": -34,
+      "localMs": 0,
+      "guardReads": 13,
+      "guardReadMs": 626.6867499999985,
+      "guardReadFailures": 0,
+      "otherMs": 2246
+     },
+     "passed": true,
+     "seconds": 39.8,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 14,
+     "costUsd": 0.019691,
+     "reportedCostUsd": 0.5969806000000002,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 28,
+      "cacheRead": 953303,
+      "cacheWrite": 41351,
+      "output": 3770
+     },
+     "exitCode": 0,
+     "answer": "The request is submitted. The \"Request submitted\" screen is showing in the bf4e4279 window, which I've left open.\n\nI entered Research for Category, Orchid for Project, and bf4e4279 for Code. Partway through, a stale Category menu caught a click on the Project field and changed Category to Operations"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-nested",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 8.49,
+      "group": {
+       "claude": 1.61,
+       "engine node": 0.58,
+       "mcp@latest": 0.5,
+       "node": 0.21,
+       "(bash)": 0.03,
+       "Python": 0.05,
+       "osascript": 0.11,
+       "codex": 0.26,
+       "(AgentPeekBridge)": 0.01,
+       "(zsh)": 0
+      },
+      "outside": {
+       "Helium": 0.89,
+       "engine helper": 4.24
+      }
+     },
+     "timing": {
+      "totalMs": 19062,
+      "modelMs": 11937,
+      "calls": 7,
+      "refused": 0,
+      "toolMs": 5168,
+      "engineMs": 5149,
+      "relayMs": 19,
+      "localMs": 0,
+      "guardReads": 6,
+      "guardReadMs": 482.432251000002,
+      "guardReadFailures": 0,
+      "otherMs": 1957
+     },
+     "passed": true,
+     "seconds": 20.4,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 8,
+     "costUsd": 0.010593,
+     "reportedCostUsd": 0.3287554,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 16,
+      "cacheRead": 474817,
+      "cacheWrite": 24296,
+      "output": 1968
+     },
+     "exitCode": 0,
+     "answer": "The Coral report is selected in the Helium window at 127.0.0.1:57688/5121f787/. The path Collections > Science > Marine > Station > Reports is still expanded, and the page now shows \"Coral report 5121f787\" as the open report. I left the window open and didn't touch any other tabs or windows."
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-infinite",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 9.62,
+      "group": {
+       "claude": 1.65,
+       "engine node": 0.61,
+       "mcp@latest": 0.53,
+       "node": 0.22,
+       "(bash)": 0.02,
+       "Python": 0.04,
+       "(grep)": 0,
+       "osascript": 0.08,
+       "codex": 0.34
+      },
+      "outside": {
+       "Helium": 1.01,
+       "engine helper": 5.12
+      }
+     },
+     "timing": {
+      "totalMs": 21818,
+      "modelMs": 11944,
+      "calls": 5,
+      "refused": 0,
+      "toolMs": 7455,
+      "engineMs": 7434,
+      "relayMs": 21,
+      "localMs": 0,
+      "guardReads": 5,
+      "guardReadMs": 1001.4734170000015,
+      "guardReadFailures": 0,
+      "otherMs": 2419
+     },
+     "passed": true,
+     "seconds": 23.2,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 6,
+     "costUsd": 0.0094977,
+     "reportedCostUsd": 0.3102464,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 12,
+      "cacheRead": 348312,
+      "cacheWrite": 24877,
+      "output": 2076
+     },
+     "exitCode": 0,
+     "answer": "Record 87 is marked reviewed with the note \"Reviewed 5793e930\", and the dialog is closed.\n\nI scrolled the records list until all 100 loaded, opened Record 87, entered the note, and clicked Confirm review. The page now shows \"Record 87 reviewed\" with the Helium window left open. I did not touch any o"
+    }
+   ]
+  },
+  {
+   "attempt": "rerun",
+   "round": 3,
+   "surfaces": "computer",
+   "stamp": "2026-10-10T14-27-33-984Z",
+   "suite": "real",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 9.14,
+      "group": {
+       "claude": 1.55,
+       "engine node": 0.61,
+       "mcp@latest": 0.52,
+       "node": 0.18,
+       "(Python)": 0.07,
+       "(node)": 0,
+       "osascript": 0.11,
+       "codex": 0.35,
+       "(bash)": 0.01,
+       "uv": 0.02,
+       "Python": 0.04,
+       "(vibe-island-brid)": 0.01,
+       "python3": 0.07
+      },
+      "outside": {
+       "Helium": 0.88,
+       "engine helper": 4.72
+      }
+     },
+     "timing": {
+      "totalMs": 21242,
+      "modelMs": 12315,
+      "calls": 4,
+      "refused": 0,
+      "toolMs": 6576,
+      "engineMs": 6556,
+      "relayMs": 20,
+      "localMs": 0,
+      "guardReads": 7,
+      "guardReadMs": 2183.604832,
+      "guardReadFailures": 0,
+      "otherMs": 2351
+     },
+     "passed": true,
+     "seconds": 22.5,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 5,
+     "costUsd": 0.0091227,
+     "reportedCostUsd": 0.30760479999999996,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 10,
+      "cacheRead": 286524,
+      "cacheWrite": 25930,
+      "output": 2141
+     },
+     "exitCode": 0,
+     "answer": "The form is submitted. The Helium window for `127.0.0.1:57907/a9c60bab/` now shows a \"Submitted\" confirmation.\n\nI filled in Name \"Morgan Reed\", Email \"morgan@example.test\", Team \"Design\", Code \"a9c60bab\", and checked \"Send updates\" before submitting. I confirmed all five values in the form before cl"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-grid",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 9.45,
+      "group": {
+       "claude": 1.63,
+       "engine node": 0.59,
+       "mcp@latest": 0.53,
+       "node": 0.19,
+       "(bash)": 0.02,
+       "Python": 0.03,
+       "(grep)": 0,
+       "osascript": 0.07,
+       "codex": 0.35
+      },
+      "outside": {
+       "Helium": 0.75,
+       "engine helper": 5.29
+      }
+     },
+     "timing": {
+      "totalMs": 23388,
+      "modelMs": 17084,
+      "calls": 5,
+      "refused": 0,
+      "toolMs": 4372,
+      "engineMs": 4353,
+      "relayMs": 19,
+      "localMs": 0,
+      "guardReads": 6,
+      "guardReadMs": 1782.5983340000012,
+      "guardReadFailures": 0,
+      "otherMs": 1932
+     },
+     "passed": true,
+     "seconds": 24.7,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 6,
+     "costUsd": 0.0117919,
+     "reportedCostUsd": 0.3994272,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 12,
+      "cacheRead": 361236,
+      "cacheWrite": 32184,
+      "output": 3483
+     },
+     "exitCode": 0,
+     "answer": "Orchid's Budget is now 125 and the table is sorted by Budget ascending. The order is Cedar 90, Orchid 125, Harbor 140, Maple 180, Willow 220, Juniper 260, Birch 310, Elm 350, Aspen 390, Pine 430, Spruce 470, Oak 510. The other eleven values match their originals. The Helium window is still open, and"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-editor",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 19.64,
+      "group": {
+       "claude": 2.09,
+       "engine node": 0.9,
+       "mcp@latest": 0.53,
+       "node": 0.2,
+       "(bash)": 0.02,
+       "Python": 0.04,
+       "(grep)": 0,
+       "osascript": 0.19,
+       "codex": 0.34
+      },
+      "outside": {
+       "Helium": 1.82,
+       "engine helper": 13.51
+      }
+     },
+     "timing": {
+      "totalMs": 56949,
+      "modelMs": 39683,
+      "calls": 9,
+      "refused": 0,
+      "toolMs": 15170,
+      "engineMs": 15141,
+      "relayMs": 29,
+      "localMs": 0,
+      "guardReads": 29,
+      "guardReadMs": 8695.08170799999,
+      "guardReadFailures": 0,
+      "otherMs": 2096
+     },
+     "passed": true,
+     "seconds": 58.4,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 10,
+     "costUsd": 0.0187925,
+     "reportedCostUsd": 0.6193666,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 20,
+      "cacheRead": 661673,
+      "cacheWrite": 41479,
+      "output": 7756
+     },
+     "exitCode": 0,
+     "answer": "The Release checklist paragraph now reads \"We **ship carefully** every Friday.\", and a third bullet \"Archive notes a09e62ad\" sits below \"Publish release\". I left the Helium window open and did not touch any other tabs or windows.\n\nMy first Bold attempt bolded \"ip carefully e\" because the selection w"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-dense",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 11.48,
+      "group": {
+       "claude": 1.79,
+       "engine node": 0.75,
+       "mcp@latest": 0.52,
+       "node": 0.22,
+       "osascript": 0.14,
+       "codex": 0.38
+      },
+      "outside": {
+       "Helium": 1.91,
+       "engine helper": 5.77
+      }
+     },
+     "timing": {
+      "totalMs": 31816,
+      "modelMs": 20796,
+      "calls": 7,
+      "refused": 1,
+      "toolMs": 8423,
+      "engineMs": 8396,
+      "relayMs": 27,
+      "localMs": 0,
+      "guardReads": 3,
+      "guardReadMs": 124.70637499999884,
+      "guardReadFailures": 0,
+      "otherMs": 2597
+     },
+     "passed": true,
+     "seconds": 33.4,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 8,
+     "costUsd": 0.0176982,
+     "reportedCostUsd": 0.5928428,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 16,
+      "cacheRead": 575434,
+      "cacheWrite": 50069,
+      "output": 3857
+     },
+     "exitCode": 0,
+     "answer": "The \"Tidal observatory field notes\" article is open and visible in the Helium window (`127.0.0.1:58208/9094f5df/article/link-173`). I left the window open and didn't touch any other tabs or windows.\n\nThe article page has only a heading, one line of text (\"Field notes for the coastal research archive"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-spa",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 11.88,
+      "group": {
+       "claude": 2.52,
+       "engine node": 0.9,
+       "mcp@latest": 0.59,
+       "node": 0.24,
+       "osascript": 0.33,
+       "codex": 0.39,
+       "(osascript)": 0.09
+      },
+      "outside": {
+       "Helium": 1.47,
+       "engine helper": 5.35
+      }
+     },
+     "timing": {
+      "totalMs": 48686,
+      "modelMs": 35874,
+      "calls": 15,
+      "refused": 0,
+      "toolMs": 10153,
+      "engineMs": 10178,
+      "relayMs": -25,
+      "localMs": 0,
+      "guardReads": 16,
+      "guardReadMs": 1269.7019189999955,
+      "guardReadFailures": 0,
+      "otherMs": 2659
+     },
+     "passed": true,
+     "seconds": 50.3,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 16,
+     "costUsd": 0.0258468,
+     "reportedCostUsd": 0.7995843999999999,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 32,
+      "cacheRead": 1171442,
+      "cacheWrite": 55796,
+      "output": 5940
+     },
+     "exitCode": 0,
+     "answer": "The request is submitted and Helium is showing the \"Request submitted\" screen for the 127.0.0.1:58303/6bf62e36/ page. I left that window open and did not touch any other tabs or windows.\n\nThe submitted request has Category Research, Project Orchid, and Code 6bf62e36.\n\nPartway through, a click landed"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-nested",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 8.53,
+      "group": {
+       "claude": 2,
+       "engine node": 0.75,
+       "mcp@latest": 0.6,
+       "node": 0.25,
+       "osascript": 0.21,
+       "codex": 0.3
+      },
+      "outside": {
+       "Helium": 0.93,
+       "engine helper": 3.49
+      }
+     },
+     "timing": {
+      "totalMs": 22589,
+      "modelMs": 14822,
+      "calls": 8,
+      "refused": 0,
+      "toolMs": 5595,
+      "engineMs": 5650,
+      "relayMs": -55,
+      "localMs": 0,
+      "guardReads": 6,
+      "guardReadMs": 0.03583299999900191,
+      "guardReadFailures": 0,
+      "otherMs": 2172
+     },
+     "passed": true,
+     "seconds": 24.2,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 9,
+     "costUsd": 0.0134419,
+     "reportedCostUsd": 0.426397,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 18,
+      "cacheRead": 556385,
+      "cacheWrite": 33321,
+      "output": 2424
+     },
+     "exitCode": 0,
+     "answer": "The Helium window now shows Collections > Science > Marine > Station > Reports fully expanded, with \"Coral report bde3ee25\" selected. The report title appears in the content area below the tree, and the window is still open. I didn't touch any other tabs or windows."
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-infinite",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 9.61,
+      "group": {
+       "claude": 1.9,
+       "engine node": 0.72,
+       "mcp@latest": 0.58,
+       "node": 0.23,
+       "osascript": 0.1,
+       "codex": 0.4
+      },
+      "outside": {
+       "Helium": 1.1,
+       "engine helper": 4.58
+      }
+     },
+     "timing": {
+      "totalMs": 28409,
+      "modelMs": 18317,
+      "calls": 8,
+      "refused": 0,
+      "toolMs": 7620,
+      "engineMs": 7595,
+      "relayMs": 25,
+      "localMs": 0,
+      "guardReads": 6,
+      "guardReadMs": 482.5307089999992,
+      "guardReadFailures": 0,
+      "otherMs": 2472
+     },
+     "passed": true,
+     "seconds": 30,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 9,
+     "costUsd": 0.0127824,
+     "reportedCostUsd": 0.40093500000000004,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 18,
+      "cacheRead": 551795,
+      "cacheWrite": 28788,
+      "output": 3010
+     },
+     "exitCode": 0,
+     "answer": "Record 87 is reviewed. The dialog is closed and the page shows \"Record 87 reviewed\" under \"All records loaded.\" I left the Helium window open and did not touch any other tabs or windows."
+    }
+   ]
+  },
+  {
+   "attempt": "rerun",
+   "round": 3,
+   "surfaces": "browser,computer",
+   "stamp": "2026-10-10T14-31-58-266Z",
+   "suite": "real",
+   "ownerAway": true,
+   "arms": [
+    "sleight"
+   ],
+   "model": "claude-haiku-5-5",
+   "effort": "high",
+   "claude": "claude",
+   "auth": "api",
+   "results": [
+    {
+     "arm": "sleight",
+     "task": "helium-form",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 5.3,
+      "group": {
+       "claude": 1.6,
+       "engine node": 1.05,
+       "mcp@latest": 0.62,
+       "(Python)": 0.03,
+       "node": 0.29,
+       "codex": 0.33
+      },
+      "outside": {
+       "Helium": 0.09,
+       "engine helper": 1.29
+      }
+     },
+     "timing": {
+      "totalMs": 21975,
+      "modelMs": 19744,
+      "calls": 2,
+      "refused": 1,
+      "toolMs": 320,
+      "engineMs": 314,
+      "relayMs": 6,
+      "localMs": 0,
+      "otherMs": 1911
+     },
+     "passed": false,
+     "reason": "server has no submission with all five expected values",
+     "seconds": 23.9,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 3,
+     "costUsd": 0.0059653,
+     "reportedCostUsd": 0.2092186,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 6,
+      "cacheRead": 146973,
+      "cacheWrite": 12755,
+      "output": 3888
+     },
+     "exitCode": 0,
+     "answer": "I haven't filled or submitted the form. The Helium window can't be reached without listing other windows and tabs, which you asked me not to do.\n\n- Looking up Helium by name failed with \"Browser is not available: Helium\".\n- Looking it up by the form URL failed with an error requiring a full inventor"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-grid",
+     "run": 1,
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": false,
+     "footprint": {
+      "cpuSeconds": 5.48,
+      "group": {
+       "claude": 1.6,
+       "engine node": 1.07,
+       "mcp@latest": 0.61,
+       "node": 0.23,
+       "codex": 0.38,
+       "osascript": 0.16,
+       "(bash)": 0.01,
+       "(vibe-island-brid)": 0.01
+      },
+      "outside": {
+       "Helium": 0.08,
+       "engine helper": 1.33
+      }
+     },
+     "timing": {
+      "totalMs": 24875,
+      "modelMs": 17039,
+      "calls": 3,
+      "refused": 1,
+      "toolMs": 673,
+      "engineMs": 494,
+      "relayMs": 5,
+      "localMs": 174,
+      "otherMs": 7163
+     },
+     "passed": false,
+     "reason": "page state does not match the grid task",
+     "seconds": 26.3,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "turns": 4,
+     "costUsd": 0.0062974,
+     "reportedCostUsd": 0.21148840000000002,
+     "models": [
+      "claude-haiku-5-5"
+     ],
+     "usage": {
+      "input": 8,
+      "cacheRead": 202042,
+      "cacheWrite": 13476,
+      "output": 3162
+     },
+     "exitCode": 0,
+     "answer": "I couldn't reach the Helium window, so I haven't changed anything.\n\nThe computer-use engine needs a full state inventory before it will act on a window, and that inventory lists every open window and tab. Helium also reports as Chrome, so finding its browser ID requires the same listing. The window-"
+    },
+    {
+     "arm": "sleight",
+     "task": "helium-editor",
+     "run": 1,
+     "permissionRefusal": true,
+     "stderr": "[claude-code:unrecognized_model] {\"model\":\"claude-haiku-5-5\",\"query_source\":\"sdk\"}\n",
+     "groupClean": true,
+     "timedOut": false,
+     "cancelled": true,
+     "footprint": {
+      "cpuSeconds": 5.18,
+      "group": {
+       "claude": 1.79,
+       "engine node": 1.02,
+       "mcp@latest": 0.66,
+       "node": 0.25,
+       "codex": 0.27
+      },
+      "outside": {
+       "Helium": 0.08,
+       "engine helper": 1.11
+      }
+     },
+     "passed": false,
+     "reason": "computer-use permission refused: stopped",
+     "seconds": 21.2,
+     "fixtureDiagnostics": [
+      {
+       "app": "Helium",
+       "bundle": "net.imput.helium",
+       "retries": [],
+       "totalWaitMs": 0,
+       "actionTaken": false,
+       "running": true,
+       "pid": 20805,
+       "launched": true,
+       "fresh": false
+      }
+     ],
+     "models": [],
+     "exitCode": 143
+    }
+   ]
+  }
+ ]
+}
