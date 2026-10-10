@@ -1,0 +1,25 @@
+{
+  "note": "Fixture for the results-page tests, in the early release files' shape: every pass on the way, with the release pass last. Home paths such as /Users/someone/notes must come out as ~.",
+  "passes": [
+    {
+      "stamp": "2026-10-05T04-51-34-962Z",
+      "arms": ["sleight"],
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "results": [
+        { "arm": "sleight", "task": "calculator-click", "run": 1, "passed": false, "reason": "answer does not contain 391", "seconds": 13.3, "turns": 8, "costUsd": 0.19 }
+      ]
+    },
+    {
+      "stamp": "2026-10-05T06-10-00-000Z",
+      "arms": ["sleight"],
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "results": [
+        { "arm": "sleight", "task": "calculator-click", "run": 1, "passed": true, "seconds": 15.5, "turns": 6, "timing": { "totalMs": 15500, "modelMs": 9000 } },
+        { "arm": "sleight", "task": "calculator-click", "run": 2, "passed": true, "seconds": 20, "turns": 7, "timing": { "totalMs": 20000, "modelMs": 11000 } },
+        { "arm": "sleight", "task": "textedit-save", "run": 1, "passed": false, "reason": "no file at /Users/someone/notes/out.txt", "seconds": 30, "turns": 12, "timing": { "totalMs": 30000, "modelMs": 20000 } }
+      ]
+    }
+  ]
+}

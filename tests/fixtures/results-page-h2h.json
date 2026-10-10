@@ -1,0 +1,40 @@
+{
+  "arms": ["sleight", "codex"],
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "auth": "api",
+  "ownerAway": true,
+  "stamp": "2026-10-10T16-24-42-039Z",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 17.7,
+      "turns": 4,
+      "timing": { "totalMs": 16159, "modelMs": 7762 },
+      "footprint": {
+        "cpuSeconds": 8.09,
+        "group": { "claude": 1.44, "engine node": 1.52, "mcp@latest": 0.62, "codex": 0.32, "node": 0.24, "osascript": 0.08 },
+        "outside": { "Calculator": 1.12, "engine helper": 2.75 }
+      }
+    },
+    {
+      "arm": "codex",
+      "task": "calculator-click",
+      "run": 1,
+      "passed": true,
+      "seconds": 14.9,
+      "turns": 4,
+      "toolCalls": 2,
+      "engineMs": 863,
+      "models": ["gpt-6.1-sol"],
+      "footprint": {
+        "cpuSeconds": 4.7,
+        "group": { "codex": 0.93, "node": 0.19, "engine node": 0.61, "codex-code-mode-host": 0.11 },
+        "outside": { "Calculator": 0.24, "engine helper": 2.62 }
+      }
+    }
+  ]
+}
