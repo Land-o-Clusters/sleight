@@ -313,6 +313,7 @@ test('Claude sees replay in tools/list and gets the stopped step, remaining work
   h.send({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
   const definition = h.received[0].result.tools.find(tool => tool.name === 'replay');
   assert.ok(definition);
+  assert.equal(definition._meta?.['anthropic/alwaysLoad'], false, 'replay stays discoverable without forcing its schema into every prompt');
   assert.ok(definition.inputSchema.properties.waitMs);
   h.send({ jsonrpc: '2.0', id: 'read', method: 'tools/call', params: { name: 'js', arguments: { code: 'await app.getAXState();' } } });
   h.send({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'replay', arguments: { script: scriptOf(stopped, next), waitMs: 500 }, _meta: { trace: 'same Claude turn' } } });

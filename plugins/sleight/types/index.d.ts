@@ -37,6 +37,8 @@ declare module 'claude-code' {
       frame: Frame | null
       view: ViewStatus
       stopped: boolean
+      replayFile: string
+      replaying: boolean
     }
   }
 }

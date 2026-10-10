@@ -263,7 +263,7 @@ export async function replay(script, { server, ask = async () => false, ...optio
 
 export const REPLAY_TOOL = {
   name: 'replay',
-  _meta: { 'anthropic/alwaysLoad': true },
+  _meta: { 'anthropic/alwaysLoad': false },
   description: 'Run a recorded sleight script in this session. Pass the JSON script made by sleight-mcp record. ' +
     'On a stop, returns the 1-based step, error, remaining steps (including the stopped step), each step\'s wait and a fresh full window read when available. ' +
     'Finish from that window using js and the existing app handles; a stopped batch may have sent some input, so inspect it before continuing. ' +

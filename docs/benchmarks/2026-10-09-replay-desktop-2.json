@@ -1,0 +1,38 @@
+{
+  "method": "Claude get_context_usage detail full; no model prompts or tool execution",
+  "model": "claude-sonnet-5-5",
+  "toolSearch": true,
+  "countsAreHostEstimates": true,
+  "runs": [
+    {
+      "attempt": 1,
+      "exitCode": 1,
+      "results": [
+        { "arm": "always", "model": "claude-sonnet-5-5", "categories": [] },
+        { "arm": "always", "error": "The context breakdown did not include replay" },
+        { "arm": "deferred", "model": "claude-sonnet-5-5", "categories": [] },
+        { "arm": "deferred", "error": "The context breakdown did not include replay" }
+      ]
+    },
+    {
+      "attempt": 2,
+      "exitCode": 0,
+      "results": [
+        { "arm": "always", "servers": [{ "name": "replay_probe", "status": "connected" }] },
+        { "arm": "always", "model": "claude-sonnet-5-5", "replay": { "name": "mcp__replay_probe__replay", "serverName": "replay_probe", "tokens": 490, "isLoaded": true }, "categories": [{ "name": "MCP tools", "tokens": 490, "color": "cyan_FOR_SUBAGENTS_ONLY", "kind": "used" }] },
+        { "arm": "deferred", "servers": [{ "name": "replay_probe", "status": "connected" }] },
+        { "arm": "deferred", "model": "claude-sonnet-5-5", "replay": { "name": "mcp__replay_probe__replay", "serverName": "replay_probe", "tokens": 490, "isLoaded": false }, "categories": [{ "name": "MCP tools", "tokens": 490, "color": "cyan_FOR_SUBAGENTS_ONLY", "kind": "used" }] }
+      ]
+    },
+    {
+      "attempt": 3,
+      "exitCode": 0,
+      "results": [
+        { "arm": "always", "servers": [{ "name": "plugin:sleight:computer", "status": "connected" }] },
+        { "arm": "always", "model": "claude-sonnet-5-5", "replay": { "name": "mcp__plugin_sleight_computer__replay", "serverName": "plugin_sleight_computer", "tokens": 496, "isLoaded": true }, "totalTokens": 2340 },
+        { "arm": "deferred", "servers": [{ "name": "plugin:sleight:computer", "status": "connected" }] },
+        { "arm": "deferred", "model": "claude-sonnet-5-5", "replay": { "name": "mcp__plugin_sleight_computer__replay", "serverName": "plugin_sleight_computer", "tokens": 496, "isLoaded": false }, "totalTokens": 2340 }
+      ]
+    }
+  ]
+}

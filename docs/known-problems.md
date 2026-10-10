@@ -351,7 +351,8 @@ our own runs. Dates and engine versions are given where they matter.
 - In a TextEdit typing probe on 2026-10-08, select-all followed by `typeText("engine01")` and save
   left `Engine01engine01` instead of replacing the text. Part of it is macOS auto-capitalization,
   which `typeText` goes through: a later probe typed "sleight is here. it works" and TextEdit saved
-  "Sleight is here. It works", while `paste` saved it exactly. We don't know why select-all didn't replace the old text.
+  "Sleight is here. It works", while `paste` saved it exactly. Why select-all didn't replace the old text isn't confirmed. Tree sizes suggest a pending
+  capitalization suggestion took Cmd+A, so nothing was selected (2026-10-10).
   A separate digit probe passed all five key-by-key and five bulk replacements. The skill says to
   paste exact text and to read the result. [All attempts](benchmarks/2026-10-08-engine-time.json)
   include the failure and later fixture cleanup. A background probe now compares direct engine
@@ -529,3 +530,16 @@ our own runs. Dates and engine versions are given where they matter.
 - It's macOS on Apple Silicon only. The engine's JavaScript has Linux and Windows instructions, but
   the helper that clicks and types comes only with the Mac ChatGPT app, and there's no ChatGPT desktop
   app for Linux (checked 2026-10-04). We haven't checked the Windows app.
+
+## Desktop replay
+
+The pane logs replay step outcomes when the replay tool returns, showing a running entry and Stop
+until then. Desktop button delivery and automatic handoff still need the owner's check in the Code tab.
+A recorded script over
+4 MiB exceeds the mod's process-output limit. Use the CLI with an output filename for that script.
+Refresh gets its replay target from a literal `getApp` name. A script that acquires only an object
+or window ID may leave Refresh targeting the earlier app.
+A pane replay is untested in Auto mode, where the classifier may refuse the mod's `replay` call
+because the mod doesn't approve it (the classifier refused the pane's snapshot on 2026-10-08).
+The same literal `getApp` names decide which apps the next prompt asks Claude to read in full after
+a replay.

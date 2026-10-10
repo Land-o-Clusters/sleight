@@ -137,7 +137,20 @@ before relying on a diff.
 
 ## Replay a run
 
-A run Claude finished can run again with no model, through the same guards:
+A run Claude finished can run again with no model, through the same guards. In the desktop app's
+Code tab or a terminal session:
+
+```text
+/sleight record task.json
+/sleight replay task.json
+```
+
+`record` saves this session's successful sleight calls and never replaces an existing file. Replay
+uses the session's approvals and input lease and logs each step in the pane. It stops at the first
+step the app isn't ready for, and Claude then gets what stopped and finishes the task. Stop in the
+pane cancels a replay. The pane has buttons for both, too.
+
+From a shell, you can record an older session:
 
 ```bash
 ~/.claude/plugins/marketplaces/sleight/plugins/sleight/bin/sleight-mcp record <session id> task.json
@@ -147,8 +160,8 @@ A run Claude finished can run again with no model, through the same guards:
 ~/.claude/plugins/marketplaces/sleight/plugins/sleight/bin/sleight-mcp replay task.json
 ```
 
-The session id is the transcript's file name under `~/.claude/projects`. Replay stops at the first
-step the app isn't ready for, and asks in the terminal before using an app you haven't pre-approved.
+The session id is the transcript's file name under `~/.claude/projects`. The shell replay asks in
+the terminal before using an app you haven't pre-approved.
 [How it works](docs/design/replay.md).
 
 ## Safety
