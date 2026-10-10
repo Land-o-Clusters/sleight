@@ -75,17 +75,21 @@ test('every native method checks the identity returned by a combined observation
 });
 
 test('a combined snapshot cannot preserve a stale number, ID or label after an action', async () => {
-  for (const selector of ['2', '{ id: "Save" }', '{ label: "Save" }']) {
+  for (const careful of [false, true]) for (const selector of ['2', '{ id: "Save" }', '{ label: "Save" }']) {
     let changed = false;
     const f = fixture({ current: () => tree(expected, changed ? '\t2 button Delete\n\t3 button Save, ID: Save' : '\t2 button Save, ID: Save'),
       action: () => { changed = true; } });
-    const done = f.run(`await app.getAXStateAndScreenshot(); await app.click(2); await app.click(${selector});`);
+    const done = f.run(`await app.getAXStateAndScreenshot(); await app.click(2); await app.click(${selector});`, careful ? { careful } : undefined);
     if (selector === '2') {
       await assert.rejects(done, /changed what element 2 is/);
       assert.deepEqual(f.calls.filter(c => c[0] === 'click'), [['click', 2]]);
     } else {
       await done;
-      assert.deepEqual(f.calls.filter(c => c[0] === 'click'), [['click', 2], ['click', 3]]);
+      // By default a later action by ID or label goes to the engine as it is, and the engine finds
+      // the element (owner, 2026-10-10). Careful mode still reads and passes the current number.
+      const clicks = f.calls.filter(c => c[0] === 'click');
+      if (careful) assert.deepEqual(clicks, [['click', 2], ['click', 3]]);
+      else { assert.deepEqual(clicks[0], ['click', 2]); assert.equal(typeof clicks[1][1], 'object'); }
     }
   }
 });
@@ -274,6 +278,15 @@ for (const method of ['getAXState', 'getAXStateAndScreenshot']) {
   });
 }
 
+// textedit-save, 2026-10-10: Return after setValue({ id }) read the 54,000-character Save sheet.
+test('Return after setValue goes ahead on its header by default, and careful mode reads first', async () => {
+  for (const [options, reads] of [[undefined, 2], [{ careful: true }, 3]]) {
+    const f = fixture();
+    await f.run('await app.setValue(1, "b.txt"); await app.pressKey("Return");', options);
+    assert.equal(f.calls.filter(c => c[0] === 'read').length, reads, JSON.stringify(options));
+  }
+});
+
 test('a call that took no action after a split acquisition takes that read as its header', async () => {
   const f = fixture();
   f.context.cua.listApps = async () => [];
@@ -307,7 +320,10 @@ test('a window the call\'s own shortcut or Return opened or named is accepted, i
     ['await app.typeText("/tmp/x/b.txt"); await app.pressKey("Return"); await app.click({ id: "Save" });', 'Return', saved, { adoptUrl: true }, false],
     // Not this call's name, not after an opening action, or a strict mode: still a stop.
     ['await app.pressKey("super+o"); await app.pressKey("super+shift+g");', 'super+o', other, { adoptUrl: true }, true],
-    ['await app.typeText("abc"); await app.click({ id: "Save" });', 'abc', untitled, { adoptUrl: true }, true],
+    // By default an ID click after typing goes ahead on the earlier header (owner, 2026-10-10);
+    // careful mode reads first and stops.
+    ['await app.typeText("abc"); await app.click({ id: "Save" });', 'abc', untitled, { adoptUrl: true }, false],
+    ['await app.typeText("abc"); await app.click({ id: "Save" });', 'abc', untitled, { adoptUrl: true, careful: true }, true],
     ['await app.pressKey("super+n"); await app.pressKey("super+shift+t");', 'super+n', untitled, {}, true]]) {
     let changed = false;
     const f = fixture({ current: () => changed ? after : tree(), action: (name, args) => { if (args[0] === trigger) changed = true; } });

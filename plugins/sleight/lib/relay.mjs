@@ -98,7 +98,7 @@ const TURN_END_TOOL = 'turn_ended';
 // (batching study, 2026-10-09). Rewritten only while the engine's sentence is exactly this.
 const FIRST_CALL_RULE = 'execute exactly one of the API calls shown below, optionally assigning its result to a variable. Do not add other API calls, waits, or snapshots to that invocation.';
 // Chaining past Cmd+N or Cmd+O got the lease to stop 10 of 12 TextEdit batches (2026-10-09), hence its last clause.
-const FIRST_CALL_BATCH = 'start with one of the API calls shown below, assigning the app to a variable. When you already know the first actions on that app, put them after it in the same call: sleight acquires the app and checks its window before they run. Chain every later action whose target you already know (keys, text, `{ id }` or `{ label }` clicks) in one call too, but end the call after a shortcut that opens or names a window (Cmd+N, Cmd+O, or Cmd+S on an untitled document): sleight stops the rest of a call when its window changes.';
+const FIRST_CALL_BATCH = 'start with one of the API calls shown below, assigning the app to a variable. When you already know the first actions on that app, put them after it in the same call: sleight acquires the app and checks its window before they run. Chain every later action whose target you already know (keys, text, `{ id }` or `{ label }` clicks) in one call too, but end the call after a shortcut that opens or names a window (Cmd+N, Cmd+O, or Cmd+S on an untitled document): sleight stops a numbered action, or keys after a click, when the window changed.';
 // An open menu in front of a window reads as "0 menu Secondary Actions: Cancel". Escape left it open in
 // 3 of 3 tries in the head-to-head (TextEdit and Finder, 2026-10-09), and its Cancel action closed it.
 export function openMenuNote(text) {
@@ -109,13 +109,23 @@ export function openMenuNote(text) {
 // SLEIGHT_FIRST_CALL_BATCH=merge, under A/B. Since 668b462 a call continues into a window its own
 // shortcut opens, but the clause above still ends the call there: save and close were split in 14 of
 // 15 TextEdit runs, and no first call in 617 runs held an action (study, 2026-10-10).
-const FIRST_CALL_MERGE = 'start with one of the API calls shown below, assigning the app to a variable. When you already know the first actions on that app, put them after it in the same call (`let app = await cua.getApp("TextEdit"); await app.pressKey("super+n")`): sleight acquires the app and checks its window before they run. Chain every later action whose target you already know (keys, text, `{ id }` or `{ label }` clicks) in one call too, such as typing after the click that focuses a field, or Cmd+W after Cmd+S when the task closes the document. Do not end a call only to read the window before an action you already know: sleight waits for the app after each click, shortcut or Return, follows a Save or Open panel, a new window or a document saved under a name the call typed, and stops the rest of the call if any other window appears.';
+const FIRST_CALL_MERGE = 'start with one of the API calls shown below, assigning the app to a variable. When you already know the first actions on that app, put them after it in the same call (`let app = await cua.getApp("TextEdit"); await app.pressKey("super+n")`): sleight acquires the app and checks its window before they run. Chain every later action whose target you already know (keys, text, `{ id }` or `{ label }` clicks) in one call too, such as typing after the click that focuses a field, or Cmd+W after Cmd+S when the task closes the document. Do not end a call only to read the window before an action you already know: sleight waits for the app after each click, shortcut or Return, follows a Save or Open panel, a new window or a document saved under a name the call typed, and stops a numbered action, or keys after a click, if any other window appeared.';
 // Whether a call's first action needs no element from the tree: keys, typing, paste, or a click,
 // scroll or drag at coordinates.
 const ACTION = /\.(pressKey|typeText|paste|click|doubleClick|rightClick|scroll|drag|setValue|selectText|performSecondaryAction|performAction)\(\s*(\[)?/;
 export function treeFreeFirstAction(code) {
   const first = ACTION.exec(typeof code === 'string' ? code : '');
   return !!first && (['pressKey', 'typeText', 'paste'].includes(first[1]) || (!!first[2] && ['click', 'doubleClick', 'rightClick', 'scroll', 'drag'].includes(first[1])));
+}
+// A first action by ID or label, such as setValue({ id: "saveAsNameTextField" }, …): the guard finds
+// it in Claude's read from the call just before, when that read is under 10 s old (owner, 2026-10-10,
+// 1.4 s a save). Numbered first actions still read, since the window can renumber between calls.
+const NAMED_ACTION = /\.(?:pressKey|typeText|paste|click|doubleClick|rightClick|scroll|drag|setValue|selectText|performSecondaryAction|performAction)\(\s*\{\s*["']?(?:id|label)["']?\s*:/;
+export function reusableFirstAction(code) {
+  if (treeFreeFirstAction(code)) return true;
+  const text = typeof code === 'string' ? code : '';
+  const first = ACTION.exec(text);
+  return !!first && NAMED_ACTION.exec(text)?.index === first.index;
 }
 export function batchingDescription(description, variant = true) {
   const text = variant === 'merge' ? FIRST_CALL_MERGE : FIRST_CALL_BATCH;
@@ -1622,7 +1632,7 @@ export function createRelay({
             // A first action that sends keys, text or coordinates reuses it whatever the read took
             // (owner, 2026-10-10, for about 0.35 s a run): a window switch between calls isn't caught
             // before that action. Numbered, ID and label actions keep the read unless reads are slow.
-            const prior = !documentMode && !changeReview && guardMode !== 'careful' && priorRead && (priorRead.split || priorRead.ms > 2000 || treeFreeFirstAction(originalCode)) && priorRead.seq + 1 === callSeqs.get(msg.id) && Date.now() - priorRead.at < 10000 &&
+            const prior = !documentMode && !changeReview && guardMode !== 'careful' && priorRead && (priorRead.split || priorRead.ms > 2000 || reusableFirstAction(originalCode)) && priorRead.seq + 1 === callSeqs.get(msg.id) && Date.now() - priorRead.at < 10000 &&
               target?.app === priorRead.app ? { text: priorRead.text, id: priorRead.id, title: priorRead.title, windows: priorRead.windows, split: priorRead.split } : undefined;
             msg.params.arguments.code = guardedCode(originalCode, target, reason,
               inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,

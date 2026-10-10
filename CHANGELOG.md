@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The guard skips three more reads Codex doesn't make (owner's call). Return after `setValue` goes
+  ahead, a first action by ID or label uses Claude's read from the call before when it's under 10 s
+  old, and later actions by ID or label go to the engine to find. Those reads took about 1.85 s and
+  1.4 s of each save and 3.5 s of each Calculator run, and without them a window that changes just
+  before such an action isn't caught first. `SLEIGHT_GUARD=careful` keeps every read. The first action of a session no longer
+  says "UI unverified (no earlier read)" because of the engine's docs on that call.
 - App approval prompts offer "Always allow" (owner's call). It adds the app to your pre-approved
   list with its risk level and the date, so later sessions don't ask. Only your click writes it,
   and terminals and OpenAI's apps never offer it. `sleight-mcp allow list` and
