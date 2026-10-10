@@ -200,7 +200,7 @@ function footprint(apps) {
   return { onSpawn: pgid => { stop = startFootprint({ pgid, apps: apps.filter(Boolean) }); }, finish: async () => stop?.() };
 }
 
-function runClaude(prompt, arm, env = {}, { signal, evidenceDir, onPermissionRefusal, privateMail = false, onSpawn } = {}) {
+function runClaude(prompt, arm, env = {}, { signal, evidenceDir, onPermissionRefusal, privateMail = false, onSpawn, fixtureLifecycle = false } = {}) {
   if (privateMail) assertPrivateClaudePolicy();
   const args = [
     '-p', prompt,
@@ -209,14 +209,14 @@ function runClaude(prompt, arm, env = {}, { signal, evidenceDir, onPermissionRef
     '--disallowedTools', OUTSIDE_TOOLS.join(','),
     ...(privateMail ? ['--setting-sources', ''] : []),
     '--settings', join(ROOT, 'bench', privateMail ? 'private-settings.json' : 'settings.json'),
-    '--output-format', suite === 'real' ? 'stream-json' : 'json',
-    ...(suite === 'real' ? ['--verbose'] : []),
+    '--output-format', suite === 'real' || fixtureLifecycle ? 'stream-json' : 'json',
+    ...(suite === 'real' || fixtureLifecycle ? ['--verbose'] : []),
     '--model', model,
     '--effort', effort,
   ];
   return runDriver(claudeBin, args, { cwd: arm.cwd, env: armEnv(arm, env), timeoutMs: TIMEOUT_MS, onSpawn,
     signal: signal ?? controller.signal, evidenceDir, privateMail, privatePolicyCheck: privateMail ? assertPrivateClaudePolicy : undefined,
-    onPermissionRefusal, format: suite === 'real' ? 'stream-json' : 'json' });
+    onPermissionRefusal, format: suite === 'real' || fixtureLifecycle ? 'stream-json' : 'json' });
 }
 
 // Window titles can carry the user's name (Chess: "Game 1 | Name - Computer"),
@@ -224,7 +224,7 @@ function runClaude(prompt, arm, env = {}, { signal, evidenceDir, onPermissionRef
 const fullName = (() => { try { return execFileSync('id', ['-F'], { encoding: 'utf8' }).trim(); } catch { return ''; } })();
 const scrub = text => {
   if (typeof text !== 'string') return text;
-  if (suite === 'real') text = text.replaceAll(homedir(), '~').replaceAll(realpathSync(tmpdir()), '<temp>').replaceAll(tmpdir(), '<temp>');
+  text = text.replaceAll(homedir(), '~').replaceAll(realpathSync(tmpdir()), '<temp>').replaceAll(tmpdir(), '<temp>');
   return fullName.length > 2 ? text.split(fullName).join('<user>') : text;
 };
 
@@ -246,7 +246,7 @@ const save = () => {
   const json = JSON.stringify({ stamp, ...(suite === 'real' ? { suite, surfaces: 'computer', ownerAway } : {}),
     arms: armNames, model, effort, claude: claudeBin, results,
     ...(passCleanupErrors.length && { passCleanupErrors }) }, null, 2);
-  writeFileSync(file, (suite === 'real' ? scrub(json) : json) + '\n');
+  writeFileSync(file, scrub(json) + '\n');
 };
 // The runner owns the pass lock. Real tasks reuse it, so they cannot wait on
 // themselves. This extends main's pass lock through driver collection.
@@ -294,7 +294,7 @@ pass: for (let run = 1; run <= runs; run++) {
       const dir = join(suite === 'real' ? realpathSync(tmpdir()) : tmpdir(), 'sleight-bench', stamp, `${armName}-${task.id}-${run}`);
       mkdirSync(dir, { recursive: true });
       const ctx = { dir, nonce, ownerAway };
-      if (suite === 'real') {
+      if (suite === 'real' || task.fixtureLifecycle) {
         if (task.privateMail) assertPrivateClaudePolicy();
         if (task.privateMail) ctx.privateTask = task;
         realContexts.push(ctx);
@@ -314,7 +314,8 @@ pass: for (let run = 1; run <= runs; run++) {
               return response;
             }
             const response = await runClaude(prompt, ARMS[armName], !task.privateMail && armName === 'sleight' ? { SLEIGHT_TRACE: evidenceDir } : {},
-              { signal: controller.signal, evidenceDir, ...callbacks, privateMail: task.privateMail, onSpawn: task.privateMail ? undefined : cpu.onSpawn });
+              { signal: controller.signal, evidenceDir, ...callbacks, privateMail: task.privateMail,
+                fixtureLifecycle: true, onSpawn: task.privateMail ? undefined : cpu.onSpawn });
             if (!task.privateMail) response.footprint = await cpu.finish();
             if (!task.privateMail) response.timing = runTiming(response.out, armName === 'sleight' ? traceTiming(evidenceDir) : undefined);
             return response;
@@ -429,7 +430,7 @@ pass: for (let run = 1; run <= runs; run++) {
       }
     }
     if (!isDryRun && unlock) for (const cleanup of [closeBenchTextEdit, quitChess, quitSimApp]) {
-      try { await cleanup(suite === 'real' ? { ownedOnly: true } : undefined); }
+      try { await cleanup(suite === 'real' || cleanup === quitSimApp ? { ownedOnly: true } : undefined); }
       catch (error) { console.error(privatePass ? 'Pass cleanup failed: PRIVATE_MAIL_CLEANUP_UNCONFIRMED' : `Pass cleanup failed: ${error.message}`); process.exitCode = 1; }
     }
     save();

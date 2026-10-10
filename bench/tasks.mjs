@@ -10,6 +10,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { restartChess } from './chess-launch.mjs';
 import { realTasks } from './tasks-real.mjs';
+import { acquireFixture } from './real-run.mjs';
+import { openFixture, closeFixtures } from './real-fixture.mjs';
 export { writeTestPDF } from './real-pdf.mjs';
 
 // Calculator shows digit grouping ("1,024"), and Claude reports what it shows.
@@ -204,6 +206,14 @@ export async function serveForm(nonce) {
   return `http://127.0.0.1:${form.server.address().port}/`;
 }
 
+async function prepareSimulatorForm(ctx) {
+  ctx.url = await serveForm(ctx.nonce);
+  ctx.closeServer = () => {
+    forms.get(ctx.nonce)?.server.close();
+    forms.delete(ctx.nonce);
+  };
+}
+
 export const tasks = [
   {
     id: 'calculator-click',
@@ -280,15 +290,39 @@ export const tasks = [
   {
     id: 'simulator-form',
     app: 'Simulator',
+    fixtureLifecycle: true,
     // Safari in the simulator opens the form, as an app under test would be
     // launched to its first screen. The check is what the server received.
+    prepare: prepareSimulatorForm,
     setup: async ctx => {
-      ctx.sim = bootedIPhone();
-      ctx.url = await serveForm(ctx.nonce);
-      simctl('openurl', ctx.sim.udid, ctx.url);
+      const modern = existsSync('/Applications/Xcode.app/Contents/Applications/DeviceHub.app');
+      await acquireFixture(ctx, 'simViewer', () => openFixture(ctx, { app: modern ? 'DeviceHub' : 'Simulator',
+        bundle: modern ? 'com.apple.dt.Devices' : 'com.apple.iphonesimulator', target: '', mode: 'inherit' }, {
+        launch: async beginLaunch => {
+          await acquireFixture(ctx, 'sim', () => bootedIPhone({ trackOwnership: true, beforeViewerLaunch: beginLaunch }));
+          await prepareSimulatorForm(ctx);
+          simctl('openurl', ctx.sim.udid, ctx.url);
+          ctx.simPageOpened = true;
+        },
+      }));
     },
-    cleanup: quitSimApp,
-    prompt: ({ nonce, sim }) =>
+    cleanup: async ctx => {
+      try {
+        if (ctx.simPageOpened && ctx.sim?.bootedByTask) simctl('terminate', ctx.sim.udid, 'com.apple.mobilesafari');
+        await closeFixtures(ctx);
+      } finally {
+        try { if (ctx.sim?.bootedByTask) simctl('shutdown', ctx.sim.udid); }
+        finally {
+          try { await quitSimApp({ ownedOnly: true,
+            lease: ctx.windowLeases?.find(lease => ['DeviceHub', 'Simulator'].includes(lease.app)) }); }
+          finally {
+            await ctx.closeServer?.();
+            ctx.closeServer = undefined;
+          }
+        }
+      }
+    },
+    prompt: ({ nonce, sim = { name: 'iPhone', app: 'Simulator' } }) =>
       `Using computer use in the background, go to the ${sim.name} simulator in the ${sim.app} app, where Safari ` +
       `shows a form. Type exactly "sleight bench ${nonce}" into its Message field and tap Submit. Reply when the page says Sent.`,
     check: ({ nonce }) => {

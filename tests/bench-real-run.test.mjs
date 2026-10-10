@@ -291,6 +291,35 @@ test('fixture acquisition records ownership before resolving and retains uncerta
   }
 });
 
+for (const dialogStop of [false, true]) test(`an uncollected driver still closes the local server${dialogStop ? ' during a dialog stop' : ''}`, async t => {
+  const execute = await runner(), ctx = fixture(t);
+  let closed = 0;
+  ctx.closeServer = async () => { closed++; };
+  const result = await execute({ setup: () => {}, prompt: () => '', check: () => true,
+    cleanup: () => assert.fail('no app cleanup while the driver can still act'),
+  }, ctx, { drive: async (_prompt, context) => {
+    if (dialogStop) context.onAppDialog({ app: 'Simulator', category: 'access' });
+    return { code: 1, groupClean: false };
+  } });
+  assert.equal(closed, 1);
+  assert.equal(ctx.closeServer, undefined);
+  assert.equal(result.passed, false);
+  assert.match(result.cleanupError, /process group/);
+  assert.equal(existsSync(ctx.dir), true);
+  assert.equal(existsSync(ctx.lockPath), false);
+});
+
+test('local server cleanup failure preserves the fixture and still releases the lock', async t => {
+  const execute = await runner(), ctx = fixture(t);
+  ctx.closeServer = async () => { throw new Error('listener cleanup failed'); };
+  const result = await execute({ setup: () => {}, prompt: () => '', check: () => true, cleanup: () => {} },
+    ctx, { drive: async () => ({ code: 0, groupClean: true }) });
+  assert.equal(result.passed, false);
+  assert.match(result.cleanupError, /listener cleanup failed/);
+  assert.equal(existsSync(ctx.dir), true);
+  assert.equal(existsSync(ctx.lockPath), false);
+});
+
 test('a task under the runner-owned lock does not wait on itself or release its caller lock', async t => {
   const execute = await runner(), ctx = fixture(t);
   mkdirSync(ctx.lockPath);
