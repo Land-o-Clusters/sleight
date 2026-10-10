@@ -155,3 +155,152 @@ test('rules paths cannot enter the project through symlinks or a subdirectory cw
   const link = join(bank, 'outside.json'); symlinkSync(file, link);
   assert.throws(() => loadFlowRules({ SLEIGHT_FLOW_RULES: link }, { cwd: sub }), /outside.*project/);
 });
+
+// Header shapes recorded in the native document and browser-surface fixtures.
+const webResult = (host, value = 'PRIVATE VALUE', app = 'Helium') => ({ content: [{ type: 'text',
+  text: `Window: "Test", App: ${app}.\n0 standard window Test, URL: https://${host}/private, Secondary Actions: Raise\n\t1 text ${value}` }] });
+const tabResult = (host, value = 'PRIVATE VALUE', id = '1') => ({ content: [{ type: 'text',
+  text: `Browser tab: ${id}, Title: "Test", URL: "https://${host}/private".\n0 AXWebArea Test\n\t1 text ${value}` }] });
+const read = (flow, code, result) => { const plan = flow.analyze('js', { code }); flow.forward(plan); flow.observe(result, plan); };
+const sitePattern = { id: 'site-secret', kind: 'pattern', pattern: 'SECRET', destinations: ['site:example.com'] };
+
+test('site destinations use native window URLs, with exact hosts and label-bounded wildcards', () => {
+  for (const [selector, host, count] of [
+    ['site:example.com', 'EXAMPLE.COM', 1], ['site:example.com', 'sub.example.com', 0],
+    ['site:*.example.com', 'sub.example.com', 1], ['site:*.example.com', 'a.b.example.com', 1],
+    ['site:*.example.com', 'example.com', 0], ['site:*.example.com', 'notexample.com', 0],
+    ['site:*.example.com', 'example.com.evil.test', 0],
+  ]) {
+    const flow = rules({ ...sitePattern, destinations: [selector] });
+    read(flow, 'let app = await cua.getApp("Helium")', webResult(host));
+    assert.equal(flow.analyze('js', { code: 'await app.typeText("SECRET")' }).violations.length, count, `${selector}, ${host}`);
+  }
+});
+
+test('site source values retain their observed host after a later read on another site', () => {
+  const flow = rules({ ...source, sources: ['site:*.example.com'] });
+  read(flow, 'let app = await cua.getApp("Helium")', webResult('private.example.com'));
+  read(flow, 'await app.getAXState()', webResult('public.test', 'PUBLIC VALUE'));
+  assert.equal(analyze(flow, 'let mail = await cua.getApp("Mail"); await mail.typeText("PRIVATE VALUE")').violations.length, 1);
+  assert.equal(analyze(flow, 'await mail.typeText("PUBLIC VALUE")').violations.length, 0);
+});
+
+test('browser tab headers attribute protected text to a site and preserve browser source rules', () => {
+  for (const selector of ['site:example.com', 'browser']) {
+    const flow = rules({ ...source, sources: [selector] });
+    read(flow, 'let tab = await cua.getTab("1")', tabResult('example.com'));
+    assert.equal(analyze(flow, 'let mail = await cua.getApp("Mail"); await mail.paste("PRIVATE VALUE")').violations.length, 1);
+  }
+});
+
+test('saved browser tabs and derived locators keep distinct site destinations', () => {
+  const flow = rules(sitePattern);
+  read(flow, 'let privateTab = await cua.getTab("1")', tabResult('example.com'));
+  read(flow, 'let publicTab = await cua.getTab("2")', tabResult('public.test', 'PUBLIC VALUE', '2'));
+  assert.equal(flow.analyze('js', { code: 'await privateTab.playwright.getByRole("textbox").fill("SECRET")' }).violations.length, 1);
+  assert.equal(flow.analyze('js', { code: 'await publicTab.playwright.getByRole("textbox").fill("SECRET")' }).violations.length, 0);
+  read(flow, 'let field = privateTab.playwright.getByRole("textbox")', tabResult('example.com'));
+  assert.equal(flow.analyze('js', { code: 'await field.fill("SECRET")' }).violations.length, 1);
+  read(flow, 'await privateTab.getAXState()', tabResult('public.test'));
+  assert.equal(flow.analyze('js', { code: 'await field.fill("SECRET")' }).violations.length, 0);
+});
+
+test('site exceptions require a current unambiguous observed HTTP URL', () => {
+  for (const text of [
+    'Window: "Test", App: Helium.\n0 standard window Test',
+    'Window: "Test", App: Helium.\nURL: https://example.com\nURL: https://evil.test',
+    'Window: "Test", App: Helium.\nURL: file:///tmp/example.com',
+    'Window: "Test", App: Helium.\nURL: https://example.com@evil.test',
+    'Window: "Test", App: Helium.\nURL: not a URL',
+  ]) {
+    const flow = rules({ ...pattern, except: ['site:example.com'] });
+    read(flow, 'let app = await cua.getApp("Helium")', webResult('example.com'));
+    read(flow, 'await app.getAXState()', { content: [{ type: 'text', text }] });
+    assert.equal(flow.analyze('js', { code: 'await app.typeText("123-45-6789")' }).violations.length, 1, text);
+  }
+  const flow = rules({ ...pattern, except: ['site:example.com'] });
+  read(flow, 'let app = await cua.getApp("Helium")', webResult('EXAMPLE.COM'));
+  assert.equal(flow.analyze('js', { code: 'await app.typeText("123-45-6789")' }).violations.length, 0);
+});
+
+test('missing browser headers cannot inherit another tab site or a site exception', () => {
+  const flow = rules({ ...pattern, except: ['site:example.com'] });
+  read(flow, 'let approved = await cua.getTab("1")', tabResult('example.com'));
+  read(flow, 'let unknown = await cua.getTab("2")', { content: [{ type: 'text', text: 'No state' }] });
+  assert.equal(flow.analyze('js', { code: 'await unknown.playwright.getByRole("textbox").fill("123-45-6789")' }).violations.length, 1);
+  assert.equal(flow.analyze('js', { code: 'await approved.playwright.getByRole("textbox").fill("123-45-6789")' }).violations.length, 0);
+  const dest = rules(sitePattern);
+  read(dest, 'let unknown = await cua.getTab("2")', { content: [{ type: 'text', text: 'No state' }] });
+  assert.equal(dest.analyze('js', { code: 'await unknown.playwright.getByRole("textbox").fill("SECRET")' }).violations.length, 1);
+});
+
+test('navigation checks the requested URL host and invalidates earlier site exceptions', () => {
+  const flow = rules({ ...sitePattern, pattern: 'SECRET', except: ['site:public.test'] });
+  read(flow, 'let tab = await cua.getTab("1")', tabResult('public.test'));
+  assert.equal(flow.analyze('js', { code: 'await tab.goto("https://example.com/?SECRET")' }).violations.length, 1);
+  assert.equal(flow.analyze('js', { code: 'let tab = await cua.createBrowserTab("chrome", "https://example.com/?SECRET")' }).violations.length, 1);
+  assert.equal(flow.analyze('js', { code: 'await tab.goto("https://example.com"); await tab.playwright.getByRole("textbox").fill("SECRET")' }).violations.length, 1);
+});
+
+test('site typing tails stay separate while existing browser pattern rules still join calls', () => {
+  for (const [destinations, count] of [[['site:example.com'], 0], [['browser'], 1]]) {
+    const flow = rules({ ...sitePattern, destinations });
+    read(flow, 'let a = await cua.getTab("1")', tabResult('example.com'));
+    flow.forward(flow.analyze('js', { code: 'await a.playwright.getByRole("textbox").type("SECRE")' }));
+    read(flow, 'let b = await cua.getTab("2")', tabResult('public.test', 'PUBLIC VALUE', '2'));
+    assert.equal(flow.analyze('js', { code: 'await b.playwright.getByRole("textbox").type("T")' }).violations.length, count);
+  }
+});
+
+test('ambiguous site selector syntax refuses configuration in every selector position', () => {
+  for (const selector of ['site:', 'site:*', 'site:*.com', 'site:foo*.example.com', 'site:**.example.com',
+    'site:example.*', 'site:https://example.com', 'site:example.com/path', 'site:example.com:443',
+    'site:example.com?x', 'site: example.com', 'site:example.com.', 'site:ex ample.com', 'site:*.127.0.0.1']) {
+    for (const key of ['sources', 'destinations', 'except']) {
+      assert.throws(() => rules({ ...source, [key]: [selector] }), /site.*host|host.*site/i, `${key}: ${selector}`);
+    }
+  }
+});
+
+test('native missing or conflicting window headers clear earlier site exceptions', () => {
+  for (const reply of [
+    { content: [{ type: 'text', text: 'No state' }] },
+    { content: [...webResult('evil.test').content, ...webResult('example.com').content] },
+  ]) {
+    const flow = rules({ ...pattern, except: ['site:example.com'] });
+    read(flow, 'let app = await cua.getApp("Helium")', webResult('example.com'));
+    read(flow, 'await app.getAXState()', reply);
+    assert.equal(flow.analyze('js', { code: 'await app.typeText("123-45-6789")' }).violations.length, 1);
+  }
+});
+
+test('browser headers with DOM snapshots protect readable site values', () => {
+  const flow = rules({ ...source, sources: ['site:example.com'] });
+  const reply = tabResult('example.com');
+  reply.content[0].text += '\n- paragraph: DOM PRIVATE VALUE\n- textbox "Email": secret@example.org';
+  read(flow, 'let tab = await cua.getTab("1")', reply);
+  assert.equal(analyze(flow, 'let mail = await cua.getApp("Mail"); await mail.paste("DOM PRIVATE VALUE")').violations.length, 1);
+  assert.equal(analyze(flow, 'await mail.paste("secret@example.org")').violations.length, 1);
+});
+
+test('browser history and reload clear stale site destinations before later input', () => {
+  for (const method of ['back', 'forward', 'reload']) {
+    const flow = rules(sitePattern);
+    read(flow, 'let tab = await cua.getTab("1")', tabResult('public.test'));
+    assert.equal(flow.analyze('js', { code: `await tab.${method}(); await tab.playwright.getByRole("textbox").fill("SECRET")` }).violations.length, 1, method);
+    read(flow, `await tab.${method}()`, { content: [{ type: 'text', text: 'Navigation complete' }] });
+    assert.equal(flow.analyze('js', { code: 'await tab.playwright.getByRole("textbox").fill("SECRET")' }).violations.length, 1, `${method}, later call`);
+  }
+});
+
+test('unfamiliar native browsers retain learned web status after ambiguous or missing URLs', () => {
+  for (const reply of [
+    { content: [...webResult('example.com', 'PRIVATE VALUE', 'Vivaldi').content, ...webResult('public.test', 'PUBLIC VALUE', 'Vivaldi').content] },
+    { content: [{ type: 'text', text: 'Window: "Test", App: Vivaldi.\n0 standard window Test' }] },
+  ]) {
+    const flow = rules(sitePattern);
+    read(flow, 'let app = await cua.getApp("Vivaldi")', webResult('example.com', 'PRIVATE VALUE', 'Vivaldi'));
+    read(flow, 'await app.getAXState()', reply);
+    assert.equal(flow.analyze('js', { code: 'await app.typeText("SECRET")' }).violations.length, 1);
+  }
+});

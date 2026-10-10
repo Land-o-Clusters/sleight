@@ -9,9 +9,12 @@ our own runs. Dates and engine versions are given where they matter.
   before sleight learns browser handles. Candidates attempt the known native window lease and
   saved-file checks; when native access is unavailable, their runtime guard denies native access
   while browser operations remain usable. These guards remain cooperative, not JavaScript isolation.
-  Flow rules use one `browser` source and destination
-  for all tabs, with literal fills, typing and navigation URLs checked. They do not distinguish
-  sites or tabs. Clipboard transfers and runtime strings remain outside those checks. Native
+  Flow rules accept site selectors from window and tab URL headers, with literal fills, typing and
+  navigation URLs checked. Saved browser tabs retain separate site observations, while native
+  browsers share one window observation per app. Missing or conflicting headers clear the current
+  site. A person's navigation between calls can still leave a stale site. The site checks have
+  recorded-header unit coverage, with live checks held on 2026-10-09. Clipboard transfers and runtime
+  strings remain outside those checks. Native
   document scope and saved-file change review do not cover browser tabs. Browser discovery runs
   once at startup; connecting an extension later requires a new sleight session or an explicit
   `SLEIGHT_SURFACES` override. An installed extension can be absent from the engine's live inventory.

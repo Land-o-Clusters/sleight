@@ -12,6 +12,39 @@ export const FLOW_TOOL = {
 };
 const error = message => new Error(`Flow rules: ${message}`);
 const norm = app => typeof app === 'string' ? app.toLowerCase().replace(/^.*\//, '').replace(/\.app$/, '') : '';
+const isSite = selector => typeof selector === 'string' && selector.toLowerCase().startsWith('site:');
+function siteSelector(selector) {
+  const pattern = selector.slice(5).toLowerCase();
+  const wildcard = pattern.startsWith('*.');
+  const host = wildcard ? pattern.slice(2) : pattern;
+  const label = /^[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?$/;
+  if (host.length > 253 || !host.split('.').every(part => label.test(part)) ||
+      (wildcard && (!host.includes('.') || /^[\d.]+$/.test(host)))) throw error(`invalid site host selector: ${selector}`);
+  // Reject URL parser aliases such as shortened IPv4 addresses.
+  try { if (new URL(`https://${host}`).hostname !== host) throw new Error(); }
+  catch { throw error(`invalid site host selector: ${selector}`); }
+  return { host, wildcard };
+}
+function urlHost(value) {
+  if (typeof value !== 'string' || /[\s\\]/.test(value)) return null;
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) ? url.hostname.toLowerCase().replace(/\.$/, '') : null;
+  } catch { return null; }
+}
+const nativeBrowser = app => /^(?:browser|safari|helium|google chrome|chrome|chromium|firefox|microsoft edge|brave browser|arc|com\.apple\.safari|com\.google\.chrome|org\.mozilla\.firefox|com\.microsoft\.edgemac|net\.imput\.helium)$/i.test(norm(app));
+const target = (app, url) => ({ app, host: urlHost(url), web: nativeBrowser(app) || !!urlHost(url), observed: !!urlHost(url) });
+function headerTarget(text) {
+  const window = windowFromText(text);
+  if (window) return target(window.app, window.url);
+  const header = /^Browser tab: [^\n]+?, Title: "(?:[^"\\]|\\.)*", URL: ("(?:[^"\\]|\\.)*")\.?\r?$/m.exec(text);
+  if (header && !/^URL: /m.test(text)) {
+    try { return target('browser', JSON.parse(header[1])); } catch { /* Unknown site. */ }
+  }
+  // A malformed native URL still identifies its app, but grants no site exception.
+  const app = /^Window: "(?:[^"\\]|\\.)*", App: (.+?)\.?\r?$/m.exec(text)?.[1];
+  return app ? target(app) : /^Browser tab: /m.test(text) ? target('browser') : undefined;
+}
 const within = (file, root) => { const r = relative(root, file); return !r || (!r.startsWith('..') && !isAbsolute(r)); };
 function projectRoot(cwd) {
   let dir = realpathSync(cwd);
@@ -78,35 +111,35 @@ export function tokens(code) {
 }
 
 function calls(code, handles, fallback) {
-  const ts = tokens(code); const inputs = []; let readApp = fallback;
+  const ts = tokens(code); const inputs = []; let readTarget = fallback;
   for (let i = 0; i < ts.length; i++) {
     if (ts[i].v === '=' && !ts[i - 1]?.string) {
       const source = i + (ts[i + 1]?.v === 'await' ? 2 : 1);
       const end = ts.findIndex((t, index) => index > source && t.v === ';');
       const expression = ts.slice(source, end < 0 ? ts.length : end);
       const factories = ['getByRole', 'getByText', 'getByLabel', 'getByPlaceholder', 'getByTestId', 'locator', 'frameLocator', 'filter', 'first', 'last', 'nth', 'and', 'or', 'new', 'get'];
-      if (handles.get(ts[source]?.v) === 'browser' && ts[source + 1]?.v === '.' &&
+      if (handles.get(ts[source]?.v)?.app === 'browser' && ts[source + 1]?.v === '.' &&
           expression.some((t, index) => !t.string && factories.includes(t.v) && expression[index + 1]?.v === '(')) {
-        handles.set(ts[i - 1].v, 'browser');
+        handles.set(ts[i - 1].v, handles.get(ts[source].v));
       }
     }
-    if (!ts[i].string && handles.get(ts[i].v) === 'browser' && ts[i + 1]?.v === '.') readApp = 'browser';
+    if (!ts[i].string && handles.has(ts[i].v) && ts[i + 1]?.v === '.') readTarget = handles.get(ts[i].v);
     if (['getApp', 'getBrowser', 'getTab', 'createBrowserTab'].includes(ts[i].v) && ts[i + 1]?.v === '(' && (ts[i].v !== 'getApp' || ts[i + 2]?.string)) {
-      const target = ts[i].v === 'getApp' ? ts[i + 2].v : 'browser'; readApp = target;
+      const app = ts[i].v === 'getApp' ? ts[i + 2].v : 'browser'; readTarget = target(app);
       // Find the receiver assigned to this acquisition, without executing it.
       const start = Math.max(ts.slice(0, i).findLastIndex(t => t.v === ';') + 1, 0);
       const eq = ts.slice(start, i).findIndex(t => t.v === '=');
-      if (eq > 0) handles.set(ts[start + eq - 1].v, target);
+      if (eq > 0) handles.set(ts[start + eq - 1].v, readTarget);
     }
     const method = ts[i].v;
-    if (!['typeText', 'paste', 'setValue', 'pressKey', 'fill', 'type', 'pressSequentially', 'press', 'goto', 'createBrowserTab'].includes(method)) continue;
+    if (!['typeText', 'paste', 'setValue', 'pressKey', 'fill', 'type', 'pressSequentially', 'press', 'goto', 'createBrowserTab', 'back', 'forward', 'reload'].includes(method)) continue;
     const bracket = ts[i].string && ts[i - 1]?.v === '[' && ts[i + 1]?.v === ']';
     if (!bracket && ts[i - 1]?.v !== '.') continue;
     const receiver = ts[i - 2]?.v;
     const start = Math.max(ts.slice(0, i).findLastIndex(t => t.v === ';') + 1, 0);
-    const root = ts.slice(start, i).find(t => handles.has(t.v) && handles.get(t.v) === 'browser')?.v;
-    const destination = method === 'createBrowserTab' ? 'browser' : handles.get(root ?? receiver) ?? fallback;
-    if (destination === 'browser') readApp = 'browser';
+    const root = ts.slice(start, i).find(t => handles.get(t.v)?.app === 'browser')?.v;
+    const destination = method === 'createBrowserTab' ? readTarget : handles.get(root ?? receiver) ?? fallback;
+    if (destination?.app === 'browser') readTarget = destination;
     const open = i + (bracket ? 2 : 1);
     if (ts[open]?.v !== '(') continue;
     const args = [[]]; let depth = 0; let j = open + 1;
@@ -120,10 +153,14 @@ function calls(code, handles, fallback) {
     }
     const arg = method === 'createBrowserTab' ? args[1] : method === 'setValue' ? args[1] : (args[0]?.[0]?.string ? args[0] : args[1] ?? args[0]);
     const literals = (arg ?? []).filter(t => t.string).map(t => t.v);
-    if (literals.length) inputs.push({ method, app: destination, value: literals.join('') });
+    const navigation = ['goto', 'createBrowserTab', 'back', 'forward', 'reload'].includes(method);
+    const urlNavigation = ['goto', 'createBrowserTab'].includes(method);
+    if (literals.length && (!navigation || urlNavigation)) inputs.push({ method, target: urlNavigation ? { ...target(destination?.app, literals.join('')), observed: false }
+      : { ...destination }, value: literals.join('') });
+    if (navigation && destination) { destination.host = null; destination.observed = false; }
     i = j;
   }
-  return { inputs, readApp };
+  return { inputs, readApp: readTarget?.app, readTarget };
 }
 
 function keyText(value) {
@@ -169,45 +206,73 @@ export class FlowRules {
       if (typeof rule.id !== 'string' || !/^[\w.-]{1,80}$/.test(rule.id) || ids.has(rule.id) || !list(rule.destinations) ||
           (rule.except !== undefined && !list(rule.except)) || Object.keys(rule).some(k => !allowed.includes(k))) throw error('invalid or duplicate rule');
       ids.add(rule.id);
+      for (const selector of [...rule.destinations, ...(rule.except ?? []), ...(Array.isArray(rule.sources) ? rule.sources : [])]) {
+        if (isSite(selector)) siteSelector(selector);
+      }
       const copy = structuredClone(rule);
+      copy.siteScoped = [...rule.destinations, ...(rule.except ?? [])].some(isSite);
       if (rule.kind === 'pattern') {
         if (typeof rule.pattern !== 'string' || !rule.pattern || !/^[imsu]*$/.test(rule.flags ?? '')) throw error(`invalid pattern in ${rule.id}`);
         try { copy.regex = new RegExp(rule.pattern, rule.flags); } catch { throw error(`invalid pattern in ${rule.id}`); }
       } else if (rule.kind !== 'source' || !list(rule.sources)) throw error(`invalid source rule ${rule.id}`);
       return copy;
     });
-    this.aliases = new Map(); this.handles = new Map(); this.values = new Map(); this.tails = new Map(); this.revision = 0;
+    this.aliases = new Map(); this.handles = new Map(); this.values = new Map(); this.tails = new Map(); this.windows = new Map(); this.revision = 0;
   }
   canonical(app) { return this.aliases.get(norm(app)) ?? norm(app); }
-  matches(app, apps) { return apps.some(a => a === '*' || this.canonical(a) === this.canonical(app)); }
+  matches(value, apps, { unknown = false, exception = false } = {}) {
+    const context = typeof value === 'string' ? target(value) : value;
+    return apps.some(a => {
+      if (!isSite(a)) return a === '*' || this.canonical(a) === this.canonical(context?.app);
+      if (!context?.host) return unknown && !!context?.web;
+      if (exception && !context.observed) return false;
+      const { host, wildcard } = siteSelector(a);
+      return wildcard ? context.host.endsWith('.' + host) : context.host === host;
+    });
+  }
   analyze(name, args = {}, window) {
-    const handles = new Map(this.handles); const tails = new Map(this.tails);
-    const parsed = name === 'js' ? calls(args.code ?? '', handles, window?.app) : { inputs: strings(Object.fromEntries(Object.entries(args).filter(([k]) => !['app', 'op'].includes(k)))).map(value => ({ app: args.app, value, method: 'argument' })), readApp: args.app };
+    const copies = new Map();
+    const fallback = window ? target(window.app, window.url) : undefined;
+    const current = value => value?.app === 'browser' ? value : this.windows.get(this.canonical(value?.app)) ??
+      (fallback && this.canonical(value?.app) === this.canonical(fallback.app) ? fallback : value);
+    const handles = new Map([...this.handles].map(([name, value]) => {
+      if (!copies.has(value)) copies.set(value, { ...current(value) });
+      return [name, copies.get(value)];
+    }));
+    const tails = new Map(this.tails);
+    const localTarget = current(target(args.app));
+    const parsed = name === 'js' ? calls(args.code ?? '', handles, fallback) : { inputs: strings(Object.fromEntries(Object.entries(args).filter(([k]) => !['app', 'op'].includes(k)))).map(value => ({ target: localTarget, value, method: 'argument' })), readApp: args.app, readTarget: localTarget };
     const violations = new Map();
     for (const input of parsed.inputs) {
-      const app = this.canonical(input.app);
+      const destination = input.target;
+      const app = this.canonical(destination?.app);
+      const siteKey = JSON.stringify([app, destination?.host ?? null]);
       let value = input.value;
       if (['pressKey', 'press'].includes(input.method)) {
         value = keyText(value);
-        if (value === undefined) { tails.delete(app); continue; }
+        if (value === undefined) { tails.delete(app); tails.delete(siteKey); continue; }
       }
-      if (input.method === 'setValue') tails.delete(app);
-      const previous = tails.get(app) ?? '';
-      const combined = previous + value;
-      if (input.method !== 'argument') tails.set(app, combined.slice(-16384));
+      if (input.method === 'setValue') { tails.delete(app); tails.delete(siteKey); }
+      const previousApp = tails.get(app) ?? '', previousSite = tails.get(siteKey) ?? '';
+      if (input.method !== 'argument') {
+        tails.set(app, (previousApp + value).slice(-16384)); tails.set(siteKey, (previousSite + value).slice(-16384));
+      }
       for (const rule of this.rules) {
+        const previous = rule.siteScoped ? previousSite : previousApp;
+        const combined = previous + value;
         // Unknown destinations cannot establish an app exception.
-        if ((input.app && !this.matches(input.app, rule.destinations)) || (input.app && rule.except && this.matches(input.app, rule.except))) continue;
+        if ((destination?.app && !this.matches(destination, rule.destinations, { unknown: true })) ||
+            (destination?.app && rule.except && this.matches(destination, rule.except, { exception: true }))) continue;
         let source;
-        const hit = rule.kind === 'pattern' ? newPatternMatch(rule.regex, value, combined, previous.length) : [...this.values].some(([from, values]) => {
+        const hit = rule.kind === 'pattern' ? newPatternMatch(rule.regex, value, combined, previous.length) : [...this.values.values()].some(({ from, values }) => {
           if (!this.matches(from, rule.sources)) return false;
-          if ([...values].some(v => value.includes(v) || combined.slice(Math.max(0, previous.length - v.length + 1)).includes(v))) { source = from; return true; }
+          if ([...values].some(v => value.includes(v) || combined.slice(Math.max(0, previous.length - v.length + 1)).includes(v))) { source = rule.sources.some(isSite) && from.host ? `site:${from.host}` : this.canonical(from.app); return true; }
           return false;
         });
-        if (hit) violations.set(JSON.stringify([rule.id, app]), { rule: rule.id, app: input.app ?? 'unknown app', ...(source ? { source } : {}) });
+        if (hit) violations.set(JSON.stringify([rule.id, app]), { rule: rule.id, app: destination?.app ?? 'unknown app', ...(source ? { source } : {}) });
       }
     }
-    return { violations: [...violations.values()], handles, tails, readApp: parsed.readApp };
+    return { violations: [...violations.values()], handles, tails, readApp: parsed.readApp, readTarget: parsed.readTarget };
   }
   forward(plan) { this.handles = plan.handles; this.tails = plan.tails; this.revision++; }
   observe(result, plan) {
@@ -219,13 +284,33 @@ export class FlowRules {
       const canonical = this.canonical(window.app);
       for (const alias of [window.app, result._meta?.['codex/toolSurface']?.app?.appId, plan.readApp]) if (alias) this.aliases.set(norm(alias), canonical);
     }
+    const sections = all.split(/(?=^(?:Window: |Browser tab: ))/m).filter(Boolean);
+    const headers = sections.filter(s => /^(?:Window: |Browser tab: )/m.test(s)).map(headerTarget).filter(Boolean);
+    const observed = headers.length === 1 ? headers[0] : undefined;
+    if (plan.readTarget) {
+      const same = observed && this.canonical(observed.app) === this.canonical(plan.readTarget.app);
+      Object.assign(plan.readTarget, { host: same ? observed.host : null, observed: same && observed.observed,
+        web: plan.readTarget.web || !!observed?.web });
+      if (plan.readTarget.app !== 'browser') this.windows.set(this.canonical(plan.readTarget.app), { ...plan.readTarget });
+    }
+    for (const header of headers) if (header.app !== 'browser') {
+      const app = this.canonical(header.app);
+      const next = headers.filter(h => this.canonical(h.app) === app).length === 1 ? header : target(header.app);
+      next.web ||= this.windows.get(app)?.web || headers.some(h => this.canonical(h.app) === app && h.web);
+      this.windows.set(app, next);
+    }
     for (const block of blocks) {
       if (block.startsWith('## Computer Use\n') && block.includes('\n## API') && !/^Window: /m.test(block)) continue;
-      const sections = block.split(/(?=^Window: )/m).filter(Boolean);
+      const sections = block.split(/(?=^(?:Window: |Browser tab: ))/m).filter(Boolean);
       for (const section of sections) {
-        const target = windowFromText(section)?.app ?? plan.readApp;
-        if (!target || !this.rules.some(r => r.kind === 'source' && this.matches(target, r.sources))) continue;
+        const context = headerTarget(section) ?? observed ?? target(plan.readApp);
+        if (!context.app || !this.rules.some(r => r.kind === 'source' && this.matches(context, r.sources))) continue;
         const values = []; const add = v => { if (v?.trim()) values.push(v.trim(), ...v.split('\n').map(s => s.trim()).filter(Boolean)); };
+        if (context.app === 'browser') for (const line of section.split('\n')) {
+          const field = /^\s*-\s+[\w-]+(?:\s+("(?:[^"\\]|\\.)*"))?(?:\s+\[[^\]]*\])*\s*(?::\s*(.*))?$/.exec(line);
+          if (field?.[1]) { try { add(JSON.parse(field[1])); } catch { /* Ignore malformed labels. */ } }
+          if (field?.[2]) add(field[2]);
+        }
         if (/^(?:Window: |Browser tab: )/m.test(section)) {
           let field = [];
           for (const line of section.split('\n')) {
@@ -236,18 +321,15 @@ export class FlowRules {
           }
           if (field.length) add(field.join('\n'));
         } else {
-          if (target === 'browser') for (const line of section.split('\n')) {
-            const field = /^\s*-\s+[\w-]+(?:\s+("(?:[^"\\]|\\.)*"))?(?:\s+\[[^\]]*\])*\s*(?::\s*(.*))?$/.exec(line);
-            if (field?.[1]) { try { add(JSON.parse(field[1])); } catch { /* Keep malformed labels as raw text below. */ } }
-            if (field?.[2]) add(field[2]);
-          }
           try { for (const v of strings(JSON.parse(section))) add(v); } catch { add(section); }
         }
-        const app = this.canonical(target); const known = this.values.get(app) ?? new Set();
+        const from = { ...context, app: this.canonical(context.app) };
+        const key = JSON.stringify([from.app, from.host]);
+        const known = this.values.get(key)?.values ?? new Set();
         for (const v of values) known.add(v);
-        this.values.set(app, known);
+        this.values.set(key, { from, values: known });
       }
     }
   }
-  dispose() { this.values.clear(); this.handles.clear(); this.tails.clear(); this.aliases.clear(); }
+  dispose() { this.values.clear(); this.handles.clear(); this.tails.clear(); this.aliases.clear(); this.windows.clear(); }
 }
