@@ -141,8 +141,9 @@ test('a missing element in a changed or unknown window never retries', async () 
   const code = 'await app.click({"id":"Seven"});';
   for (const window of [undefined, { ...windowFromText(TREE), title: 'Another document' }]) {
     let attempts = 0;
+    const error = window ? missing('ID', 'Seven') : missing('ID', 'Seven').split('\n')[0];
     const { server } = fakeServer(msg => msg.method === 'tools/call'
-      ? msg.params.arguments.code === code ? (++attempts, toolReply(msg, missing('ID', 'Seven'), true)) : toolReply(msg, TREE) : undefined);
+      ? msg.params.arguments.code === code ? (++attempts, toolReply(msg, error, true)) : toolReply(msg, 'Window unavailable') : undefined);
     const outcome = await replay(scriptOf(step(code)), { server, clock: fakeClock(), window });
     assert.equal(outcome.ok, false);
     assert.equal(attempts, 1);
@@ -189,9 +190,117 @@ function bridgeHarness(t, reply) {
   const outgoing = createInterface({ input: output });
   outgoing.on('line', line => received.push(JSON.parse(line)));
   t.after(() => { input.end(); incoming.close(); outgoing.close(); });
-  return { send, respond, sent, received, bridge };
+  return { send, sendLine: line => input.write(line + '\n'), respond, sent, received, bridge };
 }
 const settle = () => new Promise(resolve => setImmediate(resolve));
+
+test('ordinary bridge traffic stays byte for byte without JSON parsing or serialization', () => {
+  const input = new PassThrough(), output = new PassThrough(), sent = [], received = [];
+  const bridge = replayModule.replayBridge({ input, output });
+  bridge.clientIn.on('data', chunk => sent.push(chunk.toString()));
+  output.on('data', chunk => received.push(chunk.toString()));
+  const client = [' { "params": { "name": "js", "arguments": { "code": "await app.getScreenshot();" } }, "method" : "tools/call", "id": 7 }\n',
+    '{ "method": "notifications/initialized", "jsonrpc": "2.0" }\r\n', 'invalid line\n'];
+  const server = [' { "id": 7, "result": { "content": [{ "type": "image", "data": "' + 'A'.repeat(2 ** 20) + '" }] } }\n',
+    '{ "method": "elicitation/create", "id": "ask", "params": {"message":"Allow Calculator?"} }\r\n'];
+  const parse = JSON.parse, stringify = JSON.stringify;
+  let parses = 0, serializations = 0;
+  try {
+    JSON.parse = (...args) => { parses++; return parse(...args); };
+    JSON.stringify = (...args) => { serializations++; return stringify(...args); };
+    for (const line of client) input.write(line);
+    for (const line of server) bridge.clientOut.write(line);
+  } finally { JSON.parse = parse; JSON.stringify = stringify; input.end(); bridge.clientOut.end(); }
+  assert.equal(parses, 0);
+  assert.equal(serializations, 0);
+  assert.equal(sent.join(''), client.join(''));
+  assert.equal(received.join(''), server.join(''));
+});
+
+test('a pending tool list parses only its matching reply and preserves other lines', () => {
+  const input = new PassThrough(), output = new PassThrough(), sent = [], received = [];
+  const bridge = replayModule.replayBridge({ input, output });
+  bridge.clientIn.on('data', chunk => sent.push(chunk.toString()));
+  output.on('data', chunk => received.push(chunk.toString()));
+  const request = ' { "id" : "catalog", "method" : "tools/list", "params": {} }\n';
+  input.write(request);
+  const unrelated = '{ "id": "catalog-other", "result": { "content": [{"type":"image","data":"' + 'A'.repeat(2 ** 20) + '"}] } }\n';
+  const parse = JSON.parse, stringify = JSON.stringify;
+  let parses = 0, serializations = 0;
+  try {
+    JSON.parse = (...args) => { parses++; return parse(...args); };
+    JSON.stringify = (...args) => { serializations++; return stringify(...args); };
+    bridge.clientOut.write(unrelated);
+    assert.equal(parses, 0);
+    assert.equal(serializations, 0);
+    bridge.clientOut.write('{ "id" : "catalog", "result": { "tools": [{ "name":"js" }] } }\n');
+  } finally { JSON.parse = parse; JSON.stringify = stringify; input.end(); bridge.clientOut.end(); }
+  assert.equal(parses, 1);
+  assert.equal(serializations, 1);
+  assert.equal(sent.join(''), request);
+  assert.equal(received[0], unrelated);
+  assert.ok(JSON.parse(received[1]).result.tools.some(tool => tool.name === 'replay'));
+});
+
+test('an action-only replay waits using its first refused result without adding a read', async t => {
+  let reads = 0, attempts = 0;
+  const code = 'await app.click({"id":"Seven"});';
+  const h = bridgeHarness(t, (msg, respond) => {
+    if (msg.method !== 'tools/call') return;
+    if (msg.params.arguments.code !== code) { reads++; respond(toolReply(msg, TREE)); }
+    else { attempts++; respond(toolReply(msg, attempts === 1 ? missing('ID', 'Seven') : TREE, attempts === 1)); }
+  });
+  h.send({ jsonrpc: '2.0', id: 'run', method: 'tools/call', params: { name: 'replay', arguments: { script: scriptOf(step(code)) } } });
+  await settle();
+  const outcome = JSON.parse(h.received.at(-1).result.content[0].text);
+  assert.equal(outcome.ok, true);
+  assert.deepEqual(outcome.waits, [{ step: 1, waitedMs: 250 }]);
+  assert.equal(reads, 0);
+  assert.equal(h.sent[0].params.arguments.code, code);
+});
+
+test('an acquisition result supplies the expected window without an extra read', async t => {
+  let attempts = 0;
+  const code = 'await app.click({"id":"Seven"});';
+  const h = bridgeHarness(t, (msg, respond) => {
+    const failed = msg.params.arguments.code === code && ++attempts === 1;
+    respond(toolReply(msg, failed ? missing('ID', 'Seven') : TREE, failed));
+  });
+  h.send({ jsonrpc: '2.0', id: 'run', method: 'tools/call', params: { name: 'replay', arguments: { script: scriptOf(step('app = await cua.getApp("Calculator");'), step(code)) } } });
+  await settle();
+  const outcome = JSON.parse(h.received.at(-1).result.content[0].text);
+  assert.equal(outcome.ok, true);
+  assert.deepEqual(outcome.waits, [{ step: 1, waitedMs: 0 }, { step: 2, waitedMs: 250 }]);
+  assert.equal(h.sent.length, 3);
+  assert.equal(h.sent.some(msg => msg.params.arguments.code.includes('getAXState')), false);
+});
+
+test('escaped envelope fields and tool-list IDs still concern the bridge', async t => {
+  const h = bridgeHarness(t);
+  h.sendLine('{"\\u006dethod":"tools\\u002flist","id":"catalog"}');
+  h.bridge.clientOut.write('{"id":"\\u0063atalog","result":{"tools":[{"name":"js"}]}}\n');
+  assert.ok(h.received.at(-1).result.tools.some(tool => tool.name === 'replay'));
+  h.sendLine('{"method":"tools\\/list","id":"catalog/2"}');
+  h.bridge.clientOut.write('{"id":"catalog\\/2","result":{"tools":[{"name":"js"}]}}\n');
+  assert.ok(h.received.at(-1).result.tools.some(tool => tool.name === 'replay'));
+  h.sendLine('{"id":"run","method":"tools\\u002fcall","params":{"name":"re\\u0070lay","arguments":{"script":{"sleightReplay":1,"steps":[]}}}}');
+  await settle();
+  assert.equal(JSON.parse(h.received.at(-1).result.content[0].text).ok, true);
+});
+
+test('bridge framing preserves split UTF-8, multiple lines and an unterminated final line', async () => {
+  const input = new PassThrough(), output = new PassThrough(), sent = [], received = [];
+  const bridge = replayModule.replayBridge({ input, output });
+  bridge.clientIn.on('data', chunk => sent.push(chunk.toString()));
+  output.on('data', chunk => received.push(chunk.toString()));
+  const data = Buffer.from('{"method":"unknown","text":"é ♟"}\r\n{"id":7,"result":{}}\nfinal');
+  for (const byte of data) input.write(Buffer.from([byte]));
+  bridge.clientOut.write(data);
+  input.end(); bridge.clientOut.end();
+  await settle();
+  assert.equal(sent.join(''), data.toString());
+  assert.equal(received.join(''), data.toString());
+});
 
 test('Claude sees replay in tools/list and gets the stopped step, remaining work, waits and fresh window', async t => {
   const stopped = step('await app.click({"id":"Seven"});');
@@ -253,6 +362,7 @@ test('the tool shares the real relay approval memory, input lease and guards wit
     inputLease: new InputLease({ directory, holder: 'replay test' }), changeReview: false, idleTurnEndMs: 0 });
   t.after(() => { relay.close(); rmSync(directory, { recursive: true, force: true }); });
   const engine = [], waiting = new Map();
+  let held;
   const respond = msg => serverOut.write(JSON.stringify(msg) + '\n');
   const answer = msg => {
     const code = msg.params.arguments.code;
@@ -273,7 +383,8 @@ test('the tool shares the real relay approval memory, input lease and guards wit
           message: 'Allow Computer Use to use "Calculator"?', requestedSchema: { type: 'object', properties: {} },
           _meta: { connector_id: 'computer-use', tool_params: { app: 'com.apple.calculator' }, persist: ['session'], riskLevel: 'low' },
         } });
-      } else answer(msg);
+      } else if (msg.params.arguments.code?.includes('typeText("pending")')) held = msg;
+      else answer(msg);
     }
   });
   const acquisition = step('app = await cua.getApp("Calculator");');
@@ -294,6 +405,14 @@ test('the tool shares the real relay approval memory, input lease and guards wit
   const sessions = engine.filter(msg => msg.method === 'tools/call').map(msg => JSON.parse(msg.params._meta['x-codex-turn-metadata']).session_id);
   assert.equal(new Set(sessions).size, 1);
   assert.equal(h.received.find(msg => msg.id === 'takeover').result.isError, undefined);
+  h.send({ jsonrpc: '2.0', id: 'pending', method: 'tools/call', params: { name: 'js', arguments: { code: 'await app.typeText("pending");' } } });
+  assert.ok(held);
+  h.send({ jsonrpc: '2.0', id: 'overlap', method: 'tools/call', params: { name: 'replay', arguments: { script: scriptOf(step('await app.typeText("next");')) } } });
+  await settle();
+  const overlap = JSON.parse(h.received.find(msg => msg.id === 'overlap').result.content[0].text);
+  assert.equal(overlap.ok, false, 'the current relay still refuses replay input while an ordinary call is pending');
+  assert.equal(engine.some(msg => msg.params?.arguments?.code?.includes('typeText("next")')), false);
+  answer(held);
 });
 
 test('CLI wait options and positional permission are passed explicitly', () => {
@@ -315,7 +434,7 @@ test('a first action stop snapshots that action handle rather than a later unrel
   assert.match(calls[1], /^await calc\.getAXState/);
 });
 
-test('a later replay can wait on the window the previous replay observed', async t => {
+test('a later replay uses its own result before waiting instead of tracking previous results', async t => {
   let attempts = 0;
   const code = 'await app.click({"id":"Seven"});';
   const h = bridgeHarness(t, (msg, respond) => {
@@ -339,7 +458,9 @@ test('cancellation reaches the active internal call and prevents later replay st
     script: scriptOf(step('await app.typeText("x");'), step('await app.typeText("y");')),
   } } });
   const pending = h.sent[0];
-  h.send({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 'run', reason: 'user stopped' } });
+  h.sendLine('{"jsonrpc":"2.0","method":"notifications\\u002fcancelled","params":{"requestId":"run","reason":"user stopped"}}');
+  assert.equal(h.sent.at(-1).params.requestId, pending.id);
+  h.sendLine('{"method":"notifications\\/cancelled","params":{"requestId":"run"}}');
   assert.equal(h.sent.at(-1).params.requestId, pending.id);
   h.respond(toolReply(pending, 'cancelled, input outcome unknown', true));
   await settle();
@@ -367,6 +488,29 @@ test('a flow refusal preserves the pending user exception without an automatic s
   await settle();
   assert.equal(prompts.length, 1);
   assert.match(prompts[0][2].detail, /SECRET/);
+});
+
+test('a named action replay uses a granted flow exception without an intervening read', async t => {
+  const h = bridgeHarness(t), serverIn = new PassThrough(), serverOut = new PassThrough(), forwarded = [];
+  const relay = createRelay({ clientIn: h.bridge.clientIn, clientOut: h.bridge.clientOut, serverIn, serverOut, changeReview: false,
+    flowRules: new FlowRules({ version: 1, rules: [{ id: 'private', kind: 'pattern', pattern: 'SECRET', destinations: ['*'] }] }),
+    ask: async () => 'accept', idleTurnEndMs: 0 });
+  t.after(() => relay.close());
+  const lines = createInterface({ input: serverIn });
+  t.after(() => lines.close());
+  lines.on('line', line => { const msg = JSON.parse(line); forwarded.push(msg); serverOut.write(JSON.stringify(toolReply(msg, TREE)) + '\n'); });
+  const script = scriptOf(step('await app.setValue({"id":"field"},"SECRET");'));
+  h.send({ id: 1, method: 'tools/call', params: { name: 'replay', arguments: { script } } });
+  await settle();
+  assert.match(JSON.parse(h.received.at(-1).result.content[0].text).error, /Flow rules/);
+  assert.equal(forwarded.length, 0);
+  h.send({ id: 2, method: 'tools/call', params: { name: 'flow_exception', arguments: {} } });
+  await settle();
+  h.send({ id: 3, method: 'tools/call', params: { name: 'replay', arguments: { script } } });
+  await settle();
+  assert.equal(JSON.parse(h.received.at(-1).result.content[0].text).ok, true);
+  assert.equal(forwarded.length, 1);
+  assert.match(forwarded[0].params.arguments.code, /setValue/);
 });
 
 test('the replay tool passes approvals and their decisions through the existing client unchanged', async t => {

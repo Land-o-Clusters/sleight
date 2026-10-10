@@ -18,11 +18,15 @@ until that budget runs out. An engine call already in progress can outlast the b
 for its result and never retries a timeout or an unknown outcome.
 
 Only a guard stop for a missing ID, label or whole line can wait. The stopped window must match the
-last observed title, app and URL. Replay must also prove that the stop came before the call's first
+title, app and URL observed within this replay. Replay must also prove that the stop came before the call's first
 input. It recognizes sequences of awaited app calls with JSON arguments. The first input must name
 the missing element, and no later input may produce the same stop message. A different missing
 element, an ambiguous match, complex code, or an unknown window stops at once. This avoids repeating
 input from a partly completed batch. It uses the existing guard.
+
+Replay takes its expected window from its first step's result. That can be a successful acquisition
+or the guard's first missing-element refusal, after proving that input hasn't run. Later refusals
+must match that window. Ordinary results outside replay aren't inspected or cached for it.
 
 `await app.click({"id":"Seven"}); await app.typeText("2");` can wait for its first button.
 If that button was pressed and a later click stopped, the call never repeats. Loops and computed arguments
@@ -104,6 +108,7 @@ Review caught a snapshot targeting a later unrelated handle, a snapshot clearing
 exception, cancellation carrying the outer request ID, and a window lost between replay calls. Each
 has a regression test. The fixes select the failed action's handle, preserve flow-exception context,
 map cancellation to the active request, and retain windows observed through replay.
+The follow-up below replaces that last fix with an observation from each replay's own result.
 
 The first bare `npm run check` exited 1 under the workspace sandbox: local TCP and Unix sockets and
 fixture-directory writes were denied. After host access was granted, the same bare command exited 0:
@@ -120,3 +125,80 @@ The corrected report passed bare `npm run lint:prose` with exit 0 (59 files).
 No live replay was attempted: `/tmp/sleight-hold` was present. The Calculator measurements above belong
 to the original replay version. Native cancellation and delayed app elements remain unmeasured
 in this change.
+
+## Bridge CPU follow-up, 2026-10-09
+
+The bridge now passes unchanged lines through verbatim. It parses internal replay replies, matching
+pending `tools/list` replies, tool-list requests, replay requests, and cancellation or tool calls while
+replay is active. Only modified tool lists, remapped cancellations and new replay messages are
+serialized. Escaped envelope fields take a conservative parse fallback. Framing preserves CRLF,
+split UTF-8 characters and the final line even when it lacks a delimiter.
+Ordinary tool results aren't parsed for windows. The existing relay still refuses input
+while another engine call is pending, covered by the approval-and-lease integration test.
+
+The recorded source was `$TMPDIR/sleight-bench/2026-10-09T22-25-01-496Z/sleight-chess-drag-2/trace-38602.jsonl`:
+215 trace records, 79,701 bytes, SHA-256
+`09efbb6d936149cc0bdd45a8e09a490aa0268899d2a11ad977301198c8ee81a7`.
+The harness selected `to-server` and `to-client` messages, serialized them once before timing, and fed
+82 lines (37,085 UTF-8 bytes) through the two bridge streams. The trace's 10 image fields each
+contained 309 characters. A separate unit test uses a 1 MiB image payload and asserts zero parses,
+zero serializations and unchanged output bytes.
+
+Each CPU sample used 1,000 runs after 100 warm-up runs on Node v26.4.0. A run created and closed the
+bridge streams and discarded their output. CPU means `process.cpuUsage()` user plus system time.
+No engine or app was started.
+
+| Source | CPU ms per run, samples | Median ms per run | Exit |
+| --- | --- | --- | --- |
+| Before, `de4db37` | 0.726831, 0.612140, 0.607557, 0.580360, 0.598345 | 0.607557 | 0 |
+| First fast path | 0.362462, 0.300997, 0.284789, 0.280142, 0.280523 | 0.284789 | 0 |
+| Final, with framing and escaped-field handling | 0.351655, 0.333688, 0.294278, 0.323893, 0.298552 | 0.323893 | 0 |
+
+Median CPU fell 46.7% for this trace. That measures the bridge and stream harness, not the whole
+plugin's CPU footprint. The harness didn't time trace parsing, module loading, engine work or live app
+behavior. The follow-up unit runs were 24 passed / 4 failed (exit 1), then 28 / 0 (exit 0), then 28 / 0
+(exit 0) after extending the relay concurrency test. Review regressions then gave 25 / 5 (exit 1)
+and 30 / 0 (exit 0). Escaped slash tests gave 29 / 2 (exit 1), followed by 31 / 0 (exit 0).
+Review caught an initial read consuming an approved flow exception. The first refused step's own
+window now supplies the expected window without inserting a read. Unicode and slash escapes in
+envelope fields, and unchanged CRLF lines, also have regression coverage.
+
+An interim bare `npm run check` hit 180 s compiler timeouts in the native prototype, Helium, Mail,
+Mimestream, PDF and Chess fixture tests. It was interrupted once through its retained terminal and
+exited 1, with 998 passed, 6 failed and 1 cancelled. A diagnostic `codex-macos-inspect help` exited 64
+because that operation is unsupported. The supported `memory-pressure` operation returned 2.
+Prose lint exited 1 for two wording flags in the report, then 1 for two flags in the final receipt.
+The branch rebased onto `origin/pane/auto-mode` at `8aff828`, which includes `08abe24`.
+The final bare `npm run check` exited 0: 1,010 unit tests, both plugin validations and 11 mod tests
+passed. Bare `npm run lint:prose` exited 0 across 59 files. The final focused review is complete.
+
+The measurement runner takes a module path and trace path. The before module is `de4db37`'s
+`replay.mjs`, with its relative document-scope import pointed at the same worktree dependency.
+
+```js
+import { readFileSync } from 'node:fs';
+import { PassThrough } from 'node:stream';
+import { pathToFileURL } from 'node:url';
+import { setImmediate } from 'node:timers/promises';
+const [modulePath, tracePath] = process.argv.slice(2);
+const { replayBridge } = await import(pathToFileURL(modulePath));
+const lines = readFileSync(tracePath, 'utf8').trim().split('\n').map(JSON.parse)
+  .filter(r => ['to-server', 'to-client'].includes(r.direction))
+  .map(r => ({ client: r.direction === 'to-server', line: JSON.stringify(r.msg) + '\n' }));
+async function run() {
+  const input = new PassThrough(), output = new PassThrough();
+  const bridge = replayBridge({ input, output });
+  output.on('data', () => {});
+  bridge.clientIn.on('data', () => {});
+  for (const { client, line } of lines) (client ? input : bridge.clientOut).write(line);
+  input.end(); bridge.clientOut.end(); output.end();
+  await setImmediate();
+}
+for (let i = 0; i < 100; i++) await run();
+for (let sample = 0; sample < 5; sample++) {
+  const started = process.cpuUsage();
+  for (let i = 0; i < 1000; i++) await run();
+  const used = process.cpuUsage(started);
+  console.log((used.user + used.system) / 1000 / 1000);
+}
+```
