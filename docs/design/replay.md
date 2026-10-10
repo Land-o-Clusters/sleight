@@ -63,22 +63,41 @@ calls before compaction. The mod refuses empty recordings, existing output files
 the host's 4 MiB output limit. Omitting the file argument uses `sleight-<session id>.json`.
 
 `/sleight replay <file>` opens the pane, reads the script and calls `replay` on the session's connected
-MCP server. It starts only while Claude is idle. There is one replay call for the whole script;
+MCP server. It starts only while Claude is idle and the user's Stop is not in force.
+Replay never clears Stop, which remains until a new prompt. There is one replay call for the whole script;
 the relay retains its concurrency, waiting and cancellation checks across steps. The pane shows that
 it is running and keeps Stop available. When the call returns it lists every attempted step's outcome
-and `waitedMs`, newest first. The file field and Replay file / Record session buttons do the same work.
+and `waitedMs`, newest first. The file field starts empty, and both pane buttons require a filename.
+The Record session button does not use the command's default filename.
 
 On a stop, the mod sends Claude the structured result, including remaining steps, the window or its
 read error, and a reminder to inspect any partial input. It does not snapshot the pane or end the
 engine turn between that stop and handoff, because either could discard a pending flow exception.
-A user Stop sends `turn_ended` and suppresses handoff. Refresh waits until replay finishes.
+A user Stop sends `turn_ended` and suppresses handoff before submission. If another plugin delays
+a prompt already submitted, it can still arrive after Stop. In this host, the automatic handoff
+skips this mod's own prompt hook and cannot lift Stop; computer input is blocked until a new
+user message. The result and log identify the stopped step and warn that it may have sent input.
+Refresh waits until replay finishes.
 Invalid files, refused tools and transport errors are reported without asking Claude to bypass them.
+The handoff timer is registered after the replay cleanup awaits finish and the active flag clears.
+If a newer replay overtakes it, a toast reports the missed handoff.
 
 The mod's `tool.check` allowance still covers only its own exact pane snapshot and `turn_ended`.
-Replay uses the normal tool check, and app approvals still go to the user. Positional scripts remain
-refused in the pane. Claude's tool and the CLI keep their explicit opt-in. Recording and replay add no
+The host treats `$.mcp.call` as a plugin call, with the plugin itself providing the grant.
+The outer replay call can be seen by hooks above this mod. Its inner `js` steps run inside the relay:
+they do not pass through Claude Code's per-call permission rules or other plugins' hooks.
+The relay's app approvals, input lease and guards still apply to each step. App approvals go to the user.
+Positional scripts remain refused in the pane. Claude's tool and the CLI keep their explicit opt-in.
+Recording and replay add no
 transcript reads, file work, timers or engine reads to calls that do not use them. The bridge's existing
 tests still check zero JSON parses and serializations for ordinary messages, including a 1 MiB image.
+
+Replay is listed with `anthropic/alwaysLoad: false`. A host with tool search can defer its schema,
+while the pane calls the tool directly by name on the connected server without a model search.
+Claude Code's full context breakdown reports 496 estimated schema tokens for the production tool name,
+loaded with `alwaysLoad: true` and deferred with `false`. Billed-token usage was not measured.
+Hosts with tool search disabled may load it regardless. The
+[probe and its limits](../benchmarks/2026-10-09-replay-desktop-2.md) record both arms.
 
 ## Safety
 

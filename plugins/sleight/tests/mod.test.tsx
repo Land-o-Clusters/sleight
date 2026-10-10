@@ -12,6 +12,114 @@ describe('sleight mod', () => {
     { tool: 'js', args: { code: 'await app.click({"id":"Seven"});', title: 'Press Seven' } },
   ] }
 
+  test('pane actions require an explicitly chosen file', async ($, on) => {
+    const work: unknown[] = []
+    const toasts: string[] = []
+    on('fs.read', async (_$, e) => { work.push(e); return { value: JSON.stringify(script) } as never })
+    on('fs.write', async (_$, e) => { work.push(e); return { value: undefined } })
+    on('process.run', async (_$, e) => { work.push(e); return { value: { exitCode: 0, stdout: JSON.stringify(script), stderr: '' } } as never })
+    on('ui.toast', async (_$, e) => { toasts.push(e.text); return { value: undefined } })
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop', props: { bodyColumns: 60 } as never })
+    await ui.press({ key: 'replay' })
+    await ui.press({ key: 'record' })
+    expect(work).toEqual([])
+    expect(toasts.length).toBe(2)
+    expect(toasts.every(text => text.includes('Choose a JSON file'))).toBe(true)
+  })
+
+  test('a pane replay cannot lift Stop before a new message', async ($, on) => {
+    const calls: string[] = []
+    on('ui.open', async () => ({ value: { isPlaced: true } }) as never)
+    on('fs.read', async () => { calls.push('read'); return { value: JSON.stringify(script) } as never })
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async (_$, e) => { calls.push(e.tool); return { value: { content: [{ type: 'text', text: JSON.stringify({ ok: true, steps: 2, waits: [] }) }] } } as never })
+    on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [] } }) as never)
+    await $.command.run({ command: 'sleight', args: 'stop' } as never)
+    calls.length = 0
+    const result = await $.command.run({ command: 'sleight', args: 'replay task.json' } as never)
+    expect(calls).toEqual([])
+    expect(String((result as { text?: string }).text)).toMatch(/stopped.*new message/i)
+    const refused = await $.tool.call({ tool: JS_TOOL, code: 'await app.click(1);' } as never)
+    expect(String(refused.deny)).toMatch(/stopped sleight/)
+  })
+
+  test('stop handoff is scheduled after replay cleanup finishes', async ($, on) => {
+    const sent: string[] = []
+    let release: (() => void) | undefined
+    on('ui.open', async () => ({ value: { isPlaced: true } }) as never)
+    on('fs.read', async () => ({ value: JSON.stringify(script) }) as never)
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async () => ({ value: { content: [{ type: 'text', text: JSON.stringify({ ok: false, step: 2, error: 'missing Seven', waits: [{ step: 2, waitedMs: 5000 }], remaining: script.steps.slice(1) }) }] } }) as never)
+    on('state.set', { plugin: 'sleight', key: 'replaying' }, async (_$, e, next) => {
+      if (e.value === false) await new Promise<void>(resolve => { release = resolve })
+      return next(e)
+    })
+    on('prompt.submit', async (_$, e) => { sent.push(e.text); return { text: e.text } })
+    const clock = mock.clock(on)
+    const running = $.command.run({ command: 'sleight', args: 'replay task.json' } as never)
+    await clock.settle()
+    expect(release).toBeDefined()
+    await clock.advance(1)
+    expect(sent).toEqual([])
+    release!()
+    await running
+    await clock.advance(1)
+    expect(sent.length).toBe(1)
+    expect(sent[0]).toMatch(/missing Seven/)
+  })
+
+  test('Stop still blocks input after another plugin delays an already submitted handoff', {
+    plugins: [{
+      name: 'delayed-prompt',
+      tier: 'prepend',
+      register(on) {
+        on('prompt.submit', async ($, e, next) => {
+          if (e.origin.kind === 'plugin' && e.origin.name === 'sleight' && !e.origin.asUser) {
+            await $.fs.read('handoff-gate')
+            const result = await next(e)
+            await $.fs.read('handoff-done')
+            return result
+          }
+          return next(e)
+        })
+      },
+    }],
+  }, async ($, on) => {
+    const sent: string[] = []
+    let release: (() => void) | undefined
+    let finished!: () => void
+    const completed = new Promise<void>(resolve => { finished = resolve })
+    on('ui.open', async () => ({ value: { isPlaced: true } }) as never)
+    on('fs.read', async (_$, e) => {
+      if (e.path.endsWith('/handoff-gate')) await new Promise<void>(resolve => { release = resolve })
+      if (e.path.endsWith('/handoff-done')) finished()
+      return { value: JSON.stringify(script) } as never
+    })
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async () => ({ value: { content: [{ type: 'text', text: JSON.stringify({ ok: false, step: 2, error: 'missing Seven', waits: [], remaining: script.steps.slice(1) }) }] } }) as never)
+    on('prompt.submit', async (_$, e) => { sent.push(e.text); return { text: e.text } })
+    on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [] } }) as never)
+    const clock = mock.clock(on)
+    await $.command.run({ command: 'sleight', args: 'replay task.json' } as never)
+    const advancing = clock.advance(1)
+    await clock.settle()
+    expect(release).toBeDefined()
+    await $.command.run({ command: 'sleight', args: 'stop' } as never)
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop', props: { bodyColumns: 60 } as never })
+    expect(await ui.find({ text: /Stopped until your next message/ })).toBeDefined()
+    release!()
+    await advancing
+    await completed
+    expect(sent.length).toBe(1)
+    expect(sent[0]).toMatch(/missing Seven/)
+    const refused = await $.tool.call({ tool: JS_TOOL, code: 'await app.click(1);' } as never)
+    expect(String(refused.deny)).toMatch(/stopped sleight/)
+    await $.prompt.submit({ text: 'Continue the task', asUser: true })
+    expect(sent.at(-1)).toBe('Continue the task')
+    const resumed = await $.tool.call({ tool: JS_TOOL, code: 'await app.click(1);' } as never)
+    expect(resumed.deny).toBeUndefined()
+  })
+
   test('/sleight replay uses this session and logs each result and wait on both surfaces', async ($, on) => {
     const calls: unknown[] = []
     on('ui.open', async () => ({ value: { isPlaced: true } }) as never)
@@ -135,9 +243,11 @@ describe('sleight mod', () => {
     await $.command.run({ command: 'sleight', args: 'stop' } as never)
     expect(calls).toEqual(['replay', 'turn_ended'])
     finish!({ value: { content: [{ type: 'text', text: JSON.stringify({ ok: false, step: 1, error: 'Replay stopped by the client.', waits: [{ step: 1, waitedMs: 0 }], remaining: script.steps }) }] } })
-    await running
+    const stoppedResult = await running
+    expect(String((stoppedResult as { text?: string }).text)).toMatch(/step 1.*may have (acted|sent input)/i)
     await clock.advance(1)
     expect(sent).toEqual([])
+    expect(await ui.find({ text: /step 1.*may have (acted|sent input)/i })).toBeDefined()
     const ended = await $.tool.call({ tool: TURN_END_TOOL } as never)
     expect(String(ended.deny)).toMatch(/internal to sleight/)
   })
@@ -219,8 +329,6 @@ describe('sleight mod', () => {
     expect(await ui.find({ text: /Calculator: Get Calculator app/ })).toBeDefined()
   })
 
-  // Lifting the stop on the next message (prompt.submit) is checked in a live
-  // session: the test kit raises no prompt.submit.
   test('the action log lists the newest action first', async ($, on) => {
     on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [{ type: 'text', text: 'App: Chess.' }] } }) as never)
     for (const move of ['Play e4', 'Play Nf3', 'Play Bc4']) {

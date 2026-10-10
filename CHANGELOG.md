@@ -13,10 +13,12 @@
   that cannot be shown reports a failure. Unit-tested only, with [install notes](docs/other-hosts.md).
 - `/sleight record [file]` saves the current session's successful sleight calls, and
   `/sleight replay <file>` runs them through that session's replay tool. The pane has a file field
-  and buttons for both. It logs each attempted step's result and wait when the tool returns, and
-  hands a stopped replay to Claude with its window and remaining steps. Stop cancels without
-  handing off. Mod and relay tests cover the paths; desktop clicks await the owner's check
-  (Sol, `codex/replay-desktop`).
+  and buttons for both, starting with an empty file field. It logs each attempted step's result
+  and wait when the tool returns, and hands a stopped replay to Claude with its window and remaining
+  steps. Stop cancels, prevents handoff before submission and warns that the stopped step may have
+  sent input. Replay preserves the user's Stop until a new message, and its schema can load on demand.
+  Mod and relay tests cover the paths;
+  desktop clicks await the owner's check (Sol, `codex/replay-desktop`).
 - `sleight-mcp --doctor <app>` reads an app that is already running and reports the read's time and
   whether it had a window header. It never launches the app or sends input. An app on the user's
   pre-approved list is read, with the grant audited; any other app needing approval is skipped without
