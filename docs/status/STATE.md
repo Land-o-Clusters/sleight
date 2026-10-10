@@ -92,6 +92,9 @@ in `.dev/prompts/`, for Sol threads the owner starts:
 - Merged `codex/other-hosts` as `6ca6639` (01:45 UTC), with the claude* name match and the README's
   Claude Code requirement restored. Still out with Sol: footprint-3, small-fixes-2, doctor-flow-2,
   replay-desktop, verified-results, scoped-approvals.
+- Merged `codex/small-fixes` as `05903fa`. Its skill bullet (compare before saving) passed 6/6 on
+  textedit-save and textedit-edit, but textedit-save took 19 turns against 15 before. Watch it in the
+  release pass and drop the compare step if it keeps costing a turn.
 - sleight-arch: the guard's reads (`document-scope.mjs`, guard code in `relay.mjs`), with a
   background subagent studying guard-read phases across tonight's traces.
 - `/tmp/sleight-hold` exists while another project's window runs. Every brief stops live probes

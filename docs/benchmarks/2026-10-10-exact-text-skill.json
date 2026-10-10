@@ -1,0 +1,374 @@
+{
+  "stamp": "2026-10-10T01-54-13-163Z",
+  "arms": [
+    "sleight"
+  ],
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "claude": "claude",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 38.7,
+      "turns": 6,
+      "costUsd": 0.1779596,
+      "usage": {
+        "input": 12,
+        "cacheRead": 308698,
+        "cacheWrite": 26384,
+        "output": 1066
+      },
+      "timing": {
+        "totalMs": 35289,
+        "modelMs": 13536,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 18469,
+        "engineMs": 18255,
+        "relayMs": 214,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 7303.372333999999,
+        "guardReadFailures": 0,
+        "otherMs": 3284
+      },
+      "footprint": {
+        "cpuSeconds": 11.42,
+        "group": {
+          "claude": 2.02,
+          "engine node": 1.84,
+          "mcp@latest": 0.64,
+          "(bash)": 0.01,
+          "(AgentPeekBridge)": 0,
+          "bash": 0.01,
+          "(sh)": 0,
+          "codex": 0.6,
+          "node": 0.31,
+          "python3": 0.01,
+          "(python3)": 0.01,
+          "(grep)": 0,
+          "osascript": 0.22,
+          "(uv)": 0.02,
+          "(Python)": 0.09,
+          "(python3.14)": 0.13,
+          "(git)": 0.01
+        },
+        "outside": {
+          "engine helper": 2.88,
+          "TextEdit": 2.62
+        }
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 6,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I created a new TextEdit document, switched it to plain text with Make Plain Text, and entered \"sleight bench c9200c0f\". I saved it as `c9200c0f.txt` in `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-10T01-54-13-163Z/sleight-textedit-save-1/`, then closed it.\n\nAfter the save",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 1,
+      "passed": true,
+      "seconds": 24.4,
+      "turns": 9,
+      "costUsd": 0.2501616,
+      "usage": {
+        "input": 18,
+        "cacheRead": 517558,
+        "cacheWrite": 33251,
+        "output": 1361
+      },
+      "timing": {
+        "totalMs": 22547,
+        "modelMs": 12364,
+        "calls": 8,
+        "refused": 1,
+        "toolMs": 7872,
+        "engineMs": 7702,
+        "relayMs": 170,
+        "localMs": 0,
+        "guardReads": 9,
+        "guardReadMs": 2333.192624000001,
+        "guardReadFailures": 0,
+        "otherMs": 2311
+      },
+      "footprint": {
+        "cpuSeconds": 7.22,
+        "group": {
+          "claude": 1.86,
+          "engine node": 1.18,
+          "mcp@latest": 0.66,
+          "node": 0.26,
+          "osascript": 0.25,
+          "codex": 0.32,
+          "(open)": 0.01,
+          "(bash)": 0.01,
+          "(vibe-island-brid)": 0.01,
+          "(sh)": 0
+        },
+        "outside": {
+          "engine helper": 1.56,
+          "TextEdit": 1.1
+        }
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I changed \"beta\" to \"delta\" in `ad2eec18-edit.txt`, so it now reads \"alpha delta gamma\". I saved it and closed the document.\n\nI made the change by selecting all the text and pasting the corrected line, since the file was a single short line. I didn't check the saved file on disk afterwards. The wind",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 35.2,
+      "turns": 7,
+      "costUsd": 0.2567514,
+      "usage": {
+        "input": 14,
+        "cacheRead": 351857,
+        "cacheWrite": 42828,
+        "output": 1504
+      },
+      "timing": {
+        "totalMs": 33752,
+        "modelMs": 15270,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 15962,
+        "engineMs": 15790,
+        "relayMs": 172,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 4431.039373999998,
+        "guardReadFailures": 0,
+        "otherMs": 2520
+      },
+      "footprint": {
+        "cpuSeconds": 8.7,
+        "group": {
+          "claude": 1.69,
+          "engine node": 1.15,
+          "mcp@latest": 0.54,
+          "node": 0.2,
+          "(bash)": 0.01,
+          "(AgentPeekBridge)": 0.01,
+          "(zsh)": 0,
+          "osascript": 0.37,
+          "codex": 0.33
+        },
+        "outside": {
+          "engine helper": 2.28,
+          "TextEdit": 2.12
+        }
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 6,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I saved the document to `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-10T01-54-13-163Z/sleight-textedit-save-2/9d9de9fd.txt` and closed its window. It contains \"sleight bench 9d9de9fd\". I didn't open the file afterwards to check its contents.\n\nI sent the Make Plain Text sho",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 2,
+      "passed": true,
+      "seconds": 21.6,
+      "turns": 6,
+      "costUsd": 0.174489,
+      "usage": {
+        "input": 12,
+        "cacheRead": 292615,
+        "cacheWrite": 26343,
+        "output": 1057
+      },
+      "timing": {
+        "totalMs": 20233,
+        "modelMs": 10512,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 7250,
+        "engineMs": 7105,
+        "relayMs": 145,
+        "localMs": 0,
+        "guardReads": 9,
+        "guardReadMs": 1822.7324169999993,
+        "guardReadFailures": 0,
+        "otherMs": 2471
+      },
+      "footprint": {
+        "cpuSeconds": 6.3,
+        "group": {
+          "claude": 1.43,
+          "engine node": 1.03,
+          "mcp@latest": 0.56,
+          "node": 0.21,
+          "osascript": 0.29,
+          "codex": 0.24
+        },
+        "outside": {
+          "engine helper": 1.51,
+          "TextEdit": 1.03
+        }
+      },
+      "appWindows": {
+        "samples": 5,
+        "onScreen": 4,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I opened `b2fa013c-edit.txt` in TextEdit and changed \"beta\" to \"delta\", so the text now reads \"alpha delta gamma\". I saved it with Cmd+S, then closed the window with Cmd+W. The close went through with no save prompt, which suggests the save worked. I didn't re-read the file from disk.\n\nCmd+O opened ",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 3,
+      "passed": true,
+      "seconds": 30.7,
+      "turns": 6,
+      "costUsd": 0.182028,
+      "usage": {
+        "input": 12,
+        "cacheRead": 309900,
+        "cacheWrite": 27076,
+        "output": 1172
+      },
+      "timing": {
+        "totalMs": 29331,
+        "modelMs": 11587,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 15547,
+        "engineMs": 15402,
+        "relayMs": 145,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 6130.0284580000025,
+        "guardReadFailures": 0,
+        "otherMs": 2197
+      },
+      "footprint": {
+        "cpuSeconds": 7.67,
+        "group": {
+          "claude": 1.52,
+          "engine node": 0.9,
+          "mcp@latest": 0.57,
+          "node": 0.21,
+          "osascript": 0.13,
+          "codex": 0.31
+        },
+        "outside": {
+          "engine helper": 2.15,
+          "TextEdit": 1.88
+        }
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I created a new TextEdit document, made it plain text, and entered `sleight bench ee8f4a02`. I saved it as `/var/folders/1x/q5_9hz5j3gs1fcf2z5yz477m0000gn/T/sleight-bench/2026-10-10T01-54-13-163Z/sleight-textedit-save-3/ee8f4a02.txt`, then closed it.\n\nI checked the result in TextEdit's window state.",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-edit",
+      "run": 3,
+      "passed": true,
+      "seconds": 26.6,
+      "turns": 6,
+      "costUsd": 0.1378042,
+      "usage": {
+        "input": 12,
+        "cacheRead": 275791,
+        "cacheWrite": 18258,
+        "output": 959
+      },
+      "timing": {
+        "totalMs": 24611,
+        "modelMs": 13234,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 8676,
+        "engineMs": 8384,
+        "relayMs": 292,
+        "localMs": 0,
+        "guardReads": 13,
+        "guardReadMs": 5177.480664999999,
+        "guardReadFailures": 0,
+        "otherMs": 2701
+      },
+      "footprint": {
+        "cpuSeconds": 7.13,
+        "group": {
+          "claude": 1.68,
+          "engine node": 1.28,
+          "mcp@latest": 0.55,
+          "node": 0.2,
+          "osascript": 0.31,
+          "codex": 0.34,
+          "(bash)": 0.02,
+          "(AgentPeekBridge)": 0.01,
+          "(vibe-island-brid)": 0.01
+        },
+        "outside": {
+          "engine helper": 1.68,
+          "TextEdit": 1.05
+        }
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 5,
+        "offScreenOnly": 0,
+        "none": 1
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "I opened `c5e183ad-edit.txt` in TextEdit and changed \"beta\" to \"delta\", so the text now reads \"alpha delta gamma\". I saved it and closed the document. The window closed without a save prompt, which points to the save having worked. I didn't reopen the file to check.\n\nAn empty \"Untitled 6\" document w",
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

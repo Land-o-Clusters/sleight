@@ -339,6 +339,12 @@ above, turns were 48 without Chess against 58 with batching off and 56 with the 
 textedit-save took 15 against 20 and 23. Chess took 43 turns (16, 18 and 9). One calculator-click
 run took 87.8 s in 3 turns, 44.5 s of it in 8 guard reads.
 
+With the skill's exact-replacement bullet and the clipboard helper (`05903fa`, 2026-10-10 01:54 UTC,
+the owner away, load 24 to 44), textedit-save and textedit-edit passed 6/6
+([`exact-text-skill`](benchmarks/2026-10-10-exact-text-skill.json)). textedit-save took 19 turns and
+a median 35.2 s against 15 turns and 26.3 s at 01:18, and textedit-edit 21 turns and 24.4 s against
+19 and 27.3 s.
+
 The head-to-head at the owner's normal load (2026-10-09, the owner away, load 6 to 24, Sonnet 5.5 at
 medium against gpt-6.1-sol at medium) alternated sleight and Codex task by task. The default tasks
 ran 3 times per arm ([`h2h-normal-default`](benchmarks/2026-10-09-h2h-normal-default.json)) and six
