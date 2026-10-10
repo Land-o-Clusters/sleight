@@ -43,10 +43,12 @@ briefs (`sol-waits-targeting-3.md`, `sol-sim-savelock-2.md`, `sol-plugin-arm-3.m
   waiting for the UI to settle), a read Codex doesn't make. Skipping it for clicks by ID or label,
   which renumbering can't misdirect, would save about 3.5 s in each Calculator run if the owner
   trades that settle wait for speed.
-- Whether the benchmark's allowlist may approve browser-extension access to its own local test
-  pages (`http://127.0.0.1:<port>`). Without it the extension can't be compared with accessibility
-  reads unattended: accessibility 21/21, extension stopped in 3 of 8 runs at that prompt
-  (`docs/benchmarks/2026-10-10-surface-ab.md`).
+- The browser-extension comparison (`docs/benchmarks/2026-10-10-surface-ab.md`): the owner approved
+  site access to the benchmark's local pages (LAWS), but two things block it. The engine says the
+  ChatGPT extension isn't attached to Helium, where the benchmark's pages open. The site prompt
+  isn't sent to the benchmark's approval hook, since the hook didn't log a request, so it appears
+  outside MCP. Next, learn which browser has the extension, and have the owner allow `127.0.0.1`
+  there once.
 - The benchmark left "Untitled 6.txt" and "Untitled 9.txt" in the owner's iCloud TextEdit folder
   from runs whose save failed, and deleting them is the owner's call.
 
