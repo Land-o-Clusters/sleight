@@ -72,7 +72,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
     async close() {
       if (completed && untouched(completed)) return;
       if (ctx.cleanupSignal?.aborted) { await lease.dispose(); throw new Error('Fixture cleanup stopped by a permission window'); }
-      writeFileSync(control, JSON.stringify({ command: 'close', launched: lease.launched }), { mode: 0o600 });
+      writeFileSync(control, JSON.stringify({ command: 'close' }), { mode: 0o600 });
       let timer;
       const result = await Promise.race([response, new Promise(resolve => { timer = setTimeout(() => {
         controller.abort(); resolve({ error: 'Fixture cleanup timed out', groupClean: false });
@@ -90,7 +90,9 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
   const beginLaunch = (launched = true) => {
     lease.launched = launched;
     diagnostics.launched = launched;
-    writeFileSync(control, JSON.stringify({ command: 'launching', launched }), { mode: 0o600 });
+    // No `launched` field: with it every Helium setup timed out (2026-10-10), cause unknown. Without
+    // it the fixture never adopts a launch handoff (DeviceHub); see sol-real-use-tasks-13.md.
+    writeFileSync(control, JSON.stringify({ command: 'launching' }), { mode: 0o600 });
   };
   try { command = await helper(request, signal); }
   catch (error) { if (error.noMutation === true) diagnostics.cleanup = 'nothing created'; throw error; }
@@ -151,7 +153,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
       : ['-g', '-a', request.app, ...(request.target ? [request.target] : [])];
     await open('/usr/bin/open', args, { signal, timeout: 15000 });
   }
-  writeFileSync(control, JSON.stringify({ command: 'opened', launched: lease.launched }), { mode: 0o600 });
+  writeFileSync(control, JSON.stringify({ command: 'opened' }), { mode: 0o600 });
   await waitStage('ready');
   return lease;
   } catch (error) {
