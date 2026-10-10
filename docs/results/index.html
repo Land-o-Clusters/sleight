@@ -27,42 +27,43 @@ pre{background:#eef1f5;padding:0.7rem;overflow-x:auto;}
 <h3>sleight and Codex (2026-10-10)</h3>
 <table><thead><tr><th>Arm</th><th>Model</th><th>Passed</th><th>Total s</th><th>Turns</th><th>Model s</th><th>Own CPU s</th></thead>
 <tbody>
-<tr><td>sleight</td><td>claude-haiku-5-5</td><td>6/6</td><td>246</td><td>55</td><td>161.2</td><td>54.7</td></tr>
-<tr><td>Codex</td><td>gpt-6.1-sol</td><td>6/6</td><td>194</td><td>46</td><td>n/a</td><td>31.0</td></tr>
+<tr><td>sleight</td><td>claude-haiku-5-5</td><td>9/9</td><td>313</td><td>79</td><td>189.6</td><td>78.2</td></tr>
+<tr><td>Codex</td><td>gpt-6.1-sol</td><td>9/9</td><td>340</td><td>83</td><td>n/a</td><td>54.3</td></tr>
 </tbody></table>
 <p class="note">Own CPU is the run&#39;s own process group plus the shared engine helper and the target app. The groups are named by process name: engine is the engine&#39;s node and helper, &quot;sleight&#39;s processes&quot; is the relay, MCP servers and osascript, client is the host CLI, and other is the target app and anything unclassified.</p>
 <p>Own CPU seconds by group:</p>
 <table><thead><tr><th>Arm</th><th>Engine</th><th>sleight&#39;s processes</th><th>Client</th><th>Other</th></thead>
 <tbody>
-<tr><td>sleight</td><td>24.4</td><td>5.7</td><td>13.4</td><td>11.2</td></tr>
-<tr><td>Codex</td><td>14.6</td><td>0.8</td><td>7.8</td><td>7.8</td></tr>
+<tr><td>sleight</td><td>33.4</td><td>9.5</td><td>21.2</td><td>14.0</td></tr>
+<tr><td>Codex</td><td>26.5</td><td>1.4</td><td>11.7</td><td>14.8</td></tr>
 </tbody></table>
 <p>Every process the sampler saw, per arm:</p>
 <table><thead><tr><th>Process</th><th>sleight</th><th>Codex</th></thead>
 <tbody>
-<tr><td>engine helper</td><td>16.7</td><td>10.4</td></tr>
-<tr><td>claude</td><td>11.5</td><td>0.0</td></tr>
-<tr><td>TextEdit</td><td>9.4</td><td>7.0</td></tr>
-<tr><td>engine node</td><td>7.7</td><td>4.2</td></tr>
-<tr><td>mcp@latest</td><td>3.3</td><td>0.0</td></tr>
-<tr><td>codex</td><td>1.9</td><td>7.3</td></tr>
-<tr><td>Calculator</td><td>1.7</td><td>0.9</td></tr>
-<tr><td>node</td><td>1.2</td><td>0.8</td></tr>
-<tr><td>osascript</td><td>1.2</td><td>0.0</td></tr>
+<tr><td>engine helper</td><td>20.9</td><td>19.6</td></tr>
+<tr><td>claude</td><td>18.1</td><td>0.0</td></tr>
+<tr><td>engine node</td><td>12.5</td><td>6.8</td></tr>
+<tr><td>TextEdit</td><td>10.2</td><td>13.3</td></tr>
+<tr><td>mcp@latest</td><td>5.4</td><td>0.0</td></tr>
+<tr><td>Calculator</td><td>3.4</td><td>1.5</td></tr>
+<tr><td>codex</td><td>3.1</td><td>10.8</td></tr>
+<tr><td>node</td><td>2.2</td><td>1.4</td></tr>
+<tr><td>osascript</td><td>2.0</td><td>0.0</td></tr>
+<tr><td>Python</td><td>0.2</td><td>0.0</td></tr>
 <tr><td>python3</td><td>0.1</td><td>0.0</td></tr>
 <tr><td>(bash)</td><td>0.0</td><td>0.0</td></tr>
-<tr><td>uv</td><td>0.0</td><td>0.0</td></tr>
-<tr><td>Python</td><td>0.0</td><td>0.0</td></tr>
+<tr><td>(node)</td><td>0.0</td><td>0.0</td></tr>
 <tr><td>bash</td><td>0.0</td><td>0.0</td></tr>
-<tr><td>(AgentPeekBridge)</td><td>0.0</td><td>0.0</td></tr>
 <tr><td>(vibe-island-brid)</td><td>0.0</td><td>0.0</td></tr>
-<tr><td>(python3)</td><td>0.0</td><td>0.0</td></tr>
-<tr><td>(grep)</td><td>0.0</td><td>0.0</td></tr>
-<tr><td>(sw_vers)</td><td>0.0</td><td>0.0</td></tr>
-<tr><td>(zsh)</td><td>0.0</td><td>0.0</td></tr>
+<tr><td>(AgentPeekBridge)</td><td>0.0</td><td>0.0</td></tr>
+<tr><td>uv</td><td>0.0</td><td>0.0</td></tr>
+<tr><td>(git)</td><td>0.0</td><td>0.0</td></tr>
+<tr><td>sh</td><td>0.0</td><td>0.0</td></tr>
 <tr><td>(sh)</td><td>0.0</td><td>0.0</td></tr>
+<tr><td>(grep)</td><td>0.0</td><td>0.0</td></tr>
 <tr><td>&lt;defunct&gt;</td><td>0.0</td><td>0.0</td></tr>
-<tr><td>codex-code-mode-host</td><td>0.0</td><td>0.5</td></tr>
+<tr><td>vibe-island-bridge</td><td>0.0</td><td>0.0</td></tr>
+<tr><td>codex-code-mode-host</td><td>0.0</td><td>0.9</td></tr>
 </tbody></table>
 <h3>sleight and LCU (2026-10-03)</h3>
 <table><thead><tr><th>Arm</th><th>Model</th><th>Passed</th><th>Total s</th><th>Turns</th><th>Model s</th><th>Own CPU s</th></thead>
@@ -100,18 +101,24 @@ pre{background:#eef1f5;padding:0.7rem;overflow-x:auto;}
 <h3>sleight and Codex (2026-10-10)</h3>
 <table><thead><tr><th>Task</th><th>Run</th><th>Arm</th><th>Result</th><th>s</th><th>Turns</th><th>Model s</th><th>Raw</th></thead>
 <tbody>
-<tr><td>calculator-click</td><td>1</td><td>sleight</td><td>pass</td><td>17.3</td><td>4</td><td>8.9</td><td><a href="../benchmarks/2026-10-10-h2h-guard-2.json">json</a></td></tr>
-<tr><td>calculator-click</td><td>1</td><td>Codex</td><td>pass</td><td>16.6</td><td>4</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-guard-2.json">json</a></td></tr>
-<tr><td>calculator-click</td><td>2</td><td>sleight</td><td>pass</td><td>17.3</td><td>4</td><td>9.2</td><td><a href="../benchmarks/2026-10-10-h2h-guard-2.json">json</a></td></tr>
-<tr><td>calculator-click</td><td>2</td><td>Codex</td><td>pass</td><td>18.7</td><td>4</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-guard-2.json">json</a></td></tr>
-<tr><td>textedit-edit</td><td>1</td><td>sleight</td><td>pass</td><td>20.8</td><td>8</td><td>13.0</td><td><a href="../benchmarks/2026-10-10-h2h-guard-2.json">json</a></td></tr>
-<tr><td>textedit-edit</td><td>1</td><td>Codex</td><td>pass</td><td>35.7</td><td>8</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-guard-2.json">json</a></td></tr>
-<tr><td>textedit-edit</td><td>2</td><td>sleight</td><td>pass</td><td>20.9</td><td>6</td><td>12.2</td><td><a href="../benchmarks/2026-10-10-h2h-guard-2.json">json</a></td></tr>
-<tr><td>textedit-edit</td><td>2</td><td>Codex</td><td>pass</td><td>29.6</td><td>8</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-guard-2.json">json</a></td></tr>
-<tr><td>textedit-save</td><td>1</td><td>sleight</td><td>pass</td><td>73.3</td><td>16</td><td>52.6</td><td><a href="../benchmarks/2026-10-10-h2h-guard-2.json">json</a></td></tr>
-<tr><td>textedit-save</td><td>1</td><td>Codex</td><td>pass</td><td>53.1</td><td>11</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-guard-2.json">json</a></td></tr>
-<tr><td>textedit-save</td><td>2</td><td>sleight</td><td>pass</td><td>96.2</td><td>17</td><td>65.3</td><td><a href="../benchmarks/2026-10-10-h2h-guard-2.json">json</a></td></tr>
-<tr><td>textedit-save</td><td>2</td><td>Codex</td><td>pass</td><td>40.2</td><td>11</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-guard-2.json">json</a></td></tr>
+<tr><td>calculator-click</td><td>1</td><td>sleight</td><td>pass</td><td>24.3</td><td>5</td><td>10.4</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>calculator-click</td><td>1</td><td>Codex</td><td>pass</td><td>16.1</td><td>4</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>calculator-click</td><td>2</td><td>sleight</td><td>pass</td><td>26.4</td><td>6</td><td>13.7</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>calculator-click</td><td>2</td><td>Codex</td><td>pass</td><td>14.9</td><td>4</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>calculator-click</td><td>3</td><td>sleight</td><td>pass</td><td>16.8</td><td>4</td><td>7.6</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>calculator-click</td><td>3</td><td>Codex</td><td>pass</td><td>15.1</td><td>4</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>textedit-edit</td><td>1</td><td>sleight</td><td>pass</td><td>21.7</td><td>7</td><td>12.9</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>textedit-edit</td><td>1</td><td>Codex</td><td>pass</td><td>40.6</td><td>10</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>textedit-edit</td><td>2</td><td>sleight</td><td>pass</td><td>28.1</td><td>9</td><td>19.5</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>textedit-edit</td><td>2</td><td>Codex</td><td>pass</td><td>29.4</td><td>9</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>textedit-edit</td><td>3</td><td>sleight</td><td>pass</td><td>23.9</td><td>7</td><td>14.1</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>textedit-edit</td><td>3</td><td>Codex</td><td>pass</td><td>26.8</td><td>7</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>textedit-save</td><td>1</td><td>sleight</td><td>pass</td><td>51.8</td><td>11</td><td>32.0</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>textedit-save</td><td>1</td><td>Codex</td><td>pass</td><td>50.2</td><td>11</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>textedit-save</td><td>2</td><td>sleight</td><td>pass</td><td>50.7</td><td>12</td><td>31.8</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>textedit-save</td><td>2</td><td>Codex</td><td>pass</td><td>110</td><td>24</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>textedit-save</td><td>3</td><td>sleight</td><td>pass</td><td>69.6</td><td>18</td><td>47.7</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
+<tr><td>textedit-save</td><td>3</td><td>Codex</td><td>pass</td><td>37.1</td><td>10</td><td>n/a</td><td><a href="../benchmarks/2026-10-10-h2h-5.json">json</a></td></tr>
 </tbody></table>
 <h3>sleight and LCU (2026-10-03)</h3>
 <table><thead><tr><th>Task</th><th>Run</th><th>Arm</th><th>Result</th><th>s</th><th>Turns</th><th>Model s</th><th>Raw</th></thead>
@@ -169,7 +176,7 @@ pre{background:#eef1f5;padding:0.7rem;overflow-x:auto;}
 <li><a href="../benchmarks/2026-10-09-release-0.16.0.json">2026-10-09-release-0.16.0.json</a>: 2026-10-09, claude-sonnet-5-5 at medium, arm sleight, owner presence not in the file.</li>
 <li><a href="../benchmarks/2026-10-09-release-1.0.0.json">2026-10-09-release-1.0.0.json</a>: 2026-10-09, claude-sonnet-5-5 at medium, arm sleight, owner presence not in the file.</li>
 <li><a href="../benchmarks/2026-10-09-release-1.1.0.json">2026-10-09-release-1.1.0.json</a>: 2026-10-09, claude-sonnet-5-5 at medium, arm sleight, owner presence not in the file.</li>
-<li><a href="../benchmarks/2026-10-10-h2h-guard-2.json">2026-10-10-h2h-guard-2.json</a>: 2026-10-10, claude-haiku-5-5 at high, arm sleight and Codex, auth api, owner presence not in the file.</li>
+<li><a href="../benchmarks/2026-10-10-h2h-5.json">2026-10-10-h2h-5.json</a>: 2026-10-10, claude-haiku-5-5 at high, arm sleight and Codex, auth api, owner presence not in the file.</li>
 <li><a href="../benchmarks/2026-10-03-sleight-vs-lcu.json">2026-10-03-sleight-vs-lcu.json</a>: 2026-10-03, default, arm sleight and LCU, owner presence not in the file.</li>
 </ul>
 <p class="note">The standard results files don&#39;t record an engine version or load figures. Passes that measured them state them in a write-up or note. Turns differ between harnesses.</p>
@@ -182,6 +189,6 @@ PLUGIN_ARM_RIVAL_DIR=/absolute/path/to/plugin node bench/run.mjs --arm plugin:ri
 MCP_ARM_RIVAL_CONFIG=/absolute/path/to/mcp.json node bench/run.mjs --arm mcp:rival,sleight --tasks calculator-click --runs 1</code></pre>
 <p>A live pass auto-approves the benchmark apps and drives them unattended, and Chess and the simulator need `--owner-away`. Live runs take /tmp/sleight-live.lock and stop while /tmp/sleight-hold exists. See <a href="../benchmark.md">benchmark.md</a> for the full method.</p>
 <p>Rebuild this page after a release pass with:</p>
-<pre><code>node bench/results-page.mjs docs/benchmarks/2026-10-05-release-0.7.0.json docs/benchmarks/2026-10-05-release-0.8.0.json docs/benchmarks/2026-10-05-release-0.11.0.json docs/benchmarks/2026-10-05-release-0.12.0.json docs/benchmarks/2026-10-09-release-0.16.0.json docs/benchmarks/2026-10-09-release-1.0.0.json docs/benchmarks/2026-10-09-release-1.1.0.json docs/benchmarks/2026-10-10-h2h-guard-2.json docs/benchmarks/2026-10-03-sleight-vs-lcu.json</code></pre>
+<pre><code>node bench/results-page.mjs docs/benchmarks/2026-10-05-release-0.7.0.json docs/benchmarks/2026-10-05-release-0.8.0.json docs/benchmarks/2026-10-05-release-0.11.0.json docs/benchmarks/2026-10-05-release-0.12.0.json docs/benchmarks/2026-10-09-release-0.16.0.json docs/benchmarks/2026-10-09-release-1.0.0.json docs/benchmarks/2026-10-09-release-1.1.0.json docs/benchmarks/2026-10-10-h2h-5.json docs/benchmarks/2026-10-03-sleight-vs-lcu.json</code></pre>
 </body>
 </html>

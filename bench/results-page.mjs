@@ -29,11 +29,13 @@ export function loadResults(name, raw, writeUp) {
   if (!Array.isArray(results) || results.length === 0) throw new Error(`no runs in ${name}`);
   const arms = raw.arms ?? last.arms ?? ['sleight'];
   const version = /-release-([0-9.]+)\.json$/.exec(name)?.[1];
+  // A single-arm file is a release pass only when its name says which release;
+  // any other single-arm file is 'other', and the page skips it.
   return {
     name,
     link: `../benchmarks/${name}`,
     writeUp: writeUp ? `../benchmarks/${writeUp}` : undefined,
-    kind: arms.length > 1 ? 'h2h' : 'release',
+    kind: arms.length > 1 ? 'h2h' : version ? 'release' : 'other',
     rival: arms.filter(arm => arm !== 'sleight').join(', ') || undefined,
     version,
     stamp: raw.stamp ?? last.stamp,
@@ -127,18 +129,30 @@ const byVersion = (a, b) => {
   return 0;
 };
 
-// The page's inputs, ordered: release passes old to new, and per rival the latest
-// head-to-head by stamp (Codex first, then the rest by name).
+// Which head-to-head the page shows for a rival: a default-suite file beats a
+// real-suite one (bench/run.mjs writes suite: 'real' at the top of every real-suite
+// results file), then the file with more runs wins, then the newer stamp.
+const ranksAbove = (file, held) => {
+  const realFile = file.suite === 'real', realHeld = held.suite === 'real';
+  if (realFile !== realHeld) return realHeld;
+  if (file.results.length !== held.results.length) return file.results.length > held.results.length;
+  return file.stamp > held.stamp;
+};
+
+// The page's inputs, ordered: release passes old to new, and per rival one
+// head-to-head chosen by ranksAbove (Codex first, then the rest by name). Single-arm
+// files that aren't release passes come back as skipped.
 export function buildPage(inputs) {
   const releases = inputs.filter(file => file.kind === 'release').sort(byVersion);
   const rivals = new Map();
   for (const file of inputs.filter(file => file.kind === 'h2h')) {
     const held = rivals.get(file.rival);
-    if (!held || file.stamp > held.stamp) rivals.set(file.rival, file);
+    if (!held || ranksAbove(file, held)) rivals.set(file.rival, file);
   }
   const order = rival => (rival === 'codex' ? 0 : rival === 'lcu' ? 1 : 2);
   const latest = [...rivals.values()].sort((a, b) => order(a.rival) - order(b.rival));
-  return { releases, latestRelease: releases[releases.length - 1], rivals: latest };
+  const skipped = inputs.filter(file => file.kind === 'other');
+  return { releases, latestRelease: releases[releases.length - 1], rivals: latest, skipped };
 }
 
 const rivalName = rival => (rival === 'codex' ? 'Codex' : rival === 'lcu' ? 'LCU' : rival);
@@ -425,6 +439,7 @@ export function main(argv = process.argv.slice(2)) {
     return loadResults(name, JSON.parse(readFileSync(file, 'utf8')), existsSync(join(benchDir, writeUpName)) ? writeUpName : undefined);
   });
   const page = buildPage(inputs);
+  for (const file of page.skipped) console.log(`skipped ${file.name}: one arm and no -release-<version> in the name`);
   const outDir = join(ROOT, out);
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, 'index.html'), renderHtml(page));

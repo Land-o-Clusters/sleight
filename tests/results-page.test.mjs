@@ -62,6 +62,28 @@ test('per-arm numbers: model time only where the file has it', () => {
   assert.ok(Math.abs(arms.codex.cpu - 4.7) < 1e-9);
 });
 
+const runs = (count, task, arms = ['sleight', 'codex']) => Array.from({ length: count }, (_, i) =>
+  ({ arm: arms[i % arms.length], task, run: Math.floor(i / arms.length) + 1, passed: true, seconds: 10, turns: 3 }));
+
+test('skips a single-arm file without -release-<version> in its name', () => {
+  const turns = loadResults('2026-10-10-calculator-turns.json',
+    { stamp: '2026-10-10T19-02-19-594Z', arms: ['sleight'], results: runs(3, 'calculator-click', ['sleight']) });
+  const page = buildPage([release, turns, h2h]);
+  assert.notEqual(turns.kind, 'release');
+  assert.deepEqual(page.releases.map(file => file.name), ['2026-10-05-release-0.7.0.json']);
+  assert.deepEqual(page.skipped.map(file => file.name), ['2026-10-10-calculator-turns.json']);
+  assert.doesNotMatch(renderMarkdown(page), /calculator-turns/);
+});
+
+test('per rival, the default-suite head-to-head with the most runs wins over newer, smaller or real-suite ones', () => {
+  const big = loadResults('2026-10-10-h2h-5.json', { stamp: '2026-10-10T19-07-34-250Z', arms: ['sleight', 'codex'], results: runs(18, 'textedit-save') });
+  const small = loadResults('2026-10-10-h2h-6.json', { stamp: '2026-10-10T19-30-00-000Z', arms: ['sleight', 'codex'], results: runs(4, 'textedit-save') });
+  const shop = loadResults('2026-10-10-shop-2.json', { stamp: '2026-10-10T19-52-02-278Z', suite: 'real', arms: ['sleight', 'codex'], results: runs(20, 'safari-shop') });
+  const tie = loadResults('2026-10-10-h2h-4.json', { stamp: '2026-10-10T16-59-22-637Z', arms: ['sleight', 'codex'], results: runs(18, 'textedit-save') });
+  assert.equal(buildPage([tie, big, small, shop, h2h]).rivals[0].name, '2026-10-10-h2h-5.json', 'equal runs go to the newer stamp');
+  assert.equal(buildPage([shop]).rivals[0].name, '2026-10-10-shop-2.json', 'a real-suite comparison shows when it is the only one');
+});
+
 test('the pages link every raw file and scrub home paths', () => {
   const page = buildPage([release, h2h]);
   assert.equal(page.latestRelease.version, '0.7.0');

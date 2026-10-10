@@ -12,8 +12,8 @@ One page per release, generated from the results files in [benchmarks](../benchm
 
 | Arm | Model | Passed | Total s | Turns | Model s | Own CPU s |
 | --- | --- | --- | --- | --- | --- | --- |
-| sleight | claude-haiku-5-5 | 6/6 | 246 | 55 | 161.2 | 54.7 |
-| Codex | gpt-6.1-sol | 6/6 | 194 | 46 | n/a | 31.0 |
+| sleight | claude-haiku-5-5 | 9/9 | 313 | 79 | 189.6 | 78.2 |
+| Codex | gpt-6.1-sol | 9/9 | 340 | 83 | n/a | 54.3 |
 
 Own CPU is the run's own process group plus the shared engine helper and the target app. The groups are named by process name: engine is the engine's node and helper, "sleight's processes" is the relay, MCP servers and osascript, client is the host CLI, and other is the target app and anything unclassified.
 
@@ -21,36 +21,37 @@ Own CPU seconds by group:
 
 | Arm | Engine | sleight's processes | Client | Other |
 | --- | --- | --- | --- | --- |
-| sleight | 24.4 | 5.7 | 13.4 | 11.2 |
-| Codex | 14.6 | 0.8 | 7.8 | 7.8 |
+| sleight | 33.4 | 9.5 | 21.2 | 14.0 |
+| Codex | 26.5 | 1.4 | 11.7 | 14.8 |
 
 Every process the sampler saw, per arm:
 
 | Process | sleight | Codex |
 | --- | --- | --- |
-| engine helper | 16.7 | 10.4 |
-| claude | 11.5 | 0.0 |
-| TextEdit | 9.4 | 7.0 |
-| engine node | 7.7 | 4.2 |
-| mcp@latest | 3.3 | 0.0 |
-| codex | 1.9 | 7.3 |
-| Calculator | 1.7 | 0.9 |
-| node | 1.2 | 0.8 |
-| osascript | 1.2 | 0.0 |
+| engine helper | 20.9 | 19.6 |
+| claude | 18.1 | 0.0 |
+| engine node | 12.5 | 6.8 |
+| TextEdit | 10.2 | 13.3 |
+| mcp@latest | 5.4 | 0.0 |
+| Calculator | 3.4 | 1.5 |
+| codex | 3.1 | 10.8 |
+| node | 2.2 | 1.4 |
+| osascript | 2.0 | 0.0 |
+| Python | 0.2 | 0.0 |
 | python3 | 0.1 | 0.0 |
 | (bash) | 0.0 | 0.0 |
-| uv | 0.0 | 0.0 |
-| Python | 0.0 | 0.0 |
+| (node) | 0.0 | 0.0 |
 | bash | 0.0 | 0.0 |
-| (AgentPeekBridge) | 0.0 | 0.0 |
 | (vibe-island-brid) | 0.0 | 0.0 |
-| (python3) | 0.0 | 0.0 |
-| (grep) | 0.0 | 0.0 |
-| (sw_vers) | 0.0 | 0.0 |
-| (zsh) | 0.0 | 0.0 |
+| (AgentPeekBridge) | 0.0 | 0.0 |
+| uv | 0.0 | 0.0 |
+| (git) | 0.0 | 0.0 |
+| sh | 0.0 | 0.0 |
 | (sh) | 0.0 | 0.0 |
+| (grep) | 0.0 | 0.0 |
 | &lt;defunct&gt; | 0.0 | 0.0 |
-| codex-code-mode-host | 0.0 | 0.5 |
+| vibe-island-bridge | 0.0 | 0.0 |
+| codex-code-mode-host | 0.0 | 0.9 |
 
 ### sleight and LCU (2026-10-03)
 
@@ -93,18 +94,24 @@ Own CPU is the run's own process group plus the shared engine helper and the tar
 
 | Task | Run | Arm | Result | s | Turns | Model s | Raw |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| calculator-click | 1 | sleight | pass | 17.3 | 4 | 8.9 | [json](../benchmarks/2026-10-10-h2h-guard-2.json) |
-| calculator-click | 1 | Codex | pass | 16.6 | 4 | n/a | [json](../benchmarks/2026-10-10-h2h-guard-2.json) |
-| calculator-click | 2 | sleight | pass | 17.3 | 4 | 9.2 | [json](../benchmarks/2026-10-10-h2h-guard-2.json) |
-| calculator-click | 2 | Codex | pass | 18.7 | 4 | n/a | [json](../benchmarks/2026-10-10-h2h-guard-2.json) |
-| textedit-edit | 1 | sleight | pass | 20.8 | 8 | 13.0 | [json](../benchmarks/2026-10-10-h2h-guard-2.json) |
-| textedit-edit | 1 | Codex | pass | 35.7 | 8 | n/a | [json](../benchmarks/2026-10-10-h2h-guard-2.json) |
-| textedit-edit | 2 | sleight | pass | 20.9 | 6 | 12.2 | [json](../benchmarks/2026-10-10-h2h-guard-2.json) |
-| textedit-edit | 2 | Codex | pass | 29.6 | 8 | n/a | [json](../benchmarks/2026-10-10-h2h-guard-2.json) |
-| textedit-save | 1 | sleight | pass | 73.3 | 16 | 52.6 | [json](../benchmarks/2026-10-10-h2h-guard-2.json) |
-| textedit-save | 1 | Codex | pass | 53.1 | 11 | n/a | [json](../benchmarks/2026-10-10-h2h-guard-2.json) |
-| textedit-save | 2 | sleight | pass | 96.2 | 17 | 65.3 | [json](../benchmarks/2026-10-10-h2h-guard-2.json) |
-| textedit-save | 2 | Codex | pass | 40.2 | 11 | n/a | [json](../benchmarks/2026-10-10-h2h-guard-2.json) |
+| calculator-click | 1 | sleight | pass | 24.3 | 5 | 10.4 | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| calculator-click | 1 | Codex | pass | 16.1 | 4 | n/a | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| calculator-click | 2 | sleight | pass | 26.4 | 6 | 13.7 | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| calculator-click | 2 | Codex | pass | 14.9 | 4 | n/a | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| calculator-click | 3 | sleight | pass | 16.8 | 4 | 7.6 | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| calculator-click | 3 | Codex | pass | 15.1 | 4 | n/a | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| textedit-edit | 1 | sleight | pass | 21.7 | 7 | 12.9 | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| textedit-edit | 1 | Codex | pass | 40.6 | 10 | n/a | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| textedit-edit | 2 | sleight | pass | 28.1 | 9 | 19.5 | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| textedit-edit | 2 | Codex | pass | 29.4 | 9 | n/a | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| textedit-edit | 3 | sleight | pass | 23.9 | 7 | 14.1 | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| textedit-edit | 3 | Codex | pass | 26.8 | 7 | n/a | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| textedit-save | 1 | sleight | pass | 51.8 | 11 | 32.0 | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| textedit-save | 1 | Codex | pass | 50.2 | 11 | n/a | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| textedit-save | 2 | sleight | pass | 50.7 | 12 | 31.8 | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| textedit-save | 2 | Codex | pass | 110 | 24 | n/a | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| textedit-save | 3 | sleight | pass | 69.6 | 18 | 47.7 | [json](../benchmarks/2026-10-10-h2h-5.json) |
+| textedit-save | 3 | Codex | pass | 37.1 | 10 | n/a | [json](../benchmarks/2026-10-10-h2h-5.json) |
 
 ### sleight and LCU (2026-10-03)
 
@@ -164,7 +171,7 @@ Run counts differ between versions: the task set grew from 18 runs to 21, and 0.
 - [2026-10-09-release-0.16.0.json](../benchmarks/2026-10-09-release-0.16.0.json): 2026-10-09, claude-sonnet-5-5 at medium, arm sleight, owner presence not in the file.
 - [2026-10-09-release-1.0.0.json](../benchmarks/2026-10-09-release-1.0.0.json): 2026-10-09, claude-sonnet-5-5 at medium, arm sleight, owner presence not in the file.
 - [2026-10-09-release-1.1.0.json](../benchmarks/2026-10-09-release-1.1.0.json): 2026-10-09, claude-sonnet-5-5 at medium, arm sleight, owner presence not in the file.
-- [2026-10-10-h2h-guard-2.json](../benchmarks/2026-10-10-h2h-guard-2.json): 2026-10-10, claude-haiku-5-5 at high, arm sleight and Codex, auth api, owner presence not in the file.
+- [2026-10-10-h2h-5.json](../benchmarks/2026-10-10-h2h-5.json): 2026-10-10, claude-haiku-5-5 at high, arm sleight and Codex, auth api, owner presence not in the file.
 - [2026-10-03-sleight-vs-lcu.json](../benchmarks/2026-10-03-sleight-vs-lcu.json): 2026-10-03, default, arm sleight and LCU, owner presence not in the file.
 
 The standard results files don't record an engine version or load figures. Passes that measured them state them in a write-up or note. Turns differ between harnesses.
@@ -185,5 +192,5 @@ A live pass auto-approves the benchmark apps and drives them unattended, and Che
 Rebuild this page after a release pass with:
 
 ```sh
-node bench/results-page.mjs docs/benchmarks/2026-10-05-release-0.7.0.json docs/benchmarks/2026-10-05-release-0.8.0.json docs/benchmarks/2026-10-05-release-0.11.0.json docs/benchmarks/2026-10-05-release-0.12.0.json docs/benchmarks/2026-10-09-release-0.16.0.json docs/benchmarks/2026-10-09-release-1.0.0.json docs/benchmarks/2026-10-09-release-1.1.0.json docs/benchmarks/2026-10-10-h2h-guard-2.json docs/benchmarks/2026-10-03-sleight-vs-lcu.json
+node bench/results-page.mjs docs/benchmarks/2026-10-05-release-0.7.0.json docs/benchmarks/2026-10-05-release-0.8.0.json docs/benchmarks/2026-10-05-release-0.11.0.json docs/benchmarks/2026-10-05-release-0.12.0.json docs/benchmarks/2026-10-09-release-0.16.0.json docs/benchmarks/2026-10-09-release-1.0.0.json docs/benchmarks/2026-10-09-release-1.1.0.json docs/benchmarks/2026-10-10-h2h-5.json docs/benchmarks/2026-10-03-sleight-vs-lcu.json
 ```
