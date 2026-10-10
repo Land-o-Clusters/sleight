@@ -49,6 +49,8 @@ belong in [STATE.md](STATE.md).
 - Bigger releases, less often (owner, 2026-10-10), so competitors have less to copy or benchmark
   against between releases. Work in progress goes to the private `Land-o-Clusters/sleight-dev`
   (`remote.pushDefault private`), and the public repo gets pushes only at release (owner, 2026-10-10).
+  A pre-push hook in the shared `.git/hooks` refuses a push to the public repo unless
+  `SLEIGHT_RELEASE_PUSH=1` is set, because a branch tracking `origin` still pushed there.
 
 ## Approvals and safety
 

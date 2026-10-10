@@ -146,7 +146,9 @@ Branches and worktrees (`~/Projects/sleight-wt/<name>`):
   OpenUsage's hourly retry passing after the next pass would confirm the cause.
 
 - Watching the Mail and Mimestream tasks (about 10 minutes).
-- Whether to delete the pre-switch `codex/*` branches from the public repo.
+- Whether to delete the pre-switch `codex/*` branches from the public repo. Sol pushed
+  `codex/real-use-tasks` `0d24316` there at about 07:10 UTC, after the switch, since that branch
+  tracks `origin`. The pre-push hook (LAWS) now refuses such pushes.
 - Which of the unstarted briefs above to run.
 - Left on their screen from 2026-10-09, Safari fixture windows, Helium, Preview `Pages-*.pdf`, Word
   and Excel fixture documents, a TextEdit "Untitled 6" in their iCloud TextEdit folder (check it only
