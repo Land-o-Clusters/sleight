@@ -30,7 +30,8 @@ processes at 0.25 to 0.29 s a run. The engine is about even, and the rest is the
 the owner's plugins. Routines passed live (`docs/benchmarks/2026-10-10-routines-live.md`).
 
 Lanes: `codex/setup` merged as `5a4a8c4` and `codex/textedit-helper` as `a021a7c` (Grok, both with
-review fixes). Out: `codex/spawns` and `codex/privacy` (GLM, briefs in `.dev/prompts/`). Setup
+review fixes). Out (briefs in `.dev/prompts/`): `codex/spawns`, `codex/privacy`, `codex/lcu-arm` and
+`codex/release-prep` (GLM), `codex/panel-name`, `codex/live-checks` and `codex/iphone-mirroring` (Grok). Setup
 probe v3 in puddle-census, never signed in: the engine from ChatGPT.app listed apps (ROADMAP 5b.7).
 The away-window chain is `.dev/passes/away-2026-10-10.sh`.
 
