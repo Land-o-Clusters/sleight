@@ -41,6 +41,7 @@ import { runDriver, privateDriverEnvironment } from './driver.mjs';
 import { privateMailResult, publicPrivateMailRow, publishPrivateMailResults } from './private-mail.mjs';
 import { assertPrivateClaudePolicy } from './private-policy.mjs';
 import { DEFAULT_CAP_USD, addSpend, benchAuth, runCost } from './api-auth.mjs';
+import { archiveOldRuns } from './run-archive.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TIMEOUT_MS = 5 * 60 * 1000;
@@ -244,6 +245,7 @@ const scrub = text => {
 };
 
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+if (!isDryRun) for (const base of new Set([tmpdir(), realpathSync(tmpdir())])) archiveOldRuns(join(base, 'sleight-bench'), join(ARM_HOME, 'runs-archive'));
 const results = [];
 const realContexts = [], passCleanupErrors = [];
 const resultsDir = join(ROOT, 'bench', 'results');

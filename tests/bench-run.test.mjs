@@ -26,7 +26,7 @@ async function runner({ suite = 'real', arm = 'sleight', outcome = {}, taps = []
     writeFileSync: (_path, value) => saved.push(JSON.parse(value)), randomBytes: () => ({ toString: () => 'nonce' }),
     privateMailResult, publicPrivateMailRow,
     privateDriverEnvironment, assertPrivateClaudePolicy: () => calls.push('policy audit'),
-    DEFAULT_CAP_USD: 200, runCost: out => out?.total_cost_usd, benchAuth: () => auth, addSpend: usd => { calls.push(['spend', usd]); return spend(usd); },
+    DEFAULT_CAP_USD: 200, runCost: out => out?.total_cost_usd, archiveOldRuns: () => [], benchAuth: () => auth, addSpend: usd => { calls.push(['spend', usd]); return spend(usd); },
     publishPrivateMailResults: (_path, value, options) => { calls.push('private audit'); assert.ok(options.terms.every(term => term === 'private label')); saved.push(JSON.parse(value)); },
     execFileSync(command, args) {
       if (command === '/usr/bin/git') throw new Error('outside repo');

@@ -390,6 +390,11 @@ our own runs. Dates and engine versions are given where they matter.
 
 ## Specific apps
 
+- A Save or Open sheet showing a folder with many items reads as a very large tree: 198 file rows
+  made one read of TextEdit's Save sheet 57,000 characters (2026-10-10), past Claude Code's tool
+  output limit, so Claude saw only a pointer to a file, and every guard read of it took 1.4 to
+  2.3 s. The benchmark now moves runs older than 6 hours out of its folder. For users, a read
+  that leaves out the browser's rows isn't built yet.
 - Finishing a File > Open panel brought TextEdit to the front for about a second in 3 of about 21
   textedit-edit runs while the owner worked (2026-10-10, WindowServer log), each time just after the
   panel opened the document. The engine's actions themselves didn't. The skill now sends Claude to
