@@ -1034,10 +1034,17 @@ export function createRelay({
       const appTool = ['drag', 'hover', 'blocked_app', 'select_window', 'open_file'].includes(name);
       if (appTool) {
         if (closing) throw new Error('Input lease: this session is closing.');
-        resolved = await (localTools.target?.(args) ?? Promise.resolve(
-          [leaseWindow?.app, leaseWindow?.appId].includes(args.app) ? leaseWindow : undefined));
+        try {
+          resolved = await (localTools.target?.(args) ?? Promise.resolve(
+            [leaseWindow?.app, leaseWindow?.appId].includes(args.app) ? leaseWindow : undefined));
+        } catch (err) {
+          // open_file launches an app that isn't running, in the background, and sends no input to a
+          // window. Refusing it sent Claude to launch the app through the engine first, which once
+          // brought TextEdit to the front (2026-10-10 10:58 UTC).
+          if (name !== 'open_file' || !/launch it first/.test(String(err?.message))) throw err;
+        }
       }
-      if (leaseCalls.get(msg.id)?.localAction) {
+      if (leaseCalls.get(msg.id)?.localAction && !(name === 'open_file' && !resolved)) {
         const target = resolved ?? { appId: 'desktop', app: 'macOS', title: 'local desktop controls', url: null };
         const key = inputLease.acquire(target, appTool ? 'app' : 'desktop');
         leaseCalls.set(msg.id, { key }); refreshHeartbeat();

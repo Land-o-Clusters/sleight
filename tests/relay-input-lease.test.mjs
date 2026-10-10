@@ -307,6 +307,17 @@ test('window selection cannot raise an app while another session holds one of it
   h.send(rpc(2, 'select_window', { app: 'TextEdit', title: 'b.txt' })); await new Promise(resolve => setImmediate(resolve));
   assert.equal(selections, 0); assert.match(h.received.at(-1).result.content[0].text, /Input lease.*A/);
 });
+test('open_file runs when its app isn\'t running yet; other local tools still need the app', async t => {
+  const { harness } = setup(t);
+  const called = [];
+  const notRunning = async () => { throw new Error('Input lease: the local tool needs one running app with a bundle ID; launch it first'); };
+  const h = harness('opener', { localTools: { tools: [{ name: 'open_file' }, { name: 'drag' }], target: notRunning,
+    call: async name => { called.push(name); return { content: [{ type: 'text', text: 'ok' }] }; } } });
+  h.send(rpc(1, 'open_file', { app: 'TextEdit', path: '/tmp/a.txt' })); await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc(2, 'drag', { app: 'TextEdit', from: [1, 1], to: [2, 2] })); await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(called, ['open_file']);
+  assert.match(h.received.at(-1).result.content[0].text, /launch it first/);
+});
 test('a retained same-name handle cannot replace the selected bundle through an AX read', async t => {
   const { harness, path } = setup(t);
   const target = { appId: 'com.apple.TextEdit', app: 'TextEdit', title: 'a.txt', url: pathToFileURL(path).href };
