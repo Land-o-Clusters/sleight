@@ -4,7 +4,8 @@ Everything we intend to do, in order. [STATE.md](STATE.md) says where we are now
 [LAWS.md](LAWS.md) says what's always true. When the owner adds or corrects anything about the plan,
 sleight-arch writes it here in the same turn. When asked for the plan, answer from this file whole.
 
-The tracks run in parallel. Live runs that can take the owner's pointer or keyboard wait until
+This release is due 2026-10-10 (owner). Codex is out of quota, so Grok and GLM lanes take the code
+work in `.dev/prompts/lane-*.md`. sleight-arch merges it and runs the live checks before the release. The tracks run in parallel. Live runs that can take the owner's pointer or keyboard wait until
 they're away. Sol works track 4, and sleight-arch works tracks 2 and 3 while the owner is at the Mac.
 
 ## 1. Release 1.0 (done: v1.0.0, 2026-10-09)

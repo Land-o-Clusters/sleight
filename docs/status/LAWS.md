@@ -40,7 +40,10 @@ belong in [STATE.md](STATE.md).
   every read. In the default mode on a loaded Mac, the first action may use Claude's full read from the call
   just before when that read took over 2 s and is less than 10 s old. A first action that sends keys,
   text or coordinates may use that read whenever it is less than 10 s old, loaded or not (owner,
-  2026-10-10, for about 0.35 s a run). A window switch between calls isn't caught before that action. The bar is Codex's speed and footprint under any load.
+  2026-10-10, for about 0.35 s a run). A window switch between calls isn't caught before that action. Return after
+  `setValue({ id })`, a first action by ID or label (reusing a read under 10 s old), and clicks by ID or
+  label after the first action in a batch skip the read too (owner, 2026-10-10. They took 1.85 s a
+  save, 1.4 s, and about 3.5 s a Calculator run). The bar is Codex's speed and footprint under any load.
 - Codex time goes to known problems and enhancements, not benchmark runs (owner, 2026-10-04).
   SUPERSEDED (2026-10-09): "one benchmark pass per merge that changes default behavior". The owner
   now wants several fixes and features batched into each release, with one full pass per release. In
