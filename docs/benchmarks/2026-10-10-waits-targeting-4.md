@@ -26,6 +26,11 @@ arm, 2 repetitions
 With one window the identity check is skipped, so equal cost is the expected result. The idle run
 needs load under 3 and hasn't run.
 
+The sleight arm passed 6/6 on calculator-click, textedit-edit and textedit-save at `6291251`, 2 runs
+each, 2026-10-10 15:44 UTC, Haiku 5.5 at high
+([raw](2026-10-10-waits-targeting-4-tasks.json)). Those runs cover the turn ends the branch changed,
+not a stop.
+
 Esc during a turn, `/sleight stop` followed by a new message in a real Claude Code session,
 TextEdit Cmd+S with `waitFor`, and two equal-title TextEdit windows still need a live check. The
 script's live mode (`node bench/waits-targeting-live.mjs live --owner-away`) asks for the owner to
