@@ -109,6 +109,9 @@ belong in [STATE.md](STATE.md).
 - Other projects on this Mac run timed tests in announced windows. Their architects message this
   session. No app driving during a window, ask before any run that adds load, and say in the results
   when a run overlapped another project's load.
+- During another project's window sleight-arch keeps `/tmp/sleight-hold`. Every brief stops live
+  probes while it exists, and `npm run check` waits on it. Compile-heavy checks skewed Puddle's timed
+  pairs on 2026-10-10 until the check itself waited.
 - Live checks that drive apps hold `/tmp/sleight-live.lock`, taken with `mkdir`, released on exit. A
   command that can't take it stops there (`mkdir … || exit 1`), so nothing after it runs.
 - A run that can take the owner's pointer or keyboard happens only while the owner is away from the
