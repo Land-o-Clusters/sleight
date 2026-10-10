@@ -3,93 +3,59 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-10 05:40 UTC, Sol branches reviewed)
+## Banner (2026-10-10 08:45 UTC, owner asleep: overnight run)
+
+The owner went to bed at about 08:15 UTC and said to handle things overnight. Owner away means live
+runs that can take the pointer are allowed (LAWS), once Puddle's window is closed.
 
 The owner's bar (ROADMAP track 3): lightning quick under any load, no noticeable load on the Mac,
-measured against Codex on the same engine. Engine 26.1002.52244. The owner started every Sol brief
-at 05:20 UTC, and their checks pushed load past 200. `/tmp/sleight-hold` was set from 06:15 to
-07:02 UTC at Puddle's request, then lifted when its window was cancelled. The live lock is free. No
-open PRs.
+measured against Codex on the same engine. Engine 26.1007.21159 since 05:44 UTC: the API docs are
+identical to 26.1002.52244 once sleight's skill is left out, and the watch's calculator-click
+passed (08:19 UTC). The 42 A/B runs ran on it too. `/tmp/sleight-hold` is set since 08:19 UTC for
+Puddle's window 1010b (R16 pairs, attribution, OCR, about 100 to 120 min from ~08:45 UTC); lift it
+at puddle arch's CLOSE message. The live lock is free. No open PRs.
 
 **Where work goes.** Work in progress is private between releases (owner, 2026-10-10, LAWS): this
 repo has `remote.pushDefault private`, which sends every worktree's pushes to the private
-`Land-o-Clusters/sleight-dev` (Actions off, since spending is the owner's). Public
-`origin/pane/auto-mode` stays at `332e3ca` and gets pushes only at release.
-The `codex/*` branches already on the public repo (pushed 02:18 to 03:25 UTC, and `0d24316` at
-07:10) stay there: the owner said to leave them (2026-10-10).
+`Land-o-Clusters/sleight-dev` (Actions off, since spending is the owner's), and a pre-push hook
+refuses the public repo without `SLEIGHT_RELEASE_PUSH=1`. Public `origin/pane/auto-mode` stays at
+`332e3ca`. The `codex/*` branches already public stay there (owner, 2026-10-10).
 
-**Other projects.** Puddle arch messages this session before each timed window; when it says HOLD,
-create `/tmp/sleight-hold` (stops live probes, and `npm run check` waits on it since `890faed`),
-remove it at CLOSE. No window is announced now. Memory `shared-mac-quiet-windows`.
+**Benchmark.** Claude arms run on the owner's API key, Haiku 5.5 at high, capped at $200 a month
+(LAWS). About $0.80 is spent this month. Runs are priced from token counts.
 
-Released: `v1.1.0` (`0b6a1c0`) on `main`. Unreleased on `pane/auto-mode` since then, all in
-`CHANGELOG.md`: first-call batching by default with the end-the-call clause, windows a call opens
-itself, the split read's reuse, the no-action header, replay with Claude taking over, other hosts
-(Claude first), doctor reading an app (pre-approved list), per-site flow rules, the clipboard helper,
-settings windows by AX metadata, footprint cuts (helper lanes, cached extension check, lease
-database reuse), `docs/background.md`, the daily watch. Live-checked with Claude driving: 15/15 on
-five default tasks at `7c8e357`, 6/6 on the TextEdit tasks at `05903fa`.
+Released: `v1.1.0` (`0b6a1c0`) on `main`. Unreleased on `pane/auto-mode`, all in `CHANGELOG.md`.
+Landed today: replay from the desktop pane, `open_file` (owner's call, after TextEdit's Open panel
+took focus 3 times in about 21 runs), footprint parity's guard setup and native probe filters,
+the JXA count fix, the shared Swift module cache, and test files 4 at a time.
 
-**Release gate (ROADMAP 3.5) not met.** Footprint at `6e21846` (2026-10-10 02:10 UTC): sleight 45.8
-CPU s of its own against Codex 38.7 over six runs, while sleight was faster (154 s against 239 s,
-35 turns against 59). Left: the engine's node process +3.3 (guard reads) and `osascript` +2.2.
-Brief for it: `.dev/prompts/astra-footprint-parity.md` (Astra, deep perf). If a competing plugin is
-released first, releasing on speed is the owner's call (ROADMAP track 6).
+**Release gate (ROADMAP 3.5) not met.** Footprint at `6e21846`: sleight 45.8 CPU s of its own
+against Codex 38.7 over six runs, while sleight was faster (154 s against 239 s). Footprint parity
+(`4082ae9`) cut guard and probe CPU. The task-level head-to-head on it hasn't run.
 
-**Sol branches, reviewed 2026-10-10 05:30 UTC.** Merged: `codex/lease-close-tests` (`0125ca7`),
-`codex/windows-research` (`33c4ddd`), `codex/replay-desktop` with sleight-arch's fix for the
-full-read note after a pane replay. Sent back, briefs for the owner to paste to Sol:
-- `codex/textedit-fixes` `72437b7` → `sol-textedit-fixes-2.md`: the rich move is on by default,
-  writes the clipboard, never finished live, and a timed-out paste holds the clipboard lock.
-- `codex/waits-targeting` `e3f5a0b` → `sol-waits-targeting-2.md`, because Esc runs the checked stop and
-  exits the relay (traced by sleight-arch), and window identity needs sleight's own Accessibility.
-- `codex/verified-results` `62207a6` → `sol-verified-results-3.md`: retains every tree (heap 4.4 to
-  110.6 MB over 400 actions, reproduced by the reviewer), and the stale guard is off after a reset.
-  Merges before waits-targeting. Both edit `relay.mjs`.
-Verified-results and waits change what Claude reads, so they need Calculator, TextEdit, Chess and a
-Safari form before release. Replay-desktop needs the owner's check of the pane buttons in the Code
-tab.
-
-**Briefs written, not known to be started** (`.dev/prompts/`): `sol-sim-savelock.md`,
-`sol-lease-broker.md`, `sol-review-receipts.md`, `sol-routines-demo.md`, `sol-plugin-arm.md`,
-`sol-real-use-tasks-12.md` (DeviceHub replaces its process at launch; simulator-flow failed setup at
-03:30 UTC), `astra-footprint-parity.md`. Ask the owner which are running.
+**Sol branches.** Briefs in `.dev/prompts/` wait for the owner to paste:
+`sol-waits-targeting-3.md` (equal-title refusal, `/sleight stop` exits the relay, cost unmeasured),
+`sol-sim-savelock-2.md` (retry cap, simulator note opt-in), `sol-plugin-arm-3.md` (same stop rules
+for both arms, evidence trims), `sol-routines-demo-2.md` was answered by `210423b` (reviewed: routines
+can't run on this engine, since its `getApp` rejects `{ windowId }`; recorder gates done; not
+merged), `sol-verified-results-3.md` (no round 3 pushed yet). In review: `codex/textedit-fixes`
+`cc1d7e6` (round 3, rich move opt-in). Reviewed, to merge with a fix: `codex/review-receipts`
+`65a641b` (a Shift or Option key with a printable key is kept verbatim: record it as text).
 
 Next, in order:
-0. When Puddle's window closes: lift the hold, run `npm run check` once, and commit (in this order)
-   the replay merge with the full-read fix, the benchmark's API key mode and connector switch, the
-   shared Swift module cache, and the `SLEIGHT_FIRST_CALL_BATCH=merge` wording. Then, in the
-   background with TextEdit only, run `bench/small-fixes-textedit.mjs --quick` (the select-all
-   question) and the merge A/B on textedit-edit and textedit-save, 12 runs a side, about $14. The
-   plan is in `.dev/research/2026-10-10-merged-calls.md`. Chess and simulator-form wait for the
-   owner to be away. Done through the commits (`8e9e201`). The A/B started 07:04 UTC
-   (`.dev/passes/merge-ab.sh`, log `.dev/passes/merge-ab.log`), and the select-all run is blocked
-   by its helper (ROADMAP track 2).
-1. Review Sol's next rounds of the three branches above as they land, and merge them. After the
-   A/B (both edit `bench/run.mjs`): squash `codex/real-use-tasks` `0d24316` (reviewed: merge after
-   fixes) with a `launchDate` check on the adopted DeviceHub, a brief two-PID overlap treated as
-   wait, `elapsedMs` from `beginLaunch`, and its `--test-concurrency=4` kept, since it lowers the
-   check's load. `codex/plugin-arm` `565854b` went back as `sol-plugin-arm-2.md`: its arm would
-   pass the owner's API key to a competitor's server, and its evidence lists the owner's connectors
-   and apps (private repo only).
-   `codex/review-receipts` `f01987f` went back as `sol-review-receipts-2.md`: receipts go off by
-   default (owner, 2026-10-10), and they kept the owner's full name in a title and single typed keys.
-   `codex/routines-demo` `6f3b955` went back as `sol-routines-demo-2.md` with the owner's calls
-   (2026-10-10): the recorder starts only from a terminal and shows a notification, routine
-   install asks in the terminal, and routines wait until the user has been idle for 2 minutes.
-   `codex/textedit-fixes` `f23748b` went back as `sol-textedit-fixes-3.md`: the rich move becomes
-   opt-in until it passes live (sleight-arch), and after an unconfirmed paste it keeps the shared
-   clipboard lock without a limit. sleight-arch runs its live trials after round 3.
-2. The 1.1.0 live checks (helper resend, stale-number remap, keyboard-tap notice) and
-   simulator-flow, with the owner away: they can take the pointer or keyboard.
-3. The footprint gap (Astra's branch, then rerun `--arm sleight,codex --tasks
-   calculator-click,textedit-edit,textedit-save --runs 2`).
-4. A full release pass with the owner away, reread README whole, release (LAWS). Push the public
-   repo only then. README lines tied to a release (checked 2026-10-10): the pass result and the
-   13/21 and Chess 0/3 head-to-head mentions (lines 93 to 95), the roadmap checklist (add replay,
-   verified results, other hosts; Windows now has `docs/design/windows.md`), and whether the
-   Claude Code minimums (2.1.275, and 2.1.287 for the pane) still hold. The replay section was
-   tightened on 2026-10-10.
+1. At Puddle's CLOSE: lift the hold, run `npm run check`, and commit the staged
+   `codex/real-use-tasks` squash with sleight-arch's launch-date and overlap fixes, then the engine
+   docs capture that leaves out sleight's skill.
+2. Merge `codex/review-receipts` with the Shift fix, and `codex/textedit-fixes` after its review.
+3. Live, owner away: textedit-fixes trials (`bench/textedit-fixes.mjs`), the select-all probe
+   (`bench/small-fixes-textedit.mjs --quick`), the TextEdit tasks with `open_file`, the 1.1.0 live
+   checks, simulator-flow and the DeviceHub handoff, waits-targeting and plugin-arm live checks if
+   their Sol rounds are pushed.
+4. The footprint head-to-head on `4082ae9` or later: `--arm sleight,codex --tasks
+   calculator-click,textedit-edit,textedit-save --runs 2`.
+5. A full release pass with the owner away, reread README whole, release (LAWS). Recheck the README
+   lines tied to a release: the pass result and the 13/21 and Chess 0/3 mentions. Add replay,
+   `open_file` and other hosts to its roadmap checklist, and confirm the Claude Code minimums.
 
 Read first: `docs/known-problems.md`, `docs/benchmark.md`, `docs/design/guard-reads.md`.
 
