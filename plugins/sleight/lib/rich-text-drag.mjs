@@ -137,11 +137,13 @@ export async function runRichTextMove(args, plan, runLocal,
   io = createNativeClipboardIO(fileURLToPath(new URL('./clipboard.js', import.meta.url))),
   { timers = { setTimeout, clearTimeout }, notice = queueRichTextNotice } = {}) {
   let reserved = false, original, ownedCount, inputStarted = false, retained = false, disposed = false;
+  // The helper reports the types macOS added to the staged RTF, which recovery compares against.
+  let staged = [[{ type: 'public.rtf', data: plan.rtf }]];
   let result = { ok: false, path: 'accessibility' };
   const fail = error => { result = { ...result, ok: false, error: [result.error, String(error.message || error)].filter(Boolean).join('; ') }; };
   const retain = async (waitForExit, error) => {
     const held = pending = { io, original, ownedCount, stagedCount: ownedCount,
-      stagedItems: [[{ type: 'public.rtf', data: plan.rtf }]], runLocal, pid: plan.pid, waitForExit, timers, notice };
+      stagedItems: staged, runLocal, pid: plan.pid, waitForExit, timers, notice };
     held.finished = new Promise(resolve => { held.finishRecovery = resolve; });
     retained = true;
     held.deadline = timers.setTimeout(() => expireHeld(held).catch(() => {}), 9000);
@@ -164,7 +166,9 @@ export async function runRichTextMove(args, plan, runLocal,
     await io({ op: 'acquire' }); reserved = true;
     original = await io({ op: 'read' });
     try {
-      ownedCount = (await io({ op: 'write', expectedCount: original.count, items: [[{ type: 'public.rtf', data: plan.rtf }]] })).count;
+      const written = await io({ op: 'write', expectedCount: original.count, items: staged });
+      ownedCount = written.count;
+      if (Array.isArray(written.items)) staged = written.items;
     } catch (error) {
       if (error.clipboardMutation && error.clipboardCount === original.count + 1) ownedCount = error.clipboardCount;
       else if (error.clipboardMutation !== false) await retain(false, error);

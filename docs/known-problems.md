@@ -695,8 +695,11 @@ our own runs. Dates and engine versions are given where they matter.
   bridge NSAttributedString's string initializers, so every rich move fell back to the plain move
   until 2026-10-10 (fixed). The next live trial stopped at the clipboard helper's write check
   ("Clipboard write verification failed") before any paste: the text was unchanged and the
-  clipboard restored. The cause isn't known yet; macOS adding its own representations to the
-  staged RTF is a guess. Unit tests mock both layers and caught neither.
+  clipboard restored. macOS lists `public.utf16-external-plain-text` and
+  `public.utf8-plain-text` beside an item written with only `public.rtf`, and the helper's check
+  required an exact match. Writing that trial's recorded RTF to a private pasteboard gives the same error (1/1).
+  The helper now allows added types (fixed 2026-10-10). No live rich move has run since, so we
+  don't know yet whether TextEdit's Paste keeps the bold red word.
 - With every test file running at once, the app-health restart test and the doctor's pipe test each
   failed one full check at load 9 to 11 (2026-10-10) and passed 5 of 5 and 3 of 3 runs alone.
   `npm test` now runs 4 files at a time.

@@ -11,7 +11,10 @@ test('a collected Paste receipt is exact, survives framing and does not trust tr
   assert.equal(module.richPasteChildState('sleight:rich-paste-post', true), 'unknown');
   assert.equal(module.richPasteChildState('sleight:rich-paste-posted\n', true), 'pending');
 });
-function board({ readFails = false, busy = false } = {}) {
+// macOS lists two plain-text types beside an item written with only public.rtf (2026-10-10).
+const translated = reps => reps.length === 1 && reps[0].type === 'public.rtf'
+  ? [...reps, { type: 'public.utf16-external-plain-text', data: '//4gAA==' }, { type: 'public.utf8-plain-text', data: 'IA==' }] : reps;
+function board({ readFails = false, busy = false, translate = false } = {}) {
   let count = 10, items = structuredClone(original), held = false, closed = false;
   const io = async request => {
     if (request.op === 'acquire') { if (busy || held) throw new Error('Clipboard busy'); held = true; return; }
@@ -19,7 +22,9 @@ function board({ readFails = false, busy = false } = {}) {
     if (request.op === 'read') { if (readFails) throw new Error('File promises cannot be snapshotted'); return { count, items: structuredClone(items) }; }
     assert.equal(held, true);
     if (request.expectedCount !== count) throw Object.assign(new Error('Clipboard ownership changed; current contents were left alone'), { clipboardMutation: false, clipboardCount: count });
-    items = structuredClone(request.items); return { count: ++count };
+    items = structuredClone(request.items);
+    if (translate && items.some(reps => translated(reps) !== reps)) { items = items.map(translated); return { count: ++count, items: structuredClone(items) }; }
+    return { count: ++count };
   };
   io.close = async () => { held = false; closed = true; };
   return { io, current: () => ({ count, items, held, closed }), wipe: () => { items = []; return ++count; }, takeover: () => { items = [[{ type: 'public.utf8-plain-text', data: 'dXNlcg==' }]]; count++; } };
@@ -55,6 +60,16 @@ test('unconfirmed Paste restores only the exact staged generation and bytes, the
     assert.equal(await module.recoverPendingRichTextMove(), true);
     assert.equal(c.pending().length, 0);
   }
+});
+test('unconfirmed Paste restores staged RTF that macOS gave extra plain-text types', async () => {
+  const b = board({ translate: true }), c = clock(), notices = [];
+  await module.runRichTextMove({}, plan, async () => ({ ok: false, richPasteState: 'pending' }), b.io,
+    { timers: c.timers, notice: message => notices.push(message) });
+  assert.equal(b.current().items[0].length, 3);
+  await c.fire(9000);
+  assert.deepEqual(b.current().items, original);
+  assert.match(notices.join('\n'), /restored/);
+  assert.equal(await module.recoverPendingRichTextMove(), true);
 });
 test('the lock deadline bounds a stuck status/read and ignores their late replies', async () => {
   const b = board(), c = clock(), notices = [];

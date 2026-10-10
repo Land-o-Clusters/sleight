@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../plugins/sleight/lib/clipboard.js', import.meta.url), 'utf8');
@@ -30,7 +31,7 @@ function fixture(chunks = []) {
   });
   const context = vm.createContext({ ObjC: { import: () => {}, unwrap: value => value }, $: native });
   vm.runInContext(source, context);
-  return { board, read: () => JSON.parse(JSON.stringify(context.read(board))), write: r => context.write(board, r), array, data,
+  return { board, context, read: () => JSON.parse(JSON.stringify(context.read(board))), write: r => context.write(board, r), array, data,
     serve: () => context.run(['--serve']), once: () => context.run([]), written };
 }
 const items = [[{ type: 'public.rtf', data: 'AAEC' }, { type: 'public.png', data: 'AwQF' }], [{ type: 'public.file-url', data: 'BgcI' }]];
@@ -71,6 +72,57 @@ test('snapshot refuses missing data, a file promise and the 64 MiB bound', () =>
 test('snapshot refuses an owner change while a promised representation is materialized', () => {
   const h = fixture(); h.board.pasteboardItems = h.array([{ types: h.array(['public.png']), dataForType: () => { h.board.changeCount++; return h.data(Buffer.from('a')); } }]);
   assert.throws(() => h.read(), /ownership changed during snapshot/);
+});
+
+// The staged RTF of the 2026-10-10 live trial that stopped at "Clipboard write verification failed".
+const recordedRTF = JSON.parse(readFileSync(new URL('../docs/benchmarks/2026-10-10-textedit-fixes-1791627947226.json', import.meta.url), 'utf8'))
+  .trials.find(trial => trial.op === 'drag').result.richTextMove.rtf;
+const plainTypes = ['public.utf16-external-plain-text', 'public.utf8-plain-text'];
+test('types macOS adds to a staged RTF item pass verification and come back in the reply', () => {
+  const h = fixture();
+  h.board.writeObjects = objects => {
+    // What a private macOS pasteboard listed for an item written with only public.rtf.
+    const item = objects.objectAtIndex(0);
+    for (const type of plainTypes) item.setDataForType(h.data(Buffer.from('alpha')), type);
+    h.board.pasteboardItems = objects; return true;
+  };
+  const reply = JSON.parse(JSON.stringify(h.write({ expectedCount: 20, items: [[{ type: 'public.rtf', data: recordedRTF }]] })));
+  assert.equal(reply.count, 21);
+  assert.deepEqual(reply.items[0].map(rep => rep.type), ['public.rtf', ...plainTypes]);
+  assert.equal(reply.items[0][0].data, recordedRTF);
+  // A write that reads back exactly what it asked for keeps the reply small.
+  h.board.writeObjects = objects => { h.board.pasteboardItems = objects; return true; };
+  assert.equal(h.write({ expectedCount: 21, items }).items, undefined);
+});
+test('a requested representation that reads back changed or missing still fails verification', () => {
+  for (const change of ['bytes', 'missing']) {
+    const h = fixture();
+    h.board.writeObjects = objects => {
+      const first = change === 'bytes'
+        ? { types: h.array(['public.rtf', 'public.png']), dataForType: t => h.data(Buffer.from(t === 'public.rtf' ? 'other' : 'AwQF', 'base64')) }
+        : { types: h.array(['public.png']), dataForType: () => h.data(Buffer.from('AwQF', 'base64')) };
+      h.board.pasteboardItems = h.array([first, objects.objectAtIndex(1)]); return true;
+    };
+    assert.throws(() => h.write({ expectedCount: 20, items }),
+      error => /verification/.test(error.message) && error.clipboardMutation === true && error.clipboardCount === 21);
+  }
+});
+test('a private AppKit pasteboard takes the recorded staged RTF, with no clipboard or app access', { skip: process.platform !== 'darwin' }, () => {
+  const h = fixture();
+  const code = `ObjC.import('AppKit'); const LIMIT = 64 * 1024 * 1024;
+    ${h.context.read.toString()}
+    ${h.context.write.toString()}
+    const board = $.NSPasteboard.pasteboardWithUniqueName;
+    let reply;
+    try { reply = write(board, { expectedCount: Number(board.changeCount), items: [[{ type: 'public.rtf', data: ${JSON.stringify(recordedRTF)} }]] }); }
+    catch (error) { reply = { error: String(error.message) }; }
+    finally { board.releaseGlobally; }
+    JSON.stringify(reply);`;
+  const reply = JSON.parse(execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', code], { encoding: 'utf8', timeout: 10000 }));
+  assert.equal(reply.error, undefined);
+  assert.equal(reply.ok, true);
+  const rtf = (reply.items?.[0] ?? []).find(rep => rep.type === 'public.rtf') ?? { data: recordedRTF };
+  assert.equal(rtf.data, recordedRTF);
 });
 
 test('a nominally successful write that drops an item fails verification with its owned generation', () => {

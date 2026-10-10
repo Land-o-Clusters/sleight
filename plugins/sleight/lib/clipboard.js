@@ -52,10 +52,17 @@ function write(board, request) {
     // Materialize every published representation before acknowledging the write.
     // AppKit can otherwise expose only the first file item after the helper exits.
     const actual = read(board);
-    const canonical = items => JSON.stringify(items.map(reps => reps.slice().sort((a, b) => a.type.localeCompare(b.type))));
-    if (actual.count !== ownedCount || canonical(actual.items) !== canonical(request.items)) throw new Error('Clipboard write verification failed'); // read() returns count as a JS number
+    // AppKit lists types it can translate to: an item holding only public.rtf reads back with
+    // public.utf16-external-plain-text and public.utf8-plain-text too (macOS 27, 2026-10-10).
+    // An unchanged generation rules out another writer, so extra types are allowed, while every
+    // requested representation must read back byte for byte.
+    const exact = actual.items.length === request.items.length && request.items.every((reps, i) =>
+      reps.every(rep => actual.items[i].some(got => got.type === rep.type && got.data === rep.data)));
+    if (actual.count !== ownedCount || !exact) throw new Error('Clipboard write verification failed'); // read() returns count as a JS number
+    // Callers that later compare the clipboard with what they staged need the added types.
+    const added = actual.items.some((reps, i) => reps.length !== request.items[i].length);
+    return { ok: true, count: Number(board.changeCount), ...(added ? { items: actual.items } : {}) };
   } catch (error) { throw Object.assign(error, { clipboardMutation: true, clipboardCount: ownedCount }); }
-  return { ok: true, count: Number(board.changeCount) };
 }
 
 function dispatch(request) {

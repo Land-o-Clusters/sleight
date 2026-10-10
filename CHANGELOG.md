@@ -6,6 +6,10 @@
   first call has answered, not during it. Its second engine used to overlap every session's first
   call: about 0.12 s on a quiet Mac, and 2.4 s against 1.2 s under load
   (`docs/benchmarks/2026-10-10-startup-costs.md`).
+- The clipboard helper accepts types macOS adds to what it writes, as long as every requested
+  type reads back byte for byte. The opt-in rich TextEdit move stopped there on its last live
+  trial: staged RTF read back with two plain-text types. A private pasteboard reproduced it
+  with that trial's RTF. No live run since.
 - A call that acted and ended on exactly the window Claude last saw gets the whole tree instead of
   "no change since the last full tree you saw", which read as if the actions hadn't run. In
   calculator-click, Calculator still showed the previous run's 391, and Claude read again in 2 of 9
