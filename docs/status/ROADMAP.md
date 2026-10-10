@@ -141,6 +141,17 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
 4. Electron and Gecko: tasks for VS Code, Cursor, Firefox, and read-only Slack, Discord and
    WhatsApp. iPhone Mirroring with the owner at the Mac.
 5. A head-to-head with LCU again after these are merged.
+6. Anthropic's directory listing (owner, 2026-10-10). Submission is at claude.ai/directory/manage
+   from the public repo. The plugin folder passes the mechanical checks (50 files, the largest 142
+   KB, an MIT license field). Unknown: how review treats the ChatGPT engine dependency, and whether
+   the mod's self-approval of its own pane snapshot reads as changing Claude's permissions. A
+   privacy policy link is required. Asking Anthropic first is the owner's call.
+7. Less setup in the ChatGPT app (owner, 2026-10-10). Today a user installs ChatGPT and turns on
+   Computer Use in Codex once, which installs the helper from inside the app and gets macOS
+   permissions. The app needn't run after that. To find out: whether `codex plugin add` installs
+   the bundled computer-use plugin and helper without the app's UI, tested in a clean macOS user
+   or VM. Then `sleight-mcp setup` does what can be done and opens the right Settings panes.
+   macOS permissions always need the user's click.
 
 ## 6. Features after replay
 
