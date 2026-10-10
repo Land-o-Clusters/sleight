@@ -6,7 +6,9 @@ belong in [STATE.md](STATE.md).
 ## Owner decisions
 
 - The owner pushes changes to `.github/workflows/` and any `*.yml`. The org ruleset
-  `no-workflow-edits-without-disabling-this-ruleset` blocks everyone else. Only the owner toggles it.
+  `no-workflow-edits-without-disabling-this-ruleset` blocks everyone else. sleight-arch toggles it
+  only when the owner asks in chat, for that one push, and turns it back on in the same command
+  (owner, 2026-10-10). If Claude Code's safety classifier blocks that, the owner runs it.
 - Going public, money, scope changes, and redistributing or bundling anything that depends on another
   vendor's app or engine are the owner's call.
 - sleight is public (owner, 2026-10-03), and promoting it is cleared: the owner checked the licensing
@@ -41,8 +43,8 @@ belong in [STATE.md](STATE.md).
   now wants several fixes and features batched into each release, with one full pass per release. In
   development only the affected tasks run.
 - Bigger releases, less often (owner, 2026-10-10), so competitors have less to copy or benchmark
-  against between releases. Whether work in progress stays on the public repo between releases is
-  open: the working branch is public today.
+  against between releases. Work in progress goes to the private `Land-o-Clusters/sleight-dev`
+  (`remote.pushDefault private`), and the public repo gets pushes only at release (owner, 2026-10-10).
 
 ## Approvals and safety
 
