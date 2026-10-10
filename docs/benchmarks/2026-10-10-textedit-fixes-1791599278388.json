@@ -1,0 +1,112 @@
+{
+  "started": "2026-10-10T02:27:56.958Z",
+  "bank": "/private/tmp/sleight-textedit-fixes-wzhQeO",
+  "plain": false,
+  "legacy": true,
+  "move": true,
+  "trials": [
+    {
+      "op": "preflight",
+      "result": {
+        "id": 0,
+        "ok": true,
+        "running": true,
+        "foregroundTextEdit": false
+      }
+    },
+    {
+      "op": "open",
+      "result": {
+        "id": 1,
+        "ok": true,
+        "text": "alpha beta gamma\n",
+        "selected": "",
+        "foregroundSame": true,
+        "attributedText": "alpha beta gamma\n",
+        "characters": [
+          {
+            "index": 0,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1"
+          },
+          {
+            "index": 4,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1"
+          },
+          {
+            "index": 6,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          },
+          {
+            "index": 11,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          },
+          {
+            "index": 15,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          }
+        ]
+      }
+    },
+    {
+      "op": "prepare",
+      "result": {
+        "id": 2,
+        "ok": true,
+        "app": "TextEdit",
+        "windowId": 243523,
+        "from": [
+          20.951660000000004,
+          108.5
+        ],
+        "to": [
+          126.27539100000001,
+          108.5
+        ],
+        "settleMs": 0,
+        "covered": true,
+        "foregroundSame": true
+      }
+    },
+    {
+      "op": "drag",
+      "error": "cannot match window 243523 to one AX window; nothing was pressed"
+    },
+    {
+      "op": "close",
+      "result": {
+        "id": 4,
+        "ok": true,
+        "closed": true,
+        "foregroundSame": true
+      }
+    }
+  ],
+  "source": {
+    "bench/textedit-fixes.mjs": "ce37eac86972e463044b2613c52be2cab01bb809beb1ddfe63554f8b186ad148",
+    "bench/textedit-fixes-fixture.js": "53d1f7082bd54fb6d81b3ec48441322697094cefb5fe51fc42543da0e1d55370",
+    "plugins/sleight/lib/drag.js": "e271ae301e5a63a6bcdf4127b99aea30107187644be780b8fa05cb57495cc31f"
+  },
+  "clipboardBefore": {
+    "count": 480,
+    "digest": "c97a5d2de1d2022dfcaa1da3f93c687b957f368e48cc139b32aa50b439d27a19"
+  },
+  "documentClosed": true,
+  "error": "cannot match window 243523 to one AX window; nothing was pressed",
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixtureCollected": true,
+  "lockReleased": true,
+  "finished": "2026-10-10T02:27:58.387Z"
+}

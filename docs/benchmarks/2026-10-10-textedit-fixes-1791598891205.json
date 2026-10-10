@@ -1,0 +1,84 @@
+{
+  "started": "2026-10-10T02:21:30.287Z",
+  "bank": "/private/tmp/sleight-textedit-fixes-twYuIG",
+  "trials": [
+    {
+      "op": "preflight",
+      "result": {
+        "id": 0,
+        "ok": true,
+        "running": true,
+        "foregroundTextEdit": false
+      }
+    },
+    {
+      "op": "open",
+      "result": {
+        "id": 1,
+        "ok": true,
+        "text": "alpha beta gamma\n",
+        "selected": "",
+        "foregroundSame": true,
+        "attributedText": "alpha beta gamma\n",
+        "characters": [
+          {
+            "index": 0,
+            "bold": false,
+            "color": null,
+            "axAttributes": "{\n    AXATextAlignmentValue = 0;\n    AXFont =     {\n        AXFontFamily = Helvetica;\n        AXFontName = \"Helvetica-Bold\";\n        AXFontSize = 14;\n        AXVisibleName = \"Helvetica Bold\";\n    };\n    AXForegroundColor = \"<CGColor 0x7564c01ce0> [<CGColorSpace 0x7564c1c360> (kCGColorSpaceICCBased; kCGColorSpaceModelRGB; Generic RGB Profile)] headroom = 1.000000 ( 0.899279 0.127707 0 1 )\";\n}"
+          },
+          {
+            "index": 4,
+            "bold": false,
+            "color": null,
+            "axAttributes": "{\n    AXATextAlignmentValue = 0;\n    AXFont =     {\n        AXFontFamily = Helvetica;\n        AXFontName = \"Helvetica-Bold\";\n        AXFontSize = 14;\n        AXVisibleName = \"Helvetica Bold\";\n    };\n    AXForegroundColor = \"<CGColor 0x7564c01ce0> [<CGColorSpace 0x7564c1c360> (kCGColorSpaceICCBased; kCGColorSpaceModelRGB; Generic RGB Profile)] headroom = 1.000000 ( 0.899279 0.127707 0 1 )\";\n}"
+          },
+          {
+            "index": 6,
+            "bold": false,
+            "color": null,
+            "axAttributes": "{\n    AXATextAlignmentValue = 0;\n    AXFont =     {\n        AXFontFamily = Helvetica;\n        AXFontName = Helvetica;\n        AXFontSize = 14;\n        AXVisibleName = Helvetica;\n    };\n}"
+          },
+          {
+            "index": 11,
+            "bold": false,
+            "color": null,
+            "axAttributes": "{\n    AXATextAlignmentValue = 0;\n    AXFont =     {\n        AXFontFamily = Helvetica;\n        AXFontName = Helvetica;\n        AXFontSize = 14;\n        AXVisibleName = Helvetica;\n    };\n}"
+          }
+        ]
+      }
+    },
+    {
+      "op": "rtf-read",
+      "result": {
+        "id": 2,
+        "ok": true,
+        "rtfBytes": 371,
+        "text": "alpha",
+        "attributes": "{\n    NSColor = \"Generic RGB colorspace hdrm(1) 0.86275 0 0 1\";\n    NSFont = \"\\\"Helvetica-Bold 14.00 pt. P [] (0x7564bf0500) fobj=0x7564bf0a00, spc=3.89\\\"\";\n    NSParagraphStyle = \"Alignment Left, LineSpacing 0, ParagraphSpacing 0, ParagraphSpacingBefore 0, HeadIndent 0, TailIndent 0, FirstLineHeadIndent 0, LineHeight 0/0, LineHeightMultiple 0 LineBreakMode WordWrapping, Tabs (\\n    28L,\\n    56L,\\n    84L,\\n    112L,\\n    140L,\\n    168L,\\n    196L,\\n    224L,\\n    252L,\\n    280L,\\n    308L,\\n    336L\\n), DefaultTabInterval 0, Blocks (\\n), Lists (\\n), BaseWritingDirection Natural, HyphenationFactor 0, TighteningForTruncation NO, HeaderLevel 0 LineBreakStrategy 0 PresentationIntents (\\n) ListIntentOrdinal 0 CodeBlockIntentLanguageHint ''\";\n}"
+      }
+    },
+    {
+      "op": "close",
+      "result": {
+        "id": 3,
+        "ok": true,
+        "closed": true,
+        "foregroundSame": true
+      }
+    }
+  ],
+  "source": {
+    "bench/textedit-fixes.mjs": "2dbeff495f31e37df7ca39cf4ff06e56d4c5e13550d2850577570224b55b3761",
+    "bench/textedit-fixes-fixture.js": "45322ad618a2720bd86df1503c9a2af5da7da9eb7fad647874fb2a96dae8f43d",
+    "plugins/sleight/lib/drag.js": "56592ccd41a3c307a1f61ab5185dd5826ab92f485b73893a59c8a86296c61284"
+  },
+  "documentClosed": true,
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixtureCollected": true,
+  "lockReleased": true,
+  "finished": "2026-10-10T02:21:31.204Z"
+}

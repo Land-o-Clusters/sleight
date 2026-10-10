@@ -1,0 +1,259 @@
+{
+  "started": "2026-10-10T02:28:52.836Z",
+  "bank": "/private/tmp/sleight-textedit-fixes-aojKMl",
+  "plain": false,
+  "legacy": true,
+  "move": true,
+  "trials": [
+    {
+      "op": "preflight",
+      "result": {
+        "id": 0,
+        "ok": true,
+        "running": true,
+        "foregroundTextEdit": false
+      }
+    },
+    {
+      "op": "open",
+      "result": {
+        "id": 1,
+        "ok": true,
+        "text": "alpha beta gamma\n",
+        "selected": "",
+        "foregroundSame": true,
+        "attributedText": "alpha beta gamma\n",
+        "characters": [
+          {
+            "index": 0,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1"
+          },
+          {
+            "index": 4,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1"
+          },
+          {
+            "index": 6,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          },
+          {
+            "index": 11,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          },
+          {
+            "index": 15,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          }
+        ]
+      }
+    },
+    {
+      "op": "prepare",
+      "result": {
+        "id": 2,
+        "ok": true,
+        "app": "TextEdit",
+        "windowId": 245420,
+        "from": [
+          20.951660000000004,
+          108.5
+        ],
+        "to": [
+          126.27539100000001,
+          108.5
+        ],
+        "settleMs": 0,
+        "covered": true,
+        "foregroundSame": true,
+        "candidates": [
+          {
+            "fixtureName": true,
+            "position": [
+              152,
+              73
+            ],
+            "size": [
+              600,
+              400
+            ],
+            "documentMatches": true
+          }
+        ],
+        "cgBounds": {
+          "X": 152,
+          "Height": 400,
+          "Y": 73,
+          "Width": 600
+        }
+      }
+    },
+    {
+      "op": "drag",
+      "result": {
+        "id": 3,
+        "ok": true,
+        "app": "TextEdit",
+        "windowId": 245420,
+        "from": [
+          20.951660000000004,
+          108.5
+        ],
+        "to": [
+          126.27539100000001,
+          108.5
+        ],
+        "coordinates": "window points: no engine screenshot of this app yet",
+        "path": "accessibility",
+        "fallbackReason": "background skipped: Claude covers the window at the drag points",
+        "textChanged": true,
+        "spaceInserted": true
+      }
+    },
+    {
+      "op": "read",
+      "result": {
+        "id": 4,
+        "ok": true,
+        "text": "beta gamma alpha\n",
+        "selected": "alpha",
+        "foregroundSame": true,
+        "attributedText": "beta gamma alpha\n",
+        "characters": [
+          {
+            "index": 0,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          },
+          {
+            "index": 4,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          },
+          {
+            "index": 6,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          },
+          {
+            "index": 11,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          },
+          {
+            "index": 15,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          }
+        ]
+      }
+    },
+    {
+      "op": "save",
+      "result": {
+        "id": 5,
+        "ok": true,
+        "saved": true,
+        "characters": [
+          {
+            "index": 0,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          },
+          {
+            "index": 4,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          },
+          {
+            "index": 6,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          },
+          {
+            "index": 11,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          },
+          {
+            "index": 15,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null
+          }
+        ]
+      }
+    },
+    {
+      "op": "close",
+      "result": {
+        "id": 6,
+        "ok": true,
+        "closed": true,
+        "foregroundSame": true
+      }
+    }
+  ],
+  "source": {
+    "bench/textedit-fixes.mjs": "ce37eac86972e463044b2613c52be2cab01bb809beb1ddfe63554f8b186ad148",
+    "bench/textedit-fixes-fixture.js": "5befad36a8ca854972f8d316772495085a086f83e8847c14d16e0fdf9119cc53",
+    "plugins/sleight/lib/drag.js": "e271ae301e5a63a6bcdf4127b99aea30107187644be780b8fa05cb57495cc31f"
+  },
+  "clipboardBefore": {
+    "count": 480,
+    "digest": "c97a5d2de1d2022dfcaa1da3f93c687b957f368e48cc139b32aa50b439d27a19"
+  },
+  "moveResult": {
+    "id": 3,
+    "ok": true,
+    "app": "TextEdit",
+    "windowId": 245420,
+    "from": [
+      20.951660000000004,
+      108.5
+    ],
+    "to": [
+      126.27539100000001,
+      108.5
+    ],
+    "coordinates": "window points: no engine screenshot of this app yet",
+    "path": "accessibility",
+    "fallbackReason": "background skipped: Claude covers the window at the drag points",
+    "textChanged": true,
+    "spaceInserted": true
+  },
+  "clipboardAfter": {
+    "count": 480,
+    "digest": "c97a5d2de1d2022dfcaa1da3f93c687b957f368e48cc139b32aa50b439d27a19"
+  },
+  "clipboardBytesPreserved": true,
+  "exactText": true,
+  "formatPreserved": false,
+  "documentClosed": true,
+  "error": "Move, formatting or clipboard verification failed",
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixtureCollected": true,
+  "lockReleased": true,
+  "finished": "2026-10-10T02:28:59.649Z"
+}

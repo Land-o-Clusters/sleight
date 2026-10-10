@@ -11,6 +11,7 @@
 
 ObjC.import('AppKit');
 ObjC.import('CoreGraphics');
+const richClipboardState = { paste: 'not-posted' };
 
 // The person at the Mac. The foreground path takes the pointer and keyboard
 // focus for a few seconds, and keys typed then land in the target app: a
@@ -126,7 +127,7 @@ function validatePoints(info, bounds, from, to, isTextEdit, app = 'TextEdit') {
     const el = areas[0].el;
     const value = el.value(), selected = el.attributes.byName('AXSelectedText').value();
     if (typeof value !== 'string' || typeof selected !== 'string' || !selected.trim()) throw new Error('Select non-whitespace TextEdit text in this window before dragging; nothing was pressed');
-    text = { el, text: value, selected, app };
+    text = { el, text: value, selected, app, isTextEdit: true };
   } else {
     // Any other app: a drag that starts in one text area or field with selected text, and ends in
     // the same one, is a text move. Anything else stays an ordinary drag, as before.
@@ -223,6 +224,23 @@ function settleAfterTextWrite(pid) {
 // The text area under a screen point, through the Accessibility C API, which
 // can map a point to a character and write text without the pointer or focus.
 // JXA can't pass struct pointers, so AXValues are built from an NSValue's bytes.
+function textEditPasteItem(app, get) {
+  const matches = [];
+  let visited = 0;
+  const walk = (el, depth) => {
+    if (++visited > 300 || depth > 8) throw new Error('TextEdit menu exceeded the rich-paste lookup budget');
+    const value = name => attempt(() => ObjC.unwrap(ObjC.castRefToObject(get(el, name))), undefined);
+    // AXMenuItemCmdModifiers omits Command unless NoCommand (8) is present. Zero is Cmd alone.
+    if (value('AXRole') === 'AXMenuItem' && String(value('AXMenuItemCmdChar')).toLowerCase() === 'v' &&
+        value('AXMenuItemCmdModifiers') === 0 && value('AXEnabled') === true) matches.push(el);
+    const children = attempt(() => ObjC.castRefToObject(get(el, 'AXChildren')), null);
+    if (children) for (let i = 0; i < Number(children.count); i++) walk(children.objectAtIndex(i), depth + 1);
+  };
+  walk(ObjC.castRefToObject(get(app, 'AXMenuBar')), 0);
+  if (matches.length !== 1) throw new Error('Expected one enabled TextEdit Paste menu item; nothing was changed');
+  return matches[0];
+}
+
 function axTextArea(pid, point) {
   ObjC.import('ApplicationServices');
   ObjC.bindFunction('malloc', ['void*', ['unsigned long']]);
@@ -253,6 +271,8 @@ function axTextArea(pid, point) {
     const m = /x:([-\d.]+) y:([-\d.]+) w:([-\d.]+) h:([-\d.]+)/.exec(described(ask(el, 'AXBoundsForRange', range(index, 1))));
     return m && { X: +m[1], Y: +m[2], Width: +m[3], Height: +m[4] };
   };
+  const attributed = (location, length) => ObjC.castRefToObject(ask(el, 'AXAttributedStringForRange', range(location, length)));
+  let sourceAttributes;
   return {
     value: () => ObjC.unwrap(ObjC.castRefToObject(get(el, 'AXValue'))),
     selection: () => rangeOf(get(el, 'AXSelectedTextRange')),
@@ -266,6 +286,43 @@ function axTextArea(pid, point) {
     replace: (location, length, text) => { set(el, 'AXSelectedTextRange', range(location, length)); set(el, 'AXSelectedText', $(text)); },
     select: (location, length) => set(el, 'AXSelectedTextRange', range(location, length)),
     settle: () => settleAfterTextWrite(pid),
+    richMove: (location, length, dest, insert) => {
+      sourceAttributes = attributed(location, length);
+      const text = ObjC.unwrap(ObjC.castRefToObject(get(el, 'AXValue')));
+      const target = attributed(Math.max(0, Math.min(dest - 1, text.length - 1)), 1).attributesAtIndexEffectiveRange(0, null);
+      let different = false;
+      for (let i = 0; i < length; i++) if (!sourceAttributes.attributesAtIndexEffectiveRange(i, null).isEqualToDictionary(target)) different = true;
+      if (!different) return null;
+      const data = ObjC.castRefToObject(ask(el, 'AXRTFForRange', range(location, length)));
+      const source = $.NSAttributedString.alloc.initWithRTFDocumentAttributes(data, null);
+      if (source.isNil() || ObjC.unwrap(source.string) !== text.slice(location, location + length)) throw new Error('TextEdit did not supply the selected rich text; nothing was changed');
+      const rich = $.NSMutableAttributedString.alloc.initWithAttributedString(source);
+      const word = ObjC.unwrap(source.string), prefix = insert.startsWith(' ') && !word.startsWith(' ') ? ' ' : '';
+      const suffix = insert.length > prefix.length + word.length ? ' ' : '';
+      const space = () => $.NSAttributedString.alloc.initWithStringAttributes(' ', source.attributesAtIndexEffectiveRange(0, null));
+      if (prefix) rich.insertAttributedStringAtIndex(space(), 0);
+      if (suffix) rich.appendAttributedString(space());
+      const rtf = rich.RTFFromRangeDocumentAttributes($.NSMakeRange(0, Number(rich.length)), $({}));
+      if (rtf.isNil()) throw new Error('TextEdit rich text could not be prepared; nothing was changed');
+      return { rtf: ObjC.unwrap(rtf.base64EncodedStringWithOptions(0)), sourceRTF: ObjC.unwrap(data.base64EncodedStringWithOptions(0)) };
+    },
+    pasteRich: (location, _insert, count, posted) => {
+      if (Number($.NSPasteboard.generalPasteboard.changeCount) !== count) throw new Error('Clipboard ownership changed before the rich paste; nothing was changed');
+      set(el, 'AXFocused', $(true));
+      set(el, 'AXSelectedTextRange', range(location, 0));
+      if (!$.CFEqual(ObjC.castRefToObject(get(app, 'AXFocusedUIElement')), ObjC.castRefToObject(el))) throw new Error('TextEdit focus changed before the rich paste; nothing was changed');
+      const before = ObjC.unwrap(ObjC.castRefToObject(get(el, 'AXValue')));
+      const paste = textEditPasteItem(app, get);
+      const caret = rangeOf(get(el, 'AXSelectedTextRange'));
+      if (caret.location !== location || caret.length !== 0 || ObjC.unwrap(ObjC.castRefToObject(get(el, 'AXValue'))) !== before ||
+          !$.CFEqual(ObjC.castRefToObject(get(app, 'AXFocusedUIElement')), ObjC.castRefToObject(el))) throw new Error('TextEdit text or focus changed before the rich paste; nothing was changed');
+      if (Number($.NSPasteboard.generalPasteboard.changeCount) !== count) throw new Error('Clipboard ownership changed before the rich paste; nothing was changed');
+      posted(); // AX cannotComplete can return while an action callback continues.
+      const status = Number($.AXUIElementPerformAction(paste, $('AXPress')));
+      if (status) throw new Error('TextEdit Paste action was not acknowledged: ' + status);
+      for (let i = 0; i < 30 && ObjC.unwrap(ObjC.castRefToObject(get(el, 'AXValue'))) === before; i++) delay(0.05);
+    },
+    verifyRich: (location, length) => !!sourceAttributes && !!sourceAttributes.isEqualToAttributedString(attributed(location, length)),
   };
 }
 
@@ -290,7 +347,7 @@ function dropIndex(area, p, text) {
 // one space comes out with a word at the source, and one goes in at the drop
 // when the word would touch another. Checks the whole result, and on a mismatch
 // says to undo.
-function accessibilityMove(area, snapshot, end, window) {
+function accessibilityMove(area, snapshot, end, window, prepared) {
   const before = area.value(), sel = area.selection();
   if (before !== snapshot.text || before.slice(sel.location, sel.location + sel.length) !== snapshot.selected) {
     throw new Error('the text or selection changed before the move; nothing was changed, read the window again');
@@ -312,6 +369,42 @@ function accessibilityMove(area, snapshot, end, window) {
   const expected = dest > srcEnd
     ? before.slice(0, cutFrom) + before.slice(cutTo, dest) + insert + before.slice(dest)
     : before.slice(0, dest) + insert + before.slice(dest, cutFrom) + before.slice(cutTo);
+  if (snapshot.isTextEdit && area.richMove) {
+    let rich;
+    try { rich = area.richMove(src, sel.length, dest, insert); }
+    catch (e) { return { textChanged: false, error: `Cannot preserve TextEdit formatting: ${e.message || e}. Nothing was changed.` }; }
+    if (prepared && (!rich || prepared.pid !== snapshot.pid || prepared.text !== before || prepared.selected !== word || prepared.windowId !== window.id || prepared.sourceRTF !== rich.sourceRTF || prepared.rtf !== rich.rtf ||
+        prepared.dest !== dest || prepared.src !== src || prepared.cutFrom !== cutFrom || prepared.cutTo !== cutTo || prepared.insert !== insert)) {
+      throw new Error('the rich text or window changed before the move; nothing was changed, read the window again');
+    }
+    if (rich) {
+      if (!prepared) return { textChanged: false, richTextMove: { ...rich, pid: snapshot.pid, text: before, selected: word, windowId: window.id, dest, src, cutFrom, cutTo, insert } };
+      let after, deleting = false;
+      try {
+        area.pasteRich(dest, insert, prepared.clipboardCount, () => { richClipboardState.paste = 'pending'; });
+        after = area.value();
+        if (after !== before.slice(0, dest) + insert + before.slice(dest)) throw new Error('TextEdit did not confirm the rich text paste; the source was left in place');
+        richClipboardState.paste = 'consumed';
+        const prefixLength = insert.startsWith(' ') && !word.startsWith(' ') ? 1 : 0;
+        if (!area.verifyRich(dest + prefixLength, word.length)) throw new Error('TextEdit did not confirm the pasted formatting attributes; the source was left in place');
+        // Insert first in both directions. A failed paste can never delete the source.
+        deleting = true;
+        area.replace(cutFrom + (dest < src ? insert.length : 0), cutTo - cutFrom, '');
+        area.settle();
+        after = area.value();
+        const at = dest - (dest > srcEnd ? cutTo - cutFrom : 0) + prefixLength;
+        if (after !== expected) throw new Error('TextEdit did not confirm the complete rich text move');
+        if (!area.verifyRich(at, word.length)) throw new Error('TextEdit did not confirm the moved formatting attributes');
+        area.select(at, word.length);
+        return { textChanged: true, spaceInserted: insert !== word, richTextPreserved: true, richPasteState: richClipboardState.paste };
+      } catch (e) {
+        attempt(() => area.settle());
+        const changed = attempt(() => area.value(), null) !== before;
+        const undo = deleting ? ' Press Cmd+Z twice if both edits took effect, or once if only the paste did. Read after each Undo.' : ' Press Cmd+Z once in that window, then read it before continuing.';
+        return { textChanged: changed, richPasteState: richClipboardState.paste, error: `${e.message || e}.${changed ? undo : ' Read the window before continuing.'}` };
+      }
+    }
+  }
   // The later edit first, so the earlier one's indices still hold.
   const edits = dest > srcEnd ? [[dest, 0, insert], [cutFrom, cutTo - cutFrom, '']] : [[cutFrom, cutTo - cutFrom, ''], [dest, 0, insert]];
   let after;
@@ -443,6 +536,14 @@ function run(argv) {
   };
   try {
     const request = JSON.parse(argv[0]);
+    richClipboardState.paste = 'not-posted';
+    // Clipboard recovery is read only. The old process must be gone before an unacknowledged
+    // queued Paste can no longer consume restored clipboard data. Never infer this from a timeout.
+    if (request.op === 'rich-paste-status') {
+      if (!Number.isInteger(request.pid) || request.pid <= 0) throw new Error('invalid rich paste process');
+      const running = $.NSRunningApplication.runningApplicationWithProcessIdentifier(request.pid);
+      return JSON.stringify({ ok: true, terminated: running.isNil() || running.isTerminated === true });
+    }
     const { app, from, to, holdMs = 500, steps = 25, settleMs = 1500 } = request;
     if (![from, to].every(p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite)) ||
         (request.windowId !== undefined && (!Number.isInteger(request.windowId) || request.windowId <= 0)) ||
@@ -502,12 +603,13 @@ function run(argv) {
         if (globalThis.SLEIGHT_ACCESSIBILITY_MOVE === false) return null;
         let area;
         try { area = axTextArea(pid, points.end); }
-        catch (e) { fallbackReason += `; accessibility move unavailable: ${e.message || e}`; return null; }
+        catch (e) { if (request.richTextMove) throw new Error(`prepared rich paste unavailable: ${e.message || e}`); fallbackReason += `; accessibility move unavailable: ${e.message || e}`; return null; }
         try {
-          const outcome = accessibilityMove(area, points.text, points.end, main);
+          const outcome = accessibilityMove(area, points.text, points.end, main, request.richTextMove);
           path = 'accessibility';
-          return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, ...units, path, fallbackReason, ...outcome });
+          return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, ...units, path, fallbackReason, richPasteState: richClipboardState.paste, ...outcome });
         } catch (e) {
+          if (request.richTextMove) throw e;
           if (/changed before the move|inside the selection/.test(String(e.message))) throw e;
           fallbackReason += `; accessibility move failed: ${e.message || e}`;
           return null;
@@ -515,9 +617,10 @@ function run(argv) {
       };
       // Outside TextEdit, the posted mouse drag's text settings are unmeasured, so text moves go
       // through Accessibility first.
-      if (points.text && (cover || !isTextEdit)) {
+      if (points.text && (cover || !isTextEdit || request.richTextMove)) {
         const moved = byAccessibility();
         if (moved) return moved;
+        if (request.richTextMove) throw new Error('prepared rich paste unavailable; nothing was changed');
       }
       let sequence;
       if (!cover) try {
@@ -578,6 +681,7 @@ function run(argv) {
         if (moved) return moved;
       }
     }
+    if (request.richTextMove) throw new Error('prepared rich paste unavailable; foreground fallback was skipped');
     unchangedText();
     waitForIdle();
     unchangedText();
@@ -636,7 +740,7 @@ function run(argv) {
     return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, ...units, holdMs, steps, path, fallbackReason, ...outcome });
   } catch (e) {
     const message = String(e.message || e);
-    return JSON.stringify({ ok: false, path, fallbackReason, ...units, error: message + (!didPress && !message.includes('nothing was pressed') ? '; nothing was pressed' : '') });
+    return JSON.stringify({ ok: false, path, fallbackReason, ...units, richPasteState: richClipboardState.paste, error: message + (!didPress && richClipboardState.paste === 'not-posted' && !message.includes('nothing was pressed') ? '; nothing was pressed' : '') });
   } finally {
     if (pressed && post) attempt(() => post($.kCGEventLeftMouseUp, current));
     if (saved) attempt(() => $.CGWarpMouseCursorPosition(saved));

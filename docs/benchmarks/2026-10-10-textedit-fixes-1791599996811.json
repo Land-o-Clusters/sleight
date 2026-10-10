@@ -1,0 +1,45 @@
+{
+  "started": "2026-10-10T02:39:56.472Z",
+  "bank": "/private/tmp/sleight-textedit-fixes-pwMOdP",
+  "plain": false,
+  "legacy": false,
+  "move": false,
+  "orphan": false,
+  "trials": [
+    {
+      "op": "preflight",
+      "result": {
+        "id": 0,
+        "ok": true,
+        "running": true,
+        "foregroundTextEdit": false,
+        "documents": 0,
+        "hidden": false,
+        "onScreenWindows": 0
+      }
+    }
+  ],
+  "source": {
+    "bench/textedit-fixes.mjs": "41a92c065ce06a8b98677ff8cb80af6f6902459a7cb7694bc023ddbd2c59f001",
+    "bench/textedit-fixes-fixture.js": "3331244f4e047098ad134c089594240bacbf10863a565a5607fcc0737c19ab8d",
+    "plugins/sleight/lib/drag.js": "c103eb5fce652a0c0550e7da6db24d3bd71aacd97261b1ee9a56afedec2c1b53"
+  },
+  "health": {
+    "status": "responding",
+    "pid": 52188,
+    "windows": 0,
+    "minimized": 0,
+    "hidden": false,
+    "onScreen": 0,
+    "allWindows": 1,
+    "fullScreenSpace": true
+  },
+  "inspected": true,
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixtureCollected": true,
+  "lockReleased": true,
+  "finished": "2026-10-10T02:39:56.810Z"
+}
