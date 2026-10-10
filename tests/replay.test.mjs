@@ -336,11 +336,7 @@ test('waiting against the real guard sends input once and never repeats a partia
     const clock = fakeClock(), inputs = [];
     const code = partial ? 'await app.click({"id":"Seven"}); await app.click({"id":"Eight"});' : 'await app.click({"id":"Seven"});';
     const current = () => partial || clock.now() >= 500 ? TREE : TREE.replace('\t\t13 button Seven, ID: Seven\n', '');
-    // Like the engine, a click by an ID the window lacks fails without input.
-    const raw = { getAXState: async () => current(), click: async target => {
-      if (typeof target === 'object' && !current().includes(`ID: ${target.id}\n`)) throw new Error(`no element with ID ${target.id}`);
-      inputs.push(target);
-    } };
+    const raw = { getAXState: async () => current(), click: async number => inputs.push(number) };
     const outcome = await replayModule.replaySteps(scriptOf(step(code)), {
       clock, window: windowFromText(TREE),
       call: async (_name, args) => {

@@ -32,13 +32,12 @@ and up to 118 s with 20 CPU workers added (`load-cost`). Codex doesn't make that
 
 The guard is cooperative JavaScript, not a security boundary, and it expects actions to be awaited.
 
-## Reads skipped since 2026-10-10 (owner's call)
+## Return after setValue (2026-10-10, owner's call)
 
 Return after `setValue` goes ahead on the header its `setValue` was checked against, as after
-typing. A call's first action by ID or label uses Claude's read from the call just before when it
-is under 10 s old, as keys already did. Later actions by ID or label in a call don't read: the
-engine finds the element, as in Codex. Numbered actions still read before acting, since that
-catches renumbering, and `SLEIGHT_GUARD=careful` reads before every action.
+typing. Actions by ID or label still read first: the engine's `click` and `setValue` take only an
+element number or a point. The guard finds the element's current number in a fresh read. A
+skipped read there could click the wrong element after a renumber.
 
 ## Measurements
 

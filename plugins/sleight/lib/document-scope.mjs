@@ -347,14 +347,8 @@ function guardSetup(update, { reuseSetup = false, acknowledge = false } = {}) {
           // Save sheet skipped its 54,000-character read (owner, 2026-10-10, 1.85 s a save).
           const quiet = before && (['typeText', 'paste', 'setValue'].includes(before.name) || (before.name === 'pressKey' &&
             typeof before.key === 'string' && !before.key.includes('+') && !/^(?:return|enter|escape|esc|tab|space)$/i.test(before.key)));
-          // A click or other action by ID or label after the call's first action goes ahead on that
-          // action's header too, and the engine finds the element itself, as in Codex (owner,
-          // 2026-10-10, about 3.5 s a Calculator run). Numbered actions keep the read: it catches
-          // renumbering.
-          const namedTarget = args[0] && typeof args[0] === 'object' && !Array.isArray(args[0]) &&
-            (typeof args[0].id === 'string' || typeof args[0].label === 'string');
           let observed;
-          if (text === undefined && ((treeFree && quiet) || namedTarget) && !state.careful && state.callHeaders.has(proxy)) {
+          if (text === undefined && treeFree && quiet && !state.careful && state.callHeaders.has(proxy)) {
             observed = state.callHeaders.get(proxy);
             if (state.timing) nodeRepl.write('[sleight:guard-timing]' + JSON.stringify({ phase: 'skipped', ms: 0, chars: 0, failed: false }) + '\\n');
           } else {
@@ -373,7 +367,7 @@ function guardSetup(update, { reuseSetup = false, acknowledge = false } = {}) {
           // ({ line: "Scientific, ID: menuAction:" }) is the element whose whole line, after its number,
           // is exactly that: a replayed step names an element this way when no ID or label is unique.
           const byId = typeof spec?.id === 'string' || typeof spec?.label === 'string' || typeof spec?.line === 'string';
-          if (byId && text !== undefined) {
+          if (byId) {
             const [kind, value, match] = typeof spec.id === 'string' ? ['ID', spec.id, hasIdentifier]
               : typeof spec.label === 'string' ? ['label', spec.label, hasLabel] : ['line', spec.line, (line, value) => line === value];
             let found = [...elements(text)].filter(([, line]) => match(line, value));

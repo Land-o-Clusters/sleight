@@ -156,15 +156,11 @@ test('an element given by its AX ID is found in the read before each action, eve
   const run = code => runInNewContext(`(async () => { ${code} })()`, context);
   await run(readCode('await cua.getApp("Calculator");'));
   const window = { title: 'Calculator', app: 'Calculator', url: null };
-  await run(guardedCode('for (const id of ["AllClear", "Seven", "Equals"]) await app.click({ id });', window, undefined, undefined, { careful: true }));
-  assert.deepEqual(clicked, [2, 2, 3], 'careful mode: All Clear at 2, then Seven and Equals at their new numbers');
-  // By default only the first action is looked up; later ones go to the engine by ID (owner, 2026-10-10).
-  clicked.length = 0; shifted = false;
   await run(guardedCode('for (const id of ["AllClear", "Seven", "Equals"]) await app.click({ id });', window));
-  assert.equal(JSON.stringify(clicked), JSON.stringify([2, { id: 'Seven' }, { id: 'Equals' }]));
+  assert.deepEqual(clicked, [2, 2, 3], 'All Clear at 2, then Seven and Equals at their new numbers');
   await assert.rejects(run(guardedCode('await app.click({ id: "Eight" });', window)), /no element with ID "Eight"/);
   clicked.length = 0;
-  await run(guardedCode('await app.click({ label: "=" }); await app.click({ label: "7" });', window, undefined, undefined, { careful: true }));
+  await run(guardedCode('await app.click({ label: "=" }); await app.click({ label: "7" });', window));
   assert.deepEqual(clicked, [3, 2], 'labels match descriptions');
   raw.getAXState = async () => tree() + '\n\t9 button Description: 7, ID: Seven';
   await assert.rejects(run(guardedCode('await app.click({ id: "Seven" });', window)), /2 elements with ID "Seven"/);

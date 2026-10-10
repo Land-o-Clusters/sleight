@@ -73,8 +73,7 @@ test('numbered actions stop on changed elements after screenshot; IDs and labels
       assert.deepEqual(f.calls, ['both', ['click', 2], 'read']);
     } else {
       await run;
-      // A later action by ID or label goes to the engine as it is, with no read first (owner, 2026-10-10).
-      assert.deepEqual(f.calls.map(c => Array.isArray(c) ? c[0] + ':' + typeof c[1] : c), ['both', 'click:number', 'click:object', 'read']);
+      assert.deepEqual(f.calls, ['both', ['click', 2], 'read', ['click', 3], 'read']);
     }
   }
 });
