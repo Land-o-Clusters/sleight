@@ -62,6 +62,7 @@ function run(argv) {
   };
   const taps = argv[0] === '--session' ? query('keyboard-taps') : undefined;
   const target = argv[0] === '--session' ? query('lease-target') : undefined;
+  let windowIdentity;
   const stdin = $.NSFileHandle.fileHandleWithStandardInput, stdout = $.NSFileHandle.fileHandleWithStandardOutput;
   let buffer = '';
   for (;;) {
@@ -79,7 +80,8 @@ function run(argv) {
       let request;
       try {
         request = JSON.parse(line);
-        const result = request.op === 'keyboard-taps' ? JSON.parse(taps())
+        const result = request.op === 'window-identity' ? JSON.parse((windowIdentity ||= query('window-identity'))([JSON.stringify(request.window)]))
+          : request.op === 'keyboard-taps' ? JSON.parse(taps())
           : request.op === 'lease-target' ? JSON.parse(target([JSON.stringify({ app: request.app })])) : probe(request.app);
         reply = { id: request.id, ...result };
       } catch { reply = { id: request?.id, status: 'unknown', ok: false, error: 'session query failed' }; }

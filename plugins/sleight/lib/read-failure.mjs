@@ -80,6 +80,7 @@ export function createAppHealthHelper({ timeoutMs = 2000, operationTimeoutMs = 3
   const taps = helperLane('taps', operationTimeoutMs, spawnHelper);
   return {
     probe: app => probe.request({ app }, { status: 'unknown' }),
+    windowIdentity: window => target.request({ op: 'window-identity', window }, { status: 'unknown' }),
     target: args => target.request({ op: 'lease-target', app: args.app }, { ok: false,
       error: `Lease-target resolution failed: its helper was unavailable or did not answer within ${operationTimeoutMs / 1000} s. Stop this local action; reading the app again won't help.` }),
     keyboardTaps: async () => { const r = await taps.request({ op: 'keyboard-taps' }, { ok: false }); return r.ok ? r.taps : []; },

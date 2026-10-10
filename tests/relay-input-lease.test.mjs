@@ -13,6 +13,82 @@ const header = 'Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt';
 const rpc = (id, name, args = {}) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
 const result = (id, text = header) => ({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }],
   _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit' } } } } });
+test('native ambiguity or same-title replacement refuses input before forwarding, including split acquisition', async t => {
+  for (const combined of [false, true]) {
+    const { harness } = setup(t);
+    let identity = 1, matches = 1;
+    const h = harness('native', { fresh: true, changeReview: false, windowIdentity: async window => ({
+      ...window, status: 'ok', epoch: 'helper', window: identity, pid: 123, processStart: 1, matches
+    }) });
+    const code = combined ? 'let app = await cua.getApp("TextEdit"); await app.typeText("x");'
+      : 'let app = await cua.getApp("TextEdit");';
+    h.send(rpc('read', 'js', { code }));
+    const acquisition = h.forwarded.at(-1).id;
+    matches = combined ? 2 : 1;
+    h.reply(result(acquisition, 'Window: "Untitled", App: TextEdit.\n0 standard window Untitled'));
+    await new Promise(resolve => setImmediate(resolve));
+    if (!combined) {
+      identity = 2;
+      h.send(rpc('act', 'js', { code: 'await app.typeText("x")' }));
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    assert.equal(h.forwarded.length, 1);
+    assert.equal(h.received.at(-1).result.isError, true);
+    assert.match(h.received.at(-1).result.content.map(c => c.text ?? '').join('\n'), /ambiguous|changed/);
+  }
+});
+test('a unique unsaved native window admits input and holds admission while the check is pending', async t => {
+  const { harness } = setup(t);
+  let resolveCheck;
+  const observe = window => ({ ...window, status: 'ok', epoch: 'helper', window: 1, pid: 123, processStart: 1, matches: 1 });
+  const h = harness('native', { fresh: true, changeReview: false, windowIdentity: window =>
+    resolveCheck === undefined ? Promise.resolve(observe(window)) : new Promise(resolve => { resolveCheck = () => resolve(observe(window)); }) });
+  h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit");' }));
+  h.reply(result('read', 'Window: "Untitled", App: TextEdit.\n0 standard window Untitled'));
+  await new Promise(resolve => setImmediate(resolve));
+  resolveCheck = true;
+  h.send(rpc('act', 'js', { code: 'await app.typeText("x")' }));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('other', 'js', { code: 'await app.typeText("y")' }));
+  assert.match(h.received.at(-1).result.content[0].text, /pending/);
+  resolveCheck(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.forwarded.at(-1).id, 'act');
+});
+test('metadata-free rereads after reset and through aliases establish a native baseline', async t => {
+  for (const reset of [false, true]) {
+    const { harness } = setup(t);
+    let identity = 1, checks = 0;
+    const h = harness('baseline', { fresh: true, changeReview: false, windowIdentity: async window => {
+      checks++;
+      return { ...window, status: 'ok', epoch: 'helper', window: identity, pid: 123, processStart: 1, matches: 1 };
+    } });
+    const tree = 'Window: "Untitled", App: TextEdit.\n0 standard window Untitled';
+    h.send(rpc('first', 'js', { code: 'let te = await cua.getApp("TextEdit");' })); h.reply(result('first', tree));
+    await new Promise(resolve => setImmediate(resolve));
+    if (reset) { h.send(rpc('reset', 'js_reset')); h.reply(result('reset', 'reset')); }
+    h.send(rpc('again', 'js', { code: reset ? 'let te = await cua.getApp("TextEdit");' : 'await te.getAXState();' }));
+    const reply = result('again', tree); delete reply.result._meta; h.reply(reply);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(checks, 2, 'the metadata-free read checked native identity');
+    identity = 2;
+    const before = h.forwarded.length;
+    h.send(rpc('action', 'js', { code: 'await te.typeText("x");' }));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.forwarded.length, before);
+    assert.match(h.received.at(-1).result.content[0].text, /changed/);
+  }
+});
+test('ambiguous native identity does not block browser-only candidates', async t => {
+  const { harness } = setup(t);
+  const h = harness('browser', { fresh: true, changeReview: false, windowIdentity: async window => ({ ...window, status: 'ok', matches: 2 }) });
+  h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit");' }));
+  h.reply(result('read', 'Window: "Untitled", App: TextEdit.\n0 standard window Untitled'));
+  await new Promise(resolve => setImmediate(resolve));
+  h.send(rpc('browser', 'js', { code: 'let tab = await cua.createBrowserTab("chrome", "https://example.com");' }));
+  assert.equal(h.forwarded.at(-1).id, 'browser');
+  assert.match(h.forwarded.at(-1).params.arguments.code, /Native access stopped/);
+});
+
 test('normal action results and app acquisitions have no window note', t => {
   const { a } = setup(t);
   a.send(rpc(1, 'js', { code: 'app = await cua.getApp("TextEdit")' })); a.reply(result(1));

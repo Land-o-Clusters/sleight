@@ -33,6 +33,15 @@ function select(request, windows, options = {}) {
   return { result: JSON.parse(result), events };
 }
 const left = { AXTitle: 'left.txt', AXDocument: 'file:///tmp/left.txt' };
+test('recorded unsaved TextEdit headers with equal titles refuse selection without AX input', () => {
+  const recorded = JSON.parse(readFileSync(new URL('../docs/benchmarks/2026-10-04-input-lease-window-attempt.json', import.meta.url), 'utf8'));
+  const tree = recorded.trials[0].error.slice(recorded.trials[0].error.indexOf('Window: '));
+  // Project the same recorded header onto two native windows. The engine tree cannot separate them.
+  const trees = [tree, tree];
+  const windows = trees.map(tree => ({ AXTitle: JSON.parse(/^Window: ("[^"]*")/.exec(tree)[1]), AXDocument: null }));
+  const { result, events } = select({ app: 'TextEdit', title: windows[0].AXTitle }, windows);
+  assert.equal(result.ok, false); assert.match(result.error, /found 2/); assert.deepEqual(events, []);
+});
 const right = { AXTitle: 'right.txt', AXDocument: 'file:///tmp/right.txt' };
 test('window-selection opt-out leaves the other local tools enabled', () => {
   const names = env => localToolDefinitions(env).map(tool => tool.name);
