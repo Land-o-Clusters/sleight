@@ -3,12 +3,10 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-11 06:05 UTC, flushed before the owner's clear)
+## Banner (2026-10-11 06:30 UTC, lanes generic-drag and generic-mechanisms merged)
 
-`pane/auto-mode` is pushed to private (`Land-o-Clusters/sleight-dev`) with this banner, nothing
-uncommitted. `npm run check` 1,867 tests plus 31 mod tests, `lint:prose` clean. No background job is
-running: the skill A/B finished, and the OpenUsage watcher stops at the clear (its question below
-is still open). Live lock and hold are free.
+`pane/auto-mode` at `97dd734` is pushed to private (`Land-o-Clusters/sleight-dev`). `npm run check`
+1,902 tests plus 31 mod tests, `lint:prose` clean. Live lock and hold are free.
 
 **Direction (owner, 2026-10-11, in LAWS and ROADMAP track 0):** sleight is app-agnostic, like Codex.
 What users run adds generic mechanisms, never rules or code paths for one app. Benchmark checks are
@@ -16,13 +14,21 @@ generic too. The owner asked for the existing code and the skill to be cleaned u
 tests. A side-by-side battery against Codex on about 25 popular apps (approved, in LAWS) follows. The
 owner starts that in a fresh context. Don't start the battery before they say so.
 
-**Ready to paste, Codex gpt-6.1-sol, in `.dev/prompts/`, all based on `5829bb3`:**
-`lane-generic-drag.md` (delete the TextEdit rich-text move, about 400 lines, and give drag one path
-for every app), `lane-generic-mechanisms.md` (screenshot-scale note, orphan Save panel, demonstration
-recorder, browser detection and the setValue settle for any app), `lane-battery-harness.md` (generic
-fixture and check kinds: doc-file, self-message, web-page, app-state, with window order recorded per
-run) and `lane-battery-report.md` (parity table, Codex call diff, rules mined on half the apps and
-proven on the other half). The owner printed them on 2026-10-11 and hasn't said they're running.
+**Merged 2026-10-11, live checks pending:** generic-drag (`702cf3b`: one drag path for every app,
+Accessibility first for selected text, the TextEdit rich-text move and the Command modifier deleted,
+about 450 production lines gone) and generic-mechanisms (`97dd734`: screenshot scale note for any app,
+orphan Save panel in any AppKit app, `record --watch <bundle.id>`, browsers found through
+LaunchServices, a Shift press after a guarded text-area `setValue`; a refused Shift press no longer fails
+the `setValue`). Each needs a live check. A background selected-text move in TextEdit and in one
+other native text app must leave the whole text and spacing right, the front app and pointer unmoved,
+and the file saving without a hang. Chess must move the intended piece (owner away). A large
+non-simulator screenshot must get the scale note. An orphan panel in a second AppKit app must be named
+once. A recording must work in a third app, and a flow rule in a browser outside the old list. TextEdit
+`setValue` then Cmd+S must save without a hang. Open question for the drag check: an uncovered TextEdit text move used to go through posted events first and now goes through
+Accessibility, which writes plain text. Whether the posted drag kept formatting was never measured.
+
+**Still building (Codex gpt-6.1-sol):** battery-harness and battery-report, in
+`~/Projects/sleight-wt/`, uncommitted on `8718e55` at 06:30 UTC. Briefs in `.dev/prompts/`.
 
 **Skill A/B, done** (docs/benchmark.md, `docs/benchmarks/2026-10-11-skill-ab.json`): current 11/11 at
 14.5 s a run, slim 12/12 at 16.0 s, and the arm with no sleight rules 11/11 at 19.5 s. With no rules
@@ -46,10 +52,10 @@ Lanes chat-tasks-2, mail-fixtures, unsaved-review-2 and launch-focus were withdr
 Giving the user's front app back after a launch takes it is still wanted, as a generic mechanism
 (ROADMAP track 0). The chat helper no longer sets the Accessibility switch (`5827c2d`).
 
-Worktrees: 66 old ones were removed on 2026-10-11. Left under `~/Projects/sleight-wt/`: panel-rows
-(`4642150`), codex-diff (`227ca30`), mirroring-turns (`00546c1`) and launch-flake (`1147230`), from
-lanes the owner told to remove themselves; check, and remove them and their private branches if they're
-still there. plugin-arm's last commit `f7486d0` was never pushed. Keep it until checked.
+Worktrees: on 2026-10-11 the withdrawn lanes panel-rows (`4642150`), codex-diff (`227ca30`),
+mirroring-turns (`00546c1`) and launch-flake (`1147230`) were removed with their branches. The merged
+lanes' worktrees went too. plugin-arm round 3 (`f7486d0`) is on private and its files match the
+working branch.
 
 **Away sitting** (owner asks once): first the sheet and skill A/Bs on textedit-save. Then
 `node bench/away-sitting.mjs` runs its 12 steps, about 38 min by its dry run.
@@ -101,8 +107,7 @@ Read first: `docs/known-problems.md`, `docs/benchmark.md`, `docs/design/guard-re
 Branches and worktrees (`~/Projects/sleight-wt/<name>`):
 - `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it
   and pushes `origin`.
-- Lane worktrees from 2026-10-11 under `~/Projects/sleight-wt/` are merged and safe to remove, except
-  the open lanes' (lease-select, owner-present-mail).
+- `~/Projects/sleight-wt/` contains only the battery-harness and battery-report lanes (2026-10-11).
 - `perf/screenshot-scale` (`1aa574b`, `shots`): parked.
 
 ## Machine state outside the repo
