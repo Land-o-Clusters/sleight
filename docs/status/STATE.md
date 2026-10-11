@@ -11,8 +11,15 @@ runs two Save A/Bs (sheet and skill), `bench/away-sitting.mjs` (12 steps) and
 `bench/run.mjs --suite battery --owner-away` (17 tasks, 34 runs). Progress is in
 `.dev/passes/away-2026-10-11.log`. Don't change plugin files in the main checkout until it ends.
 Nothing ran from 07:15 to 12:30 UTC: sleight-arch ended its turn without asking for the sitting.
-After the chain, `.dev/passes/away-2026-10-11-web.sh` runs the 12 web tasks, sleight against Codex,
-2 runs each. Lane browser-tasks (Codex gpt-6.1-sol, `.dev/prompts/lane-browser-tasks.md`) started
+Results so far: the skill A/B rerun (slim matches current, 14.5 s against 15.6 s), the Save-sheet
+A/B (sheet lost, 29.7 s against 21.5 s, to be removed after the sitting) and the skill A/B on
+textedit-save (slim 38.9 s, current 44.7 s), all in docs/benchmark.md. Slim replaces SKILL.md after
+the sitting. The sitting's first start failed without `--owner-away` (sleight-arch's error). The
+battery stopped after 1 run at 13:14 UTC: the TextEdit task passed on disk, but cleanup left the
+fixture window open (CLEANUP_UNCONFIRMED). sleight-arch closed that one document and released the
+lock. Its fix is lane battery-cleanup (`.dev/prompts/lane-battery-cleanup.md`). Now running: sleight against Codex on the
+12 web tasks (2 runs each), then the 12-step sitting
+(`.dev/passes/away-2026-10-11-sitting.sh`). Lane browser-tasks (Codex gpt-6.1-sol, `.dev/prompts/lane-browser-tasks.md`) started
 about 12:50 UTC from the owner's phone, so this sitting's CPU and timing numbers overlap its checks.
 
 
