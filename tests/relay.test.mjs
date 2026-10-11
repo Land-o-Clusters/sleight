@@ -1970,6 +1970,13 @@ test('SLEIGHT_FIRST_CALL_BATCH rewrites only the engine\'s first-call rule, only
   assert.match(merged, /Cmd\+W after Cmd\+S/);
   assert.doesNotMatch(merged, /end the call after a shortcut/);
   assert.ok(merged.startsWith('Control apps.') && merged.endsWith('The tool result will include documentation.'));
+  // 'app' names the native entry before the first call: 50 of 80 runs (2026-10-11) spent their first
+  // turn on cua.getState(), the only native-looking call the engine's list shows.
+  const app = batchingDescription(engine, 'app');
+  assert.match(app, /let app = await cua\.getApp\("Calculator"\)/);
+  assert.match(app, /cua\.getState\(\) only/);
+  assert.match(app, /put them after it in the same call/);
+  assert.doesNotMatch(batchingDescription(engine), /cua\.getState\(\) only/);
   for (const [firstCallBatch, rewrites] of [[false, false], [true, true], ['merge', true]]) {
     const h = harness({ firstCallBatch });
     h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }); await tick();

@@ -117,8 +117,13 @@ export function treeFreeFirstAction(code) {
   const first = ACTION.exec(typeof code === 'string' ? code : '');
   return !!first && (['pressKey', 'typeText', 'paste'].includes(first[1]) || (!!first[2] && ['click', 'doubleClick', 'rightClick', 'scroll', 'drag'].includes(first[1])));
 }
+// SLEIGHT_FIRST_CALL_BATCH=app, under A/B. Before its first call Claude sees only the engine's list,
+// whose one native-looking entry is cua.getState(); the skill naming getApp arrives with the first
+// result. 50 of 80 runs (2026-10-11) spent their first turn on getState.
+const FIRST_CALL_APP = 'start with one of the API calls shown below, assigning the app to a variable. For a Mac app you can name, start with `let app = await cua.getApp("Calculator")` (its name or bundle ID): it returns that app\'s UI state. Use cua.getState() only to find an app or browser you can\'t name. ' +
+  FIRST_CALL_BATCH.slice(FIRST_CALL_BATCH.indexOf('When you already know'));
 export function batchingDescription(description, variant = true) {
-  const text = variant === 'merge' ? FIRST_CALL_MERGE : FIRST_CALL_BATCH;
+  const text = variant === 'merge' ? FIRST_CALL_MERGE : variant === 'app' ? FIRST_CALL_APP : FIRST_CALL_BATCH;
   return typeof description === 'string' && description.includes(FIRST_CALL_RULE) ? description.replace(FIRST_CALL_RULE, text) : description;
 }
 const TURN_END_DESCRIPTION = 'Internal to sleight: its hooks call this when a Claude turn ends. Never call it yourself.';

@@ -624,7 +624,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     guardMode: process.env.SLEIGHT_GUARD,
     takeNotices: takeRichTextNotices,
     simFocusNote: process.env.SLEIGHT_SIM_FOCUS_NOTE !== '0',
-    firstCallBatch: process.env.SLEIGHT_FIRST_CALL_BATCH === 'merge' ? 'merge' : process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
+    firstCallBatch: ['merge', 'app'].includes(process.env.SLEIGHT_FIRST_CALL_BATCH) ? process.env.SLEIGHT_FIRST_CALL_BATCH : process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
     clientIn: replayClient.clientIn,
     clientOut: replayClient.clientOut,
     serverIn: child.stdin,
