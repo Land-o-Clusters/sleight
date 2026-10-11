@@ -3,31 +3,30 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-11 04:50 UTC)
+## Banner (2026-10-11 05:05 UTC)
 
-`pane/auto-mode` is at `7f49b40` plus docs, pushed to private, nothing uncommitted. `npm run check`
-1,787 tests plus 31 mod tests, `lint:prose` clean. Merged since the clear, each reviewed and squashed:
-lease-select (Grok), owner-present-mail (GLM), lease-broker and unsaved-review (Codex). Not merged, on
-purpose: `codex/richmove-placement`.
+`pane/auto-mode` is at `f328943`, pushed to private, nothing uncommitted. `npm run check` 1,821 tests
+plus 31 mod tests, `lint:prose` clean. Merged since the clear: lease-select (Grok), owner-present-mail
+(GLM), lease-broker, unsaved-review, turn-study and away-runner (Codex), temp-hygiene (Grok) and
+release-audit (GLM). Not merged, on purpose: `codex/richmove-placement`. 2,064 old sleight-* temp
+folders (24 GB) were removed with `scripts/temp-leftovers.mjs --remove`.
 
-Done since the clear:
-- The first-call wording naming `cua.getApp` is the default (`a43945d`): 12/12, first calls on
-  `getState` 0/12 against 8/11, 27.0 s against 30.6 s a run.
-- calculator-click's re-read is gone since `fef67fe` (8/8). `SLEIGHT_GUARD=batch` is dropped
-  (Calculator renumbers on its first click). The orphan Save panel reproduced, with a working read.
-- `SLEIGHT_RESULT_TRIM=1` lost its A/B (11/12, 30.8 s against 26.8 s): the Save-panel list trim hid
-  the folder a save needs and is gone (`0d3068a`).
+Measured since the clear (`docs/benchmark.md`): the `cua.getApp` first-call wording is the default
+(27.0 s against 30.6 s a run); the Save-panel list trim lost and is gone; the acquisition-tree drop
+(`SLEIGHT_RESULT_TRIM=1`) tied and stays opt-in; `SLEIGHT_FIRST_CALL_BATCH=sheet` (no Cmd+S stop,
+`open_file` names its `getApp` call, saves observed from the file on disk, menu clicks in one call)
+did each thing it is for in 6 runs and needs a full A/B.
 
-**Running:** `nohup .dev/passes/ab-three.sh` (started 04:47 UTC, about 20 min), three arms one
-change each, 2 rounds of calculator-click, textedit-edit and textedit-save x2: default,
-`SLEIGHT_RESULT_TRIM=1` (now only the acquisition-tree drop) and `SLEIGHT_FIRST_CALL_BATCH=sheet` (no
-Cmd+S stop, `open_file` names its `getApp` call, a save observed from its file on disk). Log
-`.dev/passes/ab-three.log`; compare with the scratch `ab-compare.mjs` pattern (per arm: passes, turns,
-model time per turn, total, spills, `waitFor` after Cmd+S, `cua.getAXState` calls, Bash or Read
-after a save). A winner with every run passing becomes the default with no opt-out.
+The owner saw TextEdit's Save sheet over their window during textedit-save runs (known problems).
+The log doesn't show a front-app change. Until a window-order capture explains it, textedit-save runs only
+with the owner away.
 
-**Lanes out** (prompts in `.dev/prompts/`, each pushes `codex/<name>` to private, all from
-`d21965c`). Codex has turn-study and away-runner. Grok has temp-hygiene, and GLM has release-audit.
+**Away sitting, next** (owner asked once, all lanes merged), about 60 min:
+1. `.dev/passes/ab-sheet.sh` (default against `sheet`, 2 rounds, 3 runs a task, about 20 min) with
+   `osascript -l JavaScript .dev/tools/window-order.js 1500` logging window order beside it.
+2. `node bench/away-sitting.mjs` (12 steps, about 38 min by its dry run; the two Codex head-to-heads
+   swap ChatGPT's "Always allow" list on the owner's 2026-10-09 OK and restore it).
+Then the owner-present runs (Mail, Mimestream, chat, Helium Console) and the release pass.
 
 Results that matter for the release gate (ROADMAP 3.5, 5b.1): speed-research found the clean-arms CPU
 gap to Codex (51.8 s against 42.8 s) was 8.6 s from two failed textedit-save runs, and the seven runs
@@ -40,7 +39,7 @@ textedit-edit 3/3 each. The opt-in rich move stays off: macOS disables Paste in 
 never been frontmost (`323183d`).
 
 Next, in order:
-1. Review and merge lease-broker and unsaved-review as they report, then run their live checks.
+1. Live checks of the merged lanes (lease-broker with Codex, unsaved-review) with the owner present.
 2. Then ask the owner for the one away sitting (owner: no partial windows), with the run order and
    length (about 75 to 90 min): the Codex head-to-head with clean arms and the owner's setup,
    textedit-drag, Chess with computed points, simulator-form x3, the save-lock experiment
