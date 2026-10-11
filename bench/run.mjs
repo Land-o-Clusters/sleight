@@ -497,7 +497,9 @@ pass: for (let run = 1; run <= runs; run++) {
         finishRun(results.at(-1));
         save();
         const recorded = results.at(-1);
-        console.error(`${recorded.passed ? 'PASS' : isDryRun ? 'DRY' : recorded.outcome ? 'STOP' : 'FAIL'} ${armName} ${task.id} #${run} ${recorded.seconds ?? 0}s${recorded.reason ? ` (${recorded.reason})` : ''}`);
+        // A private row has no reason; its code (CHAT_…, MIMESTREAM_…) carries no content, so the local log shows it.
+        const privateCode = task.privateMail && !recorded.passed ? /^[A-Z][A-Z0-9_]+\b/.exec(String(result.reason ?? result.cleanupError ?? ''))?.[0] : undefined;
+        console.error(`${recorded.passed ? 'PASS' : isDryRun ? 'DRY' : recorded.outcome ? 'STOP' : 'FAIL'} ${armName} ${task.id} #${run} ${recorded.seconds ?? 0}s${recorded.reason ? ` (${recorded.reason})` : privateCode ? ` (${privateCode})` : ''}`);
         if (result.cleanupError || result.permissionPrompt || result.permissionRefusal || result.observerError || result.appDialog || result.groupClean === false) {
           // Which check and its code only (MIMESTREAM_…): codes carry no mail content.
           const privateStop = () => ['cleanupError', 'permissionPrompt', 'permissionRefusal', 'observerError', 'appDialog'].filter(key => result[key])
