@@ -615,7 +615,11 @@ our own runs. Dates and engine versions are given where they matter.
   succeeded after confirmed process absence, without a -600 retry. Space, the historical window
   state and the native command failure's cause remain unknown. Some window captures returned black
   pixels. Clear captures confirmed that Chess's AX square Y positions were inverted; this does not
-  explain a window-availability refusal. An off-screen refusal now tells Claude to have the user show that exact window,
+  explain a window-availability refusal.
+  Chess opened at 667 by 532 and 897 by 705 points on 2026-10-10/11. The engine's screenshot is that
+  window size, so the 1223 by 949 drag points miss. Live checks now take e2 and e4 from the board's
+  AX frames, or scale those 2026-10-08 points by the current window. Unit tests cover both later
+  sizes. A live drag with the computed points has not run. An off-screen refusal now tells Claude to have the user show that exact window,
   reacquire the app, and take a fresh screenshot before using current window IDs and coordinates.
   It never retries the old drag or substitutes another window. In a separate minimized-window control,
   the refusal left the board unchanged, and restoring and reacquiring the same window led to a verified

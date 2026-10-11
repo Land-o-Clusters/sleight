@@ -2,5 +2,5 @@
   "bounds": { "X": 46, "Y": 80, "Width": 1223, "Height": 949 },
   "from": [654, 655],
   "to": [654, 527],
-  "source": "Single-window screenshot from chess-observe, 2026-10-08. Coordinates measured against the window frame; Chess AX square Y positions are inverted. Reinspect if bounds or board orientation change."
+  "source": "Single-window screenshot from chess-observe, 2026-10-08. Scaling baseline when a launch's AX squares have no frames. Coordinates measured against the window frame. Chess AX square Y positions are inverted relative to that image."
 }

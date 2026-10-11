@@ -25,6 +25,7 @@ async function measureFailure({ quitFails = false, spawnFails = false, workerCol
     writeFileSync: (path, data) => { if (path.endsWith('.json')) report = JSON.parse(data); },
     rmSync: () => { removed = true; },
     reliabilityEvidence: value => JSON.stringify(value),
+    chessMovePoints: () => ({ from: [0, 0], to: [0, 0], source: 'fixture' }),
     acquireLiveLock: async () => async () => { unlocks++; },
     execFile() {},
     promisify: () => async (cmd, args) => {

@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { restartChess } from './chess-launch.mjs';
 import { cleanupChessTrial } from './reliability-cleanup.mjs';
+import { chessMovePoints } from './chess-move-points.mjs';
 
 const execute = promisify(execFile);
 const inspector = join(homedir(), '.codex/bin/codex-macos-inspect');
@@ -158,8 +159,9 @@ try {
           }
         }
         if (process.argv[2].endsWith('inspect')) break;
-        const measured = JSON.parse(await readFile('bench/reliability-chess-points.json', 'utf8'));
-        if (JSON.stringify(measured.bounds) !== JSON.stringify(b)) throw new Error('Screenshot geometry changed; no drag posted');
+        const recorded = JSON.parse(await readFile('bench/reliability-chess-points.json', 'utf8'));
+        let measured = chessMovePoints({ bounds: b, squares: trial.geometry.squares, recorded });
+        trial.movePoints = measured;
         if (cancelled) throw new Error('Interrupted before drag');
         if (recovery) {
           const result = trial.recovery = {};
@@ -173,7 +175,9 @@ try {
           result.reacquired = await client.js('var chess = await cua.getApp("com.apple.Chess"); await chess.getAXState({disableDiffing:true})');
           if (result.reacquired.isError || !text(result.reacquired).includes(`Window: "${title}", App: Chess.`)) throw new Error('Recovered engine read does not identify the same game');
           result.freshAX = await chess({ op: 'geometry', title });
-          if (JSON.stringify(result.freshAX.bounds) !== JSON.stringify(measured.bounds)) throw new Error('Recovered screenshot geometry changed; no drag posted');
+          if (JSON.stringify(result.freshAX.bounds) !== JSON.stringify(b)) throw new Error('Recovered screenshot geometry changed; no drag posted');
+          measured = chessMovePoints({ bounds: result.freshAX.bounds, squares: result.freshAX.squares, recorded });
+          trial.movePoints = measured;
           result.freshCG = JSON.parse(await command(inspector, ['windows-for-pid', String(after.pid), '--scope', 'all']));
           const fresh = result.freshCG.filter(w => w.windowNumber === trial.windowId && w.layer === 0 && w.onScreen &&
             Math.abs(w.bounds.x - b.X) < 1 && Math.abs(w.bounds.y - b.Y) < 1 &&

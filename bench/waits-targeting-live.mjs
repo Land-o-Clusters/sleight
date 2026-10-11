@@ -12,6 +12,7 @@ import { resolveServer } from '../plugins/sleight/lib/launch.mjs';
 import { createAppHealthHelper } from '../plugins/sleight/lib/read-failure.mjs';
 import { reliabilityEvidence } from './reliability-evidence.mjs';
 import { startFootprint } from './footprint.mjs';
+import { chessMovePoints } from './chess-move-points.mjs';
 
 const execute = promisify(execFile), root = fileURLToPath(new URL('../', import.meta.url));
 const mode = process.argv[2], titles = new Set();
@@ -185,24 +186,15 @@ try {
           const board = await js('var app = await cua.getApp("com.apple.Chess")', 'Chess acquisition');
           assert.match(text(board), /white pawn, e2/); assert.doesNotMatch(text(board), /white pawn, e4/);
           for (const m of text(board).matchAll(/^Window: "([^"]*)", App: Chess\.?$/gm)) titles.add(m[1]);
-          let points = JSON.parse(readFileSync(join(root, 'bench/reliability-chess-points.json'), 'utf8'));
+          const recorded = JSON.parse(readFileSync(join(root, 'bench/reliability-chess-points.json'), 'utf8'));
           const snapshot = JSON.parse(await command('/usr/bin/osascript', ['-l', 'JavaScript', join(root, 'bench/reliability-chess.js'), JSON.stringify({ op: 'snapshot' })]));
           const games = snapshot.windows.filter(w => w.bounds.Width > 400);
           games.forEach(w => titles.add(w.title)); assert.equal(games.length, 1);
-          if (process.argv.includes('--inspect-chess')) {
-            const windows = JSON.parse(await command('/usr/bin/osascript', ['-l', 'JavaScript', join(root, 'bench/drag-chess-fixture.js'), JSON.stringify({ op: 'windows' })]));
-            assert.equal(windows.length, 1);
-            const image = join(bank, 'chess.png'), plan = join(bank, 'chess-plan.json');
-            await command('/usr/sbin/screencapture', ['-x', '-l', String(windows[0].id), image]);
-            report.inspection = { image, plan, bounds: games[0].bounds, windowId: windows[0].id }; publish();
-            console.log(JSON.stringify({ inspection: report.inspection }));
-            const deadline = Date.now() + 120000;
-            while (!existsSync(plan)) { ready(); assert.ok(Date.now() < deadline, 'Screenshot inspection deadline; no move sent'); await new Promise(resolve => setTimeout(resolve, 200)); }
-            points = JSON.parse(readFileSync(plan, 'utf8'));
-            const fresh = JSON.parse(await command('/usr/bin/osascript', ['-l', 'JavaScript', join(root, 'bench/drag-chess-fixture.js'), JSON.stringify({ op: 'windows' })]));
-            assert.deepEqual(fresh, windows, 'Board changed during inspection');
-          }
-          assert.deepEqual(games[0].bounds, points.bounds);
+          const windows = JSON.parse(await command('/usr/bin/osascript', ['-l', 'JavaScript', join(root, 'bench/drag-chess-fixture.js'), JSON.stringify({ op: 'windows' })]));
+          assert.equal(windows.length, 1);
+          const geometry = JSON.parse(await command('/usr/bin/osascript', ['-l', 'JavaScript', join(root, 'bench/drag-chess-fixture.js'), JSON.stringify({ op: 'geometry', windowId: windows[0].id })]));
+          const points = chessMovePoints({ bounds: games[0].bounds, squares: geometry.squares, recorded });
+          trial.movePoints = points;
           const moved = await js(`await app.drag(${JSON.stringify(points.from)}, ${JSON.stringify(points.to)}); await app.getAXState({disableDiffing:true})`, 'Chess one e2-e4 move');
           assert.match(text(moved), /white pawn, e4/); assert.doesNotMatch(text(moved), /white pawn, e2/);
         }
