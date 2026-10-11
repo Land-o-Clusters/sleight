@@ -91,10 +91,25 @@ function freshTextEdit() {
   // Claude can type into or save a document that was already open: in h2h-2 (2026-10-10) a Save
   // sheet on a leftover iCloud "Untitled 9" moved it into the task's folder. So a TextEdit task
   // doesn't start next to documents this pass didn't open, and the benchmark never closes them.
-  const foreign = (textEditDocs() ?? []).filter(d => !isBenchDoc(d)).length;
+  const open = textEditDocs() ?? [];
+  const foreign = open.filter(d => !isBenchDoc(d)).length;
   if (foreign) throw new Error(`TextEdit has ${foreign} document${foreign === 1 ? '' : 's'} this pass didn't open. Claude could type into or save ${foreign === 1 ? 'it' : 'them'}, so TextEdit tasks don't start until ${foreign === 1 ? 'it is' : 'they are'} closed.`);
   closeBenchTextEdit({ quit: true });
+  // With TextEdit closed the check above sees nothing, and the engine's launch for Claude then
+  // restored the windows TextEdit last had: leftover iCloud "Untitled 6" and "Untitled 9", which
+  // Claude edited and saved instead of the task's file (h2h, 2026-10-10 23:26). One launch that
+  // ignores saved state, then a quit, leaves TextEdit with no windows to restore.
+  if (!open.length && !textEditStateCleared) {
+    textEditStateCleared = true;
+    try { execFileSync('open', ['-g', '-a', 'TextEdit', '--args', '-ApplePersistenceIgnoreState', 'YES'], { timeout: 15000, stdio: 'ignore' }); } catch {}
+    for (let attempt = 0; attempt < 5; attempt++) {
+      execFileSync('sleep', ['2']);
+      try { execFileSync('osascript', ['-e', 'tell application "TextEdit" to quit saving no'], { timeout: 15000, stdio: 'ignore' }); } catch {}
+      if (waitTextEditGone()) break;
+    }
+  }
 }
+let textEditStateCleared = false;
 
 // Quits Chess without leaving its windows behind. Chess restores the windows
 // it had when it last quit, and a force quit keeps them, so killed runs piled up
@@ -140,7 +155,7 @@ export const REAL_APPS = ['Safari', 'com.apple.Safari', 'Preview', 'com.apple.Pr
   'Microsoft Word', 'Word', 'com.microsoft.Word', 'Microsoft Excel', 'Excel', 'com.microsoft.Excel',
   'Microsoft PowerPoint', 'PowerPoint', 'com.microsoft.Powerpoint', 'Mail', 'com.apple.mail', 'Mimestream', 'com.mimestream.Mimestream',
   // VS Code, Cursor, Firefox, Slack, Discord and WhatsApp (owner, 2026-10-10, chat apps open and read only).
-  'Visual Studio Code', 'VS Code', 'com.microsoft.VSCode', 'Cursor', 'com.todesktop.230313mzl4w4u92',
+  'Visual Studio Code', 'VS Code', 'Code', 'com.microsoft.VSCode', 'Cursor', 'com.todesktop.230313mzl4w4u92',
   'Firefox', 'org.mozilla.firefox', 'Slack', 'com.tinyspeck.slackmacgap', 'Discord', 'com.hnc.Discord',
   'WhatsApp', 'net.whatsapp.WhatsApp'];
 

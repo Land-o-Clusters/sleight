@@ -178,6 +178,7 @@ try {
           const saved = await js(`await app.pressKey("super+shift+g"); await app.typeText(${JSON.stringify(bank)}); await app.pressKey("Return"); await app.waitFor({ id: "saveAsNameTextField" }); await app.setValue({ id: "saveAsNameTextField" }, "wait-save.txt"); await app.pressKey("Return")`, 'TextEdit save');
           assert.match(text(saved), /wait-save\.txt/); trial.savedBytes = readFileSync(destination, 'utf8');
           assert.match(trial.savedBytes, /Sleight wait save proof\./);
+          docId = 'wait-save.txt'; // The fixture finds documents by name, and the save renamed it.
         } else {
           // Existing games are left alone. A launched Chess starts with its own new game.
           if (wasRunning) throw new Error('Chess already running; no existing game modified');

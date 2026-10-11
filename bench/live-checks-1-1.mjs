@@ -220,9 +220,19 @@ async function statusApproval(params, fallback) {
   return { action: 'decline' };
 }
 
-async function connect(traces) {
+async function connect(traces, { launcher = false } = {}) {
   const { resolveServer } = await import('../plugins/sleight/lib/launch.mjs');
   const { probeClient, benchmarkApproval } = await import('./double-keys-client.mjs');
+  // menu_bar is one of sleight's local tools, which only the launcher registers: through a bare
+  // relay the call failed with "unknown tool: menu_bar" (2026-10-10).
+  if (launcher) {
+    return probeClient({ command: new URL('../plugins/sleight/bin/sleight-mcp', import.meta.url).pathname, args: [],
+      env: { SLEIGHT_SURFACES: 'computer', SLEIGHT_APPROVAL_PROMPT: 'client' } }, {
+      relay: false, timeoutMs: 120000,
+      approve: params => statusApproval(params, benchmarkApproval),
+      record: event => { if (event.direction) traces.push(event.direction); },
+    });
+  }
   const server = resolveServer({ ...process.env, SLEIGHT_SURFACES: 'computer' });
   if (server.error) throw new Error(server.error);
   return probeClient(server, {
@@ -293,7 +303,7 @@ async function runDriving(check) {
   try {
     unlock = await acquireLiveLock();
     if (existsSync('/tmp/sleight-hold')) throw new Error('sleight-hold exists; live work stopped');
-    client = await connect(traces);
+    client = await connect(traces, { launcher: check === 'menu-bar' });
     if (check === 'stale-number') await runStaleNumber(client, report, traces);
     else await runMenuBar(client, report, state);
   } catch (error) {
