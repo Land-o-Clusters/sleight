@@ -46,7 +46,8 @@ Open, in order of user impact (full list in [known-problems.md](../known-problem
 - Live checks for the unit-tested 1.1.0 changes: `bench/live-checks-1-1.mjs` (`5690bf2`) runs the
   stale-number remap and `menu_bar`. The helper resend and the keyboard-tap notice skip, since
   forcing them would mean killing OpenAI's helper or installing a tap.
-- Smaller ones: a moved word in rich text should keep the formatting it had, `/sleight stop` in the
+- Smaller ones: a moved word in rich text should keep the formatting it had (blocked 2026-10-11: macOS
+  disables Paste in a TextEdit that has never been frontmost; the opt-in stays off), `/sleight stop` in the
   desktop app, TextEdit's orphan Save Panel diagnosis, a live `menu_bar` check, and desktop sessions
   that stay busy. Done 2026-10-10: the doctor's per-app read (`83188cf`, `ac9f0d2`), per-site flow
   rules (`83188cf`), localized Settings titles in `blocked_app` and the clipboard helper (`05903fa`).

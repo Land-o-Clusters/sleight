@@ -35,8 +35,8 @@ sim-readiness (`37e2d8e`) and speed-research (`68cdc78`). speed-research found t
 (51.8 s against 42.8 s) was 8.6 s from the two failed textedit-save runs; the seven runs both arms
 passed differ by 0.4 s. So the gate may be met once textedit-save passes. Its proposed
 `SLEIGHT_GUARD=batch` (skip before-click reads for unique IDs) would save about 1 s a pass and goes
-against a LAWS read, so it isn't built. Out: GLM's selectall-check, richmove-paste, sim-scale-note;
-Grok's iphone-settle. Codex keeps lease-select and, on the owner's word, the lease broker and the
+against a LAWS read, so it isn't built. Merged since: iphone-settle (`6f5f1b9`, owner-present check pending) and richmove-paste
+(`323183d`). Out: GLM's selectall-check and sim-scale-note. Codex keeps lease-select and, on the owner's word, the lease broker and the
 unsaved-changes review (ROADMAP 6). saveclose-research found the next speed lever for speed-research.
 Claude spends two or three calls inside the Save sheet, 6 to 9 s a run
 (`docs/design/save-then-close-2026-10-11.md`).
@@ -59,9 +59,8 @@ Next, in order:
    pass's saved rows, `stale-number` and `menu-bar` (live-checks-1-1), the shop smoke outcomes,
    textedit-save with traces, Best Buy, select-all, simulator-form, the chat tasks, and the save-lock
    experiment (`node bench/textedit-save-lock.mjs --delivery-check`, then the full run; finishing its
-   Open panel can bring TextEdit forward). The rich-text move
-   (`SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background`) waits for
-   richmove-paste.
+   Open panel can bring TextEdit forward). The opt-in rich-text move is off the list: richmove-paste (`323183d`) found
+   macOS disables Paste in a TextEdit that has never been frontmost, so it stays opt-in and off.
 3. Act on speed-research to close the gate, then the full release pass and the release (ROADMAP 5b).
 4. Confirm the bench arms' own config folder with one cluster once OpenUsage reads fresh (below).
 
