@@ -28,15 +28,27 @@ function runningBundle(target) {
   return value == null ? '' : String(value);
 }
 
+function runningPid(target) {
+  var raw = target && target.processIdentifier;
+  if (raw == null) return -1;
+  if (raw.isNil && raw.isNil()) return -1;
+  var value = typeof raw === 'number' ? raw : Number(ObjC.unwrap(raw));
+  if (typeof value !== 'number' || value !== value) return -1;
+  return value;
+}
+
 function inheritReadyCondition(target, app, api, control) {
-  var finished = !!(target && target.isFinishedLaunching);
+  if (!target) return null;
+  // DeviceHub after open -g can run for tens of seconds with isFinishedLaunching
+  // still false (2026-10-11: 34 s, one unchanged pid). A booted simulator plus
+  // this live viewer process is the readiness the task can actually observe.
+  if (control && control.simulatorBooted === true) return 'simulator-booted';
+  var finished = !!target.isFinishedLaunching;
   var focused = !!(api.focused && api.focused(app));
   var hasWindow = !!(api.mainWindow && api.mainWindow(app));
   if (!hasWindow && api.windowCount) hasWindow = api.windowCount(app) > 0;
   if (finished && focused) return 'focused-window';
   if (finished && hasWindow) return 'window';
-  // A booted simulator says nothing about the viewer, so the viewer must have finished launching.
-  if (finished && control && control.simulatorBooted === true) return 'simulator-booted';
   return null;
 }
 
@@ -44,7 +56,11 @@ function quitFixtureApplication(pid, bundle, application, clock) {
   var started = clock.now(), accepted = false, finishedLaunching;
   pid = Number(pid);
   function identity(target) {
-    var actualPid = Number(target.processIdentifier), actualBundle = runningBundle(target);
+    var actualPid = runningPid(target), actualBundle = runningBundle(target);
+    // AppKit reports -1 once a looked-up process is exiting or the property is
+    // stale. The lookup was by the launched pid, so keep that identity when the
+    // bundle still matches (2026-10-11: pid -1 vs 89311, DeviceHub still up).
+    if (actualPid === -1) actualPid = pid;
     finishedLaunching = !!target.isFinishedLaunching;
     // An empty identifier counts only when the process runs from the expected app's own bundle:
     // a reused PID belongs to some other program, which cleanup must never quit.
@@ -550,7 +566,7 @@ function run(argv) {
     // During a launch handoff the original and its successor can both be listed for a moment:
     // keep the original until it exits rather than failing setup.
     if (Number(matches.count) === 2 && state.setup && pid && !running && controlData().launched === true) {
-      for (var i = 0; i < 2; i++) if (Number(matches.objectAtIndex(i).processIdentifier) === pid) return matches.objectAtIndex(i);
+      for (var i = 0; i < 2; i++) if (runningPid(matches.objectAtIndex(i)) === pid) return matches.objectAtIndex(i);
     }
     if (Number(matches.count) > 1) throw new Error('Ambiguous fixture process');
     return Number(matches.count) === 1 ? matches.objectAtIndex(0) : null;
@@ -562,8 +578,8 @@ function run(argv) {
   var target, running, pid, app, previous, owned, observedDialogs = [];
   var pids = [], processHandoff, handoffPending = false, launchStarted = clock.now();
   function recordProcess(value) {
-    var nextPid = Number(value.processIdentifier);
-    if (pid === nextPid) return;
+    var nextPid = runningPid(value);
+    if (!(nextPid > 0) || pid === nextPid) return;
     if (pid) {
       if (!state.setup || running || controlData().launched !== true || processHandoff || owned || state.actionTaken ||
         String(ObjC.unwrap(value.bundleIdentifier)) !== request.bundle) throw new Error('Fixture process changed');
@@ -660,7 +676,13 @@ function run(argv) {
     $.AXUIElementSetMessagingTimeout(app, 0.5);
     checkAppDialog();
     if (inherited) {
-      var condition = inheritReadyCondition(target, app, api, controlData());
+      var control = controlData();
+      var condition = inheritReadyCondition(target, app, api, control);
+      if (attempt === 0 || attempt === 199) emit({ stage: 'readiness', readiness: {
+        finished: !!target.isFinishedLaunching,
+        simulatorBooted: !!(control && control.simulatorBooted === true),
+        pid: pid, inheritReady: condition || null,
+      } });
       if (condition) { state.inheritReady = condition; return true; }
       return false;
     }
@@ -680,7 +702,8 @@ function run(argv) {
   } else {
     for (var attempt = 0; attempt < 200; attempt++) {
       if (probeReadiness(attempt)) { applicationReady = true; break; }
-      api.wait();
+      if (inherited && target) waitForLaunch();
+      else api.wait();
     }
   }
   if (!applicationReady) throw new Error('Fixture application readiness unconfirmed');
@@ -701,7 +724,7 @@ function run(argv) {
   beginCleanup(state);
   checkAppDialog();
   target = application();
-  if (target && Number(target.processIdentifier) !== pid) throw new Error('Fixture process changed before cleanup');
+  if (target && runningPid(target) !== pid && runningPid(target) !== -1) throw new Error('Fixture process changed before cleanup');
   if (target && !inherited) closeOwnedWindow(owned, request, app, api);
   emit({ stage: 'closed' });
   } catch (error) {

@@ -961,6 +961,36 @@ test('native quit uses the pid the setup recorded even when it arrives as a stri
     { now: () => 0, wait: () => {}, emit() {} }), true);
 });
 
+test('native quit treats an AppKit processIdentifier of -1 as the launched pid when the bundle matches', () => {
+  const { quitFixtureApplication } = nativeSource();
+  let gone = false;
+  const app = { processIdentifier: -1, bundleIdentifier: 'com.apple.dt.Devices',
+    get terminate() { gone = true; return true; } };
+  assert.equal(quitFixtureApplication(89311, 'com.apple.dt.Devices', () => gone ? null : app,
+    { now: () => 0, wait: () => {}, emit() {} }), true);
+  assert.equal(gone, true);
+});
+
+test('a streamed pid of -1 does not replace the launched process id', async t => {
+  const { openFixture } = await import('../bench/real-fixture.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'real-pid-keep-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ctx = { dir };
+  await assert.rejects(openFixture(ctx, { app: 'DeviceHub', bundle: 'com.apple.dt.Devices', mode: 'inherit' }, {
+    launch: async beginLaunch => { beginLaunch(true); },
+    run: async (_command, args, options) => {
+      assert.notEqual(JSON.parse(args.at(-1)).mode, 'quit');
+      options.onStdout('{"stage":"armed","running":false,"pid":89311}\n');
+      await new Promise(resolve => setImmediate(resolve));
+      const stdout = '{"stage":"setup-failure","pid":-1,"cleanup":"unconfirmed"}\n';
+      options.onStdout(stdout);
+      return { exit: { code: 1 }, stdout, stderr: 'Fixture application readiness unconfirmed', groupClean: true };
+    },
+  }), /readiness unconfirmed/);
+  assert.equal(ctx.windowLeases[0].pid, 89311);
+  assert.equal(ctx.fixtureDiagnostics[0].pid, 89311);
+});
+
 test('normal quit waits for a cold app beyond five seconds and records the exact process outcome', () => {
   const { quitFixtureApplication } = nativeSource(), events = [];
   let time = 0, quits = 0;

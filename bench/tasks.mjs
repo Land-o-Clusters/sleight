@@ -169,7 +169,14 @@ const XCODE = '/Applications/Xcode.app/Contents/Developer';
 const SIM_APPS = [['DeviceHub', join(XCODE, '../Applications/DeviceHub.app')], ['Simulator', join(XCODE, 'Applications/Simulator.app')]];
 export function simctl(...args) {
   const env = existsSync(XCODE) ? { ...process.env, DEVELOPER_DIR: XCODE } : process.env;
-  return execFileSync('xcrun', ['simctl', ...args], { encoding: 'utf8', env, timeout: 180000 });
+  try {
+    const stdout = execFileSync('xcrun', ['simctl', ...args], { encoding: 'utf8', env, timeout: 180000 });
+    simctl.last = { args: [...args], stdout: stdout ?? '', stderr: '', status: 0 };
+    return stdout;
+  } catch (error) {
+    simctl.last = { args: [...args], stdout: error.stdout ?? '', stderr: error.stderr ?? '', status: error.status ?? error.code ?? 1 };
+    throw error;
+  }
 }
 
 // Quits the app showing the simulator, leaving the simulator booted. Left open after a
@@ -190,28 +197,59 @@ export function quitSimApp({ ownedOnly = false, lease } = {}) {
 
 // A booted iPhone simulator with the app showing it open behind the other
 // windows. Boots the first available iPhone when none is running.
-export function bootedIPhone({ trackOwnership = false, beforeViewerLaunch } = {}) {
+export function bootedIPhone({ trackOwnership = false, beforeViewerLaunch, record } = {}) {
+  const steps = [];
   const devices = Object.values(JSON.parse(simctl('list', 'devices', 'available', '--json')).devices).flat()
     .filter(d => d.name.startsWith('iPhone'));
   if (!devices.length) {
     throw new Error('no iPhone simulator: install an iOS runtime (xcodebuild -downloadPlatform iOS) first');
   }
   const device = devices.find(d => d.state === 'Booted') ?? devices[0];
-  const bootedByTask = device.state !== 'Booted';
-  if (device.state !== 'Booted') simctl('boot', device.udid);
-  simctl('bootstatus', device.udid, '-b');
   const [app, path] = SIM_APPS.find(([, path]) => existsSync(path)) ?? ['Simulator'];
+  let viewerPid = null;
+  const note = (step, extra = {}) => {
+    const entry = {
+      at: new Date().toISOString(), step, deviceState: device.state, viewerPid,
+      stderr: simctl.last && typeof simctl.last.stderr === 'string' ? simctl.last.stderr : '',
+      ...extra,
+    };
+    steps.push(entry);
+    record?.(entry);
+  };
+  const viewerProcessId = () => {
+    try {
+      const value = Number(String(execFileSync('/usr/bin/pgrep', ['-x', app], { encoding: 'utf8' })).trim().split(/\s+/)[0]);
+      return value > 0 ? value : null;
+    } catch { return null; }
+  };
+  note('list');
+  const bootedByTask = device.state !== 'Booted';
+  if (device.state !== 'Booted') {
+    simctl('boot', device.udid);
+    note('boot');
+  }
+  simctl('bootstatus', device.udid, '-b');
+  device.state = 'Booted';
+  note('bootstatus');
   let viewerLaunchedByTask = false;
   if (trackOwnership) {
     try { execFileSync('/usr/bin/pgrep', ['-x', app], { stdio: 'ignore' }); }
     catch (error) {
-      if (error.status !== 1 || error.signal) throw new Error('Simulator viewer ownership unconfirmed', { cause: error });
+      if (error.status !== 1 || error.signal) {
+        note('viewer-probe', { stderr: error.stderr ?? String(error.message || error) });
+        throw new Error('Simulator viewer ownership unconfirmed', { cause: error });
+      }
       viewerLaunchedByTask = true;
     }
   }
+  viewerPid = viewerProcessId();
+  note('viewer-probe');
   beforeViewerLaunch?.(viewerLaunchedByTask);
   execFileSync('open', ['-g', ...(path ? [path] : ['-a', app])]);
-  return { udid: device.udid, name: device.name, app, ...(trackOwnership ? { bootedByTask, viewerLaunchedByTask } : {}) };
+  viewerPid = viewerProcessId();
+  note('open-viewer');
+  return { udid: device.udid, name: device.name, app, state: device.state, viewerPid, setupSteps: steps,
+    ...(trackOwnership ? { bootedByTask, viewerLaunchedByTask } : {}) };
 }
 
 // A one-field form on 127.0.0.1, which the simulator reaches through the
@@ -335,10 +373,20 @@ export const tasks = [
       await acquireFixture(ctx, 'simViewer', () => openFixture(ctx, { app: modern ? 'DeviceHub' : 'Simulator',
         bundle: modern ? 'com.apple.dt.Devices' : 'com.apple.iphonesimulator', target: '', mode: 'inherit' }, {
         launch: async beginLaunch => {
-          await acquireFixture(ctx, 'sim', () => bootedIPhone({ trackOwnership: true, beforeViewerLaunch: beginLaunch }));
+          const diagnostic = ctx.fixtureDiagnostics?.[0];
+          const record = step => { if (diagnostic) (diagnostic.setupSteps ??= []).push(step); };
+          await acquireFixture(ctx, 'sim', () => bootedIPhone({ trackOwnership: true, beforeViewerLaunch: beginLaunch, record }));
           beginLaunch.simulatorBooted = true;
           await prepareSimulatorForm(ctx);
-          simctl('openurl', ctx.sim.udid, ctx.url);
+          try {
+            simctl('openurl', ctx.sim.udid, ctx.url);
+            record({ at: new Date().toISOString(), step: 'openurl', deviceState: ctx.sim.state,
+              viewerPid: ctx.sim.viewerPid ?? null, stderr: simctl.last?.stderr ?? '' });
+          } catch (error) {
+            record({ at: new Date().toISOString(), step: 'openurl', deviceState: ctx.sim?.state,
+              viewerPid: ctx.sim?.viewerPid ?? null, stderr: error.stderr ?? simctl.last?.stderr ?? '' });
+            throw error;
+          }
           ctx.simPageOpened = true;
         },
       }));

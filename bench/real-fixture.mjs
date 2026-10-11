@@ -112,7 +112,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
         const line = buffer.slice(0, index); buffer = buffer.slice(index + 1);
         let event; try { event = JSON.parse(line); } catch { continue; }
         if (typeof event.running === 'boolean') { lease.running = event.running; diagnostics.running = event.running; }
-        if (event.pid) { lease.pid = event.pid; diagnostics.pid = event.pid; }
+        if (event.pid > 0) { lease.pid = event.pid; diagnostics.pid = event.pid; }
         if (event.bundle) { lease.bundle = event.bundle; diagnostics.observedBundle = event.bundle; }
         if (event.pids) { lease.pids = event.pids; diagnostics.pids = event.pids; }
         if (event.processHandoff) diagnostics.processHandoff = event.processHandoff;

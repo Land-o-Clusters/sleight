@@ -236,9 +236,16 @@ test('inherit readiness records a focused window when that is what DeviceHub rep
   assert.equal(fixture.events.find(event => event.stage === 'ready').inheritReady, 'focused-window');
 });
 
-test('a booted simulator is not readiness while the viewer is still launching', () => {
+test('a booted simulator is not readiness while the viewer process is absent', () => {
   const fixture = inheritReadyFixture({ finished: false, simulatorBooted: true });
-  assert.equal(fixture.inheritReady({ isFinishedLaunching: false }, {}, { focused: () => null }, { simulatorBooted: true }), null);
+  assert.equal(fixture.inheritReady(null, {}, { focused: () => null }, { simulatorBooted: true }), null);
+});
+
+test('inherit readiness accepts a booted simulator once DeviceHub has a process, even if launching is unfinished', () => {
+  const fixture = inheritReadyFixture({ finished: false, simulatorBooted: true });
+  fixture.run();
+  assert.equal(fixture.events.find(event => event.stage === 'ready').inheritReady, 'simulator-booted');
+  assert.equal(fixture.events.find(event => event.stage === 'ready').pid, 73541);
 });
 
 test('inherit readiness accepts simctl boot state when DeviceHub has no window', () => {
@@ -251,4 +258,49 @@ test('inherit readiness stays unconfirmed without a window or simulator boot', (
   const fixture = inheritReadyFixture({ finished: true });
   assert.throws(fixture.run, /readiness unconfirmed/);
   assert.equal(fixture.events.some(event => event.stage === 'ready'), false);
+});
+
+test('inherit readiness pumps the run loop so a late isFinishedLaunching becomes ready', () => {
+  const events = [];
+  let time = 0, ready = false, pumped = false;
+  const target = { processIdentifier: 73541, bundleIdentifier: bundle, get isFinishedLaunching() { return pumped; } };
+  const sandbox = { ObjC: { import() {}, unwrap: value => value } };
+  runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), sandbox);
+  const foundation = value => ({ dataUsingEncoding: () => value });
+  foundation.AXIsProcessTrusted = () => true;
+  foundation.NSRunningApplication = {
+    runningApplicationsWithBundleIdentifier: () => ({ count: 1, objectAtIndex: () => target }),
+    runningApplicationWithProcessIdentifier: () => ({ isNil: () => true, isTerminated: true }),
+  };
+  foundation.AXUIElementCreateApplication = () => ({});
+  foundation.AXUIElementSetMessagingTimeout = () => {};
+  foundation.NSFileHandle = { fileHandleWithStandardOutput: { writeData: line => {
+    const event = JSON.parse(line); events.push(event); if (event.stage === 'ready') ready = true;
+  } } };
+  foundation.NSData = { dataWithContentsOfFile: () => ({ isNil: () => false }) };
+  foundation.NSString = { alloc: { initWithDataEncoding: () => JSON.stringify({
+    command: ready ? 'close' : 'opened', launched: true,
+  }) } };
+  sandbox.$ = foundation;
+  sandbox.Date = { now: () => time };
+  sandbox.waitForLaunch = seconds => { pumped = true; time += Math.round((seconds ?? 0.1) * 1000); };
+  sandbox.nativeAX = () => ({
+    focused: () => pumped ? { role: 'AXWindow' } : null,
+    mainWindow: () => null, windowCount: () => 0,
+    dialog: () => [], readiness: () => ({}),
+    wait: () => { time += 100; },
+  });
+  sandbox.run([JSON.stringify({ app: 'DeviceHub', bundle, mode: 'inherit', control: 'fake', startedAtMs: 0 })]);
+  assert.equal(events.find(event => event.stage === 'ready').inheritReady, 'focused-window');
+});
+
+test('failed inherit readiness records finished, boot flag and viewer pid on the first and last probe', () => {
+  const fixture = inheritReadyFixture({ finished: false });
+  assert.throws(fixture.run, /readiness unconfirmed/);
+  const probes = fixture.events.filter(event => event.stage === 'readiness');
+  assert.equal(probes.length, 2);
+  assert.deepEqual(probes.map(event => event.readiness), [
+    { finished: false, simulatorBooted: false, pid: 73541, inheritReady: null },
+    { finished: false, simulatorBooted: false, pid: 73541, inheritReady: null },
+  ]);
 });
