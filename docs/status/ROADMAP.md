@@ -28,7 +28,11 @@ Open, in order of user impact (full list in [known-problems.md](../known-problem
 - Full screen and Split View failed 8 of 21 runs. Detection is built (unreleased, after 1.1.0): an
   app read says so. Left: a pass in real Split View with the Claude app, at release.
 - In the simulator, Claude's first tap on a Safari field often doesn't focus it (6 of 6 runs with shrunk
-  screenshots), and Claude second-guesses the screenshot's scale there.
+  screenshots), and Claude second-guesses the screenshot's scale there. Lane sim-scale-note (2026-10-11).
+- iPhone Mirroring: scroll didn't move the Settings list, and taps during page animations hit the row
+  below (2026-10-11). Lane iphone-settle.
+- Keys after a click in their own call: dropped (2026-10-11). The merged-calls study found 18 safe
+  pairs before the batching rewrite and 2 after.
 - `typeText` after select-all wrote `Engine01engine01`. The skill now says to paste and compare
   (`05903fa`, 6/6 on the TextEdit tasks). Likely cause (2026-10-10, inferred from tree sizes, not
   confirmed): a pending TextEdit capitalization suggestion took Cmd+A, so nothing was selected. The
@@ -170,7 +174,7 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
    ([raw](../benchmarks/2026-10-10-h2h-lcu-0.11.2.json), recorded in `1a60395`, arm setup
    `29b6de3`). LCU's failure was textedit-save run 1, where the file wasn't saved; its run 2 took
    136.3 s and 27 turns.
-6. Anthropic's directory listing (owner, 2026-10-10). Submission is at claude.ai/directory/manage
+6. Parked (owner, 2026-10-11). Anthropic's directory listing (owner, 2026-10-10). Submission is at claude.ai/directory/manage
    from the public repo. The plugin folder passes the mechanical checks (50 files, the largest 142
    KB, an MIT license field). Unknown: how review treats the ChatGPT engine dependency, and whether
    the mod's self-approval of its own pane snapshot reads as changing Claude's permissions. A
@@ -210,9 +214,9 @@ build what nobody has. Sources are `.dev/research/2026-10-04-competitors.md` and
   Chess and Safari-form with the owner away (`docs/benchmarks/2026-10-10-away.md`). A save named
   through Go to Folder and the panel's name field now reads as that file (`71c45ff`).
 - Done 2026-10-10 (`6ca6639`): sleight runs from Cursor or any MCP client, with Claude first in the docs.
-- One lease and consent broker shared by Claude, Codex and other runtimes (without leases, two
+- Next for Codex when its quota resets (owner, 2026-10-11): one lease and consent broker shared by Claude, Codex and other runtimes (without leases, two
   sessions typing into one document doubled the text 5/5).
-- Review unsaved changes and app state, not only saved files.
+- Next for Codex too (owner, 2026-10-11): review unsaved changes and app state, not only saved files.
 - Shelved (owner, 2026-10-10): scoped approvals (separate read and control grants, expiry, and a
   required confirm for anything irreversible). The design (`docs/design/scoped-approvals.md`)
   found a guard in Claude's JavaScript can't guarantee the confirm, and a TextEdit save would need 3
@@ -223,7 +227,7 @@ build what nobody has. Sources are `.dev/research/2026-10-04-competitors.md` and
 - Stop that confirms the Mac stopped, element waits and exact window targeting for untitled windows
   merged 2026-10-10 (`6291251`), with their live checks before release. Recording a task from the
   user's demonstration merged with routines (`da78144`). Its live check is open.
-- Windows (owner's idea, 2026-10-09). Codex computer use reached Windows on 2026-05-29, foreground
+- Parked (owner, 2026-10-11). Windows (owner's idea, 2026-10-09). Codex computer use reached Windows on 2026-05-29, foreground
   only. The relay, guards, mod and benchmark could carry over. `drag.js`, `menu_bar`,
   `notifications`, `blocked_app`, the keyboard-tap check and the launchd watch are macOS-only
   (`docs/design/windows.md`). Research on 2026-10-10 didn't find a public report of it working on ARM64,

@@ -201,8 +201,14 @@ const auth = !preparationErrors.length && armNames.some(name => !ARMS[name].code
   ? benchAuth({ mode: option('auth', 'auto'), capUsd: Number(process.env.SLEIGHT_BENCH_API_CAP_USD || DEFAULT_CAP_USD) })
   : { mode: 'login', env: {}, unset: [] };
 if (auth.mode === 'api') console.log(`Claude arms run on the API key: $${auth.spent.toFixed(2)} of the $${auth.capUsd} monthly cap spent.`);
+// A pass started from a Claude session inherits that session's identity: CLAUDE_CODE_ENTRYPOINT,
+// the account's IDs and email, and the desktop app's messaging socket. Arms carried all of it, so
+// the API grant billed them as the desktop app's Claude Code and refused them, while the same key
+// paid for claude -p from a clean environment (2026-10-11). Arms start from the host env without it.
+const HOST_SESSION = /^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_AGENT_SDK_|CLAUDE_PID$|CLAUDE_EFFORT$|CLAUDE_PREVIEW_)/;
+const hostFree = Object.fromEntries(Object.entries(process.env).filter(([key]) => !HOST_SESSION.test(key)));
 const armEnv = (arm, extra = {}) => {
-  const env = { ...process.env, BENCH_ROOT: ROOT, SLEIGHT_APPROVAL_PROMPT: 'client',
+  const env = { ...hostFree, BENCH_ROOT: ROOT, SLEIGHT_APPROVAL_PROMPT: 'client',
     ...arm.env, ...extra, BENCH_SUITE: suite, ENABLE_CLAUDEAI_MCP_SERVERS: 'false', ...auth.env,
     ...(ownerPresent ? { BENCH_OWNER_PRESENT: '1' } : {}),
     ...(suite === 'real' ? { SLEIGHT_SURFACES: realSurfaces } : {}) };

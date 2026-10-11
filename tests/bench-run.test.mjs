@@ -645,3 +645,19 @@ test('iPhone Mirroring published rows keep the answer and timings and omit scree
   assert.equal(row.screenshot, undefined);
   assert.ok(result.envs.every(env => !env.SLEIGHT_TRACE));
 });
+
+test('arms never inherit the host Claude session that started the pass', async () => {
+  // Started from a desktop session, every arm carried CLAUDE_CODE_ENTRYPOINT=claude-desktop, the
+  // account's IDs and the desktop app's messaging socket. The API grant then refused the arms as
+  // Claude Code traffic; with a clean environment the same key paid for claude -p (2026-10-11).
+  const host = { CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'claude-desktop', CLAUDE_CODE_MESSAGING_TOKEN: 'secret',
+    CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH: '1', CLAUDE_CODE_USER_EMAIL: 'owner@example.com', CLAUDE_AGENT_SDK_VERSION: '0.3.295',
+    CLAUDE_PID: '1', CLAUDE_EFFORT: 'high', CLAUDE_PREVIEW_CLASSIFIER_FLOOR: '1', PATH: '/usr/bin' };
+  const result = await runner({ suite: 'default', base: host, auth: apiAuth });
+  assert.ok(result.envs.length);
+  for (const env of result.envs) {
+    assert.deepEqual(Object.keys(env).filter(key => /^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_AGENT_SDK_|CLAUDE_PID|CLAUDE_EFFORT|CLAUDE_PREVIEW_)/.test(key)), []);
+    assert.equal(env.PATH, '/usr/bin');
+    assert.equal(env.ANTHROPIC_API_KEY, 'sk-ant-test');
+  }
+});

@@ -72,23 +72,18 @@ Owner at the Mac, 2026-10-11 02:15 to 02:25 UTC:
 - The iCloud `Untitled 10.txt` (contents `sleight bench 276874eb`) is in the Trash, on the owner's OK.
 
 **Waiting on the owner:**
-- Bench auth (owner, 2026-10-11 02:10 UTC): live runs use the owner's login (`--auth login`) until
-  they decide. The key's $200 is a promotional grant (the "API credit (Max 20x)", $199.73 left,
-  expires 2026-11-08) that covers "Agent SDK, API, Batch API, Playground, Managed Agents". Direct
-  Messages API calls on the key work (Haiku and Sonnet, 2026-10-11). Anything sent through the
-  `claude` binary gets "Credit balance is too low": `claude -p` and the Agent SDK 0.3.296 alike. Bench
-  runs on the key passed until 00:43 UTC and fail from about 01:00 at $0 (inferred: billing began
-  counting that traffic as Claude Code). Owner's choice: buy a little credit, or stay on the login.
-  Faking the traffic's product or a bare-API arm are out (the latter isn't Claude Code plus sleight).
-  textedit-save on the login passed 3/3 (93.4, 40.2, 45.6 s, `bench/results/2026-10-11T02-00-43-494Z.json`).
-- Windows (ROADMAP track 6): on the 2020 Intel MacBook Pro, register for the Windows 11 Enterprise
-  evaluation, download it and VMware Fusion, install ChatGPT, turn on OpenSSH. Then sleight-arch
-  runs the spike over SSH.
-- The directory listing (ROADMAP 5b.6).
-- With the owner at the Mac, Mail and Mimestream, "Always allow" once (unreleased: the owner's
-  installed sleight is 1.1.0, `0b6a1c0`, which has no such button; rerun it after the release), a
-  live `sleight-mcp setup` in a
-  fresh macOS user, and Accessibility for the process that runs `menu_bar`'s osascript.
+- Bench auth, settled 2026-10-11 03:05 UTC: the $200 is the Max plan's monthly API credit, which
+  covers "Agent SDK, API, Batch API, Playground, Managed Agents". Arms started from a Claude desktop
+  session inherited its `CLAUDE_CODE_ENTRYPOINT=claude-desktop`, account IDs and messaging socket, so
+  billing counted them as the desktop's Claude Code and refused them ("Credit balance is too low").
+  From a clean environment the same key paid for the Agent SDK and `claude -p`. The runner now strips
+  the host session's `CLAUDE*` variables, and calculator-click passed 3/3 on the key
+  (`bench/results/2026-10-11T03-04-03-856Z.json`). Live runs are back on the key.
+- Parked by the owner (2026-10-11): the directory listing and the Windows spike. sleight-arch's calls
+  on the owner's "whatever you want": `menu_bar` stays at "needs Accessibility" (a macOS security
+  setting), and "Always allow" and a fresh-user `setup` run wait until after the release.
+- With the owner at the Mac, Mail and Mimestream. ("Always allow" needs the release: the owner's
+  installed sleight is 1.1.0, `0b6a1c0`, without that button.)
 - Whether to release if the gate (ROADMAP 3.5) isn't met.
 
 **Where work goes.** Work in progress is private between releases (LAWS): `remote.pushDefault
