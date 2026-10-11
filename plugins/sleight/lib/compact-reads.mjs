@@ -18,7 +18,8 @@
 import { GUARD_END, GUARD_MARK, documentKey, windowFromText, hasIdentifier, hasLabel } from './document-scope.mjs';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+import { statSync } from 'node:fs';
 
 export { GUARD_END, GUARD_MARK };
 const MAX_LINES = 3000; // above this, the line diff costs more than it saves
@@ -180,6 +181,10 @@ function saveFinishLine(after, before, failed, overlap) {
     JSON.stringify(id) + ' }, "<name>"); await app.pressKey("Return").';
 }
 const edited = title => /(?: — | - )Edited$/.test(title);
+// A file:// document's modification time, null when it has none or can't be read.
+function fileTime(url) {
+  try { return url?.startsWith('file://') ? statSync(fileURLToPath(url)).mtimeMs : null; } catch { return null; }
+}
 const withoutValue = line => line.replace(/(?:, )?Value: ?.*?(?=, (?:Secondary Actions|ID|Help|Description):|$)/, '')
   .replace(/, (?=(?:Secondary Actions|ID|Help|Description):)/g, ' ').replace(/ +/g, ' ').trimEnd();
 
@@ -219,6 +224,10 @@ function resultNote(action, after, failed) {
     const editedTitleCleared = sameDocument && edited(before.window.title) && !edited(after.window.title) &&
       before.window.title.replace(/(?: — | - )Edited$/, '') === after.window.title && before.window.url === after.window.url;
     const named = action.namedURL && action.namedURL === after?.window.url;
+    // TextEdit in the background shows no edited state, so every Cmd+S on an open file read "not
+    // confirmed" in 7 of 7 textedit-edit runs, and 4 of them spent a turn checking (2026-10-11). The
+    // relay is on the same Mac: the document's file changing during the call is the save.
+    const fileWritten = sameDocument && action.fileTime !== undefined && (fileTime(after.window.url) ?? -Infinity) > (action.fileTime ?? -Infinity);
     // The two ordinary steps of a Save panel get no saved field: the panel opening, and the panel
     // closing on a document with a file URL when the call named no path it could check. The header
     // shows both, and "not confirmed" there sent Claude to check again (h2h-3, 2026-10-10). A named
@@ -230,47 +239,13 @@ function resultNote(action, after, failed) {
     else saved = unavailable ? `not confirmed (${unavailable})` : !document ? 'not confirmed (no document save state change seen)'
       : !sameDocument && !named ? `not confirmed (${after.window.url ? 'different document' : 'document identity unavailable'})`
       : modifiedCleared || editedTitleCleared ? `observed ${JSON.stringify(after.window.url)} (modified state cleared; cause unknown)`
-      : named ? `observed ${JSON.stringify(after.window.url)} (named file URL)` : 'not confirmed (no document save state change seen)';
+      : named ? `observed ${JSON.stringify(after.window.url)} (named file URL)`
+      : fileWritten ? `observed ${JSON.stringify(after.window.url)} (its file on disk changed during this call)` : 'not confirmed (no document save state change seen)';
   }
   const fields = [failed ? 'call failed (partial input possible)' : ui, saved && 'saved: ' + saved].filter(Boolean);
   const finish = saveFinishLine(after, before, failed, action.overlap);
   if (!fields.length) return finish;
   return 'sleight: ' + fields.join('; ') + '.' + (finish ? '\n' + finish : '');
-}
-
-// A Save or Open panel's file browser lists every item of each folder it shows. In 4 of 8
-// textedit-save runs (2026-10-11) the Save sheet's tree ran 58,786 to 87,740 characters, 594 of
-// 1,230 lines being rows of the benchmark's temp folders, and Claude Code wrote the result to a file
-// that Claude then spent 2 to 5 calls filtering. Past FILE_LIST_KEEP rows in one list, the rest go
-// out as one line with their count. Selected rows always stay. Numbers on the lines kept don't change.
-const FILE_LIST_KEEP = 10;
-export function trimFileLists(text) {
-  if (typeof text !== 'string' || !text.includes('Open Finder item')) return text;
-  const lines = text.split('\n');
-  const depth = line => { const m = /^(?:[+-] )?(\t*)\d+ /.exec(line); return m ? m[1].length : -1; };
-  // The end of the block that starts at i: its line and every deeper line after it.
-  const blockEnd = i => { const d = depth(lines[i]); let j = i + 1; while (j < lines.length && depth(lines[j]) > d) j++; return j; };
-  // One file row is a few lines (container, icon, name; a list view row adds size, kind and date cells).
-  // A bigger block is a list or its parent, which is walked into instead.
-  const isFile = (i, j) => j - i <= 12 && lines.slice(i, j).some(line => line.includes('Open Finder item'));
-  const out = [];
-  let i = 0;
-  while (i < lines.length) {
-    const d = depth(lines[i]);
-    let j = d < 0 ? i + 1 : blockEnd(i);
-    if (d < 0 || !isFile(i, j)) { out.push(lines[i]); i++; continue; }
-    const run = [];
-    while (i < lines.length && depth(lines[i]) === d && isFile(i, j = blockEnd(i))) { run.push([i, j]); i = j; }
-    if (run.length <= FILE_LIST_KEEP) { for (const [a, b] of run) out.push(...lines.slice(a, b)); continue; }
-    let left = 0;
-    run.forEach(([a, b], n) => {
-      if (n < FILE_LIST_KEEP || lines.slice(a, b).some(line => /\((?:[^)]*, )?selected\b/.test(line))) out.push(...lines.slice(a, b));
-      else left++;
-    });
-    const lead = /^[+-] /.test(lines[run[0][0]]) ? lines[run[0][0]].slice(0, 2) : '';
-    out.push(`${lead}${'\t'.repeat(d)}sleight: ${left} more items in this list aren't shown. Go to Folder (super+shift+g) opens a folder by its path.`);
-  }
-  return out.join('\n');
 }
 
 // Whether text holds a full tree: a window header whose next lines aren't a diff of an earlier one.
@@ -298,7 +273,7 @@ export function dropAcquisitionTree(head, rest) {
   });
 }
 
-export function createReadCompactor({ trimLists = false } = {}) {
+export function createReadCompactor({ fileSaveCheck = false } = {}) {
   // window key -> { lines, valid }: the last full tree Claude got, and the
   // element numbers in it Claude knows are current (undefined: all of them).
   const seen = new Map();
@@ -427,10 +402,7 @@ export function createReadCompactor({ trimLists = false } = {}) {
       const out = content.map(item => {
         if (item?.type === 'text' && /sleight: an action in this call failed|engine's JavaScript session restarted/.test(item.text ?? '')) failed = true;
         if (item?.type !== 'text' || typeof item.text !== 'string' || !item.text.includes(GUARD_MARK)) {
-          if (item?.type === 'text' && typeof item.text === 'string') {
-            remember(item.text);
-            if (trimLists) return { ...item, text: trimFileLists(item.text) };
-          }
+          if (item?.type === 'text' && typeof item.text === 'string') remember(item.text);
           return item;
         }
         let out = '', seenText = '', pos = 0;
@@ -453,7 +425,7 @@ export function createReadCompactor({ trimLists = false } = {}) {
           if (end < 0) break;
           pos = end + GUARD_END.length;
         }
-        return { ...item, text: trimLists ? trimFileLists(out) : out };
+        return { ...item, text: out };
       });
       const note = action && resultNote(action, observedInResult, failed);
       if (note) out.push({ type: 'text', text: note });
@@ -462,6 +434,7 @@ export function createReadCompactor({ trimLists = false } = {}) {
     },
     beginAction(code) {
       const kind = actionKind(code, latest);
+      if (kind?.save && fileSaveCheck && latest?.window.url?.startsWith('file://')) kind.fileTime = fileTime(latest.window.url);
       return kind && { ...kind, before: latest };
     },
     // What Claude takes these element numbers to be in this window, from what it was last shown:

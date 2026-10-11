@@ -24,6 +24,17 @@ test('open_file opens an existing file with the app left in the background', asy
   assert.deepEqual(calls[1], ['/usr/bin/open', '-g', '-b', 'com.apple.TextEdit', file]);
 });
 
+test('under the sheet A/B, open_file names the getApp call to send next', async () => {
+  const { exec } = recorder();
+  const was = process.env.SLEIGHT_FIRST_CALL_BATCH;
+  process.env.SLEIGHT_FIRST_CALL_BATCH = 'sheet';
+  try {
+    const result = await openDocument({ app: 'TextEdit', path: file }, { exec, resolve });
+    assert.match(message(result), /Next, send `let app = await cua\.getApp\("com\.apple\.TextEdit"\)`/);
+    assert.doesNotMatch(message(result), /getAXState/);
+  } finally { if (was === undefined) delete process.env.SLEIGHT_FIRST_CALL_BATCH; else process.env.SLEIGHT_FIRST_CALL_BATCH = was; }
+});
+
 test('open_file refuses terminals by resolved ID, launchers, runnable files and bad paths before running open', async () => {
   const { calls, exec } = recorder();
   mkdirSync(join(dir, 'folder'));

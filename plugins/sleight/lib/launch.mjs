@@ -410,6 +410,9 @@ export async function openDocument(args, { exec = runOpen, resolve = resolveAppI
   }
   try { await exec('/usr/bin/open', ['-g', '-b', bundleId, path]); }
   catch (err) { return text(`macOS couldn't open ${raw} in ${app}: ${String(err.message || err).split('\n')[0]}`, true); }
+  // "Read the app with getAXState" sent Claude to cua.getAXState(), which doesn't exist, in 2 of 7
+  // textedit-edit runs (2026-10-11), a turn each. Under A/B (SLEIGHT_FIRST_CALL_BATCH=sheet).
+  if (process.env.SLEIGHT_FIRST_CALL_BATCH === 'sheet') return text(`Opened ${raw} in ${app} in the background. Next, send \`let app = await cua.getApp(${JSON.stringify(bundleId)})\`: it returns the app's windows, this file's among them.`);
   return text(`Opened ${raw} in ${app} in the background. Read the app with getAXState({ disableDiffing: true }) before acting: its windows changed.`);
 }
 
@@ -625,7 +628,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     takeNotices: takeRichTextNotices,
     simFocusNote: process.env.SLEIGHT_SIM_FOCUS_NOTE !== '0',
     resultTrim: process.env.SLEIGHT_RESULT_TRIM === '1',
-    firstCallBatch: process.env.SLEIGHT_FIRST_CALL_BATCH === 'merge' ? process.env.SLEIGHT_FIRST_CALL_BATCH : process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
+    firstCallBatch: ['merge', 'sheet'].includes(process.env.SLEIGHT_FIRST_CALL_BATCH) ? process.env.SLEIGHT_FIRST_CALL_BATCH : process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
     clientIn: replayClient.clientIn,
     clientOut: replayClient.clientOut,
     serverIn: child.stdin,
