@@ -13,7 +13,11 @@ they're away. Sol works track 4, and sleight-arch works tracks 2 and 3 while the
 1. Clean up what exists: lanes generic-drag and generic-mechanisms, from an audit that found about 15
    places where code depends on one app. Merged 2026-10-11. Live checks are listed in STATE.
 2. Slim the skill: `SKILL-slim.md` against the current skill and no skill, A/B running; textedit-save
-   in the away sitting.
+   in the away sitting. Then a pruning session (owner, 2026-10-11: the skill is fat, and the point is
+   super lightweight): the current skill is 137 lines and about 1,500 words, with app names in about
+   17 places, among them a TextEdit `setValue` rule and an iPhone Mirroring section. The slim one is
+   86 lines with none. Cut every line the A/Bs don't show saving turns or time, and treat the tool
+   descriptions and relay notices as part of the same budget.
 3. Run the parity battery on about 25 popular apps (approved, LAWS), side by side with Codex, with generic
    fixture and check kinds, window order recorded per run. Rules are mined on half the apps and
    proven on the other half. Lanes battery-harness and battery-report, merged 2026-10-11. The owner
