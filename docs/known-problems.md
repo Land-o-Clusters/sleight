@@ -961,6 +961,10 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   [Recorded failures](benchmarks/2026-10-11-textedit-fixes-1791679610865.json) and
   [review](benchmarks/2026-10-10-textedit-fixes-3.md) retain the earlier attempts.
   There is no rich-text preservation option in `drag` as of 2026-10-11.
+- On 2026-10-11 the engine's read of the owner's Helium (one process since 2026-10-10, about ten
+  windows) timed out twice with `-10005 timeoutReached`, 30 s and 60 s. The input lease needs that read
+  before `cua.getBrowser`. The extension's tabs couldn't be opened from that session. Whether the
+  window count causes it is unmeasured.
 - Driving Helium's Claude Console tab from a session that had used the engine (2026-10-11), the input
   lease refused `browser.nameSession(...)` and later `tab.goto(...)` on a tab from `cua.getTab` with
   the native "bundle ID and full window header" refusal, after `cua.getState()`.

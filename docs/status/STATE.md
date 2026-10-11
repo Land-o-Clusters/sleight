@@ -15,6 +15,8 @@ Chess, save-lock and select-all harnesses at their own setup. The battery and th
 tasks stopped on harness cleanup. Lanes web-cleanup, owned-abort and prune-budget
 (`.dev/prompts/`) are with the owner for Codex. Guest carts with test items are left in Safari on
 Target and Best Buy, and one benchmark Helium window on 127.0.0.1 is open, for the owner to close.
+Allowing 127.0.0.1 in the extension (owner's OK) didn't happen: the engine's read of Helium timed
+out twice, and the lease needs it first (known-problems). The owner sets it in the extension at the Mac.
 
 **Owner's OK, 13:54 UTC:** sleight-arch allows `127.0.0.1` in the Codex extension's site settings in Helium
 and Chrome, through the browsers' own UI, once no live run holds the lock. The extension's own
