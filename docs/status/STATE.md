@@ -3,32 +3,41 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-11 06:30 UTC, lanes generic-drag and generic-mechanisms merged)
+## Banner (2026-10-11 07:10 UTC, all four track-0 lanes merged)
 
-`pane/auto-mode` at `97dd734` is pushed to private (`Land-o-Clusters/sleight-dev`). `npm run check`
-1,902 tests plus 31 mod tests, `lint:prose` clean. Live lock and hold are free.
+`pane/auto-mode` at `ff03fbc` is pushed to private (`Land-o-Clusters/sleight-dev`), and the main
+checkout is fast-forwarded to it. `npm run check` 1,938 tests plus 31 mod tests, `lint:prose` clean.
+Live lock and hold are free. Every lane is merged, and `~/Projects/sleight-wt/` is empty. This session
+works in its worktree (`claude/boot-sleight-arch-6d0629`), because a hook refuses edits in the main
+checkout. It pushes with `git push private HEAD:pane/auto-mode`, then fast-forwards the main checkout.
 
 **Direction (owner, 2026-10-11, in LAWS and ROADMAP track 0):** sleight is app-agnostic, like Codex.
 What users run adds generic mechanisms, never rules or code paths for one app. Benchmark checks are
-generic too. The owner asked for the existing code and the skill to be cleaned up and hardened for apps nobody
-tests. A side-by-side battery against Codex on about 25 popular apps (approved, in LAWS) follows. The
-owner starts that in a fresh context. Don't start the battery before they say so.
+generic too. A side-by-side battery against Codex follows the cleanup. The owner starts it. Don't
+start the battery before they say so.
 
-**Merged 2026-10-11, live checks pending:** generic-drag (`702cf3b`: one drag path for every app,
-Accessibility first for selected text, the TextEdit rich-text move and the Command modifier deleted,
-about 450 production lines gone) and generic-mechanisms (`97dd734`: screenshot scale note for any app,
-orphan Save panel in any AppKit app, `record --watch <bundle.id>`, browsers found through
-LaunchServices, a Shift press after a guarded text-area `setValue`; a refused Shift press no longer fails
-the `setValue`). Each needs a live check. A background selected-text move in TextEdit and in one
-other native text app must leave the whole text and spacing right, the front app and pointer unmoved,
-and the file saving without a hang. Chess must move the intended piece (owner away). A large
-non-simulator screenshot must get the scale note. An orphan panel in a second AppKit app must be named
-once. A recording must work in a third app, and a flow rule in a browser outside the old list. TextEdit
-`setValue` then Cmd+S must save without a hang. Open question for the drag check: an uncovered TextEdit text move used to go through posted events first and now goes through
-Accessibility, which writes plain text. Whether the posted drag kept formatting was never measured.
+**Merged 2026-10-11:** generic-drag (`702cf3b`), generic-mechanisms (`97dd734`), battery-harness
+(`d0175cd`) and battery-report (`ff03fbc`). The generic-mechanisms lane's Shift press after `setValue`
+was dropped (`6ac66d5`): the engine refuses a modifier-only key (`-10005`, 2/2 live), so it would have
+failed every `setValue` on a text area. Its unit tests mocked `pressKey`.
 
-**Still building (Codex gpt-6.1-sol):** battery-harness and battery-report, in
-`~/Projects/sleight-wt/`, uncommitted on `8718e55` at 06:30 UTC. Briefs in `.dev/prompts/`.
+Live with the owner present, 2026-10-11, background TextEdit opened with `open -g`: `drag` moved a
+bold red word 3/3 through Accessibility (the window was covered), with the text, spacing, front app
+and pointer right, about 6.6 s a drag, and the formatting lost 3/3. `setValue` then the engine's Cmd+S
+saved 3/3 (about 1.0 s and 0.6 s). sleight answered that save "saved: not confirmed (degraded read)"
+3/3 although the file had changed, because the file wasn't opened through `open_file`.
+
+Live checks still open: an uncovered TextEdit move and a move in a second native text app (owner away,
+since the posted path can take the pointer), Chess, a large non-simulator screenshot's scale note, an
+orphan panel in a second AppKit app, a recording in a third app, a flow rule in a browser outside the
+old list, and `setValue` in a document opened through the Open panel (the save-lock run).
+
+**Battery, ready for the owner** (`node bench/run.mjs --suite battery --dry-run`): 17 tasks and 34
+runs without the owner, 31 tasks and 62 runs with `--owner-present`. That needs the owner to seed 10
+items first (self-messages in Slack, Discord, WhatsApp, Messages and Mail, and items in Music, Maps,
+Photos, Spotify and Zoom), passed with `--markers`, and a `--local-fixtures` file naming local
+Notes, Reminders and Calendar containers. `bench/battery-report.mjs` turns the results into the
+parity tables.
 
 **Skill A/B, done** (docs/benchmark.md, `docs/benchmarks/2026-10-11-skill-ab.json`): current 11/11 at
 14.5 s a run, slim 12/12 at 16.0 s, and the arm with no sleight rules 11/11 at 19.5 s. With no rules
@@ -71,7 +80,8 @@ textedit-edit 3/3 each. The opt-in rich move stays off: macOS disables Paste in 
 never been frontmost (`323183d`).
 
 Next, in order:
-1. Live checks of the merged lanes (lease-broker with Codex, unsaved-review) with the owner present.
+1. Live checks with the owner present: lease-broker with Codex, unsaved-review, and track 0's
+   background ones (scale note, orphan panel, recording, flow rule). The skill A/B rerun.
 2. Then ask the owner for the one away sitting (owner: no partial windows), with the run order and
    length (about 75 to 90 min): the Codex head-to-head with clean arms and the owner's setup,
    textedit-drag, Chess with computed points, simulator-form x3, the save-lock experiment
@@ -107,7 +117,7 @@ Read first: `docs/known-problems.md`, `docs/benchmark.md`, `docs/design/guard-re
 Branches and worktrees (`~/Projects/sleight-wt/<name>`):
 - `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it
   and pushes `origin`.
-- `~/Projects/sleight-wt/` contains only the battery-harness and battery-report lanes (2026-10-11).
+- `~/Projects/sleight-wt/` is empty (2026-10-11).
 - `perf/screenshot-scale` (`1aa574b`, `shots`): parked.
 
 ## Machine state outside the repo

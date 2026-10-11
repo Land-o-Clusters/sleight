@@ -10,14 +10,14 @@ they're away. Sol works track 4, and sleight-arch works tracks 2 and 3 while the
 
 ## 0. App-agnostic, and parity with Codex (owner, 2026-10-11), before the release
 
-1. Clean up what exists: lanes generic-drag and generic-mechanisms (`.dev/prompts/`), from an audit
-   that found about 15 places where code depends on one app.
+1. Clean up what exists: lanes generic-drag and generic-mechanisms, from an audit that found about 15
+   places where code depends on one app. Merged 2026-10-11. Live checks are listed in STATE.
 2. Slim the skill: `SKILL-slim.md` against the current skill and no skill, A/B running; textedit-save
    in the away sitting.
 3. Run the parity battery on about 25 popular apps (approved, LAWS), side by side with Codex, with generic
    fixture and check kinds, window order recorded per run. Rules are mined on half the apps and
-   proven on the other half. Lanes battery-harness and battery-report. The owner starts it in a
-   fresh context.
+   proven on the other half. Lanes battery-harness and battery-report, merged 2026-10-11. The owner
+   starts it.
 4. Give the user's front app back when a launch takes it, as a generic mechanism.
 
 ## 1. Release 1.0 (done: v1.0.0, 2026-10-09)
