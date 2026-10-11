@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The `js` tool's description names `let app = await cua.getApp("Calculator")` as the first call
+  for an app Claude can name, and `cua.getState()` only for one it can't. In an A/B of 11 and 12 runs
+  (2026-10-11), first calls on `getState` fell from 8 of 11 to 0 of 12, turns from 7.91 to 7.17 a
+  run and total time from 30.6 s to 27.0 s, with every run passing.
 - The mod ends the engine turn after a turn that used an app even when Claude Code's pane list
   fails. That failure used to skip `turn_ended`, so only the relay's 30 s idle timer ended the
   turn. That may be one cause of desktop sessions that stay busy (inferred). A mod test covers it. It hasn't run live.

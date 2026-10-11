@@ -98,7 +98,10 @@ const TURN_END_TOOL = 'turn_ended';
 // (batching study, 2026-10-09). Rewritten only while the engine's sentence is exactly this.
 const FIRST_CALL_RULE = 'execute exactly one of the API calls shown below, optionally assigning its result to a variable. Do not add other API calls, waits, or snapshots to that invocation.';
 // Chaining past Cmd+N or Cmd+O got the lease to stop 10 of 12 TextEdit batches (2026-10-09), hence its last clause.
-const FIRST_CALL_BATCH = 'start with one of the API calls shown below, assigning the app to a variable. When you already know the first actions on that app, put them after it in the same call: sleight acquires the app and checks its window before they run. Chain every later action whose target you already know (keys, text, `{ id }` or `{ label }` clicks) in one call too, but end the call after a shortcut that opens or names a window (Cmd+N, Cmd+O, or Cmd+S on an untitled document): sleight stops the rest of a call when its window changes.';
+// Naming getApp here: before its first call Claude sees only the engine's list, whose one native-looking
+// entry is cua.getState(), and 50 of 80 runs spent their first turn on it. With this wording 0 of 12
+// did, with turns 7.91 to 7.17 and total time 30.6 s to 27.0 s a run, every run passing (A/B, 2026-10-11).
+const FIRST_CALL_BATCH = 'start with one of the API calls shown below, assigning the app to a variable. For a Mac app you can name, start with `let app = await cua.getApp("Calculator")` (its name or bundle ID): it returns that app\'s UI state. Use cua.getState() only to find an app or browser you can\'t name. When you already know the first actions on that app, put them after it in the same call: sleight acquires the app and checks its window before they run. Chain every later action whose target you already know (keys, text, `{ id }` or `{ label }` clicks) in one call too, but end the call after a shortcut that opens or names a window (Cmd+N, Cmd+O, or Cmd+S on an untitled document): sleight stops the rest of a call when its window changes.';
 // An open menu in front of a window reads as "0 menu Secondary Actions: Cancel". Escape left it open in
 // 3 of 3 tries in the head-to-head (TextEdit and Finder, 2026-10-09), and its Cancel action closed it.
 export function openMenuNote(text) {
@@ -117,13 +120,8 @@ export function treeFreeFirstAction(code) {
   const first = ACTION.exec(typeof code === 'string' ? code : '');
   return !!first && (['pressKey', 'typeText', 'paste'].includes(first[1]) || (!!first[2] && ['click', 'doubleClick', 'rightClick', 'scroll', 'drag'].includes(first[1])));
 }
-// SLEIGHT_FIRST_CALL_BATCH=app, under A/B. Before its first call Claude sees only the engine's list,
-// whose one native-looking entry is cua.getState(); the skill naming getApp arrives with the first
-// result. 50 of 80 runs (2026-10-11) spent their first turn on getState.
-const FIRST_CALL_APP = 'start with one of the API calls shown below, assigning the app to a variable. For a Mac app you can name, start with `let app = await cua.getApp("Calculator")` (its name or bundle ID): it returns that app\'s UI state. Use cua.getState() only to find an app or browser you can\'t name. ' +
-  FIRST_CALL_BATCH.slice(FIRST_CALL_BATCH.indexOf('When you already know'));
 export function batchingDescription(description, variant = true) {
-  const text = variant === 'merge' ? FIRST_CALL_MERGE : variant === 'app' ? FIRST_CALL_APP : FIRST_CALL_BATCH;
+  const text = variant === 'merge' ? FIRST_CALL_MERGE : FIRST_CALL_BATCH;
   return typeof description === 'string' && description.includes(FIRST_CALL_RULE) ? description.replace(FIRST_CALL_RULE, text) : description;
 }
 const TURN_END_DESCRIPTION = 'Internal to sleight: its hooks call this when a Claude turn ends. Never call it yourself.';

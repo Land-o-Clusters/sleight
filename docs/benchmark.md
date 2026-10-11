@@ -390,6 +390,24 @@ the owner away, load 24 to 44), textedit-save and textedit-edit passed 6/6
 a median 35.2 s against 15 turns and 26.3 s at 01:18, and textedit-edit 21 turns and 24.4 s against
 19 and 27.3 s.
 
+The batching wording still left `cua.getState()` as the only native-looking call Claude saw before
+its first one, and 50 of 80 runs spent their first turn on it. Wording that names
+`cua.getApp("Calculator")` for an app Claude can name (`4ee20df`) ran against it on 2026-10-11
+(03:47 to 03:59 UTC, Haiku 5.5 at high, the owner at the Mac, apps in the background), two rounds
+alternating, calculator-click, textedit-edit and textedit-save twice each per round
+([raw](benchmarks/2026-10-11-firstcall-ab.json)). One default run was skipped when the harness's
+`open -g -a TextEdit` failed during setup.
+
+| Wording | Passed | First call `getState` | Turns a run | Model s a run | Model s a turn | Total s a run |
+|---|---:|---:|---:|---:|---:|---:|
+| Batching | 11/11 | 8/11 | 7.91 | 19.8 | 2.50 | 30.6 |
+| Names `getApp` | 12/12 | 0/12 | 7.17 | 16.4 | 2.29 | 27.0 |
+
+calculator-click fell from 4 turns to 3 in every run. Under the new wording, 2 of 12 first calls
+called `cua.getAXState()`, which `cua` doesn't have. One textedit-save took 19 turns and 77.7 s. All 8
+textedit-save runs sent Go to Folder through the final Return in one call, against 0 of 3 before the
+save-sheet note (`49356a7`). The new wording is the default since this A/B.
+
 The head-to-head at the owner's normal load (2026-10-09, the owner away, load 6 to 24, Sonnet 5.5 at
 medium against gpt-6.1-sol at medium) alternated sleight and Codex task by task. The default tasks
 ran 3 times per arm ([`h2h-normal-default`](benchmarks/2026-10-09-h2h-normal-default.json)) and six
