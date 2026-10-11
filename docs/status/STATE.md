@@ -3,30 +3,47 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-11 05:05 UTC)
+## Banner (2026-10-11 05:55 UTC, written for the owner's fresh context)
 
-`pane/auto-mode` is at `f328943`, pushed to private, nothing uncommitted. `npm run check` 1,821 tests
-plus 31 mod tests, `lint:prose` clean. Merged since the clear: lease-select (Grok), owner-present-mail
-(GLM), lease-broker, unsaved-review, turn-study and away-runner (Codex), temp-hygiene (Grok) and
-release-audit (GLM). Not merged, on purpose: `codex/richmove-placement`. 2,064 old sleight-* temp
-folders (24 GB) were removed with `scripts/temp-leftovers.mjs --remove`.
+`pane/auto-mode` is at `5829bb3` plus this banner, pushed to private, nothing uncommitted.
+`npm run check` 1,867 tests plus 31 mod tests, `lint:prose` clean.
 
-Measured since the clear (`docs/benchmark.md`): the `cua.getApp` first-call wording is the default
-(27.0 s against 30.6 s a run); the Save-panel list trim lost and is gone; the acquisition-tree drop
-(`SLEIGHT_RESULT_TRIM=1`) tied and stays opt-in; `SLEIGHT_FIRST_CALL_BATCH=sheet` (no Cmd+S stop,
-`open_file` names its `getApp` call, saves observed from the file on disk, menu clicks in one call)
-did each thing it is for in 6 runs and needs a full A/B.
+**Direction (owner, 2026-10-11, in LAWS):** sleight is app-agnostic, like Codex. What users run adds
+generic mechanisms, never rules or code paths for one app. Benchmark checks are generic too. The owner
+wants what already exists cleaned up, the skill slimmed and hardened for apps nobody tests, and a
+side-by-side battery against Codex on about 25 popular apps (apps approved, in LAWS). The owner will
+start that work in a fresh context. Don't start the battery before they say so.
 
-The owner saw TextEdit's Save sheet over their window during textedit-save runs (known problems).
-The log doesn't show a front-app change. Until a window-order capture explains it, textedit-save runs only
-with the owner away.
+**Running at the clear:** `nohup .dev/passes/ab-skill.sh` (started 05:47 UTC, about 20 min): the current
+skill against `SLEIGHT_SKILL=slim` (`plugins/sleight/skills/drive-mac-apps/SKILL-slim.md`, 79 lines,
+40% shorter, no app names) and `SLEIGHT_SKILL=none` (no sleight rules, as Codex), on calculator-click
+and textedit-edit x3, 2 rounds. Log `.dev/passes/ab-skill.log`. Compare per arm: passes, turns, model
+time per turn, total. textedit-save joins in the away sitting (Go to Folder flashes the sheet over the
+owner's window, so save runs need the owner away). If slim matches or beats current, it replaces
+SKILL.md. If none is close, the skill was mostly weight.
 
-**Away sitting, next** (owner asked once, all lanes merged), about 60 min:
-1. `.dev/passes/ab-sheet.sh` (default against `sheet`, 2 rounds, 3 runs a task, about 20 min) with
-   `osascript -l JavaScript .dev/tools/window-order.js 1500` logging window order beside it.
-2. `node bench/away-sitting.mjs` (12 steps, about 38 min by its dry run; the two Codex head-to-heads
-   swap ChatGPT's "Always allow" list on the owner's 2026-10-09 OK and restore it).
-Then the owner-present runs (Mail, Mimestream, chat, Helium Console) and the release pass.
+**Ready to paste, Codex gpt-6.1-sol, in `.dev/prompts/`:** `lane-generic-drag.md` (delete the TextEdit
+rich-text move, about 400 lines; one drag path for every app), `lane-generic-mechanisms.md` (screenshot
+scale note, orphan Save panel, demonstration recorder, browser detection and the setValue settle for
+any app), `lane-battery-harness.md` (generic fixture and check kinds: doc-file, self-message, web-page,
+app-state; window order recorded per run), `lane-battery-report.md` (parity table, Codex call diff,
+rules mined on half the apps and proven on the other half). The audit behind the cleanup lanes found
+about 15 app-specific places, the biggest being the rich-text move.
+
+Measured since the clear (docs/benchmark.md): the `cua.getApp` first-call wording is the default
+(27.0 s against 30.6 s); `open_file` naming its `getApp` call and saves observed from the file on disk
+are the default (textedit-edit 6/6, 18.5 s against 20.0 s); the Save-panel list trim lost and is gone;
+the acquisition-tree drop tied and stays off; `SLEIGHT_FIRST_CALL_BATCH=sheet` (no Cmd+S stop, menu
+clicks in one call) waits for the save A/B. With the owner present, Mail, Mimestream and the chat tasks failed
+in setup in their per-app helpers (known problems); the engine itself read Slack (161 elements) and
+Discord (223). Slack takes the front on launch with no click; Electron trees build seconds after
+launch. Lanes chat-tasks-2, mail-fixtures, unsaved-review-2 and launch-focus were withdrawn by the
+owner; launch-focus's idea (give the user's front app back after a launch takes it) is still wanted,
+as a generic mechanism.
+
+Worktrees: 66 old lane worktrees removed tonight. Left: panel-rows, codex-diff, mirroring-turns,
+launch-flake (owner told those lanes to remove themselves; check, then remove if still there) and
+plugin-arm (its last commit `f7486d0` was never pushed).
 
 Results that matter for the release gate (ROADMAP 3.5, 5b.1): speed-research found the clean-arms CPU
 gap to Codex (51.8 s against 42.8 s) was 8.6 s from two failed textedit-save runs, and the seven runs
