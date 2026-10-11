@@ -152,5 +152,5 @@ function probe(selector) {
     }
   }
   return { status: 'responding', pid, windows: Number(windows.count), windowTitles, minimized: minimizedCount(windows), ...space,
-    ...(ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit' && Number(windows.count) === 0 && onlySavePanel ? { savePanelOnly: true, savePanelWindowIds } : {}) };
+    ...(Number(windows.count) === 0 && onlySavePanel ? { savePanelOnly: true, savePanelWindowIds, app: ObjC.unwrap(target.localizedName) } : {}) };
 }

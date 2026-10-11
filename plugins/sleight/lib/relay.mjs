@@ -556,13 +556,13 @@ export function createRelay({
   // a window wasn't launched by that read, which lets a split acquisition's read stand in below.
   const preHealth = new Map();
   const savePanelsNoted = new Set();
-  function panelAdvice(health, app) {
+  function panelAdvice(health) {
     if (health?.savePanelOnly !== true) return;
     const panels = (health.savePanelWindowIds?.length ? health.savePanelWindowIds : ['unknown'])
-      .map(id => `${health.pid ?? 'TextEdit'}:${id}`);
+      .map(id => JSON.stringify([health.app ?? null, health.pid ?? null, id]));
     if (panels.every(id => savePanelsNoted.has(id))) return;
     panels.forEach(id => savePanelsNoted.add(id));
-    return savePanelNote(app);
+    return savePanelNote(health);
   }
 
   function invalidateDiagnostics() {

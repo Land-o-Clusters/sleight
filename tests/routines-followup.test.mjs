@@ -27,7 +27,7 @@ test('recording announces start and stop, saves privately and never replaces a f
   const helper = { check: async () => ({ trusted: true, listening: true }),
     observe: async emit => { events.push('observe'); emit({ kind: 'click', element: button }); },
     close: async () => events.push('close') };
-  const options = { app: 'Calculator', output, input: { isTTY: true }, helper, notify: async state => events.push(state) };
+  const options = { app: 'com.apple.calculator', output, input: { isTTY: true }, helper, notify: async state => events.push(state) };
   await recordWatch(options);
   assert.deepEqual(events, ['started', 'observe', 'close', 'stopped']);
   assert.equal(statSync(output).mode & 0o777, 0o600);
@@ -41,12 +41,12 @@ test('recording announces start and stop, saves privately and never replaces a f
 });
 
 test('text capture refuses prior contents and unobserved baselines', () => {
-  const old = new DemoRecording('TextEdit');
-  assert.throws(() => old.observe({ kind: 'baseline', element: field, empty: false }), /existing text/);
+  const old = new DemoRecording('com.apple.TextEdit');
+  assert.throws(() => old.observe({ kind: 'baseline', element: field, empty: false }), /empty.*baseline/);
   assert.throws(() => old.script(), /stopped/);
-  const unknown = new DemoRecording('TextEdit');
+  const unknown = new DemoRecording('com.apple.TextEdit');
   assert.throws(() => unknown.observe({ kind: 'value', element: field, value: 'old document plus new text' }), /empty.*baseline/);
-  const empty = new DemoRecording('TextEdit');
+  const empty = new DemoRecording('com.apple.TextEdit');
   empty.observe({ kind: 'baseline', element: field, empty: true });
   empty.observe({ kind: 'value', element: field, value: 'new text' });
   assert.match(JSON.stringify(empty.script()), /new text/);

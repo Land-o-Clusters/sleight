@@ -12,17 +12,17 @@ sleight-mcp replay task.json --wait-ms 2000
 
 ## Recording a demonstration
 
-`sleight-mcp record --watch Calculator task.json` observes an app already open, for 60 seconds.
-`TextEdit` also works. Add `--seconds 120` for longer, or press Ctrl-C to finish. Recording never
+`sleight-mcp record --watch org.example.editor task.json` observes an app already open, by bundle
+ID, for 60 seconds. Add `--seconds 120` for longer, or press Ctrl-C to finish. Recording never
 launches, activates or controls the app. The output uses the same replay version and step shape as
 transcript recording. A filename and interactive terminal stdin are required. A macOS notification
 announces start and stop, including a failed capture. The file must not already exist; the recorder
 writes it with mode 0600 only after complete capture and cleanup. It never prints the script to stdout.
 
 Accessibility notifications supply focused-element changes, menu selections and editable native
-TextEdit values, with focus used only to track the edited field. Consecutive edits in one field become one
-`setValue` with its final text. Recording refuses editable fields that already contain text, and fields
-without an observed empty baseline. Earlier document contents never enter the event stream or script.
+text values in any app, with focus used only to track the edited field. Consecutive edits in one field become one
+`setValue` with its final text. A field that already contains text isn't given a baseline, and
+editing or typing in one stops the recording. Earlier document contents never enter the event stream or script.
 Review the private file before sharing it. Each selector uses a unique AX identifier or label.
 
 Accessibility has no general button-press notification. A listen-only tap observes mouse clicks.
@@ -39,11 +39,10 @@ Demonstration scripts and routines acquire with `cua.getApp("<bundle id>")`. Rep
 recorded window (or an explicit `window` option). A successful acquisition must match that title
 (and URL when present) or the run stops.
 
-Drags, gestures, scrolls, secondary clicks, Calculator typing, keyboard shortcuts and typing into
+Drags, gestures, scrolls, secondary clicks, typing outside an empty editable native field, keyboard shortcuts and typing into
 web views are not captured. Native text edits depend on the app delivering value notifications;
 unreported programmatic changes cannot be reconstructed. A field without a unique ID or label
-stops the recording. The first version targets Calculator buttons and named TextEdit fields. It does
-not record file dialogs or save workflows. A recorded click says what the user clicked, not whether
+stops the recording. Live recording has never run, in any app. It does not record file dialogs or save workflows. A recorded click says what the user clicked, not whether
 the app completed it. Native observation and replay need separate live qualification.
 
 ## Waiting

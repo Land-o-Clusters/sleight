@@ -466,7 +466,15 @@ function guardSetup(update, { reuseSetup = false, acknowledge = false } = {}) {
           // A second handle may refer to this same app/window. Every input
           // invalidates the call's observations, including reads on that alias.
           state.reads = new WeakMap();
-          return value.apply(raw, args);
+          const result = await value.apply(raw, args);
+          // Native AX text writes can leave an edit unfinished before the next save. Settle text
+          // areas in every app with a Shift press and release, as drag's text-write path does.
+          if (name === 'setValue' && /^text entry area\\b/.test(elements(text ?? '').get(Number(args[0])) ?? '')) {
+            await checkLease();
+            // The value is already set; a refused settle must not report the setValue as failed.
+            try { await raw.pressKey('shift'); } catch {}
+          }
+          return result;
         };
         // An action Claude didn't await that fails would reject with no handler, and that ends the
         // engine's JavaScript session with every handle (3/3, 2026-10-07). Handle every action's

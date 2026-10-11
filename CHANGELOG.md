@@ -9,7 +9,11 @@
   The generic Shift event after Accessibility writes remains (10/13 save hangs without it,
   0/10 with it in the original probes). The new regressions failed 10/10 against the old code;
   the mocked window suite passes 122/122 across two bundle IDs. Live qualification is pending.
-
+- Screenshot scale notes above a 2000-pixel long edge now cover any app, alongside
+  orphan AppKit Save panels, demonstration capture by bundle ID, browser identification from
+  HTTP and HTTPS registrations, and Shift settle after guarded text-area `setValue`.
+  The new offline tests failed 9/9 against the old code. The passive observer's Swift source
+  typechecks. Live proof is pending for each mechanism, including TextEdit `setValue` then Cmd+S.
 - `open_file` tells Claude the exact `getApp` call to send next, and a Cmd+S on an open file reads
   "saved: observed" when the file on disk changed during the call. TextEdit in the background shows
   no edited state. Those saves used to read "not confirmed", and Claude spent a turn checking in
@@ -232,7 +236,7 @@
   passed 10/10 steps behind the idle gate, and `remove` waited for typed confirmation.
   A launchd-scheduled run needs a release that contains routines: the installed 1.1.0 copy has
   none, and its scheduled run exited 1.
-- `record --watch Calculator|TextEdit <file.json>` observes a demonstration using Accessibility
+- `record --watch <bundle.id> <file.json>` observes a demonstration using Accessibility
   and a passive click listener, then writes portable replay steps. It checks permissions without asking.
   A terminal and filename are required, with notifications at start and stop. It refuses existing text
   and unsupported actions, and preserves existing recordings. It has never run live. Native qualification
@@ -279,10 +283,10 @@
   [shop-1](docs/benchmarks/2026-10-10-shop-1.json) and passed both in
   [shop-2](docs/benchmarks/2026-10-10-shop-2.json) after the title-nonce fix.
 - Real-suite task `iphone-mirroring-settings` opens iPhone Mirroring and reads the iOS version from Settings > General > About. The check is that version text. `--owner-present` is required. Default passes and the head-to-head skip it. Headless `claude -p` can't show an approval prompt. The benchmark approves iPhone Mirroring only in `--owner-present` runs (owner, 2026-10-11). Published rows keep the answer and timings, with no screenshot. A version followed by a blank line and a note passes. One live run on 2026-10-11 read 27.0.1 in 66.9 s and 16 turns, and failed the stricter check then in place, since Claude added a note about a mis-tap.
-- Simulator screenshot replies larger than Claude Code shows unresized (a 2000-pixel long edge,
+- App screenshot replies larger than Claude Code shows unresized (a 2000-pixel long edge,
   observed once, on a 2200 × 1600 engine screenshot shown at 2000 × 1455) now state the engine's
-  pixel frame, the shown size and the exact multiplier, and ask Claude to confirm field focus before
-  typing. On by default; `SLEIGHT_SIM_FOCUS_NOTE=0` turns it off. Coordinates are unchanged.
+  pixel frame, the shown size and the exact multiplier. On by default; `SLEIGHT_SIM_FOCUS_NOTE=0`
+  turns it off. Coordinates are unchanged.
   Unit-tested only; `simulator-form` must pass with it (3 runs, first tap on the field) before
   release.
 - `sleight-mcp --doctor <app>` reads an app that is already running and reports the read's time and

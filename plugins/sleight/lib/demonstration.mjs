@@ -10,8 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { collectOwnedGroup } from './owned-group.mjs';
 import { notification } from './notification.mjs';
 
-const APPS = new Map([['Calculator', 'com.apple.calculator'], ['com.apple.calculator', 'com.apple.calculator'],
-  ['TextEdit', 'com.apple.TextEdit'], ['com.apple.TextEdit', 'com.apple.TextEdit']]);
+const bundleID = app => typeof app === 'string' && /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(app) ? app : undefined;
+const editableText = element => ['AXTextArea', 'AXTextField'].includes(element?.role) && element.editable === true;
 const step = code => ({ tool: 'js', args: { code }, positions: [] });
 function selector(element) {
   if (element?.secure || element?.role === 'AXSecureTextField') throw new Error('secure fields cannot be recorded');
@@ -22,8 +22,8 @@ function selector(element) {
 
 export class DemoRecording {
   constructor(app) {
-    this.app = APPS.get(app);
-    if (!this.app) throw new Error('demonstration recording supports Calculator and TextEdit only');
+    this.app = bundleID(app);
+    if (!this.app) throw new Error('demonstration recording requires the selected app bundle ID');
     this.steps = [step(`let app = await cua.getApp(${JSON.stringify(this.app)});`)];
     this.interactions = new Set();
     this.emptyFields = new Set();
@@ -41,7 +41,7 @@ export class DemoRecording {
       if (event.element?.secure || event.element?.role === 'AXSecureTextField') throw new Error('secure fields cannot be recorded');
       if (event.kind === 'focus') return;
       if (event.kind === 'baseline') {
-        if (this.app !== 'com.apple.TextEdit' || event.empty !== true) throw new Error('field has existing text; start with an empty TextEdit fixture');
+        if (!editableText(event.element) || event.empty !== true) throw new Error('text recording requires an empty editable native field baseline');
         this.emptyFields.add(JSON.stringify(selector(event.element)));
       } else if (event.kind === 'click' || event.kind === 'menu') {
         if (!['AXButton', 'AXMenuBarItem', 'AXMenuItem', 'AXCheckBox', 'AXRadioButton'].includes(event.element?.role)) throw new Error('unsupported clickable element');
@@ -50,7 +50,7 @@ export class DemoRecording {
         this.steps.push(step(`await app.click(${JSON.stringify(selector(event.element))});`));
         this.lastValue = undefined;
       } else if (event.kind === 'value') {
-        if (this.app !== 'com.apple.TextEdit' || !['AXTextArea', 'AXTextField'].includes(event.element?.role) || !event.element?.editable || typeof event.value !== 'string') throw new Error('only editable native TextEdit values can be recorded');
+        if (!editableText(event.element) || typeof event.value !== 'string') throw new Error('only editable native text values can be recorded');
         const spec = JSON.stringify(selector(event.element));
         if (!this.emptyFields.has(spec)) throw new Error('text recording requires an empty field baseline from before observation');
         const code = `await app.setValue(${spec},${JSON.stringify(event.value)});`;
@@ -69,7 +69,7 @@ export class DemoRecording {
 }
 
 export function watchOptions(args) {
-  if (args[0] !== '--watch' || !APPS.has(args[1]) || !args[2] || args[2].startsWith('--')) throw new Error('usage: sleight-mcp record --watch Calculator|TextEdit out.json [--seconds 60]');
+  if (args[0] !== '--watch' || !bundleID(args[1]) || !args[2] || args[2].startsWith('--')) throw new Error('usage: sleight-mcp record --watch bundle.id out.json [--seconds 60]');
   const output = args[2] && !args[2].startsWith('--') ? args[2] : undefined;
   const options = args.slice(output ? 3 : 2);
   let seconds = 60;

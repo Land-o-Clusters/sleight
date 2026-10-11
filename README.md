@@ -188,8 +188,9 @@ idle and require existing app windows. A stop pauses scheduled runs and sends a 
 the private log path. Only literal background steps in apps on your preapproved list can run.
 [Routine design and limits](docs/design/routines.md).
 
-To record your own demonstration, open Calculator or TextEdit with one window, then run
-`sleight-mcp record --watch Calculator task.json` (or `TextEdit`). Demonstrate for 60 seconds,
+To record your own demonstration, open the app with one window, then run
+`sleight-mcp record --watch org.example.editor task.json` with the app's bundle ID
+(`osascript -e 'id of app "AppName"'` prints it). Demonstrate for 60 seconds,
 or press Ctrl-C to finish. It observes without controlling the app and checks existing permissions
 without asking for new ones. [Supported observations and limits](docs/design/replay.md#recording-a-demonstration).
 

@@ -108,8 +108,10 @@ export function offSpace(health) {
     health.allWindows - (health.minimized ?? 0) > 0;
 }
 
-export function savePanelNote(app = 'TextEdit') {
-  return `sleight: ${app} has no Accessibility document windows, but macOS still lists "Save Panel Accessory View", a possible orphan Save panel. Ask the user to close the panel with Cancel or Escape if it is visible. If it is hidden or won't close, save any other work, then quit and reopen ${app}. Read the app again afterwards. This observation alone does not identify a helper fault.`;
+export function savePanelNote(health) {
+  const app = typeof health?.app === 'string' && health.app ? health.app : 'the probed app';
+  const pid = Number.isInteger(health?.pid) && health.pid > 0 ? ` (pid ${health.pid})` : '';
+  return `sleight: ${app}${pid} has no Accessibility document windows, but macOS still lists "Save Panel Accessory View", a possible orphan Save panel. Ask the user to close the panel with Cancel or Escape if it is visible. If it is hidden or won't close, save any other work, then quit and reopen ${app}. Read the app again afterwards. This observation alone does not identify a helper fault.`;
 }
 
 export function offSpaceNote(app) {
@@ -141,7 +143,7 @@ export async function diagnoseReadFailure(app, control, { probeApp = probeAppHea
 
 export function readFailureAdvice(app, diagnosis = { kind: 'unknown' }) {
   const recovery = 'Stop retrying. sleight will retry by itself with one standalone read every 20 s and resume this app after a successful read.';
-  if (diagnosis.kind === 'app-save-panel') return savePanelNote(app);
+  if (diagnosis.kind === 'app-save-panel') return savePanelNote(diagnosis.target);
   if (diagnosis.kind === 'app-off-space') return `${offSpaceNote(app)} ${recovery}`;
   if (diagnosis.kind === 'helper-stuck') return `The SkyComputerUseService read path appears stuck: ${app} and ${diagnosis.control} answer Accessibility, but the control app's engine read also timed out. ${recovery} Tell the user to restart ChatGPT to recover computer use. Restarting ends their Codex sessions; never restart or quit ChatGPT yourself.`;
   if (['app-hung', 'app-windows', 'app-read'].includes(diagnosis.kind)) {

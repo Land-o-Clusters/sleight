@@ -15,14 +15,19 @@ const png = (width, height) => {
 };
 const target = { app: 'Device Hub', title: 'iPhone fixture' };
 
+test('a large non-simulator window gets scale advice without app-specific input rules', () => {
+  const note = simulatorScreenshotNote([png(1600, 2400)], { app: 'Preview', title: 'Fixture' }, imageSize);
+  assert.match(note, /Fixture.*Preview.*1600 × 2400/);
+  assert.match(note, /1333 × 2000.*multiply each x and y by 1\.2/);
+  assert.doesNotMatch(note, /Safari|Capture Keyboard|tapping/);
+});
+
 test('a first headerless simulator screenshot gets its dimensions from the leased target', () => {
   const content = [png(2196, 1598)];
   assert.equal(screenshotOf(content), undefined, 'the old header-based association misses a standalone screenshot');
   const note = simulatorScreenshotNote(content, target, imageSize);
   assert.match(note, /2196 × 1598/);
   assert.match(note, /iPhone fixture/);
-  assert.match(note, /focus/);
-  assert.match(note, /Capture Keyboard.*unchanged/);
 });
 
 test('an oversized screenshot names the engine frame, the shown size and the exact factor', () => {
@@ -30,8 +35,6 @@ test('an oversized screenshot names the engine frame, the shown size and the exa
   assert.match(note, /engine screenshot 2200 × 1600 pixels/);
   assert.match(note, /2000 × 1455/);
   assert.match(note, /multiply each x and y by 1\.1/);
-  assert.match(note, /focus/);
-  assert.match(note, /Capture Keyboard.*unchanged/);
 });
 
 test('a screenshot no larger than Claude Code shows unresized gets no note', () => {
@@ -43,7 +46,6 @@ test('a screenshot no larger than Claude Code shows unresized gets no note', () 
 test('unowned, contradictory and ambiguous screenshots get no simulator advice', () => {
   for (const [content, context] of [
     [[png(2196, 1598)], undefined],
-    [[png(2196, 1598)], { app: 'Safari', title: 'iPhone fixture' }],
     [[png(2196, 1598)], { app: 'Device Hub' }],
     [[png(2196, 1598), png(2196, 1598)], target],
     [[{ type: 'text', text: 'Window: "Other", App: Device Hub.' }, png(2196, 1598)], target],
@@ -57,7 +59,7 @@ test('unowned, contradictory and ambiguous screenshots get no simulator advice',
 test('matching Simulator app identity permits advice without mutating pixels or targets', () => {
   const content = [{ type: 'text', text: 'Window: "iPhone fixture", App: Simulator.' }, png(2196, 1598)];
   const before = structuredClone(content);
-  const context = { app: 'com.apple.iphonesimulator', title: 'iPhone fixture' };
+  const context = { app: 'Simulator', title: 'iPhone fixture' };
   assert.match(simulatorScreenshotNote(content, context, imageSize), /2196 × 1598/);
   assert.deepEqual(content, before);
 });
@@ -89,7 +91,9 @@ for (const enabled of [undefined, false, true]) test(`Simulator note is ${enable
   call(5, 'await calc.getScreenshot()'); reply(5, [picture]);
   call(6, 'await sim.getScreenshot(); await calc.getScreenshot()'); reply(6, [picture]);
   await new Promise(resolve => setImmediate(resolve));
-  for (const id of [4, 5, 6]) assert.deepEqual(replies.find(message => message.id === id).result.content, [picture]);
+  for (const id of [4, 6]) assert.deepEqual(replies.find(message => message.id === id).result.content, [picture]);
+  if (enabled === false) assert.deepEqual(replies.find(message => message.id === 5).result.content, [picture]);
+  else assert.match(replies.find(message => message.id === 5).result.content.at(-1).text, /Calculator.*2196 × 1598/);
   // Notes are output only. The engine still receives its original coordinate expression.
   call(7, 'var sim = await cua.getApp("com.apple.dt.Devices")');
   reply(7, [{ type: 'text', text: 'Window: "iPhone fixture", App: Device Hub.\n0 standard window iPhone fixture' }], 'com.apple.dt.Devices');

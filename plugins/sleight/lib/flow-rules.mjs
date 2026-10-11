@@ -3,6 +3,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { windowFromText } from './document-scope.mjs';
 
 export const FLOW_TOOL = {
@@ -32,18 +33,35 @@ function urlHost(value) {
     return ['http:', 'https:'].includes(url.protocol) ? url.hostname.toLowerCase().replace(/\.$/, '') : null;
   } catch { return null; }
 }
-const nativeBrowser = app => /^(?:browser|safari|helium|google chrome|chrome|chromium|firefox|microsoft edge|brave browser|arc|com\.apple\.safari|com\.google\.chrome|org\.mozilla\.firefox|com\.microsoft\.edgemac|net\.imput\.helium)$/i.test(norm(app));
-const target = (app, url) => ({ app, host: urlHost(url), web: nativeBrowser(app) || !!urlHost(url), observed: !!urlHost(url) });
-function headerTarget(text) {
+// Read registration metadata once when flow rules load. This neither launches nor acquires apps.
+export function discoverNativeBrowsers({ run = execFileSync } = {}) {
+  try {
+    const script = `ObjC.import('CoreServices'); ObjC.import('AppKit');
+      const http = ObjC.deepUnwrap(ObjC.castRefToObject($.LSCopyAllHandlersForURLScheme('http'))) || [];
+      const https = ObjC.deepUnwrap(ObjC.castRefToObject($.LSCopyAllHandlersForURLScheme('https'))) || [];
+      const apps = [];
+      for (const bundle of http.filter(id => https.includes(id))) {
+        apps.push(bundle);
+        const url = $.NSWorkspace.sharedWorkspace.URLForApplicationWithBundleIdentifier(bundle);
+        if (url && !url.isNil()) apps.push(ObjC.unwrap(url.lastPathComponent).replace(/\\.app$/, ''));
+      }
+      JSON.stringify(apps);`;
+    const apps = JSON.parse(run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script], { encoding: 'utf8', timeout: 2000, maxBuffer: 262144, stdio: ['ignore', 'pipe', 'pipe'] }));
+    return Array.isArray(apps) && apps.every(app => typeof app === 'string' && app) ? apps : [];
+  } catch { return []; }
+}
+const nativeBrowser = (app, browsers) => browsers?.has(norm(app)) || /^(?:browser|safari|helium|google chrome|chrome|chromium|firefox|microsoft edge|brave browser|arc|com\.apple\.safari|com\.google\.chrome|org\.mozilla\.firefox|com\.microsoft\.edgemac|net\.imput\.helium)$/i.test(norm(app));
+const target = (app, url, browsers) => ({ app, host: urlHost(url), web: nativeBrowser(app, browsers) || !!urlHost(url), observed: !!urlHost(url) });
+function headerTarget(text, browsers) {
   const window = windowFromText(text);
-  if (window) return target(window.app, window.url);
+  if (window) return target(window.app, window.url, browsers);
   const header = /^Browser tab: [^\n]+?, Title: "(?:[^"\\]|\\.)*", URL: ("(?:[^"\\]|\\.)*")\.?\r?$/m.exec(text);
   if (header && !/^URL: /m.test(text)) {
-    try { return target('browser', JSON.parse(header[1])); } catch { /* Unknown site. */ }
+    try { return target('browser', JSON.parse(header[1]), browsers); } catch { /* Unknown site. */ }
   }
   // A malformed native URL still identifies its app, but grants no site exception.
   const app = /^Window: "(?:[^"\\]|\\.)*", App: (.+?)\.?\r?$/m.exec(text)?.[1];
-  return app ? target(app) : /^Browser tab: /m.test(text) ? target('browser') : undefined;
+  return app ? target(app, undefined, browsers) : /^Browser tab: /m.test(text) ? target('browser', undefined, browsers) : undefined;
 }
 const within = (file, root) => { const r = relative(root, file); return !r || (!r.startsWith('..') && !isAbsolute(r)); };
 function projectRoot(cwd) {
@@ -56,7 +74,7 @@ function projectRoot(cwd) {
   }
 }
 
-export function loadFlowRules(env = process.env, { cwd = process.cwd() } = {}) {
+export function loadFlowRules(env = process.env, { cwd = process.cwd(), discoverBrowsers = discoverNativeBrowsers } = {}) {
   const setting = env.SLEIGHT_FLOW_RULES;
   if (!setting || setting === '0') return undefined;
   try {
@@ -65,7 +83,7 @@ export function loadFlowRules(env = process.env, { cwd = process.cwd() } = {}) {
     const actual = realpathSync(file);
     const plugin = realpathSync(join(dirname(fileURLToPath(import.meta.url)), '..'));
     if (within(actual, projectRoot(cwd)) || within(actual, plugin)) throw error('the user rules file must be outside the working project and plugin');
-    return new FlowRules(JSON.parse(readFileSync(actual, 'utf8')));
+    return new FlowRules(JSON.parse(readFileSync(actual, 'utf8')), { browsers: discoverBrowsers() });
   } catch (err) { throw error(err.message); }
 }
 
@@ -110,7 +128,7 @@ export function tokens(code) {
   return out;
 }
 
-function calls(code, handles, fallback) {
+function calls(code, handles, fallback, browsers) {
   const ts = tokens(code); const inputs = []; let readTarget = fallback;
   for (let i = 0; i < ts.length; i++) {
     if (ts[i].v === '=' && !ts[i - 1]?.string) {
@@ -125,7 +143,7 @@ function calls(code, handles, fallback) {
     }
     if (!ts[i].string && handles.has(ts[i].v) && ts[i + 1]?.v === '.') readTarget = handles.get(ts[i].v);
     if (['getApp', 'getBrowser', 'getTab', 'createBrowserTab'].includes(ts[i].v) && ts[i + 1]?.v === '(' && (ts[i].v !== 'getApp' || ts[i + 2]?.string)) {
-      const app = ts[i].v === 'getApp' ? ts[i + 2].v : 'browser'; readTarget = target(app);
+      const app = ts[i].v === 'getApp' ? ts[i + 2].v : 'browser'; readTarget = target(app, undefined, browsers);
       // Find the receiver assigned to this acquisition, without executing it.
       const start = Math.max(ts.slice(0, i).findLastIndex(t => t.v === ';') + 1, 0);
       const eq = ts.slice(start, i).findIndex(t => t.v === '=');
@@ -140,7 +158,7 @@ function calls(code, handles, fallback) {
     const root = ts.slice(start, i).find(t => handles.get(t.v)?.app === 'browser')?.v;
     // A new tab is always the browser, however the method was named (`cua.createBrowserTab(` or
     // `cua["createBrowserTab"](`, where the token after the name is `]`, not `(`).
-    const destination = method === 'createBrowserTab' ? target('browser') : handles.get(root ?? receiver) ?? fallback;
+    const destination = method === 'createBrowserTab' ? target('browser', undefined, browsers) : handles.get(root ?? receiver) ?? fallback;
     if (destination?.app === 'browser') readTarget = destination;
     const open = i + (bracket ? 2 : 1);
     if (ts[open]?.v !== '(') continue;
@@ -157,7 +175,7 @@ function calls(code, handles, fallback) {
     const literals = (arg ?? []).filter(t => t.string).map(t => t.v);
     const navigation = ['goto', 'createBrowserTab', 'back', 'forward', 'reload'].includes(method);
     const urlNavigation = ['goto', 'createBrowserTab'].includes(method);
-    if (literals.length && (!navigation || urlNavigation)) inputs.push({ method, target: urlNavigation ? { ...target(destination?.app, literals.join('')), observed: false }
+    if (literals.length && (!navigation || urlNavigation)) inputs.push({ method, target: urlNavigation ? { ...target(destination?.app, literals.join(''), browsers), observed: false }
       : { ...destination }, value: literals.join('') });
     if (navigation && destination) { destination.host = null; destination.observed = false; }
     i = j;
@@ -198,7 +216,8 @@ function newPatternMatch(regex, value, combined, previousLength) {
 }
 
 export class FlowRules {
-  constructor(config) {
+  constructor(config, { browsers = [] } = {}) {
+    this.browsers = new Set(browsers.map(norm));
     if (config?.version !== 1 || !Array.isArray(config.rules) || Object.keys(config).some(k => !['version', 'rules'].includes(k))) throw error('expected version 1 and rules array');
     const ids = new Set();
     const list = value => Array.isArray(value) && value.length > 0 && value.every(v => typeof v === 'string' && v.trim());
@@ -223,7 +242,7 @@ export class FlowRules {
   }
   canonical(app) { return this.aliases.get(norm(app)) ?? norm(app); }
   matches(value, apps, { unknown = false, exception = false } = {}) {
-    const context = typeof value === 'string' ? target(value) : value;
+    const context = typeof value === 'string' ? target(value, undefined, this.browsers) : value;
     return apps.some(a => {
       if (!isSite(a)) return a === '*' || this.canonical(a) === this.canonical(context?.app);
       if (!context?.host) return unknown && !!context?.web;
@@ -234,7 +253,7 @@ export class FlowRules {
   }
   analyze(name, args = {}, window) {
     const copies = new Map();
-    const fallback = window ? target(window.app, window.url) : undefined;
+    const fallback = window ? target(window.app, window.url, this.browsers) : undefined;
     const current = value => value?.app === 'browser' ? value : this.windows.get(this.canonical(value?.app)) ??
       (fallback && this.canonical(value?.app) === this.canonical(fallback.app) ? fallback : value);
     const handles = new Map([...this.handles].map(([name, value]) => {
@@ -242,8 +261,8 @@ export class FlowRules {
       return [name, copies.get(value)];
     }));
     const tails = new Map(this.tails);
-    const localTarget = current(target(args.app));
-    const parsed = name === 'js' ? calls(args.code ?? '', handles, fallback) : { inputs: strings(Object.fromEntries(Object.entries(args).filter(([k]) => !['app', 'op'].includes(k)))).map(value => ({ target: localTarget, value, method: 'argument' })), readApp: args.app, readTarget: localTarget };
+    const localTarget = current(target(args.app, undefined, this.browsers));
+    const parsed = name === 'js' ? calls(args.code ?? '', handles, fallback, this.browsers) : { inputs: strings(Object.fromEntries(Object.entries(args).filter(([k]) => !['app', 'op'].includes(k)))).map(value => ({ target: localTarget, value, method: 'argument' })), readApp: args.app, readTarget: localTarget };
     const violations = new Map();
     for (const input of parsed.inputs) {
       const destination = input.target;
@@ -284,10 +303,16 @@ export class FlowRules {
     const all = blocks.join('\n'); const window = windowFromText(all);
     if (window) {
       const canonical = this.canonical(window.app);
-      for (const alias of [window.app, result._meta?.['codex/toolSurface']?.app?.appId, plan.readApp]) if (alias) this.aliases.set(norm(alias), canonical);
+      const aliases = [window.app, result._meta?.['codex/toolSurface']?.app?.appId, plan.readApp].filter(Boolean);
+      const web = aliases.some(alias => nativeBrowser(alias, this.browsers));
+      for (const alias of aliases) {
+        this.aliases.set(norm(alias), canonical);
+        // LaunchServices' bundle filename may differ from the localized name in the engine read.
+        if (web) this.browsers.add(norm(alias));
+      }
     }
     const sections = all.split(/(?=^(?:Window: |Browser tab: ))/m).filter(Boolean);
-    const headers = sections.filter(s => /^(?:Window: |Browser tab: )/m.test(s)).map(headerTarget).filter(Boolean);
+    const headers = sections.filter(s => /^(?:Window: |Browser tab: )/m.test(s)).map(text => headerTarget(text, this.browsers)).filter(Boolean);
     const observed = headers.length === 1 ? headers[0] : undefined;
     if (plan.readTarget) {
       const same = observed && this.canonical(observed.app) === this.canonical(plan.readTarget.app);
@@ -297,7 +322,7 @@ export class FlowRules {
     }
     for (const header of headers) if (header.app !== 'browser') {
       const app = this.canonical(header.app);
-      const next = headers.filter(h => this.canonical(h.app) === app).length === 1 ? header : target(header.app);
+      const next = headers.filter(h => this.canonical(h.app) === app).length === 1 ? header : target(header.app, undefined, this.browsers);
       next.web ||= this.windows.get(app)?.web || headers.some(h => this.canonical(h.app) === app && h.web);
       this.windows.set(app, next);
     }
@@ -305,7 +330,7 @@ export class FlowRules {
       if (block.startsWith('## Computer Use\n') && block.includes('\n## API') && !/^Window: /m.test(block)) continue;
       const sections = block.split(/(?=^(?:Window: |Browser tab: ))/m).filter(Boolean);
       for (const section of sections) {
-        const context = headerTarget(section) ?? observed ?? target(plan.readApp);
+        const context = headerTarget(section, this.browsers) ?? observed ?? target(plan.readApp, undefined, this.browsers);
         if (!context.app || !this.rules.some(r => r.kind === 'source' && this.matches(context, r.sources))) continue;
         const values = []; const add = v => { if (v?.trim()) values.push(v.trim(), ...v.split('\n').map(s => s.trim()).filter(Boolean)); };
         if (context.app === 'browser') for (const line of section.split('\n')) {

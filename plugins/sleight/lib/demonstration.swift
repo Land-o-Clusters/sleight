@@ -27,7 +27,6 @@ final class Observation {
     let pid: pid_t
     let app: AXUIElement
     let window: AXUIElement
-    let textEdit: Bool
     var observer: AXObserver?
     var tap: CFMachPort?
     var registered: [AXUIElement] = []
@@ -46,7 +45,7 @@ final class Observation {
         pid = running[0].processIdentifier; app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.3)
         guard let focused = element(app, kAXFocusedWindowAttribute) else { fail("Selected app has no focused window") }
-        window = focused; textEdit = bundle == "com.apple.TextEdit"
+        window = focused
         guard let windows = attr(app, kAXWindowsAttribute) as? [AXUIElement], windows.count == 1 else { fail("Recording requires exactly one app window") }
         checkWindow()
     }
@@ -85,13 +84,17 @@ final class Observation {
                 "idCount": id.isEmpty ? 0 : nodes.filter { string($0, kAXIdentifierAttribute) == id }.count,
                 "labelCount": name.isEmpty ? 0 : nodes.filter { label($0) == name }.count]
     }
+    func editableText(_ node: AXUIElement) -> Bool {
+        guard ["AXTextArea", "AXTextField"].contains(string(node, kAXRoleAttribute)) else { return false }
+        return (description(node)["editable"] as? Bool) == true
+    }
     func event(_ kind: String, _ node: AXUIElement, _ interactionID: String? = nil) {
         checkWindow(); scan()
         var data: [String: Any] = ["kind": kind, "element": description(node)]
         if let interactionID { data["interaction"] = interactionID }
         if kind == "value" {
-            guard textEdit, ["AXTextArea", "AXTextField"].contains(string(node, kAXRoleAttribute)) else { return }
-            guard emptyFields.contains(where: { CFEqual($0, node) }) else { stop("text field lacks an empty baseline; start with an empty TextEdit fixture") }
+            guard editableText(node) else { return }
+            guard emptyFields.contains(where: { CFEqual($0, node) }) else { stop("text field lacks an empty baseline; start with an empty native field") }
             guard let focus = element(app, kAXFocusedUIElementAttribute), CFEqual(focus, node) else { stop("value changed outside the focused field") }
             guard let value = attr(node, kAXValueAttribute) as? String, value.utf8.count <= 1_048_576 else { stop("text value unavailable or too large") }
             data["value"] = value
@@ -104,7 +107,7 @@ final class Observation {
         for node in nodes where !registered.contains(where: { CFEqual($0, node) }) {
             let role = string(node, kAXRoleAttribute)
             let names = role == "AXMenuItem" ? [kAXMenuItemSelectedNotification] :
-                textEdit && ["AXTextArea", "AXTextField"].contains(role) ? [kAXValueChangedNotification] : []
+                editableText(node) ? [kAXValueChangedNotification] : []
             for name in names {
                 let result = AXObserverAddNotification(observer, node, name as CFString, Unmanaged.passUnretained(self).toOpaque())
                 if result != .success && result != .notificationAlreadyRegistered { stop("required accessibility notification is unavailable") }
@@ -115,14 +118,11 @@ final class Observation {
     func start() {
         // Inspect emptiness once, before notifications or input observation. Never emit prior text.
         scan()
-        if textEdit {
-            for node in nodes where ["AXTextArea", "AXTextField"].contains(string(node, kAXRoleAttribute)) {
-                let spec = description(node)
-                guard (spec["editable"] as? Bool) == true else { continue }
-                guard let value = attr(node, kAXValueAttribute) as? String, value.isEmpty else { stop("field has existing text; start with an empty TextEdit fixture") }
-                emptyFields.append(node)
-                output(["kind": "baseline", "element": spec, "empty": true])
-            }
+        for node in nodes where editableText(node) {
+            let spec = description(node)
+            guard let value = attr(node, kAXValueAttribute) as? String, value.isEmpty else { continue }
+            emptyFields.append(node)
+            output(["kind": "baseline", "element": spec, "empty": true])
         }
         let callback: AXObserverCallback = { _, node, notification, raw in
             guard let raw else { return }
@@ -164,9 +164,9 @@ final class Observation {
         if type == .keyDown {
             guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
             checkWindow()
-            guard textEdit, let focus = element(app, kAXFocusedUIElementAttribute),
-                  ["AXTextArea", "AXTextField"].contains(string(focus, kAXRoleAttribute)),
-                  !event.flags.contains(.maskCommand), !event.flags.contains(.maskControl) else { stop("keyboard shortcut or Calculator typing") }
+            guard let focus = element(app, kAXFocusedUIElementAttribute), editableText(focus),
+                  emptyFields.contains(where: { CFEqual($0, focus) }),
+                  !event.flags.contains(.maskCommand), !event.flags.contains(.maskControl) else { stop("keyboard shortcut or typing outside an empty editable native field") }
             // AX value changes record native text. No key code or character is read.
             _ = description(focus); return
         }
@@ -190,7 +190,7 @@ final class Observation {
             down = hit; dragged = false
             let role = string(hit, kAXRoleAttribute)
             if ["AXButton", "AXMenuBarItem", "AXMenuItem", "AXCheckBox", "AXRadioButton"].contains(role) { eventClick(hit, role) }
-            else if !textEdit || !["AXTextArea", "AXTextField", "AXScrollArea"].contains(role) { stop("unsupported click") }
+            else if !["AXTextArea", "AXTextField", "AXScrollArea"].contains(role) { stop("unsupported click") }
         }
         else if type == .scrollWheel || type == .rightMouseDown { stop("scroll or secondary click") }
     }
@@ -220,7 +220,8 @@ if args == ["--routine-state"] {
     let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: UInt32.max)!)
     output(["idleSeconds": idle, "apps": apps]); exit(0)
 }
-guard args.count == 2, ["com.apple.calculator", "com.apple.TextEdit"].contains(args[0]), let seconds = Double(args[1]), seconds >= 1, seconds <= 3600 else { fail("invalid observer arguments") }
+guard args.count == 2, args[0].range(of: #"^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$"#, options: .regularExpression) != nil,
+      let seconds = Double(args[1]), seconds >= 1, seconds <= 3600 else { fail("invalid observer arguments") }
 guard AXIsProcessTrusted() else { fail("Accessibility unavailable; no permission requested") }
 guard CGPreflightListenEventAccess() else { fail("Input Monitoring unavailable; no permission requested") }
 let observation = Observation(args[0]); observation.start()

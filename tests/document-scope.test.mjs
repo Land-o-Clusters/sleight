@@ -3,6 +3,23 @@ import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
 import { GUARD_END, GUARD_MARK, guardedCode, hasIdentifier, hasLabel, readCode, windowFromText, windowMatches } from '../plugins/sleight/lib/document-scope.mjs';
 
+test('setValue settles native text areas in a non-listed app before the next save', async () => {
+  const window = { title: 'Fixture', app: 'Fixture Editor', url: null };
+  const events = [];
+  const raw = {
+    getAXState: async () => 'Window: "Fixture", App: Fixture Editor.\n0 standard window Fixture\n1 text entry area (settable) ID: body\n2 text field (settable) ID: name',
+    setValue: async (id, value) => { events.push(['write', id, value]); return 'written'; },
+    pressKey: async key => events.push(['key', key]),
+  };
+  const context = { app: raw, cua: { getApp: async () => raw }, nodeRepl: { write() {} } };
+  const result = await runInNewContext(`(async () => { ${guardedCode('const result = await app.setValue({ id: "body" }, "fixture"); await app.pressKey("super+s"); return result;', window)} })()`, context);
+  assert.equal(result, 'written');
+  assert.deepEqual(events, [['write', 1, 'fixture'], ['key', 'shift'], ['key', 'super+s']]);
+  events.length = 0;
+  await runInNewContext(`(async () => { ${guardedCode('await app.setValue(2, "name");', window)} })()`, context);
+  assert.deepEqual(events, [['write', 2, 'name']]);
+});
+
 test('headers require one exact identity, including a document URL', () => {
   assert.deepEqual(windowFromText('Window: "", App: Chess.\n0 standard window'), { title: '', app: 'Chess', url: null });
   assert.deepEqual(windowFromText('Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt'), { title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' });

@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const window = (pid, onScreen, extra = {}) => ({ onScreen, info: { kCGWindowOwnerPID: pid, kCGWindowLayer: 0, kCGWindowAlpha: 1,
   kCGWindowBounds: { Width: 600, Height: 400 }, ...extra } });
 
-function probe({ trusted = true, error = 0, count = 1, apps = ['com.apple.TextEdit'], timeoutError = 0, hidden = false,
+function probe({ trusted = true, error = 0, count = 1, apps = ['com.apple.TextEdit'], name = 'TextEdit', timeoutError = 0, hidden = false,
   minimized = [], cg = [window(42, true)], fullScreen = false } = {}) {
   const calls = [];
   const $ = value => value;
@@ -19,7 +19,7 @@ function probe({ trusted = true, error = 0, count = 1, apps = ['com.apple.TextEd
     NSPredicate: { predicateWithFormatArgumentArray: (format, args) => ({ format, args }) },
     AXIsProcessTrusted: () => trusted,
     NSWorkspace: { sharedWorkspace: { frontmostApplication: { processIdentifier: 9, isNil: () => false }, runningApplications: array(apps.map(id => ({
-      localizedName: 'TextEdit', bundleIdentifier: id, bundleURL: { path: '/System/Applications/TextEdit.app' }, processIdentifier: 42, hidden,
+      localizedName: name, bundleIdentifier: id, bundleURL: { path: '/System/Applications/TextEdit.app' }, processIdentifier: 42, hidden,
       valueForKeyPath(key) { return key.split('.').reduce((value, part) => value?.[part], this); },
     }))) } },
     kCGWindowListOptionOnScreenOnly: 1, kCGWindowListOptionAll: 0, kCGWindowListExcludeDesktopElements: 16,
@@ -78,7 +78,16 @@ test('an empty TextEdit with only a Save Panel Accessory View is identified with
   assert.deepEqual(result.savePanelWindowIds, [71]);
   assert.equal(JSON.stringify(result).includes('Save Panel Accessory View'), false);
   for (const options of [{ count: 1, cg: [panel] }, { count: 0, cg: [panel, window(42, false)] },
-    { count: 0, cg: [window(42, false)] }, { count: 0, cg: [panel], apps: ['com.apple.Preview'] }, { count: 0, cg: [panel], error: -25204 }]) {
+    { count: 0, cg: [window(42, false)] }, { count: 0, cg: [panel], error: -25204 }]) {
     assert.notEqual(probe(options).run('TextEdit').savePanelOnly, true);
   }
+});
+
+test('a second AppKit app with zero AX windows gets the orphan-panel diagnosis', () => {
+  const panel = window(42, false, { kCGWindowName: 'Save Panel Accessory View', kCGWindowNumber: 72 });
+  const result = probe({ count: 0, cg: [panel], apps: ['com.apple.Preview'], name: 'Preview' }).run('com.apple.Preview');
+  assert.equal(result.savePanelOnly, true);
+  assert.equal(result.app, 'Preview');
+  assert.equal(result.pid, 42);
+  assert.deepEqual(result.savePanelWindowIds, [72]);
 });

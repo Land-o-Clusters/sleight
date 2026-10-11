@@ -1916,7 +1916,7 @@ test('a read with an open menu in front says how to close it', async () => {
 });
 test('a read with only a native Save accessory panel names it even on an engine error', async () => {
   for (const rpcError of [false, true]) {
-    const h = harness({ spaceProbe: async () => ({ status: 'responding', windows: 0, savePanelOnly: true }) });
+    const h = harness({ spaceProbe: async () => ({ status: 'responding', app: 'TextEdit', pid: 42, windows: 0, savePanelOnly: true }) });
     h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("TextEdit")' } } }); await tick();
     h.fromServer({ jsonrpc: '2.0', id: 1, ...(rpcError ? { error: { code: -32000, message: 'noWindowsAvailable' } }
       : { result: { isError: true, content: [{ type: 'text', text: 'noWindowsAvailable' }] } }) }); await tick(); await tick();
@@ -1942,6 +1942,20 @@ test('Save-panel advice appears once per process and native window across calls'
   health = { ...health, pid: 43 };
   assert.match(await read(5), /Save Panel Accessory View/);
 });
+test('orphan-panel notes use probe identity and missing pids never deduplicate different apps', async () => {
+  let health = { status: 'responding', app: 'Fixture Editor', windows: 0, savePanelOnly: true, savePanelWindowIds: [11] };
+  const h = harness({ spaceProbe: async () => health });
+  const read = async (id, selector) => {
+    helperRead(h, id, `let app = await cua.getApp(${JSON.stringify(selector)})`); await tick();
+    helperReply(h, id, 'noWindowsAvailable'); await tick(); await tick();
+    return JSON.stringify(h.toClient.find(m => m.id === id));
+  };
+  assert.match(await read(1, 'org.example.editor'), /Fixture Editor/);
+  assert.doesNotMatch(await read(2, 'org.example.editor'), /Save Panel Accessory View/);
+  health = { ...health, app: 'Second Editor' };
+  assert.match(await read(3, 'org.example.second'), /Second Editor.*Save Panel Accessory View/);
+});
+
 test('Save-panel diagnosis and later blocked input share the read-note deduplication', async () => {
   const health = { status: 'responding', pid: 42, windows: 0, savePanelOnly: true, savePanelWindowIds: [11] };
   const h = harness({ spaceProbe: async () => health, diagnoseRead: async () => ({ kind: 'app-save-panel', target: health }) });

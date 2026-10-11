@@ -1,15 +1,12 @@
 // Advisory screenshot guidance; this never changes an input event.
-const simulatorApp = app => ['Device Hub', 'DeviceHub', 'com.apple.dt.Devices'].includes(app) ? 'Device Hub'
-  : ['Simulator', 'com.apple.iphonesimulator'].includes(app) ? 'Simulator' : undefined;
-
 // Claude Code shows an image unresized up to a 2000-pixel long edge and scales larger ones to it
 // (2026-10-10: a 2200 × 1600 engine screenshot reached Claude at 2000 × 1455 with a 1.10
 // multiplier in the image metadata).
 const SHOWN_LONG_EDGE = 2000;
 
 export function simulatorScreenshotNote(content, target, sizeOf) {
-  const app = simulatorApp(target?.app);
-  if (!app || typeof target.title !== 'string' || !target.title) return undefined;
+  const app = target?.app;
+  if (typeof app !== 'string' || !app || typeof target.title !== 'string' || !target.title) return undefined;
   const images = content.filter(block => block?.type === 'image');
   if (images.length !== 1 || typeof images[0].data !== 'string') return undefined;
   const size = sizeOf(images[0].data);
@@ -23,7 +20,7 @@ export function simulatorScreenshotNote(content, target, sizeOf) {
     if (block?.type !== 'text') continue;
     for (const header of (block.text ?? '').matchAll(/^Window: ("(?:[^"\\]|\\.)*"), App: ([^\n]+?)\.?$/gm)) {
       try {
-        if (JSON.parse(header[1]) !== target.title || simulatorApp(header[2]) !== app) return undefined;
+        if (JSON.parse(header[1]) !== target.title || header[2] !== app) return undefined;
       } catch { return undefined; }
     }
   }
@@ -31,6 +28,5 @@ export function simulatorScreenshotNote(content, target, sizeOf) {
     `The engine reads coordinates in these screenshot pixels. Claude Code shows this image smaller, at ` +
     `${Math.round(size.width / factor)} × ${Math.round(size.height / factor)}, so multiply each x and y by ` +
     `${Number(factor.toFixed(4))} before sending coordinates. ` +
-    'After tapping a Safari field, take a fresh screenshot and confirm visible focus before typeText. ' +
-    'A missed tap does not establish a scale change. Leave Capture Keyboard unchanged.';
+    'A missed tap does not establish a scale change.';
 }

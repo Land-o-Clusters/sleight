@@ -54,12 +54,14 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   markers and matching live owners need `routine unlock` (typed `unlock` in a
   terminal). An active session at start, or a person returning during replay, logs a skip and tries
   at the next interval. Other stops pause the job until a successful explicit `run-now`.
-- Demonstration recording supports Calculator and TextEdit with one window. It requires existing
+- Demonstration recording accepts a selected bundle ID with one window. It requires existing
   Accessibility and Input Monitoring access and never requests either permission. It depends on
   app notifications for native text and menu changes. Drags, gestures, keyboard shortcuts, web-view
-  typing, Calculator typing and file dialogs are unsupported. A field without a unique ID or label
+  typing, typing outside editable native text fields and file dialogs are unsupported. A field without a unique ID or label
   stops the capture. The source needs Xcode command-line tools to compile its passive observer.
   A menu notification that arrives before its matching mouse observation also stops capture.
+  Text capture needs an empty baseline from before observation. The observer's Swift source
+  typechecks, but recording in an app other than Calculator or TextEdit has no live proof.
 - CPU parity with Codex is unverified after the guard setup and native app-probe changes. The
   [no-model profile](benchmarks/2026-10-10-footprint-parity.md) covers two small native trees and
   changing Space visibility. Full AX reads remain, and no large-tree scaling result is available.
@@ -137,7 +139,9 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   browsers share one window observation per app. Missing or conflicting headers clear the current
   site. A person's navigation between calls can still leave a stale site. The site checks have
   recorded-header unit coverage, with live checks held on 2026-10-09. Clipboard transfers and runtime
-  strings remain outside those checks. Native
+  strings remain outside those checks. LaunchServices registration discovery has offline coverage
+  for a browser outside the old list, but no live flow-rule proof there. Lookup failures keep the
+  old list. New registrations need a new session. Native
   document scope and saved-file change review do not cover browser tabs. Automatic mode uses a
   connected-extension result cached for six hours, or a negative for 24 hours. Every automatic
   session refreshes it after initialization. A newly connected extension leaves the current session
@@ -290,8 +294,10 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   held the lock. A review of the evidence (2026-10-10) favors the event giving TextEdit's main loop a
   turn that finishes the Accessibility edit before Cmd+S blocks: idle time didn't help, since 10 s
   waits still hung. NSDocument's autosave event monitor, whose mask covers flags-changed, and the
-  Shift modifier itself aren't ruled out. The fix applies only to sleight's own Accessibility writes
-  in `drag.js`, not to a `setValue` from `js`. A rewritten experiment on 2026-10-10 stalled in every
+  Shift modifier itself aren't ruled out. The guard now awaits an engine Shift press after a
+  `setValue` on any native text area, before returning to the caller. Offline tests check its
+  ordering before Cmd+S. Whether the engine's Shift press matches the native flags-changed pair
+  in `drag.js`, and whether it prevents a save hang, need live proof. A rewritten experiment on 2026-10-10 stalled in every
   variant, Shift included, and the saves finished at about 30 s, which points at its own harness
   ([report](benchmarks/2026-10-10-away-2.md)). The night rerun (30 of 30 runs with AppKit
   serialization logging on, then 10 of 10 without) stalled again in every variant, and a `sample`
@@ -638,16 +644,19 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   message named a stuck helper. Quitting TextEdit recovered it every time. The relay now checks
   target AX and a fresh engine read of another acquired app before advising an app quit or helper
   restart. The skill tells Claude to select and type in TextEdit
-  instead of using `setValue`, and to use Cmd+S or File > Save As.
+  instead of using `setValue`, and to use Cmd+S or File > Save As. The guard's generic Shift settle
+  after text-area `setValue` has no live save proof. That skill advice still applies.
 - On 2026-10-06 TextEdit timed out every engine read after an AppleScript `close every document
   saving no`. It still answered AppleScript, but its only window was an orphan "Save Panel Accessory
   View" that Accessibility didn't list. The relay's message again named a stuck helper, while
   `--doctor` passed. Quitting TextEdit fixed it. A read now identifies a possible orphan when macOS
-  lists only `Save Panel Accessory View` and TextEdit has zero AX windows. It asks the user to
-  close a visible panel with Cancel or Escape, or save other work and quit and reopen TextEdit
+  lists only `Save Panel Accessory View` and the probed app has zero AX windows. The note takes
+  the app name and pid from that probe, and is deduplicated by app, process and panel. It asks the user to
+  close a visible panel with Cancel or Escape, or save other work and quit and reopen that app
   if the panel is hidden or will not close. Normal document windows and failed AX reads prevent
   that diagnosis. It also depends on Screen Recording permission: macOS otherwise omits the CG
-  window names used to recognize the panel. Missing names prevent the orphan note. Unit tests pass.
+  window names used to recognize the panel. Missing names prevent the orphan note. A second
+  AppKit app has offline coverage only. Its orphan-panel diagnosis still needs a live check.
   Reproduced on 2026-10-11 through the engine: a background TextEdit with one temporary file,
   `pressKey("super+alt+shift+s")` (the Save As sheet opened), then `close every document saving no`
   left 0 AX windows and 0 documents while CoreGraphics still listed `Save Panel Accessory View`.
@@ -709,8 +718,9 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   scale note, on by default, whenever the engine's screenshot is larger than Claude Code shows
   unresized. Claude Code showed a 2200 × 1600 engine screenshot at 2000 × 1455 with a 1.10
   multiplier (2026-10-10, one observation, so the 2000-pixel ceiling is unconfirmed at other sizes).
-  The note states the engine's pixel frame, the shown size and the exact multiplier, and asks Claude
-  to confirm visible focus before typing. `SLEIGHT_SIM_FOCUS_NOTE=0` turns it off. It has unit proof
+  The note states the engine's pixel frame, the shown size and the exact multiplier for any app.
+  It no longer gives Safari focus or Capture Keyboard advice. `SLEIGHT_SIM_FOCUS_NOTE=0` turns it off.
+  A large non-simulator window has offline coverage only. The note has unit proof
   only and changes what Claude does, so `simulator-form` must pass with it before release: 3 runs,
   each first tap inside the phone and on the Message field, with turns per run against the
   2026-10-09 base runs (7, 6 and 7 turns,

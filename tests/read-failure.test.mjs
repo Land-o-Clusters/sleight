@@ -2,8 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import * as module from '../plugins/sleight/lib/read-failure.mjs';
+
+test('orphan advice uses the probed app and pid rather than the request selector', () => {
+  const advice = module.readFailureAdvice('com.example.editor', { kind: 'app-save-panel',
+    target: { app: 'Fixture Editor', pid: 84, savePanelOnly: true } });
+  assert.match(advice, /Fixture Editor.*84/);
+  assert.match(advice, /quit and reopen Fixture Editor/);
+  assert.doesNotMatch(advice, /TextEdit|com.example.editor/);
+});
 test('a Save panel without document windows is named before helper or Space advice', async () => {
-  const target = { status: 'responding', windows: 0, savePanelOnly: true, hidden: false, onScreen: 0, allWindows: 1, fullScreenSpace: true };
+  const target = { status: 'responding', app: 'TextEdit', pid: 42, windows: 0, savePanelOnly: true, hidden: false, onScreen: 0, allWindows: 1, fullScreenSpace: true };
   assert.equal(module.classifyReadFailure({ target }), 'app-save-panel');
   assert.equal(module.offSpace(target), false);
   const diagnosis = await module.diagnoseReadFailure('TextEdit', undefined, { probeApp: async () => target });

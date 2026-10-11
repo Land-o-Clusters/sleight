@@ -4,6 +4,8 @@ import { mkdtempSync, writeFileSync, rmSync, mkdirSync, symlinkSync } from 'node
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { FlowRules, loadFlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
+import * as flowModule from '../plugins/sleight/lib/flow-rules.mjs';
+import { runInNewContext } from 'node:vm';
 
 const pattern = { id: 'ssns', kind: 'pattern', pattern: '\\b\\d{3}-\\d{2}-\\d{4}\\b', destinations: ['*'], except: ['1Password'] };
 const source = { id: 'contacts-mail', kind: 'source', sources: ['Contacts'], destinations: ['Mail'] };
@@ -11,6 +13,46 @@ const rules = (...entries) => new FlowRules({ version: 1, rules: entries });
 const analyze = (flow, code, app = 'Mail') => flow.analyze('js', { code }, { app });
 const result = (app, text, appId) => ({ content: [{ type: 'text', text: `Window: "Test", App: ${app}\n0 standard window Test\n1 text entry area Value: ${text}\n2 menu bar\n3 File` }],
   _meta: { 'codex/toolSurface': { app: { appId } } } });
+
+test('registered non-listed browsers with unknown sites cannot bypass site rules or use exceptions', () => {
+  for (const app of ['Orion', 'com.kagi.kagimacOS', 'Vivaldi', 'Opera', 'Zen']) {
+    const flow = new FlowRules({ version: 1, rules: [{ id: 'site-secret', kind: 'pattern', pattern: 'SECRET',
+      destinations: ['site:example.com'], except: ['site:allowed.example'] }] }, { browsers: [app] });
+    assert.equal(analyze(flow, 'await app.typeText("SECRET")', app).violations.length, 1);
+    const acquired = flow.analyze('js', { code: `let other = await cua.getApp(${JSON.stringify(app)}); await other.typeText("SECRET")` });
+    assert.equal(acquired.violations.length, 1);
+  }
+});
+
+test('LaunchServices discovery intersects HTTP and HTTPS handlers and resolves their app names', () => {
+  assert.equal(typeof flowModule.discoverNativeBrowsers, 'function');
+  const schemes = [];
+  const browsers = flowModule.discoverNativeBrowsers({ run: (command, args) => {
+    assert.equal(command, '/usr/bin/osascript');
+    return runInNewContext(args.at(-1), {
+      ObjC: { import() {}, castRefToObject: value => value, deepUnwrap: value => value, unwrap: value => value },
+      $: { LSCopyAllHandlersForURLScheme: scheme => { schemes.push(scheme); return scheme === 'http'
+        ? ['com.kagi.kagimacOS', 'org.example.http-only'] : ['com.kagi.kagimacOS', 'org.example.https-only']; },
+      NSWorkspace: { sharedWorkspace: { URLForApplicationWithBundleIdentifier: bundle => ({
+        isNil: () => false, lastPathComponent: bundle === 'com.kagi.kagimacOS' ? 'Orion.app' : 'Other.app' }) } } },
+    });
+  } });
+  assert.deepEqual(schemes, ['http', 'https']);
+  assert.deepEqual(browsers, ['com.kagi.kagimacOS', 'Orion']);
+  const fallback = flowModule.discoverNativeBrowsers({ run: () => { throw new Error('unavailable'); } });
+  const flow = new FlowRules({ version: 1, rules: [{ id: 'secret', kind: 'pattern', pattern: 'SECRET', destinations: ['site:example.com'] }] }, { browsers: fallback });
+  assert.equal(analyze(flow, 'await app.typeText("SECRET")', 'Safari').violations.length, 1);
+});
+
+test('a registered browser bundle keeps site rules under a localized observed app name', () => {
+  const flow = new FlowRules({ version: 1, rules: [{ id: 'localized-secret', kind: 'pattern', pattern: 'SECRET',
+    destinations: ['site:example.com'], except: ['site:allowed.example'] }] }, { browsers: ['com.kagi.kagimacOS', 'Orion'] });
+  const plan = flow.analyze('js', { code: 'let web = await cua.getApp("Navigateur");' });
+  flow.forward(plan);
+  flow.observe(result('Navigateur', '', 'com.kagi.kagimacOS'), plan);
+  assert.equal(flow.analyze('js', { code: 'await web.typeText("SECRET")' }).violations.length, 1);
+  assert.equal(analyze(flow, 'await app.typeText("SECRET")', 'Navigateur').violations.length, 1);
+});
 
 test('pattern rules check typeText, paste and setValue before forwarding', () => {
   const flow = rules(pattern);
@@ -139,7 +181,7 @@ test('loads opt-in user files once and rejects a rules file inside the working p
   t.after(() => rmSync(bank, { recursive: true, force: true }));
   const file = join(bank, 'rules.json'); writeFileSync(file, JSON.stringify({ version: 1, rules: [pattern] }));
   assert.equal(loadFlowRules({}), undefined);
-  const flow = loadFlowRules({ SLEIGHT_FLOW_RULES: file }, { cwd: process.cwd() });
+  const flow = loadFlowRules({ SLEIGHT_FLOW_RULES: file }, { cwd: process.cwd(), discoverBrowsers: () => [] });
   writeFileSync(file, JSON.stringify({ version: 1, rules: [] }));
   assert.equal(analyze(flow, 'await app.typeText("123-45-6789")').violations.length, 1);
   assert.throws(() => loadFlowRules({ SLEIGHT_FLOW_RULES: file }, { cwd: bank }), /outside.*project/);

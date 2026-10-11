@@ -123,13 +123,19 @@ Rejected turn cleanup retries at that interval, with three total attempts per tu
 rejection, sleight logs one warning and drops that turn's cleanup. A later turn has its own budget.
 This bounds retries. It cannot confirm that an engine which rejects cleanup released its resources.
 
-## Simulator focus note
+## Screenshot scale note
 
-Simulator and Device Hub screenshots can exceed what Claude Code shows unresized. Such a screenshot's
-reply states the engine's pixel frame, the shown size and the exact multiplier between them, and asks
-Claude to check visible focus before typing and leave Capture Keyboard unchanged. The note is on by
-default. Set `SLEIGHT_SIM_FOCUS_NOTE=0` to turn it off. Coordinates are unchanged. The affected
-`simulator-form` task must pass with it while the owner is away before release.
+Any app's screenshot with a long edge over 2000 pixels gets a note with the engine's pixel frame,
+the shown size and the multiplier between them. The 2000-pixel size comes from one observation on
+2026-10-10: 2200 × 1600 shown at 2000 × 1455. The note is on by default; its existing setting,
+`SLEIGHT_SIM_FOCUS_NOTE=0`, turns it off. Coordinates are unchanged. A large window in an app other
+than Simulator or Device Hub still needs a live check.
+
+## Demonstration recording
+
+`sleight-mcp record --watch org.example.editor task.json` selects an app by bundle ID. Open one
+window yourself before recording. Editable native text areas and fields need an empty baseline
+before observation. Existing text is never recorded. Replay keeps its app approval checks.
 
 ## Local tools
 
@@ -276,6 +282,10 @@ and source text keeps the host where it was read. Unknown browser sites remain s
 destination rules and cannot use a site exception. Missing or conflicting headers clear the current
 site. A navigation call clears its earlier site until the next header arrives. Native browsers share
 one observed window per app. A person's navigation between reads can leave an observation stale.
+At startup, enabled flow rules read LaunchServices registrations for both HTTP and HTTPS. The
+registered bundle IDs and app names identify browsers even before a URL header arrives. The
+existing browser list is the fallback when registration lookup fails. Registrations are read once
+per session. Relaunch sleight after installing a browser.
 [The design](design/flow-rules.md) explains the gaps in literal checks and source attribution.
 
 ## Driving apps the engine refuses

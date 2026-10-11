@@ -626,7 +626,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, { readControl, probeApp: appHealth.probe }),
     spaceProbe: app => appHealth.probe(app),
     guardMode: process.env.SLEIGHT_GUARD,
-    simFocusNote: process.env.SLEIGHT_SIM_FOCUS_NOTE !== '0',
+    simFocusNote: process.env.SLEIGHT_SIM_FOCUS_NOTE !== '0', // Screenshot scale advice for any app.
     resultTrim: process.env.SLEIGHT_RESULT_TRIM === '1',
     firstCallBatch: ['merge', 'sheet'].includes(process.env.SLEIGHT_FIRST_CALL_BATCH) ? process.env.SLEIGHT_FIRST_CALL_BATCH : process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
     clientIn: replayClient.clientIn,
