@@ -20,6 +20,8 @@ export function promptIphoneMirroring() {
   return 'Using computer use in iPhone Mirroring, open the iPhone\'s Settings app. Go to General, then About. ' +
     'Read the iOS version shown there. In your answer, write only that version number, digits and dots, for example 18.6.2. ' +
     'Read only: do not tap outside Settings, General and About, do not enter text, and do not send anything. ' +
+    'If iPhone Mirroring shows that it is locked or connecting, it may be unlocking on its own: take another ' +
+    'screenshot every few seconds for up to 30 seconds before you stop, and never enter or ask for a password. ' +
     'Leave iPhone Mirroring open.';
 }
 

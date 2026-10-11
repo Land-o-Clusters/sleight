@@ -36,7 +36,12 @@ sim-readiness (`37e2d8e`) and speed-research (`68cdc78`). speed-research found t
 passed differ by 0.4 s. So the gate may be met once textedit-save passes. Its proposed
 `SLEIGHT_GUARD=batch` (skip before-click reads for unique IDs) would save about 1 s a pass and goes
 against a LAWS read, so it isn't built. Merged since: iphone-settle (`6f5f1b9`, owner-present check pending) and richmove-paste
-(`323183d`). Out: GLM's selectall-check and sim-scale-note. Codex keeps lease-select and, on the owner's word, the lease broker and the
+(`323183d`). Out: GLM's selectall-check and sim-scale-note.
+iPhone Mirroring with iphone-settle, owner present (03:25 UTC, `bench/results/2026-10-11T03-25-00-216Z.json`):
+2/3, 27.0.1 in 35.4 s and 8 turns, and 17.6 s and 5 turns, against 66.9 s and 16 before, with no tap
+outside Settings. The third run started on the About page the previous run left. The failed run
+stopped at the lock screen iPhone Mirroring shows while it unlocks itself; the prompt now says to wait
+up to 30 s and never enter a password. An earlier set of 3 at 03:24 failed the same way. Codex keeps lease-select and, on the owner's word, the lease broker and the
 unsaved-changes review (ROADMAP 6). saveclose-research found the next speed lever for speed-research.
 Claude spends two or three calls inside the Save sheet, 6 to 9 s a run
 (`docs/design/save-then-close-2026-10-11.md`).
