@@ -44,8 +44,9 @@ Next, in order:
 1. Review selectall-check when it reports. Squash it in a scratch worktree, run the full check
    there, and fast-forward `pane/auto-mode`. Hand out richmove-format and savelock-engine when lanes
    free up.
-2. One owner-away window verifies the merged lanes live: the TextEdit tasks with the new launch
-   (only the helper ran live, 1.6 s warm), the computed Chess points (waits live check), the chat
+2. One owner-away window verifies the merged lanes live. Done on the login 2026-10-11 with the new
+   TextEdit launch: textedit-save 3/3 and textedit-edit 3/3 (`bench/results/2026-10-11T02-00-43-494Z.json`,
+   `…T02-11-10-111Z.json`), with TextEdit quit after the second. Left: textedit-drag, the computed Chess points (waits live check), the chat
    pass's saved rows, `stale-number` and `menu-bar` (live-checks-1-1), the shop smoke outcomes,
    textedit-save with traces, Best Buy, select-all, simulator-form, the chat tasks. The rich-text
    move (`SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background`) waits for
