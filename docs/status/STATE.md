@@ -33,6 +33,7 @@ Next, in order:
    rich-text move (`SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background`),
    the save-lock experiment, select-all, `stale-number`, Chess, simulator-form, the chat tasks.
 3. Act on speed-research to close the gate, then the full release pass and the release (ROADMAP 5b).
+4. Isolate the bench arms from the owner's Claude login (below, OpenUsage), before the next pass.
 
 **Waiting on the owner:**
 - `Untitled 10.txt` in the iCloud TextEdit folder, a benchmark leftover: move it to the Trash or keep.
@@ -122,12 +123,13 @@ Branches and worktrees (`~/Projects/sleight-wt/<name>`):
 
 ## Waiting on the owner
 
-- OpenUsage's usage reads get 429s, and all 6 throttle starts since 2026-10-08 came 1 to 5 minutes
-  after a `bench/run.mjs` run began (the owner's other agent, 2026-10-10). Claude Code's docs don't
-  mention a usage call from `claude -p`. Benchmark arms now run with
-  `ENABLE_CLAUDEAI_MCP_SERVERS=false` and on the owner's API key (LAWS), checked 2026-10-10 06:00 UTC:
-  `/v1/models` answered 200, and a stopped `claude -p` reported `apiKeySource: ANTHROPIC_API_KEY`.
-  OpenUsage's hourly retry passing after the next pass would confirm the cause.
+- OpenUsage's Claude reads still get 429s with the bench on the API key (disk-audit session,
+  2026-10-11). Each throttle began 3 to 5 minutes after a cluster's first bench run, API key or
+  login: 07:04 to 07:07, 10:27 to 10:30, 14:01 to 14:06 UTC. Inferred: `claude -p` in an arm still
+  reaches the owner's keychain login, which OpenUsage also reads (its log shows ~2,000
+  `keychainCurrentUser refresh=yes` lines). Next for sleight-arch: give each arm a bench-only
+  `CLAUDE_CONFIG_DIR` (check that the arm then can't find the owner's login), run one cluster, and
+  confirm OpenUsage gets fresh reads throughout (grep its log for "plugin:claude").
 
 - Safari fixture windows, Preview `Pages-*.pdf`, Word and Excel fixture documents were left on
   their screen on 2026-10-09. Check the iCloud TextEdit files only by exact content, never by browsing.
