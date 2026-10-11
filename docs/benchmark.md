@@ -537,6 +537,10 @@ the same tasks and counts, the owner away, [raw](benchmarks/2026-10-11-skill-ab-
 36 runs. Slim (86 lines) and current both took 4.58 turns a run, at 14.5 s and 15.6 s, with 8.0 and
 9.2 s of model time. With no sleight rules it took 5.75 turns and 18.6 s, and calculator-click took 4
 to 7 turns against 3 for both skills. Slim's calculator-click runs all took 3 turns this time.
+On textedit-save (13:00 to 13:14 UTC, 6 runs an arm, the owner away, a Codex lane's checks on the
+same Mac, [raw](benchmarks/2026-10-11-skill-ab-save.json)), slim passed 6/6 at 11.33 turns and 38.9 s
+a run, current 6/6 at 10.83 turns and 44.7 s, and none 5/6 at 13.00 turns and 46.0 s. Slim's runs
+ranged from 36.7 to 41.0 s, current's from 34.6 to 59.1 s.
 
 The head-to-head at the owner's normal load (2026-10-09, the owner away, load 6 to 24, Sonnet 5.5 at
 medium against gpt-6.1-sol at medium) alternated sleight and Codex task by task. The default tasks
