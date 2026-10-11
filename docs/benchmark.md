@@ -517,6 +517,12 @@ and 18.5 s a run, against 5/5 at 6.6 turns and 20.0 s (one default run was skipp
 calculator-click took 3 turns in all 12 runs, at 10.4 s against 11.0 s. `open_file` naming its `getApp` call and a save
 observed from the file on disk are the default since.
 
+The full sheet A/B ran with the owner away (12:43 to 13:00 UTC, all three tasks, 2 rounds of 3 runs a
+task per arm, [raw](benchmarks/2026-10-11-sheet-ab.json)). A Codex lane ran its checks on the same
+Mac during it. Both arms passed 17/17, with one run each skipped at setup. The sheet arm took 7.53
+turns and 29.7 s a run against 5.94 turns and 21.5 s. Its textedit-save runs took 8 to 25 turns
+(29.9 to 109.4 s) against 7 to 10 turns (33.2 to 39.2 s). The sheet batch lost and is removed.
+
 The skill itself ran against a slim, app-agnostic version (`SKILL-slim.md`, 79 lines against 137, no
 app names) and against no sleight rules at all (`b03b5a7`, 05:48 to 05:59 UTC, calculator-click and
 textedit-edit, 6 runs a task per arm, the owner at the Mac,
