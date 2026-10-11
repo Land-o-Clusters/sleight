@@ -134,8 +134,8 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
 - Briefs 6 to 10 are built and squash-merged into `pane/auto-mode` (through `309c2c9`).
   Qualification on 2026-10-09 passed Helium, Preview, Finder and TextEdit with Calculator 3/3 each,
   and all 11 web tasks 1/1. Word, Excel and PowerPoint passed 1/1 each (Excel and PowerPoint on
-  2026-10-09 at `76cf880`). Still to qualify are simulator-flow, Mail and Mimestream, all with the owner away.
-  Mail's fixture import and Mimestream both refuse without `--owner-away` (checked 2026-10-11).
+  2026-10-09 at `76cf880`). Still to qualify are simulator-flow (owner away), and Mail, Mimestream and the chat tasks with the
+  owner watching (owner, 2026-10-11). Their code required `--owner-away`, and lane owner-present-mail flips it.
 
 ## 5. After 1.0, in the owner's order
 

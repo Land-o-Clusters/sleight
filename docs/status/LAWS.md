@@ -39,6 +39,8 @@ belong in [STATE.md](STATE.md).
   docs, dense, interactive, collapsible), Microsoft Office (Word, Excel, PowerPoint), and mail
   apps, where tasks only navigate and never send. Mimestream runs on the owner's own Gmail and only
   opens and reads, and its published results don't include any mail content (owner, 2026-10-09).
+  Tasks in the owner's real accounts (Mail, Mimestream, Slack, Discord, WhatsApp) run only with the
+  owner at the Mac and watching (`--owner-present`), never while they're away (owner, 2026-10-11).
 - Speed comes before the guard's read between actions in a batch (owner, 2026-10-09): keys,
   typing, paste and coordinate actions after the first action in a call skip it by default, as in
   Codex. The first action and numbered actions keep their check, and `SLEIGHT_GUARD=careful` keeps

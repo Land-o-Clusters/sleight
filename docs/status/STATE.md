@@ -65,13 +65,13 @@ Next, in order:
 2. One owner-away sitting, asked for only once every lane is merged (owner, 2026-10-11: no partial
    windows), verifies the merged lanes live and reruns the Codex head-to-head. Done on the login 2026-10-11 with the new
    TextEdit launch: textedit-save 3/3 and textedit-edit 3/3 (`bench/results/2026-10-11T02-00-43-494Z.json`,
-   `…T02-11-10-111Z.json`), with TextEdit quit after the second. Left: textedit-drag, the computed Chess points (waits live check), the chat
-   pass's saved rows, `stale-number` and `menu-bar` (live-checks-1-1), the shop smoke outcomes,
-   textedit-save with traces, Best Buy, select-all, simulator-form, the chat tasks, Mail and
-   Mimestream qualification (one run each, `--owner-away`), and the save-lock
+   `…T02-11-10-111Z.json`), with TextEdit quit after the second. Left: textedit-drag, the computed Chess points (waits live check), `stale-number` and `menu-bar` (live-checks-1-1), the shop smoke outcomes,
+   textedit-save with traces, Best Buy, select-all, simulator-form, and the save-lock
    experiment (`node bench/textedit-save-lock.mjs --delivery-check`, then the full run; finishing its
    Open panel can bring TextEdit forward). The opt-in rich-text move is off the list: richmove-paste (`323183d`) found
    macOS disables Paste in a TextEdit that has never been frontmost, so it stays opt-in and off.
+   Separately, with the owner watching after owner-present-mail merges, run Mail, Mimestream and the chat
+   tasks, one run each.
 3. Act on speed-research to close the gate, then the full release pass and the release (ROADMAP 5b).
 4. Confirm the bench arms' own config folder with one cluster once OpenUsage reads fresh (below).
 
@@ -98,7 +98,8 @@ Owner at the Mac, 2026-10-11 02:15 to 02:25 UTC:
   on the owner's "whatever you want": `menu_bar` stays at "needs Accessibility" (a macOS security
   setting), and "Always allow" and a fresh-user `setup` run wait until after the release.
 - "Always allow" needs the release: the owner's installed sleight is 1.1.0, `0b6a1c0`, without that
-  button. Mail and Mimestream moved to the away sitting: both refuse without `--owner-away` (03:39 UTC).
+  button. Mail, Mimestream and the chat tasks run only with the owner watching (owner, 03:45 UTC, LAWS); their
+  code required `--owner-away`, and lane owner-present-mail (GLM) flips it.
 - Whether to release if the gate (ROADMAP 3.5) isn't met.
 
 **Where work goes.** Work in progress is private between releases (LAWS): `remote.pushDefault
