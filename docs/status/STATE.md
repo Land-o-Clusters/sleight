@@ -20,15 +20,16 @@ livechecks (`46c055c`), saveclose-research (`867f58c`), shop-check (`5a96105`), 
 Not merged: richmove-placement. My brief misread the evidence. The fixture covers its window on
 purpose, because the opt-in rich move only runs on the Accessibility path. In that run the move
 pasted, then failed its formatting check. `codex/richmove-placement` stays on private, unused. The
-follow-up is `.dev/prompts/lane-richmove-format.md`. savelock-delivery's `--delivery-check` ran live
+follow-up is richmove-format. savelock-delivery's `--delivery-check` ran live
 twice, and neither posted Cmd+S saved the background TextEdit. The follow-up is
-`.dev/prompts/lane-savelock-engine.md`. Both briefs wait for a free lane. The bench arms get their own
+savelock-engine. The bench arms get their own
 `CLAUDE_CONFIG_DIR` in API mode (OpenUsage, below). The live lock and hold are free.
 
-Lanes out: GLM's selectall-check (brief in `.dev/prompts/lane-selectall-check.md`, after
-`lane-rules-2026-10-11.md`), which pushes `codex/selectall-check` to private and doesn't merge.
-Codex hasn't started lease-select (Best Buy's lease refusals), sim-readiness or speed-research. They
-wait for its quota to reset. saveclose-research found the next speed lever for speed-research.
+Lanes out (each pushes `codex/<name>` to private and doesn't merge; briefs in `.dev/prompts/`):
+GLM's selectall-check and richmove-format, Grok's savelock-engine (the last two handed out 02:20 UTC).
+The owner now gets each lane as one paste-ready prompt with the model named.
+Codex hasn't started lease-select (Best Buy's lease refusals and tonight's browser-tab refusals),
+sim-readiness or speed-research. They wait for its quota to reset, with prompts ready. saveclose-research found the next speed lever for speed-research.
 Claude spends two or three calls inside the Save sheet, 6 to 9 s a run
 (`docs/design/save-then-close-2026-10-11.md`).
 
