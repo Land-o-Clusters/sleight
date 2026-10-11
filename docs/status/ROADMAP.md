@@ -24,6 +24,22 @@ they're away. Sol works track 4, and sleight-arch works tracks 2 and 3 while the
    starts it.
 4. Give the user's front app back when a launch takes it, as a generic mechanism.
 
+## 0b. Market it, and win in the browser (owner, 2026-10-11)
+
+Another developer is building a Codex-derived browser extension for Claude, open source and teased
+for soon. Because he's focused on browser use, the owner set browser use as sleight's strongest
+suit (2026-10-11), with a release out first and numbers that show it.
+
+1. Browser depth: the battery's web-page tasks grow past reading one marker to forms, tabs, logins
+   left to the user, dense and collapsible pages and downloads, through the Chrome extension API and in each
+   native browser, against Codex. A gap gets a generic fix, never a per-site rule.
+2. Release once track 0's live checks and the away sitting meet the gate (5b), public push included.
+3. A launch post the owner publishes, built on measured results only. It leads with the browser
+   numbers and the Codex parity table, then native Mac apps, then the install line. sleight-arch
+   drafts it.
+4. A short demo from the battery's own runs, recorded per window (LAWS: no full-screen capture).
+5. When his extension is public, the same browser tasks run on it, published in full as LAWS requires.
+
 ## 1. Release 1.0 (done: v1.0.0, 2026-10-09)
 
 1. The Chess and simulator head-to-head and a release pass, with the owner away (running 2026-10-09).

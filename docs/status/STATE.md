@@ -3,7 +3,15 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-11 07:10 UTC, all four track-0 lanes merged)
+## Banner (2026-10-11 12:40 UTC, the away sitting is running)
+
+**Running now, owner's OK at 12:33 UTC (sitting plus the battery's no-seed half):** the skill A/B
+rerun (`.dev/passes/ab-skill-r2.log`). After it, `.dev/passes/away-2026-10-11.sh` from this worktree
+runs two Save A/Bs (sheet and skill), `bench/away-sitting.mjs` (12 steps) and
+`bench/run.mjs --suite battery --owner-away` (17 tasks, 34 runs). Progress is in
+`.dev/passes/away-2026-10-11.log`. Don't change plugin files in the main checkout until it ends.
+Nothing ran from 07:15 to 12:30 UTC: sleight-arch ended its turn without asking for the sitting.
+
 
 `pane/auto-mode` at `ff03fbc` is pushed to private (`Land-o-Clusters/sleight-dev`), and the main
 checkout is fast-forwarded to it. `npm run check` 1,938 tests plus 31 mod tests, `lint:prose` clean.
