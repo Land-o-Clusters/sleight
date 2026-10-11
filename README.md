@@ -144,7 +144,7 @@ Optional unsaved review lists changed windows and observed native Undo or Revert
 The [settings](docs/settings.md#receipts-and-unsaved-review) explain title redaction and review.
 
 `/sleight stop`, or Stop (`s`) in the pane, works mid-turn. It ends the engine's turn and refuses every
-further sleight call until your next message. Press Esc too if you want the rest of Claude's turn gone.
+further sleight call until your next message. The call in progress is cut off, which usually ends Claude's turn. If Claude keeps working without sleight, press Esc.
 
 The pane waits for Claude to finish before it takes a picture. The engine reports UI changes as a diff
 against the latest read of an app, no matter who made that read, so a snapshot mid-turn could hide a

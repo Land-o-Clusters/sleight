@@ -54,6 +54,17 @@ Next, in order:
 3. Act on speed-research to close the gate, then the full release pass and the release (ROADMAP 5b).
 4. Confirm the bench arms' own config folder with one cluster once OpenUsage reads fresh (below).
 
+Owner at the Mac, 2026-10-11 02:15 to 02:25 UTC:
+- `/sleight stop` on installed 1.1.0 came mid-call in a Calculator loop. Claude Code marked the call
+  interrupted and ended the turn at once. Calculator stopped at 208 of the loop's target 1000. Esc
+  then had nothing to stop. The stop message now says to press Esc only if Claude keeps working.
+- iPhone Mirroring (`--owner-present`): first run refused in 4.1 s, since headless runs can't prompt.
+  The owner approved adding it for owner-present runs only (LAWS). The rerun read 27.0.1 in 66.9 s
+  and 16 turns, scored a failure under the then-strict check, which now allows a note after a blank
+  line. A tap opened Personal Hotspot by mistake. The owner was asked to check its compatibility
+  switch.
+- The iCloud `Untitled 10.txt` (contents `sleight bench 276874eb`) is in the Trash, on the owner's OK.
+
 **Waiting on the owner:**
 - Bench auth (owner, 2026-10-11 02:10 UTC): live runs use the owner's login (`--auth login`) until
   they decide. The key's $200 is a promotional grant (the "API credit (Max 20x)", $199.73 left,
@@ -64,13 +75,13 @@ Next, in order:
   counting that traffic as Claude Code). Owner's choice: buy a little credit, or stay on the login.
   Faking the traffic's product or a bare-API arm are out (the latter isn't Claude Code plus sleight).
   textedit-save on the login passed 3/3 (93.4, 40.2, 45.6 s, `bench/results/2026-10-11T02-00-43-494Z.json`).
-- `Untitled 10.txt` in the iCloud TextEdit folder, a benchmark leftover: move it to the Trash or keep.
 - Windows (ROADMAP track 6): on the 2020 Intel MacBook Pro, register for the Windows 11 Enterprise
   evaluation, download it and VMware Fusion, install ChatGPT, turn on OpenSSH. Then sleight-arch
   runs the spike over SSH.
 - The directory listing (ROADMAP 5b.6).
-- With the owner at the Mac, Esc and `/sleight stop` in a real session, Mail and Mimestream,
-  iPhone Mirroring (`--owner-present`), trying "Always allow" once, a live `sleight-mcp setup` in a
+- With the owner at the Mac, Mail and Mimestream, "Always allow" once (unreleased: the owner's
+  installed sleight is 1.1.0, `0b6a1c0`, which has no such button; rerun it after the release), a
+  live `sleight-mcp setup` in a
   fresh macOS user, and Accessibility for the process that runs `menu_bar`'s osascript.
 - Whether to release if the gate (ROADMAP 3.5) isn't met.
 

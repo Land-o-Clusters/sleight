@@ -15,7 +15,10 @@ test('iOS version check accepts only dotted version text', () => {
   for (const answer of ['18.6.2', '26.0', '27', '27.0.1']) {
     assert.equal(checkIosVersion({ answer }), true, answer);
   }
-  for (const answer of ['', 'iOS 18.6.2', '18.6.2 extra', '18.6.2\n', 'v18.6.2', '18.6.2.', '.1']) {
+  // A note after a blank line passes: on 2026-10-11 Claude answered the version and then warned about
+  // a mis-tap into Personal Hotspot, which the owner needed to know.
+  assert.equal(checkIosVersion({ answer: '27.0.1\n\nMy first tap landed on Personal Hotspot.' }), true);
+  for (const answer of ['', 'iOS 18.6.2', '18.6.2 extra', '18.6.2\n', 'v18.6.2', '18.6.2.', '.1', '18.6.2\nextra', 'note\n\n18.6.2']) {
     assert.notEqual(checkIosVersion({ answer }), true, JSON.stringify(answer));
   }
 });

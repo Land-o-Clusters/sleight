@@ -340,7 +340,9 @@ export const register: Register = on => {
       usedThisTurn = false
       const receipt = await endEngineTurn($, 'Interrupt', true)
       $.ui.status('sleight · stopped')
-      return { text: `${receipt} Press Esc to stop the rest of the turn.` }
+      // The interrupted call usually ends Claude's turn at once (desktop app, 2026-10-11), so Esc
+      // is only for a turn that goes on without sleight.
+      return { text: `${receipt} If Claude keeps working, press Esc to end its turn.` }
     }
     await $.ui.open({ id: PANE, title: 'sleight' })
     if (args === 'replay' || args.startsWith('replay ')) return replayCurrent($, args.slice(6))

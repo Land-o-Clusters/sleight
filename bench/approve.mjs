@@ -22,7 +22,11 @@ const app = /^Allow Computer Use to use "(.+)"\?$/.exec(e.message ?? '')?.[1] ??
 // The computer-use server of each benchmark arm (see run.mjs).
 const generic = Boolean(process.env.BENCH_ARM_SERVERS);
 const SERVERS = generic ? JSON.parse(process.env.BENCH_ARM_SERVERS) : ['plugin:sleight:computer', 'lcu'];
-const apps = [...BENCH_APPS, ...(process.env.BENCH_SUITE === 'real' ? REAL_APPS : [])];
+// iPhone Mirroring needs the owner's sign-in and focus, so it's approved only in a real-suite run
+// started with --owner-present (owner, 2026-10-11). Headless claude -p can't show a prompt.
+const OWNER_PRESENT_APPS = ['iPhone Mirroring', 'com.apple.ScreenContinuity'];
+const apps = [...BENCH_APPS, ...(process.env.BENCH_SUITE === 'real' ? REAL_APPS : []),
+  ...(process.env.BENCH_SUITE === 'real' && process.env.BENCH_OWNER_PRESENT === '1' ? OWNER_PRESENT_APPS : [])];
 const choices = e.requested_schema?.properties?.choice?.enum ?? [];
 const supported = (!choices.length || choices.includes('session') || choices.includes('once')) &&
   (!generic || (e.requested_schema?.required ?? []).every(key => key === 'choice' && choices.length));

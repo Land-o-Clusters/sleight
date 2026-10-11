@@ -79,7 +79,8 @@ belong in [STATE.md](STATE.md).
   (Calculator, TextEdit, Chess, and Simulator or DeviceHub since 2026-10-07, by name or bundle ID) in benchmark runs,
   plus Safari, Preview, Finder and Helium for the real-use tasks (owner, 2026-10-08) and Word,
   Excel, PowerPoint, Mail and Mimestream for them too (owner, 2026-10-09), VS Code (also by its app name, Code), Cursor, Firefox,
-  Slack, Discord and WhatsApp for them too (owner, 2026-10-10, chat apps open and read only), and the repo's own
+  Slack, Discord and WhatsApp for them too (owner, 2026-10-10, chat apps open and read only), iPhone Mirroring
+  only in real-suite runs started with `--owner-present` (owner, 2026-10-11), and the repo's own
   hang fixture (`org.sleight.reliability-fixture`, owner, 2026-10-08) in its probe, browser-extension access to
   the benchmark's own local pages on `127.0.0.1` (owner, 2026-10-10), and a list the user writes in
   a file outside any project, read by sleight in every session, headless or not (owner, 2026-10-04).

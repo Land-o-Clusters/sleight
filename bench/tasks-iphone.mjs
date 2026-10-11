@@ -3,7 +3,8 @@ import { openElectron, cleanupElectron } from './real-electron.mjs';
 export const IPHONE_MIRRORING_BUNDLE = 'com.apple.ScreenContinuity';
 
 export function checkIosVersion({ answer } = {}) {
-  return /^\d+(\.\d+)*$/.test(String(answer ?? '')) || 'answer is not an iOS version';
+  // The version alone, optionally followed by a blank line and a note (a mis-tap warning, 2026-10-11).
+  return /^\d+(\.\d+)*(\n\n[\s\S]*\S[\s\S]*)?$/.test(String(answer ?? '')) || 'answer is not an iOS version';
 }
 
 export function prepareIphoneMirroring() {}
@@ -22,7 +23,7 @@ export function promptIphoneMirroring() {
     'Leave iPhone Mirroring open.';
 }
 
-// iPhone Mirroring is not on the benchmark approval allowlist. The owner approves it at the prompt.
+// iPhone Mirroring is approved only in --owner-present runs (bench/approve.mjs, owner 2026-10-11).
 export const iphoneTasks = [{
   id: 'iphone-mirroring-settings', app: 'iPhone Mirroring', bundle: IPHONE_MIRRORING_BUNDLE,
   ownerPresent: true, noScreenshot: true,

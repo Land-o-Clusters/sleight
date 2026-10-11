@@ -422,6 +422,8 @@ describe('sleight mod', () => {
     })
     const receipt = await $.command.run({ command: 'sleight', args: 'stop' } as never)
     expect(String((receipt as { text?: string }).text)).toContain(text)
+    // The stop usually ends the turn itself (the 2026-10-11 desktop check), so Esc is conditional.
+    expect(String((receipt as { text?: string }).text)).toContain('If Claude keeps working, press Esc')
     text = 'old engine response'
     const absent = await $.command.run({ command: 'sleight', args: 'stop' } as never)
     expect(String((absent as { text?: string }).text)).toContain('no checked receipt')

@@ -2,10 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 
-const approve = (message, suite = 'default') => {
+const approve = (message, suite = 'default', extra = {}) => {
   const input = { mcp_server_name: 'plugin:sleight:computer', message };
+  const env = { ...process.env, BENCH_SUITE: suite, ...extra };
+  if (!('BENCH_OWNER_PRESENT' in extra)) delete env.BENCH_OWNER_PRESENT;
   const output = execFileSync(process.execPath, ['bench/approve.mjs'], { cwd: new URL('..', import.meta.url),
-    env: { ...process.env, BENCH_SUITE: suite }, input: JSON.stringify(input), encoding: 'utf8' });
+    env, input: JSON.stringify(input), encoding: 'utf8' });
   return output ? JSON.parse(output).hookSpecificOutput.action : null;
 };
 test('benchmark menu approvals cover the original apps and exclude unapproved targets', () => {
@@ -43,4 +45,13 @@ test('real tasks approve their apps and exact bundle IDs without widening core a
 test('benchmark runs approve Simulator and DeviceHub by name and bundle ID', () => {
   for (const app of ['Simulator', 'com.apple.iphonesimulator', 'DeviceHub', 'Device Hub', 'com.apple.dt.Devices']) assert.equal(approve(`Allow Computer Use to use "${app}"?`), 'accept');
   assert.equal(approve('Allow Computer Use to use "Xcode"?'), null);
+});
+
+test('iPhone Mirroring is approved only in a real-suite run with the owner present (owner, 2026-10-11)', () => {
+  for (const app of ['iPhone Mirroring', 'com.apple.ScreenContinuity']) {
+    assert.equal(approve(`Allow Computer Use to use "${app}"?`, 'real', { BENCH_OWNER_PRESENT: '1' }), 'accept');
+    assert.equal(approve(`Allow Computer Use to use "${app}"?`, 'real'), null);
+    assert.equal(approve(`Allow Computer Use to use "${app}"?`, 'default', { BENCH_OWNER_PRESENT: '1' }), null);
+  }
+  assert.equal(approve('Allow Computer Use to use "com.apple.screencontinuity"?', 'real', { BENCH_OWNER_PRESENT: '1' }), null);
 });

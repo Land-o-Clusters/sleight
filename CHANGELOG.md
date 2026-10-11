@@ -257,7 +257,7 @@
   day: helium-shop passed both arms, and safari-shop failed fixture setup on both in
   [shop-1](docs/benchmarks/2026-10-10-shop-1.json) and passed both in
   [shop-2](docs/benchmarks/2026-10-10-shop-2.json) after the title-nonce fix.
-- Real-suite task `iphone-mirroring-settings` opens iPhone Mirroring and reads the iOS version from Settings > General > About. The check is that version text. `--owner-present` is required. Default passes and the head-to-head skip it. The owner approves the app at the prompt. It is not on the allowlist. Published rows keep the answer and timings, with no screenshot. Unit-tested. No live run (needs the owner at the Mac).
+- Real-suite task `iphone-mirroring-settings` opens iPhone Mirroring and reads the iOS version from Settings > General > About. The check is that version text. `--owner-present` is required. Default passes and the head-to-head skip it. Headless `claude -p` can't show an approval prompt. The benchmark approves iPhone Mirroring only in `--owner-present` runs (owner, 2026-10-11). Published rows keep the answer and timings, with no screenshot. A version followed by a blank line and a note passes. One live run on 2026-10-11 read 27.0.1 in 66.9 s and 16 turns, and failed the stricter check then in place, since Claude added a note about a mis-tap.
 - With `SLEIGHT_SIM_FOCUS_NOTE=1`, Simulator screenshot replies specify the acquired window and image dimensions and ask Claude to
   confirm field focus before typing. Coordinates are unchanged. Unit-tested only; the affected
   simulator task and the owner-away focus probe remain pending. The note is off by default.

@@ -204,6 +204,7 @@ if (auth.mode === 'api') console.log(`Claude arms run on the API key: $${auth.sp
 const armEnv = (arm, extra = {}) => {
   const env = { ...process.env, BENCH_ROOT: ROOT, SLEIGHT_APPROVAL_PROMPT: 'client',
     ...arm.env, ...extra, BENCH_SUITE: suite, ENABLE_CLAUDEAI_MCP_SERVERS: 'false', ...auth.env,
+    ...(ownerPresent ? { BENCH_OWNER_PRESENT: '1' } : {}),
     ...(suite === 'real' ? { SLEIGHT_SURFACES: realSurfaces } : {}) };
   for (const key of auth.unset) delete env[key];
   return env;

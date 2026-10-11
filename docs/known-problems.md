@@ -789,6 +789,11 @@ our own runs. Dates and engine versions are given where they matter.
   in parallel with others, so the evidence is unclean. Likely cause: a handle stays a browser handle
   only after the engine reply marks the call `browserUse` (`browserHandles` in `relay.mjs`), and
   the refused handles weren't confirmed. Not reproduced in a test yet.
+- iPhone Mirroring (2026-10-11, one owner-present run): the engine's scroll didn't move the iPhone's
+  Settings list in 3 tries, and taps sent while a page was still animating hit the row below the target. One
+  of them opened Personal Hotspot instead of General. Claude saw it and said so, and the owner was
+  asked to check that page's compatibility switch. The tree shows only the window, so
+  every step works from screenshots.
 - With every test file running at once, the app-health restart test and the doctor's pipe test each
   failed one full check at load 9 to 11 (2026-10-10) and passed 5 of 5 and 3 of 3 runs alone.
   `npm test` now runs 4 files at a time.
