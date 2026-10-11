@@ -52,6 +52,8 @@ belong in [STATE.md](STATE.md).
   their read: the engine takes only element numbers or points, so sleight finds the current number in a
   fresh read. The owner also chose to skip those reads, on sleight-arch's wrong claim that the engine
   resolves IDs itself. Those reads are unchanged. The bar is Codex's speed and footprint under any load.
+- Owner-away live runs happen in one sitting, asked for only once every open lane is merged, never in
+  partial windows: each sitting means pausing the owner's other projects (owner, 2026-10-11).
 - Build work goes to Codex, Grok and GLM lanes, not Claude subagents, which the owner saves for
   other work (owner, 2026-10-11). sleight-arch reviews, merges and runs the live checks.
 - Codex time goes to known problems and enhancements, not benchmark runs (owner, 2026-10-04).
@@ -102,6 +104,8 @@ belong in [STATE.md](STATE.md).
   it built) and `turn_ended`, matched by `next.origin.plugin === 'sleight'`, which the host sets. It
   never approves a call Claude made (owner, 2026-10-08).
 - sleight's branding uses only its own marks, never another company's logo or mascot.
+- sleight never tells Claude to bring an app to the front. When only activation would help, the
+  message hands that choice to the user, since it takes their focus.
 
 ## The engine
 
@@ -164,6 +168,9 @@ belong in [STATE.md](STATE.md).
   other window open and names it to the owner.
 - A skill or prompt change that alters what Claude does is released only after the affected tasks ran with
   it: a hint that read well (press a 3D piece at its head) cost Chess runs (2026-10-09).
+- Any Claude process the benchmark or a probe starts begins from an environment without the host
+  session's `CLAUDE*` variables. Inherited, they made every arm look like the desktop app's own
+  Claude Code, and billing refused the arms (2026-10-11).
 - Benchmark arms run from folders outside any git repo. Claude Code loads CLAUDE.md from parent
   folders and keys project memory by the git root, so a folder inside this repo leaks both.
 - The marketplace installs from the default branch, so `main` is what new users get. Keep it releasable:
