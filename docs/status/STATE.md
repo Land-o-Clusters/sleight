@@ -3,7 +3,14 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-11 15:45 UTC, the away sitting done as far as its harnesses allow)
+## Banner (2026-10-11 16:30 UTC, 1.2.0 released)
+
+**Released `v1.2.0` (`6755a28`) on the owner's call to release on today's head-to-heads without a full
+release pass.** Public `main` and the tag are pushed, the GitHub release is up, and the owner's installed copy
+is 1.2.0 at `6755a28`. Work since then goes to private again. Next: merge lanes web-cleanup,
+owned-abort (authorized to update its one obsolete test) and prune-budget, then run their live checks,
+the lean-prompt A/B, the battery and the browser tasks overnight, then the launch post (ROADMAP 0b).
+
 
 Measured today, owner away (docs/benchmark.md): clean-arms head-to-head 9/9 each, sleight 22.0 s a
 run against Codex 44.6 s at 4.68 against 4.84 CPU seconds; normal setup 9/9 each, 27.1 s against
