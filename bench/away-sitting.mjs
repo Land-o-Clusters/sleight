@@ -115,13 +115,13 @@ export function frontReport(line, baseline) {
 // that installs one during the sitting stops it. The first live start stopped on Magnet's and Siri's
 // standing taps (2026-10-11). The engine's helper holds two taps from its first key action in every
 // session, Codex's too, and stopped the second start; `engine` names its pids.
-export const ENGINE_HELPER = /\/\.codex\/computer-use\/[^/]+\.app\//;
-export function tapReport(text, baseline, engine = new Set()) {
+export const ENGINE_HELPER = /\/\.codex\/computer-use\/[^/]+\.app\/|\bcom\.openai\.sky\.CUAService\b/;
+export function tapReport(text, baseline, engine = new Set(), paths = new Map()) {
   try {
     const taps = JSON.parse(text);
     if (!Array.isArray(taps) || taps.some(tap => !tap || !Number.isInteger(tap.pid) || typeof tap.app !== 'string')) throw new Error();
     const added = taps.filter(tap => !baseline?.has(tap.pid) && !engine.has(tap.pid));
-    return added.length ? `keyboard tap reported (${[...new Set(added.map(tap => tap.app))].join(', ')})` : undefined;
+    return added.length ? `keyboard tap reported (${[...new Set(added.map(tap => paths.get(tap.pid) ? `${tap.app} at ${paths.get(tap.pid)}` : tap.app))].join(', ')})` : undefined;
   } catch { return 'keyboard watcher report malformed'; }
 }
 export function tapBaseline(text) {
@@ -222,13 +222,15 @@ async function watch(controller) {
       try {
         const { stdout } = await execute(taps, [], { timeout: 3000, maxBuffer: 1024 * 1024 });
         tapsBefore ??= tapBaseline(stdout);
-        const engine = new Set();
+        const engine = new Set(), paths = new Map();
         for (const pid of new Set(JSON.parse(stdout).map(tap => tap.pid))) {
           if (tapsBefore?.has(pid)) continue;
-          const path = await execute('/bin/ps', ['-o', 'comm=', '-p', String(pid)], { timeout: 2000 }).then(r => r.stdout, () => '');
-          if (ENGINE_HELPER.test(path)) engine.add(pid);
+          const path = await execute('/bin/ps', ['-o', 'comm=', '-p', String(pid)], { timeout: 2000 }).then(r => r.stdout.trim(), () => '');
+          const bundle = await execute('/usr/bin/lsappinfo', ['info', '-only', 'bundleid', String(pid)], { timeout: 2000 }).then(r => r.stdout.trim(), () => '');
+          paths.set(pid, scrub(path || bundle || 'unknown'));
+          if (ENGINE_HELPER.test(path) || ENGINE_HELPER.test(bundle)) engine.add(pid);
         }
-        const reason = tapReport(stdout, tapsBefore, engine); if (reason) stop(reason);
+        const reason = tapReport(stdout, tapsBefore, engine, paths); if (reason) stop(reason);
       } catch { stop('keyboard watcher failed'); }
       if (!stopping) timer = setTimeout(poll, 500);
     })();

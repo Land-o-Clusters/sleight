@@ -134,6 +134,8 @@ test('watcher parsers reject malformed reports, retain baseline and stop on a ta
   assert.equal(tapReport('[{"pid":7,"app":"Window Manager"},{"pid":51,"app":"ChatGPT Computer Use"}]', before, new Set([51])), undefined);
   const { ENGINE_HELPER } = await load();
   assert.ok(ENGINE_HELPER.test('/Users/someone/.codex/computer-use/Codex Computer Use.app/Contents/MacOS/SkyComputerUseService'));
+  assert.ok(ENGINE_HELPER.test('"CFBundleIdentifier"="com.openai.sky.CUAService"'));
   assert.ok(!ENGINE_HELPER.test('/Applications/Device Hub.app/Contents/MacOS/Device Hub'));
+  assert.match(tapReport('[{"pid":42,"app":"Device Hub"}]', before, new Set(), new Map([[42, '/Applications/Device Hub.app']])), /Device Hub at \/Applications/);
   for (const value of ['broken', '{}', '[null]']) assert.match(tapReport(value), /watcher/);
 });
