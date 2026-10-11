@@ -73,6 +73,11 @@ if (ownerAway && ownerPresent) throw new Error('--owner-present is the opposite 
 const calculatorGate = process.argv.includes('--calculator-gate');
 const cleanArms = process.argv.includes('--clean-arms');
 const suite = option('suite', 'default');
+if (suite === 'battery') {
+  try { process.exitCode = await (await import('./battery/run.mjs')).main(); }
+  catch (error) { console.error(`Battery stopped: ${/^[A-Z][A-Z0-9_]+\b/.exec(error.message)?.[0] ?? 'BATTERY_STOP'}. Check options, fixture seeds and private prerequisites.`); process.exitCode = 1; }
+  process.exit(process.exitCode ?? 0);
+}
 if (isSetupOnly && (suite !== 'real' || isDryRun)) throw new Error('--setup-only requires --suite real without --dry-run');
 const suiteTasks = getTasks(suite);
 const controller = new AbortController();

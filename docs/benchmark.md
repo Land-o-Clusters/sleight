@@ -1,5 +1,73 @@
 # Benchmark
 
+## Parity battery
+
+The battery catalog has 31 tasks (2026-10-11).
+
+| Kind | Tasks |
+|---|---:|
+| doc-file | 12 |
+| self-message | 5 |
+| web-page | 5 |
+| app-state | 9 |
+
+Each task is data: app, bundle ID, goal, fixture kind, check kind and owner-present flag. Four shared
+fixtures and checks handle the catalog. The runner alternates sleight-first and Codex-first pairs.
+Each pair gets the same marker, fixture path or URL and prompt. Document fixtures reset before each
+arm. The drivers use Haiku 5.5 at high effort and gpt-6.1-sol at high effort, as in the existing runner.
+
+```bash
+node bench/run.mjs --suite battery --dry-run --owner-present
+```
+
+This prints 62 planned runs and the owner seed markers before runtime setup. An offline guard test
+rejects writes and child processes during this command. Without `--owner-present`, the plan has
+17 tasks and 34 runs, and lists the 14 excluded tasks. `--tasks textedit,word` selects task IDs.
+`--runs 3` makes three alternating pairs per task. The battery always compares sleight and Codex.
+
+The owner posts each self-message marker once before a live pass. Music, Maps, Photos, Spotify and
+Zoom need an owner-seeded visible fixture too. Save the dry plan outside the repo and pass its path
+with `--markers` to reuse its markers. Account tasks require `--owner-present`. The arms
+only read self-messages and existing account fixtures. They never send, post, delete or change
+settings. Notion's local-file task records a failure if local opening is unavailable.
+
+Doc-file setup writes txt, rtf, html, md, docx, xlsx, pptx or a reading-only pdf. Checks read the saved
+file, using unzip for OOXML. An edit must retain the random marker, replace PENDING with DONE and
+save to the original path and format. A read must return the marker and leave the file hash unchanged.
+The iWork tasks use docx, xlsx and pptx. Web tasks read a marker from a server bound to `127.0.0.1`.
+Self-message answers must contain the exact marker, a sender and a displayed time. App-state checks
+make one scripted engine acquisition and read, with no model, then match the visible marker.
+
+Notes, Reminders and Calendar have declarative scripting descriptors. `--local-fixtures` accepts a
+private JSON file such as `{"notes":{"id":"fixture-container-id","local":true}}`. The owner must
+identify a local fixture container, with no account data in it. One generic script creates the marker
+item there before either arm reads it. Without a supplied local container, the model's prompt requires
+an isolated local item and a stop if one is unavailable. Created items remain for the owner to review.
+The harness never deletes them.
+
+Live results record pass, total seconds, turns, model API time when available, model-gap time, the
+existing CPU footprint and every tool call's waste classes from `bench/turn-study.mjs`. A generic
+native observer records window IDs, order, bounds, bundle IDs and the frontmost bundle every 200 ms.
+It pumps the NSWorkspace run loop between samples. Each run counts changed-focus samples and samples
+where the target overlaps a window of the initially frontmost app. Published results contain metadata,
+timings and check codes, without prompts, answers, sender names, window titles or transcript text.
+Raw driver streams stay in memory. Codex may retain its own private rollout in its benchmark home.
+
+Cleanup closes retained fixture window references and quits only a process the run launched. A missing
+reference, surviving window or unconfirmed driver cleanup stops the pass, preserves the fixture and
+keeps the live lock for sleight-arch. The Codex arm uses the existing benchmark's temporary app-approval
+transaction, restoring the earlier list even after a stop. `--clean-arms` uses the existing strict
+sleight setup and checks that the Codex benchmark home has one server. Results label clean or normal.
+
+Offline evidence: 13 battery tests pass, including eight document-format roundtrips and the dry-run
+side-effect guard. All 13 fail against the starting tree. No battery app has run in this lane. App
+opening, script dictionaries, the 200 ms observer and cleanup still need sleight-arch's live check.
+Codex does not expose isolated model API time in its CLI stream, so its `modelMs` is null. The separate
+model-gap measurement includes host scheduling. [Battery limits](known-problems.md#parity-battery)
+list what these checks cannot establish.
+
+## Earlier benchmarks
+
 `bench/` runs each task through headless `claude -p` and checks it outside the agent, against the file
 on disk or the exact answer. sleight and LCU get the same prompt for each task, and the prompts
 don't mention a tool by name.

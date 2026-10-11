@@ -1,5 +1,33 @@
 # Known problems
 
+## Parity battery
+
+The 31-app battery passed 13 offline tests with zero live runs (2026-10-11), leaving Office and iWork
+saves and Notion's local-file support unchecked. The Notes, Reminders and Calendar scripting descriptors have not run
+against their dictionaries. Local fixture IDs and the `local: true` declaration come from the owner;
+the runner cannot independently prove that a supplied container is outside an account.
+
+Self-message checks match a marker and require nonempty sender and time fields. They do not verify
+those two fields against an independent account read. A marker already appears in the search prompt,
+so matching it alone does not prove the message was read. App-state checks prove that one engine read
+contained the marker, without proving which UI field held it. Model-created fixtures have no scripted
+reset, so an earlier arm's item can remain visible. Created items remain for the owner to review.
+
+Codex's CLI stream does not report isolated model API time. Battery results record null for that field
+and keep model-gap time separate, since it includes host scheduling. Calls that arrive without a
+start event have incomplete wall timing. The CPU sampler can miss short processes between its
+one-second samples, as in the existing benchmark. Account apps may use windows whose document URL
+is absent, or open a fixture in an existing tab. The generic cleanup then cannot claim that window
+and stops the pass with the live lock retained.
+
+The focus observer requests 200 ms samples, but native calls can delay them. The saved timestamps
+show actual gaps. No live cadence has been measured. Windows on other Spaces and windows excluded
+by macOS's on-screen list are absent. A changed frontmost bundle or overlapping target window is
+recorded evidence, without establishing whether the owner or the benchmark caused the change.
+Raw streams are not published. Codex may write private rollouts in its existing benchmark home, and
+normal arms can load user plugins with their own logging policies. The runner's read-only task
+instructions depend on the driver following them, as in the existing benchmark.
+
 Generic benchmark arms accept only the existing benchmark approval messages and empty forms or a
 `choice` field offering `session` or `once`. Other competitors' approval schemas stop with an
 unsupported-approval result. Remote MCP servers and installer commands are unsupported. The initial
