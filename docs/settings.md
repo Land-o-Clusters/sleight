@@ -226,15 +226,14 @@ sleight rewrites that sentence so Claude can put the first actions after the acq
 same call, since the guard checks the window before they run. It also names `cua.getApp` for an app
 Claude can name, which took the first-call `getState` from 8 of 11 runs to 0 of 12 (2026-10-11). Set
 `SLEIGHT_FIRST_CALL_BATCH=0` to keep the engine's wording. `SLEIGHT_FIRST_CALL_BATCH=merge` also
-asks Claude to chain later calls such as save and close into one; it is under A/B, and got save and
-close into one call in 0 of 24 runs, so the default wording doesn't ask for it.
+asks Claude to chain later calls such as save and close into one, which happened in 0 of 24 runs.
+`SLEIGHT_FIRST_CALL_BATCH=sheet` (under A/B) drops the wording's stop after Cmd+S. With it, `open_file`
+names its `getApp` call, and a save is confirmed when the document's file on disk changes.
 
 ## Result size
 
-`SLEIGHT_RESULT_TRIM=1` (under A/B) sends a Save or Open panel's file list past 10 rows as a count,
-and leaves a split acquisition's tree out of a result when the same call returned a newer full one.
-Off by default: in the A/B's textedit-save runs it took spilled results from about 56k to 16k
-characters.
+`SLEIGHT_RESULT_TRIM=1` (under A/B) leaves a split acquisition's tree out of a result when the same
+call returned a newer full one. It tied the default (24.8 s against 23.8 s a run, 2026-10-11).
 
 ## Doctor app reads
 

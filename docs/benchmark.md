@@ -418,6 +418,18 @@ Claude clicked the nearest one it could see. One of them failed. No result in ei
 enough for Claude Code to write it to a file, so the case the trim was for didn't come up. The list
 trim is gone. The acquisition-tree drop runs again alone.
 
+An A/B with one change per arm ran next (`7f49b40`, 04:43 to 04:57 UTC, same tasks and setup,
+[raw](benchmarks/2026-10-11-three-arm-ab.json)). The default passed 11/11 with one run skipped at
+setup, at 6.82 turns, 2.18 s of model time a turn and 23.8 s a run. Leaving out the acquisition's
+tree (`SLEIGHT_RESULT_TRIM=1`) passed 12/12 at 6.92 turns, 2.09 s and 24.8 s, a tie, and its results
+were no smaller (59,253 characters a run against 58,453). `SLEIGHT_FIRST_CALL_BATCH=sheet` ran one
+round: its second was stopped by sleight-arch after 17 s and is left out. Its 6 runs passed at 6.83
+turns, 2.55 s and 29.0 s. Each of its changes did what it was for. Both textedit-edit runs sent the
+`getApp` call `open_file` named, and both of their saves read "saved: observed" from the file on
+disk (0 of 7 before). One textedit-save chained Cmd+N, Make Plain Text and the paste in one call and
+finished in 5 calls. Its slowest run, 70.1 s, lost its time to a result written to a file and a menu
+opened in one call and used in the next. Its totals need the second round, which runs next.
+
 The head-to-head at the owner's normal load (2026-10-09, the owner away, load 6 to 24, Sonnet 5.5 at
 medium against gpt-6.1-sol at medium) alternated sleight and Codex task by task. The default tasks
 ran 3 times per arm ([`h2h-normal-default`](benchmarks/2026-10-09-h2h-normal-default.json)) and six
