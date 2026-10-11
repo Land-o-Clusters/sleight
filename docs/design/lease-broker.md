@@ -143,37 +143,80 @@ manifest validation and 30 mod tests passed. The earlier sandbox run exited 1.
 
 ## Live check for sleight-arch
 
-No live run belongs to this branch author. Before Codex joins, the owner must
-approve a scoped AGENTS.md line such as: "Before every native computer-use input,
-acquire the sleight broker lease for the observed bundle ID and exact window URL
-or title; renew every 5 s, stop on refusal, keep the token private, and release
-only after input has finished. Obtain app approval in this runtime separately."
-The owner chooses where that instruction applies and authorizes the CLI there.
-A skill with the same rule is an alternative. An MCP adapter and its config
-entry would be additional work requiring the owner's approval. This branch
-doesn't install these integrations or change files under `~/.codex`.
+Run from the checkout under test during an owner-agreed away window, with
+TextEdit closed:
 
-Use the owned TextEdit fixture, exact readback and per-trial raw replies from
-`bench/double-keys.mjs`. Use the child protocol, request recording and checked
-disconnect pattern of `bench/other-hosts-client.mjs` for the sleight side. The
-other participant must be an actual Codex thread using native computer use and
-the CLI. sleight-arch takes and releases the live lock during the owner-agreed
-window for this run.
+```sh
+node bench/broker-live.mjs 'owner-agreed away window'
+```
 
-- Run five trials with sleight holding first and five with Codex holding first.
-  Each trial must show one successful acquire. The other client must get a
-  refusal naming that holder and expiry, without calling its input tool.
-  Independent TextEdit readback must contain exactly one marker. Retain
-  failures and unconfirmed outcomes.
-- After each release, the refused client must acquire and append its distinct
-  marker exactly once (10/10 handoffs). Also show both clients can reserve
-  different documents, and an app reservation excludes the other's window.
-- With an actual Codex holder, renew for at least 35 seconds while sleight stays
-  refused. End that holder without release, wait at least 31 seconds without
-  renewal, then show sleight acquiring. The old token's release must be refused
-  while sleight's reservation remains. Collect the holder's pending input before handoff.
-- Record each runtime's own approval or refusal independently. Acquiring a lease
-  must never satisfy an unanswered app approval, and an approval in one runtime
-  must never be copied to the other. Publish sanitized receipts, exact counts,
-  fixture closure, ended input and zero owned lease records. These results would
-  qualify cooperation only, not protection from a runtime that ignores the rule.
+The harness takes `/tmp/sleight-live.lock` with `mkdir`. An existing lock or
+`/tmp/sleight-hold` stops setup. A hold that appears during a run cancels owned
+drivers and stops further app operations. It opens two private TextEdit files,
+retains their native window references through `bench/real-fixture.mjs`, and
+uses the double-keys fixture for independent exact text readback. It refuses
+setup if TextEdit was already running. Cleanup closes only retained fixtures,
+quits only the TextEdit process this run launched, and removes the lock only
+after ended input, fixture closure and zero owned lease records are confirmed.
+Otherwise the bank and lock stay for sleight-arch to inspect.
+
+The Codex participant is a real headless `codex exec` thread, resumed for later
+trials, on `gpt-6.1-sol` with `CODEX_HOME=~/.codex-bench`. That home must already
+have its login, native `cua_repl` server and usable TextEdit approval. The harness
+doesn't write an AGENTS.md or change either runtime's approval settings.
+The owner-approved rule goes verbatim in each trial prompt:
+
+> Before every native computer-use input, acquire the sleight broker lease for the observed bundle ID and exact window URL or title; renew every 5 s, stop on refusal, keep the token private, and release only after input has finished. Obtain app approval in this runtime separately.
+
+Each prompt gives the absolute Node and broker CLI invocation, with one private
+request file on stdin and a private reply file on stdout. Codex observes the
+exact bundle, title and URL before admission, then sends one literal native
+typing call on success. A refused client must stop before calling input.
+The adapter checks recorded CLI and native-tool events, rather than the agent's
+answer. It renews Codex's grant every 5 s, including while native input or
+approval is pending, and keeps the grant after the headless turn ends.
+A renewal failure cancels and collects that owned Codex process. The sleight
+participant uses the normal relay input path and its same `InputLease` object;
+a private stdio reserve operation covers the no-input reservation trials.
+Both adapters hold renewals until the trial releases them.
+
+All 13 planned scenarios must pass:
+
+- Sleight holds first in five trials, then Codex holds first in five.
+  The other client gets a holder-and-expiry refusal with zero forwarded input.
+  Independent readback contains exactly one marker. After checked release,
+  the refused client acquires and appends its distinct marker exactly once:
+  10/10 exact contention readbacks and 10/10 exact handoffs.
+- Both clients reserve different documents at once. A Codex app reservation
+  excludes sleight's reservation of the other document.
+- Codex renews through at least 35 s while sleight stays refused in seven
+  probes. After Codex input has ended, its adapter stops renewal without
+  release. At least 31 s later sleight acquires and appends its marker.
+  Codex's old token cannot release that successor, which remains active.
+- Each runtime obtains its own app approval. The result identifies accepted
+  native calls separately from sleight's benchmark allowlist approval.
+  An unanswered headless prompt fails the run, and each adapter keeps its own
+  approval boundary.
+
+The harness writes a timestamped JSON file to `docs/benchmarks/` on exit,
+including failed and interrupted attempts, raw broker replies, scoped native
+input replies, exact readbacks, exit results and cleanup status. Unrun scenarios
+are counted separately. Unexpected tool output is omitted from publication
+because it can contain unrelated windows. Its call still fails the audit.
+Tokens, agent prose, rollout transcripts, image payloads and home paths are
+excluded or scrubbed. Don't publish the private benchmark-home rollouts.
+
+Offline on 2026-10-11, all 15 harness tests failed with the new harness removed
+from the unchanged `464e0ba` checkout, using fake clients or engines and
+temporary broker stores. An intermediate focused run passed 14/15: the fake
+engine's initialization exceeded a 100 ms test deadline. That deadline was
+raised to 5 s. The final full check passed all 15 harness tests within 1,836
+Node tests, both validation steps and 31 mod tests; bare `npm run check`
+exited 0 with scoped host access. The first sandboxed check exited 1 on
+existing socket, worktree-write and host-inspection tests. These attempts
+drove no app and prove no live behavior.
+For live qualification, sleight-arch must show the scenario counts above and
+each runtime's own approval evidence. Cleanup must confirm input completion
+and fixture closure, with zero owned lease records remaining. A runtime can
+ignore the cooperative lease instruction. Limits remain in
+[known problems](../known-problems.md).
