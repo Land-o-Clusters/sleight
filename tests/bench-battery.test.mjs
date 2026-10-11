@@ -254,7 +254,9 @@ function cleanupHost(options = {}) {
       return -25205;
     },
     AXUIElementPerformAction(element, action) {
-      assert.equal(element, close); assert.equal(String(action), 'AXPress'); presses.push(now);
+      if (options.strictRefs) { if (element?.cast !== close) throw new Error('Ref has incompatible type'); }
+      else assert.equal(element, close);
+      assert.equal(String(action), 'AXPress'); presses.push(now);
       if (options.axCloses) present = false;
       return options.pressStatus ?? 0;
     },
@@ -267,7 +269,8 @@ function cleanupHost(options = {}) {
       } };
     } } },
   });
-  const ObjC = { import() {}, unwrap: value => value?.value ?? value, castRefToObject: value => value, deepUnwrap: value => value };
+  const ObjC = { import() {}, unwrap: value => value?.value ?? value, deepUnwrap: value => value,
+    castRefToObject: value => options.strictRefs && value === close ? { cast: close } : value };
   const request = { bundle: 'org.example.fixture', targetURL: expected, control: 'ignored', fixturePath: path,
     fixtureRoot: '/private/tmp/sleight-battery-unit/pair' };
   const source = readFileSync(new URL('../bench/battery/host.js', import.meta.url), 'utf8');
@@ -303,6 +306,14 @@ test('a passed check survives failed cleanup and publishes each retained window 
   assert.equal(row.cleanupDetails.windows[0].document, 'file:///private/tmp/another.txt');
   assert.equal(row.cleanupDetails.windows[0].expectedURL, 'file:///private/tmp/sleight-battery-unit/pair/fixture.txt');
   assert.ok(row.cleanupDetails.windows[0].reasons.includes('DOCUMENT_NOT_MATCHED'));
+});
+
+test('the close button is pressed as a cast object, which JXA requires', async () => {
+  const { executePlan } = await load('run'), { plan } = await load('plan');
+  const runtime = cleanupRuntime({ strictRefs: true, axCloses: true });
+  const rows = await executePlan(plan({ wanted: ['textedit'] }), runtime);
+  assert.ok(rows.every(row => row.passed && row.cleanupConfirmed));
+  for (const cleanup of runtime.cleanups) { assert.equal(cleanup.presses.length, 1); assert.equal(cleanup.scripts.length, 0); }
 });
 
 test('a stuck owned fixture closes through bundle scripting and the paired pass continues', async () => {

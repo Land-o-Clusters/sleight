@@ -125,7 +125,8 @@ function run(argv) {
         var close = attribute(w, 'AXCloseButton');
         if (!close) reason(row, 'CLOSE_BUTTON_MISSING');
         else {
-          row.axPressStatus = Number($.AXUIElementPerformAction(close, $('AXPress')));
+          // A raw Ref value throws "Ref has incompatible type" here; the cast object presses (live, 2026-10-11).
+          row.axPressStatus = Number($.AXUIElementPerformAction(ObjC.castRefToObject(close), $('AXPress')));
           if (row.axPressStatus !== 0) reason(row, 'AXPRESS_FAILED');
         }
       });
@@ -184,6 +185,7 @@ function run(argv) {
       clean = false;
       reason(details, error.message === 'WINDOWS_READ_FAILED' ? error.message : error.message === 'HOST_STOP' ? 'HOST_ABORTED' : 'CLEANUP_FAILED');
       if (error.axStatus !== undefined) details.axStatus = error.axStatus;
+      details.error = String(error.message || error).slice(0, 200);
     }
     emit({ stage: 'cleanup', confirmed: clean, details: details });
   }
