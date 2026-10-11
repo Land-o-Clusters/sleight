@@ -10,6 +10,8 @@ import { isDocumentRead } from './document-scope.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
 
 export const LEASE_MS = 30000;
+const validKey = key => typeof key === 'string' && /^[a-f0-9]{64}$/.test(key);
+const publicLease = (key, { token: _token, ...record }, now) => ({ key, ...record, active: record.expires > now });
 const sameFile = (a, b) => Boolean(a && b && a.dev === b.dev && a.ino === b.ino);
 function coordinatorIdentity(path) {
   try {
@@ -135,9 +137,12 @@ export class InputLease {
     } finally { try { unlinkSync(temporary); } catch (err) { if (err.code !== 'ENOENT') throw err; } }
   }
   acquire(window, scope = 'window') {
+    return this.acquireGrant(window, scope).key;
+  }
+  acquireGrant(window, scope = 'window') {
     if (!window?.appId || !['window', 'app', 'desktop'].includes(scope)) throw new Error('Input lease: missing bundle ID or invalid scope.');
     const key = leaseKey(window, scope);
-    this.transact(key, (path, record) => {
+    return this.transact(key, (path, record) => {
       const own = this.owned.get(key);
       for (const name of readdirSync(this.directory).filter(n => n.endsWith('.json'))) {
         const other = this.read(join(this.directory, name));
@@ -148,10 +153,37 @@ export class InputLease {
         if (overlaps) throw this.refusal(other);
       }
       const token = record && record.token === own ? own : randomUUID();
-      this.store(path, { holder: this.holder, token, expires: this.now() + LEASE_MS, window, scope });
+      const next = { holder: this.holder, token, expires: this.now() + LEASE_MS, window, scope };
+      this.store(path, next);
       this.owned.set(key, token);
+      return { ...publicLease(key, next, this.now()), token };
     });
-    return key;
+  }
+  inspect(key) {
+    if (!validKey(key)) throw new Error('Input lease: invalid lease key.');
+    return this.transact(key, (_path, record) => record ? publicLease(key, record, this.now()) : null);
+  }
+  withGrant(key, token, operation) {
+    if (!validKey(key) || typeof token !== 'string' || !token) throw new Error('Input lease: invalid lease key or token.');
+    return this.transact(key, (path, record) => {
+      if (!record || record.token !== token || record.expires <= this.now()) {
+        throw new Error('Input lease: ownership lost or expired; stop actions and read the window again.');
+      }
+      return operation(path, record);
+    });
+  }
+  renewGrant(key, token) {
+    return this.withGrant(key, token, (path, record) => {
+      const next = { ...record, expires: this.now() + LEASE_MS };
+      this.store(path, next);
+      return publicLease(key, next, this.now());
+    });
+  }
+  releaseGrant(key, token) {
+    return this.withGrant(key, token, path => {
+      unlinkSync(path);
+      if (this.owned.get(key) === token) this.owned.delete(key);
+    });
   }
   renew(keys = this.owned.keys()) {
     for (const key of keys) this.transact(key, (path, record) => {

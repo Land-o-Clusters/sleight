@@ -105,8 +105,20 @@ our own runs. Dates and engine versions are given where they matter.
 - [Input leases](design/input-lease.md) let one sleight session act on a window at a time.
   Another session gets the holder's name and time left, while reads remain available. Leases expire
   after 30 seconds without renewal and end with the turn or session. Local drag and hover reserve the app,
-  while menu and notification actions reserve the desktop. Other tools, including Codex,
-  do not take these leases, and arbitrary JavaScript can bypass the injected guard.
+  while menu and notification actions reserve the desktop. The
+  [broker CLI](design/lease-broker.md) (unreleased) lets outside clients acquire,
+  inspect, renew and release the same reservations. Codex still takes no lease
+  automatically. An owner-approved AGENTS.md instruction or skill must make it
+  call the CLI before input. This is a convention that an agent can ignore,
+  and arbitrary JavaScript can bypass the injected guard. App approvals stay in
+  their own runtime. The broker cannot grant or copy them. Offline broker
+  and lease tests passed 51/51; Codex participation and independent approval
+  prompts remain unverified live. Exact bundle IDs and URL or title spellings
+  must match across clients. Clock jumps, separate store directories and pending
+  input that continues after expiry can break coordination. A lost acquire reply can
+  leave a reservation until expiry. Status omits its token. The broker
+  doesn't install an observer and cannot attribute outside input from diffs or shared
+  helper activity. Status may include private document titles and URLs.
   Never delete the SQLite coordinator during live use. Replacement between transactions is detected
   and reopened, but metadata checks cannot prevent arbitrary filesystem replacement during an action.
 - Multiple equal-title candidates without a URL need one matching native AX window. The relay
