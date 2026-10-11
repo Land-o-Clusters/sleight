@@ -760,6 +760,23 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
 
 ## The real-use benchmark harness
 
+- The away-sitting runner has 8 passing tests and no live run (2026-10-11). Its 13-step plan
+  refuses both Codex comparisons: `bench/run.mjs` writes ChatGPT's approval list for that arm,
+  which this runner must leave alone. A no-write Codex command is missing. No dedicated quiet-box
+  comparison command is recorded either. `.dev/passes/front-watch.sh` is untracked and absent
+  from a new worktree; live mode stops unless sleight-arch supplies that existing watcher and the
+  precompiled keyboard-tap lister. Any foreground change or enabled keyboard filter tap stops the
+  sitting, including unrelated activity. Polling every half second allows input before the
+  next report. The foreground watcher compares app names and misses changes between windows of
+  the same app. Cancellation and collection of the real harnesses' children are unverified.
+  The stale-number and menu-bar harnesses have no SIGINT handler. Signal termination marks their
+  app and detached engine cleanup unconfirmed, even when the process group is gone.
+  Existing harnesses still handle their own benchmark approvals and permission refusals. The runner
+  cannot prevent an inherited harness from reaching a macOS prompt. The owner handles prompts.
+  A retained live lock stops the sequence for inspection. Timing estimates include old setup
+  failures and exclude some cleanup, so they do not establish a 75 to 90 min completion time.
+  Private child logs can contain window titles and need review before publication.
+
 - Shop smoke tasks `real-shop-target` and `real-shop-bestbuy` are Safari-only, `--runs 1`, and
   excluded from default real passes and the head-to-head. They stop at a CAPTCHA or bot check and
   never sign in or start checkout. Ran once each on 2026-10-10, owner away

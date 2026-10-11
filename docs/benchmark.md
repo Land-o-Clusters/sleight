@@ -562,6 +562,53 @@ configuration, empty setting sources) against the Codex home's engine-only serve
 results record `armSetup: "clean"` or `"normal"`. The summary table splits each arm's own CPU into
 sleight's processes, the engine, the client CLI and other group processes.
 
+## One away sitting
+
+`node bench/away-sitting.mjs --dry-run` prints 13 steps from STATE's away list at `d21965c`.
+It reads the list and past result files without launching a harness, starting a watcher or taking
+the live lock. A changed list stops planning until its command mapping is reviewed.
+
+```bash
+node bench/away-sitting.mjs --dry-run
+node bench/away-sitting.mjs --dry-run --only textedit-drag,best-buy
+node bench/away-sitting.mjs --dry-run --from save-delivery
+```
+
+The plan gives each command, estimated minutes and its raw timing source. Head-to-head estimates
+are 8.9 and 8.2 min, from the clean and normal runs on 2026-10-10, failures included.
+Setup and cleanup can add time. The owner's 75 to 90 min window remains unmeasured as a whole.
+Steps stay in STATE order even when `--only` names them in another order.
+
+sleight-arch runs `node bench/away-sitting.mjs --owner-away` after every lane has merged and the
+owner grants the complete window. `--only` and `--from` also select live steps. A hold or existing
+live lock stops before the first step. Each harness acquires and releases its lock. A lock left
+after a step stops the sitting for inspection. This runner leaves it in place.
+
+Live mode requires `.dev/passes/front-watch.sh` in the worktree and the existing
+`~/Library/Caches/sleight-bench/keyboard-taps` binary, built from `bench/keyboard-taps.swift`.
+The foreground watcher establishes a baseline before any step. Every later change of foreground app name,
+any enabled keyboard filter tap, watcher failure or new hold cancels the active child process
+group and prevents another step. The harness first receives SIGINT and has 30 s for its cleanup.
+Forced termination marks app and detached engine cleanup unconfirmed. Ordinary command failures
+advance to the next step. Each completed
+or refused step prints one JSON line with start, end, exit code, result files and a private receipt.
+Child output stays in private `/private/tmp/sleight-away-*` logs for review before publication.
+
+The plan uses `bench/reliability-live.mjs chess-after` for computed Chess points, simulator-form
+with 3 runs, delivery-check before the full save-lock experiment, select-all with `--quick`, both
+live checks, both shop smoke tasks and a separate Best Buy run, excluding owner-present tasks.
+Codex steps are refused because their existing harness rewrites ChatGPT's approval list.
+There is no dedicated quiet-box command on this branch. All three produce exit 126 and remain
+visible in the plan. These [limits](known-problems.md#the-real-use-benchmark-harness)
+need resolution before the whole sitting can finish.
+
+On 2026-10-11, all 8 runner tests failed before the runner existed and passed after it was added.
+The dry-run subprocess also passed with Node denying writes, network access and child processes.
+No live sitting ran on this branch. sleight-arch must verify hold refusal, failure continuation,
+watcher cancellation with all owned children collected, result attribution and unchanged approval
+lists. The save delivery must finish within 2 s; the full run must count hangs and preserve its
+lock on uncertain cleanup. Live behavior remains unverified.
+
 ## Benchmarking another plugin
 
 Point at a local Claude Code plugin or an MCP configuration for an already installed server:
