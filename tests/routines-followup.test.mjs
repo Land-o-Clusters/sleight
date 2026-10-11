@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test } from './macos-only.mjs';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, existsSync, statSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';

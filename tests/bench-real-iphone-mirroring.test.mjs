@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test from './macos-only.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { checkIosVersion } from '../bench/tasks-iphone.mjs';

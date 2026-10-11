@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test from './macos-only.mjs';
 import assert from 'node:assert/strict';
 import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';

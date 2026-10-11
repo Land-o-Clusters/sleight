@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test } from './macos-only.mjs';
 import assert from 'node:assert/strict';
 import { simulatorScreenshotNote } from '../plugins/sleight/lib/simulator-focus.mjs';
 import { createRelay, imageSize, screenshotOf } from '../plugins/sleight/lib/relay.mjs';

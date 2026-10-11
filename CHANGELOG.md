@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.2.1 (2026-10-11)
+
+- Tests that need macOS (osascript, xcrun, plutil or `/private/tmp`) are listed as skipped on other
+  platforms. CI on Linux failed 36 of them for 1.2.0. The plugin itself is unchanged.
+
 ## 1.2.0 (2026-10-11)
 
 Against native Codex computer use on the same engine, with the owner away: 9/9 each with clean arms,

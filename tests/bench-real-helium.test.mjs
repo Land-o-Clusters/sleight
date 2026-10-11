@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test from './macos-only.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runOwned } from '../bench/preapproved-process.mjs';
