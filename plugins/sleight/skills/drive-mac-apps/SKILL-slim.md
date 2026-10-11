@@ -19,8 +19,9 @@ it. If an app isn't approved, ask the user, or stop when a headless run refuses 
 - `let app = await cua.getApp("<name or bundle ID>")` returns the app's UI state. When you already
   know the first actions, put them in the same call: sleight acquires the app, checks the window,
   then runs them. Keep the handle between calls, and `await` every action.
-- Act by element number, or by `{ id }` or `{ label }`, which stays right when an earlier action in
-  the call renumbers the window. Batch the actions you're sure of in one call.
+- Act by element number, or by ID or label, which stays right when an earlier action in the call
+  renumbers the window: `await app.click({ id: "<ID from the tree>" }); await app.click({ label: "<label>" })`.
+  Batch every click you're sure of in one call, as in a form or a keypad.
 - Each result shows what changed since the last full tree you saw. A full read is
   `await app.getAXState({ disableDiffing: true })`.
 - An app that just launched can show an almost empty tree for a few seconds. Read it once more
@@ -36,7 +37,7 @@ it. If an app isn't approved, ask the user, or stop when a headless run refuses 
 - For exact text, `await app.paste("text")`: typing goes through autocorrect and capitalization. To
   replace a whole document, select all and paste in one call, then read it back and compare.
 - Use a menu item's shortcut when it has one. Otherwise open the menu and choose the item by label
-  in the same call: `await app.click({ label: "Format" }); await app.click({ label: "Make Plain Text" })`.
+  in the same call: `await app.click({ label: "<menu>" }); await app.click({ label: "<item>" })`.
   `menu_bar` is only for status icons at the right end of the menu bar.
 - Open a file with `open_file`, not the app's Open panel, which can bring the app to the front.
 - In a Save panel, send Go to Folder, the folder, Return, the name and the final Return in one call,

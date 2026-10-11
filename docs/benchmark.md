@@ -449,6 +449,15 @@ and 18.5 s a run, against 5/5 at 6.6 turns and 20.0 s (one default run was skipp
 calculator-click took 3 turns in all 12 runs, at 10.4 s against 11.0 s. `open_file` naming its `getApp` call and a save
 observed from the file on disk are the default since.
 
+The skill itself ran against a slim, app-agnostic version (`SKILL-slim.md`, 79 lines against 137, no
+app names) and against no sleight rules at all (`b03b5a7`, 05:48 to 05:59 UTC, calculator-click and
+textedit-edit, 6 runs a task per arm, the owner at the Mac,
+[raw](benchmarks/2026-10-11-skill-ab.json)). The current skill passed 11/11 at 4.55 turns and 14.5 s
+a run, the slim one 12/12 at 4.83 and 16.0 s, and none 11/11 at 5.91 and 19.5 s (one run of each of
+those two skipped at setup). Without the rules calculator-click took 5 to 9 turns against 3. The slim skill took 4 turns in 2 of its 6 calculator-click runs. It
+dropped the current skill's `{ id: "Seven" }` and `{ label: "Multiply" }` examples, the likely cause,
+which isn't confirmed. textedit-edit was within a second across all three.
+
 The head-to-head at the owner's normal load (2026-10-09, the owner away, load 6 to 24, Sonnet 5.5 at
 medium against gpt-6.1-sol at medium) alternated sleight and Codex task by task. The default tasks
 ran 3 times per arm ([`h2h-normal-default`](benchmarks/2026-10-09-h2h-normal-default.json)) and six
