@@ -113,12 +113,14 @@ export function frontReport(line, baseline) {
 
 // Taps held before the sitting starts (a window manager, Siri) are the owner's and stay; a process
 // that installs one during the sitting stops it. The first live start stopped on Magnet's and Siri's
-// standing taps (2026-10-11).
-export function tapReport(text, baseline) {
+// standing taps (2026-10-11). The engine's helper holds two taps from its first key action in every
+// session, Codex's too, and stopped the second start; `engine` names its pids.
+export const ENGINE_HELPER = /\/\.codex\/computer-use\/[^/]+\.app\//;
+export function tapReport(text, baseline, engine = new Set()) {
   try {
     const taps = JSON.parse(text);
     if (!Array.isArray(taps) || taps.some(tap => !tap || !Number.isInteger(tap.pid) || typeof tap.app !== 'string')) throw new Error();
-    const added = taps.filter(tap => !baseline?.has(tap.pid));
+    const added = taps.filter(tap => !baseline?.has(tap.pid) && !engine.has(tap.pid));
     return added.length ? `keyboard tap reported (${[...new Set(added.map(tap => tap.app))].join(', ')})` : undefined;
   } catch { return 'keyboard watcher report malformed'; }
 }
@@ -220,7 +222,13 @@ async function watch(controller) {
       try {
         const { stdout } = await execute(taps, [], { timeout: 3000, maxBuffer: 1024 * 1024 });
         tapsBefore ??= tapBaseline(stdout);
-        const reason = tapReport(stdout, tapsBefore); if (reason) stop(reason);
+        const engine = new Set();
+        for (const pid of new Set(JSON.parse(stdout).map(tap => tap.pid))) {
+          if (tapsBefore?.has(pid)) continue;
+          const path = await execute('/bin/ps', ['-o', 'comm=', '-p', String(pid)], { timeout: 2000 }).then(r => r.stdout, () => '');
+          if (ENGINE_HELPER.test(path)) engine.add(pid);
+        }
+        const reason = tapReport(stdout, tapsBefore, engine); if (reason) stop(reason);
       } catch { stop('keyboard watcher failed'); }
       if (!stopping) timer = setTimeout(poll, 500);
     })();

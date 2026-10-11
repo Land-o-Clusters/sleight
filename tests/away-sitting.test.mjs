@@ -131,5 +131,9 @@ test('watcher parsers reject malformed reports, retain baseline and stop on a ta
   const before = tapBaseline(standing);
   assert.equal(tapReport(standing, before), undefined);
   assert.match(tapReport('[{"pid":7,"app":"Window Manager"},{"pid":42,"app":"Device Hub"}]', before), /\(Device Hub\)/);
+  assert.equal(tapReport('[{"pid":7,"app":"Window Manager"},{"pid":51,"app":"ChatGPT Computer Use"}]', before, new Set([51])), undefined);
+  const { ENGINE_HELPER } = await load();
+  assert.ok(ENGINE_HELPER.test('/Users/someone/.codex/computer-use/Codex Computer Use.app/Contents/MacOS/SkyComputerUseService'));
+  assert.ok(!ENGINE_HELPER.test('/Applications/Device Hub.app/Contents/MacOS/Device Hub'));
   for (const value of ['broken', '{}', '[null]']) assert.match(tapReport(value), /watcher/);
 });
