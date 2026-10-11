@@ -7,7 +7,8 @@ What is true now. One banner, replaced in place as work happens. Always-true rul
 
 `pane/auto-mode` at `ff03fbc` is pushed to private (`Land-o-Clusters/sleight-dev`), and the main
 checkout is fast-forwarded to it. `npm run check` 1,938 tests plus 31 mod tests, `lint:prose` clean.
-Live lock and hold are free. Every lane is merged, and `~/Projects/sleight-wt/` is empty. This session
+Live lock and hold are free. Lanes generic-drag, generic-mechanisms, battery-harness and battery-report are merged, and
+`~/Projects/sleight-wt/` is empty. This session
 works in its worktree (`claude/boot-sleight-arch-6d0629`), because a hook refuses edits in the main
 checkout. It pushes with `git push private HEAD:pane/auto-mode`, then fast-forwards the main checkout.
 
