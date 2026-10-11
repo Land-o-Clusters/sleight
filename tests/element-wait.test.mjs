@@ -20,7 +20,9 @@ test('waitFor reads only when called, returns the matching full tree and traces 
   const tree = await f.run(guardedCode('return await app.waitFor({ id: "Seven" }, { timeoutMs: 1000 });', window, undefined, undefined, { timing: true }));
   assert.match(tree, /ID: Seven/);
   assert.equal(f.starts.length, 2);
-  assert.ok(f.starts[1] - f.starts[0] >= 250);
+  // The poll waits setTimeout(250); Node's timer can fire a fraction of a millisecond early against
+  // this clock (1 failure in 7 full checks, 2026-10-11), so allow 10 ms.
+  assert.ok(f.starts[1] - f.starts[0] >= 240);
   assert.equal(f.output.filter(x => x.includes('"phase":"wait"')).length, 2);
   assert.equal(f.output.filter(x => x.includes('Window: "Calculator"')).length, 0,
     'polls cache their trees; the caller receives one full tree');
