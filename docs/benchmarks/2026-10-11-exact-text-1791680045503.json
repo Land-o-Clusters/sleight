@@ -1,0 +1,30 @@
+{
+  "started": "2026-10-11T00:54:05.501Z",
+  "repetitions": 1,
+  "bank": "/private/tmp/sleight-exact-VW9uDT",
+  "trials": [],
+  "records": [],
+  "source": {
+    "plugins/sleight/lib/relay.mjs": "0be039a8859ad4040c10319bd4ff2c6f1bdf5812e554a9da6e40653f094dbf68",
+    "bench/small-fixes-textedit.js": "556d079ccfaaaa4a3214b90b468ac2e5f04b85710968ba19e754b2590a8e790a",
+    "bench/small-fixes-textedit.mjs": "35eb1b3c0e1fd205c53bb0a769ead063d7452be4ae207d78063eeb851b0c6e1e"
+  },
+  "preflight": {
+    "id": 0,
+    "ok": true,
+    "running": true,
+    "foregroundTextEdit": false
+  },
+  "error": "TextEdit has a dialog; no action will be sent",
+  "documentCleanupError": "TextEdit has a dialog; no action will be sent",
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixtureCollected": true,
+  "lockRetained": "Owned document or process cleanup is unconfirmed; operator inspection required",
+  "attached": false,
+  "finished": "2026-10-11T00:54:06.045Z",
+  "exactCount": 0,
+  "completedCount": 0
+}

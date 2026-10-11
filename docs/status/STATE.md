@@ -15,15 +15,14 @@ in the Save sheet, in a run that didn't record Claude's code. VS Code, Cursor an
 5/5. Merged: spawns, the results page fix, the rich-text clipboard fix, the save-lock experiment
 script. Codex is out of quota until later tonight (owner).
 
-Next, in order:
-1. textedit-save's Save-sheet failure: rerun with `SLEIGHT_TRACE_CODE=1 SLEIGHT_TRACE_CUT=60000`.
-2. Best Buy: the input lease refused every Safari click (known problems). Read the run's trace.
-3. Bench bugs: the chat pass's private-results filter, the select-all check's launch dialog, the
-   live checks' `stale-number` plan and `menu-bar` Accessibility, and the save-lock harness stall.
-4. simulator-form's `openurl` timeout (not the blocked event loop).
-5. With the owner away: the rich-text move live check (`SLEIGHT_RICH_TEXT_MOVE=1`), the Chess drag,
-   then the release pass and the release (ROADMAP 5b). The owner takes Windows and the directory
-   listing tomorrow.
+Next, in order (evidence for each in `docs/benchmarks/2026-10-11-evidence.md`):
+1. Codex builds four briefs once its quota resets (`.dev/prompts/sol-common-2026-10-11.md` first):
+   `sol-lease-select.md` (Best Buy's lease refusals), `sol-bench-textedit.md` (iCloud leftovers,
+   select-all, save-lock delivery, rich-move placement), `sol-bench-fixtures.md` (simulator
+   readiness, stale-number, Chess points, shop and chat checks) and `sol-research-speed.md`.
+2. sleight-arch reviews and merges them, then one away window verifies them all live.
+3. The release gate (ROADMAP 3.5 and 5b.1) and the release pass. The owner takes Windows and the
+   directory listing tomorrow.
 
 **Where work goes.** Work in progress is private between releases (LAWS): `remote.pushDefault
 private` sends pushes to `Land-o-Clusters/sleight-dev`, and a pre-push hook refuses the public repo

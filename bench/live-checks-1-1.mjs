@@ -77,7 +77,10 @@ export function planStaleBatch(tree) {
     oneButton(tree, 'Equals', 'Equals') ?? oneButton(tree, undefined, '='),
   ];
   if (numbers.some(n => n === undefined)) {
-    return { error: 'Calculator keypad buttons were not unique in the history-open tree' };
+    // The candidate lines show what matched, so a failed live run is enough to fix the plan.
+    const wanted = [['AllClear', 'All Clear'], ['Seven', '7'], ['Multiply', 'Multiply'], ['Eight', '8'], ['Equals', 'Equals']];
+    const candidates = wanted.map(([id, label]) => ({ id, lines: buttons(tree).filter(b => hasIdentifier(b.line, id) || hasLabel(b.line, id) || hasLabel(b.line, label)).map(b => b.line) }));
+    return { error: 'Calculator keypad buttons were not unique in the history-open tree: ' + JSON.stringify(candidates) };
   }
   return { numbers, expected: '56', code: numbers.map(n => `await app.click(${n})`).join('; ') };
 }

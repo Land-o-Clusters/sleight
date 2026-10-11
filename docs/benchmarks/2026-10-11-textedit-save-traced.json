@@ -1,0 +1,211 @@
+{
+  "stamp": "2026-10-11T00-43-26-532Z",
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 1,
+      "passed": true,
+      "seconds": 43.7,
+      "turns": 10,
+      "costUsd": 0.0241719,
+      "reportedCostUsd": 0.8219426,
+      "usage": {
+        "input": 20,
+        "cacheRead": 724673,
+        "cacheWrite": 72781,
+        "output": 4734
+      },
+      "timing": {
+        "totalMs": 42451,
+        "modelMs": 25563,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 14145,
+        "engineMs": 14103,
+        "relayMs": 42,
+        "localMs": 0,
+        "guardReads": 11,
+        "guardReadMs": 1341.2798320000002,
+        "guardReadFailures": 0,
+        "otherMs": 2743
+      },
+      "footprint": {
+        "cpuSeconds": 8.7,
+        "group": {
+          "claude": 1.99,
+          "engine node": 1.12,
+          "mcp@latest": 0.45,
+          "node": 0.19,
+          "codex": 0.5,
+          "osascript": 0.12
+        },
+        "outside": {
+          "engine helper": 2.51,
+          "TextEdit": 1.82
+        },
+        "split": {
+          "sleight": 0.31,
+          "engine": 3.63,
+          "client": 1.99,
+          "other": 0.95
+        }
+      },
+      "appWindows": {
+        "samples": 9,
+        "onScreen": 6,
+        "offScreenOnly": 0,
+        "none": 3
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "The document is saved as `<temp>/sleight-bench/2026-10-11T00-43-26-532Z/sleight-textedit-save-1/2b7f33b9.txt` and closed.\n\nIt was made plain text before typing, and its contents read \"sleight bench 2b7f33b9\". I entered the text by paste rather than typing, b",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 2,
+      "passed": true,
+      "seconds": 37.9,
+      "turns": 9,
+      "costUsd": 0.0225119,
+      "reportedCostUsd": 0.7703415999999998,
+      "usage": {
+        "input": 18,
+        "cacheRead": 650668,
+        "cacheWrite": 70312,
+        "output": 3882
+      },
+      "timing": {
+        "totalMs": 36591,
+        "modelMs": 22297,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 11660,
+        "engineMs": 11616,
+        "relayMs": 44,
+        "localMs": 0,
+        "guardReads": 11,
+        "guardReadMs": 490.6627909999979,
+        "guardReadFailures": 0,
+        "otherMs": 2634
+      },
+      "footprint": {
+        "cpuSeconds": 8.09,
+        "group": {
+          "claude": 1.96,
+          "engine node": 1.14,
+          "mcp@latest": 0.49,
+          "node": 0.19,
+          "(bash)": 0.01,
+          "(vibe-island-brid)": 0.01,
+          "codex": 0.43,
+          "osascript": 0.14
+        },
+        "outside": {
+          "engine helper": 2.26,
+          "TextEdit": 1.46
+        },
+        "split": {
+          "sleight": 0.33,
+          "engine": 3.4,
+          "client": 1.96,
+          "other": 0.94
+        }
+      },
+      "appWindows": {
+        "samples": 8,
+        "onScreen": 6,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "The document is saved and closed. It was saved to `<temp>/sleight-bench/2026-10-11T00-43-26-532Z/sleight-textedit-save-2/04ad713f.txt` as plain text containing exactly `sleight bench 04ad713f`, and I confirmed the text in the window before saving.\n\nTextEdit ",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-save",
+      "run": 3,
+      "passed": true,
+      "seconds": 46.4,
+      "turns": 10,
+      "costUsd": 0.0194536,
+      "reportedCostUsd": 0.6399054000000001,
+      "usage": {
+        "input": 20,
+        "cacheRead": 691187,
+        "cacheWrite": 51501,
+        "output": 4479
+      },
+      "timing": {
+        "totalMs": 45114,
+        "modelMs": 24851,
+        "calls": 9,
+        "refused": 0,
+        "toolMs": 17289,
+        "engineMs": 17247,
+        "relayMs": 42,
+        "localMs": 0,
+        "guardReads": 12,
+        "guardReadMs": 2395.933585999997,
+        "guardReadFailures": 0,
+        "otherMs": 2974
+      },
+      "footprint": {
+        "cpuSeconds": 10.14,
+        "group": {
+          "claude": 2.28,
+          "engine node": 1.15,
+          "mcp@latest": 0.46,
+          "node": 0.19,
+          "codex": 0.41,
+          "osascript": 0.06,
+          "(osascript)": 0.07,
+          "(bash)": 0,
+          "(vibe-island-brid)": 0.01
+        },
+        "outside": {
+          "engine helper": 3.19,
+          "TextEdit": 2.32
+        },
+        "split": {
+          "sleight": 0.32,
+          "engine": 4.34,
+          "client": 2.28,
+          "other": 0.88
+        }
+      },
+      "appWindows": {
+        "samples": 10,
+        "onScreen": 8,
+        "offScreenOnly": 0,
+        "none": 2
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "The text file is saved and its document is closed.\n\nI created a new TextEdit document, switched it to plain text, typed \"sleight bench 455cb553\", and saved it as `<temp>/sleight-bench/2026-10-11T00-43-26-532Z/sleight-textedit-save-3/455cb553.txt`. The save r",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    }
+  ]
+}

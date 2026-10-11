@@ -1,0 +1,11 @@
+{
+  "started": "2026-10-11T00:46:50.921Z",
+  "check": "stale-number",
+  "ownerAway": true,
+  "dryRun": false,
+  "launched": false,
+  "error": "Calculator keypad buttons were not unique in the history-open tree: [{\"id\":\"AllClear\",\"lines\":[\"button Description: All Clear, ID: AllClear\",\"button Description: All Clear, ID: AllClear\"]},{\"id\":\"Seven\",\"lines\":[\"button Description: 7, ID: Seven\",\"button Description: 7, ID: Seven\"]},{\"id\":\"Multiply\",\"lines\":[\"button Multiply\",\"button Multiply\"]},{\"id\":\"Eight\",\"lines\":[\"button Description: 8, ID: Eight\",\"button Description: 8, ID: Eight\"]},{\"id\":\"Equals\",\"lines\":[\"button Equals\",\"button Equals\"]}]",
+  "passed": false,
+  "lockReleased": true,
+  "finished": "2026-10-11T00:46:52.845Z"
+}

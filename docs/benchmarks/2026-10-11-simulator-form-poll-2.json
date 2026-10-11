@@ -1,0 +1,51 @@
+{
+  "stamp": "2026-10-11T00-54-39-502Z",
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "simulator-form",
+      "run": 1,
+      "passed": false,
+      "reason": "Fixture setup failed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "cleanupError": "Launched DeviceHub quit unconfirmed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Launched app identity changed; quit refused (pid -1 vs 91387, bundle com.apple.dt.Devices vs com.apple.dt.Devices) (-2700)",
+      "fixtureDiagnostics": [
+        {
+          "app": "DeviceHub",
+          "bundle": "com.apple.dt.Devices",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": false,
+          "setupCase": "cold-launch",
+          "launched": true,
+          "pid": 91387,
+          "observedBundle": "com.apple.dt.Devices",
+          "pids": [
+            91387
+          ],
+          "fresh": true,
+          "cleanup": "unconfirmed",
+          "helperCollectionConfirmed": true
+        }
+      ],
+      "cleanupUnconfirmed": true,
+      "fixtureDir": "<temp>/sleight-bench/2026-10-11T00-54-39-502Z/sleight-simulator-form-1",
+      "models": []
+    }
+  ],
+  "passCleanupErrors": [
+    {
+      "app": "DeviceHub",
+      "error": "Launched DeviceHub quit unconfirmed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Launched app identity changed; quit refused (pid -1 vs 91387, bundle com.apple.dt.Devices vs com.apple.dt.Devices) (-2700)"
+    }
+  ]
+}

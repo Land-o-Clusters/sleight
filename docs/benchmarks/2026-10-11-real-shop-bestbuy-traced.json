@@ -1,0 +1,97 @@
+{
+  "stamp": "2026-10-11T00-45-43-222Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "ownerPresent": false,
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "real-shop-bestbuy",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 7.39,
+        "group": {
+          "claude": 2.56,
+          "engine node": 0.7,
+          "mcp@latest": 0.6,
+          "node": 0.21,
+          "osascript": 0.42,
+          "codex": 0.38
+        },
+        "outside": {
+          "Safari": 0.68,
+          "engine helper": 1.84
+        },
+        "split": {
+          "sleight": 0.63,
+          "engine": 2.54,
+          "client": 2.56,
+          "other": 0.98
+        }
+      },
+      "timing": {
+        "totalMs": 45691,
+        "modelMs": 39687,
+        "calls": 14,
+        "refused": 2,
+        "toolMs": 3781,
+        "engineMs": 1976,
+        "relayMs": 12,
+        "localMs": 1793,
+        "otherMs": 2223
+      },
+      "passed": false,
+      "reason": "answer does not name Duracell Coppertop AA batteries, Anker USB-C to USB-C cable, SanDisk Ultra USB flash drive",
+      "seconds": 47.2,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 15,
+      "costUsd": 0.0257875,
+      "reportedCostUsd": 0.8142871999999999,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 28,
+        "cacheRead": 1086056,
+        "cacheWrite": 57068,
+        "output": 7021
+      },
+      "exitCode": 0,
+      "answer": "I didn't complete the task. Safari's input lease keeps refusing clicks in the Best Buy window, so I haven't set the store or added anything to the cart.\n\n- **Where things stand:** The Best Buy window is still on the HP 24yh monitor product page, not the home page. The store is still [store scrubbed][location scrubbed], "
+    }
+  ]
+}
