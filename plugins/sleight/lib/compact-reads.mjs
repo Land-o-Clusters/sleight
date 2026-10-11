@@ -165,6 +165,20 @@ function stateFields(line) {
 }
 const attributes = line => (line.match(/\b(?:Help|Description|ID):/g) ?? []).length;
 const panel = line => /(?:^|\t)(?:sheet|dialog)\b/.test(line);
+const saveSheet = root => /\bsave-panel\b/.test(root ?? '') && !/\bopen-panel\b/.test(root ?? '');
+function saveNameId(lines) {
+  for (const line of lines ?? []) {
+    const id = /(?:^|, )ID: ([^,\n]+)/.exec(line)?.[1];
+    if (id && (id === 'saveAsNameTextField' || /saveAsName/.test(id))) return id;
+  }
+}
+function saveFinishLine(after, before, failed, overlap) {
+  if (failed || overlap || !after || !before || !saveSheet(after.root) || saveSheet(before.root)) return;
+  const id = saveNameId(after.lines);
+  if (!id) return;
+  return 'sleight: finish the save in the next call: await app.pressKey("super+shift+g"); await app.typeText("<folder>"); await app.pressKey("Return"); await app.setValue({ id: ' +
+    JSON.stringify(id) + ' }, "<name>"); await app.pressKey("Return").';
+}
 const edited = title => /(?: — | - )Edited$/.test(title);
 const withoutValue = line => line.replace(/(?:, )?Value: ?.*?(?=, (?:Secondary Actions|ID|Help|Description):|$)/, '')
   .replace(/, (?=(?:Secondary Actions|ID|Help|Description):)/g, ' ').replace(/ +/g, ' ').trimEnd();
@@ -209,9 +223,9 @@ function resultNote(action, after, failed) {
     // closing on a document with a file URL when the call named no path it could check. The header
     // shows both, and "not confirmed" there sent Claude to check again (h2h-3, 2026-10-10). A named
     // path that doesn't match still says so.
-    const panel = root => /^(?:sheet|dialog)\b|\b(?:save|open)-panel\b/.test(root ?? '');
-    const panelStep = !unavailable && after && (panel(after.root) ||
-      (panel(before?.root) && /^standard window\b/.test(after.root) && after.window.url?.startsWith('file://') && !action.namedURL));
+    const panelRoot = root => /^(?:sheet|dialog)\b|\b(?:save|open)-panel\b/.test(root ?? '');
+    const panelStep = !unavailable && after && (panelRoot(after.root) ||
+      (panelRoot(before?.root) && /^standard window\b/.test(after.root) && after.window.url?.startsWith('file://') && !action.namedURL));
     if (panelStep) saved = undefined;
     else saved = unavailable ? `not confirmed (${unavailable})` : !document ? 'not confirmed (no document save state change seen)'
       : !sameDocument && !named ? `not confirmed (${after.window.url ? 'different document' : 'document identity unavailable'})`
@@ -219,7 +233,9 @@ function resultNote(action, after, failed) {
       : named ? `observed ${JSON.stringify(after.window.url)} (named file URL)` : 'not confirmed (no document save state change seen)';
   }
   const fields = [failed ? 'call failed (partial input possible)' : ui, saved && 'saved: ' + saved].filter(Boolean);
-  return fields.length ? 'sleight: ' + fields.join('; ') + '.' : undefined;
+  const finish = saveFinishLine(after, before, failed, action.overlap);
+  if (!fields.length) return finish;
+  return 'sleight: ' + fields.join('; ') + '.' + (finish ? '\n' + finish : '');
 }
 
 export function createReadCompactor() {

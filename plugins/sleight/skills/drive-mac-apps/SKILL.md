@@ -52,11 +52,11 @@ it. If an app needs approval, ask the user, or stop when a headless run refuses 
   the menu and its item in one call. `menu_bar` is only for icons at the right end of the menu bar.
 - Open an existing file with the `open_file` tool, not File > Open: the Open panel can bring the app
   in front of the user's work.
-- Save to a path in one call once the save dialog shows, including the final Return:
+- Save to a path in one call once the save dialog shows, including the final Return. A result that
+  opened the sheet includes this sequence with that sheet's element IDs; finish the save in the next call:
 
   ```js
-  await app.pressKey("super+shift+g"); await app.typeText("/path/to/folder"); await app.pressKey("Return");
-  await app.setValue({ id: "saveAsNameTextField" }, "name.txt"); await app.pressKey("Return");
+  await app.pressKey("super+shift+g"); await app.typeText("<folder>"); await app.pressKey("Return"); await app.setValue({ id: "saveAsNameTextField" }, "<name>"); await app.pressKey("Return")
   ```
 
   The result's window title and URL name the saved file. That is the confirmation: don't run `ls`
