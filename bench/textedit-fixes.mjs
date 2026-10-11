@@ -76,7 +76,9 @@ try {
     opened = true;
     if (openBackground) {
       await ensureFree();
-      await promisify(execFile)('/usr/bin/open', ['-g', '-a', 'TextEdit', path], { timeout: 10000 });
+      // Per-launch only (they apply when this starts TextEdit): no restored windows and no iCloud
+      // autosave. A plain open restored an empty iCloud "Untitled 11" beside the fixture (2026-10-11).
+      await promisify(execFile)('/usr/bin/open', ['-g', '-a', 'TextEdit', path, '--args', '-ApplePersistenceIgnoreState', 'YES', '-NSDocumentSaveNewDocumentsToCloud', 'NO'], { timeout: 10000 });
       report.backgroundOpen = true;
     }
     const initial = await request('open', { frontPid: preflight.frontPid, backgroundOpen: openBackground, initiallyEmpty: preflight.documents === 0 || !preflight.running });

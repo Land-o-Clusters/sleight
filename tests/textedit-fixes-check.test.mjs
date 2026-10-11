@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const { textEditFormatPreserved } = await import('../bench/textedit-fixes-check.mjs').catch(() => ({}));
@@ -23,5 +24,15 @@ test('format loss at either end of the moved word fails before or after saving',
   for (const stage of [1, 2]) for (const index of [0, 1]) {
     const input = states(); input[stage].characters[index].font = 'Helvetica';
     assert.equal(textEditFormatPreserved(...input), false);
+  }
+});
+
+test('--open-background launches TextEdit without restored windows or iCloud autosave', () => {
+  // On 2026-10-11 the plain `open -g` restored an empty iCloud "Untitled 11" beside the fixture, and
+  // the rich move then found TextEdit's Paste disabled.
+  const source = readFileSync(new URL('../bench/textedit-fixes.mjs', import.meta.url), 'utf8');
+  const launch = source.match(/'\/usr\/bin\/open', \[([^\]]*)\]/)?.[1] ?? '';
+  for (const flag of ["'--args'", "'-ApplePersistenceIgnoreState', 'YES'", "'-NSDocumentSaveNewDocumentsToCloud', 'NO'"]) {
+    assert.ok(launch.includes(flag), flag);
   }
 });
