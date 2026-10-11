@@ -784,6 +784,17 @@ sleight's processes, the engine, the client CLI and other group processes.
 
 ## One away sitting
 
+The sitting of 2026-10-11 (the owner away; Haiku 5.5 at high against gpt-6.1-sol at high) ran the
+clean-arms head-to-head in full from 14:03 to 14:13 UTC
+([raw](benchmarks/2026-10-11-h2h-clean-arms.json)). Both arms passed 9/9. sleight took 22.0 s and
+7.11 turns a run, Codex 44.6 s and 8.67 turns, and their own processes used 4.68 and 4.84 CPU
+seconds a run. sleight was faster in each of the 9 pairs: calculator-click 10.9 to 11.5 s against
+15.2 to 17.6 s, textedit-edit 16.7 to 24.1 s against 34.2 to 80.9 s, textedit-save 29.5 to 39.3 s
+against 47.4 to 95.6 s. The head-to-head in the owner's normal setup stopped after 9 runs, all
+passing, when its keyboard guard saw a tap from a process that had already exited
+([raw](benchmarks/2026-10-11-h2h-normal-partial.json)). Earlier starts that day stopped
+before any run, on the guard or a missing flag, and the guard was fixed after each.
+
 `node bench/away-sitting.mjs --dry-run` prints 13 steps from STATE's away list at `d21965c`.
 It reads the list and past result files without launching a harness, starting a watcher or taking
 the live lock. A changed list stops planning until its command mapping is reviewed.
