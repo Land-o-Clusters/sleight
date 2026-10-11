@@ -203,6 +203,55 @@ explicit read state and unchanged mailbox counts, preserves Mimestream, and clos
 window. These tasks also require `--owner-present`; the helper refuses the request without it
 before it touches the app.
 
+### Browser depth fixtures
+
+The browser-task catalog has 16 page kinds across 5 native browsers and 3 extension browsers
+(2026-10-11, offline checks only). The 6 earlier kinds and their checks retain their IDs. Firefox's
+earlier `firefox-grid` and `firefox-spa` keep their existing setup too. The 10 new kinds are:
+
+| Kind | Required page state |
+|---|---|
+| `validation` | A rejected draft, then a corrected registration with no errors |
+| `controls` | Orchid in a combobox, November 17, 2026 in a date picker, Research in a native select |
+| `modal` | Orchid approved with the run's note and its dialog closed |
+| `hover` | Orchid archived through its revealed menu, with the menu closed |
+| `reorder` | Orchid dragged after Maple, preserving all 5 projects |
+| `iframe` | The embedded form submitted, with the outer field blank |
+| `shadow` | The open shadow-root form submitted, with the outer field blank |
+| `tabs` | A value read in a second tab and submitted only on the first |
+| `accordion` | Marine expanded, its code submitted, the other sections collapsed |
+| `delayed` | Content loaded after a nonce-derived delay of 1,000 to 3,000 ms, its code submitted |
+
+Native IDs are `<browser>-<kind>`, with browser prefixes `safari`, `helium`, `chrome`, `firefox`
+and `arc`. Extension IDs append `-extension` for Helium, Google Chrome and Arc. Each result records
+`surface: native` or `surface: extension`. Task instructions differ only in their first sentence.
+Native runs use the engine's app API. Extension runs require a connected extension for the named
+browser, use `cua.createBrowserTab`, and require `--surfaces browser,computer`. Without that flag,
+default selection omits extension variants and explicit selection refuses them before the live lock.
+
+Each loopback server compares exact reported control state, independently of the driver's answer.
+Iframe and second-tab pages have separate state endpoints and request records. A first-page snapshot
+cannot replace either page's record. All 10 new kinds have offline tests for accepted state, near misses and
+their generated event handlers. Browser rendering and real input await sleight-arch's live check.
+
+The live matrix is 80 new task IDs (50 native, 30 extension), once per arm, 160 runs total. Print
+the IDs without launching a browser:
+
+```bash
+node --input-type=module -e "import {webTasks} from './bench/tasks-web.mjs'; import {depthKinds} from './bench/web-pages/depth.mjs'; console.log(webTasks.filter(t => depthKinds.includes(t.webKind)).map(t => t.id).join(','))"
+```
+
+Then sleight-arch runs the complete list with the owner away:
+
+```bash
+node bench/run.mjs --suite real --arm sleight,codex --tasks <ids> --runs 1 --owner-away --surfaces browser,computer
+```
+
+Publish every run, including setup, permission, task and cleanup failures. Traces must identify the
+browser and app or browser API. They must confirm exact accepted state and cleanup of only the owned
+windows and tabs. Record turns, model time, total time and own CPU for both arms. No download or upload fixture
+is included.
+
 ### Shop tasks
 
 `safari-shop` and `helium-shop` drive a local Harbor Market page: ZIP and store, search, filters,

@@ -535,8 +535,9 @@ function run(argv) {
   var allowed = ['com.apple.Safari', 'com.apple.Preview', 'com.apple.finder',
     'com.apple.TextEdit', 'com.apple.calculator', 'com.apple.Chess', 'com.apple.dt.Devices', 'com.apple.iphonesimulator', 'net.imput.helium',
     'com.microsoft.Word', 'com.microsoft.Excel', 'com.microsoft.Powerpoint', 'com.apple.mail'];
+  var webFixture = request.fixtureKind === 'web-page' && /^http:\/\/127\.0\.0\.1:[1-9]\d*\/[A-Za-z0-9_-]{1,80}\/$/.test(request.target || '');
   if (request.mode === 'quit') {
-    if (allowed.indexOf(request.bundle) === -1 || request.bundle === 'com.apple.finder' || !(request.pid > 0)) throw new Error('Invalid launched app quit request');
+    if ((allowed.indexOf(request.bundle) === -1 && !webFixture) || request.bundle === 'com.apple.finder' || !(request.pid > 0)) throw new Error('Invalid launched app quit request');
     return quitFixtureApplication(request.pid, request.bundle, function () {
       var value = $.NSRunningApplication.runningApplicationWithProcessIdentifier(request.pid);
       return value.isNil() || value.isTerminated ? null : value;
@@ -547,7 +548,7 @@ function run(argv) {
         return ObjC.unwrap(url.URLByResolvingSymlinksInPath.path) === ObjC.unwrap(expected.URLByResolvingSymlinksInPath.path);
       } });
   }
-  if (allowed.indexOf(request.bundle) === -1 || !request.control || !request.mode) throw new Error('Invalid fixture request');
+  if ((allowed.indexOf(request.bundle) === -1 && !webFixture) || !request.control || !request.mode || (webFixture && request.mode !== 'window')) throw new Error('Invalid fixture request');
   if (!$.AXIsProcessTrusted()) throw new Error('Accessibility is unavailable; fixture not opened');
   function emit(value) {
     $.NSFileHandle.fileHandleWithStandardOutput.writeData($(JSON.stringify(value) + '\n').dataUsingEncoding($.NSUTF8StringEncoding));
@@ -630,7 +631,7 @@ function run(argv) {
     Number(target.launchDate.timeIntervalSince1970) * 1000 >= request.startedAtMs);
   state.setupCase = running ? 'already-running' : 'cold-launch';
   state.office = ['com.microsoft.Word', 'com.microsoft.Excel', 'com.microsoft.Powerpoint'].indexOf(request.bundle) !== -1;
-  if (request.bundle === 'com.apple.Safari') {
+  if (webFixture || request.bundle === 'com.apple.Safari') {
     emit({ stage: 'launch', running: running });
     target = waitForApplication(application, waitForLaunch);
   }
@@ -641,10 +642,10 @@ function run(argv) {
   }
   emit({ stage: 'identified', running: running, pid: pid, setupCase: state.setupCase });
   if (!state.office || running) checkAppDialog();
-  if (request.bundle === 'com.apple.Safari') {
+  if (webFixture || request.bundle === 'com.apple.Safari') {
     if (!target) {
       emit({ stage: 'untouched' });
-      throw new Error('Safari process did not finish launching within ten seconds');
+      throw new Error('Browser process did not finish launching within ten seconds');
     }
     api.fileMenu(app, ['New Window']);
     for (var newTry = 0; newTry < 30; newTry++) {
@@ -652,7 +653,7 @@ function run(argv) {
       if (owned && !api.equal(owned, previous)) { state.fixtureExists = true; break; }
       owned = null; api.wait();
     }
-    if (!owned) throw new Error('New Safari fixture window unconfirmed');
+    if (!owned) throw new Error('New browser fixture window unconfirmed');
   }
   emit({ stage: 'armed', running: running, pid: pid });
   var inherited = request.mode === 'inherit';

@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as benchmark from '../bench/tasks.mjs';
+import { webTasks } from '../bench/tasks-web.mjs';
 
 const getTask = id => {
   const task = benchmark.getTasks?.('real').find(t => t.id === id);
@@ -20,7 +21,8 @@ test('suite selection preserves the default tasks and rejects an unknown suite',
   assert.equal(typeof benchmark.getTasks, 'function');
   assert.equal(benchmark.getTasks(), benchmark.tasks);
   assert.equal(benchmark.tasks.length, 7);
-  assert.deepEqual(benchmark.getTasks('real').map(t => t.id), [
+  assert.deepEqual(benchmark.getTasks('real').filter(t => !webTasks.includes(t) ||
+    /^(safari|helium)-(grid|editor|dense|spa|nested|infinite)$/.test(t.id)).map(t => t.id), [
     'safari-form', 'helium-form', 'preview-pdf', 'finder-files', 'textedit-calculator', 'simulator-flow',
     'safari-grid', 'helium-grid', 'safari-editor', 'helium-editor', 'safari-dense', 'helium-dense',
     'safari-spa', 'helium-spa', 'safari-nested', 'helium-nested', 'safari-infinite', 'helium-infinite',

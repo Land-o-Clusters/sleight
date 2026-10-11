@@ -889,6 +889,16 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   Excel correctly stopped on “Start Using Excel”. PowerPoint did not run. The
   [brief-10 report](benchmarks/2026-10-09-real-use-tasks-10.md) traces Word's retained process and
   records the fix: both running cases receive bounded initial-read retries. Live proof is pending.
+- The browser-depth expansion has 0 live runs (2026-10-11). Its 10 new page kinds have offline
+  server-state and generated-handler coverage, including wrong rows, a drop one slot off, wrong
+  tabs and values entered on the reference tab. Those tests do not render a browser, exercise a
+  native date popup, dispatch pointer input or measure the 1 to 3 s delay against a real clock.
+  All 5 browsers use the same New Window fixture mechanism; Chrome, Firefox and Arc setup and
+  retained-window cleanup need live proof. Extension variants require a connected, identifiable
+  Helium, Google Chrome or Arc extension. The runner's `surface` field records the API choice. Traces must
+  confirm the API actually used. Extension turn-end cleanup and reference-tab closure also need
+  live proof. sleight-arch must publish all 160 runs of the 80 new IDs on both arms. The older six
+  page kinds keep their checks, and Firefox's older grid and SPA keep their earlier setup.
 - sleight-arch's owner-away pass at `b284b05` passed 11 web tasks once each (2026-10-09).
   Word made its edits and saved, but its ZIP entry was rejected without identifying it. The file
   was removed during cleanup. Its rejection remains unexplained. Excel setup ended on `-25205` after

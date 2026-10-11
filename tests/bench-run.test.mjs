@@ -10,6 +10,7 @@ import { privateDriverEnvironment } from '../bench/driver.mjs';
 import { guardGenericOperation } from '../bench/generic-approval.mjs';
 import { genericSettings } from '../bench/plugin-arm.mjs';
 import { cpuSplit } from '../bench/footprint.mjs';
+import { webBrowsers } from '../bench/tasks-web.mjs';
 
 // Execute the actual runner body with inert dependencies. No app, CLI, approval
 // file, live lock, compiler or filesystem operation reaches the host.
@@ -86,6 +87,34 @@ async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome
   try { await runInNewContext(`(async () => { ${source}\n})()`, sandbox); } catch (caught) { error = caught; }
   return { calls, saved, envs, tailScopes, directories, error, logs, driverOptions, codexRuns, files, exitCode: sandbox.process.exitCode };
 }
+
+test('extension tasks require both surfaces before any live lock or fixture', async () => {
+  const task = { id: 'chrome-validation-extension', app: 'Google Chrome', surface: 'extension' };
+  const result = await runner({ tasks: [task], extraArgs: ['--tasks', task.id] });
+  assert.match(String(result.error?.message), /extension tasks require --surfaces browser,computer/);
+  assert.equal(result.calls.includes('lock'), false);
+  assert.equal(result.calls.includes('real run'), false);
+});
+
+test('default computer-only selection omits extension variants', async () => {
+  const result = await runner({ tasks: [
+    { id: 'chrome-validation', app: 'Google Chrome', surface: 'native' },
+    { id: 'chrome-validation-extension', app: 'Google Chrome', surface: 'extension' },
+  ] });
+  assert.equal(result.error, undefined);
+  assert.deepEqual([...new Set(result.saved.at(-1).results.map(row => row.task))], ['chrome-validation']);
+});
+
+test('every native and extension result records its surface on both arms, including failures', async () => {
+  const result = await runner({ arm: 'sleight,codex', extraArgs: ['--surfaces', 'browser,computer'], tasks: [
+    { id: 'chrome-validation', app: 'Google Chrome', surface: 'native' },
+    { id: 'chrome-validation-extension', app: 'Google Chrome', surface: 'extension' },
+  ] });
+  assert.equal(result.error, undefined);
+  const rows = result.saved.at(-1).results;
+  assert.equal(rows.length, 12);
+  for (const row of rows) assert.equal(row.surface, row.task.endsWith('-extension') ? 'extension' : 'native');
+});
 
 test('generic default comparisons use the guarded lifecycle for every arm and propagate failures', async () => {
   const result = await runner({ suite: 'default', arm: 'sleight,mcp:rival', drive: true, outcome: { passed: false, code: 1 } });
@@ -449,6 +478,7 @@ test('real cleanup tails never inspect unrelated apps and Simulator awaits only 
   const source = readFileSync(new URL('../bench/tasks.mjs', import.meta.url), 'utf8')
     .replace(/^import .*;\n/gm, '').replace(/^export \{.*\} from .*;\n/gm, '').replace(/^export /gm, '');
   const cleanup = runInNewContext(`${source}\n({closeBenchTextEdit, quitChess, quitSimApp})`, {
+    webBrowsers,
     join, tmpdir: () => '/private/tmp', realpathSync: path => path,
     execFileSync: () => assert.fail('no host app inventory or action without an owned lease'),
   });
@@ -466,6 +496,7 @@ test('a TextEdit task refuses to start next to a document the pass did not open'
   for (const [docs, refused] of [[[{ name: 'Untitled 9', path: '/Users/x/Library/Mobile Documents/Untitled 9.txt' }], true], [[], false]]) {
     const actions = [];
     const tasks = runInNewContext(`${source}\n({ freshTextEdit })`, {
+      webBrowsers,
       join, tmpdir: () => '/private/tmp', realpathSync: path => path,
       execFileSync: (command, args) => {
         if (command === 'osascript' && args.some(a => String(a).includes('documents().map'))) return JSON.stringify(docs);
@@ -483,6 +514,7 @@ function textEditHelpers(execFileSync) {
   const source = readFileSync(new URL('../bench/tasks.mjs', import.meta.url), 'utf8')
     .replace(/^import .*;\n/gm, '').replace(/^export \{.*\} from .*;\n/gm, '').replace(/^export /gm, '');
   return runInNewContext(`${source}\n({ freshTextEdit, closeBenchTextEdit, launchBenchTextEdit })`, {
+    webBrowsers,
     join, tmpdir: () => '/private/tmp', realpathSync: path => path, execFileSync,
   });
 }
@@ -496,6 +528,7 @@ test('the last TextEdit quit after a forced relaunch is retried until TextEdit i
   // Every quit is ignored until the relaunch, and the first quit after it is dropped too.
   let running = true, relaunched = false, quitsAfter = 0;
   const tasks = runInNewContext(`${source}\n({ closeBenchTextEdit })`, {
+    webBrowsers,
     join, tmpdir: () => '/private/tmp', realpathSync: path => path,
     execFileSync: (command, args) => {
       if (command === 'pgrep') { if (running) return ''; throw new Error('none'); }

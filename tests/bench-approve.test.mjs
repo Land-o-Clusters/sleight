@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { webBrowsers } from '../bench/tasks-web.mjs';
 import { execFileSync } from 'node:child_process';
 
 const approve = (message, suite = 'default', extra = {}) => {
@@ -32,11 +33,11 @@ test('real tasks approve their apps and exact bundle IDs without widening core a
     'Microsoft Word', 'Word', 'com.microsoft.Word', 'Microsoft Excel', 'Excel', 'com.microsoft.Excel', 'Microsoft PowerPoint', 'PowerPoint', 'com.microsoft.Powerpoint', 'Mail', 'com.apple.mail', 'Mimestream', 'com.mimestream.Mimestream',
     'Visual Studio Code', 'VS Code', 'com.microsoft.VSCode', 'Cursor', 'com.todesktop.230313mzl4w4u92',
     'Firefox', 'org.mozilla.firefox', 'Slack', 'com.tinyspeck.slackmacgap', 'Discord', 'com.hnc.Discord',
-    'WhatsApp', 'net.whatsapp.WhatsApp']) {
+    'WhatsApp', 'net.whatsapp.WhatsApp', ...webBrowsers.flatMap(({ app, bundle }) => [app, bundle])]) {
     assert.equal(approve(`Allow Computer Use to use "${app}"?`), null);
     assert.equal(approve(`Allow Computer Use to use "${app}"?`, 'real'), 'accept');
   }
-  for (const app of ['Google Chrome', 'net.imput.helium.copy', 'com.apple.preview', 'com.microsoft.word', 'com.microsoft.Excel.copy', 'Mail copy', 'Mimestream copy', 'com.mimestream.mimestream',
+  for (const app of ['Google Chrome copy', 'com.google.chrome', 'Arc copy', 'company.thebrowser.browser', 'net.imput.helium.copy', 'com.apple.preview', 'com.microsoft.word', 'com.microsoft.Excel.copy', 'Mail copy', 'Mimestream copy', 'com.mimestream.mimestream',
     'Code copy', 'com.microsoft.vscode', 'Slack copy', 'org.mozilla.Firefox',
     'iPhone Mirroring', 'com.apple.ScreenContinuity']) {
     assert.equal(approve(`Allow Computer Use to use "${app}"?`, 'real'), null);

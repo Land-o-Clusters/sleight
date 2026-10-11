@@ -187,7 +187,10 @@ const codexModel = option('codex-model', 'gpt-6.1-sol');
 const codexEffort = option('codex-effort', effort);
 const wanted = option('tasks', undefined)?.split(',');
 const claudeBin = process.env.CLAUDE_BIN || 'claude';
-const selected = selectSuiteTasks(suiteTasks, wanted);
+const selected = selectSuiteTasks(suiteTasks.filter(task => task.surface !== 'extension' || realSurfaces === 'browser,computer' || wanted?.includes(task.id)), wanted);
+if (selected.some(task => task.surface === 'extension') && realSurfaces !== 'browser,computer') {
+  throw new Error('extension tasks require --surfaces browser,computer');
+}
 assertShopSmokeRuns(selected, runs);
 // Tasks in the owner's real accounts run only with the owner at the Mac and watching (LAWS, 2026-10-11).
 if (selected.some(task => task.ownerPresent) && !ownerPresent) throw new Error('owner-present tasks (iPhone Mirroring, Mail, Mimestream and chat reads) require --owner-present');
@@ -491,6 +494,7 @@ pass: for (let run = 1; run <= runs; run++) {
         const { out, code, forbidden: _forbidden, ...rest } = result;
         if (task.noScreenshot) { delete rest.screenshot; delete rest.cartShot; }
         results.push(task.privateMail ? privateMailResult(task, ctx, result, { arm: armName, run }) : { arm: armName, task: task.id, run, ...rest,
+          ...((task.surface || ctx.webKind) && { surface: task.surface ?? 'native' }),
           ...(isDryRun && ARMS[armName].generic && { command: [claudeBin, ...ARMS[armName].args, '--disallowedTools', OUTSIDE_TOOLS.join(','), '--settings', ARMS[armName].settings] }),
           reason: scrub(result.reason), cleanupError: scrub(result.cleanupError), prompt: scrub(result.prompt),
           turns: out?.num_turns, costUsd: runCost(out), reportedCostUsd: out?.total_cost_usd, models: Object.keys(out?.modelUsage ?? {}),

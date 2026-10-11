@@ -9,6 +9,7 @@ import { heliumHelper } from './real-helium.mjs';
 const execute = promisify(execFile);
 const script = fileURLToPath(new URL('./real-fixture.js', import.meta.url));
 async function fixtureHelper(request, signal) {
+  if (request.fixtureKind === 'web-page') return { command: '/usr/bin/osascript', args: ['-l', 'JavaScript', script] };
   return ['net.imput.helium', 'com.apple.Safari'].includes(request.bundle)
     ? { command: await heliumHelper(signal), args: [] }
     : { command: '/usr/bin/osascript', args: ['-l', 'JavaScript', script] };
@@ -18,8 +19,8 @@ async function fixtureHelper(request, signal) {
 // window inventory or an Apple Event. Only a retained reference permits closing
 // a window; a missing reference leaves cleanup unconfirmed.
 export async function openFixture(ctx, request, { run = runOwned, open = execute, launch, helper = fixtureHelper } = {}) {
-  if (request.bundle === 'com.apple.Safari' && ctx.ownerAway !== true) {
-    throw Object.assign(new Error('Safari blank-window setup requires an explicit owner-away boundary'), { noMutation: true });
+  if ((request.fixtureKind === 'web-page' || request.bundle === 'com.apple.Safari') && ctx.ownerAway !== true) {
+    throw Object.assign(new Error('Browser blank-window setup requires an explicit owner-away boundary'), { noMutation: true });
   }
   request = { ...request, stopOnAppDialog: ctx.stopOnAppDialog || request.stopOnAppDialog, ownerAway: ctx.ownerAway === true };
   ctx.signal?.throwIfAborted();
@@ -60,7 +61,8 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
       if (!final) { await ctx.beforeFixtureCleanup?.(); ctx.cleanupSignal?.throwIfAborted(); }
       if (!lease.pid) throw new Error('Launched app identity unconfirmed; quit refused');
       const result = await run('/usr/bin/osascript', ['-l', 'JavaScript', script,
-        JSON.stringify({ bundle: lease.bundle || request.bundle, mode: 'quit', pid: Number(lease.pid), ...(request.stopOnLiveHold && { stopOnLiveHold: true }) })], {
+        JSON.stringify({ bundle: lease.bundle || request.bundle, mode: 'quit', pid: Number(lease.pid),
+          ...(request.fixtureKind && { fixtureKind: request.fixtureKind, target: request.target }), ...(request.stopOnLiveHold && { stopOnLiveHold: true }) })], {
         signal: final ? undefined : ctx.cleanupSignal, timeoutMs: 35000,
       });
       for (const line of result.stdout?.split('\n') ?? []) {
@@ -145,15 +147,17 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
     } finally { clearTimeout(timer); }
   };
   try {
-  if (request.bundle === 'com.apple.Safari') {
+  if (request.fixtureKind === 'web-page' || request.bundle === 'com.apple.Safari') {
     await waitStage('launch');
     beginLaunch();
-    await open('/usr/bin/open', ['-g', '-a', 'Safari'], { signal, timeout: 15000 });
+    await open('/usr/bin/open', request.fixtureKind === 'web-page' ? ['-g', '-b', request.bundle] : ['-g', '-a', 'Safari'], { signal, timeout: 15000 });
   }
   await waitStage('armed');
   signal?.throwIfAborted();
   if (launch) await launch(beginLaunch);
-  else if (request.bundle !== 'com.apple.Safari') {
+  else if (request.fixtureKind === 'web-page') {
+    await open('/usr/bin/open', ['-g', '-b', request.bundle, request.target], { signal, timeout: 15000 });
+  } else if (request.bundle !== 'com.apple.Safari') {
     beginLaunch();
     const args = request.app === 'Helium'
       ? ['-n', '-g', '-a', request.app, '--args', '--new-window', request.target]

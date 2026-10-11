@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { isDeepStrictEqual } from 'node:util';
+import { depthKinds, depthExpected, depthPage } from './web-pages/depth.mjs';
 
 const shell = (title, body) => `<!doctype html><meta name="viewport" content="width=device-width"><title>${title}</title>
 <style>body{font:20px system-ui;max-width:540px;margin:32px auto;padding:16px}label{display:block;margin:20px 0}input,select,button{font:inherit}input[type=text],input[type=email]{width:95%}button,a{display:inline-block;padding:12px}</style>${body}`;
@@ -83,12 +84,19 @@ const gridRows = [
   ['Oak', 510], ['Orchid', 275], ['Cedar', 90], ['Maple', 180], ['Harbor', 140], ['Pine', 430],
   ['Willow', 220], ['Elm', 350], ['Spruce', 470], ['Juniper', 260], ['Aspen', 390], ['Birch', 310],
 ].map(([project, budget]) => ({ project, budget }));
-const webKinds = ['grid', 'editor', 'dense', 'spa', 'nested', 'infinite'];
+const webKinds = ['grid', 'editor', 'dense', 'spa', 'nested', 'infinite', ...depthKinds];
 const articleTitle = id => id === 'link-173' ? 'Tidal observatory field notes' : `Research bulletin ${id.slice(5)}`;
 
 // The browser reports DOM state to this run's server. Checkers compare that
 // state with fixture values, independently of the driver's answer.
 export function checkWeb(ctx) {
+  if (depthKinds.includes(ctx.webKind)) {
+    const want = depthExpected(ctx.webKind, ctx.nonce), page = ctx.page;
+    const frameMatches = ctx.webKind !== 'iframe' || (page?.visits?.includes('frame') && isDeepStrictEqual(page.sections?.frame?.snapshot, want.frame));
+    const secondMatches = ctx.webKind !== 'tabs' || (page?.visits?.includes('second') && isDeepStrictEqual(page.sections?.second?.snapshot,
+      { tab: 'second', value: `Tide-${ctx.nonce}`, answer: '', submitted: false }));
+    return isDeepStrictEqual(page?.snapshot, want) && frameMatches && secondMatches || `page state does not match the ${ctx.webKind} task`;
+  }
   const want = {
     grid: { rows: gridRows.map(row => row.project === 'Orchid' ? { ...row, budget: 125 } : row)
       .sort((a, b) => a.budget - b.budget), sorted: 'budget-ascending' },
@@ -110,7 +118,9 @@ export function checkWeb(ctx) {
     `page state does not match the ${ctx.webKind} task`;
 }
 
-function webPage(kind, nonce, prefix, article) {
+function webPage(kind, nonce, prefix, article, section) {
+  const depth = depthPage(kind, nonce, prefix, section);
+  if (depth) return shell(`${kind} ${nonce}`, depth);
   const common = `const $ = id => document.getElementById(id);
 const text = node => node?.textContent.trim() ?? '';
 let sequence = Date.now() * 1000;
@@ -221,7 +231,7 @@ $('cancel').onclick = () => { $('modal').close(); snapshot(); }; $('modal').addE
 export async function serveWebPage(ctx, kind) {
   if (!webKinds.includes(kind) || !/^[A-Za-z0-9_-]{1,80}$/.test(ctx.nonce)) throw new Error('invalid web fixture kind or nonce');
   if (ctx.closeServer) throw new Error('web fixture server already exists');
-  const prefix = `/${ctx.nonce}/`, page = { snapshot: undefined, sequence: -1, articles: [] };
+  const prefix = `/${ctx.nonce}/`, page = { snapshot: undefined, sequence: -1, articles: [], visits: [], sections: {} };
   let origin;
   const server = createServer((req, res) => {
     res.setHeader('cache-control', 'no-store');
@@ -229,7 +239,9 @@ export async function serveWebPage(ctx, kind) {
     const route = new URL(req.url, 'http://localhost').pathname;
     if (req.headers.host !== origin?.slice(7) || !route.startsWith(prefix)) { res.writeHead(404).end(); return; }
     if (req.headers.origin && req.headers.origin !== origin) { res.writeHead(403).end(); return; }
-    if (req.method === 'POST' && route === prefix + 'state') {
+    const section = kind === 'tabs' ? 'second' : kind === 'iframe' ? 'frame' : undefined;
+    const sectionState = section && route === prefix + section + '/state';
+    if (req.method === 'POST' && (route === prefix + 'state' || sectionState)) {
       if (req.headers['content-type'] !== 'application/json') { res.writeHead(400).end(); req.resume(); return; }
       let body = '', size = 0, tooLarge = false;
       req.on('data', chunk => { size += chunk.length; if (size > 32768) { if (!tooLarge) res.writeHead(413).end(); tooLarge = true; } else body += chunk; });
@@ -238,16 +250,19 @@ export async function serveWebPage(ctx, kind) {
         let payload; try { payload = JSON.parse(body); } catch { res.writeHead(400).end(); return; }
         if (!payload || payload.nonce !== ctx.nonce || payload.kind !== kind || !Number.isSafeInteger(payload.sequence) ||
           payload.sequence < 0 || !payload.state || typeof payload.state !== 'object' || Array.isArray(payload.state)) { res.writeHead(400).end(); return; }
-        if (payload.sequence > page.sequence) { page.sequence = payload.sequence; page.snapshot = payload.state; }
+        const record = sectionState ? (page.sections[section] ??= { sequence: -1 }) : page;
+        if (payload.sequence > record.sequence) { record.sequence = payload.sequence; record.snapshot = payload.state; }
         res.writeHead(204).end();
       });
       return;
     }
     if (req.method !== 'GET') { res.writeHead(404).end(); return; }
     const article = route.slice(prefix.length).match(/^article\/(link-(?:[1-9]|[1-9]\d|1\d\d|2[0-3]\d|240))$/)?.[1];
-    if (route !== prefix && !(kind === 'dense' && article)) { res.writeHead(404).end(); return; }
+    const sectionPage = section && route === prefix + section;
+    if (route !== prefix && !(kind === 'dense' && article) && !sectionPage) { res.writeHead(404).end(); return; }
     if (article) page.articles.push(article);
-    res.end(webPage(kind, ctx.nonce, prefix, article));
+    if (sectionPage) page.visits.push(section);
+    res.end(webPage(kind, ctx.nonce, prefix, article, sectionPage ? section : undefined));
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   origin = `http://127.0.0.1:${server.address().port}`;
