@@ -225,8 +225,8 @@ function resultNote(action, after, failed) {
       before.window.title.replace(/(?: — | - )Edited$/, '') === after.window.title && before.window.url === after.window.url;
     const named = action.namedURL && action.namedURL === after?.window.url;
     // TextEdit in the background shows no edited state, so every Cmd+S on an open file read "not
-    // confirmed" in 7 of 7 textedit-edit runs, and 4 of them spent a turn checking (2026-10-11). The
-    // relay is on the same Mac: the document's file changing during the call is the save.
+    // confirmed" in 7 of 7 textedit-edit runs, and 4 of them spent a turn checking. The relay is on
+    // the same Mac: the document's file changing during the call is the save (A/B win, 2026-10-11).
     const fileWritten = sameDocument && action.fileTime !== undefined && (fileTime(after.window.url) ?? -Infinity) > (action.fileTime ?? -Infinity);
     // The two ordinary steps of a Save panel get no saved field: the panel opening, and the panel
     // closing on a document with a file URL when the call named no path it could check. The header
@@ -273,7 +273,7 @@ export function dropAcquisitionTree(head, rest) {
   });
 }
 
-export function createReadCompactor({ fileSaveCheck = false } = {}) {
+export function createReadCompactor() {
   // window key -> { lines, valid }: the last full tree Claude got, and the
   // element numbers in it Claude knows are current (undefined: all of them).
   const seen = new Map();
@@ -434,7 +434,7 @@ export function createReadCompactor({ fileSaveCheck = false } = {}) {
     },
     beginAction(code) {
       const kind = actionKind(code, latest);
-      if (kind?.save && fileSaveCheck && latest?.window.url?.startsWith('file://')) kind.fileTime = fileTime(latest.window.url);
+      if (kind?.save && latest?.window.url?.startsWith('file://')) kind.fileTime = fileTime(latest.window.url);
       return kind && { ...kind, before: latest };
     },
     // What Claude takes these element numbers to be in this window, from what it was last shown:

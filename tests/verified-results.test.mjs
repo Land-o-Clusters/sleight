@@ -175,21 +175,20 @@ test('saving then navigating or observing a different handle cannot confirm the 
   ]) assert.match(run(tree(rows), after, code), /saved: not confirmed \(mixed save targets\)/);
 });
 
-test('a save is observed when the document\'s file on disk changes during the call, only with the file check on', async () => {
+test('a save is observed when the document\'s file on disk changes during the call', async () => {
   const { mkdtempSync, writeFileSync, utimesSync, rmSync } = await import('node:fs');
   const { join } = await import('node:path'); const { tmpdir } = await import('node:os'); const { pathToFileURL } = await import('node:url');
   const dir = mkdtempSync(join(tmpdir(), 'sleight-filesave-'));
   try {
     const file = join(dir, 'a.txt'); writeFileSync(file, 'before'); utimesSync(file, 1000, 1000);
     const url = pathToFileURL(file).href, doc = tree(rows, 'a.txt', url);
-    const save = (check, write) => {
-      const c = createReadCompactor({ fileSaveCheck: check }); c.process([text(doc)]);
+    const save = write => {
+      const c = createReadCompactor(); c.process([text(doc)]);
       const action = c.beginAction('await app.pressKey("super+s")');
       if (write) { writeFileSync(file, 'after'); utimesSync(file, 2000, 2000); } else utimesSync(file, 1000, 1000);
       return c.process([text(GUARD_MARK + doc + GUARD_END)], { action }).find(item => /^sleight: /.test(item.text))?.text;
     };
-    assert.match(save(true, true), /saved: observed ".*a\.txt" \(its file on disk changed during this call\)/);
-    assert.match(save(true, false), /saved: not confirmed \(no document save state change seen\)/);
-    assert.match(save(false, true), /saved: not confirmed \(no document save state change seen\)/);
+    assert.match(save(true), /saved: observed ".*a\.txt" \(its file on disk changed during this call\)/);
+    assert.match(save(false), /saved: not confirmed \(no document save state change seen\)/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

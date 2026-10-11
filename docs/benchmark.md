@@ -430,6 +430,12 @@ disk (0 of 7 before). One textedit-save chained Cmd+N, Make Plain Text and the p
 finished in 5 calls. Its slowest run, 70.1 s, lost its time to a result written to a file and a menu
 opened in one call and used in the next. Its totals need the second round, which runs next.
 
+On the two tasks without a Save sheet it ran with the owner at the Mac (05:09 to 05:16 UTC,
+[raw](benchmarks/2026-10-11-sheet-edit-ab.json)). textedit-edit passed 6/6 at 6 turns in every run
+and 18.5 s a run, against 5/5 at 6.6 turns and 20.0 s (one default run was skipped at setup).
+calculator-click took 3 turns in all 12 runs, at 10.4 s against 11.0 s. `open_file` naming its `getApp` call and a save
+observed from the file on disk are the default since.
+
 The head-to-head at the owner's normal load (2026-10-09, the owner away, load 6 to 24, Sonnet 5.5 at
 medium against gpt-6.1-sol at medium) alternated sleight and Codex task by task. The default tasks
 ran 3 times per arm ([`h2h-normal-default`](benchmarks/2026-10-09-h2h-normal-default.json)) and six

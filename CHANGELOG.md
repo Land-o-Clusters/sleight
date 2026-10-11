@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `open_file` tells Claude the exact `getApp` call to send next, and a Cmd+S on an open file reads
+  "saved: observed" when the file on disk changed during the call. TextEdit in the background shows
+  no edited state. Those saves used to read "not confirmed", and Claude spent a turn checking in
+  4 of 7 runs. On textedit-edit the A/B went 6/6 at 6 turns and 18.5 s a run against 5/5 at 6.6 turns
+  and 20.0 s (2026-10-11).
 - The `js` tool's description names `let app = await cua.getApp("Calculator")` as the first call
   for an app Claude can name, and `cua.getState()` only for one it can't. In an A/B of 11 and 12 runs
   (2026-10-11), first calls on `getState` fell from 8 of 11 to 0 of 12, turns from 7.91 to 7.17 a

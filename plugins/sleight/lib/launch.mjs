@@ -418,9 +418,8 @@ export async function openDocument(args, { exec = runOpen, resolve = resolveAppI
   try { await exec('/usr/bin/open', ['-g', '-b', bundleId, path]); }
   catch (err) { return text(`macOS couldn't open ${raw} in ${app}: ${String(err.message || err).split('\n')[0]}`, true); }
   // "Read the app with getAXState" sent Claude to cua.getAXState(), which doesn't exist, in 2 of 7
-  // textedit-edit runs (2026-10-11), a turn each. Under A/B (SLEIGHT_FIRST_CALL_BATCH=sheet).
-  if (process.env.SLEIGHT_FIRST_CALL_BATCH === 'sheet') return text(`Opened ${raw} in ${app} in the background. Next, send \`let app = await cua.getApp(${JSON.stringify(bundleId)})\`: it returns the app's windows, this file's among them.`);
-  return text(`Opened ${raw} in ${app} in the background. Read the app with getAXState({ disableDiffing: true }) before acting: its windows changed.`);
+  // textedit-edit runs. Naming the call: 6/6 at 6 turns and 18.5 s against 20.0 s (A/B, 2026-10-11).
+  return text(`Opened ${raw} in ${app} in the background. Next, send \`let app = await cua.getApp(${JSON.stringify(bundleId)})\`: it returns the app's windows, this file's among them.`);
 }
 
 export const HOVER_TOOL = {

@@ -21,7 +21,7 @@ test('open_file opens an existing file with the app left in the background', asy
   const result = await openDocument({ app: 'TextEdit', path: file }, { exec, resolve });
   assert.equal(result.isError, undefined);
   assert.deepEqual(calls, [['/usr/bin/open', '-g', '-b', 'com.apple.TextEdit', file]]);
-  assert.match(message(result), /disableDiffing: true/);
+  assert.match(message(result), /Next, send `let app = await cua\.getApp\("com\.apple\.TextEdit"\)`/);
   await openDocument({ app: 'com.apple.TextEdit', path: '~/note.txt' }, { exec, resolve, home: dir });
   assert.deepEqual(calls[1], ['/usr/bin/open', '-g', '-b', 'com.apple.TextEdit', file]);
 });

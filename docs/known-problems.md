@@ -590,11 +590,15 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   2.3 s. The benchmark now moves runs older than 6 hours out of its folder. Engine 26.1007.21159
   still has no root, depth, filter or element-query on `getAXState`, so a read that leaves out the
   browser rows is unbuilt. Filtering the text after a full walk would not cut the walk.
-- TextEdit's Save sheet can appear over the window the owner is using while TextEdit stays in the
-  background (owner's report, 2026-10-11, during textedit-save runs). The system log shows no
-  front-app change for TextEdit, only macOS's Open and Save Panel Service starting for it, so the
-  sheet may be drawn by that service above other apps. That is unconfirmed: no window-order capture
-  has been taken. Until it is, textedit-save runs only while the owner is away.
+- Go to Folder in a background TextEdit's Save panel puts TextEdit's windows over the user's window
+  for about 0.4 s (owner's report and a window-order capture, 2026-10-11: 05:23:13.249 to 13.680 UTC,
+  during the call that sends Cmd+Shift+G, the folder and Return). The front app didn't change, so
+  typing stays in the user's window, but the sheet visibly flashes over it. Every textedit-save run
+  uses Go to Folder, so it runs only with the owner away until a save path that doesn't flash is found.
+- Launching a closed Slack with `cua.getApp` (2026-10-11, once, with the owner watching) put Slack's
+  window on top of the user's window while the user's app stayed in front. A click on it would
+  move the user's typing into Slack. The same read returned 161 elements, with channels, messages
+  and the composer, against the 15 a read on 2026-10-10 found.
 - Finishing a File > Open panel brought TextEdit to the front for about a second in 3 of about 21
   textedit-edit runs while the owner worked (2026-10-10, WindowServer log), each time just after the
   panel opened the document. The engine's actions themselves didn't. The skill now sends Claude to

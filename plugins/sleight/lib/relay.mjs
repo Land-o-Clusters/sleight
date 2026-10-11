@@ -348,7 +348,7 @@ export function createRelay({
   chromeSettleIntervalMs = 100,
   chromeSettleSleep = ms => new Promise(r => setTimeout(r, ms)),
 }) {
-  let compactor = createReadCompactor({ fileSaveCheck: firstCallBatch === 'sheet' });
+  let compactor = createReadCompactor();
   const journal = receipts || stateReview ? new TurnJournal({ redactTitles: redactReceiptTitles }) : undefined;
   const receiptEnds = new Map();
   let latestReceipt;
@@ -484,7 +484,7 @@ export function createRelay({
         toServer({ jsonrpc: '2.0', method: 'notifications/initialized' });
       }
       if (!isCurrent()) throw new Error('Engine restart was stopped.');
-      clipboard = newClipboard(); compactor = createReadCompactor({ fileSaveCheck: firstCallBatch === 'sheet' }); resultCalls.clear(); docsShown = false; priorRead = undefined;
+      clipboard = newClipboard(); compactor = createReadCompactor(); resultCalls.clear(); docsShown = false; priorRead = undefined;
       selectorWindows.clear(); helperStates.clear(); helperHandles.clear(); helperAliases.clear();
       screenshots.clear(); turnId = randomUUID();
       trace('engine-restarted-after-stop', {});
