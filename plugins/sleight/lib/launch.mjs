@@ -674,7 +674,10 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     trace: relayTrace,
     guardTiming: !!process.env.SLEIGHT_TRACE,
     traceCode: process.env.SLEIGHT_TRACE_CODE === '1',
-    firstCallRules: process.env.SLEIGHT_FIRST_CALL_BATCH === 'sheet' ? sheetRules(skillRules()) : skillRules(),
+    // SLEIGHT_SKILL=slim or none, under A/B (owner, 2026-10-11: app-agnostic, and no more than Codex needs).
+    firstCallRules: process.env.SLEIGHT_SKILL === 'none' ? undefined
+      : (rules => process.env.SLEIGHT_FIRST_CALL_BATCH === 'sheet' ? sheetRules(rules) : rules)(
+        process.env.SLEIGHT_SKILL === 'slim' ? skillRules(join(LIB, '..', 'skills', 'drive-mac-apps', 'SKILL-slim.md')) : skillRules()),
     keyboardTaps: () => appHealth.keyboardTaps(),
     windowIdentity: window => appHealth.windowIdentity(window),
     beginStop: () => { stoppingForReceipt = true; },

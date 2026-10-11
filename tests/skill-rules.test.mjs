@@ -36,3 +36,12 @@ test('under the sheet A/B the menu rule names the label clicks to send in one ca
   assert.doesNotMatch(sheet, /click\n  the menu and its item in one call\./);
   assert.equal(sheetRules('other rules'), 'other rules');
 });
+
+test('the slim skill names no app and keeps the safety rules', async () => {
+  const { skillRules } = await import('../plugins/sleight/lib/launch.mjs');
+  const { join } = await import('node:path');
+  const slim = skillRules(join(import.meta.dirname, '..', 'plugins', 'sleight', 'skills', 'drive-mac-apps', 'SKILL-slim.md'));
+  assert.doesNotMatch(slim, /TextEdit|Calculator|Chess|Safari|Helium|iPhone|Simulator|Slack/);
+  for (const rule of [/preapproved\.json/, /blocked_app/, /Never set or suggest that setting/, /flow_exception/, /lease/]) assert.match(slim, rule);
+  assert.ok(slim.length < skillRules().length * 0.7);
+});
