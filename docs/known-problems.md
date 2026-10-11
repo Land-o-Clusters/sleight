@@ -2,8 +2,8 @@
 
 ## Parity battery
 
-The 31-app battery passed 13 offline tests with zero live runs (2026-10-11), leaving Office and iWork
-saves and Notion's local-file support unchecked. The Notes, Reminders and Calendar scripting descriptors have not run
+The 31-app battery passed 41/41 offline tests (2026-10-11). Office and iWork
+saves and Notion's local-file support remain unchecked. The Notes, Reminders and Calendar scripting descriptors have not run
 against their dictionaries. Local fixture IDs and the `local: true` declaration come from the owner;
 the runner cannot independently prove that a supplied container is outside an account.
 
@@ -1020,11 +1020,29 @@ Cleanup diagnostics record each retained window's AXDocument URL, expected URL, 
 close-button outcome, sheets and closure after 10 s. A scripting fallback closes only the run's
 temporary fixture, after its retained window's exact URL is checked again, and records the path.
 An unmatched window, failed window read, sheet, unsupported scripting or launched app that stays
-running stops the pass and retains the lock. These paths passed 19/19 new offline regressions with
-simulated native APIs. Live scripting, window closure and app termination remain unverified.
-sleight-arch must run the TextEdit battery twice with one run per arm, then the full no-seed battery,
-and publish every run. Each pass must confirm fixture closure and termination of every app it
-launched before releasing its lock.
+running stops the pass and retains the lock.
+
+After `d421e0c` cast the close-button Ref, sleight-arch measured TextEdit passing 4/4 runs with cleanup
+confirmed and AXPress status 0 (2026-10-11). The next full battery stopped on its third row.
+Codex's Word run failed in 1.08 s with `RUN_FAILED` and `HOST_NOT_STARTED`. The row omitted the error
+message and preceded any model call. Word had launched with a restored document from an older benchmark folder beside the fixture.
+sleight-arch closed both windows and quit Word.
+
+Startup failures now record `cleanupDetails.startError` with the host's message, stage and window
+count. The count is null when unavailable. The application Ref is cast before reading AXWindows.
+Only an app the run launches receives `--args -ApplePersistenceIgnoreState YES` on its `open` command.
+A foreign document observed during that startup is recorded with `retained: false`. The host leaves
+its window open and stops before a model call. The pass retains the lock. An absent document URL
+also stops that startup because fixture ownership is unconfirmed.
+
+These changes passed 8/8 new offline regressions, each failing with the original code,
+and 41/41 battery tests. This branch has had zero live runs. Native casting, persistence suppression,
+Word saves, scripting fallback and launched-app termination still need live checks. sleight-arch must
+run `node bench/run.mjs --suite battery --owner-away --tasks word --runs 1`, then the full no-seed
+battery, and publish every run. Both Word arms must start, save the expected fixture and confirm
+cleanup. Every launched app must exit before lock release. Any restored foreign window must remain
+unclaimed and open, with its document recorded and the pass stopped with the lock kept. A startup
+failure must include its message, stage and window count in the published row.
 
 The offline battery reporter has no live qualification yet. Codex model API time can be unavailable;
 its model and host scheduling gap is not a substitute. Sampled focus and window overlap count

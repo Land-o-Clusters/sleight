@@ -2,10 +2,9 @@
 ObjC.import('AppKit'); ObjC.import('ApplicationServices'); ObjC.import('CoreGraphics'); ObjC.import('Foundation');
 function run(argv) {
   var request = JSON.parse(argv[0]), started = Date.now(), retained = [], samples = [];
-  var initial = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(request.bundle);
-  var wasRunning = initial.count > 0, target = wasRunning ? initial.objectAtIndex(0) : null;
-  var pid = target ? Number(target.processIdentifier) : null, launched = false, ready = false;
+  var wasRunning = false, target = null, pid = null, launched = false, ready = false;
   var expected = request.targetURL, baselineFront, baselineOwnerWindows;
+  var hostStage = 'baseline', windowCount = null;
   function emit(data) { $.NSFileHandle.fileHandleWithStandardOutput.writeData($(JSON.stringify(data) + '\n').dataUsingEncoding($.NSUTF8StringEncoding)); }
   function wait() { $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.2)); }
   function active() {
@@ -19,27 +18,37 @@ function run(argv) {
   }
   function attribute(element, name) { return readAttribute(element, name).value; }
   function windows() {
-    if (!pid) return [];
-    var read = readAttribute($.AXUIElementCreateApplication(pid), 'AXWindows');
+    windowCount = null;
+    if (!pid) { windowCount = 0; return []; }
+    var read = readAttribute(ObjC.castRefToObject($.AXUIElementCreateApplication(pid)), 'AXWindows');
     if (read.code !== 0 || !read.value) {
       var error = new Error('WINDOWS_READ_FAILED'); error.axStatus = read.code; throw error;
     }
     var list = ObjC.castRefToObject(read.value), out = [];
     for (var n = 0; n < list.count; n++) out.push(list.objectAtIndex(n));
+    windowCount = out.length;
     return out;
   }
   function same(a, b) { return !!$.CFEqual(a, b); }
-  var before = windows();
-  function retain() {
-    var current = windows();
-    current.forEach(function(w) {
+  var before = [];
+  function retain(current) {
+    current = current || windows();
+    var foreign = [];
+    current.forEach(function(w, index) {
       if (before.some(function(old) { return same(w, old); }) || retained.some(function(old) { return same(w, old); })) return;
-      var document = attribute(w, 'AXDocument');
-      var match = document && expected && String(ObjC.unwrap(ObjC.castRefToObject(document))) === expected;
-      // Exact document URL binds an existing app's new window. A newly launched
-      // process's first windows belong to this launch; later windows do not.
-      if (match || (launched && !ready)) retained.push(w);
+      var doc = readAttribute(w, 'AXDocument');
+      var document = doc.value ? String(ObjC.unwrap(ObjC.castRefToObject(doc.value))) : null;
+      var match = expected && doc.code === 0 && document === expected;
+      // A launch does not grant ownership of restored documents.
+      if (match || (launched && !ready && !expected)) retained.push(w);
+      else if (launched && !ready && expected) foreign.push({ index: index, retained: false, expectedURL: expected,
+        document: document, documentStatus: doc.code, documentReads: [{ document: document, status: doc.code }],
+        reasons: ['WINDOW_NOT_RETAINED', 'DOCUMENT_NOT_MATCHED'], present: true });
     });
+    if (foreign.length) {
+      emit({ stage: 'cleanup', confirmed: false, details: { reasons: ['FOREIGN_WINDOW_ON_START'], windows: foreign } });
+      throw new Error('FOREIGN_WINDOW_ON_START');
+    }
   }
   function sample() {
     var list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly | $.kCGWindowListExcludeDesktopElements, $.kCGNullWindowID));
@@ -189,26 +198,43 @@ function run(argv) {
     }
     emit({ stage: 'cleanup', confirmed: clean, details: details });
   }
-  sample(); emit({ stage: 'armed', wasRunning: wasRunning });
-  var end = Date.now() + 600000;
-  while (Date.now() < end) {
-    var raw = $.NSString.stringWithContentsOfFileEncodingError(request.control, $.NSUTF8StringEncoding, null);
-    var command = raw ? JSON.parse(ObjC.unwrap(raw)).command : '';
-    if (command === 'abort') { emit({ stage: 'cleanup', confirmed: false, details: { reasons: ['HOST_ABORTED'], windows: [] } }); return ''; }
-    if (command === 'launched' && !ready) {
-      var list = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(request.bundle);
-      if (list.count) {
-        target = list.objectAtIndex(0); pid = Number(target.processIdentifier); launched = !wasRunning;
-        retain();
-        if (target.isFinishedLaunching && windows().length) { ready = true; emit({ stage: 'ready', launched: launched, pid: pid }); }
+  try {
+    var initial = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(request.bundle);
+    wasRunning = initial.count > 0; target = wasRunning ? initial.objectAtIndex(0) : null;
+    pid = target ? Number(target.processIdentifier) : null;
+    before = windows();
+    sample(); emit({ stage: 'armed', wasRunning: wasRunning, windowCount: windowCount });
+    var end = Date.now() + 600000;
+    while (Date.now() < end) {
+      var raw = $.NSString.stringWithContentsOfFileEncodingError(request.control, $.NSUTF8StringEncoding, null);
+      var command = raw ? JSON.parse(ObjC.unwrap(raw)).command : '';
+      if (command === 'abort') { emit({ stage: 'cleanup', confirmed: false, details: { reasons: ['HOST_ABORTED'], windows: [] } }); return ''; }
+      if (command === 'launched' && !ready) {
+        var list = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(request.bundle);
+        if (list.count) {
+          target = list.objectAtIndex(0); pid = Number(target.processIdentifier); launched = !wasRunning;
+          hostStage = 'retain';
+          retain();
+          hostStage = 'ready';
+          if (target.isFinishedLaunching) {
+            var current = windows();
+            retain(current);
+            if (current.length) { ready = true; emit({ stage: 'ready', launched: launched, pid: pid, windowCount: windowCount }); }
+          }
+        }
       }
+      if (ready) retain();
+      if (command === 'finish') {
+        cleanup(); return '';
+      }
+      sample(); wait();
     }
-    if (ready) retain();
-    if (command === 'finish') {
-      cleanup(); return '';
-    }
-    sample(); wait();
+    emit({ stage: 'cleanup', confirmed: false, details: { reasons: ['HOST_TIMEOUT'], windows: [] } });
+    return '';
+  } catch (error) {
+    var details = { message: String(error.message || error).slice(0, 500), stage: hostStage, windowCount: windowCount };
+    if (error.axStatus !== undefined) details.axStatus = error.axStatus;
+    emit({ stage: 'error', error: details });
+    return '';
   }
-  emit({ stage: 'cleanup', confirmed: false, details: { reasons: ['HOST_TIMEOUT'], windows: [] } });
-  return '';
 }

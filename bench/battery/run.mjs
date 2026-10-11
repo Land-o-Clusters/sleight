@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { plan, promptFor } from './plan.mjs';
 import { tasks } from './tasks.mjs';
 import { publicResult } from './metrics.mjs';
@@ -13,10 +14,11 @@ export async function executePlan(pass, runtime) {
       ctx = await runtime.setupPair(task, pair[0]);
       const prompt = promptFor(task, ctx);
       for (const row of pair) {
-        let host, response, verdict = 'RUN_NOT_STARTED', cleanup, failure;
+        let host, response, verdict = 'RUN_NOT_STARTED', cleanup, failure, stage = 'resetFixture';
         const started = Date.now();
         try {
           await runtime.resetFixture(task, ctx);
+          stage = 'startHost';
           host = await runtime.startHost(task, ctx);
           response = await runtime.drive(row.arm, prompt, task, ctx);
           if (!response.groupClean) verdict = 'DRIVER_CLEANUP_UNCONFIRMED';
@@ -24,9 +26,15 @@ export async function executePlan(pass, runtime) {
           else if (response.forbidden) verdict = 'OUTSIDE_TOOL_USED';
           else if (response.code !== 0) verdict = 'DRIVER_FAILED';
           else verdict = await runtime.check(task, ctx, response.answer);
-        } catch { failure = true; verdict = 'RUN_FAILED'; }
+        } catch (error) {
+          failure = true; verdict = 'RUN_FAILED';
+          if (!host) cleanup = error.hostCleanup ?? { confirmed: false, samples: [], details: {
+            reasons: ['HOST_NOT_STARTED'], windows: [], startError: {
+              message: String(error.message || error).slice(0, 500).replaceAll(homedir(), '~').replaceAll(encodeURI(homedir()), '~'),
+              stage, windowCount: null } } };
+        }
         finally {
-          try { cleanup = await host?.finish({ abort: failure || response?.approvalStop || response?.groupClean === false }); }
+          try { if (host) cleanup = await host.finish({ abort: failure || response?.approvalStop || response?.groupClean === false }); }
           catch { cleanup = { confirmed: false, samples: [], details: { reasons: ['HOST_FINISH_FAILED'], windows: [] } }; }
         }
         const unsafe = !cleanup?.confirmed || response?.groupClean === false || response?.approvalStop;

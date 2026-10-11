@@ -212,7 +212,7 @@ const fixturePath = '/private/tmp/sleight-battery-unit/pair/fixture.txt';
 // Execute the real host against native API doubles. No app, engine or live lock is used.
 function cleanupHost(options = {}) {
   const events = [], presses = [], scripts = [];
-  let command = '', now = 0, opened = false, present = true, terminations = 0;
+  let command = '', now = 0, opened = false, present = true, terminations = 0, windowReads = 0;
   const path = options.path ?? fixturePath, expected = pathToFileURL(path).href;
   const window = {}, secondWindow = {}, foreignWindow = {}, close = {}, appElement = {};
   const list = values => ({ count: values.length, objectAtIndex: n => values[n] });
@@ -233,18 +233,22 @@ function cleanupHost(options = {}) {
       if (event.stage === 'ready') command = 'finish';
     } } },
     NSURL: { fileURLWithPath: value => ({ absoluteString: pathToFileURL(String(value)).href }) },
-    AXUIElementCreateApplication: () => appElement,
+    AXUIElementCreateApplication: () => options.strictApplicationRef ? { rawApplication: appElement } : appElement,
     AXUIElementCopyAttributeValue(element, name, out) {
       name = String(name);
+      if (element?.rawApplication) throw new Error('Ref has incompatible type');
       if (element === appElement && name === 'AXWindows') {
+        windowReads++;
         if (options.windowReadFailure && now >= 10000) return -25204;
-        const foreign = (options.extraWindowAfterPress && presses.length) || (options.transientWindow && now >= 400 && now < 5000);
+        const foreign = (options.restoredWindow && opened) || (options.restoredOnRead && windowReads >= options.restoredOnRead) ||
+          (options.extraWindowAfterPress && presses.length) || (options.transientWindow && now >= 400 && now < 5000);
         out[0] = list([...(opened && present ? options.multipleWindows ? [window, secondWindow] : [window] : []), ...(foreign ? [foreignWindow] : [])]); return 0;
       }
       if (element === foreignWindow && name === 'AXDocument') { out[0] = 'file:///private/tmp/another.txt'; return 0; }
       if (element === secondWindow && !present) return -25202;
       if (element !== window && element !== secondWindow) return -25205;
       if (name === 'AXDocument') {
+        if (options.documentReadError) throw new Error(options.documentReadError);
         if (options.documentMissing) return -25205;
         if (options.changedDocumentCloses && now >= 10000) present = false;
         out[0] = options.changedDocument && now >= 10000 ? options.changedDocument : options.document ?? expected; return 0;
@@ -270,13 +274,54 @@ function cleanupHost(options = {}) {
     } } },
   });
   const ObjC = { import() {}, unwrap: value => value?.value ?? value, deepUnwrap: value => value,
-    castRefToObject: value => options.strictRefs && value === close ? { cast: close } : value };
+    castRefToObject: value => value?.rawApplication ?? (options.strictRefs && value === close ? { cast: close } : value) };
   const request = { bundle: 'org.example.fixture', targetURL: expected, control: 'ignored', fixturePath: path,
     fixtureRoot: '/private/tmp/sleight-battery-unit/pair' };
   const source = readFileSync(new URL('../bench/battery/host.js', import.meta.url), 'utf8');
   runInNewContext(`${source}\nrun([request]);`, { $: dollar, ObjC, Ref: () => [], Date: { now: () => now }, request: JSON.stringify(request) });
-  return { ...events.findLast(e => e.stage === 'cleanup'), presses, scripts, terminations, present };
+  return { ...events.findLast(e => e.stage === 'cleanup'), events, presses, scripts, terminations, present };
 }
+
+test('the application Ref is cast before reading its AXWindows', () => {
+  const result = cleanupHost({ strictApplicationRef: true, axCloses: true });
+  assert.equal(result.confirmed, true);
+  assert.equal(result.presses.length, 1);
+  assert.equal(result.terminations, 1);
+});
+
+test('native startup errors report their own message, stage and observed window count', () => {
+  const result = cleanupHost({ documentReadError: 'Ref has incompatible type' });
+  const event = result.events.find(e => e.stage === 'error');
+  assert.equal(event.error.message, 'Ref has incompatible type');
+  assert.equal(event.error.stage, 'retain');
+  assert.equal(event.error.windowCount, 1);
+  assert.equal(result.events.some(e => e.stage === 'ready'), false);
+  assert.equal(result.presses.length, 0);
+});
+
+test('a restored foreign document stops startup without retaining or closing its window', () => {
+  const result = cleanupHost({ restoredWindow: true, axCloses: true });
+  assert.equal(result.confirmed, false);
+  assert.equal(result.events.some(e => e.stage === 'ready'), false);
+  assert.deepEqual(result.presses, []);
+  assert.deepEqual(result.scripts, []);
+  assert.equal(result.terminations, 0);
+  const foreign = result.details.windows.find(w => w.document === 'file:///private/tmp/another.txt');
+  assert.equal(foreign.retained, false);
+  assert.ok(foreign.reasons.includes('WINDOW_NOT_RETAINED'));
+  assert.equal(result.events.find(e => e.stage === 'error').error.windowCount, 2);
+});
+
+test('a foreign document appearing in the readiness snapshot prevents readiness', () => {
+  const result = cleanupHost({ restoredOnRead: 2, axCloses: true });
+  assert.equal(result.events.some(e => e.stage === 'ready'), false);
+  assert.equal(result.confirmed, false);
+  assert.equal(result.details.windows[0].retained, false);
+  assert.equal(result.details.windows[0].document, 'file:///private/tmp/another.txt');
+  assert.deepEqual(result.presses, []);
+  assert.deepEqual(result.scripts, []);
+  assert.equal(result.terminations, 0);
+});
 
 function cleanupRuntime(options = {}) {
   const published = [], cleanups = [];
@@ -438,4 +483,92 @@ test('owned host collects fragmented cleanup diagnostics and only grants scripti
     assert.equal(cleanup.details.windows[0].document, 'file://~/other.txt');
     assert.equal(cleanup.details.windows[0].scriptingPath, path);
   }
+});
+
+test('only a newly launched app receives the one-launch persistence argument', async t => {
+  const { startHost } = await load('runtime');
+  const dir = bank(t);
+  for (const wasRunning of [false, true]) for (const target of [undefined, '/private/tmp/fixture.txt']) {
+    const launches = [], response = Promise.withResolvers();
+    const runProcess = (executable, args, options) => {
+      if (executable === '/usr/bin/open') {
+        launches.push(args); return Promise.resolve({ exit: { code: 0 }, groupClean: true });
+      }
+      assert.equal(executable, '/usr/bin/osascript');
+      options.onStdout(JSON.stringify({ stage: 'armed', wasRunning }) + '\n{"stage":"ready"}\n');
+      return response.promise;
+    };
+    const host = await startHost({ bundle: 'org.example.fixture' }, { dir, target }, new AbortController().signal, runProcess);
+    const args = ['-g', '-b', 'org.example.fixture', ...(target ? [target] : [])];
+    assert.deepEqual(launches, wasRunning && !target ? [] : [[...args,
+      ...(!wasRunning ? ['--args', '-ApplePersistenceIgnoreState', 'YES'] : [])]]);
+    response.resolve({ exit: { code: 0 }, groupClean: true });
+    await host.finish();
+  }
+});
+
+for (const nativeError of [true, false]) test(`host startup publishes ${nativeError ? 'native error metadata' : 'an early process error'} before stopping the pass`, async t => {
+  const { startHost } = await load('runtime'), { executePlan } = await load('run'), { plan } = await load('plan');
+  const dir = bank(t), published = [];
+  let driven = 0;
+  const runProcess = (executable, args, options) => {
+    assert.equal(executable, '/usr/bin/osascript');
+    if (nativeError) {
+      const message = JSON.stringify({ stage: 'error', error: {
+        message: `Ref has incompatible type at ${homedir()}/private`, stage: 'retain', windowCount: 2,
+      } }) + '\n';
+      options.onStdout(message.slice(0, 30)); options.onStdout(message.slice(30));
+    }
+    return Promise.resolve({ exit: { code: nativeError ? 0 : 1 }, groupClean: true,
+      stderr: nativeError ? '' : `execution error: host failed at ${homedir()}/private` });
+  };
+  const runtime = { async setupPair() { return { dir }; }, async resetFixture() {},
+    startHost: (task, ctx) => startHost(task, ctx, new AbortController().signal, runProcess),
+    async drive() { driven++; }, publish(rows) { published.push(structuredClone(rows)); }, async closePair() {},
+  };
+  await assert.rejects(executePlan(plan({ wanted: ['word'] }), runtime), /CLEANUP_UNCONFIRMED/);
+  assert.equal(driven, 0);
+  assert.equal(published.length, 1);
+  const row = published[0][0];
+  assert.equal(row.checkCode, 'RUN_FAILED');
+  assert.equal(row.cleanupConfirmed, false);
+  assert.deepEqual(row.cleanupDetails.startError, nativeError
+    ? { message: 'Ref has incompatible type at ~/private', stage: 'retain', windowCount: 2 }
+    : { message: 'execution error: host failed at ~/private', stage: 'armed', windowCount: null });
+});
+
+test('a restored-window startup receipt reaches the published row before any driver call', async t => {
+  const { startHost } = await load('runtime'), { executePlan } = await load('run'), { plan } = await load('plan');
+  const native = cleanupHost({ restoredWindow: true, axCloses: true });
+  const dir = bank(t), published = [], response = Promise.withResolvers();
+  let receive, driven = 0;
+  const runProcess = (executable, args, options) => {
+    if (executable === '/usr/bin/osascript') {
+      receive = options.onStdout;
+      receive(JSON.stringify(native.events.find(e => e.stage === 'armed')) + '\n');
+      return response.promise;
+    }
+    assert.equal(executable, '/usr/bin/open');
+    for (const event of native.events.filter(e => ['cleanup', 'error', 'ready'].includes(e.stage))) receive(JSON.stringify(event) + '\n');
+    response.resolve({ exit: { code: 0 }, groupClean: true });
+    return Promise.resolve({ exit: { code: 0 }, groupClean: true });
+  };
+  const runtime = { async setupPair() { return { dir, target: fixturePath }; }, async resetFixture() {},
+    startHost: (task, ctx) => startHost(task, ctx, new AbortController().signal, runProcess),
+    async drive() { driven++; return { groupClean: true, code: 0 }; }, async check() { return true; },
+    publish(rows) { published.push(structuredClone(rows)); }, async closePair() {},
+  };
+  await assert.rejects(executePlan(plan({ wanted: ['word'] }), runtime), /CLEANUP_UNCONFIRMED/);
+  assert.equal(driven, 0);
+  assert.equal(published.length, 1);
+  const row = published[0][0];
+  assert.equal(row.checkCode, 'RUN_FAILED');
+  assert.deepEqual(row.cleanupDetails.reasons, ['FOREIGN_WINDOW_ON_START']);
+  assert.deepEqual(row.cleanupDetails.startError, { message: 'FOREIGN_WINDOW_ON_START', stage: 'retain', windowCount: 2 });
+  assert.equal(row.cleanupDetails.windows[0].retained, false);
+  assert.equal(row.cleanupDetails.windows[0].document, 'file:///private/tmp/another.txt');
+  assert.equal(row.cleanupConfirmed, false);
+  assert.deepEqual(native.presses, []);
+  assert.deepEqual(native.scripts, []);
+  assert.equal(native.terminations, 0);
 });

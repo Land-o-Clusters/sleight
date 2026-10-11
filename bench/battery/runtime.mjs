@@ -37,6 +37,7 @@ export async function startHost(task, ctx, signal, runProcess = runOwned) {
   const command = value => writeFileSync(control, JSON.stringify({ command: value }), { mode: 0o600 });
   command('observe');
   const samples = [], stages = new Map(); let confirmed = false, buffer = '', details = { reasons: ['HOST_RECEIPT_MISSING'], windows: [] };
+  let startStage = 'armed', windowCount = null;
   const stage = name => { if (!stages.has(name)) stages.set(name, Promise.withResolvers()); return stages.get(name); };
   const hostController = new AbortController();
   // setupFixture created this exact file in the run's private bank. Never grant a URL or another file.
@@ -51,6 +52,7 @@ export async function startHost(task, ctx, signal, runProcess = runOwned) {
     for (let n; (n = buffer.indexOf('\n')) >= 0;) {
       const line = buffer.slice(0, n); buffer = buffer.slice(n + 1);
       let event; try { event = JSON.parse(line); } catch { continue; }
+      if (Number.isInteger(event.windowCount)) windowCount = event.windowCount;
       if (event.stage === 'sample') samples.push(event.sample);
       if (event.stage === 'cleanup') { confirmed = event.confirmed === true; details = scrub(event.details ?? { reasons: ['HOST_DETAILS_MISSING'], windows: [] }); }
       stage(event.stage).resolve(event);
@@ -64,7 +66,9 @@ export async function startHost(task, ctx, signal, runProcess = runOwned) {
   }
   async function wait(name) {
     let timer;
-    try { return await Promise.race([stage(name).promise, response.then(() => { throw new Error('HOST_EXITED'); }),
+    try { return await Promise.race([stage('error').promise.then(event => {
+      const error = new Error(event.error.message); error.hostStart = scrub(event.error); throw error;
+    }), stage(name).promise, response.then(result => { throw new Error(result.spawnError || result.stderr?.trim() || 'HOST_EXITED'); }),
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('HOST_DEADLINE')), 35000); })]); }
     finally { clearTimeout(timer); }
   }
@@ -78,13 +82,24 @@ export async function startHost(task, ctx, signal, runProcess = runOwned) {
     const armed = await wait('armed');
     signal.throwIfAborted();
     if (ctx.target || !armed.wasRunning) {
-      const opened = await runProcess('/usr/bin/open', ['-g', '-b', task.bundle, ...(ctx.target ? [ctx.target] : [])], { signal, timeoutMs: 30000 });
-      if (opened.exit.code !== 0 || !opened.groupClean) throw new Error('FIXTURE_OPEN_FAILED');
+      startStage = 'open';
+      const opened = await runProcess('/usr/bin/open', ['-g', '-b', task.bundle, ...(ctx.target ? [ctx.target] : []),
+        ...(!armed.wasRunning ? ['--args', '-ApplePersistenceIgnoreState', 'YES'] : [])], { signal, timeoutMs: 30000 });
+      if (opened.exit.code !== 0 || !opened.groupClean) throw new Error(opened.spawnError || opened.stderr?.trim() || 'FIXTURE_OPEN_FAILED');
     }
     command('launched');
+    startStage = 'ready';
     await wait('ready');
     return { finish, abort: () => command('abort') };
-  } catch (error) { command('abort'); hostController.abort(); await response; throw error; }
+  } catch (error) {
+    command('abort'); hostController.abort();
+    const result = await response.catch(() => null);
+    if (!stages.has('cleanup')) details = { reasons: ['HOST_NOT_STARTED'], windows: [] };
+    details.startError = scrub(error.hostStart ?? { message: String(error.message || error).slice(0, 500), stage: startStage, windowCount });
+    if (!result?.groupClean || result.exit.code !== 0) details.reasons.push('HOST_PROCESS_UNCONFIRMED');
+    error.hostCleanup = { confirmed: false, details, samples };
+    throw error;
+  }
 }
 
 export async function liveRuntime({ pass, option, localFixtures, ownerPresent, cleanArms }) {
