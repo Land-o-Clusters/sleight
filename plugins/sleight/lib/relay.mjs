@@ -120,14 +120,8 @@ export function treeFreeFirstAction(code) {
   const first = ACTION.exec(typeof code === 'string' ? code : '');
   return !!first && (['pressKey', 'typeText', 'paste'].includes(first[1]) || (!!first[2] && ['click', 'doubleClick', 'rightClick', 'scroll', 'drag'].includes(first[1])));
 }
-// SLEIGHT_FIRST_CALL_BATCH=sheet, under A/B. The Cmd+S stop above predates 668b462, which lets a call
-// continue into the window or sheet its own shortcut opens. 5 of 8 textedit-save runs then waited for
-// the Save sheet with waitFor, 3.8 to 5.9 s, which the guard's read after a shortcut already does
-// (2026-10-11).
-const FIRST_CALL_SHEET = FIRST_CALL_BATCH.slice(0, FIRST_CALL_BATCH.indexOf(', but end the call after a shortcut')) +
-  ', including after a shortcut that opens a window or sheet (Cmd+N, Cmd+O, Cmd+S): sleight waits for it and continues in it, so don\'t wait for it yourself. sleight stops the rest of a call if a window the call didn\'t open appears.';
 export function batchingDescription(description, variant = true) {
-  const text = variant === 'merge' ? FIRST_CALL_MERGE : variant === 'sheet' ? FIRST_CALL_SHEET : FIRST_CALL_BATCH;
+  const text = variant === 'merge' ? FIRST_CALL_MERGE : FIRST_CALL_BATCH;
   return typeof description === 'string' && description.includes(FIRST_CALL_RULE) ? description.replace(FIRST_CALL_RULE, text) : description;
 }
 const TURN_END_DESCRIPTION = 'Internal to sleight: its hooks call this when a Claude turn ends. Never call it yourself.';

@@ -19,29 +19,8 @@ test('a missing or empty skill gives no rules', t => {
   assert.equal(skillRules(join(dir, 'empty.md')), undefined);
 });
 
-test('the skill routes iPhone Mirroring past scroll to Settings search', () => {
+test('the skill names no app and keeps the safety rules', () => {
   const rules = skillRules();
-  assert.match(rules, /iPhone Mirroring/);
-  assert.match(rules, /search field/);
-  assert.match(rules, /app\.scroll/);
-  assert.match(rules, /0\.3, 0\.6 or 1 page/);
-});
-
-test('under the sheet A/B the menu rule names the label clicks to send in one call', async () => {
-  const { skillRules, sheetRules } = await import('../plugins/sleight/lib/launch.mjs');
-  const rules = skillRules();
-  assert.match(rules, /click\n  the menu and its item in one call\./);
-  const sheet = sheetRules(rules);
-  assert.match(sheet, /await app\.click\(\{ label: "Format" \}\); await\n  app\.click\(\{ label: "Make Plain Text" \}\)/);
-  assert.doesNotMatch(sheet, /click\n  the menu and its item in one call\./);
-  assert.equal(sheetRules('other rules'), 'other rules');
-});
-
-test('the slim skill names no app and keeps the safety rules', async () => {
-  const { skillRules } = await import('../plugins/sleight/lib/launch.mjs');
-  const { join } = await import('node:path');
-  const slim = skillRules(join(import.meta.dirname, '..', 'plugins', 'sleight', 'skills', 'drive-mac-apps', 'SKILL-slim.md'));
-  assert.doesNotMatch(slim, /TextEdit|Calculator|Chess|Safari|Helium|iPhone|Simulator|Slack/);
-  for (const rule of [/preapproved\.json/, /blocked_app/, /Never set or suggest that setting/, /flow_exception/, /lease/]) assert.match(slim, rule);
-  assert.ok(slim.length < skillRules().length * 0.7);
+  assert.doesNotMatch(rules, /TextEdit|Calculator|Chess|Safari|Helium|iPhone|Simulator|Slack/);
+  for (const rule of [/preapproved\.json/, /blocked_app/, /Never set or suggest that setting/, /flow_exception/, /lease/]) assert.match(rules, rule);
 });

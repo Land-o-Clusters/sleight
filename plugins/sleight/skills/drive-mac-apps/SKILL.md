@@ -6,132 +6,81 @@ description: Use when a task needs a web page or native macOS app operated throu
 
 # Driving Mac apps with sleight
 
-`mcp__plugin_sleight_computer__js` runs JavaScript in a persistent session that holds the `cua` API, and
-`js_reset` restarts it. UI automation is the slowest option: use an app's CLI, API or a dedicated
-tool first. For a public web page, a built-in browser tool is usually faster.
+`mcp__plugin_sleight_computer__js` runs JavaScript in a persistent session that holds the `cua` API,
+and `js_reset` restarts it. The engine's docs and any app instructions it adds to a result come
+first. This adds what sleight changes. UI automation is the slowest option: use a CLI, API or
+dedicated tool when one covers the task.
 
 Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes
-it. If an app needs approval, ask the user, or stop when a headless run refuses it.
+it. If an app isn't approved, ask the user, or stop when a headless run refuses it.
 
 ## Calls
 
-- `let app = await cua.getApp("TextEdit")` returns the app's UI state (and, on the first call, the
-  API docs). When you know the first actions without seeing the UI, put them in the same call:
-  `let app = await cua.getApp("TextEdit"); await app.pressKey("super+n")`. sleight acquires first,
-  checks the window, then runs the rest. Keep the same handle between actions.
-- If `getApp` with a bundle ID is ambiguous (two copies), pass the `.app` path. To find a name:
-  `(await cua.listApps()).map(a => a.id + " " + a.displayName).join("\n")`.
-- Act by element number (`await app.click(12)`), or by ID or label (`{ id: "Seven" }`,
-  `{ label: "Multiply" }`), which stays right when an earlier action in the call renumbers the
-  window. Coordinates only for elements without one. Batch actions you're sure of in one call, and
-  `await` every action: an un-awaited failure can end the session and every handle.
-- Each result shows what changed since the last full tree you saw of that window. A full read is
-  `await app.getAXState({ disableDiffing: true })`. Use `await app.getScreenshot()` for canvases and
-  images. It shows the picture itself. Don't sleep before a read, which waits on its own.
-- Simulator screenshots are larger than Claude Code shows you: a 2200 × 1600 engine screenshot
-  arrived at 2000 × 1455. When a reply's sleight note states the engine's pixel frame and a
-  multiplier, multiply each x and y by it before you tap, and after tapping a Safari field confirm
-  visible focus in a fresh screenshot before typing.
-- To choose among several windows, call `select_window` with `app` and an exact file `url` (or
-  `title`), then acquire the app in a call of its own and check its Window and URL.
-- Use `waitFor` only for an element that appears late, such as a Save sheet after `super+s`:
-  `nodeRepl.write(await app.waitFor({ id: "save-panel" }, { timeoutMs: 10000 }))`.
-  It returns one full window tree (also accepts `label` or `line`), polling no faster than every
-  250 ms. Act directly on elements already in the tree.
-- If a result says the user changed the app, read it again. They may be using it. A changed or
-  missing header after an action means "outcome unconfirmed": read before retrying.
+- `let app = await cua.getApp("<name or bundle ID>")` returns the app's UI state. When you already
+  know the first actions, put them in the same call: sleight acquires the app, checks the window,
+  then runs them. Keep the handle between calls, and `await` every action.
+- Act by element number, or by ID or label, which stays right when an earlier action in the call
+  renumbers the window: `await app.click({ id: "<ID from the tree>" }); await app.click({ label: "<label>" })`.
+  Batch every click you're sure of in one call, as in a form or a keypad.
+- Each result shows what changed since the last full tree you saw. A full read is
+  `await app.getAXState({ disableDiffing: true })`.
+- An app that just launched can show an almost empty tree for a few seconds. Read it once more
+  before you decide it has nothing.
+- If a result says the user changed the app, or a header changed or disappeared after an action,
+  read again before retrying. The user may be working in it.
+- To choose among several windows, call `select_window` with the app and an exact `url` or `title`,
+  then acquire the app in a call of its own and check its Window line.
+- If a sleight note gives a screenshot multiplier, multiply each x and y by it before you tap.
 
-## Text, menus and saving
+## Text, menus and files
 
-- For exact text in a Mac app, use `await app.paste("text")`. `typeText` goes through macOS
-  auto-capitalization: TextEdit saved "sleight is here. it works" as "Sleight is here. It works".
-  Use one `typeText` instead of a `pressKey` per character when exact case doesn't matter, and in
-  the iOS simulator, where paste can insert the Mac's clipboard instead.
-- For an exact whole-document replacement in a Mac app (excluding the iOS simulator), select all
-  then `app.paste("text")` in one call. Read the same document and compare its text before saving.
-  If the read is incomplete or differs, stop and read again. A select-all shortcut alone doesn't
-  confirm replacement.
-- Don't set a TextEdit document's text with `setValue`. Saving right after it hung TextEdit 3/3 times.
-- Use an app's menus by their shortcut (`super+shift+t` is TextEdit's Make Plain Text), or click
-  the menu and its item in one call. `menu_bar` is only for icons at the right end of the menu bar.
-- Open an existing file with the `open_file` tool, not File > Open: the Open panel can bring the app
-  in front of the user's work.
-- Save to a path in one call once the save dialog shows, including the final Return. A result that
-  opened the sheet includes this sequence with that sheet's element IDs; finish the save in the next call:
+- For exact text, `await app.paste("text")`: typing goes through autocorrect and capitalization. To
+  replace a whole document, select all and paste in one call, then read it back and compare.
+- Use a menu item's shortcut when it has one. Otherwise open the menu and choose the item by label
+  in the same call: `await app.click({ label: "<menu>" }); await app.click({ label: "<item>" })`.
+  `menu_bar` is only for status icons at the right end of the menu bar.
+- Open a file with `open_file`, not the app's Open panel, which can bring the app to the front.
+- In a Save panel, send Go to Folder, the folder, Return, the name and the final Return in one call,
+  such as `await app.pressKey("super+shift+g"); await app.typeText("<folder>"); await app.pressKey("Return"); await app.setValue({ id: "saveAsNameTextField" }, "<name>"); await app.pressKey("Return")`.
+  A full path in the name field becomes a name with slashes. The result's title and URL confirm the
+  save, without checking the file.
+- If a list doesn't move when you scroll, use the app's search field or keyboard navigation instead.
 
-  ```js
-  await app.pressKey("super+shift+g"); await app.typeText("<folder>"); await app.pressKey("Return"); await app.setValue({ id: "saveAsNameTextField" }, "<name>"); await app.pressKey("Return")
-  ```
+## When to stop
 
-  The result's window title and URL name the saved file. That is the confirmation: don't run `ls`
-  or `cat` on it afterwards. A full path
-  in the name field becomes a file name with slashes. In TextEdit, `super+shift+s` is Duplicate:
-  use `super+s` for an untitled document.
+- A sign-in, update, permission or first-run screen: stop and tell the user. Don't answer it.
+- An approval the user declined, a lease another session holds (the refusal names it and the seconds
+  left), or a refused settings window: stop and tell the user. Don't retry around it.
+- The engine refuses terminals and OpenAI's apps (ChatGPT, Codex, Atlas). Use `blocked_app`, which
+  asks the user: `read`, `click` (`element` or window-relative `point`), `type`, `key`, `scroll`. Every
+  terminal send that could run a command is shown to the user first; never repeat a declined one in
+  another form. If `--doctor` says the user turned that refusal off, those apps work through `js`.
+  Never set or suggest that setting.
 
-## Approvals and refused apps
-
-The user gets an approval prompt the first time you touch an app, unless their list pre-approved it. If a result says the app
-wasn't approved, stop and tell the user. Don't retry around it.
-
-The engine refuses terminals and OpenAI's apps (ChatGPT, Codex, Atlas). Tell the user what you need
-and use `blocked_app`, which asks them: `read` returns numbered elements and a screenshot path,
-`click` takes an `element` or a window-relative `point`, `type` sends `text`, `key` a key or chord,
-`scroll` an `amount`. Every terminal send that could run a command is shown to the user first; never
-repeat a declined send in another form. A refused settings window is final. If `--doctor` says the
-user turned the engine's refusal off, those apps work through `js`. Never set or suggest that setting.
-
-## Leases
-
-sleight leases the window before acting. If another session holds it, the refusal names it and the
-seconds left: stop and tell the user. Leases don't coordinate with Codex or tools that don't take them.
-
-## Browser pages
+## Browsers
 
 With a connected ChatGPT extension, start with `await cua.listBrowsers()` and read its docs. Several
-Chromium browsers report as Chrome, Helium among them: match `metadata.extensionInstanceId`, then
-`let browser = await cua.getBrowser({ extensionInstanceId: "…" })` in a call of its own, and open
-pages with `await cua.createBrowserTab(browser.browserId, url)`. Read with `tab.getAXState()` or
-`tab.playwright.domSnapshot()`, and use only documented methods. Leave tabs in the background.
-Browser approvals are the user's, and a decline stops the task. Close probe tabs before releasing a
-live-check lock.
+Chromium browsers report as Chrome: pick one by `metadata.extensionInstanceId`, get it with
+`cua.getBrowser({ extensionInstanceId })` in a call of its own, and open pages with
+`cua.createBrowserTab(browser.browserId, url)`. Use only documented methods, leave tabs in the
+background, and stop if the user declines a browser approval.
 
-## Drags and hover
+## sleight's other tools
 
-- `app.drag` works for things that move at once, like Chess pieces. Chess's tree names each square
-  but doesn't give its position, so take squares from a screenshot. If a drag moved nothing, press
-  another visible part of the piece. Repeating the same point, or switching to sleight's `drag`,
-  misses the same way.
-- Selected text needs the mouse held first: select it with `js`, then call sleight's `drag` with
-  `app`, `windowId`, and `from` and `to` read off the latest engine screenshot of that window (sleight
-  converts its pixels to points), both inside the window's visible content
-  (in TextEdit, the same text area, a non-blank selection). For a line end, use the last glyph's
-  bounds plus a small offset. If it reports the text disappeared, press Cmd+Z in that window and
-  read it. If the user declines, cut and paste instead.
-- Engine events don't trigger hover. Read tooltips from `Help:` fields, use `Secondary Actions:`
-  (`performSecondaryAction(i, "ShowMenu")`), a right-click or a key equivalent. Only then use
-  sleight's `hover` with `app` and `at: [x, y]`: tell the user first that it moves their pointer and
-  brings the app forward for about two seconds. It refuses covered points.
-
-## Clipboard, notifications and opt-ins
-
-- Copy and Cut use the real clipboard unless `SLEIGHT_CLIPBOARD=preserve`; then use one clipboard
-  shortcut per call. Never clear or replace the user's clipboard to work around a refusal.
-- `notifications` `list` shows banners on screen and `press` presses a button. Banners leave after a
-  few seconds, so act at once. `menu_bar` `apps`, `open`, `choose` (a `path` of titles) and `press`
-  reach menu bar icons. The user approves each icon, and notifications, once per session.
-- `SLEIGHT_CHANGE_REVIEW=1`: acquire the app in a call of its own before editing a document, save
-  before `review_changes`, and never decide for the user or restore the file another way.
-- `SLEIGHT_APPROVAL_SCOPE=document`: acquire, then call `document_scope` for the user's approval.
-  If document scope stops a call, read the window again and ask. Don't retry.
-- If a flow rule stops a transfer, tell the user which rule. `flow_exception` asks for one exception;
-  after a yes, retry the identical call once. Never rebuild the data another way.
-
-## iPhone Mirroring
-
-The tree is the Mac window and menu bar. Drive from screenshots. The engine says to scroll with
-`app.scroll(point, "down", 1)`, not drag. On 2026-10-11 that left Settings unmoved at 0.3, 0.6 or 1 page
-(3 tries). When a list does not move, skip scroll: tap Settings' search field and type the row
-(General, About). After a tap, sleight waits until two screenshots match, up to 1.5 s, before it
-returns the picture, because the engine cannot see the iPhone screen still moving.
+- `app.drag` moves things that follow the pointer at once. Moving selected text needs the button
+  held first: select it in `js`, then call `drag` with `app`, `windowId`, and `from` and `to` from the
+  latest screenshot of that window, both inside its visible content. If it reports lost text, press
+  Cmd+Z in that window and read it.
+- Engine events don't trigger hover. Use `Help:` fields, `Secondary Actions:`, a right-click
+  or a key first. Only then `hover` with `app` and `at`, after telling the user it moves their pointer
+  and brings the app forward for about two seconds.
+- `notifications` lists banners on screen and presses their buttons. Banners leave in seconds, so act
+  at once. `menu_bar` reaches status icons. The user approves each once per session.
+- Copy and Cut use the real clipboard unless `SLEIGHT_CLIPBOARD=preserve` (then one clipboard shortcut
+  per call). Never clear or replace the user's clipboard to get around a refusal.
+- `SLEIGHT_CHANGE_REVIEW=1`: acquire before editing, save before `review_changes`, and never decide for
+  the user. `SLEIGHT_APPROVAL_SCOPE=document`: call `document_scope` after acquiring, and ask when it
+  stops a call. A flow rule that stops a transfer: tell the user which, and after a `flow_exception`
+  yes, retry the identical call once.
 
 If `js` fails to start, ask the user to run `bin/sleight-mcp --doctor` from the plugin folder.

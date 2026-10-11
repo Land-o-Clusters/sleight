@@ -230,8 +230,6 @@ same call, since the guard checks the window before they run. It also names `cua
 Claude can name, which took the first-call `getState` from 8 of 11 runs to 0 of 12 (2026-10-11). Set
 `SLEIGHT_FIRST_CALL_BATCH=0` to keep the engine's wording. `SLEIGHT_FIRST_CALL_BATCH=merge` also
 asks Claude to chain later calls such as save and close into one, which happened in 0 of 24 runs.
-`SLEIGHT_FIRST_CALL_BATCH=sheet` (under A/B) drops the wording's stop after Cmd+S and names the menu
-clicks to send in one call.
 
 ## Result size
 

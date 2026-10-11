@@ -212,11 +212,6 @@ const LIB = dirname(fileURLToPath(import.meta.url));
 // The skill's body, sent after the engine's first-call docs. Missing or unreadable means none.
 // Under the sheet A/B, the menu rule gets the call to send. 9 textedit-save runs opened Format in one call
 // and chose Make Plain Text in the next, 33.8 s over 11 calls (turn study, 2026-10-11).
-const MENU_RULE = 'or click\n  the menu and its item in one call.';
-const MENU_RULE_SHEET = 'or open the\n  menu and choose its item by label in the same call: `await app.click({ label: "Format" }); await\n  app.click({ label: "Make Plain Text" })`. sleight waits for the menu between them.';
-export function sheetRules(rules) {
-  return typeof rules === 'string' && rules.includes(MENU_RULE) ? rules.replace(MENU_RULE, MENU_RULE_SHEET) : rules;
-}
 export function skillRules(path = join(LIB, '..', 'skills', 'drive-mac-apps', 'SKILL.md')) {
   try { return readFileSync(path, 'utf8').replace(/^---\n[\s\S]*?\n---\n+/, '').trim() || undefined; }
   catch { return undefined; }
@@ -628,7 +623,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     guardMode: process.env.SLEIGHT_GUARD,
     simFocusNote: process.env.SLEIGHT_SIM_FOCUS_NOTE !== '0', // Screenshot scale advice for any app.
     resultTrim: process.env.SLEIGHT_RESULT_TRIM === '1',
-    firstCallBatch: ['merge', 'sheet'].includes(process.env.SLEIGHT_FIRST_CALL_BATCH) ? process.env.SLEIGHT_FIRST_CALL_BATCH : process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
+    firstCallBatch: process.env.SLEIGHT_FIRST_CALL_BATCH === 'merge' ? 'merge' : process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
     clientIn: replayClient.clientIn,
     clientOut: replayClient.clientOut,
     serverIn: child.stdin,
@@ -668,10 +663,9 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     trace: relayTrace,
     guardTiming: !!process.env.SLEIGHT_TRACE,
     traceCode: process.env.SLEIGHT_TRACE_CODE === '1',
-    // SLEIGHT_SKILL=slim or none, under A/B (owner, 2026-10-11: app-agnostic, and no more than Codex needs).
-    firstCallRules: process.env.SLEIGHT_SKILL === 'none' ? undefined
-      : (rules => process.env.SLEIGHT_FIRST_CALL_BATCH === 'sheet' ? sheetRules(rules) : rules)(
-        process.env.SLEIGHT_SKILL === 'slim' ? skillRules(join(LIB, '..', 'skills', 'drive-mac-apps', 'SKILL-slim.md')) : skillRules()),
+    // SLEIGHT_SKILL=none leaves the skill out, for A/Bs. The app-agnostic skill replaced the old one after
+    // matching or beating it: 14.5 s against 15.6 s a run, and 38.9 s against 44.7 s on textedit-save (2026-10-11).
+    firstCallRules: process.env.SLEIGHT_SKILL === 'none' ? undefined : skillRules(),
     keyboardTaps: () => appHealth.keyboardTaps(),
     windowIdentity: window => appHealth.windowIdentity(window),
     beginStop: () => { stoppingForReceipt = true; },

@@ -76,7 +76,6 @@ test('a call that leaves no sheet open adds no finish line', () => {
 
 test('the skill\'s save sequence matches the result note\'s recipe, including the name-field ID', () => {
   const skill = readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', import.meta.url), 'utf8');
-  assert.match(skill, /Save to a path in one call once the save dialog shows/);
-  assert.match(skill, /finish the save in the next call/);
+  assert.match(skill, /In a Save panel, send Go to Folder, the folder, Return, the name and the final Return in one call/);
   assert.match(skill, new RegExp(recipe.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });

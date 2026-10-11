@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The skill is the app-agnostic one: 86 lines against 137, with no app names. It matched or beat
+  the old skill in two A/Bs (2026-10-11): 4.58 turns and 14.5 s a run against 4.58 and 15.6 s on
+  calculator-click and textedit-edit, and 38.9 s against 44.7 s on textedit-save, every run passing.
+  `SLEIGHT_SKILL=none` still leaves it out, for A/Bs. `SLEIGHT_FIRST_CALL_BATCH=sheet` is gone: it took
+  29.7 s a run against 21.5 s.
 - `drag` uses one path for every app. Selected text tries Accessibility before posted
   events. The guarded foreground fallback remains last. Text endpoints must share one area or field
   with a non-blank selection. Covered windows use the same focused-selection check.

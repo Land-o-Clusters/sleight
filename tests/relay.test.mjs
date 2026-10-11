@@ -1999,10 +1999,8 @@ test('SLEIGHT_FIRST_CALL_BATCH rewrites only the engine\'s first-call rule, only
   // first turn on cua.getState(), the only native-looking call the engine's list shows.
   assert.match(rewritten, /let app = await cua\.getApp\("Calculator"\)/);
   assert.match(rewritten, /cua\.getState\(\) only/);
-  // 'sheet' drops the Cmd+S stop: a call continues into the sheet its own shortcut opens (A/B, 2026-10-11).
-  const sheet = batchingDescription(engine, 'sheet');
-  assert.match(sheet, /sleight waits for it and continues in it/);
-  assert.doesNotMatch(sheet, /end the call after a shortcut/);
+  // 'sheet' lost its A/B (29.7 s against 21.5 s a run, 2026-10-11) and falls back to the default.
+  assert.equal(batchingDescription(engine, 'sheet'), rewritten);
   assert.match(rewritten, /end the call after a shortcut/);
   for (const [firstCallBatch, rewrites] of [[false, false], [true, true], ['merge', true]]) {
     const h = harness({ firstCallBatch });
