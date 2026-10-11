@@ -12,82 +12,16 @@
   check scored as a plain failure and Best Buy's lease refusal scored "stopped at a CAPTCHA or
   bot check" (2026-10-10). Both recorded answers now score correctly, from unit tests against
   the stored answers. No live run.
-- The browser-extension check, which decides whether the next session gets the browser API, runs after the engine's
-  first call has answered, not during it. Its second engine used to overlap every session's first
-  call: about 0.12 s on a quiet Mac, and 2.4 s against 1.2 s under load
-  (`docs/benchmarks/2026-10-10-startup-costs.md`).
-- The clipboard helper accepts types macOS adds to what it writes, as long as every requested
-  type reads back byte for byte. The opt-in rich TextEdit move stopped there on its last live
-  trial: staged RTF read back with two plain-text types. A private pasteboard reproduced it
-  with that trial's RTF. No live run since.
-- A call that acted and ended on exactly the window Claude last saw gets the whole tree instead of
-  "no change since the last full tree you saw", which read as if the actions hadn't run. In
-  calculator-click, Calculator still showed the previous run's 391, and Claude read again in 2 of 9
-  traced runs. In 6 runs after the change it got the tree every time.
-- `click("Multiply")` with a bare name clicks the one element with that label, or else with that
-  ID, as `click({ label })` does. The engine rejects a bare name, and Claude redid a batch over two
-  calls when it wrote one.
-- Real-suite task `iphone-mirroring-settings` opens iPhone Mirroring and reads the iOS version from Settings > General > About. The check is that version text. `--owner-present` is required. Default passes and the head-to-head skip it. The owner approves the app at the prompt. It is not on the allowlist. Published rows keep the answer and timings, with no screenshot. Unit-tested. No live run (needs the owner at the Mac).
 - `sleight-mcp setup` (`--dry-run` prints the steps) runs OpenAI's helper installer from
   ChatGPT.app when its status isn't OK. Then it opens the Accessibility and Screen Recording panes
   and runs the doctor. With no Codex plugin under `~/.codex`, sleight starts the engine from
   ChatGPT.app directly, driving Mac apps only (`CUA_REPL_ENABLED_SURFACES=computer`), because its
   browser extension API needs a Codex sign-in. In a macOS user that never signed in to ChatGPT, that engine listed apps (2026-10-10).
   A full setup run hasn't been tried live.
-- Trace settings for diagnosis on this Mac: `SLEIGHT_TRACE_CODE=1` keeps Claude's code in the
-  trace, up to 4,000 characters (the trace's 300-character cut used to drop the end of every
-  batch), and `SLEIGHT_TRACE_CUT` sets that cut for everything else, such as whole UI trees.
-- Real-use shop tasks: local Harbor Market pages for `safari-shop` and `helium-shop` (ZIP, store,
-  search, filters, pagination, options, cart), with a server-side cart check. Safari smoke tasks
-  `real-shop-target` and `real-shop-bestbuy` take `--runs 1` only and stay out of default passes
-  and the head-to-head. Their check is the answer plus a cart-page screenshot.
-- Go to Folder and a panel name field in the same call name that file URL, including `~/` folders.
-- Cmd+S opening a Save panel, and Save in the panel producing a file the call didn't name, no longer
-  say "saved: not confirmed". The window header shows both steps. A named path that doesn't match
-  still says so.
-- A numbered click in a batch that an earlier click renumbered (Calculator renumbers every button
-  when its first click closes the history) goes to the same element at its new number, with a note,
-  when that element's line is in the new tree exactly once. It used to stop, and Claude rewrote the
-  batch over several calls. A read bound to a name (`const state = await cua.getState(); return
-  state;`) now passes as a read instead of being refused.
-- Real-suite tasks for VS Code, Cursor, Firefox, Slack, Discord and WhatsApp (owner, 2026-10-10).
-  `vscode-edit` and `cursor-edit` open a temp file, replace one word and save. Firefox reuses the
-  local form, grid and spa fixtures. Slack, Discord and WhatsApp only open a named chat and
-  report the newest author; published rows keep the Mimestream hash shape, with no message text.
-  Each app is quit only if that run launched it. Unit-tested. Not live-run on this branch.
-- A call that declares `app` itself (`let app = await cua.getApp(…)` with actions after it) no
-  longer fails with "Cannot access 'app' before initialization". The guard's setup read `app`
-  before that declaration (4 of 29 TextEdit runs on 2026-10-10).
-- An action after a failed call or a reset no longer gets refused with "send the acquisition
-  first" (13 refusals in 29 TextEdit runs, a turn each). The relay acquires the app the lease last
-  confirmed and runs the call when the window is still the same one. If the window changed,
-  nothing runs, and the refusal includes the new read.
-- Return after `setValue` no longer reads the window first, as after typing (owner's call). In a
-  Save sheet that read took 1.85 s a save. `SLEIGHT_GUARD=careful` keeps it. The first action of a
-  session no longer says "UI unverified (no earlier read)" because of the engine's docs on that call.
-- Scheduled replay routines have `routine add`, `list`, `remove`, `unlock` and `run-now` commands.
-  Installation prints its launchd job and asks in an interactive terminal. Unattended runs require
-  two minutes idle (HID idle first, then the compiled observer). Existing windows and the user's
-  preapproved apps are required. Replay and routines acquire by bundle ID and confirm the window
-  title (and URL when present) before input, including a script's recorded window on plain replay.
-  Literal background steps only. Locks recover when the stored start time no longer matches the
-  live PID. Damaged receipts need `unlock`. A user returning mid-run skips and retries at the next
-  interval. Other stops pause the job and send a notification with the log path.
-- `record --watch Calculator|TextEdit <file.json>` observes a demonstration using Accessibility
-  and a passive click listener, then writes portable replay steps. It checks permissions without asking.
-  A terminal and filename are required, with notifications at start and stop. It refuses existing text
-  and unsupported actions, and preserves existing recordings. Native qualification
-  and limitations are in the [run report](docs/benchmarks/2026-10-10-routines-demo.md).
 - App approval prompts offer "Always allow" (owner's call). It adds the app to your pre-approved
   list with its risk level and the date, so later sessions don't ask. Only your click writes it,
   and terminals and OpenAI's apps never offer it. `sleight-mcp allow list` and
   `sleight-mcp allow remove <app>` show and edit the list. Unit-tested.
-- A call's first action that sends keys, text or coordinates uses Claude's full read from the call
-  just before when it's under 10 s old, however fast that read was (owner's call). Before, only a
-  read over 2 s qualified. A window that comes to the front between the two calls isn't caught
-  before that first action. A call that only acquires an app and prints it (`let app = await
-  cua.getApp("X"); app`) now counts as a read, as a bare acquisition did, so the guard doesn't read
-  the window again after it. A study of 93 runs put both at about 0.9 s a run.
 - `open_file` opens an existing file in an app with the app left in the background (`open -g`),
   instead of the File > Open panel. Finishing that panel brought TextEdit to the front for about a
   second in 3 of about 21 textedit-edit runs while the owner worked (2026-10-10). The skill points
@@ -95,101 +29,37 @@
   The app is resolved to its bundle ID first, and the tool refuses terminals, OpenAI's apps, apps
   that run or install what they open (Python Launcher, Installer), scripts, apps and executable
   files, and anything but an existing regular file. `SLEIGHT_OPEN_FILE=0` turns it off. It's
-  unit-tested, and the TextEdit tasks run with it before release.
-- Guard setup stays in the engine after its first successful installation, reducing repeated
-  source processing while retaining each call's checks. App probes filter native window and app
-  lists before converting them to JavaScript, keeping fresh observations and the original matching
-  rules. Handle reads retain their app selector so each read gets its required Space probe. Previously
-  only acquisitions did. The [CPU report](docs/benchmarks/2026-10-10-footprint-parity.md) records the measurements.
-  The Codex head-to-head is pending.
-- `SLEIGHT_RECEIPTS=1` writes a private action receipt with a link in the pane; receipts are off
-  by default. Text inputs, typed characters (a printable key alone or with Shift or Option) and window titles
-  are redacted. Each write prunes
-  files to seven days or 200 receipts, whichever is fewer. Account usernames and full names are scrubbed.
-  `SLEIGHT_STATE_REVIEW=1` also lists changed or modified windows and observed native Undo or Revert
-  controls for the user to use in the app. It is off by default. Receipts use existing reads;
-  parsing runs after forwarding turn cleanup. stderr contains counts only.
-  [Evidence and limits](docs/benchmarks/2026-10-10-review-receipts-2.md).
-- With `SLEIGHT_RICH_TEXT_MOVE=1`, covered TextEdit text moves prepare RTF when the selection and destination have different
-  formatting. They preserve readable clipboard items and formats, with attribute verification
-  before source deletion. Spelling annotations keep the plain path; initial RTF preparation
-  failure uses the existing plain move. Collected children report whether Paste may have been
-  pressed. A second child refuses Paste with less than five seconds remaining and bounds AX
-  messages to one second. Unconfirmed Paste recovery releases the clipboard reservation within
-  ten seconds. Restoration requires the exact staged generation and bytes, with a report of contents left.
-  The rich path stays off pending live qualification. The default keeps the existing plain move.
-  A read identifies a possible orphan Save panel once per window when only `Save Panel Accessory View` remains without
-  AX windows. Unit tests pass. Live qualification remains incomplete.
-  [Investigation and every attempt](docs/benchmarks/2026-10-09-textedit-fixes.md).
-  [Review follow-up](docs/benchmarks/2026-10-10-textedit-fixes-2.md).
-  [Third review](docs/benchmarks/2026-10-10-textedit-fixes-3.md).
-- `/sleight stop` says which calls were in flight and whether the engine finished or was cut off,
-  then checks lease files, the pointer button and keyboard taps once the engine and helpers are
-  collected. The relay and session approvals stay, and the next call after the user's next message
-  starts a fresh engine (acquire the app again). Esc ends the engine turn and keeps the engine.
-  Unit-tested, with the live checks before release (Sol, `codex/waits-targeting`).
-- Windows with the same title and no URL get a native identity check before input, using the
-  window number from `select_window`, the acquisition or the focused window. When identity can't
-  tell them apart, the guards work as before and warn once. Single windows and TextEdit Save sheets
-  skip it.
-- `app.waitFor({ id | label | line }, { timeoutMs })` waits up to 10 s for one element in the same
-  window, polling full reads at least 250 ms apart. The skill asks Claude to use it only for
-  elements that appear late.
-- Repository checks use four test workers, retaining the full suite and its existing deadlines.
-- A rejected `turn_ended` keeps its original turn identity and retries after the configured idle
-  interval, up to three total attempts. A third rejection logs once and drops that turn.
-  Fake-engine tests cover explicit and idle cleanup errors and a newer turn in flight.
-  The historical desktop busy incidents still need live qualification.
-- With `SLEIGHT_SIM_FOCUS_NOTE=1`, Simulator screenshot replies specify the acquired window and image dimensions and ask Claude to
-  confirm field focus before typing. Coordinates are unchanged. Unit-tested only; the affected
-  simulator task and the owner-away focus probe remain pending. The note is off by default.
-- Paste keeps the user's clipboard with one helper per session instead of a spawn per paste, and
-  reads large clipboards in linear time (a mocked 40 MiB transfer fell from about 5 s to 31 to 88 ms).
-  `blocked_app` also refuses a settings window by its Accessibility metadata, so a localized title or
-  a pane name like "General" no longer passes. The skill says to replace a whole document with
-  select-all and `app.paste`, then compare before saving, outside the iOS simulator. Live byte
-  checks and the TextEdit benchmark runs are pending (Sol, `codex/small-fixes`).
-- Cursor and generic MCP clients can use sleight's native approval panel and idle turn cleanup.
-  The panel still names Claude under Claude Code. Unanswered relay forms expire after five minutes, and a panel
-  that cannot be shown reports a failure. Unit-tested only, with [install notes](docs/other-hosts.md).
-- `/sleight record [file]` saves the current session's successful sleight calls, and
-  `/sleight replay <file>` runs them through that session's replay tool. The pane has a file field
-  and buttons for both, starting with an empty file field. It logs each attempted step's result
-  and wait when the tool returns, and hands a stopped replay to Claude with its window and remaining
-  steps. Stop cancels, prevents handoff before submission and warns that the stopped step may have
-  sent input. Replay preserves the user's Stop until a new message, and its schema can load on demand.
-  Mod and relay tests cover the paths;
-  desktop clicks await the owner's check (Sol, `codex/replay-desktop`).
+  unit-tested, and the TextEdit tasks ran with it in the build on 2026-10-10 (4/4 in the save-check
+  head-to-head, 8/9 and 9/9 in the h2h-4 and h2h-5 passes, 6/6 in the verified-results run); the
+  results files don't record whether Claude used it.
 - Native action replies add a line when a value, element, window or sheet changed, from the reads
   the relay already has (no extra engine read). A save is reported only for the same file URL or
   the path the call named, and an Edited title cleared by autosave isn't credited to Claude.
-  Unit-tested with recorded replies; the affected live tasks run before release (Sol,
-  `codex/verified-results`).
-- `sleight-mcp --doctor <app>` reads an app that is already running and reports the read's time and
-  whether it had a window header. It never launches the app or sends input. An app on the user's
-  pre-approved list is read, with the grant audited; any other app needing approval is skipped without
-  a prompt. A live run read Calculator in 156 ms with a header (2026-10-10).
-- A flow rule's source or destination can be a site (`site:example.com`, `site:*.example.com`),
-  matched from the window's URL. Existing rules keep their meaning. Unit-tested.
-- Claude can run a recorded script itself with the new `replay` tool. On a stop it gets the step,
-  the error, the steps left and the window as it is now, and finishes the task from there. A step
-  whose element isn't there yet waits up to 5 s (`--wait-ms` on the command line) when nothing in
-  that call could have sent input yet. Unit-tested only (Sol, `codex/replay-next`).
+  Cmd+S opening a Save panel, and Save in the panel producing a file the call didn't name, no
+  longer say "saved: not confirmed"; the window header shows both steps, and a named path that
+  doesn't match still says so. A save named through Go to Folder and the panel's name field in the
+  same call reads as that file URL, including `~/` folders. Unit-tested with recorded replies
+  (Sol, `codex/verified-results`). Live on 2026-10-10 with the owner away: 6/6 on Calculator and
+  TextEdit ([results](docs/benchmarks/2026-10-10-verified-results-live.json)) and 2/2 each on Chess
+  and safari-form ([away runs](docs/benchmarks/2026-10-10-away.md)); the Chess runs recorded
+  verified-results lines and save fields, but not Claude's code, so which calls produced them is
+  unknown.
+- `app.waitFor({ id | label | line }, { timeoutMs })` waits up to 10 s for one element in the same
+  window, polling full reads at least 250 ms apart. The skill asks Claude to use it only for
+  elements that appear late. Live on 2026-10-10: the waits check waited on TextEdit's Save sheet
+  with it, then saved ([away runs](docs/benchmarks/2026-10-10-away-2.md)).
+- Windows with the same title and no URL get a native identity check before input, using the
+  window number from `select_window`, the acquisition or the focused window. When identity can't
+  tell them apart, the guards work as before and warn once. Single windows and TextEdit Save sheets
+  skip it. With one window the check is skipped, and it cost the same as no check:
+  median 482 to 484 ms an action with it against 492 to 515 without, loaded
+  ([report](docs/benchmarks/2026-10-10-waits-targeting-4.md)). The equal-title live check hasn't run.
 - A call keeps going when its own shortcut, Return or click opens or names a window in the same
   app: the Save or Open panel, a new untitled window, or the document saved or opened under a name
   the call typed (owner's call). The lease stopped such calls in 10 of 12 TextEdit runs with
   first-call batching, and a transcript study estimates TextEdit's save and edit tasks drop from about
   6 calls to 3. A window you open in that app at that moment passes too. Document scope and change
   review still stop. Unit-tested only.
-- In a call that starts with the app's acquisition, the first action uses that read, taken
-  milliseconds before, when the app was already running with a window (owner's call). An app the
-  acquisition launched, or one the probe couldn't see, is read again. With the reuse check fixed
-  earlier in this release, the guard read every time: 173 extra reads and 98 s across the benchmark
-  runs of 2026-10-09. Unit-tested only.
-- A call that only acquires an app, with no action after it, takes the acquisition's read as the
-  window header the lease needs instead of reading the window again. Across the benchmark runs of
-  2026-10-09, 53 such reads cost 27 s, each milliseconds after the acquisition read the same tree.
-  Guard traces now include reads the guard skipped, which the relay used to drop. Unit-tested only.
 - Claude may put its first actions in the same call as the app's acquisition. The engine's
   description asks for the acquisition alone, and sleight now rewrites that sentence by default
   (`SLEIGHT_FIRST_CALL_BATCH=0` keeps it). On calculator-menu, textedit-save, textedit-edit and
@@ -203,46 +73,206 @@
   one in Finder. Checked live on Calculator's View menu, where the note pointed at the menu (element 1)
   and its Cancel closed it in 445 ms. This changes what Claude does. The affected tasks run with it
   before release.
-- `{ label }` matches a field whose line has states before its title (`text field (settable) Email`)
-  and a menu bar item named alone (`Edit`). Both stopped calls in the head-to-head.
-- A guard stop (a renumbered element, or no element with an ID or label) carries the window as it is
-  now, so Claude can retry with current numbers without a turn spent reading again. Each stop cost
-  safari-form a turn in the head-to-head.
-- `drag` refuses a drag another app covers and that has no selected text before raising or scanning
-  the window, outside TextEdit. It took 10 to 13 s to reach the same refusal in Chess and Finder.
-- On a loaded Mac, the first action of a call uses the full read Claude made in the call just before,
-  if that read took over 2 s and is less than 10 s old. Otherwise the guard reads again, about 50 ms
+- A call's first action that sends keys, text or coordinates uses Claude's full read from the call
+  just before when it's under 10 s old, however fast that read was (owner's call). Before, only a
+  read over 2 s qualified, and only on a loaded Mac. A window that comes to the front between the
+  two calls isn't caught before that first action. Otherwise the guard reads again, about 50 ms
   when the app has settled, and checks every number the call acts on against the line Claude last
   saw: in the head-to-head a saved TextEdit document renumbered after Claude's read, and a click
-  meant for Format opened File. Under 20 CPU workers that read took 17 to 57 s, seconds
-  after Claude's own took 1.9 s. Document scope, change review and `SLEIGHT_GUARD=careful` keep it.
-  A lookup by ID or label that finds nothing in a read that dropped attributes now takes the one
-  bare line with that name (`button One`).
-- App probes (the full-screen check on each app read, and read-failure diagnosis) go to one
-  long-lived helper per session instead of starting `osascript` each time: about 33 ms a probe after
-  a 190 ms start, against about 180 ms for each spawn. The helper runs its run loop before each
-  probe, since otherwise it never saw an app launched after it started, and an app the acquisition
-  launched is probed again after the engine answers. Both were found and checked live with a
-  full-screen fixture.
+  meant for Format opened File. Under 20 CPU workers that read took 17 to 57 s, seconds after
+  Claude's own took 1.9 s. A study of 93 runs put the change at about 0.9 s a run. Document scope,
+  change review and `SLEIGHT_GUARD=careful` keep the read.
 - Keys, typing, paste and coordinate actions after typing, pasting or a plain key in the same call
   no longer wait for a window read first. After a click, a shortcut, Return, Escape, Tab or Space
   the read stays: it also waits for a panel the action opened, and without it Cmd+O, Cmd+Shift+G and
   a typed path outran TextEdit's Open panel in a head-to-head run. That read waited about 400 ms for the UI to settle, and tens of seconds on a
   loaded Mac, where Codex doesn't make that read (owner's call). The first action and actions on
   element numbers, IDs or labels are still checked. `SLEIGHT_GUARD=careful` keeps every read.
-- The guard's check before reusing an acquisition's read never checked anything: engine
-  26.1002.52244 doesn't list windows, and two empty lists matched. Since 1.0.0 the first action after an
-  acquisition ran on that read unchecked. Now the guard reads instead, about 50 ms on a settled app.
+- Return after `setValue` no longer reads the window first, as after typing (owner's call). In a
+  Save sheet that read took 1.85 s a save. `SLEIGHT_GUARD=careful` keeps it. The first action of a
+  session no longer says "UI unverified (no earlier read)" because of the engine's docs on that call.
+- Reads around acquisitions. In a call that starts with the app's acquisition, the first action
+  uses that read, taken milliseconds before, when the app was already running with a window
+  (owner's call); an app the acquisition launched, or one the probe couldn't see, is read again.
+  A call that only acquires an app, with or without printing the handle
+  (`let app = await cua.getApp("X"); app`), takes the acquisition's read as the window header the
+  lease needs and counts as the guard's read, so the guard doesn't read the window again after it.
+  Without those skips the guard read every time: 173 extra reads and 98 s in the first case and
+  53 reads and 27 s in the second across the benchmark runs of 2026-10-09, each milliseconds after
+  the acquisition read the same tree. The check behind the 1.0.0 reuse rule never checked anything:
+  engine 26.1002.52244 doesn't list windows, and two empty lists matched, so the first action after
+  an acquisition ran on that read unchecked; now the guard reads instead, about 50 ms on a settled
+  app. Guard traces now include reads the guard skipped, which the relay used to drop. Unit-tested
+  only.
+- A call that acted and ended on exactly the window Claude last saw gets the whole tree instead of
+  "no change since the last full tree you saw", which read as if the actions hadn't run. In
+  calculator-click, Calculator still showed the previous run's 391, and Claude read again in 2 of 9
+  traced runs. In 6 runs after the change it got the tree every time.
 - On a busy Mac the engine can read an element without its attributes (`button Two` for
   `button Description: 2, ID: Two`). The guard took that as a renumbered window and stopped 5 of 5
   batched Calculator calls under load. It now matches such a bare line to the element by role and
-  ID or label. Unit-tested only.
+  ID or label, so a lookup by ID or label that finds nothing in a read that dropped attributes
+  takes the one bare line with that name. Unit-tested only.
+- `click("Multiply")` with a bare name clicks the one element with that label, or else with that
+  ID, as `click({ label })` does. The engine rejects a bare name, and Claude redid a batch over two
+  calls when it wrote one.
+- `{ label }` matches a field whose line has states before its title (`text field (settable) Email`)
+  and a menu bar item named alone (`Edit`). Both stopped calls in the head-to-head.
+- A guard stop (a renumbered element, or no element with an ID or label) carries the window as it is
+  now, so Claude can retry with current numbers without a turn spent reading again. Each stop cost
+  safari-form a turn in the head-to-head.
+- A numbered click in a batch that an earlier click renumbered (Calculator renumbers every button
+  when its first click closes the history) goes to the same element at its new number, with a note,
+  when that element's line is in the new tree exactly once. It used to stop, and Claude rewrote the
+  batch over several calls. A read bound to a name (`const state = await cua.getState(); return
+  state;`) now passes as a read instead of being refused. Unit-tested only.
 - When the user is in a full-screen or Split View Space and the app Claude reads has no window on
   it, the read says so, once per app per turn: clicks and typing still work there, and
   drags and some reads don't. A second read timeout in a row on such an app gets the same advice instead
   of "cause unknown". A Split View pass failed 8 of 21 runs this way, with Claude spending up to 19
   turns before it gave up. With a full-screen fixture in front of TextEdit, a textedit-drag run got
   the note on its first read and stopped after 12 turns, asking the user to leave full screen.
+- Guard and probe CPU. Guard setup stays in the engine after its first successful installation,
+  reducing repeated source processing while retaining each call's checks: 90 guarded no-input calls
+  fell from 0.75 to 0.05 engine CPU seconds, and the setup source from 23,088 to 1,301 bytes. App
+  probes filter native window and app lists before converting them to JavaScript, keeping fresh
+  observations and the original matching rules: 100 probes fell from about 4.8 to 0.55 osascript
+  CPU seconds. Probes go to one long-lived helper per session instead of starting `osascript` each
+  time, about 33 ms a probe after a 190 ms start, against about 180 ms for each spawn. The helper
+  runs its run loop before each probe, since otherwise it never saw an app launched after it
+  started, and an app the acquisition launched is probed again after the engine answers. Both were
+  found and checked live with a full-screen fixture. Handle reads retain their app selector so each
+  read gets its required Space probe. Previously only acquisitions did. The
+  [CPU report](docs/benchmarks/2026-10-10-footprint-parity.md) records the component measurements.
+  In the owner-away head-to-heads of 2026-10-10, sleight's own CPU was 51.8 s against Codex's 42.8
+  with clean arms (7/9 against 9/9) and 64.2 against 38.4 with the owner's setup (8/9 against 9/9)
+  ([away runs](docs/benchmarks/2026-10-10-away-2.md)).
+- The browser-extension check, which decides whether the next session gets the browser API, runs after the engine's
+  first call has answered, not during it. Its second engine used to overlap every session's first
+  call: about 0.12 s on a quiet Mac, and 2.4 s against 1.2 s under load
+  (`docs/benchmarks/2026-10-10-startup-costs.md`).
+- A call that declares `app` itself (`let app = await cua.getApp(…)` with actions after it) no
+  longer fails with "Cannot access 'app' before initialization". The guard's setup read `app`
+  before that declaration (4 of 29 TextEdit runs on 2026-10-10).
+- An action after a failed call or a reset no longer gets refused with "send the acquisition
+  first" (13 refusals in 29 TextEdit runs, a turn each). The relay acquires the app the lease last
+  confirmed and runs the call when the window is still the same one. If the window changed,
+  nothing runs, and the refusal includes the new read.
+- A rejected `turn_ended` keeps its original turn identity and retries after the configured idle
+  interval, up to three total attempts. A third rejection logs once and drops that turn.
+  Fake-engine tests cover explicit and idle cleanup errors and a newer turn in flight.
+  The historical desktop busy incidents still need live qualification.
+- `SLEIGHT_RECEIPTS=1` writes a private action receipt with a link in the pane; receipts are off
+  by default. Text inputs, typed characters (a printable key alone or with Shift or Option) and window titles
+  are redacted. Each write prunes
+  files to seven days or 200 receipts, whichever is fewer. Account usernames and full names are scrubbed.
+  `SLEIGHT_STATE_REVIEW=1` also lists changed or modified windows and observed native Undo or Revert
+  controls for the user to use in the app. It is off by default. Receipts use existing reads;
+  parsing runs after forwarding turn cleanup. stderr contains counts only.
+  [Evidence and limits](docs/benchmarks/2026-10-10-review-receipts-2.md).
+- `/sleight stop` says which calls were in flight and whether the engine finished or was cut off,
+  then checks lease files, the pointer button and keyboard taps once the engine and helpers are
+  collected. The relay and session approvals stay, and the next call after the user's next message
+  starts a fresh engine (acquire the app again). Esc ends the engine turn and keeps the engine.
+  Unit-tested, with the live checks before release (Sol, `codex/waits-targeting`).
+- Cursor and generic MCP clients can use sleight's native approval panel and idle turn cleanup.
+  The panel still names Claude under Claude Code. Unanswered relay forms expire after five minutes, and a panel
+  that cannot be shown reports a failure. Unit-tested only, with [install notes](docs/other-hosts.md).
+- `/sleight record [file]` saves the current session's successful sleight calls, and
+  `/sleight replay <file>` runs them through that session's replay tool. The pane has a file field
+  and buttons for both, starting with an empty file field. It logs each attempted step's result
+  and wait when the tool returns, and hands a stopped replay to Claude with its window and remaining
+  steps. Stop cancels, prevents handoff before submission and warns that the stopped step may have
+  sent input. Replay preserves the user's Stop until a new message, and its schema can load on demand.
+  Mod and relay tests cover the paths;
+  desktop clicks await the owner's check (Sol, `codex/replay-desktop`).
+- Claude can run a recorded script itself with the new `replay` tool. On a stop it gets the step,
+  the error, the steps left and the window as it is now, and finishes the task from there. A step
+  whose element isn't there yet waits up to 5 s (`--wait-ms` on the command line) when nothing in
+  that call could have sent input yet. Unit-tested only (Sol, `codex/replay-next`).
+- Scheduled replay routines have `routine add`, `list`, `remove`, `unlock` and `run-now` commands.
+  Installation prints its launchd job and asks in an interactive terminal. Unattended runs require
+  two minutes idle (HID idle first, then the compiled observer). Existing windows and the user's
+  preapproved apps are required. Replay and routines acquire by bundle ID and confirm the window
+  title (and URL when present) before input, including a script's recorded window on plain replay.
+  Literal background steps only. Locks recover when the stored start time no longer matches the
+  live PID. Damaged receipts need `unlock`. A user returning mid-run skips and retries at the next
+  interval. Other stops pause the job and send a notification with the log path. Live on 2026-10-10
+  with the owner away ([report](docs/benchmarks/2026-10-10-routines-live.md)): `record` built a
+  2-step Calculator script, `replay` ran it 2/2, `routine add` printed the launchd job, `run-now`
+  passed 10/10 steps behind the idle gate, and `remove` waited for typed confirmation.
+  A launchd-scheduled run needs a release that contains routines: the installed 1.1.0 copy has
+  none, and its scheduled run exited 1.
+- `record --watch Calculator|TextEdit <file.json>` observes a demonstration using Accessibility
+  and a passive click listener, then writes portable replay steps. It checks permissions without asking.
+  A terminal and filename are required, with notifications at start and stop. It refuses existing text
+  and unsupported actions, and preserves existing recordings. It has never run live. Native qualification
+  and limitations are in the [run report](docs/benchmarks/2026-10-10-routines-demo.md).
+- The clipboard helper accepts types macOS adds to what it writes, as long as every requested
+  type reads back byte for byte. The opt-in rich TextEdit move stopped there on its last live
+  trial: staged RTF read back with two plain-text types. A private pasteboard reproduced it
+  with that trial's RTF. No live run since.
+- Paste keeps the user's clipboard with one helper per session instead of a spawn per paste, and
+  reads large clipboards in linear time (a mocked 40 MiB transfer fell from about 5 s to 31 to 88 ms).
+  `blocked_app` also refuses a settings window by its Accessibility metadata, so a localized title or
+  a pane name like "General" no longer passes. The skill says to replace a whole document with
+  select-all and `app.paste`, then compare before saving, outside the iOS simulator. Live byte
+  checks and the TextEdit benchmark runs are pending (Sol, `codex/small-fixes`).
+- With `SLEIGHT_RICH_TEXT_MOVE=1`, covered TextEdit text moves prepare RTF when the selection and destination have different
+  formatting. They preserve readable clipboard items and formats, with attribute verification
+  before source deletion. Spelling annotations keep the plain path; initial RTF preparation
+  failure uses the existing plain move. Collected children report whether Paste may have been
+  pressed. A second child refuses Paste with less than five seconds remaining and bounds AX
+  messages to one second. Unconfirmed Paste recovery releases the clipboard reservation within
+  ten seconds. Restoration requires the exact staged generation and bytes, with a report of contents left.
+  The rich path stays off pending live qualification. The default keeps the existing plain move.
+  A read identifies a possible orphan Save panel once per window when only `Save Panel Accessory View` remains without
+  AX windows. Unit tests pass. The first live attempt after the clipboard fix (2026-10-11) stopped
+  before the move: another app's window covered TextEdit at the drag point, so the background path
+  was skipped and the Accessibility path failed its checks
+  ([evidence](docs/benchmarks/2026-10-11-evidence.md)). [Investigation and every attempt](docs/benchmarks/2026-10-09-textedit-fixes.md).
+  [Review follow-up](docs/benchmarks/2026-10-10-textedit-fixes-2.md).
+  [Third review](docs/benchmarks/2026-10-10-textedit-fixes-3.md).
+- `drag` refuses a drag another app covers and that has no selected text before raising or scanning
+  the window, outside TextEdit. It took 10 to 13 s to reach the same refusal in Chess and Finder.
+- Real-suite tasks for VS Code, Cursor, Firefox, Slack, Discord and WhatsApp (owner, 2026-10-10).
+  `vscode-edit` and `cursor-edit` open a temp file, replace one word and save. Firefox reuses the
+  local form, grid and spa fixtures. Slack, Discord and WhatsApp only open a named chat and
+  report the newest author; published rows keep the Mimestream hash shape, with no message text.
+  Each app is quit only if that run launched it. Unit-tested. VS Code, Cursor and Firefox passed
+  5/5 on one run each on 2026-10-10, owner away, in 27.2 to 58.7 s
+  ([raw](docs/benchmarks/2026-10-10-electron-firefox-live.json)), after the allowlist took VS
+  Code's bundle name, Code. The chat tasks never ran, because the pass's private-results filter
+  rejected a row it had built and stopped before any run was saved. That's fixed (2026-10-11,
+  unit-tested), and the chat tasks haven't run since.
+- Real-use shop tasks: local Harbor Market pages for `safari-shop` and `helium-shop` (ZIP, store,
+  search, filters, pagination, options, cart), with a server-side cart check. Safari smoke tasks
+  `real-shop-target` and `real-shop-bestbuy` take `--runs 1` only and stay out of default passes
+  and the head-to-head. Their check is the answer plus a cart-page screenshot. The smoke tasks ran
+  once each on 2026-10-10, owner away ([raw](docs/benchmarks/2026-10-10-real-shop-smoke.json)):
+  Target stopped at a "Press & hold" human check, as the task's prompt directs, and the check
+  counts that as a failure because it looks for the three item names in the answer. Best Buy
+  failed on sleight's input lease, which the check recorded as a CAPTCHA stop, which it wasn't
+  ([away runs](docs/benchmarks/2026-10-10-away-2.md)). The Harbor Market tasks ran live the same
+  day: helium-shop passed both arms, and safari-shop failed fixture setup on both in
+  [shop-1](docs/benchmarks/2026-10-10-shop-1.json) and passed both in
+  [shop-2](docs/benchmarks/2026-10-10-shop-2.json) after the title-nonce fix.
+- Real-suite task `iphone-mirroring-settings` opens iPhone Mirroring and reads the iOS version from Settings > General > About. The check is that version text. `--owner-present` is required. Default passes and the head-to-head skip it. The owner approves the app at the prompt. It is not on the allowlist. Published rows keep the answer and timings, with no screenshot. Unit-tested. No live run (needs the owner at the Mac).
+- With `SLEIGHT_SIM_FOCUS_NOTE=1`, Simulator screenshot replies specify the acquired window and image dimensions and ask Claude to
+  confirm field focus before typing. Coordinates are unchanged. Unit-tested only; the affected
+  simulator task and the owner-away focus probe remain pending. The note is off by default.
+- `sleight-mcp --doctor <app>` reads an app that is already running and reports the read's time and
+  whether it had a window header. It never launches the app or sends input. An app on the user's
+  pre-approved list is read, with the grant audited; any other app needing approval is skipped without
+  a prompt. A live run read Calculator in 156 ms with a header (2026-10-10).
+- A flow rule's source or destination can be a site (`site:example.com`, `site:*.example.com`),
+  matched from the window's URL. Existing rules keep their meaning. Unit-tested.
+- Trace settings for diagnosis on this Mac: `SLEIGHT_TRACE_CODE=1` keeps Claude's code in the
+  trace, up to 4,000 characters (the trace's 300-character cut used to drop the end of every
+  batch), and `SLEIGHT_TRACE_CUT` sets that cut for everything else, such as whole UI trees.
+- Repository checks use four test workers, retaining the full suite and its existing deadlines:
+  with every test file at once, the app-health restart test and the doctor's pipe test each failed
+  one full check at load 9 to 11 and passed 5 of 5 and 3 of 3 runs alone.
 
 ## 1.1.0 (2026-10-09)
 

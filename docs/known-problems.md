@@ -20,8 +20,16 @@ our own runs. Dates and engine versions are given where they matter.
 
 - On bestbuy.com in Safari (real-site smoke, 2026-10-10), the input lease refused every click
   because the window had changed, and kept refusing after Claude acquired Safari again and reset the
-  session ([report](benchmarks/2026-10-10-away-2.md)). The cause, likely a title or URL that keeps
-  changing on that page, isn't confirmed. The run's trace has the refusals.
+  session ([report](benchmarks/2026-10-10-away-2.md)). The traced rerun (2026-10-11,
+  [raw](benchmarks/2026-10-11-real-shop-bestbuy-traced.json)) shows the refusal asking for
+  `select_window` with the window's title and number; Claude didn't follow that instruction either,
+  acquired Safari again, and clicked element 13 five times. The window header had no URL, and the
+  title began with Safari's profile name, "Personal", as Safari titles windows when profiles are on.
+  The cause, likely a title or URL that keeps changing on that page, isn't confirmed.
+- The "Always allow" button on sleight's app approval prompt (unreleased) adds the app to your
+  pre-approved list with its risk level and the date, only from your own click. Unit-tested only:
+  nobody has pressed it in a live session, so the panel, the list it writes and a later session's
+  no-prompt behavior haven't been checked together.
 - Routines accept only literal app acquisition, named-element clicks, native value replacement,
   typing and full AX reads. They refuse arbitrary code, shortcuts, paste, drags, focus and positions.
   Crash locks recover after the former process and its recorded relay groups are gone, or when a
@@ -101,8 +109,16 @@ our own runs. Dates and engine versions are given where they matter.
   engine header and existing guards, with one warning. If titles are missing from both the engine
   inventory and health result, candidate count is unknown and the native check is skipped.
   Same-title replacement detection is unavailable on these paths and during an action.
-  TextEdit Save, equal titles and CPU comparisons remain pending under a live hold,
-  as recorded in the [third follow-up report](benchmarks/2026-10-10-waits-targeting-3.md).
+  The [third follow-up](benchmarks/2026-10-10-waits-targeting-3.md) left TextEdit Save, equal titles
+  and the CPU comparison pending under a live hold. The hold is gone. The identity check's
+  cost with one window, where it is skipped, was the same as no check: median 482 to 484 ms an
+  action with it against 492 to 515 without, loaded, warm CPU 231 to 240 against 250 to 285 ms
+  ([fourth follow-up](benchmarks/2026-10-10-waits-targeting-4.md)). The idle CPU run, which needs
+  load under 3, and the equal-title live check haven't run. Live attempts from 16:11 to 16:14 UTC on
+  2026-10-10 failed setup before a stop or a save: the recorded Chess points were for a 1223 by 949
+  board and the open one was 667 by 532. The TextEdit waits check then passed with the owner away (a
+  new document, `waitFor` on the Save sheet, the save), and its cleanup follows a saved document's
+  rename ([2026-10-10-away-2.md](benchmarks/2026-10-10-away-2.md)).
 - `/sleight stop` collects its owned engine and helpers before checking pointer button state,
   keyboard filter taps and owned lease records. A pressed button has no reliable owner, so it
   leaves cleanup unconfirmed. A remaining tap or failed scan also prevents a clear receipt.
@@ -150,6 +166,11 @@ our own runs. Dates and engine versions are given where they matter.
   window controls and reported, which is the intended behavior.
 - `claude -p` can't answer approval prompts. List apps in the user's [preapproval file](settings.md#preapproved-apps)
   before starting. Unlisted apps and requests above their listed risk still need a person.
+- `sleight-mcp setup` (unreleased) runs OpenAI's helper installer when its status isn't OK, opens
+  the Accessibility and Screen Recording panes and runs the doctor, and starts the engine from
+  ChatGPT.app directly when there's no Codex plugin. A full setup run hasn't been tried live: macOS
+  permissions always need the user's click, and the live run left is in a fresh macOS user. In a
+  macOS user that never signed in to ChatGPT, the engine started and listed apps (2026-10-10).
 - The preapproval loader proves file ownership, not who wrote it. Any process running as you,
   Claude included, can write the file. The skill tells Claude never to create or edit it, but this
   rule depends on Claude following the instruction.
@@ -202,18 +223,20 @@ our own runs. Dates and engine versions are given where they matter.
   waits still hung. NSDocument's autosave event monitor, whose mask covers flags-changed, and the
   Shift modifier itself aren't ruled out. The fix applies only to sleight's own Accessibility writes
   in `drag.js`, not to a `setValue` from `js`. A rewritten experiment on 2026-10-10 stalled in every
-  variant, Shift included, and the saves finished at 30 s, which points at its own harness
-  ([report](benchmarks/2026-10-10-away-2.md)). A `sample` 14 s after Cmd+S on 2026-10-11 showed
-  TextEdit's main thread idle in its event loop and the helper idle on its input pipe; the file was
-  written at about 30 s by autosave in every variant
-  ([evidence](benchmarks/2026-10-11-evidence.md)). The helper had posted one S key-down with the
+  variant, Shift included, and the saves finished at about 30 s, which points at its own harness
+  ([report](benchmarks/2026-10-10-away-2.md)). The night rerun (30 of 30 runs with AppKit
+  serialization logging on, then 10 of 10 without) stalled again in every variant, and a `sample`
+  14 s after Cmd+S showed TextEdit's main thread idle in its event loop and the helper idle on its
+  input pipe rather than blocked, so the save never started. The files written at about 30 s were
+  autosave ([raw](benchmarks/2026-10-10-save-lock-experiment-1791679933967.json),
+  [evidence](benchmarks/2026-10-11-evidence.md)). The helper had posted one S key-down with the
   Command flag and an S key-up with none. It now posts Command down, S down, S up with Command still
   held, and Command up. `node bench/textedit-save-lock.mjs --delivery-check` types one character (no
   Accessibility write) and requires the file to change within 2 s. Live on 2026-10-11 (2 runs) the
   typed character arrived but that Cmd+S didn't save either, and AXEdited read false throughout.
   A Cmd+S posted to a background TextEdit's PID doesn't start a save. The 2026-10-08 hangs came
   through the engine's `pressKey("super+s")`, so the experiment can't measure them until it sends
-  Cmd+S that way.
+  Cmd+S that way, and whether the Shift event helps is still unknown.
   The [2026-10-10 follow-up](benchmarks/2026-10-10-save-lock.md) stopped before
   editing: the existing background TextEdit process returned `AXWindows -25204`. A new instance
   restored extra windows, then exact-fixture cleanup returned `AXRole -25204`. A later read-only
@@ -393,8 +416,11 @@ our own runs. Dates and engine versions are given where they matter.
   gets the count instead of the lines. A number Claude took from the older tree is now sent as the
   line of the element Claude saw there, which the guard finds again, when exactly one line in the
   current tree matches it. Otherwise the relay refuses the action until Claude reads again (8
-  refusals, 6 correct passes and none wrong in CNN trials, before the line lookup). The line lookup
-  has unit tests only. Literal
+  refusals, 6 correct passes and none wrong in CNN trials, before the line lookup). Since the
+  renumbered-click change (unreleased), a numbered click in a batch that an earlier click renumbered
+  goes to the same element at its new number, with a note, when its line is in the new tree exactly
+  once; it used to stop, and Claude rewrote the batch over several calls. The line lookup and the
+  remap have unit tests only. Literal
   numbers only: a call that computes an element number is refused in that state. If Claude Code summarizes the conversation, Claude can lose the tree a diff refers
   to, as with the engine's own diffs. A read with `disableDiffing: true` comes through whole.
 - An action called without `await` that fails used to end the engine's JavaScript session, and every
@@ -431,9 +457,10 @@ our own runs. Dates and engine versions are given where they matter.
   header. It uses the user's pre-approved list and writes the session's grant audit before accepting
   a covered app approval. Other approvals are declined without a prompt. It skips apps missing or
   ambiguous in inventory. The app probe
-  has stand-in engine coverage. Initial live checks on 2026-10-09 were held by `/tmp/sleight-hold`.
-  The later user-list check timed out during inventory, before the app read, so the app's timing
-  and header remain unmeasured. Before
+  has stand-in engine coverage. Initial live checks on 2026-10-09 were held by `/tmp/sleight-hold`,
+  and a later user-list check timed out during inventory, before the app read. A live run on
+  2026-10-10 read Calculator in 156 ms with a header; that figure is recorded in the changelog
+  only, with no results file. Before
   0.7.0 it also reported "ok" when the helper couldn't start at all.
   [The investigation](benchmarks/2026-10-04-helper-health.md) records each live attempt.
 - On a busy Mac the guard can stop a call that clicks several element numbers. With 20 CPU-bound
@@ -535,9 +562,15 @@ our own runs. Dates and engine versions are given where they matter.
   The temporary-file reproduction and localized titles remain unchecked.
 - A benchmark run can act on a TextEdit document it didn't open. In a head-to-head on 2026-10-10,
   Claude typed into two leftover iCloud documents and a Save sheet moved one of them, empty, into
-  the task's folder ([report](benchmarks/2026-10-10-h2h-guard.md)). TextEdit tasks now refuse to
-  start while TextEdit has a document the pass didn't open. A user's own session has no such guard, and
-  Claude can act on any document in an approved app.
+  the task's folder ([report](benchmarks/2026-10-10-h2h-guard.md)). The owner-away head-to-heads
+  that night hit it again: TextEdit restored leftover iCloud documents ("Untitled 6" and "Untitled 9"
+  in one run, "Untitled 9" in another) when the engine launched it, and Claude worked in those
+  instead of the task's file ([2026-10-10-away-2.md](benchmarks/2026-10-10-away-2.md)). TextEdit
+  tasks refuse to start while TextEdit has a document the pass didn't open, and the benchmark now
+  clears TextEdit's saved windows before its first TextEdit task; the owner moved the two files to
+  the Trash. Each new document Claude makes is autosaved to iCloud as the next "Untitled N", so a
+  failed run leaves one there. A user's own session has no such guard, and Claude can act on any
+  document in an approved app.
 - simulator-form failed setup in both Haiku passes after the round-12 fixture code (2026-10-10,
   owner away). The first pass stopped on a DeviceHub handoff while the original was still exiting.
   The second ended "readiness unconfirmed" with one DeviceHub process, which never reported a
@@ -552,7 +585,13 @@ our own runs. Dates and engine versions are given where they matter.
   the same device, `openurl` took 0.4 to 6.5 s after a fresh boot, with DeviceHub running and
   freshly launched. A blocked event loop isn't the cause: with a live server in the same process, `openurl`
   returned in 0.45 s blocking and 0.21 s async. We don't know yet which step of the task makes it time out
-  ([report](benchmarks/2026-10-10-away.md)).
+  ([report](benchmarks/2026-10-10-away.md)). The evidence runs of 2026-10-11 failed setup twice with
+  "Fixture application readiness unconfirmed"
+  ([raw](benchmarks/2026-10-11-simulator-form-poll-1.json),
+  [raw](benchmarks/2026-10-11-simulator-form-poll-2.json)): a poller saw the device booted at
+  00:54:43 and DeviceHub start at 00:54:47 as one process that never changed, setup waited 34 s and
+  gave up, and it recorded the PID as -1, so cleanup again refused to quit the DeviceHub it had
+  launched.
 - DeviceHub replaced its launch process during `simulator-flow` setup on 2026-10-10. Setup now
   accepts one same-bundle handoff after the recorded PID exits, and cleanup quits only a viewer
   the run launched. The owner-away rerun is pending
@@ -654,10 +693,17 @@ our own runs. Dates and engine versions are given where they matter.
 
 - Shop smoke tasks `real-shop-target` and `real-shop-bestbuy` are Safari-only, `--runs 1`, and
   excluded from default real passes and the head-to-head. They stop at a CAPTCHA or bot check and
-  never sign in or start checkout. This lane did not run them. Live cart-page screenshots and
-  store-ZIP UI on those sites are unverified. The local Harbor Market tasks have unit-tested state
-  checks only.
-- The smoke checks' human-check verdict (2026-10-11) comes from unit tests against the two
+  never sign in or start checkout. Ran once each on 2026-10-10, owner away
+  ([raw](benchmarks/2026-10-10-real-shop-smoke.json)). On Target, Claude stopped at a "Press &
+  hold" human check, as the task's prompt directs. Best Buy failed on sleight's input lease (the
+  first bullet under Approvals and guards), not a CAPTCHA. The check then scored the first as a
+  plain failure and the second as a CAPTCHA stop. Since 2026-10-11 it records the Target stop as
+  `outcome: "human-check"` and the lease refusal as a refusal, in unit tests against those two
+  answers. Live cart-page screenshots and store-ZIP UI on those sites are unverified. The local
+  Harbor Market tasks ran live on 2026-10-10: helium-shop passed both arms, and safari-shop failed
+  fixture setup on both in [shop-1](benchmarks/2026-10-10-shop-1.json) and passed both in
+  [shop-2](benchmarks/2026-10-10-shop-2.json) after the title-nonce fix.
+- The smoke checks' human-check outcome (2026-10-11) comes from unit tests against the two
   recorded answers. No live run has produced it yet. Whether the cart screenshot attaches on a
   real stop is unverified, and without it the verdict falls back to the missing-screenshot
   failure. The rule reads the answer as one string: a negated CAPTCHA mention anywhere
@@ -759,11 +805,20 @@ our own runs. Dates and engine versions are given where they matter.
 - It's macOS on Apple Silicon only. The engine's JavaScript has Linux and Windows instructions, but
   the helper that clicks and types comes only with the Mac ChatGPT app, and there's no ChatGPT desktop
   app for Linux (checked 2026-10-04). We haven't checked the Windows app.
+- Cursor and generic MCP clients can use sleight's native approval panel and idle turn cleanup
+  (unreleased). The panel still names Claude under Claude Code, and it is unit-tested only: no live
+  approval in another host has been checked. Unanswered relay forms expire after five minutes.
 
 ## Desktop replay
 
-Demonstration and routine qualification remains incomplete: the native preflight on 2026-10-10
-didn't have Accessibility or Input Monitoring access. We didn't request or answer a permission prompt.
+Routines have qualified live in part ([first live run](benchmarks/2026-10-10-routines-live.md)):
+`record` built a 2-step Calculator script, `replay` ran it 2/2, `routine add` printed the launchd
+job after the argument-grammar fix (`8904dcc`), `run-now` passed 10/10 steps behind the idle gate,
+and `remove` waited for typed confirmation. A launchd-scheduled run still needs a release that
+contains routines: the installed 1.1.0 copy has none, and its scheduled run exited 1. Demonstration
+recording remains unqualified live: the native preflight on 2026-10-10 didn't have Accessibility or
+Input Monitoring access, and `record --watch` hasn't run. We didn't request or answer a permission
+prompt.
 Routines acquire by bundle ID and confirm the window title (and URL when present) from the read
 before input. A name lookup can still launch an app that exited between the native check and
 `getApp`. Title and URL matching is unit-tested. Live Calculator and TextEdit confirmation is not.

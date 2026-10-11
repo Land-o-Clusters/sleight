@@ -33,11 +33,11 @@ keystrokes straight to the target app instead. The app can be behind your other 
 and you keep working. sleight gives that engine to Claude Code.
 
 <p align="center"><img src="docs/assets/demo.gif" width="900" alt="Claude playing macOS Chess against the computer through sleight, with the sleight pane logging each move"></p>
-<p align="center"><sub>Claude plays macOS Chess against the computer through sleight, at 6× speed. Every move is a drag. The sleight pane on the right logs each one.</sub></p>
+<p align="center"><sub>Claude plays macOS Chess against the computer through sleight. Every move is a drag. The sleight pane on the right logs each one.</sub></p>
 
 ## Install
 
-You need macOS on Apple Silicon, Claude Code 2.1.275 or later, and the
+You need macOS on Apple Silicon, Claude Code 2.1.288 or later (the oldest version we've tested), and the
 [ChatGPT desktop app](https://chatgpt.com/download/) with Computer Use turned on in Codex at least
 once. That first run installs the engine's helper and gets macOS to grant it Accessibility and Screen
 Recording. You can sign out of Codex afterwards.
@@ -86,7 +86,7 @@ Also runs as a plain MCP server: see [other hosts](docs/other-hosts.md).
   lists each kind of action with the runs that measured it.
 - Several agents can share one Mac. Input leases give one session a window at a time and tell the
   others who holds it. With two sessions typing into one document, text doubled in 5/5 trials
-  without leases and appeared once in 5/5 with them.
+  without leases and appeared once, with one refusal, in 5/5 with them.
 - It never clicks a stale element. When a window's element numbers shift, sleight stops actions on
   numbers Claude hasn't seen since. A later click in a batch that an earlier click renumbered goes
   to the same element at its new number, and stops when sleight can't tell which one it is. In the
@@ -125,7 +125,8 @@ sleight is unofficial and depends on the ChatGPT app's engine.
 ## Watch and stop it
 
 The apps sleight drives stay in the background, which also means you can't see them. On Claude Code
-v2.1.287 or later you get three ways to keep an eye on things.
+2.1.287 or later, which added the turn-end hook these run on, you get three ways to keep an eye on
+things.
 
 `/sleight` opens a pane with the app's latest picture and a log of every action Claude took. Anything
 after it goes to Claude as a prompt, so `/sleight play chess in the background` opens the pane and starts
@@ -216,7 +217,7 @@ without asking for new ones. [Supported observations and limits](docs/design/rep
 | `--doctor` shows `MISSING computer-use helper` | The helper app was removed or never installed | Same as above |
 | Repeated `timeoutReached` | An app or the helper stopped answering reads | Stop retries. sleight checks native Accessibility and a fresh read of another previously acquired app. Follow the resulting app advice; if evidence is incomplete, report that uncertainty |
 | The helper diagnosis reports two responsive AX apps and a timed-out control read | The engine's read path appears stuck | Tell the user. Only they should restart ChatGPT, which ends Codex sessions. Doctor's inventory result alone cannot distinguish an app hang |
-| Approval prompt never appears | Claude Code too old for form elicitation | Update Claude Code |
+| Approval prompt never appears | Claude Code too old for form elicitation; the minimum version isn't recorded | Update Claude Code |
 | "Not approved" right away in the desktop app, with no panel | The session started before sleight 0.1.1 | Start a new session |
 | A desktop session still shows as busy after Claude has finished | Before 0.3.1, nothing ended the engine's turn in the desktop app | Update sleight and start a new session |
 | "Sky Computer Use service startup request failed" | macOS kept the helper's old launchd job and won't start a new one | Run `--doctor`; it prints the `launchctl remove` command that clears the job without restarting ChatGPT |

@@ -69,12 +69,19 @@ only with a measured reason. In order:
    and a call's first key, typing or coordinate action reuses Claude's full read when it's under
    10 s old (owner's call). Cutting the guard's reads of Save and Open sheets (5.2 s a run in
    textedit-save) isn't possible on engine 26.1007.21159, which has no partial read (`d008140`).
-3. Stop spawning processes per call. Done for app probes: one long-lived helper per session, about
-   33 ms a probe against about 180 ms a spawn (`818f7e7`). Left, from a code audit (2026-10-09, costs
-   unmeasured until the footprint run). The pane snapshot decodes a full screenshot in JavaScript
-   after each turn that used sleight. A second engine starts at launch to find browser extensions,
-   which slows the first call. Local tools spawn `osascript` twice per call, each lease operation
-   opens SQLite, and the keyboard-tap scan holds up the turn end. Rank them by the footprint numbers.
+3. Done 2026-10-10, stop spawning processes per call. App probes go to one long-lived helper per
+   session, about 33 ms a probe against about 180 ms a spawn (`818f7e7`), and filter native window
+   and app lists before converting them to JavaScript, 100 probes from about 4.8 to 0.55 osascript
+   CPU s (`4082ae9`). Guard setup stays in the engine after its first installation: 90 guarded
+   no-input calls fell from 0.75 to 0.05 engine CPU s (`4082ae9`). Lease targets, tap scans and
+   health probes share three lazy helper lanes, tap scanning from 46.09 to 7.65 ms, and the lease
+   database is reused instead of reopened per operation (`7d880dc`). The extension check is cached
+   and now runs after the engine's first call has answered, about 0.12 s on a quiet Mac and 2.4 s
+   against 1.2 s under load before the change (`cb3cbc7`,
+   [startup costs](../benchmarks/2026-10-10-startup-costs.md)). Small desktop images skip decoding;
+   terminal pane snapshots and desktop images over the embedding limit still decode all pixels
+   ([known problems](../known-problems.md)). The [CPU report](../benchmarks/2026-10-10-footprint-parity.md)
+   records the component measurements.
 4. Fewer turns. Model time is about two thirds of a run, so batching like Claude's own computer use
    is the largest lever left once the reads are cheap. A transcript study (2026-10-09) found 13 to
    20% of calls could have merged with the one before, mostly save-then-close and keys after a
@@ -141,14 +148,28 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
 
 1. Match and beat Codex in the head-to-head on time, turns and own CPU. The `let app` failure and the
    lease refusals are fixed (`80b5abc`), and the Save-panel lines are next.
-2. A CPU comparison on a quiet box, with clean arms and the owner's normal setup, both published.
+2. Done 2026-10-10, owner away (`1a60395`), both setups published in
+   [2026-10-10-away-2.md](../benchmarks/2026-10-10-away-2.md). Clean arms
+   ([raw](../benchmarks/2026-10-10-h2h-clean-arms.json)): sleight 7/9 in 263.7 s (own CPU 51.8 s)
+   against Codex 9/9 in 265.8 s (42.8 s). The owner's normal setup
+   ([raw](../benchmarks/2026-10-10-h2h-normal-setup.json)): sleight 8/9 in 262.4 s (64.2 s) against
+   Codex 9/9 in 229.6 s (38.4 s). Every sleight failure was textedit-save: two on leftover iCloud
+   documents and one stalled in the Save sheet.
 3. Shopping tasks: a local shop page (ZIP store lookup, search, add 3 items to cart) in both
    browsers, and one-run real-site smoke tasks.
 4. Electron and Gecko: tasks for VS Code, Cursor, Firefox, and read-only Slack, Discord and
-   WhatsApp. iPhone Mirroring with the owner at the Mac: the task is built (`1c0b4b5`) and needs
+   WhatsApp. Done 2026-10-10, owner away (`1a60395`): VS Code, Cursor and Firefox passed 5/5 on one
+   run each, 27.2 to 58.7 s ([raw](../benchmarks/2026-10-10-electron-firefox-live.json)), after the
+   allowlist took VS Code's bundle name "Code" (`01bfc5c`). The chat tasks never ran, because the
+   pass's private-results filter rejected a row it had built and stopped before any run was saved
+   (fixed in `1700c80`, not rerun yet). iPhone
+   Mirroring with the owner at the Mac: the task is built (`1c0b4b5`) and needs
    `--owner-present`.
-5. A head-to-head with LCU again after these are merged. LCU 0.11.2 is installed (owner's OK,
-   2026-10-10), and its arm is outside the repo (`bench/lcu-arm-setup.mjs`).
+5. Done 2026-10-10, owner away: sleight passed 8/8 in 210.6 s (56 turns, 131.2 s of model time)
+   against LCU 0.11.2's 7/8 in 299.2 s (85 turns, 209.5 s)
+   ([raw](../benchmarks/2026-10-10-h2h-lcu-0.11.2.json), recorded in `1a60395`, arm setup
+   `29b6de3`). LCU's failure was textedit-save run 1, where the file wasn't saved; its run 2 took
+   136.3 s and 27 turns.
 6. Anthropic's directory listing (owner, 2026-10-10). Submission is at claude.ai/directory/manage
    from the public repo. The plugin folder passes the mechanical checks (50 files, the largest 142
    KB, an MIT license field). Unknown: how review treats the ChatGPT engine dependency, and whether
