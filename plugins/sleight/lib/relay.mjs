@@ -170,6 +170,69 @@ export function screenshotOf(content) {
   return apps.size === 1 && size ? [[...apps][0], size, titles.size === 1 ? [...titles][0] : undefined] : undefined;
 }
 
+const CHROME_LINE = /^(?:standard window\b|button (?:Close|Minimize|Zoom|Full Screen)\b)/;
+export const CHROME_SETTLE_MS = 1500;
+
+// True when the accessibility text is only the Mac window and its chrome (menu bar,
+// Close/Minimize/Zoom). iPhone Mirroring's tree is this: the iPhone screen is pixels only.
+export function chromeOnlyTree(text) {
+  if (typeof text !== 'string' || !/^Window: /m.test(text) || !/\bstandard window\b/.test(text)) return false;
+  let menuIndent = -1;
+  for (const line of text.split('\n')) {
+    const m = /^(\t*)(\d+) (.+)/.exec(line);
+    if (!m) continue;
+    const indent = m[1].length;
+    if (menuIndent >= 0) {
+      if (indent > menuIndent) continue;
+      menuIndent = -1;
+    }
+    if (/\bmenu bar\b/.test(m[3])) { menuIndent = indent; continue; }
+    if (!CHROME_LINE.test(m[3])) return false;
+  }
+  return true;
+}
+
+export function lastImageData(content) {
+  return (content ?? []).filter(c => c?.type === 'image' && typeof c.data === 'string').at(-1)?.data;
+}
+
+export function chromeSettleHandle(code) {
+  const matches = [...String(code ?? '').matchAll(
+    /\b([A-Za-z_$][\w$]*)\.(?:getScreenshot|getAXStateAndScreenshot|click|doubleClick|rightClick|scroll|drag|pressKey|typeText|paste)\s*\(/g)];
+  return matches.at(-1)?.[1];
+}
+
+export function shouldSettleChromeScreenshot(code, content) {
+  if (typeof code !== 'string' || !ACTION.test(code)) return false;
+  const text = (content ?? []).filter(c => c?.type === 'text').map(c => c.text).join('\n');
+  return chromeOnlyTree(text) && lastImageData(content) !== undefined;
+}
+
+export async function waitForMatchingScreenshots({
+  first, take, now = Date.now, sleep, limitMs = CHROME_SETTLE_MS, intervalMs = 100,
+}) {
+  const start = now();
+  let prev = first, shots = 1;
+  while (now() - start < limitMs) {
+    await sleep(intervalMs);
+    if (now() - start >= limitMs) break;
+    const data = await take();
+    shots++;
+    if (typeof data !== 'string') break;
+    if (data === prev) return { data, waitedMs: now() - start, matched: true, shots };
+    prev = data;
+  }
+  return { data: prev, waitedMs: now() - start, matched: false, shots };
+}
+
+function replaceLastImage(content, data) {
+  const next = content.slice();
+  for (let i = next.length - 1; i >= 0; i--) {
+    if (next[i]?.type === 'image') { next[i] = { ...next[i], data }; break; }
+  }
+  return next;
+}
+
 function lines(stream, onLine) {
   let buffer = '';
   stream.setEncoding('utf8');
@@ -268,6 +331,10 @@ export function createRelay({
   spaceProbe,
   trace: writeTrace = () => {},
   traceCode = false,
+  now = Date.now,
+  chromeSettleMs = CHROME_SETTLE_MS,
+  chromeSettleIntervalMs = 100,
+  chromeSettleSleep = ms => new Promise(r => setTimeout(r, ms)),
 }) {
   let compactor = createReadCompactor();
   const journal = receipts || stateReview ? new TurnJournal({ redactTitles: redactReceiptTitles }) : undefined;
@@ -443,6 +510,7 @@ export function createRelay({
   // js calls awaiting a reply, and whether this engine session has shown its first-call docs:
   // docs again without a js_reset mean the session restarted and every handle is gone.
   const jsCalls = new Map();
+  const chromeSettled = new Set();
   let guardReady = false, guardGeneration = 0;
   const guardCalls = new Map();
   const forgetGuard = () => { guardReady = false; guardGeneration++; };
@@ -967,6 +1035,15 @@ export function createRelay({
     }
     serverIn.write(JSON.stringify(msg) + '\n');
   };
+  function extraChromeScreenshot(handle) {
+    return new Promise(resolve => {
+      const id = `sleight-chrome-settle-${nextInternalId++}`;
+      internalRequests.set(id, msg => {
+        resolve(msg.error || msg.result?.isError ? undefined : lastImageData(msg.result?.content));
+      });
+      toServer({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code: `await ${handle}.getScreenshot()` } } });
+    });
+  }
   const toClient = msg => {
     if (msg.method === undefined && stoppedClients.has(msg.id)) return;
     if (msg.method === undefined && msg.id !== undefined && Array.isArray(msg.result?.content) && takeNotices) {
@@ -2201,7 +2278,10 @@ export function createRelay({
       else if (msg.error && typeof msg.error.message === 'string') msg.error.message += '\n' + panelNote;
     }
     // Last, after every check above has read the full tree.
+    let chromeSettle = false;
     if (msg.method === undefined && Array.isArray(msg.result?.content)) {
+      chromeSettle = !automatic && !confirmedBrowser && jsCode !== undefined && !msg.error &&
+        !msg.result?.isError && shouldSettleChromeScreenshot(jsCode, msg.result.content);
       const shot = jsCode !== undefined && screenshotOf(msg.result.content);
       if (shot) {
         const entry = screenshots.get(shot[0].toLowerCase()) ?? { byTitle: {} };
@@ -2232,6 +2312,30 @@ export function createRelay({
     if (msg.method === undefined && resultCalls.has(msg.id)) {
       if (msg.error) msg.error.message += '\n' + compactor.process([], { action: resultCalls.get(msg.id), failed: true })[0].text;
       resultCalls.delete(msg.id);
+    }
+    if (chromeSettle && !chromeSettled.has(msg.id)) {
+      const handle = chromeSettleHandle(jsCode);
+      const first = lastImageData(msg.result.content);
+      if (handle && first !== undefined) {
+        chromeSettled.add(msg.id);
+        const generation = stopGeneration;
+        waitForMatchingScreenshots({
+          first, take: () => extraChromeScreenshot(handle), now, sleep: chromeSettleSleep,
+          limitMs: chromeSettleMs, intervalMs: chromeSettleIntervalMs,
+        }).then(result => {
+          if (generation !== stopGeneration || disposed || closing) return;
+          if (result.data !== undefined && result.data !== first) {
+            msg.result.content = replaceLastImage(msg.result.content, result.data);
+          }
+          trace('chrome-settle', { id: msg.id, waitedMs: result.waitedMs, matched: result.matched, shots: result.shots });
+          toClient(msg);
+        }).catch(error => {
+          if (generation !== stopGeneration || disposed || closing) return;
+          trace('chrome-settle', { id: msg.id, error: error.message });
+          toClient(msg);
+        });
+        return;
+      }
     }
     toClient(msg);
   }

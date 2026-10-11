@@ -122,4 +122,12 @@ live-check lock.
 - If a flow rule stops a transfer, tell the user which rule. `flow_exception` asks for one exception;
   after a yes, retry the identical call once. Never rebuild the data another way.
 
+## iPhone Mirroring
+
+The tree is the Mac window and menu bar. Drive from screenshots. The engine says to scroll with
+`app.scroll(point, "down", 1)`, not drag. On 2026-10-11 that left Settings unmoved at 0.3, 0.6 or 1 page
+(3 tries). When a list does not move, skip scroll: tap Settings' search field and type the row
+(General, About). After a tap, sleight waits until two screenshots match, up to 1.5 s, before it
+returns the picture, because the engine cannot see the iPhone screen still moving.
+
 If `js` fails to start, ask the user to run `bin/sleight-mcp --doctor` from the plugin folder.

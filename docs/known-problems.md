@@ -804,11 +804,13 @@ our own runs. Dates and engine versions are given where they matter.
   in parallel with others, so the evidence is unclean. Likely cause: a handle stays a browser handle
   only after the engine reply marks the call `browserUse` (`browserHandles` in `relay.mjs`), and
   the refused handles weren't confirmed. Not reproduced in a test yet.
-- iPhone Mirroring (2026-10-11, one owner-present run): the engine's scroll didn't move the iPhone's
-  Settings list in 3 tries, and taps sent while a page was still animating hit the row below the target. One
-  of them opened Personal Hotspot instead of General. Claude saw it and said so, and the owner was
-  asked to check that page's compatibility switch. The tree shows only the window, so
-  every step works from screenshots.
+- iPhone Mirroring (2026-10-11, one owner-present run): `app.scroll` at 0.3, 0.6 and 1 page left
+  the Settings list unmoved (3 tries). The skill tells Claude to use Settings' search field when a
+  list does not move. A tap during a page animation opened Personal Hotspot instead of General.
+  The tree is the Mac window and menu bar, so the engine's settle wait cannot see the iPhone screen.
+  After an action in an app whose tree is window chrome only, the relay waits for two matching
+  screenshots, up to 1.5 s, and records the wait in the trace. Unverified: live
+  `iphone-mirroring-settings` ×3 with no tap outside Settings > General > About.
 - With every test file running at once, the app-health restart test and the doctor's pipe test each
   failed one full check at load 9 to 11 (2026-10-10) and passed 5 of 5 and 3 of 3 runs alone.
   `npm test` now runs 4 files at a time.
