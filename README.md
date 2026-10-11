@@ -97,11 +97,13 @@ Also runs as a plain MCP server: see [other hosts](docs/other-hosts.md).
   ChatGPT. Terminals and
   OpenAI's apps stay off until you opt in, and sleight shows you each terminal command first unless
   you turn that off too.
-- The benchmark results are published with their failures. Its tasks in Calculator, TextEdit, Chess
-  and an iPhone simulator run three times each, and the release pass passed [PASS] (1.1.0: 20/21).
-  Every pass on the way is published too, including one at 13/21 run while the apps were on another
-  Space (the 2026-10-08 Split View pass), and head-to-heads with native Codex computer use,
-  including Chess in the 1.0.0 head-to-head, which sleight lost 0/3 to 2/3.
+- It's faster than Codex on the same engine. Against native Codex computer use (1.2.0, the owner
+  away), both passed 9/9 and sleight took 22.0 s a run against 44.6 s, at 4.68 against 4.84 CPU
+  seconds. On 12 browser tasks in Safari and Helium both passed 24/24, at 28.5 s against 41.8 s.
+- The benchmark results are published with their failures. The 1.1.0 release pass passed 20/21;
+  1.2.0 was released on the head-to-heads above, without a full release pass. Every pass on the way is
+  published too, including one at 13/21 run while the apps were on another Space (the 2026-10-08
+  Split View pass), and Chess in the 1.0.0 head-to-head, which sleight lost 0/3 to 2/3.
 
 sleight also does what the engine can't. It drags text, which the engine's own drag fails to move,
 and reaches menu bar icons and notification banners. Each of these needs its own approval.
@@ -201,9 +203,8 @@ without asking for new ones. [Supported observations and limits](docs/design/rep
 - Per-app approvals apply however you've set up the `js` tool. An accepted approval lasts for the
   session ([approval scope](docs/settings.md#approval-scope)).
 - Foreground `drag` fallback, `hover` and the `menu_bar` fallback for SwiftUI icons move your pointer
-  briefly, and each waits until you've stopped typing and using the mouse for 2 s. `drag` moves text
-  in an app's text field or a TextEdit window you've covered through Accessibility first, without
-  the pointer. `drag` refuses points outside
+  briefly, and each waits until you've stopped typing and using the mouse for 2 s. `drag` moves selected text
+  through Accessibility first, in any app, without the pointer. `drag` refuses points outside
   the chosen window's visible content; foreground also refuses covered endpoints, after bringing the
   app forward.
   `hover` refuses points another window covers, including

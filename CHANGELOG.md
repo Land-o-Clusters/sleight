@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 1.2.0 (2026-10-11)
+
+Against native Codex computer use on the same engine, with the owner away: 9/9 each with clean arms,
+sleight at 22.0 s and 7.11 turns a run against 44.6 s and 8.67, using 4.68 against 4.84 CPU seconds;
+9/9 each in the owner's normal setup, 27.1 s against 36.2 s (5.94 against 4.30 CPU seconds); and
+24/24 each on 12 browser tasks in Safari and Helium, 28.5 s against 41.8 s a run. No full release
+pass ran for this release. The owner chose to release on these head-to-heads.
+
+- sleight is app-agnostic: the skill (86 lines, down from 137) has no app-specific rules, and `drag`, the
+  screenshot scale note, the orphan Save panel diagnosis, demonstration recording and browser
+  detection work the same in every app.
+
 - The skill is the app-agnostic one: 86 lines against 137, with no app names. It matched or beat
   the old skill in two A/Bs (2026-10-11): 4.58 turns and 14.5 s a run against 4.58 and 15.6 s on
   calculator-click and textedit-edit, and 38.9 s against 44.7 s on textedit-save, every run passing.
