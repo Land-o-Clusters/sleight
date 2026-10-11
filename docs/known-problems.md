@@ -777,8 +777,11 @@ our own runs. Dates and engine versions are given where they matter.
   clipboard restored. macOS lists `public.utf16-external-plain-text` and
   `public.utf8-plain-text` beside an item written with only `public.rtf`, and the helper's check
   required an exact match. Writing that trial's recorded RTF to a private pasteboard gives the same error (1/1).
-  The helper now allows added types (fixed 2026-10-10). No live rich move has run since, so we
-  don't know yet whether TextEdit's Paste keeps the bold red word.
+  The helper now allows added types (fixed 2026-10-10). On 2026-10-11 the move pasted (the text
+  changed, the clipboard came back byte for byte) and then stopped: "TextEdit did not confirm the
+  pasted formatting attributes", with the source left in place
+  ([raw](benchmarks/2026-10-11-textedit-fixes-1791679610865.json)). We don't know yet whether the
+  paste lost the bold red formatting or the check compares attributes TextEdit changes on paste.
 - With every test file running at once, the app-health restart test and the doctor's pipe test each
   failed one full check at load 9 to 11 (2026-10-10) and passed 5 of 5 and 3 of 3 runs alone.
   `npm test` now runs 4 files at a time.

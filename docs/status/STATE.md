@@ -3,27 +3,34 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-11 01:50 UTC)
+## Banner (2026-10-11 02:05 UTC)
 
-`pane/auto-mode` is pushed to private. Merged from Grok, each squashed in a scratch worktree after
-review: icloud-textedit (`b09b792`), panel-busy (`88564db`), chat-crash (`1700c80`),
-chess-points (`31ec715`), savelock-delivery (`94960bf`). Review fixes: icloud-textedit's launch left
-TextEdit's iCloud Open panel up; a panel-busy finding became a mod fix (a failed pane list skipped
-`turn_ended`); chat-crash dropped stopped rows from private results, which now keep a bare failed
-phase. The bench arms get their own `CLAUDE_CONFIG_DIR` in API mode (OpenUsage, below).
-savelock-delivery's `--delivery-check` ran live twice, and neither posted Cmd+S saved the background
-TextEdit. The experiment needs the engine's Cmd+S. Its brief, `.dev/prompts/lane-savelock-engine.md`,
-isn't handed out yet. The live lock and hold are free.
+`pane/auto-mode` is pushed to private. Merged tonight, each squashed in a scratch worktree after
+review, check and lint at 0: from Grok, icloud-textedit (`b09b792`), panel-busy (`88564db`),
+chat-crash (`1700c80`), chess-points (`31ec715`), savelock-delivery (`94960bf`); from GLM,
+livechecks (`46c055c`), saveclose-research (`867f58c`), shop-check (`5a96105`), release-docs
+(`2faee8d`). Review fixes:
+- icloud-textedit's launch left TextEdit's iCloud Open panel up.
+- A panel-busy finding became a mod fix: a failed pane list skipped `turn_ended`.
+- chat-crash dropped stopped rows from private results. They now keep a bare failed phase.
+- shop-check's human-check stop was still a failure string. It's now `outcome: "human-check"`.
+- release-docs predated tonight's merges. Its conflicts were combined, and the chat pass is marked
+  fixed but not rerun.
 
-Lanes out, started 2026-10-11 01:10 UTC in the owner's GLM sessions. Each pushes a
-`codex/<name>` branch to private and doesn't merge. Briefs are in `.dev/prompts/lane-<name>.md`,
-after `lane-rules-2026-10-11.md`. Evidence for all of them is in
-`docs/benchmarks/2026-10-11-evidence.md`.
-- GLM, still out: selectall-check, richmove-placement, livechecks, shop-check, saveclose-research,
-  release-docs (README, CHANGELOG, known-problems and ROADMAP). Each later lane that adds a doc
-  conflicts on `package.json`'s lint list. Resolve by keeping both entries.
-- Codex hasn't started lease-select (Best Buy's lease refusals), sim-readiness or speed-research.
-  They wait for its quota to reset.
+Not merged: richmove-placement. My brief misread the evidence. The fixture covers its window on
+purpose, because the opt-in rich move only runs on the Accessibility path. In that run the move
+pasted, then failed its formatting check. `codex/richmove-placement` stays on private, unused. The
+follow-up is `.dev/prompts/lane-richmove-format.md`. savelock-delivery's `--delivery-check` ran live
+twice, and neither posted Cmd+S saved the background TextEdit. The follow-up is
+`.dev/prompts/lane-savelock-engine.md`. Both briefs wait for a free lane. The bench arms get their own
+`CLAUDE_CONFIG_DIR` in API mode (OpenUsage, below). The live lock and hold are free.
+
+Lanes out: GLM's selectall-check (brief in `.dev/prompts/lane-selectall-check.md`, after
+`lane-rules-2026-10-11.md`), which pushes `codex/selectall-check` to private and doesn't merge.
+Codex hasn't started lease-select (Best Buy's lease refusals), sim-readiness or speed-research. They
+wait for its quota to reset. saveclose-research found the next speed lever for speed-research.
+Claude spends two or three calls inside the Save sheet, 6 to 9 s a run
+(`docs/design/save-then-close-2026-10-11.md`).
 
 Results on 2026-10-10 and 11 (`docs/benchmarks/2026-10-10-away.md`, `-away-2.md`,
 `2026-10-11-evidence.md`). Against Codex with clean arms, sleight passed 7/9 in 263.7 s and Codex
@@ -33,13 +40,15 @@ VS Code, Cursor and Firefox passed 5/5. textedit-save with code traces passed 3/
 (ROADMAP 3.5) isn't met on time with the owner's setup or on own CPU.
 
 Next, in order:
-1. Review each lane's diff as it reports and fix what review finds. Squash it in a scratch worktree,
-   run the full check there, and cherry-pick it onto `pane/auto-mode`.
+1. Review selectall-check when it reports. Squash it in a scratch worktree, run the full check
+   there, and fast-forward `pane/auto-mode`. Hand out richmove-format and savelock-engine when lanes
+   free up.
 2. One owner-away window verifies the merged lanes live: the TextEdit tasks with the new launch
    (only the helper ran live, 1.6 s warm), the computed Chess points (waits live check), the chat
-   pass's saved rows, textedit-save with traces, Best Buy, the
-   rich-text move (`SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background`),
-   select-all, `stale-number`, Chess, simulator-form, the chat tasks.
+   pass's saved rows, `stale-number` and `menu-bar` (live-checks-1-1), the shop smoke outcomes,
+   textedit-save with traces, Best Buy, select-all, simulator-form, the chat tasks. The rich-text
+   move (`SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background`) waits for
+   richmove-format.
 3. Act on speed-research to close the gate, then the full release pass and the release (ROADMAP 5b).
 4. Confirm the bench arms' own config folder with one cluster once OpenUsage reads fresh (below).
 
