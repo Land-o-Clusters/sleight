@@ -112,11 +112,9 @@ final class Observer {
         var output: [String: Any] = [:]
         var problem: String?
         do {
-            // First count what AX exposes before enabling the Electron switches.
-            _ = try windows().compactMap { try scan($0) }
-            output["beforeNodeCount"] = count
-            count = 0; roles = [:]; seen = []; dialogs = []
-            try enable()
+            // The tree as the app gives it, the way the engine reads it. Turning on AXManualAccessibility
+            // or AXEnhancedUserInterface and restoring it couldn't be confirmed in Slack or WhatsApp
+            // (2026-10-11), and the engine read Slack's 161 elements without either.
             let initial = try windows()
             output["nodes"] = try initial.compactMap { try scan($0) }
             let after = try windows()
@@ -128,8 +126,7 @@ final class Observer {
         if !restore() { problem = "CHAT_AX_RESTORE_UNCONFIRMED" }
         if let problem { output["failureCode"] = problem; output["nodes"] = [] }
         output["dialogs"] = dialogs.sorted()
-        output["diagnostics"] = ["nodeCount": count, "beforeNodeCount": output["beforeNodeCount"] ?? 0, "roles": roles, "accessibility": settings]
-        output.removeValue(forKey: "beforeNodeCount")
+        output["diagnostics"] = ["nodeCount": count, "roles": roles, "accessibility": settings]
         return output
     }
 }
