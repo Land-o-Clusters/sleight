@@ -41,9 +41,18 @@ function textEditDocs() {
 let userDocs;
 const docKey = d => `${d.name}\0${d.path}`;
 // A benchmark document is under the scratch folder, or an untitled one this
-// pass made (a run that failed before saving leaves one, autosaved to iCloud).
+// pass made (a run that failed before saving leaves one).
 const isBenchDoc = d => d.path?.startsWith(SCRATCH) || d.path?.startsWith(SCRATCH_REAL) ||
   (userDocs !== undefined && /^Untitled\b/.test(d.name) && !userDocs.has(docKey(d)));
+
+// Per-launch only: `-Key Value` arguments set these defaults for this process and never write
+// the owner's. No restored windows, new documents autosave outside iCloud, and an untitled
+// document instead of the iCloud Open panel, which neither Escape nor Cancel closed in the
+// background (waits-targeting, 2026-10-10).
+export function launchBenchTextEdit({ run = execFileSync } = {}) {
+  run('open', ['-g', '-a', 'TextEdit', '--args', '-ApplePersistenceIgnoreState', 'YES',
+    '-NSDocumentSaveNewDocumentsToCloud', 'NO', '-NSShowAppCentricOpenPanelInsteadOfUntitledFile', 'NO'], { timeout: 15000, stdio: 'ignore' });
+}
 
 // Closes this pass's documents without saving, and with quit, quits TextEdit
 // too when nothing else is open. Returns whether TextEdit ended up quit.
@@ -67,7 +76,7 @@ export function closeBenchTextEdit({ quit = false, ownedOnly = false } = {}) {
   // windows and quit, so the next launch doesn't bring the documents back.
   try { execFileSync('pkill', ['-x', 'TextEdit']); } catch {}
   if (!waitTextEditGone()) return false;
-  try { execFileSync('open', ['-g', '-a', 'TextEdit', '--args', '-ApplePersistenceIgnoreState', 'YES'], { timeout: 15000, stdio: 'ignore' }); } catch {}
+  try { launchBenchTextEdit(); } catch {}
   // A quit sent while TextEdit is still launching can be dropped, which left an empty TextEdit
   // running after three passes on 2026-10-10. Ask again until it's gone, for up to five tries.
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -95,21 +104,16 @@ function freshTextEdit() {
   const foreign = open.filter(d => !isBenchDoc(d)).length;
   if (foreign) throw new Error(`TextEdit has ${foreign} document${foreign === 1 ? '' : 's'} this pass didn't open. Claude could type into or save ${foreign === 1 ? 'it' : 'them'}, so TextEdit tasks don't start until ${foreign === 1 ? 'it is' : 'they are'} closed.`);
   closeBenchTextEdit({ quit: true });
-  // With TextEdit closed the check above sees nothing, and the engine's launch for Claude then
-  // restored the windows TextEdit last had: leftover iCloud "Untitled 6" and "Untitled 9", which
-  // Claude edited and saved instead of the task's file (h2h, 2026-10-10 23:26). One launch that
-  // ignores saved state, then a quit, leaves TextEdit with no windows to restore.
-  if (!open.length && !textEditStateCleared) {
-    textEditStateCleared = true;
-    try { execFileSync('open', ['-g', '-a', 'TextEdit', '--args', '-ApplePersistenceIgnoreState', 'YES'], { timeout: 15000, stdio: 'ignore' }); } catch {}
-    for (let attempt = 0; attempt < 5; attempt++) {
-      execFileSync('sleep', ['2']);
-      try { execFileSync('osascript', ['-e', 'tell application "TextEdit" to quit saving no'], { timeout: 15000, stdio: 'ignore' }); } catch {}
-      if (waitTextEditGone()) break;
-    }
+  // Leftover iCloud "Untitled 6" and "Untitled 9" were restored by the engine's launch, and
+  // Claude edited and saved them instead of the task's file (2 textedit-save failures,
+  // 2026-10-10). So TextEdit is launched here with the flags above, and Claude's getApp
+  // reuses this process. Its launch document is closed, so each task starts with no window.
+  launchBenchTextEdit();
+  for (let attempt = 0; attempt < 20; attempt++) {
+    if (textEditDocs()?.length) { closeBenchTextEdit(); break; }
+    execFileSync('sleep', ['0.25']);
   }
 }
-let textEditStateCleared = false;
 
 // Quits Chess without leaving its windows behind. Chess restores the windows
 // it had when it last quit, and a force quit keeps them, so killed runs piled up

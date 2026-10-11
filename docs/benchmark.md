@@ -4,6 +4,12 @@
 on disk or the exact answer. sleight and LCU get the same prompt for each task, and the prompts
 don't mention a tool by name.
 
+Before each TextEdit task the harness launches TextEdit in the background with launch arguments
+that skip restored windows, keep new documents out of iCloud and replace the Open panel with an
+untitled document, which it closes. Leftover iCloud "Untitled N.txt" files caused 2 textedit-save
+failures when TextEdit restored them and Claude edited them
+([2026-10-10-away-2](benchmarks/2026-10-10-away-2.md)).
+
 Comparison with [LCU](https://github.com/amontlabs/lcu) 0.8.8, which drives the same engine, on
 2026-10-03. Each task ran 3 times per arm on Claude Code 2.1.288 and its default model (Opus 5.5).
 Each arm ran from an empty folder with only its own tool loaded. Both folders were inside this repo,

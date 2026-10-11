@@ -447,6 +447,17 @@ test('a TextEdit task refuses to start next to a document the pass did not open'
   }
 });
 
+function textEditHelpers(execFileSync) {
+  const source = readFileSync(new URL('../bench/tasks.mjs', import.meta.url), 'utf8')
+    .replace(/^import .*;\n/gm, '').replace(/^export \{.*\} from .*;\n/gm, '').replace(/^export /gm, '');
+  return runInNewContext(`${source}\n({ freshTextEdit, closeBenchTextEdit, launchBenchTextEdit })`, {
+    join, tmpdir: () => '/private/tmp', realpathSync: path => path, execFileSync,
+  });
+}
+
+const TEXTEDIT_LAUNCH = ['-g', '-a', 'TextEdit', '--args', '-ApplePersistenceIgnoreState', 'YES',
+  '-NSDocumentSaveNewDocumentsToCloud', 'NO', '-NSShowAppCentricOpenPanelInsteadOfUntitledFile', 'NO'];
+
 test('the last TextEdit quit after a forced relaunch is retried until TextEdit is gone', () => {
   const source = readFileSync(new URL('../bench/tasks.mjs', import.meta.url), 'utf8')
     .replace(/^import .*;\n/gm, '').replace(/^export \{.*\} from .*;\n/gm, '').replace(/^export /gm, '');
@@ -466,6 +477,64 @@ test('the last TextEdit quit after a forced relaunch is retried until TextEdit i
   assert.equal(tasks.closeBenchTextEdit({ quit: true }), true);
   assert.equal(running, false);
   assert.equal(quitsAfter, 2);
+});
+
+test('launchBenchTextEdit opens TextEdit in the background with per-launch arguments only', () => {
+  const calls = [];
+  const tasks = textEditHelpers((command, args) => { calls.push([command, [...args]]); return ''; });
+  assert.equal(typeof tasks.launchBenchTextEdit, 'function');
+  tasks.launchBenchTextEdit();
+  assert.deepEqual(calls, [['open', TEXTEDIT_LAUNCH]]);
+  assert.ok(!calls.some(([command]) => command === 'defaults'));
+});
+
+test('a TextEdit task launches TextEdit with persistence and iCloud flags and leaves it running', () => {
+  const commands = [], opens = [];
+  const tasks = textEditHelpers((command, args) => {
+    commands.push([command, [...args]]);
+    if (command === 'osascript' && args.some(a => String(a).includes('documents().map'))) return '[]';
+    if (command === 'open') opens.push([...args]);
+    if (command === 'pgrep') throw new Error('none');
+    return '';
+  });
+  tasks.freshTextEdit();
+  assert.deepEqual(opens.at(-1), TEXTEDIT_LAUNCH);
+  const lastOpen = commands.findLastIndex(([command]) => command === 'open');
+  assert.ok(lastOpen >= 0);
+  assert.ok(!commands.slice(lastOpen + 1).some(([command, args]) => command === 'osascript' && args.some(a => String(a).includes('to quit'))));
+  assert.ok(!commands.some(([command]) => command === 'defaults'));
+});
+
+test('a TextEdit task closes the launch document unsaved and leaves TextEdit running', () => {
+  let launched = false, closed = [];
+  const tasks = textEditHelpers((command, args) => {
+    const script = args.map(String).join(' ');
+    if (command === 'open') { launched = true; return ''; }
+    if (command === 'osascript' && script.includes('documents().map')) return launched && !closed.length ? JSON.stringify([{ name: 'Untitled', path: null }]) : '[]';
+    if (command === 'osascript' && script.includes('close({ saving: "no" })')) { closed.push(script); return ''; }
+    if (command === 'osascript' && script.includes('to quit')) throw new Error('quit after launch');
+    if (command === 'pgrep') throw new Error('none');
+    return '';
+  });
+  tasks.freshTextEdit();
+  assert.equal(closed.length, 1);
+  assert.match(closed[0], /"Untitled"/);
+});
+
+test('the forced TextEdit relaunch after a hung quit uses the same launch flags', () => {
+  let running = true, relaunched = false;
+  const opens = [];
+  const tasks = textEditHelpers((command, args) => {
+    if (command === 'pgrep') { if (running) return ''; throw new Error('none'); }
+    if (command === 'osascript' && args.some(a => String(a).includes('documents().map'))) return running ? JSON.stringify([{ name: 'a', path: '/private/tmp/sleight-bench/a.txt' }]) : '[]';
+    if (command === 'osascript' && args.some(a => String(a).includes('to quit'))) return '';
+    if (command === 'pkill') { running = false; return ''; }
+    if (command === 'open') { running = true; relaunched = true; opens.push([...args]); return ''; }
+    return '';
+  });
+  tasks.closeBenchTextEdit({ quit: true });
+  assert.equal(relaunched, true);
+  assert.deepEqual(opens, [TEXTEDIT_LAUNCH]);
 });
 
 const apiAuth = { mode: 'api', env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, unset: ['ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'], spent: 0, capUsd: 150 };
