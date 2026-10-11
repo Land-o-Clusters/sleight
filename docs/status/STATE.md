@@ -30,9 +30,14 @@ GLM's selectall-check and richmove-paste. Merged since: richmove-format (`edd09e
 then stopped at a disabled Paste item twice (richmove-paste is the follow-up), and savelock-engine
 (`45f07e9`), with a review fix that refuses a TextEdit holding documents the probe didn't open.
 The owner now gets each lane as one paste-ready prompt with the model named.
-Grok, handed out 02:55 UTC: speed-research and sim-readiness (moved off Codex) and savesheet-recipe
-(a result note with the one-call save when a Save sheet opens). Codex keeps lease-select (relay core),
-waiting for its quota. saveclose-research found the next speed lever for speed-research.
+Merged 03:20 UTC from Grok: savesheet-recipe (`49356a7`, result note naming the one-call save),
+sim-readiness (`37e2d8e`) and speed-research (`68cdc78`). speed-research found the clean-arms CPU gap
+(51.8 s against 42.8 s) was 8.6 s from the two failed textedit-save runs; the seven runs both arms
+passed differ by 0.4 s. So the gate may be met once textedit-save passes. Its proposed
+`SLEIGHT_GUARD=batch` (skip before-click reads for unique IDs) would save about 1 s a pass and goes
+against a LAWS read, so it isn't built. Out: GLM's selectall-check, richmove-paste, sim-scale-note;
+Grok's iphone-settle. Codex keeps lease-select and, on the owner's word, the lease broker and the
+unsaved-changes review (ROADMAP 6). saveclose-research found the next speed lever for speed-research.
 Claude spends two or three calls inside the Save sheet, 6 to 9 s a run
 (`docs/design/save-then-close-2026-10-11.md`).
 
