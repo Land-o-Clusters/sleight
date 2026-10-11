@@ -187,3 +187,25 @@ test('a new const browser app binding does not enter the native wrapper before i
   await h.run(h.sent.at(-1).params.arguments.code);
   assert.equal(h.context.nativeReads, 0);
 });
+
+test('browser handles from getBrowser and getTab survive a session that already used the engine', t => {
+  const h = runtime(t);
+  const docs = '## Computer Use\n\nControl native apps.\n';
+  h.call(1, 'await cua.getState()');
+  h.reply(1, { content: [{ type: 'text', text: docs }] });
+  h.call(2, 'let browser = await cua.getBrowser({ extensionInstanceId: "helium" });\nlet tab = await cua.getTab("1");');
+  assert.ok(h.sent.find(msg => msg.id === 2), JSON.stringify(h.received));
+  h.reply(2, { content: [{ type: 'text', text: docs + 'Browser tab: 1' }], _meta: { 'codex/toolSurface': { kind: 'browserUse' } } });
+  h.call(3, 'await browser.nameSession("console")');
+  assert.ok(h.sent.find(msg => msg.id === 3), h.received.at(-1)?.result?.content?.[0]?.text);
+  h.reply(3, { content: [], _meta: { 'codex/toolSurface': { kind: 'browserUse' } } });
+  h.call(4, 'await tab.goto("https://example.com")');
+  assert.ok(h.sent.find(msg => msg.id === 4), h.received.at(-1)?.result?.content?.[0]?.text);
+  h.reply(4, { content: [], _meta: { 'codex/toolSurface': { kind: 'browserUse' } } });
+  h.call(5, 'await cua.createBrowserTab(browser.browserId, "https://example.com")');
+  assert.ok(h.sent.find(msg => msg.id === 5), h.received.at(-1)?.result?.content?.[0]?.text);
+  h.reply(5, { content: [], _meta: { 'codex/toolSurface': { kind: 'browserUse' } } });
+  h.call(6, 'await app.click(1)');
+  assert.equal(h.sent.some(msg => msg.id === 6), false);
+  assert.match(h.received.at(-1).result.content[0].text, /bundle ID and full window header/);
+});

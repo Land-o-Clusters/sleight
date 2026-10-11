@@ -939,7 +939,7 @@ test('window selection holds the app lease and needs a matching standalone acqui
   assert.equal(selections, 1);
   b.send(rpc(9, 'js', { code: 'await app.typeText("x")' })); assert.equal(b.forwarded.length, 0);
   h.send(rpc(2, 'js', { code: 'await app.typeText("x")' })); assert.equal(h.forwarded.length, 0);
-  assert.match(h.received.at(-1).result.content[0].text, /selected window is not confirmed.*select_window/);
+  assert.match(h.received.at(-1).result.content[0].text, /selected window is not confirmed.*Send exactly `let app = await cua\.getApp\("com\.apple\.TextEdit"\)` in js\./);
   h.send(rpc(3, 'js', { code: 'app = await cua.getApp("TextEdit")' })); h.reply(result(3, 'Window: "b.txt", App: TextEdit'));
   assert.match(h.received.at(-1).result.content.at(-1).text, /selected window not observed/);
   h.send(rpc(4, 'js', { code: 'await app.typeText("x")' })); assert.equal(h.forwarded.length, 1);
@@ -1616,4 +1616,52 @@ test('acquire and act in one call: the split acquisition\'s read reaches the act
   const action = h.forwarded.at(-1);
   assert.equal(action.id, 1);
   assert.match(action.params.arguments.code, /"prior":\{"text":"Window: \\"Calculator\\"/);
+});
+
+// The traced Best Buy run (2026-10-11T00:45Z): the header's inch mark is unescaped and it has no URL line.
+const bestBuyTree = 'Window: "Personal — HP 24yh 23.8" IPS LED Full HD Monitor (VGA, DVI D, HDMI) Black - Best Buy", App: Safari.\n' +
+  '0 standard window Personal — HP 24yh 23.8" IPS LED Full HD Monitor (VGA, DVI D, HDMI) Black - Best Buy, ID: SafariWindow, Secondary Actions: Raise\n' +
+  '\t13 link Shop now, Value: bestbuy.com/top-deals';
+const bestBuyReply = (id, text = bestBuyTree) => ({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }],
+  _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.Safari' } } } } });
+
+test('one Safari acquisition of the Best Buy window leases it, and another document does not', async t => {
+  const { harness } = setup(t);
+  const h = harness('bestbuy', { fresh: true, changeReview: false });
+  h.send(rpc(1, 'js', { code: 'let app = await cua.getApp("Safari");\nawait app.click(13);\nawait app.getAXState({ disableDiffing: true });' }));
+  const acquisition = h.forwarded.at(-1);
+  assert.match(String(acquisition.id), /^sleight-acquire/);
+  h.reply(bestBuyReply(acquisition.id));
+  const action = h.forwarded.at(-1);
+  assert.equal(action.id, 1, JSON.stringify(h.received.at(-1)));
+  h.reply(bestBuyReply(1));
+  h.send(rpc(2, 'js', { code: 'await app.click(14)' }));
+  const next = h.forwarded.at(-1);
+  assert.equal(next.id, 2, JSON.stringify(h.received.at(-1)));
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  let clicked = false;
+  const other = 'Window: "Personal — Other", App: Safari.\n0 standard window Other\n\t14 link Elsewhere';
+  const app = { getAXState: async () => other, click: async () => { clicked = true; } };
+  await assert.rejects(new AsyncFunction('app', 'cua', 'nodeRepl', next.params.arguments.code)(
+    app, { getApp: async () => app, listApps: async () => [] }, { write() {}, emitImage() {} }), /window or URL changed/);
+  assert.equal(clicked, false);
+});
+
+test('the Best Buy lease refusal is one getApp call, and that call satisfies the lease', async t => {
+  const { harness } = setup(t);
+  const h = harness('bestbuy-recipe', { fresh: true, changeReview: false });
+  h.send(rpc(1, 'js', { code: 'let app = await cua.getApp("Safari");\nawait app.click(13);' }));
+  const acquisition = h.forwarded.at(-1);
+  const unread = bestBuyReply(acquisition.id);
+  delete unread.result._meta;
+  h.reply(unread);
+  const refusal = h.received.at(-1).result.content.map(c => c.text ?? '').join('\n');
+  const recipe = /Send exactly `([^`]+)` in js\./.exec(refusal);
+  assert.ok(recipe, refusal);
+  assert.equal(recipe[1], 'let app = await cua.getApp("Safari")');
+  assert.doesNotMatch(refusal, /then /);
+  h.send(rpc(2, 'js', { code: recipe[1] }));
+  h.reply(bestBuyReply(h.forwarded.at(-1).id));
+  h.send(rpc(3, 'js', { code: 'await app.click(13)' }));
+  assert.equal(h.forwarded.at(-1).id, 3, JSON.stringify(h.received.at(-1)));
 });

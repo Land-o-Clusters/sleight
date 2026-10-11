@@ -16,6 +16,21 @@ test('headers require one exact identity, including a document URL', () => {
   assert.equal(windowMatches({ title: 'a.txt', url: 'file:///tmp/b.txt' }, file), false);
 });
 
+// bestbuy.com, 2026-10-11: Safari's header kept the raw inch mark in 23.8" and had no URL line.
+const bestBuyHeader = 'Window: "Personal — HP 24yh 23.8" IPS LED Full HD Monitor (VGA, DVI D, HDMI) Black - Best Buy", App: Safari.\n' +
+  '0 standard window Personal — HP 24yh 23.8" IPS LED Full HD Monitor (VGA, DVI D, HDMI) Black - Best Buy, ID: SafariWindow, Secondary Actions: Raise\n' +
+  '\t5 HTML content Description: HP monitor, URL: bestbuy.com/product/hp-24yh/JJ86HQ9R94';
+const bestBuyWindow = {
+  title: 'Personal — HP 24yh 23.8" IPS LED Full HD Monitor (VGA, DVI D, HDMI) Black - Best Buy',
+  app: 'Safari', url: null,
+};
+
+test('a Safari title with a raw inch mark is one window, and a different title is not', () => {
+  assert.deepEqual(windowFromText(bestBuyHeader), bestBuyWindow);
+  assert.equal(windowMatches(bestBuyWindow, windowFromText('Window: "Personal — Other", App: Safari.\n0 standard window Other')), false);
+  assert.equal(windowFromText(bestBuyHeader + '\nWindow: "Personal — Other", App: Safari.'), undefined);
+});
+
 test('file-only guard refuses another file while cached read and cancel paths remain usable', async () => {
   const writes = [];
   const raw = { getAXState: async () => 'Window: "b.txt", App: TextEdit\nURL: file:///tmp/b.txt\n63 button Cancel, ID: CancelButton',

@@ -6,16 +6,23 @@ export const GUARD_END = '\n[/sleight:guard-read]\n';
 export const GUARD_READY = '[sleight:guard-ready]';
 
 export function windowFromText(text) {
-  const headers = [...text.matchAll(/^Window: ("(?:[^"\\]|\\.)*"), App: (.+)\r?$/gm)];
+  // The title is one JSON string. Safari writes a raw inch mark inside it (bestbuy.com, 2026-10-11:
+  // 23.8"), which is not JSON, so take the quotes off when parsing throws. Two headers still disagree.
+  const headers = [...text.matchAll(/^Window: (.*), App: (.+)\r?$/gm)];
   const windows = [];
   for (let i = 0; i < headers.length; i++) {
     const header = headers[i];
     const section = text.slice(header.index + header[0].length, headers[i + 1]?.index);
     const urls = [...section.matchAll(/^(?:URL: (.+)|0 [^\r\n]*?\bURL: (.*?)(?:, (?:Secondary Actions|ID|Help):.*)?)\r?$/gm)];
     if (urls.length > 1) return undefined;
+    let title;
     try {
-      windows.push({ title: JSON.parse(header[1]), app: header[2].trim().replace(/\.$/, ''), url: (urls[0]?.[1] ?? urls[0]?.[2])?.trim() || null });
-    } catch { return undefined; }
+      const value = JSON.parse(header[1]);
+      if (typeof value === 'string') title = value;
+    } catch { /* A raw quote in the title is not a JSON string. */ }
+    if (title === undefined && header[1].startsWith('"') && header[1].endsWith('"')) title = header[1].slice(1, -1);
+    if (title === undefined) return undefined;
+    windows.push({ title, app: header[2].trim().replace(/\.$/, ''), url: (urls[0]?.[1] ?? urls[0]?.[2])?.trim() || null });
   }
   if (!windows.length || windows.some(w => !w.app)) return undefined;
   if (windows.some(w => JSON.stringify(w) !== JSON.stringify(windows[0]))) return undefined;

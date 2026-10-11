@@ -795,7 +795,10 @@ export function createRelay({
   function selectionRecovery() {
     const args = { app: selectedWindow.appId, ...(selectedWindow.url ? { url: selectedWindow.url } : { title: selectedWindow.title }) };
     if (selectedWindow.windowNumber !== undefined) args.windowNumber = selectedWindow.windowNumber;
-    return `Call select_window with ${JSON.stringify(args)}, then send exactly \u0060${constApp ? '' : 'let app = '}await cua.getApp(${JSON.stringify(selectedWindow.appId)})\u0060 in js and check its Window and URL.`;
+    return `Call select_window with ${JSON.stringify(args)}.`;
+  }
+  function confirmRecovery() {
+    return `Send exactly \u0060${constApp ? '' : 'let app = '}await cua.getApp(${JSON.stringify(selectedWindow.appId)})\u0060 in js.`;
   }
   let constApp = false;
   // After js_reset, or when the engine's session restarts on its own, no handle survives.
@@ -919,7 +922,7 @@ export function createRelay({
         leaseCalls.set(msg.id, { localAction: true }); return true;
       }
       if (selectedWindow && (!selectionVerified || leaseWindow?.appId !== selectedWindow.appId || !sameWindow(leaseWindow, selectedWindow))) {
-        leaseStop(msg, `selected window is not confirmed. ${selectionRecovery()}`); return false;
+        leaseStop(msg, `selected window is not confirmed. ${confirmRecovery()}`); return false;
       }
       if (!leaseWindow?.appId) {
         // `let`: a failed `let app = …` leaves no binding, so a bare `app = …` would fail, and the
@@ -930,7 +933,7 @@ export function createRelay({
         const recovery = target ? `${constApp ? '' : 'let app = '}await ${target}` : 'await cua.getState()';
         const inventory = /\bcua\.(?:listApps|listWindows|getState)\(/.test(code)
           ? ' To look up apps or windows, send one expression, such as \u0060(await cua.listApps()).map(a => a.id).join("\\n")\u0060.' : '';
-        leaseStop(msg, `a bundle ID and full window header are required. Send exactly \u0060${recovery}\u0060 in js, then read the intended window before acting.${inventory}`);
+        leaseStop(msg, `a bundle ID and full window header are required. Send exactly \u0060${recovery}\u0060 in js.${inventory}`);
         return false;
       }
       if (leaseWindow.identityError) { leaseStop(msg, leaseWindow.identityError); return false; }
@@ -1976,12 +1979,10 @@ export function createRelay({
       internalRequests.delete(msg.id);
       return;
     }
+    // Applied after a docs restart below. forgetHandles would otherwise drop the handles this reply just confirmed.
+    let pendingBrowser;
     if (msg.method === undefined && browserCalls.has(msg.id)) {
-      const browser = browserCalls.get(msg.id); browserCalls.delete(msg.id);
-      for (const handle of browser.handles) {
-        if (confirmedBrowser) browserHandles.add(handle);
-        else browserHandles.delete(handle);
-      }
+      pendingBrowser = browserCalls.get(msg.id); browserCalls.delete(msg.id);
     }
     const jsCode = msg.method === undefined ? jsCalls.get(msg.id) : undefined;
     // A "call failed" line after this message sent Claude to check again (h2h-3, 2026-10-10), so the
@@ -2016,6 +2017,12 @@ export function createRelay({
         msg.result.content.push({ type: 'text', text: firstCallRules });
       }
       if (docs) docsShown = true;
+    }
+    if (pendingBrowser) {
+      for (const handle of pendingBrowser.handles) {
+        if (confirmedBrowser) browserHandles.add(handle);
+        else browserHandles.delete(handle);
+      }
     }
     if (automatic && !helperProbes.has(msg.id)) {
       // A session restart invalidated this probe while processing its reply.

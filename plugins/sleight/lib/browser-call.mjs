@@ -20,8 +20,10 @@ export function browserCall(code, handles = new Set()) {
   if (/[\w$)\]"'`.}]\s*\[(?!\s*\d+\s*\])/.test(source)) return undefined;
   // Computed keys in object literals and destructuring ({ [k]: v }) do the same.
   if (/[{,]\s*\[/.test(source)) return undefined;
-  const acquisition = source.match(/(?:(?:let|const|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.(?:getBrowser|getTab|createBrowserTab)\(/);
-  const bindings = new Set(acquisition?.[1] ? [acquisition[1]] : []);
+  const bindings = new Set();
+  for (const match of source.matchAll(/(?:(?:let|const|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.(?:getBrowser|getTab|createBrowserTab)\(/g)) {
+    bindings.add(match[1]);
+  }
   const factories = /\.(?:getByRole|getByText|getByLabel|getByPlaceholder|getByTestId|locator|frameLocator|filter|first|last|nth|and|or|new|get)\(/;
   for (const match of source.matchAll(/(?:let|const|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?([A-Za-z_$][\w$]*)(\.[^;]*)/g)) {
     if ((handles.has(match[2]) || bindings.has(match[2])) && factories.test(match[3])) bindings.add(match[1]);

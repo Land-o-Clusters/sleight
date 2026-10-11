@@ -19,13 +19,14 @@ our own runs. Dates and engine versions are given where they matter.
 ## Approvals and guards
 
 - On bestbuy.com in Safari (real-site smoke, 2026-10-10), the input lease refused every click
-  because the window had changed, and kept refusing after Claude acquired Safari again and reset the
-  session ([report](benchmarks/2026-10-10-away-2.md)). The traced rerun (2026-10-11,
-  [raw](benchmarks/2026-10-11-real-shop-bestbuy-traced.json)) shows the refusal asking for
-  `select_window` with the window's title and number; Claude didn't follow that instruction either,
-  acquired Safari again, and clicked element 13 five times. The window header had no URL, and the
-  title began with Safari's profile name, "Personal", as Safari titles windows when profiles are on.
-  The cause, likely a title or URL that keeps changing on that page, isn't confirmed.
+  and kept refusing after Claude acquired Safari again and reset the session
+  ([report](benchmarks/2026-10-10-away-2.md)). The traced rerun (2026-10-11,
+  [raw](benchmarks/2026-10-11-real-shop-bestbuy-traced.json), 2 refusals in 14 calls) did the same.
+  The window title started with Safari's profile name, Personal, and contained a raw inch mark
+  (`23.8"`). The header parser accepted only a JSON string, so that read never leased a bundle ID.
+  The header had no URL line. One `cua.getApp` of that window now leases it in a fake-engine test,
+  and a click whose fresh read shows a different title is refused before it runs. No live Best Buy
+  run has repeated this since the parser change.
 - The "Always allow" button on sleight's app approval prompt (unreleased) adds the app to your
   pre-approved list with its risk level and the date, only from your own click. Unit-tested only:
   nobody has pressed it in a live session, so the panel, the list it writes and a later session's
@@ -816,11 +817,14 @@ our own runs. Dates and engine versions are given where they matter.
   focus.
 - Driving Helium's Claude Console tab from a session that had used the engine (2026-10-11), the input
   lease refused `browser.nameSession(...)` and later `tab.goto(...)` on a tab from `cua.getTab` with
-  "a bundle ID and full window header are required", the native-app refusal, after `cua.getState()`.
-  `cua.createBrowserTab(browser.browserId, url)` went through each time. Some of those calls were sent
-  in parallel with others, so the evidence is unclean. Likely cause: a handle stays a browser handle
-  only after the engine reply marks the call `browserUse` (`browserHandles` in `relay.mjs`), and
-  the refused handles weren't confirmed. Not reproduced in a test yet.
+  the native "bundle ID and full window header" refusal, after `cua.getState()`.
+  `cua.createBrowserTab(browser.browserId, url)` went through. Some of those calls were in parallel,
+  so that live trace is unclean. A fake engine reproduces it. After the session has seen the engine's
+  Computer Use docs, a later browser reply that includes those docs again cleared every handle,
+  including the `getBrowser` and `getTab` bindings that reply had confirmed. A second binding in the
+  same call was never recorded. The relay now records every such binding from a `browserUse` reply
+  after that clear. A native `app.click` in that session still gets the native refusal. No live
+  Helium Console run has checked this.
 - iPhone Mirroring (2026-10-11, one owner-present run): `app.scroll` at 0.3, 0.6 and 1 page left
   the Settings list unmoved (3 tries). The skill tells Claude to use Settings' search field when a
   list does not move. A tap during a page animation opened Personal Hotspot instead of General.
