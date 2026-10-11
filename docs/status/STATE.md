@@ -11,6 +11,9 @@ runs two Save A/Bs (sheet and skill), `bench/away-sitting.mjs` (12 steps) and
 `bench/run.mjs --suite battery --owner-away` (17 tasks, 34 runs). Progress is in
 `.dev/passes/away-2026-10-11.log`. Don't change plugin files in the main checkout until it ends.
 Nothing ran from 07:15 to 12:30 UTC: sleight-arch ended its turn without asking for the sitting.
+After the chain, `.dev/passes/away-2026-10-11-web.sh` runs the 12 web tasks, sleight against Codex,
+2 runs each. Lane browser-tasks (Codex gpt-6.1-sol, `.dev/prompts/lane-browser-tasks.md`) started
+about 12:50 UTC from the owner's phone, so this sitting's CPU and timing numbers overlap its checks.
 
 
 `pane/auto-mode` at `ff03fbc` is pushed to private (`Land-o-Clusters/sleight-dev`), and the main
