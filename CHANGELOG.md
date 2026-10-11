@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.2.5 (2026-10-11)
+
+- The prompt-budget tests are skipped by name where the typescript dev dependency isn't installed.
+  CI doesn't install it, and 1.2.4's CI failed there. The plugin itself is unchanged.
+
 ## 1.2.4 (2026-10-11)
 
 - README: updating is right after install, with Claude Code's auto-update switch for the sleight

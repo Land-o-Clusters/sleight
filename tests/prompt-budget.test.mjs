@@ -6,7 +6,13 @@ import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { skillRules, localToolDefinitions } from '../plugins/sleight/lib/launch.mjs';
 import { batchingDescription, createRelay } from '../plugins/sleight/lib/relay.mjs';
-import { noticeInventory, sharedNoticeInventory } from '../bench/prompt-budget.mjs';
+// The budget script parses relay.mjs with the typescript dev dependency, which CI doesn't install.
+const budget = await import('../bench/prompt-budget.mjs').catch(error => {
+  if (error.code === 'ERR_MODULE_NOT_FOUND') return null;
+  throw error;
+});
+const skip = !budget && 'needs the typescript dev dependency (npm install)';
+const { noticeInventory, sharedNoticeInventory } = budget ?? {};
 
 const firstRule = 'execute exactly one of the API calls shown below, optionally assigning its result to a variable. Do not add other API calls, waits, or snapshots to that invocation.';
 const hash = text => createHash('sha256').update(text).digest('hex');
@@ -14,7 +20,7 @@ const baseline = JSON.parse(readFileSync(new URL('fixtures/prompt-default.json',
 const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', import.meta.url);
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
-test('only lean selects shorter text and every default prompt stays byte-identical', () => {
+test('only lean selects shorter text and every default prompt stays byte-identical', { skip }, () => {
   assert.ok(leanSkill().length < skillRules(skillPath, {}).length);
   assert.equal(hash(JSON.stringify(noticeInventory().map(e => e.text))), baseline.notices);
   for (const env of [{}, { SLEIGHT_PROMPT: 'default' }, { SLEIGHT_PROMPT: 'LEAN' }]) {
@@ -28,7 +34,7 @@ test('only lean selects shorter text and every default prompt stays byte-identic
   assert.deepEqual(stripDescriptions(localToolDefinitions({ SLEIGHT_PROMPT: 'lean' })), stripDescriptions(localToolDefinitions({})));
 });
 
-test('lean retains the skill safety passages verbatim and removes named examples', () => {
+test('lean retains the skill safety passages verbatim and removes named examples', { skip }, () => {
   const lean = leanSkill();
   assert.ok(lean.length < skillRules(skillPath, {}).length);
   for (const passage of baseline.skillSafety) assert.ok(lean.includes(passage), passage);
@@ -81,7 +87,7 @@ test('lean changes relay additions without changing engine text or safety refusa
   assert.match(lean.refusal.content[0].text, /stopped this call before it ran:.*Add await and send it again\./);
 });
 
-test('the offline budget command measures all sources and reaches 30 percent', () => {
+test('the offline budget command measures all sources and reaches 30 percent', { skip }, () => {
   const result = spawnSync(process.execPath, ['bench/prompt-budget.mjs', '--json'], { encoding: 'utf8', timeout: 10000 });
   assert.equal(result.status, 0, result.stderr);
   const report = JSON.parse(result.stdout);
