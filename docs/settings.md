@@ -5,7 +5,7 @@ You don't need any of these. They change approvals, guards, receipts, review or 
 ## Receipts and unsaved review
 
 Set `SLEIGHT_RECEIPTS=1` to write a private JSON receipt after each used turn to
-`~/Library/Logs/sleight/receipts/`. The pane links the latest receipt. It lists the observed app
+`~/Library/Logs/sleight/receipts/`. The pane shows the latest receipt's path. It lists the observed app
 and window, recognized actions and targets, the call's outcome and changes in the returned reads.
 Typed and pasted text and literal values become length markers. Raw code, accessibility trees,
 screenshots and error text stay out of the file. A computed input has an unknown length.

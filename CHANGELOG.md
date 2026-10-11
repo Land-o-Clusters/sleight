@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.2.2 (2026-10-11)
+
+- The pane shows the latest receipt's path as text. Claude Code 2.1.288, the oldest version we support,
+  refuses a `file://` link, and the pane then drew nothing with receipts on (`SLEIGHT_RECEIPTS=1`).
+
 ## 1.2.1 (2026-10-11)
 
 - Tests that need macOS (osascript, xcrun, plutil or `/private/tmp`) are listed as skipped on other

@@ -365,7 +365,7 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e)
-    const { Box, Text, Button, Link } = els
+    const { Box, Text, Button } = els
     paneSurface = e.surface
     paneColumns = Math.max(8, Math.min(120, e.props.bodyColumns ?? 48))
     // The rows the surface gave the pane: about a third of the terminal inline,
@@ -448,7 +448,8 @@ export const register: Register = on => {
             $.ui.toast(result.text)
           }} />
         </Box>
-        {latest?.path?.startsWith('/') && <Link href={`file://${latest.path.split('/').map(encodeURIComponent).join('/')}`} label="Open latest receipt" />}
+        {/* Text, not a Link: Claude Code 2.1.288 refuses a file:// href and then draws nothing (CI, 2026-10-11). */}
+        {latest?.path?.startsWith('/') && <Text>Latest receipt: {latest.path}</Text>}
         {latest?.unavailable && <Text>Receipt unavailable; the private file could not be written.</Text>}
         {latest?.review && <Text>{latest.review}</Text>}
         <Text bold>Actions</Text>
