@@ -41,8 +41,8 @@ iPhone Mirroring with iphone-settle, owner present (03:25 UTC, `bench/results/20
 2/3, 27.0.1 in 35.4 s and 8 turns, and 17.6 s and 5 turns, against 66.9 s and 16 before, with no tap
 outside Settings. The third run started on the About page the previous run left. The failed run
 stopped at the lock screen iPhone Mirroring shows while it unlocks itself; the prompt now says to wait
-up to 30 s and never enter a password. An earlier set of 3 at 03:24 failed the same way. Codex keeps lease-select and, on the owner's word, the lease broker and the
-unsaved-changes review (ROADMAP 6). saveclose-research found the next speed lever for speed-research.
+up to 30 s and never enter a password. An earlier set of 3 at 03:24 failed the same way. lease-select moved to Grok (owner, 03:30 UTC), the last lane before the away sitting.
+Codex gets the lease broker and the unsaved-changes review (ROADMAP 6) when its quota resets. saveclose-research found the next speed lever for speed-research.
 Claude spends two or three calls inside the Save sheet, 6 to 9 s a run
 (`docs/design/save-then-close-2026-10-11.md`).
 
