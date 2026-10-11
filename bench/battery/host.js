@@ -12,16 +12,19 @@ function run(argv) {
     var raw = $.NSString.stringWithContentsOfFileEncodingError(request.control, $.NSUTF8StringEncoding, null);
     if (raw && JSON.parse(ObjC.unwrap(raw)).command === 'abort') throw new Error('HOST_STOP');
   }
-  function attribute(element, name) {
+  function readAttribute(element, name) {
     var value = Ref();
     var code = Number($.AXUIElementCopyAttributeValue(element, $(name), value));
-    return code === 0 ? value[0] : null;
+    return { code: code, value: code === 0 ? value[0] : null };
   }
+  function attribute(element, name) { return readAttribute(element, name).value; }
   function windows() {
     if (!pid) return [];
-    var value = attribute($.AXUIElementCreateApplication(pid), 'AXWindows');
-    if (!value) return [];
-    var list = ObjC.castRefToObject(value), out = [];
+    var read = readAttribute($.AXUIElementCreateApplication(pid), 'AXWindows');
+    if (read.code !== 0 || !read.value) {
+      var error = new Error('WINDOWS_READ_FAILED'); error.axStatus = read.code; throw error;
+    }
+    var list = ObjC.castRefToObject(read.value), out = [];
     for (var n = 0; n < list.count; n++) out.push(list.objectAtIndex(n));
     return out;
   }
@@ -66,12 +69,130 @@ function run(argv) {
       focusChanged: frontBundle !== baselineFront, targetOverOwner: overOwner };
     samples.push(row); emit({ stage: 'sample', sample: row });
   }
+  function cleanup() {
+    var details = { reasons: [], windows: [] }, clean = true;
+    function reason(row, code) { if (row.reasons.indexOf(code) < 0) row.reasons.push(code); }
+    function present(w, current) { return current.some(function(now) { return same(w, now); }); }
+    function inspect(w, row) {
+      var doc = readAttribute(w, 'AXDocument');
+      row.document = doc.value ? String(ObjC.unwrap(ObjC.castRefToObject(doc.value))) : null;
+      row.documentStatus = doc.code;
+      row.documentReads.push({ document: row.document, status: doc.code });
+      row.matched = !!expected && doc.code === 0 && row.document === expected;
+      var sheets = readAttribute(w, 'AXSheets');
+      row.sheetStatus = sheets.code;
+      row.sheet = !!sheets.value && ObjC.castRefToObject(sheets.value).count > 0;
+      if (expected && !row.matched) reason(row, 'DOCUMENT_NOT_MATCHED');
+      if (row.sheet) reason(row, 'SHEET_PRESENT');
+      if (sheets.code !== 0 && sheets.code !== -25205) reason(row, 'SHEETS_READ_FAILED');
+      return (!expected || row.matched) && !row.sheet && (sheets.code === 0 || sheets.code === -25205);
+    }
+    function ownFixture() {
+      var path = request.fixturePath, root = request.fixtureRoot;
+      return path && root && root.indexOf('/private/tmp/sleight-battery-') === 0 &&
+        path.slice(0, path.lastIndexOf('/')) === root && !/(^|\/)\.\.?($|\/)/.test(path) &&
+        String(ObjC.unwrap($.NSURL.fileURLWithPath(path).absoluteString)) === expected;
+    }
+    function quote(value) { return '"' + value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r/g, '\\r').replace(/\n/g, '\\n') + '"'; }
+    function recordNew(current, entries) {
+      current.forEach(function(w) {
+        if (present(w, before) || entries.some(function(entry) { return same(w, entry.window); })) return;
+        var row = { index: entries.length, retained: false, expectedURL: expected || null,
+          reasons: ['WINDOW_NOT_RETAINED'], documentReads: [], present: true };
+        inspect(w, row); clean = false;
+        details.windows.push(row); entries.push({ window: w, retained: false, row: row });
+      });
+    }
+    function pollWindows() {
+      var current = windows(); recordNew(current, entries); return current;
+    }
+    try {
+      var current = windows();
+      if (expected && !retained.length) reason(details, 'FIXTURE_WINDOW_NOT_RETAINED');
+      var entries = retained.map(function(w) { return { window: w, retained: true }; });
+      current.forEach(function(w) {
+        if (!present(w, before) && !present(w, retained)) entries.push({ window: w, retained: false });
+      });
+      entries.forEach(function(entry, index) {
+        var w = entry.window, row = { index: index, retained: entry.retained, expectedURL: expected || null,
+          reasons: [], documentReads: [], present: present(w, current) };
+        entry.row = row; details.windows.push(row);
+        if (!row.present) return;
+        active();
+        var safe = inspect(w, row);
+        if (!entry.retained) { reason(row, 'WINDOW_NOT_RETAINED'); clean = false; return; }
+        if (!safe) { clean = false; return; }
+        var close = attribute(w, 'AXCloseButton');
+        if (!close) reason(row, 'CLOSE_BUTTON_MISSING');
+        else {
+          row.axPressStatus = Number($.AXUIElementPerformAction(close, $('AXPress')));
+          if (row.axPressStatus !== 0) reason(row, 'AXPRESS_FAILED');
+        }
+      });
+      var closeDeadline = Date.now() + 10000;
+      current = pollWindows();
+      while (retained.some(function(w) { return present(w, current); }) && Date.now() < closeDeadline) {
+        active(); sample(); wait(); current = pollWindows();
+      }
+      entries.forEach(function(entry) {
+        var w = entry.window, row = entry.row;
+        // One document-level close can remove several retained windows.
+        current = pollWindows();
+        row.stillPresentAfter10s = present(w, current);
+        if (!row.stillPresentAfter10s) return;
+        reason(row, 'WINDOW_STILL_PRESENT_AFTER_10S');
+        // Revalidate the retained reference after waiting, immediately before scripting.
+        active();
+        if (!inspect(w, row)) { clean = false; return; }
+        if (!entry.retained || !clean) return;
+        if (!ownFixture()) { reason(row, 'SCRIPTING_NOT_OWN_FIXTURE'); return; }
+        row.scriptingPath = request.fixturePath;
+        var script = 'tell application id ' + quote(request.bundle) + '\nclose (documents whose path is ' + quote(request.fixturePath) + ') saving no\nend tell';
+        var error = Ref();
+        try {
+          var result = $.NSAppleScript.alloc.initWithSource($(script)).executeAndReturnError(error);
+          row.scriptingStatus = result ? 0 : Number((ObjC.deepUnwrap(error[0]) || {}).NSAppleScriptErrorNumber) || null;
+        } catch (_) { row.scriptingStatus = null; }
+        if (row.scriptingStatus !== 0) reason(row, 'SCRIPTING_FAILED');
+      });
+      var scriptDeadline = Date.now() + 10000;
+      current = pollWindows();
+      while (entries.some(function(entry) { return entry.row.scriptingPath && present(entry.window, current); }) && Date.now() < scriptDeadline) {
+        active(); sample(); wait(); current = pollWindows();
+      }
+      entries.forEach(function(entry) {
+        var row = entry.row; row.present = present(entry.window, current);
+        if (row.present) { clean = false; if (row.scriptingPath) reason(row, 'WINDOW_STILL_PRESENT_AFTER_SCRIPTING'); }
+        if (row.reasons.indexOf('SCRIPTING_FAILED') >= 0) clean = false;
+      });
+      if (details.reasons.length) clean = false;
+      if (launched && clean) {
+        active();
+        var app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid);
+        details.app = { pid: pid, terminated: false };
+        if (!app || ObjC.unwrap(app.bundleIdentifier) !== request.bundle) { reason(details, 'APP_IDENTITY_UNCONFIRMED'); clean = false; }
+        else if (pollWindows().length) { reason(details, 'APP_HAS_WINDOWS'); clean = false; }
+        else {
+          details.app.terminateRequested = !!app.terminate;
+          var deadline = Date.now() + 30000;
+          while (!app.terminated && Date.now() < deadline) { active(); sample(); wait(); }
+          details.app.terminated = !!app.terminated;
+          if (!app.terminated) { reason(details, 'APP_NOT_TERMINATED'); clean = false; }
+        }
+      }
+    } catch (error) {
+      clean = false;
+      reason(details, error.message === 'WINDOWS_READ_FAILED' ? error.message : error.message === 'HOST_STOP' ? 'HOST_ABORTED' : 'CLEANUP_FAILED');
+      if (error.axStatus !== undefined) details.axStatus = error.axStatus;
+    }
+    emit({ stage: 'cleanup', confirmed: clean, details: details });
+  }
   sample(); emit({ stage: 'armed', wasRunning: wasRunning });
   var end = Date.now() + 600000;
   while (Date.now() < end) {
     var raw = $.NSString.stringWithContentsOfFileEncodingError(request.control, $.NSUTF8StringEncoding, null);
     var command = raw ? JSON.parse(ObjC.unwrap(raw)).command : '';
-    if (command === 'abort') { emit({ stage: 'cleanup', confirmed: false }); return ''; }
+    if (command === 'abort') { emit({ stage: 'cleanup', confirmed: false, details: { reasons: ['HOST_ABORTED'], windows: [] } }); return ''; }
     if (command === 'launched' && !ready) {
       var list = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(request.bundle);
       if (list.count) {
@@ -82,32 +203,10 @@ function run(argv) {
     }
     if (ready) retain();
     if (command === 'finish') {
-      var clean = true, current = windows();
-      if (expected && !retained.length) clean = false;
-      retained.forEach(function(w) {
-        active();
-        if (!current.some(function(now) { return same(w, now); })) return;
-        var close = attribute(w, 'AXCloseButton');
-        if (!close || Number($.AXUIElementPerformAction(close, $('AXPress'))) !== 0) clean = false;
-      });
-      var closeDeadline = Date.now() + 10000;
-      while (retained.some(function(w) { return windows().some(function(now) { return same(w, now); }); }) && Date.now() < closeDeadline) { active(); sample(); wait(); }
-      if (retained.some(function(w) { return windows().some(function(now) { return same(w, now); }); })) clean = false;
-      if (launched && clean) {
-        active();
-        var app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid);
-        if (!app || ObjC.unwrap(app.bundleIdentifier) !== request.bundle || windows().length) clean = false;
-        else {
-          app.terminate;
-          var deadline = Date.now() + 30000;
-          while (!app.terminated && Date.now() < deadline) wait();
-          if (!app.terminated) clean = false;
-        }
-      }
-      emit({ stage: 'cleanup', confirmed: clean }); return '';
+      cleanup(); return '';
     }
     sample(); wait();
   }
-  emit({ stage: 'cleanup', confirmed: false });
+  emit({ stage: 'cleanup', confirmed: false, details: { reasons: ['HOST_TIMEOUT'], windows: [] } });
   return '';
 }

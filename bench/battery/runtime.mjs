@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, readdirSync, existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,15 +32,19 @@ function codexTurns(threadId) {
   return files.length === 1 ? readFileSync(files[0], 'utf8').split('\n').filter(line => line.includes('"token_count"')).length : null;
 }
 
-async function startHost(task, ctx, signal) {
+export async function startHost(task, ctx, signal, runProcess = runOwned) {
   const control = join(ctx.dir, 'host-control.json');
   const command = value => writeFileSync(control, JSON.stringify({ command: value }), { mode: 0o600 });
   command('observe');
-  const samples = [], stages = new Map(); let confirmed = false, buffer = '';
+  const samples = [], stages = new Map(); let confirmed = false, buffer = '', details = { reasons: ['HOST_RECEIPT_MISSING'], windows: [] };
   const stage = name => { if (!stages.has(name)) stages.set(name, Promise.withResolvers()); return stages.get(name); };
   const hostController = new AbortController();
-  const response = runOwned('/usr/bin/osascript', ['-l', 'JavaScript', hostScript, JSON.stringify({
-    bundle: task.bundle, targetURL: targetURL(ctx.target), control })], { timeoutMs: 650000, signal: hostController.signal,
+  // setupFixture created this exact file in the run's private bank. Never grant a URL or another file.
+  const fixturePath = task.fixtureKind === 'doc-file' && ctx.path === ctx.target &&
+    ctx.dir.startsWith('/private/tmp/sleight-battery-') && dirname(ctx.path) === ctx.dir &&
+    realpathSync(ctx.path) === ctx.path && realpathSync(ctx.dir) === ctx.dir ? ctx.path : undefined;
+  const response = runProcess('/usr/bin/osascript', ['-l', 'JavaScript', hostScript, JSON.stringify({
+    bundle: task.bundle, targetURL: targetURL(ctx.target), control, fixturePath, fixtureRoot: fixturePath ? ctx.dir : undefined })], { timeoutMs: 650000, signal: hostController.signal,
     onStdout: receive });
   function receive(data) {
     buffer += String(data);
@@ -48,9 +52,15 @@ async function startHost(task, ctx, signal) {
       const line = buffer.slice(0, n); buffer = buffer.slice(n + 1);
       let event; try { event = JSON.parse(line); } catch { continue; }
       if (event.stage === 'sample') samples.push(event.sample);
-      if (event.stage === 'cleanup') confirmed = event.confirmed === true;
+      if (event.stage === 'cleanup') { confirmed = event.confirmed === true; details = scrub(event.details ?? { reasons: ['HOST_DETAILS_MISSING'], windows: [] }); }
       stage(event.stage).resolve(event);
     }
+  }
+  function scrub(value) {
+    if (typeof value === 'string') return value.replaceAll(homedir(), '~').replaceAll(encodeURI(homedir()), '~');
+    if (Array.isArray(value)) return value.map(scrub);
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, scrub(item)]));
+    return value;
   }
   async function wait(name) {
     let timer;
@@ -61,13 +71,14 @@ async function startHost(task, ctx, signal) {
   const finish = async ({ abort = false } = {}) => {
     command(abort ? 'abort' : 'finish');
     const result = await response;
-    return { confirmed: confirmed && result.groupClean && result.exit.code === 0, samples };
+    if (!result.groupClean || result.exit.code !== 0) details.reasons.push('HOST_PROCESS_UNCONFIRMED');
+    return { confirmed: confirmed && result.groupClean && result.exit.code === 0, details, samples };
   };
   try {
     const armed = await wait('armed');
     signal.throwIfAborted();
     if (ctx.target || !armed.wasRunning) {
-      const opened = await runOwned('/usr/bin/open', ['-g', '-b', task.bundle, ...(ctx.target ? [ctx.target] : [])], { signal, timeoutMs: 30000 });
+      const opened = await runProcess('/usr/bin/open', ['-g', '-b', task.bundle, ...(ctx.target ? [ctx.target] : [])], { signal, timeoutMs: 30000 });
       if (opened.exit.code !== 0 || !opened.groupClean) throw new Error('FIXTURE_OPEN_FAILED');
     }
     command('launched');

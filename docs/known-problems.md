@@ -998,6 +998,22 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
 
 ## Battery reports
 
+The 2026-10-11 13:14 UTC battery stopped after 1/34 planned rows. Its TextEdit row took 23.4 s
+and 5 turns and saved the fixture marker with DONE replacing PENDING, but the fixture window stayed
+open. Cleanup returned `CLEANUP_UNCONFIRMED` and retained the live lock. sleight-arch closed the
+exact fixture document and released the lock. The old row's `passed: false` included cleanup;
+rows now preserve the task check in `passed` and `checkCode` and report cleanup separately.
+
+Cleanup diagnostics record each retained window's AXDocument URL, expected URL, read status,
+close-button outcome, sheets and closure after 10 s. A scripting fallback closes only the run's
+temporary fixture, after its retained window's exact URL is checked again, and records the path.
+An unmatched window, failed window read, sheet, unsupported scripting or launched app that stays
+running stops the pass and retains the lock. These paths passed 19/19 new offline regressions with
+simulated native APIs. Live scripting, window closure and app termination remain unverified.
+sleight-arch must run the TextEdit battery twice with one run per arm, then the full no-seed battery,
+and publish every run. Each pass must confirm fixture closure and termination of every app it
+launched before releasing its lock.
+
 The offline battery reporter has no live qualification yet. Codex model API time can be unavailable;
 its model and host scheduling gap is not a substitute. Sampled focus and window overlap count
 observed episodes and can miss events between samples. They cannot identify whether the agent or

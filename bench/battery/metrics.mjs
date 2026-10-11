@@ -4,12 +4,13 @@ export function callMetrics(rows) {
   const analyzed = analyzeTranscript(rows);
   return { calls: analyzed.calls, unknownWallCalls: analyzed.unknownWallCalls, unknownGapCalls: analyzed.unknownGapCalls };
 }
-// Allowlist publication fields. No driver result, prompt, code, title, stderr or path survives.
+// Allowlist publication fields. Cleanup includes document URLs and the owned scripting path.
+// No driver result, prompt, code, title or stderr survives.
 export function publicResult(row) {
   const result = {};
   for (const key of ['arm', 'task', 'run', 'passed', 'seconds', 'turns', 'modelMs', 'modelGapMs',
     'modelTimeSource', 'footprint', 'calls', 'unknownWallCalls', 'unknownGapCalls', 'windows',
-    'exitCode', 'groupClean', 'cleanupConfirmed', 'checkCode', 'costUsd']) if (row[key] !== undefined) result[key] = row[key];
+    'exitCode', 'groupClean', 'cleanupConfirmed', 'checkCode', 'cleanupDetails', 'costUsd']) if (row[key] !== undefined) result[key] = row[key];
   return result;
 }
 // Normalize CLI streams to the turn study's input in memory. Never save the raw stream.

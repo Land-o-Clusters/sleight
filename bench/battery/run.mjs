@@ -27,14 +27,15 @@ export async function executePlan(pass, runtime) {
         } catch { failure = true; verdict = 'RUN_FAILED'; }
         finally {
           try { cleanup = await host?.finish({ abort: failure || response?.approvalStop || response?.groupClean === false }); }
-          catch { cleanup = { confirmed: false, samples: [] }; }
+          catch { cleanup = { confirmed: false, samples: [], details: { reasons: ['HOST_FINISH_FAILED'], windows: [] } }; }
         }
         const unsafe = !cleanup?.confirmed || response?.groupClean === false || response?.approvalStop;
-        results.push(publicResult({ ...row, ...response, passed: verdict === true && !unsafe,
+        results.push(publicResult({ ...row, ...response, passed: verdict === true,
           turns: response?.turns ?? null, modelMs: response?.modelMs ?? null,
           footprint: response?.footprint ?? null, calls: response?.calls ?? [],
           seconds: Math.round((Date.now() - started) / 10) / 100,
-          checkCode: !cleanup?.confirmed ? 'CLEANUP_UNCONFIRMED' : verdict === true ? 'PASS' : verdict,
+          checkCode: verdict === true ? 'PASS' : verdict,
+          cleanupDetails: cleanup?.details ?? { reasons: [host ? 'HOST_DETAILS_MISSING' : 'HOST_NOT_STARTED'], windows: [] },
           exitCode: response?.code ?? 1, cleanupConfirmed: cleanup?.confirmed === true,
           windows: { intervalMs: 200, samples: cleanup?.samples ?? [],
             focusChanges: (cleanup?.samples ?? []).filter(s => s.focusChanged).length,
