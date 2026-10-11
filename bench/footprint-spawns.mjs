@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, mkdtempSync, rmSync, writeFileSync } from 'n
 import { tmpdir, loadavg } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const currentRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -40,7 +41,7 @@ async function measured(name, repetitions, operation) {
 async function offline(root = currentRoot) {
   const { InputLease } = await import(pathToFileURL(join(root, 'plugins/sleight/lib/input-lease.mjs')));
   const { snapshotCode } = await import(pathToFileURL(join(root, 'plugins/sleight/hooks/snapshot.ts')));
-  const directory = mkdtempSync(join(tmpdir(), 'sleight-footprint-'));
+  const directory = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-footprint-')));
   const results = [];
   try {
     const lease = new InputLease({ directory });

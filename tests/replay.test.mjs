@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import * as replayModule from '../plugins/sleight/lib/replay.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
+import { removeTemp } from '../scripts/temp-leftovers.mjs';
 import { FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
 import { elementLine, elementSpec, portableCode, recordSteps, replay } from '../plugins/sleight/lib/replay.mjs';
 import { guardedCode, windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
@@ -403,7 +404,7 @@ test('the tool shares the real relay approval memory, input lease and guards wit
   const directory = mkdtempSync(join(tmpdir(), 'sleight-replay-'));
   const relay = createRelay({ clientIn: h.bridge.clientIn, clientOut: h.bridge.clientOut, serverIn, serverOut,
     inputLease: new InputLease({ directory, holder: 'replay test' }), changeReview: false, idleTurnEndMs: 0 });
-  t.after(() => { relay.close(); rmSync(directory, { recursive: true, force: true }); });
+  t.after(() => { relay.close(); removeTemp(directory); });
   const engine = [], waiting = new Map();
   let held;
   const respond = msg => serverOut.write(JSON.stringify(msg) + '\n');

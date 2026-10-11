@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { REPLAY_TOOL } from '../plugins/sleight/lib/replay.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 if (process.argv[2] === '--server') {
   const alwaysLoad = process.argv[3] === 'always';
@@ -22,7 +23,7 @@ if (process.argv[2] === '--server') {
     process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }) + '\n');
   }
 } else {
-  const cwd = await mkdtemp(join(tmpdir(), 'sleight-replay-tokens-'));
+  const cwd = trackTemp(await mkdtemp(join(tmpdir(), 'sleight-replay-tokens-')));
   const results = [];
   try {
     for (const arm of ['always', 'deferred']) {

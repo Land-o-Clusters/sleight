@@ -116,6 +116,18 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   with the sheet's `saveAsNameTextField` id. Unit tests cover those recorded trees. Compliance, turns
   and model time after the note are unverified until sleight-arch reruns textedit-save x3 with
   `SLEIGHT_TRACE_CODE=1`.
+- On 2026-10-11, `/private/tmp` held 305 `sleight-*` folders and `$TMPDIR` held 6252, left by
+  tests and probes. TextEdit's Save sheet lists `/private/tmp`, and that listing made trees of up
+  to 87,740 characters and engine reads of about 1.4 s each. A leftoverAfter run of the old
+  open-file, skill-rules and preapproved-always tests left 5 folders. One later `npm test` of
+  those plus relay, compact-reads and forbidden-targets left 18 after process exit (lease
+  coordinators still open). After cleanup, `npm test` (1764/1764) and `npm run check` (same unit
+  tests, plugin validate, 30/30 mod) each added 0. `scripts/temp-leftovers.mjs`
+  lists folders older than 6 hours and removes them only with `--remove`. It skips names without
+  the `sleight-` prefix, `$TMPDIR/sleight-bench`, folders a process still holds, and git worktrees.
+  A probe keeps its folder only when `SLEIGHT_KEEP_TEMP=1`. `demonstration.mjs` still writes
+  `sleight-observer-*` (3 on this Mac) and is outside this lane. `lsof` can miss a hold that is
+  not an open file.
 - Browser call text never turns off native guards. The engine must confirm `browserUse` on its reply
   before sleight learns browser handles. Candidates attempt the known native window lease and
   saved-file checks; when native access is unavailable, their runtime guard denies native access

@@ -4,6 +4,7 @@ import { simulatorScreenshotNote } from '../plugins/sleight/lib/simulator-focus.
 import { createRelay, imageSize, screenshotOf } from '../plugins/sleight/lib/relay.mjs';
 import { PassThrough } from 'node:stream';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { removeTemp } from '../scripts/temp-leftovers.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 
 const png = (width, height) => {
@@ -69,7 +70,7 @@ for (const enabled of [undefined, false, true]) test(`Simulator note is ${enable
   clientOut.on('data', data => data.toString().trim().split('\n').forEach(line => replies.push(JSON.parse(line))));
   serverIn.on('data', data => data.toString().trim().split('\n').forEach(line => forwarded.push(JSON.parse(line))));
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, simFocusNote: enabled, inputLease: new InputLease({ directory: bank, holder: 'simulator note test' }) });
-  t.after(() => { relay.dispose(); for (const stream of streams) stream.destroy(); rmSync(bank, { recursive: true, force: true }); });
+  t.after(() => { relay.dispose(); for (const stream of streams) stream.destroy(); removeTemp(bank); });
   const call = (id, code) => clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } }) + '\n');
   const reply = (id, content, appId) => serverOut.write(JSON.stringify({ jsonrpc: '2.0', id, result: { content,
     ...(appId && { _meta: { 'codex/toolSurface': { app: { appId } } } }) } }) + '\n');

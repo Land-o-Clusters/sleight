@@ -8,7 +8,7 @@ import { runInNewContext } from 'node:vm';
 
 // Execute the runner with controlled OS boundaries: these cases must never take the real lock,
 // inspect the Mac, launch an app or start an engine.
-async function measureFailure({ quitFails = false, spawnFails = false, workerCollected = true, loadClass, load = [20, 20, 20] } = {}) {
+async function measureFailure({ quitFails = false, spawnFails = false, workerCollected = true, loadClass, load = [20, 20, 20], keepTemp = false } = {}) {
   const script = new URL('../bench/waits-targeting-live.mjs', import.meta.url);
   const source = readFileSync(script, 'utf8').replace(/^import[^\n]*\n/gm, '')
     .replaceAll('import.meta.url', JSON.stringify(script.href));
@@ -16,7 +16,7 @@ async function measureFailure({ quitFails = false, spawnFails = false, workerCol
   let runningReads = 0, unlocks = 0, removed = false, report;
   const context = {
     assert, join, fileURLToPath, URL, performance,
-    process: { argv: ['node', fileURLToPath(script), 'measure', ...(loadClass ? ['--' + loadClass] : [])], env: {}, execPath: 'node', once() {} },
+    process: { argv: ['node', fileURLToPath(script), 'measure', ...(loadClass ? ['--' + loadClass] : [])], env: keepTemp ? { SLEIGHT_KEEP_TEMP: '1' } : {}, execPath: 'node', once() {} },
     console: { log() {} },
     loadavg: () => load, userInfo: () => ({ username: 'fixture-user' }), homedir: () => '/fixture-home',
     mkdtempSync: () => '/private/tmp/sleight-runner-fixture',
@@ -51,13 +51,19 @@ async function measureFailure({ quitFails = false, spawnFails = false, workerCol
   return { report, unlocks, removed, timers: timers.size, runningReads };
 }
 
-test('unconfirmed Calculator cleanup retains the measurement lock and evidence bank', async () => {
+test('unconfirmed Calculator cleanup retains the measurement lock and removes the bank', async () => {
   const result = await measureFailure({ quitFails: true });
   assert.match(result.report.error, /quit unconfirmed/);
   assert.equal(result.unlocks, 0);
-  assert.equal(result.removed, false);
+  assert.equal(result.removed, true);
   assert.equal(result.report.lockRetained, true);
   assert.equal(result.report.childrenCollected, false);
+});
+
+test('SLEIGHT_KEEP_TEMP keeps the evidence bank after a failed cleanup', async () => {
+  const result = await measureFailure({ quitFails: true, keepTemp: true });
+  assert.equal(result.removed, false);
+  assert.equal(result.unlocks, 0);
 });
 
 test('a failed measurement worker spawn cancels its polling timer', async () => {
@@ -70,7 +76,7 @@ test('a failed measurement worker spawn cancels its polling timer', async () => 
 test('a worker without confirmed engine collection retains the parent lock', async () => {
   const result = await measureFailure({ workerCollected: false });
   assert.equal(result.unlocks, 0);
-  assert.equal(result.removed, false);
+  assert.equal(result.removed, true);
   assert.equal(result.report.lockRetained, true);
 });
 test('cost slots refuse the wrong natural load before launching an app', async () => {

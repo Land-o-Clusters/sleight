@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
+import { removeTemp } from '../scripts/temp-leftovers.mjs';
 import { guardedCode, readCode } from '../plugins/sleight/lib/document-scope.mjs';
 import { browserCall } from '../plugins/sleight/lib/browser-call.mjs';
 
@@ -54,7 +55,7 @@ function runtime(t, options = {}) {
   }
   const lease = new InputLease({ directory });
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, inputLease: lease, changeReview: false, ...options });
-  t.after(() => { relay.close(); rmSync(directory, { recursive: true, force: true }); });
+  t.after(() => { relay.close(); removeTemp(directory); });
   const call = (id, code) => clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } }) + '\n');
   const reply = (id, result) => serverOut.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
   const context = createContext({});

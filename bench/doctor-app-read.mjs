@@ -5,9 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { userInfo } from 'node:os';
 import { doctor, resolveServer } from '../plugins/sleight/lib/launch.mjs';
 import { sanitizeHelperEvidence } from './helper-evidence.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 if (process.argv.slice(2).join('\0') !== '--doctor\0Calculator') throw new Error('usage: node bench/doctor-app-read.mjs --doctor Calculator');
-const bank = mkdtempSync('/private/tmp/sleight-doctor-read-');
+const bank = trackTemp(mkdtempSync('/private/tmp/sleight-doctor-read-'));
 const name = `2026-10-09-doctor-preapproved-${basename(bank)}.json`;
 const output = fileURLToPath(new URL(`../docs/benchmarks/${name}`, import.meta.url));
 const staged = join(bank, 'receipt.json');

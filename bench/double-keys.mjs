@@ -9,13 +9,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolveServer } from '../plugins/sleight/lib/launch.mjs';
 import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 import { probeClient, probeReadCode, probeInputCode } from './double-keys-client.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const awayWindow = process.argv[2];
 if (!awayWindow || awayWindow.startsWith('--')) throw new Error('An owner-agreed away window is required');
 const rawOnly = process.argv.includes('--raw-only');
 const keysOnly = process.argv.includes('--keypress-only');
 const execute = promisify(execFile);
-const bank = await mkdtemp('/private/tmp/sleight-double-keys-');
+const bank = trackTemp(await mkdtemp('/private/tmp/sleight-double-keys-'));
 const path = join(bank, 'double-keys.txt');
 const fixturePath = fileURLToPath(new URL('./double-keys-fixture.js', import.meta.url));
 const records = [], trials = [], clients = [];

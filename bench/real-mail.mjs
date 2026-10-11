@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { runOwned } from './preapproved-process.mjs';
 import { swiftModuleCache } from './swift-cache.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const coverage = ['content', 'attachments', 'membership', 'flags', 'read', 'added', 'deleted'];
@@ -33,7 +34,7 @@ export async function mailHelper(signal) {
   if (uncollected) throw new Error('Mail compiler collection unconfirmed');
   if (executable) return executable;
   compilation ??= (async () => {
-    helperBank = mkdtempSync(join(tmpdir(), 'sleight-mail-helper-'));
+    helperBank = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-mail-helper-')));
     const path = join(helperBank, 'mail-fixture');
     const result = await runOwned('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(),
       fileURLToPath(new URL('./real-mail.swift', import.meta.url)), '-o', path], { signal, timeoutMs: 180000 });

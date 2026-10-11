@@ -7,6 +7,7 @@ import { PassThrough } from 'node:stream';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { callLocalTool } from '../plugins/sleight/lib/launch.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const call = (cmd, args, options = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', timeout: 30000, ...options });
@@ -19,7 +20,7 @@ if (process.argv[2] === '--prepare') {
 }
 const output = process.argv[2];
 if (!output || !output.startsWith('docs/benchmarks/')) throw new Error('Use a docs/benchmarks results path');
-const dir = mkdtempSync('/private/tmp/sleight-drag-polish-');
+const dir = trackTemp(mkdtempSync('/private/tmp/sleight-drag-polish-'));
 const results = { started: new Date().toISOString(), runs: [], trace: [], approvals: [] };
 let stopping = false;
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { stopping = true; });

@@ -7,10 +7,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 export async function startWindowObserver({ timeoutMs = 250, spawnHelper = () => spawn('/usr/bin/osascript',
   ['-l', 'JavaScript', fileURLToPath(new URL('./guard-window-observer.js', import.meta.url))], { stdio: ['pipe', 'pipe', 'pipe'] }) } = {}) {
-  const directory = await mkdtemp(join(tmpdir(), 'sleight-window-'));
+  const directory = trackTemp(await mkdtemp(join(tmpdir(), 'sleight-window-')));
   await chmod(directory, 0o700);
   const endpoint = { path: join(directory, 'observer.sock'), token: randomUUID(), timeoutMs };
   let child, stopped, lines, pending, nextId = 0, failed = false, closing;

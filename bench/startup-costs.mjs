@@ -21,6 +21,7 @@ import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import { createAppHealthHelper } from '../plugins/sleight/lib/read-failure.mjs';
 import { createClipboardCoordinator } from '../plugins/sleight/lib/clipboard.mjs';
 import { resolveServer, probeSurfaces } from '../plugins/sleight/lib/launch.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const LAUNCHER = join(root, 'plugins/sleight/bin/sleight-mcp');
@@ -204,7 +205,7 @@ async function sectionOsascript() {
 // clipboard coordinator's open + acquire + release cycle with a counting
 // DatabaseSync (its constructor is injectable).
 async function sectionLease() {
-  const dir = mkdtempSync(join(tmpdir(), 'sleight-startup-costs-lease-'));
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-startup-costs-lease-')));
   const window = { appId: 'com.apple.calculator', app: 'Calculator', title: 'Calculator' };
   const lease = new InputLease({ directory: dir, holder: 'bench' });
   const cold = performance.now();
@@ -224,7 +225,7 @@ async function sectionLease() {
   }
   rmSync(dir, { recursive: true, force: true });
 
-  const clipboardDir = mkdtempSync(join(tmpdir(), 'sleight-startup-costs-clipboard-'));
+  const clipboardDir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-startup-costs-clipboard-')));
   let opens = 0;
   class CountingDatabaseSync extends DatabaseSync {
     constructor(...args) { super(...args); opens++; }

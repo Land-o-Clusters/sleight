@@ -14,13 +14,14 @@ import { callLocalTool, resolveServer } from '../plugins/sleight/lib/launch.mjs'
 import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 import { collectEngine } from './window-targeting-cleanup.mjs';
 import { SELECT_WINDOW_TOOL } from '../plugins/sleight/lib/select-window.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const output = process.argv[2];
 const probe = process.argv[3];
 assert.match(output ?? '', /^docs\/benchmarks\/[a-z0-9-]+\.json$/);
 assert.match(probe ?? '', /^\/private\/tmp\/sleight-window-targeting-ax\.[a-zA-Z0-9]+\/probe$/);
 assert.ok(!existsSync(output), 'Every attempt needs a new results file');
-const bank = await mkdtemp('/private/tmp/sleight-window-target-');
+const bank = trackTemp(await mkdtemp('/private/tmp/sleight-window-target-'));
 const paths = [join(bank, 'sleight-window-left.txt'), join(bank, 'sleight-window-right.txt')];
 const execute = promisify(execFile);
 const text = result => (result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');

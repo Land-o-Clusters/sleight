@@ -12,9 +12,10 @@ import { runRichTextMove, recoverPendingRichTextMove, drainRichTextMoves, richPa
 import { createNativeClipboardIO } from '../plugins/sleight/lib/clipboard.mjs';
 import { probeAppHealth } from '../plugins/sleight/lib/read-failure.mjs';
 import { textEditFormatPreserved } from './textedit-fixes-check.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const bank = await mkdtemp('/private/tmp/sleight-textedit-fixes-');
+const bank = trackTemp(await mkdtemp('/private/tmp/sleight-textedit-fixes-'));
 const plain = process.argv.includes('--plain'), legacy = process.argv.includes('--legacy'), move = process.argv.includes('--move');
 const orphan = process.argv.includes('--orphan');
 const misspelled = process.argv.includes('--misspelled'), openBackground = process.argv.includes('--open-background');

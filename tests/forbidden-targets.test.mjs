@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import { forbiddenTargetsAllowed, forbiddenTargetWarning, isForbiddenSettingsWindow } from '../plugins/sleight/lib/blocked-apps.mjs';
+import { removeTemp } from '../scripts/temp-leftovers.mjs';
 
 const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r)); };
 
@@ -16,10 +17,9 @@ function harness(t, options = {}) {
   serverIn.setEncoding('utf8').on('data', d => d.split('\n').filter(Boolean).forEach(l => toServer.push(JSON.parse(l))));
   clientOut.setEncoding('utf8').on('data', d => d.split('\n').filter(Boolean).forEach(l => toClient.push(JSON.parse(l))));
   const directory = mkdtempSync(join(tmpdir(), 'sleight-forbidden-'));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, sessionId: 's',
     inputLease: new InputLease({ directory, holder: 'A' }), ...options });
-  t.after(() => relay.close());
+  t.after(() => { relay.close(); removeTemp(directory); });
   return {
     toServer, toClient,
     js: (id, code) => clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } }) + '\n'),

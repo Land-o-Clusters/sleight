@@ -8,6 +8,7 @@ import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { callLocalTool } from '../plugins/sleight/lib/launch.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import { prepareWindowPair } from './drag-window-fixture.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const call = (cmd, args, options = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', timeout: 30000, ...options });
@@ -22,7 +23,7 @@ if (process.argv[2] === '--prepare') {
 }
 const output = process.argv[2];
 if (!/^docs\/benchmarks\/[a-z0-9.-]+\.json$/.test(output ?? '')) throw new Error('Use a docs/benchmarks results filename');
-const dir = mkdtempSync('/private/tmp/sleight-drag-windows-');
+const dir = trackTemp(mkdtempSync('/private/tmp/sleight-drag-windows-'));
 const results = { started: new Date().toISOString(), beforeSha: 'a01e3d8', runs: [], trace: [], approvals: [] };
 const save = () => writeFileSync(join(root, output), sanitize(results));
 let stopping = false, useLegacy = false, failed = false;

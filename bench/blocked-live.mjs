@@ -11,6 +11,7 @@ import { tmpdir, userInfo, hostname } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { judgeBlockedLive, makeClean } from './blocked-live-result.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const mode = process.argv[2];
 if (!['terminal', 'codex'].includes(mode)) throw new Error('expected terminal or codex');
@@ -19,7 +20,7 @@ const started = new Date().toISOString();
 const clean = makeClean({ home: userInfo().homedir, user: userInfo().username, host: hostname(), tmp: tmpdir() });
 const output = join(root, 'docs/benchmarks', `${started.replace(/[:.]/g, '-')}-blocked-${mode}.json`);
 
-const bank = mkdtempSync(join(tmpdir(), 'sleight-blocked-live-'));
+const bank = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-blocked-live-')));
 const cwd = join(bank, 'empty'); mkdirSync(cwd);
 const trace = join(bank, 'trace'); mkdirSync(trace);
 const config = { mcpServers: { sleight: { command: join(root, 'plugins/sleight/bin/sleight-mcp'),

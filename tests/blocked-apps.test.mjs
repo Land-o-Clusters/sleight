@@ -12,6 +12,7 @@ import { PreapprovedApps } from '../plugins/sleight/lib/preapproved.mjs';
 import { approvalButton, callBlockedApp, driverSettingsRegExp, isSettingsTitle, matchBlockedApp,
   refusedApp, SETTINGS_TITLE, terminalSend } from '../plugins/sleight/lib/blocked-apps.mjs';
 import { judgeBlockedLive, makeClean } from '../bench/blocked-live-result.mjs';
+import { removeTemp } from '../scripts/temp-leftovers.mjs';
 
 // ---- What the engine refuses, and what sleight does about it -------------
 
@@ -349,7 +350,9 @@ test('flow rules inspect blocked_app text before any consent, prompt or effect',
   assert.equal(calls.length, 1, 'a third identical call cancels the exception');
 });
 
-function leaseSetup(t, options = {}, directory = mkdtempSync(join(tmpdir(), 'sleight-blocked-lease-'))) {
+function leaseSetup(t, options = {}, directory) {
+  directory ??= mkdtempSync(join(tmpdir(), 'sleight-blocked-lease-'));
+  t.after(() => removeTemp(directory));
   const calls = [];
   const clientIn = new PassThrough();
   const clientOut = new PassThrough();
@@ -378,7 +381,7 @@ function leaseSetup(t, options = {}, directory = mkdtempSync(join(tmpdir(), 'sle
 
 test('blocked_app actions take an app-scope lease; a second session waits', async t => {
   const directory = mkdtempSync(join(tmpdir(), 'sleight-blocked-lease-'));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  t.after(() => removeTemp(directory));
   const a = leaseSetup(t, { holder: 'A' }, directory);
   const b = leaseSetup(t, { holder: 'B' }, directory);
   a.call(1, { op: 'type', text: 'echo hi' });
@@ -394,7 +397,7 @@ test('blocked_app actions take an app-scope lease; a second session waits', asyn
 
 test('a blocked_app read takes no lease and works while another session acts', async t => {
   const directory = mkdtempSync(join(tmpdir(), 'sleight-blocked-lease-'));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  t.after(() => removeTemp(directory));
   const a = leaseSetup(t, { holder: 'A' }, directory);
   const b = leaseSetup(t, { holder: 'B' }, directory);
   a.call(1, { op: 'type', text: 'echo hi' });

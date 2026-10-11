@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { removeTemp } from '../scripts/temp-leftovers.mjs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { guardedCode, GUARD_MARK, GUARD_END, sameElement } from '../plugins/sleight/lib/document-scope.mjs';
@@ -215,7 +216,7 @@ test('a failed or incomplete combined observation cannot preserve an older cache
 
 test('a cached combined observation cannot outlive input lease ownership or expiry', async t => {
   const bank = mkdtempSync(join(tmpdir(), 'sleight-guard-lease-'));
-  t.after(() => rmSync(bank, { recursive: true, force: true }));
+  t.after(() => removeTemp(bank));
   const path = join(bank, 'lease.json');
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   for (const record of [{ token: 'successor', expires: Date.now() + 30000 }, { token: 'owner', expires: 0 }]) {

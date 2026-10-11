@@ -9,6 +9,7 @@ import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { callLocalTool } from '../plugins/sleight/lib/launch.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import { screenshotCoordinates, stackedChessTrial } from './chess-drag-trial.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const call = (cmd, args, options = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', timeout: 30000, ...options });
@@ -38,7 +39,7 @@ if (process.argv[2] === '--cleanup') {
 const output = process.argv[2];
 if (!/^docs\/benchmarks\/[a-z0-9.-]+\.json$/.test(output ?? '')) throw new Error('Use a docs/benchmarks results filename');
 if (process.argv[3] !== '--measure') throw new Error('Use --measure to verify Chess points from the owned screenshot; AX coordinates are reversed');
-const dir = mkdtempSync('/private/tmp/sleight-chess-stacked-');
+const dir = trackTemp(mkdtempSync('/private/tmp/sleight-chess-stacked-'));
 const results = { started: new Date().toISOString(), runs: [], approvals: [], trace: [] };
 const sanitize = value => JSON.stringify(value, null, 2).split(homedir()).join('~') + '\n';
 const save = () => writeFileSync(join(root, output), sanitize(results));

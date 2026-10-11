@@ -10,6 +10,7 @@ import { homedir } from 'node:os';
 import { restartChess } from './chess-launch.mjs';
 import { cleanupChessTrial } from './reliability-cleanup.mjs';
 import { chessMovePoints } from './chess-move-points.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const execute = promisify(execFile);
 const inspector = join(homedir(), '.codex/bin/codex-macos-inspect');
@@ -65,7 +66,7 @@ try {
     const match = receipt.cg.filter(w => w.layer === 0 && Math.abs(w.bounds.x - b.X) < 1 && Math.abs(w.bounds.y - b.Y) < 1 && Math.abs(w.bounds.width - b.Width) < 1 && Math.abs(w.bounds.height - b.Height) < 1);
     if (match.length !== 1) throw new Error('CG/AX observation mapping not unique');
     receipt.geometry = await chess({ op: 'geometry', title: games[0].title });
-    receipt.bank = await mkdtemp('/private/tmp/sleight-reliability-observe-');
+    receipt.bank = trackTemp(await mkdtemp('/private/tmp/sleight-reliability-observe-'));
     receipt.image = join(receipt.bank, 'board.png');
     await command('/usr/sbin/screencapture', ['-x', '-l', String(match[0].windowNumber), receipt.image]);
   } else if (/^chess-(?:before|after|inspect|recovery)$/.test(process.argv[2])) {
@@ -82,7 +83,7 @@ try {
           quit: () => owned({ op: 'quit' }), process: () => owned({ op: 'process' }), wait });
       } catch (error) { cleanupUnconfirmed = true; throw error; }
     }
-    const bank = await mkdtemp('/private/tmp/sleight-reliability-'); receipt.bank = bank;
+    const bank = trackTemp(await mkdtemp('/private/tmp/sleight-reliability-')); receipt.bank = bank;
     receipt.trace = [];
     const newClient = () => reliabilityClient(value => {
       // Screenshots stay in the private bank; receipts retain tool text and metadata.
@@ -223,7 +224,7 @@ try {
       }
     }
   } else if (/^fixture-(?:before|after)$/.test(process.argv[2])) {
-    control = await mkdtemp('/private/tmp/sleight-reliability-fixture-'); receipt.bank = control;
+    control = trackTemp(await mkdtemp('/private/tmp/sleight-reliability-fixture-')); receipt.bank = control;
     const app = join(control, 'Sleight Reliability Fixture.app'), contents = join(app, 'Contents');
     await mkdir(join(contents, 'MacOS'), { recursive: true });
     await writeFile(join(contents, 'Info.plist'), '<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>org.sleight.reliability-fixture</string><key>CFBundleExecutable</key><string>fixture</string><key>CFBundleName</key><string>Sleight Reliability Fixture</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>');

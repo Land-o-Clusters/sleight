@@ -5,12 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PreapprovedApps, addPreapproved, listPreapproved, preapprovedFile, removePreapproved } from '../plugins/sleight/lib/preapproved.mjs';
 import { allowCommand } from '../plugins/sleight/lib/launch.mjs';
+import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 
-const home = () => mkdtempSync(join(tmpdir(), 'sleight-always-'));
+const home = t => trackTemp(registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-always-'))));
 const now = new Date('2026-10-10T15:00:00Z');
 
-test('Always allow creates a private list with the date, keeps hand entries, and raises but never lowers a level', () => {
-  const h = home();
+test('Always allow creates a private list with the date, keeps hand entries, and raises but never lowers a level', t => {
+  const h = home(t);
   assert.equal(addPreapproved('com.apple.TextEdit', 'medium', { home: h, now }), true);
   const file = preapprovedFile(h);
   assert.equal(statSync(file).mode & 0o777, 0o600);
@@ -26,11 +27,11 @@ test('Always allow creates a private list with the date, keeps hand entries, and
   assert.deepEqual(listPreapproved({ home: h }).map(a => a.app), ['Chess']);
 });
 
-test('the list refuses a bad date or source, a shared file, and a bad level', () => {
+test('the list refuses a bad date or source, a shared file, and a bad level', t => {
   assert.throws(() => new PreapprovedApps({ version: 1, apps: [{ app: 'A', riskLevel: 'low', added: 'yesterday' }] }));
   assert.throws(() => new PreapprovedApps({ version: 1, apps: [{ app: 'A', riskLevel: 'low', source: 'claude' }] }));
-  assert.throws(() => addPreapproved('A', 'extreme', { home: home(), now }));
-  const h = home();
+  assert.throws(() => addPreapproved('A', 'extreme', { home: home(t), now }));
+  const h = home(t);
   mkdirSync(join(h, 'Library/Application Support/sleight'), { recursive: true });
   writeFileSync(preapprovedFile(h), JSON.stringify({ version: 1, apps: [] }), { mode: 0o666 });
   chmodSync(preapprovedFile(h), 0o666);

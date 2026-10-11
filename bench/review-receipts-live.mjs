@@ -12,6 +12,7 @@ import { observePermission } from './real-permission.mjs';
 import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import { writeReceipt } from '../plugins/sleight/lib/turn-receipts.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const report = { at: new Date().toISOString(), kind: 'review-receipts-live', engineCalls: [], receipts: [], checks: {} };
 const controller = new AbortController();
@@ -27,7 +28,7 @@ let release;
 try {
   checkHold();
   release = await acquireLiveLock();
-  const ctx = { dir: mkdtempSync('/private/tmp/sleight-receipts-live-'), nonce: token, ownerAway: false };
+  const ctx = { dir: trackTemp(mkdtempSync('/private/tmp/sleight-receipts-live-')), nonce: token, ownerAway: false };
   ctx.document = join(ctx.dir, `Receipt-${token}.txt`);
   const task = {
     setup: async () => {

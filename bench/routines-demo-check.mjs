@@ -4,9 +4,10 @@ import { RoutineStore } from '../plugins/sleight/lib/routines.mjs';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 if (existsSync('/tmp/sleight-hold')) throw new Error('sleight-hold exists; native check stopped');
 if (process.argv[2] === '--installer') {
-  const temporaryHome = mkdtempSync('/private/tmp/sleight-routine-preview-');
+  const temporaryHome = trackTemp(mkdtempSync('/private/tmp/sleight-routine-preview-'));
   try {
     const calls = [];
     let confirmed = false;

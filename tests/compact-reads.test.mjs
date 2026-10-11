@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GUARD_MARK, GUARD_END, createReadCompactor, lineDiff, dropAcquisitionTree, hasFullTree } from '../plugins/sleight/lib/compact-reads.mjs';
+import { removeTemp } from '../scripts/temp-leftovers.mjs';
 
 const tree = (rows, title = 'a.txt') => [`Window: "${title}", App: TextEdit.`,
   `0 standard window ${title}, URL: file:///tmp/${title}, Secondary Actions: Raise`, ...rows].join('\n');
@@ -124,9 +125,8 @@ test('the relay remaps a stale number Claude saw, refuses one it never saw, and 
   serverIn.setEncoding('utf8').on('data', d => d.split('\n').filter(Boolean).forEach(l => toServer.push(JSON.parse(l))));
   clientOut.setEncoding('utf8').on('data', d => d.split('\n').filter(Boolean).forEach(l => toClient.push(JSON.parse(l))));
   const directory = mkdtempSync(join(tmpdir(), 'sleight-stale-'));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, sessionId: 's', changeReview: false, inputLease: new InputLease({ directory, holder: 'A' }) });
-  t.after(() => relay.close());
+  t.after(() => { relay.close(); removeTemp(directory); });
   const js = (id, code) => clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } }) + '\n');
   const reply = (id, text) => serverOut.write(JSON.stringify({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }],
     _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit' } } } } }) + '\n');

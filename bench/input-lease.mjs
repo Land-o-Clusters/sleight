@@ -12,10 +12,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { resolveServer } from '../plugins/sleight/lib/launch.mjs';
 import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const execute = promisify(execFile);
-const bank = await mkdtemp('/private/tmp/sleight-input-lease-');
+const bank = trackTemp(await mkdtemp('/private/tmp/sleight-input-lease-'));
 const path = join(bank, basename(bank) + '.txt');
 const baseline = process.argv.includes('--baseline');
 const extended = process.argv.includes('--extended');

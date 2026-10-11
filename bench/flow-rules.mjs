@@ -8,10 +8,11 @@ import { mkdtemp, writeFile, readFile, appendFile, access } from 'node:fs/promis
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const execute = promisify(execFile);
-const bank = await mkdtemp('/private/tmp/sleight-flow-rules-');
+const bank = trackTemp(await mkdtemp('/private/tmp/sleight-flow-rules-'));
 const nonce = basename(bank).split('-').at(-1);
 const first = join(bank, `SOURCE-${nonce}.txt`);
 const second = join(bank, `DESTINATION-${nonce}.txt`);

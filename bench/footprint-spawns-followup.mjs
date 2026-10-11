@@ -10,6 +10,7 @@ import { acquireLiveLock } from './live-lock.mjs';
 import { createAppHealthHelper, spawnAppHealthHelper } from '../plugins/sleight/lib/read-failure.mjs';
 import { discoverExtensions } from '../plugins/sleight/lib/browser-discovery.mjs';
 import { resolveServer } from '../plugins/sleight/lib/launch.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const scrub = value => String(value).replace(/\/Users\/[^/\s"']+/g, '~');
 const available = () => { if (existsSync('/tmp/sleight-hold')) throw new Error('/tmp/sleight-hold exists; probe refused'); };
@@ -87,7 +88,7 @@ async function worker(mode, output, cancelFile) {
 async function measure(mode, output) {
   available();
   const report = { mode, started: new Date().toISOString(), runs: [] };
-  const bank = mkdtempSync('/private/tmp/sleight-footprint-followup-'), cancelFile = join(bank, 'cancel');
+  const bank = trackTemp(mkdtempSync('/private/tmp/sleight-footprint-followup-')), cancelFile = join(bank, 'cancel');
   let interrupted = false;
   const cancel = () => { interrupted = true; writeFileSync(cancelFile, 'cancel\n'); };
   process.once('SIGINT', cancel);

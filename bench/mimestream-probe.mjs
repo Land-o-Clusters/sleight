@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { mimestreamHelper } from './real-mimestream.mjs';
 import { runOwned } from './preapproved-process.mjs';
 import { publishPrivateMailResults } from './private-mail.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 export async function probeMimestream({ helper = mimestreamHelper, run = runOwned, auditFile,
   acquireLock = () => mkdirSync('/tmp/sleight-live.lock'), releaseLock = () => rmdirSync('/tmp/sleight-live.lock'),
@@ -30,7 +31,7 @@ function auditResults(ownerName) {
   return 'passed';
 }
 function report(metadata) {
-  const bank = mkdtempSync(join(tmpdir(), 'sleight-mimestream-schema-audit-'));
+  const bank = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-mimestream-schema-audit-')));
   try {
     const ownerName = execFileSync('/usr/bin/id', ['-F'], { encoding: 'utf8' }).trim();
     if (!ownerName) throw new Error('PRIVATE_MAIL_OWNER_AUDIT_UNAVAILABLE');

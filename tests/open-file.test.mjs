@@ -1,11 +1,13 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { callLocalTool, localToolDefinitions, openDocument } from '../plugins/sleight/lib/launch.mjs';
+import { removeTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 
-const dir = mkdtempSync(join(tmpdir(), 'sleight-open-file-'));
+const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-open-file-')));
+after(() => removeTemp(dir));
 const file = join(dir, 'note.txt');
 writeFileSync(file, 'hello');
 const recorder = () => { const calls = []; return { calls, exec: async (cmd, argv) => { calls.push([cmd, ...argv]); } }; };

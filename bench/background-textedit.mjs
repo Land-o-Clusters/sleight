@@ -2,6 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, join, basename } from 'node:path';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 const root = resolve(import.meta.dirname, '..');
 const call = (cmd, args) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8' });
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -14,7 +15,7 @@ if (process.argv[2] === '--cleanup') {
   console.log('Closed only documents listed in the fixture results');
   process.exit(0);
 }
-const dir = mkdtempSync('/private/tmp/sleight-background-textedit-');
+const dir = trackTemp(mkdtempSync('/private/tmp/sleight-background-textedit-'));
 mkdirSync(join(root, '.dev'), { recursive: true });
 const fixture = join(root, '.dev/textedit-drag-fixture');
 const drag = join(root, '.dev/background-drag');

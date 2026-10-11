@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import { SELECT_WINDOW_TOOL } from '../plugins/sleight/lib/select-window.mjs';
+import { removeTemp } from '../scripts/temp-leftovers.mjs';
 const header = 'Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt';
 const rpc = (id, name, args = {}) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
 const result = (id, text = header) => ({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }],
@@ -712,7 +713,7 @@ function setup(t) {
   const path = join(directory, 'a.txt');
   writeFileSync(path, 'before\n');
   const relays = [];
-  t.after(() => { for (const r of relays) r.close(); rmSync(directory, { recursive: true, force: true }); });
+  t.after(() => { for (const r of relays) r.close(); removeTemp(directory); });
   const harness = (holder, { fresh, ...options } = {}) => {
     const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
     const forwarded = [], received = [];

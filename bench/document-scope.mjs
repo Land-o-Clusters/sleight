@@ -8,10 +8,11 @@ import { mkdtemp, writeFile, readFile, appendFile } from 'node:fs/promises';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const execute = promisify(execFile);
-const bank = await mkdtemp('/private/tmp/sleight-document-scope-');
+const bank = trackTemp(await mkdtemp('/private/tmp/sleight-document-scope-'));
 const first = join(bank, `sleight-approved-${basename(bank)}.txt`);
 const second = join(bank, `sleight-blocked-${basename(bank)}.txt`);
 const traceFile = join(bank, 'trace.jsonl');

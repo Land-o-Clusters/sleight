@@ -14,6 +14,7 @@ import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 import { probeClient } from './double-keys-client.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
 import { launchCommand, planForPreflight, isRetry, shouldRetainLock } from './small-fixes-textedit-lib.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url)), execute = promisify(execFile);
 const ATTACH_DEADLINE_MS = 8000, RETRY_SLEEP_MS = 250;
@@ -54,7 +55,7 @@ function startFixture(ownedPath) {
 
 async function main() {
   const repetitions = process.argv.includes('--quick') ? 1 : 3;
-  const bank = await mkdtemp('/private/tmp/sleight-exact-'), path = join(bank, 'exact.txt');
+  const bank = trackTemp(await mkdtemp('/private/tmp/sleight-exact-')), path = join(bank, 'exact.txt');
   report.started = new Date().toISOString(); report.repetitions = repetitions; report.bank = bank;
   report.source = Object.fromEntries(await Promise.all(['plugins/sleight/lib/relay.mjs', 'bench/small-fixes-textedit.js', 'bench/small-fixes-textedit.mjs', 'bench/small-fixes-textedit-lib.mjs'].map(async name =>
     [name, createHash('sha256').update(await readFile(join(root, name))).digest('hex')])));

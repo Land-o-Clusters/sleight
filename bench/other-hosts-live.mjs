@@ -5,6 +5,7 @@ import { homedir, userInfo } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { plainProbe } from './other-hosts-client.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const lock = '/tmp/sleight-live.lock', hold = '/tmp/sleight-hold';
 const receipt = { started: new Date().toISOString(), appAccess: false, pointerInput: false, passed: false };
@@ -19,7 +20,7 @@ try {
   if (existsSync(hold)) throw new Error('sleight-hold exists; no engine started');
   await mkdir(lock); owned = true;
   if (existsSync(hold)) throw new Error('sleight-hold appeared; no engine started');
-  bank = await mkdtemp('/private/tmp/sleight-other-hosts-');
+  bank = trackTemp(await mkdtemp('/private/tmp/sleight-other-hosts-'));
   const result = await plainProbe({ command: fileURLToPath(new URL('../plugins/sleight/bin/sleight-mcp', import.meta.url)),
     env: { SLEIGHT_TRACE: bank, SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_IDLE_TURN_END_MS: '30000' },
   }, { signal: abort.signal, record: event => {

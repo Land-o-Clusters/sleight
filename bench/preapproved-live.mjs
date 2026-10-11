@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { loadPreapproved } from '../plugins/sleight/lib/preapproved.mjs';
 import { judgePreapproval } from './preapproved-result.mjs';
 import { runOwned } from './preapproved-process.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const mode = process.argv[2];
 if (!['listed', 'unlisted'].includes(mode)) throw new Error('expected listed or unlisted');
@@ -23,7 +24,7 @@ try {
   writeFileSync(output, JSON.stringify({ started, mode, launched: false, passed: false, error: clean(error.message) }, null, 2) + '\n');
   console.error(clean(JSON.stringify({ output, error: error.message }))); process.exit(1);
 }
-const bank = mkdtempSync(join(tmpdir(), 'sleight-preapproved-live-'));
+const bank = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-preapproved-live-')));
 const cwd = join(bank, 'empty'); mkdirSync(cwd);
 const trace = join(bank, 'trace'); mkdirSync(trace);
 const config = { mcpServers: { sleight: { command: join(root, 'plugins/sleight/bin/sleight-mcp'),

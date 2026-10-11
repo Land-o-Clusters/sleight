@@ -18,6 +18,7 @@ import { acquireLiveLock } from './live-lock.mjs';
 import { probeClient } from './double-keys-client.mjs';
 import { resolveServer } from '../plugins/sleight/lib/launch.mjs';
 import { imageSize } from '../plugins/sleight/lib/relay.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 if (!process.argv.includes('--owner-away')) throw new Error('Requires --owner-away; do not run while the owner is at the Mac');
 const mode = process.argv[process.argv.indexOf('--observation') + 1];
@@ -27,7 +28,7 @@ process.once('SIGINT', () => controller.abort(new Error('interrupted')));
 const free = () => { if (existsSync('/tmp/sleight-hold')) throw new Error('Live hold exists; stopped'); controller.signal.throwIfAborted(); };
 const probeOptions = simulatorFocusProbeOptions({ check: free, observe: observePermission });
 free();
-const dir = mkdtempSync('/private/tmp/sleight-simulator-focus-');
+const dir = trackTemp(mkdtempSync('/private/tmp/sleight-simulator-focus-'));
 const ownerName = execFileSync('/usr/bin/id', ['-F'], { encoding: 'utf8' }).trim();
 if (ownerName.length < 3) throw new Error('Owner-name scrub identity unavailable; stopped');
 const report = { started: new Date().toISOString(), ownerAway: true, mode, rows: [], events: [], attempts: [] };

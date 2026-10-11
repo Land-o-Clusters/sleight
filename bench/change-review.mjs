@@ -9,12 +9,13 @@ import { join, dirname, basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const rereadMode = process.argv.slice(2).includes('--reread');
 assert.ok(process.argv.slice(2).every(arg => arg === '--reread'), 'usage: node bench/change-review.mjs [--reread]');
 const execute = promisify(execFile);
-const bank = await mkdtemp('/private/tmp/sleight-change-review-');
+const bank = trackTemp(await mkdtemp('/private/tmp/sleight-change-review-'));
 const nonce = basename(bank).split('-').at(-1);
 const first = join(bank, `UNDO-${nonce}.txt`);
 const second = join(bank, `KEEP-${nonce}.txt`);

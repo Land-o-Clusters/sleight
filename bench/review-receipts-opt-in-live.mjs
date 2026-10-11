@@ -13,6 +13,7 @@ import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import { receiptOptions } from '../plugins/sleight/lib/launch.mjs';
 import { writeReceipt } from '../plugins/sleight/lib/turn-receipts.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const report = { at: new Date().toISOString(), kind: 'receipt opt-in Calculator checks', cases: [] };
 const controller = new AbortController();
@@ -29,7 +30,7 @@ const oldReceipts = process.env.SLEIGHT_RECEIPTS;
 const oldReview = process.env.SLEIGHT_STATE_REVIEW;
 try {
   checkHold(); release = await acquireLiveLock(); acquired = true;
-  const ctx = { dir: mkdtempSync('/private/tmp/sleight-receipts-opt-in-'), nonce: randomUUID(), ownerAway: false };
+  const ctx = { dir: trackTemp(mkdtempSync('/private/tmp/sleight-receipts-opt-in-')), nonce: randomUUID(), ownerAway: false };
   safeToRelease = false;
   const task = {
     setup: async () => { checkHold(); await acquireFixture(ctx, 'calculator', () => openFixture(ctx, {

@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { acquireLiveLock } from './live-lock.mjs';
 import { probeClient } from './double-keys-client.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const scrub = value => String(value).replace(/\/Users\/[^/\s"']+/g, '~');
 const available = () => { if (existsSync('/tmp/sleight-hold')) throw new Error('/tmp/sleight-hold exists; live probe refused'); };
@@ -26,7 +27,7 @@ async function worker(root, output, cancelFile, helpersOnly = false) {
   function ready() { available(); if (interrupted) throw new Error('interrupted'); }
   try {
     ready(); unlock = await acquireLiveLock(); ready();
-    bank = mkdtempSync('/private/tmp/sleight-footprint-live-');
+    bank = trackTemp(mkdtempSync('/private/tmp/sleight-footprint-live-'));
     const { createAppHealthHelper } = await import(pathToFileURL(join(root, 'plugins/sleight/lib/read-failure.mjs')));
     const { runScript, stopHelpers } = await import(pathToFileURL(join(root, 'plugins/sleight/lib/launch.mjs')));
     let shared;
@@ -181,7 +182,7 @@ async function surfaceWorker(surfaces, output, cancelFile) {
 async function pairs(baseline, output, surfaces = false, helpersOnly = false) {
   available();
   const report = { started: new Date().toISOString(), mode: surfaces ? 'session engine surfaces' : helpersOnly ? 'native helpers without engine acquisition' : 'live helper pairs; computer surface', runs: [] };
-  const bank = mkdtempSync('/private/tmp/sleight-footprint-pairs-');
+  const bank = trackTemp(mkdtempSync('/private/tmp/sleight-footprint-pairs-'));
   const cancelFile = join(bank, 'cancel');
   let interrupted = false;
   // Workers run in their own group so terminal cancellation reaches this owner.

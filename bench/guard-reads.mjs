@@ -13,12 +13,13 @@ import { probeClient } from './double-keys-client.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
 import { closeGuardFixture } from './guard-reads-cleanup.mjs';
 import { guardTrialTiming } from './guard-reads-events.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const phase = process.argv[2];
 assert.ok(['before', 'after', 'cleanup'].includes(phase), 'pass before, after or cleanup');
 const task = phase === 'cleanup' ? 'cleanup' : process.argv[3] ?? 'all';
 assert.ok(['all', 'calculator', 'textedit', 'chess', 'typing', 'cleanup'].includes(task), 'unknown task');
-const bank = await mkdtemp('/private/tmp/sleight-guard-reads-');
+const bank = trackTemp(await mkdtemp('/private/tmp/sleight-guard-reads-'));
 const server = resolveServer();
 const report = { phase, task, engine: server.version, started: new Date().toISOString(), trials: [], probes: [], failures: [] };
 report.guardSourceSha256 = createHash('sha256').update(await readFile(new URL('../plugins/sleight/lib/document-scope.mjs', import.meta.url))).digest('hex');

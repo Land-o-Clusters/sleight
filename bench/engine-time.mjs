@@ -7,10 +7,11 @@ import { probeClient, benchmarkApproval } from './double-keys-client.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
 import { calculatorValue } from './calculator-value.mjs';
 import { windowFromText, guardedCode, elementLines, hasIdentifier } from '../plugins/sleight/lib/document-scope.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const mode = process.argv[2] ?? 'inspect';
 assert.ok(['inspect', 'latency', 'floor'].includes(mode));
-const bank = await mkdtemp('/private/tmp/sleight-engine-time-');
+const bank = trackTemp(await mkdtemp('/private/tmp/sleight-engine-time-'));
 const server = resolveServer();
 const report = { mode, engine: server.version, started: new Date().toISOString(),
   approvals: 'benchmark allowlist, exact app/risk/schema repeats cached in this client', trials: [], failures: [] };

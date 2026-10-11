@@ -221,6 +221,6 @@ finally {
   if (unlock && cleanup) { await unlock(); report.lockReleased = true; }
   else if (unlock) report.lockRetained = true;
   report.finished = new Date().toISOString(); publish();
-  if (cleanup) rmSync(bank, { recursive: true, force: true });
+  if (process.env.SLEIGHT_KEEP_TEMP !== '1') rmSync(bank, { recursive: true, force: true });
   if (mode !== 'worker') console.log(JSON.stringify({ output: output.replaceAll(homedir(), '~'), error: report.error, load: report.load, trials: report.trials?.map(t => ({ appId: t.appId, passed: t.passed, error: t.error, cleanup: t.cleanup })) }));
 }

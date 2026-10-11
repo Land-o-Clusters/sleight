@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
+import { removeTemp } from '../scripts/temp-leftovers.mjs';
 import { FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
 
 function harness(t, options = {}) {
@@ -15,7 +16,7 @@ function harness(t, options = {}) {
   for (const [stream, out] of [[serverIn, sent], [clientOut, received]]) stream.on('data', d => d.toString().trim().split('\n').forEach(l => out.push(JSON.parse(l))));
   const lease = new InputLease({ directory });
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, inputLease: lease, ...options });
-  t.after(() => { relay.close(); rmSync(directory, { recursive: true, force: true }); });
+  t.after(() => { relay.close(); removeTemp(directory); });
   return { relay, sent, received, lease,
     call: (id, code, name = 'js') => clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: { code } } }) + '\n'),
     reply: (id, result = { content: [], _meta: { 'codex/toolSurface': { kind: 'browserUse' } } }) => serverOut.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n'),

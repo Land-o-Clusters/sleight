@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
+import { trackTemp } from '../../scripts/temp-leftovers.mjs';
 const exec = promisify(execFile);
 const modes = ['pid', 'window', 'key-window', 'nsevent', 'nsevent-command', 'window-location', 'key-window-location'];
 export function validateBackgroundDrag(input) {
@@ -81,7 +82,7 @@ export function textDragExitCode(runs, cancelled = false) {
 }
 let helper;
 async function compile() {
-  const dir = mkdtempSync(join(tmpdir(), 'sleight-background-drag-'));
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-background-drag-')));
   process.once('exit', () => rmSync(dir, { recursive: true, force: true }));
   const exe = join(dir, 'background-drag');
   await exec('/usr/bin/swiftc', ['-O', '-o', exe, fileURLToPath(new URL('./background-drag.swift', import.meta.url))], { timeout: 180000 });

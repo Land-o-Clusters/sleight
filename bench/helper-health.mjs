@@ -14,13 +14,14 @@ import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 import { BENCH_APPS } from './tasks.mjs';
 import { requirePendingKill, killHelper, requireIdleKill, inspectHelperProcesses } from './helper-kill-protocol.mjs';
 import { sanitizeHelperEvidence } from './helper-evidence.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const execute = promisify(execFile);
 const mode = process.argv[2];
 const remaining = process.argv.includes('--remaining');
 assert.ok(['smoke', 'recovery', 'kill'].includes(mode), 'choose smoke, recovery or kill');
-const bank = await mkdtemp('/private/tmp/sleight-helper-health-');
+const bank = trackTemp(await mkdtemp('/private/tmp/sleight-helper-health-'));
 const document = join(bank, basename(bank) + '.txt');
 const output = join(root, 'docs/benchmarks', `2026-10-04-helper-${mode}-${basename(bank)}.json`);
 const records = [];

@@ -16,6 +16,7 @@ import { probeClient } from './double-keys-client.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
 import { resolveServer } from '../plugins/sleight/lib/launch.mjs';
 import { createAppHealthHelper } from '../plugins/sleight/lib/read-failure.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 export const VARIANTS = ['none', 'shift-pair', 'escape', 'keyup-only', 'applescript-read'];
 export const GATE_RUNS = 5, GATE_MIN_HANGS = 3, VARIANT_RUNS = Number(process.env.SAVE_LOCK_VARIANT_RUNS) || 5;
@@ -302,7 +303,7 @@ async function main() {
       current = run;
       let opened = false, attached = false, fatal;
       try { await (async () => {
-        const bank = await mkdtemp('/private/tmp/sleight-save-lock-'), path = join(bank, 'trial.txt');
+        const bank = trackTemp(await mkdtemp('/private/tmp/sleight-save-lock-')), path = join(bank, 'trial.txt');
         ownedTrialPath(path);
         run.bank = bank;
         run.preflight = strip(await request({ op: 'preflight', path }));

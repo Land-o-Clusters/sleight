@@ -11,13 +11,24 @@ import { pathToFileURL } from 'node:url';
 import { createContext, runInContext } from 'node:vm';
 import { GUARD_MARK, GUARD_END } from '../plugins/sleight/lib/compact-reads.mjs';
 import { readCode, guardedCode } from '../plugins/sleight/lib/document-scope.mjs';
+import { removeTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 
-const fixtureRoot = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-relay-review-')));
+const fixtureRoot = realpathSync(trackTemp(mkdtempSync(join(tmpdir(), 'sleight-relay-review-'))));
 const fixturePath = join(fixtureRoot, 'a.txt');
 const fixtureURL = pathToFileURL(fixturePath).href;
 writeFileSync(fixturePath, 'before\n');
 const relays = [];
-after(() => { for (const relay of relays) relay.dispose(); rmSync(fixtureRoot, { recursive: true, force: true }); });
+const leaseDirs = [];
+const leaseDir = prefix => {
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), prefix)));
+  leaseDirs.push(dir);
+  return dir;
+};
+after(() => {
+  for (const relay of relays) relay.dispose();
+  rmSync(fixtureRoot, { recursive: true, force: true });
+  for (const dir of leaseDirs) removeTemp(dir);
+});
 
 // Wires a relay to in-memory streams and records what each side receives.
 function harness(options = {}) {
@@ -1821,7 +1832,7 @@ test('an acquisition\'s read stands in for the guard\'s first read in the next c
   // The default mode: change review off, an input lease on. Change review keeps every read.
   const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
   const { mkdtempSync } = await import('node:fs');
-  const h = harness({ changeReview: false, inputLease: new InputLease({ directory: mkdtempSync(join(tmpdir(), 'sleight-prior-')), holder: 'A' }) });
+  const h = harness({ changeReview: false, inputLease: new InputLease({ directory: leaseDir('sleight-prior-'), holder: 'A' }) });
   const inventory = [{ id: 'com.apple.TextEdit', windows: [{ id: 5, app: 'TextEdit', title: 'a.txt' }] }];
   const state = 'Window: "a.txt", App: TextEdit\n0 standard window a.txt\n1 text entry area Value: hi';
   flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); await tick();
@@ -1845,7 +1856,7 @@ test('Claude\'s own read stands in for the next call\'s first read in the defaul
   const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
   const { mkdtempSync } = await import('node:fs');
   for (const [guardMode, reused] of [[undefined, true], ['careful', false]]) {
-    const h = harness({ changeReview: false, guardMode, inputLease: new InputLease({ directory: mkdtempSync(join(tmpdir(), 'sleight-prior-')), holder: 'A' }) });
+    const h = harness({ changeReview: false, guardMode, inputLease: new InputLease({ directory: leaseDir('sleight-prior-'), holder: 'A' }) });
     const state = 'Window: "Calculator", App: Calculator\n0 standard window Calculator\n\t1 button Description: 1, ID: One';
     flowCall(h, 1, 'let app = await cua.getApp("Calculator")'); await tick();
     h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: state }], _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.calculator' } } } } }); await tick();
@@ -1866,7 +1877,7 @@ test('a first action with keys, text or coordinates reuses a fast read too; a nu
   t.mock.timers.enable({ apis: ['Date'], now: 1000 });
   const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
   const { mkdtempSync } = await import('node:fs');
-  const h = harness({ changeReview: false, inputLease: new InputLease({ directory: mkdtempSync(join(tmpdir(), 'sleight-prior-')), holder: 'A' }) });
+  const h = harness({ changeReview: false, inputLease: new InputLease({ directory: leaseDir('sleight-prior-'), holder: 'A' }) });
   const state = 'Window: "Calculator", App: Calculator\n0 standard window Calculator\n\t1 button Description: 1, ID: One';
   flowCall(h, 1, 'let app = await cua.getApp("Calculator")'); await tick();
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: state }], _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.calculator' } } } } }); await tick();
@@ -1882,10 +1893,10 @@ test('a first action with keys, text or coordinates reuses a fast read too; a nu
   assert.equal(treeFreeFirstAction('await app.setValue({ id: "f" }, "x"); await app.pressKey("Return")'), false);
 });
 
-test('the relay passes the lines Claude last saw for the numbers a call acts on', async () => {
+test('the relay passes the lines Claude last saw for the numbers a call acts on', async t => {
   const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
   const { mkdtempSync } = await import('node:fs');
-  const h = harness({ changeReview: false, inputLease: new InputLease({ directory: mkdtempSync(join(tmpdir(), 'sleight-seen-')), holder: 'A' }) });
+  const h = harness({ changeReview: false, inputLease: new InputLease({ directory: leaseDir('sleight-seen-'), holder: 'A' }) });
   const state = 'Window: "a.txt", App: TextEdit\n0 standard window a.txt\n\t14 menu bar item Format\n\t15 button OK';
   flowCall(h, 1, 'let app = await cua.getApp("TextEdit")'); await tick();
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: state }], _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.TextEdit' } } } } }); await tick();
@@ -2062,17 +2073,17 @@ test('when a turn ends, an app this session drove that holds a keyboard tap is n
     assert.match(first, /sleight-warning: Device Hub holds a keyboard event tap\. If your keys stop working, quit Device Hub\./);
     assert.doesNotMatch(first, /Magnet/, 'apps sleight never drove are not its business');
     assert.doesNotMatch(await end(3), /sleight-warning/, 'once per session');
-  } finally { rmSync(directory, { recursive: true, force: true }); }
+  } finally { removeTemp(directory); }
 });
 
-test('a split acquisition\'s read stands in for the first action only when the app was already running with a window', async () => {
+test('a split acquisition\'s read stands in for the first action only when the app was already running with a window', async t => {
   const { InputLease } = await import('../plugins/sleight/lib/input-lease.mjs');
   const { mkdtempSync } = await import('node:fs');
   const state = 'Window: "Calculator", App: Calculator\n0 standard window Calculator\n\t1 button Description: 1, ID: One';
   for (const [health, reused] of [[{ status: 'responding', windows: 1 }, true], [{ status: 'absent' }, false],
     [{ status: 'responding', windows: 0 }, false], [{ status: 'unknown' }, false]]) {
     const h = harness({ changeReview: false, spaceProbe: async () => health,
-      inputLease: new InputLease({ directory: mkdtempSync(join(tmpdir(), 'sleight-split-')), holder: 'A' }) });
+      inputLease: new InputLease({ directory: leaseDir('sleight-split-'), holder: 'A' }) });
     flowCall(h, 1, 'let app = await cua.getApp("Calculator"); await app.click({ id: "One" })'); await tick();
     const acquisition = h.toServer.find(m => String(m.id).startsWith('sleight-acquire-'));
     assert.ok(acquisition, 'the call was split');

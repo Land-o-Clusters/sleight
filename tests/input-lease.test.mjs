@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { InputLease, isLeaseRead, leaseKey } from '../plugins/sleight/lib/input-lease.mjs';
+import { removeTemp } from '../scripts/temp-leftovers.mjs';
 import { guardedCode } from '../plugins/sleight/lib/document-scope.mjs';
 
 const window = { app: 'TextEdit', appId: 'com.apple.TextEdit', title: 'a.txt', url: 'file:///tmp/a.txt' };
@@ -41,7 +42,7 @@ for (const code of [
 ]) test('read/action mixture stays an action: ' + code, () => assert.equal(isLeaseRead(code), false));
 function bank(t, cleanup = () => {}) {
   const directory = mkdtempSync(join(tmpdir(), 'sleight-lease-test-'));
-  t.after(() => { try { cleanup(); } finally { rmSync(directory, { recursive: true, force: true }); } });
+  t.after(() => { try { cleanup(); } finally { removeTemp(directory); } });
   return directory;
 }
 function assertCoordinatorLock(coordinator, expected) {

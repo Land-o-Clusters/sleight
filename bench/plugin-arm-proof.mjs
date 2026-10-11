@@ -6,12 +6,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runOwned } from './preapproved-process.mjs';
 import { filterPluginEvidence } from './plugin-evidence.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const mode = process.argv[2];
 if (!['plugin-dry', 'mcp-dry', 'mcp-live', 'sanitize', 'filter-rate-limits', 'audit'].includes(mode)) throw new Error('unknown proof operation');
 const root = fileURLToPath(new URL('..', import.meta.url));
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-const bank = mkdtempSync('/private/tmp/sleight-plugin-arm-');
+const bank = trackTemp(mkdtempSync('/private/tmp/sleight-plugin-arm-'));
 const name = execFileSync('/usr/bin/id', ['-F'], { encoding: 'utf8' }).trim();
 if (!name) throw new Error('owner-name audit unavailable');
 const scrub = text => text.replaceAll(name, '<user>').replaceAll(homedir(), '~');

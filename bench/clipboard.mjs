@@ -11,10 +11,13 @@ import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { resolveServer } from '../plugins/sleight/lib/launch.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import { createNativeClipboardIO } from '../plugins/sleight/lib/clipboard.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const execute = promisify(execFile);
+const created = !process.argv[2];
 const bank = process.argv[2] || await mkdtemp('/private/tmp/sleight-clipboard-');
+if (created) trackTemp(bank);
 const extra = process.argv.includes('--extra');
 const fixed = process.argv.includes('--fixed');
 const diagnose = process.argv.includes('--diagnose');

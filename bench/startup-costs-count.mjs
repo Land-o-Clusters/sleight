@@ -10,6 +10,7 @@ import { execFile } from 'node:child_process';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import { createAppHealthHelper } from '../plugins/sleight/lib/read-failure.mjs';
 import { callLocalTool } from '../plugins/sleight/lib/launch.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const scenario = process.argv[2];
 const reps = Number(process.argv[3] ?? 10);
@@ -72,11 +73,11 @@ const scenarios = {
 
   // Lease operations against a private temp directory: opens per operation.
   'lease-cold-acquire': () => count(async i => {
-    const dir = mkdtempSync(join(tmpdir(), `sleight-lease-${i}-`));
+    const dir = trackTemp(mkdtempSync(join(tmpdir(), `sleight-lease-${i}-`)));
     try { lease(dir).acquire(window); } finally { rmSync(dir, { recursive: true, force: true }); }
   }),
   'lease-warm-acquire': () => count(async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'sleight-lease-warm-'));
+    const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-lease-warm-')));
     const l = lease(dir);
     try {
       l.acquire({ ...window, title: 'seed' });
@@ -85,7 +86,7 @@ const scenarios = {
     } finally { rmSync(dir, { recursive: true, force: true }); }
   }),
   'lease-renew': () => count(async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'sleight-lease-renew-'));
+    const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-lease-renew-')));
     const l = lease(dir);
     try {
       const key = l.acquire(window);
@@ -94,7 +95,7 @@ const scenarios = {
     } finally { rmSync(dir, { recursive: true, force: true }); }
   }),
   'lease-release': () => count(async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'sleight-lease-release-'));
+    const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-lease-release-')));
     try {
       const l = lease(dir);
       const key = l.acquire(window);

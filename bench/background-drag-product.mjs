@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { callLocalTool } from '../plugins/sleight/lib/launch.mjs';
 import { createHoverRedactor, publishHoverImage } from './hover-publication.mjs';
 import { runChessTrial } from './background-drag-product-chess.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const exec = promisify(execFile), [mode, label] = process.argv.slice(2);
 if (!['prepare', 'text', 'chess-read', 'chess', 'chess-control', 'chess-image', 'chess-finish'].includes(mode) || !/^[a-z0-9-]{1,60}$/.test(label ?? 'prepare')) throw new Error('Use a product trial mode and a fresh label');
@@ -45,7 +46,7 @@ if (mode === 'prepare') {
   const js = async code => {
     const result = await tool('js', { code });
     for (const block of result.content ?? []) if (block.type === 'image') {
-      const bank = await mkdtemp('/private/tmp/sleight-product-image-');
+      const bank = trackTemp(await mkdtemp('/private/tmp/sleight-product-image-'));
       await writeFile(join(bank, `${++imageId}.png`), Buffer.from(block.data, 'base64'));
       await publishHoverImage('Chess', block, `${label}-${imageId}.png`, async () => {});
     }
@@ -72,7 +73,7 @@ if (mode === 'prepare') {
     locked = true; console.log('Acquired shared live lock');
     if (cancelled) throw new Error('cancelled');
     if (mode === 'text') {
-      const dir = await mkdtemp('/private/tmp/sleight-product-text-');
+      const dir = trackTemp(await mkdtemp('/private/tmp/sleight-product-text-'));
       const decision = await approve(null, 'Allow Claude to drag in TextEdit? Background product fixtures.');
       if (decision.action !== 'accept') throw new Error('TextEdit not approved');
       for (let n = 1; n <= 3; n++) {
@@ -119,7 +120,7 @@ if (mode === 'prepare') {
           plan: process.argv[5] && mode !== 'chess-finish' ? JSON.parse(await readFile(process.argv[5], "utf8")) : undefined,
           receipt, save, js, tool, observeDrag, command,
           fixture: async args => JSON.parse(await command("/usr/bin/osascript", ["-l", "JavaScript", "bench/drag-chess-fixture.js", JSON.stringify(args)])),
-          makeDirectory: () => mkdtemp("/private/tmp/sleight-product-chess-"), listFiles: readdir,
+          makeDirectory: async () => trackTemp(await mkdtemp("/private/tmp/sleight-product-chess-")), listFiles: readdir,
         });
       }
     }

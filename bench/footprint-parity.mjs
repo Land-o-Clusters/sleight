@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { acquireLiveLock } from './live-lock.mjs';
 import { startFootprint } from './footprint.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const mode = process.argv[2] ?? 'profile';
 assert.ok(['profile', 'helpers', 'helpers-pairs', 'source-pairs', 'relay-reads'].includes(mode));
@@ -93,7 +94,7 @@ async function timedHelper(part, app, repetitions, source = join(root, 'plugins/
 try {
   save(); ready(); unlock = await acquireLiveLock(undefined, { wait: true, signal: waiting.signal, interval: 1000 }); ready();
   report.lockAcquired = new Date().toISOString(); report.loadAtLock = loadavg(); save();
-  bank = mkdtempSync('/private/tmp/sleight-footprint-parity-');
+  bank = trackTemp(mkdtempSync('/private/tmp/sleight-footprint-parity-'));
   const oldSource = file => {
     const target = join(bank, file);
     writeFileSync(target, execFileSync('/usr/bin/git', ['show', `${baseline}:plugins/sleight/lib/${file}`], { cwd: root }));
