@@ -773,15 +773,20 @@ our own runs. Dates and engine versions are given where they matter.
 - The opt-in rich TextEdit move (`SLEIGHT_RICH_TEXT_MOVE=1`) hasn't completed live. JXA doesn't
   bridge NSAttributedString's string initializers, so every rich move fell back to the plain move
   until 2026-10-10 (fixed). The next live trial stopped at the clipboard helper's write check
-  ("Clipboard write verification failed") before any paste: the text was unchanged and the
-  clipboard restored. macOS lists `public.utf16-external-plain-text` and
-  `public.utf8-plain-text` beside an item written with only `public.rtf`, and the helper's check
-  required an exact match. Writing that trial's recorded RTF to a private pasteboard gives the same error (1/1).
-  The helper now allows added types (fixed 2026-10-10). On 2026-10-11 the move pasted (the text
-  changed, the clipboard came back byte for byte) and then stopped: "TextEdit did not confirm the
-  pasted formatting attributes", with the source left in place
-  ([raw](benchmarks/2026-10-11-textedit-fixes-1791679610865.json)). We don't know yet whether the
-  paste lost the bold red formatting or the check compares attributes TextEdit changes on paste.
+  before any paste; the helper now allows the types macOS adds beside `public.rtf` (fixed
+  2026-10-10). On 2026-10-11 the move pasted (the text changed, the clipboard came back byte for
+  byte) and then stopped with "TextEdit did not confirm the pasted formatting attributes", leaving
+  the source in place ([raw](benchmarks/2026-10-11-textedit-fixes-1791679610865.json)). Offline
+  loads of that record's RTFs answer the question it left open: the paste did not lose formatting.
+  TextEdit's RTF writer re-encodes the document's `\red220` (0.862745) as `\csgenericrgb\c86275`,
+  so the pasted word's color differed from the source's by 4.9e-6 of full scale (one 8-bit display
+  level is 0.0039), and the exact `CFEqual` comparison rejected it (1/1 offline, with a load of the
+  fixture document as the source read). `sameTextEditFormatting` now compares colors
+  by components in one generic RGB space within half a display level, and keeps font name, size
+  and underline exact. Whether TextEdit's own AX read of a pasted word matches under the fixed
+  comparison is unverified until a live move:
+  `SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background` must report
+  exactText and formatPreserved true and exit 0.
 - Driving Helium's Claude Console tab from a session that had used the engine (2026-10-11), the input
   lease refused `browser.nameSession(...)` and later `tab.goto(...)` on a tab from `cua.getTab` with
   "a bundle ID and full window header are required", the native-app refusal, after `cua.getState()`.

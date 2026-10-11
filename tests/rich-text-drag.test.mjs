@@ -137,6 +137,76 @@ test('spelling annotations do not count as formatting and visual changes do', ()
   }
   assert.equal(context.sameTextEditFormatting(dictionary({}), dictionary({ AXUnderline: 0 })), true);
 });
+test('a color CFEqual rejects but a paste re-encodes invisibly compares by components', () => {
+  const nil = { isNil: () => true }, dictionary = values => ({ objectForKey: key => values[key] ?? nil });
+  const rgb = components => ({ colorUsingColorSpace: () => ({ isNil: () => false,
+    redComponent: components[0], greenComponent: components[1], blueComponent: components[2], alphaComponent: components[3] }) });
+  const context = vm.createContext({ ObjC: { import() {} }, $: { CFEqual: () => false,
+    NSColor: { colorWithCGColor: value => value }, NSColorSpace: { genericRGBColorSpace: {} } } });
+  vm.runInContext(readFileSync(new URL('../plugins/sleight/lib/drag.js', import.meta.url), 'utf8'), context);
+  // TextEdit held the document red at 220/255; its RTF writer re-encodes it as 0.86275.
+  const source = dictionary({ AXForegroundColor: rgb([220 / 255, 0, 0, 1]) });
+  const pasted = dictionary({ AXForegroundColor: rgb([0.86275, 0, 0, 1]) });
+  assert.equal(context.sameTextEditFormatting(source, pasted), true);
+  assert.equal(context.sameTextEditFormatting(pasted, source), true);
+  for (const other of [[200 / 255, 0, 0, 1], [0.86275, 0, 0, 0.5], [0.86275, 0.01, 0, 1]]) {
+    assert.equal(context.sameTextEditFormatting(source, dictionary({ AXForegroundColor: rgb(other) })), false);
+  }
+  const inconvertible = dictionary({ AXForegroundColor: { colorUsingColorSpace: () => ({ isNil: () => true }) } });
+  assert.equal(context.sameTextEditFormatting(source, inconvertible), false);
+});
+
+test("tonight's recorded rich move: the pasted word's formatting matches its source", { skip: process.platform !== 'darwin' }, () => {
+  const record = JSON.parse(readFileSync(new URL('../docs/benchmarks/2026-10-11-textedit-fixes-1791679610865.json', import.meta.url), 'utf8'));
+  const { rtf, sourceRTF } = record.trials[3].result.richTextMove;
+  // bench/textedit-fixes.mjs writes the fixture document this way; its \red220 color is what
+  // TextEdit held before the move. Loading sourceRTF instead would already hold the writer's
+  // re-encoded color and could not reproduce the failure.
+  const fixtureRTF = '{\\rtf1\\ansi{\\fonttbl{\\f0 Helvetica;}}{\\colortbl;\\red220\\green0\\blue0;}\\f0\\fs28\\b\\cf1 alpha\\b0\\cf0  beta gamma\\par}';
+  const context = vm.createContext({ ObjC: { import() {} } });
+  vm.runInContext(readFileSync(new URL('../plugins/sleight/lib/drag.js', import.meta.url), 'utf8'), context);
+  const code = `ObjC.import('AppKit');
+    ObjC.bindFunction('objc_msgSend', ['id', ['id', 'selector']]);
+    const attempt = (fn, fallback) => { try { return fn(); } catch (_) { return fallback; } };
+    ${context.sameTextEditFormatting.toString()}
+    const load = b64 => $.NSAttributedString.alloc.initWithRTFDocumentAttributes($.NSData.alloc.initWithBase64EncodedStringOptions(b64, 0), null);
+    // TextEdit's AX attributed string exposes the NSColor's CGColor, an AXFont dictionary, and no
+    // paragraph style or kerning (recorded 2026-10-10), so build that shape from the loads.
+    const axAttributes = (rich, index) => {
+      const a = rich.attributesAtIndexEffectiveRange(index, null), out = $.NSMutableDictionary.alloc.init;
+      const font = a.objectForKey('NSFont');
+      if (!font.isNil()) {
+        const f = $.NSMutableDictionary.alloc.init;
+        f.setObjectForKey($(ObjC.unwrap(font.fontName)), 'AXFontName');
+        f.setObjectForKey($.NSNumber.numberWithDouble(Number(font.pointSize)), 'AXFontSize');
+        out.setObjectForKey(f, 'AXFont');
+      }
+      const color = a.objectForKey('NSColor');
+      if (!color.isNil()) out.setObjectForKey($.objc_msgSend(color, 'CGColor'), 'AXForegroundColor');
+      return out;
+    };
+    const source = $.NSAttributedString.alloc.initWithRTFDocumentAttributes(
+      $(${JSON.stringify(fixtureRTF)}).dataUsingEncoding($.NSUTF8StringEncoding), null);
+    const pasted = load(${JSON.stringify(rtf)});
+    const otherRed = $.NSMutableDictionary.alloc.init;
+    otherRed.setObjectForKey(axAttributes(source, 0).objectForKey('AXFont'), 'AXFont');
+    otherRed.setObjectForKey($.objc_msgSend($.NSColor.colorWithCalibratedRedGreenBlueAlpha(200 / 255, 0, 0, 1), 'CGColor'), 'AXForegroundColor');
+    JSON.stringify({
+      stagedText: ObjC.unwrap(pasted.string),
+      cfEqualColors: Number($.CFEqual($.objc_msgSend(source.attributesAtIndexEffectiveRange(0, null).objectForKey('NSColor'), 'CGColor'),
+        $.objc_msgSend(pasted.attributesAtIndexEffectiveRange(1, null).objectForKey('NSColor'), 'CGColor'))) === 1,
+      same: sameTextEditFormatting(axAttributes(source, 0), axAttributes(pasted, 1)),
+      sameAllWordChars: [1, 2, 3, 4, 5].every(i => sameTextEditFormatting(axAttributes(source, 0), axAttributes(pasted, i))),
+      differentRedRefused: sameTextEditFormatting(axAttributes(source, 0), otherRed),
+    });`;
+  const result = JSON.parse(execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', code], { encoding: 'utf8', timeout: 30000 }));
+  assert.equal(result.stagedText, ' alpha');
+  assert.equal(result.cfEqualColors, false, 'premise: the recorded colors must still differ for CFEqual');
+  assert.equal(result.same, true);
+  assert.equal(result.sameAllWordChars, true);
+  assert.equal(result.differentRedRefused, false);
+});
+
 test('background rich paste searches only Edit and stops at its first enabled Command-V item', () => {
   const context = vm.createContext({ ObjC: { import() {},
     castRefToObject: ref => ref.native,

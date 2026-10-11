@@ -253,6 +253,22 @@ function sameTextEditFormatting(a, b) {
   const absent = value => value === undefined || value === null || value.isNil?.() === true;
   const same = (left, right) => absent(left) || absent(right)
     ? absent(left) && absent(right) : !!$.CFEqual(left, right);
+  // TextEdit's RTF writer re-encodes color components at five decimal places (\red220 becomes
+  // \csgenericrgb\c86275), so a faithful paste yields a CGColor that CFEqual rejects while the
+  // word looks the same: 4.9e-6 of full scale on the recorded 2026-10-11 move, against 0.0039
+  // for one 8-bit display level. Compare what a paste can re-encode in one generic RGB space,
+  // within half a display level; a color that cannot convert stays strict.
+  const sameColor = (left, right) => {
+    if (absent(left) || absent(right)) return absent(left) && absent(right);
+    if ($.CFEqual(left, right)) return true;
+    const components = color => attempt(() => {
+      const rgb = $.NSColor.colorWithCGColor(color).colorUsingColorSpace($.NSColorSpace.genericRGBColorSpace);
+      return rgb.isNil() ? null : [Number(rgb.redComponent), Number(rgb.greenComponent), Number(rgb.blueComponent), Number(rgb.alphaComponent)];
+    }, null);
+    const leftComponents = components(left), rightComponents = components(right);
+    return !!leftComponents && !!rightComponents &&
+      leftComponents.every((value, index) => Math.abs(value - rightComponents[index]) <= 0.002);
+  };
   const af = a.objectForKey('AXFont'), bf = b.objectForKey('AXFont');
   for (const key of ['AXFontName', 'AXFontSize']) {
     if (!same(absent(af) ? null : af.objectForKey(key), absent(bf) ? null : bf.objectForKey(key))) return false;
@@ -267,7 +283,7 @@ function sameTextEditFormatting(a, b) {
       }, false);
       if (black(left) && black(right)) continue;
     }
-    if (!same(left, right)) return false;
+    if (!(key === 'AXUnderline' ? same(left, right) : sameColor(left, right))) return false;
   }
   return true;
 }
