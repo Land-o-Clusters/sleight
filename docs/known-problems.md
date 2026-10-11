@@ -16,6 +16,22 @@ Its scrubbed environment is a forwarding control. This harness is not a sandbox 
 What doesn't work, or works only partly, with the measurements behind it. We found all of these in
 our own runs. Dates and engine versions are given where they matter.
 
+## Turn study
+
+The [2026-10-11 offline study](benchmarks/2026-10-11-turn-study.md) covered 90 cached transcripts
+and 386 calls. The cache supplied no transcripts before 2026-10-10 EDT in the selected range.
+Another 367 result rows had no matching transcript there. Those missing runs have no measured turn cost.
+Call timestamps cover the host round trip. The preceding gap includes model time and host
+scheduling. It does not isolate model API time. A class charges the whole call,
+including useful actions in that call, so 397.021 attributed seconds do not establish savings.
+Classes overlap. Parallel call wall times can overlap too. The analyzer charges a shared gap once.
+
+Read-only, menu, save-wait and filtering classes use literal method patterns and observed menu
+lines. Dynamic calls and other syntax can be missed. Consecutive reads can be necessary to check
+changing UI. A refusal can be a required guard. Missing spill files leave only preview byte counts,
+and missing timestamps remain null. The sample resolved 13 of 13 spill files and measured 386 of
+386 calls. There has been no live comparison of a change based on these classifications.
+
 ## Approvals and guards
 
 - On bestbuy.com in Safari (real-site smoke, 2026-10-10), the input lease refused every click
