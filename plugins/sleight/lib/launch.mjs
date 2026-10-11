@@ -624,6 +624,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     guardMode: process.env.SLEIGHT_GUARD,
     takeNotices: takeRichTextNotices,
     simFocusNote: process.env.SLEIGHT_SIM_FOCUS_NOTE !== '0',
+    resultTrim: process.env.SLEIGHT_RESULT_TRIM === '1',
     firstCallBatch: process.env.SLEIGHT_FIRST_CALL_BATCH === 'merge' ? process.env.SLEIGHT_FIRST_CALL_BATCH : process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',
     clientIn: replayClient.clientIn,
     clientOut: replayClient.clientOut,

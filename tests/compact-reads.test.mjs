@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GUARD_MARK, createReadCompactor, lineDiff } from '../plugins/sleight/lib/compact-reads.mjs';
+import { GUARD_MARK, GUARD_END, createReadCompactor, lineDiff, trimFileLists, dropAcquisitionTree, hasFullTree } from '../plugins/sleight/lib/compact-reads.mjs';
 
 const tree = (rows, title = 'a.txt') => [`Window: "${title}", App: TextEdit.`,
   `0 standard window ${title}, URL: file:///tmp/${title}, Secondary Actions: Raise`, ...rows].join('\n');
@@ -243,4 +243,48 @@ test('an old bare button sharing the ID also prevents folding a richer button', 
   const [out] = apply(c, GUARD_MARK + tree([...sidebar, '\t92 button Action']));
   assert.doesNotMatch(out, /button lines returned fewer attributes/);
   assert.equal(c.remapStale(buttonWindow, 'app.click(90)'), undefined);
+});
+
+// A Save sheet's column browser, n folders in its list (2026-10-11: up to 594 of 1,230 lines).
+function saveSheet(n, { selected } = {}) {
+  const rows = [];
+  for (let k = 0; k < n; k++) {
+    const num = 10 + k * 3;
+    rows.push(`\t\t\t${num} container${k === selected ? ' (selected)' : ''} Secondary Actions: Open Finder item`,
+      `\t\t\t\t${num + 1} image`,
+      `\t\t\t\t${num + 2} text field (settable) URL: file:///tmp/f${k}/, Value: f${k}, Secondary Actions: Open Finder item`);
+  }
+  const last = 10 + n * 3;
+  return ['Window: "Save", App: TextEdit.', '0 sheet Description: save, ID: save-panel', '\t1 browser ID: ColumnView', '\t\t2 list', ...rows,
+    `\t${last} text field (settable) Value: a.txt, ID: saveAsNameTextField`, `\t${last + 1} button Save, ID: OKButton`].join('\n');
+}
+
+test('long file lists in a Save sheet keep 10 rows and the selected one, with a count for the rest', () => {
+  const out = trimFileLists(saveSheet(40, { selected: 30 }));
+  assert.match(out, /^\t\t\tsleight: 29 more items in this list aren't shown\. Go to Folder \(super\+shift\+g\)/m);
+  assert.equal((out.match(/Open Finder item/g) ?? []).length, 22);
+  assert.match(out, /^\t\t\t100 container \(selected\)/m, 'the selected row and its number stay');
+  assert.match(out, /\d+ text field \(settable\) Value: a\.txt, ID: saveAsNameTextField/);
+  assert.match(out, /button Save, ID: OKButton/);
+  assert.equal(trimFileLists(saveSheet(10)), saveSheet(10), 'ten rows or fewer are left alone');
+  const diff = saveSheet(15).split('\n').map((line, i) => i > 3 && line.includes('container') || i > 3 && /image|URL/.test(line) ? '+ ' + line : line).join('\n');
+  assert.match(trimFileLists(diff), /^\+ \t\t\tsleight: 5 more items/m, 'added lines in a diff are trimmed the same way');
+});
+
+test('a split acquisition\'s tree is left out only when the rest of its call returns a newer full tree', () => {
+  const tree = 'Window: "Untitled", App: TextEdit.\n0 standard window Untitled\n\t1 text entry area';
+  const head = [{ type: 'text', text: '## Computer Use\ndocs\n' + tree }];
+  assert.deepEqual(dropAcquisitionTree(head, [{ type: 'text', text: tree + '\n\t2 button' }]), [{ type: 'text', text: '## Computer Use\ndocs' }]);
+  assert.deepEqual(dropAcquisitionTree([{ type: 'text', text: tree }], [{ type: 'text', text: tree }]), []);
+  const diff = 'Window: "Untitled", App: TextEdit.\n0 standard window Untitled\nsleight: lines changed since the last full tree you saw for this window (- removed, + added; numbers on + lines are current):\n+ \t2 button';
+  assert.equal(hasFullTree(diff), false);
+  assert.equal(dropAcquisitionTree(head, [{ type: 'text', text: diff }]), head, 'a diff needs the tree it was taken against');
+  assert.equal(dropAcquisitionTree(head, [{ type: 'text', text: 'saved' }]), head);
+});
+
+test('the compactor trims file lists in marked and plain results only when asked', () => {
+  const marked = [{ type: 'text', text: GUARD_MARK + saveSheet(30) + GUARD_END }];
+  assert.doesNotMatch(createReadCompactor().process(marked)[0].text, /more items in this list/);
+  assert.match(createReadCompactor({ trimLists: true }).process(marked)[0].text, /sleight: 20 more items in this list/);
+  assert.match(createReadCompactor({ trimLists: true }).process([{ type: 'text', text: saveSheet(30) }])[0].text, /sleight: 20 more items/);
 });

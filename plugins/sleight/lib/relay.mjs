@@ -68,7 +68,7 @@ import { verifyWindowIdentity } from './window-identity.mjs';
 import { checkedStop, stopText } from './checked-stop.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
-import { createReadCompactor } from './compact-reads.mjs';
+import { createReadCompactor, dropAcquisitionTree } from './compact-reads.mjs';
 import { forbiddenTargetWarning, isForbiddenSettingsWindow, matchBlockedApp, refusedApp } from './blocked-apps.mjs';
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
 import { offSpace, offSpaceNote, readFailureAdvice, savePanelNote } from './read-failure.mjs';
@@ -325,6 +325,9 @@ export function createRelay({
   // SLEIGHT_FIRST_CALL_BATCH=0: in 24 runs a side it cut turns 208 to 168 (2026-10-09). 'merge' picks
   // the wording under A/B.
   firstCallBatch = false,
+  // Under A/B (SLEIGHT_RESULT_TRIM=1): shortens long file lists in Save and Open panels
+  // (trimFileLists), and leaves out a split acquisition's tree when its call returns a newer full one.
+  resultTrim = false,
   firstCallRules,
   diagnoseRead,
   // Notices from work that finished between calls (rich-text clipboard recovery), added to the next
@@ -339,7 +342,7 @@ export function createRelay({
   chromeSettleIntervalMs = 100,
   chromeSettleSleep = ms => new Promise(r => setTimeout(r, ms)),
 }) {
-  let compactor = createReadCompactor();
+  let compactor = createReadCompactor({ trimLists: resultTrim });
   const journal = receipts || stateReview ? new TurnJournal({ redactTitles: redactReceiptTitles }) : undefined;
   const receiptEnds = new Map();
   let latestReceipt;
@@ -475,7 +478,7 @@ export function createRelay({
         toServer({ jsonrpc: '2.0', method: 'notifications/initialized' });
       }
       if (!isCurrent()) throw new Error('Engine restart was stopped.');
-      clipboard = newClipboard(); compactor = createReadCompactor(); resultCalls.clear(); docsShown = false; priorRead = undefined;
+      clipboard = newClipboard(); compactor = createReadCompactor({ trimLists: resultTrim }); resultCalls.clear(); docsShown = false; priorRead = undefined;
       selectorWindows.clear(); helperStates.clear(); helperHandles.clear(); helperAliases.clear();
       screenshots.clear(); turnId = randomUUID();
       trace('engine-restarted-after-stop', {});
@@ -1079,7 +1082,8 @@ export function createRelay({
       const next = splitCalls.get(msg.id); splitCalls.delete(msg.id); callGenerations.delete(msg.id); next(msg); return;
     }
     if (msg.method === undefined && splitHeads.has(msg.id)) {
-      const head = splitHeads.get(msg.id); splitHeads.delete(msg.id);
+      let head = splitHeads.get(msg.id); splitHeads.delete(msg.id);
+      if (resultTrim && msg.result && !msg.result.isError) head = dropAcquisitionTree(head, msg.result.content);
       msg = msg.result ? { ...msg, result: { ...msg.result, content: [...head, ...(msg.result.content ?? [])] } }
         : { jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [...head, { type: 'text', text: msg.error?.message ?? 'error' }] } };
     }

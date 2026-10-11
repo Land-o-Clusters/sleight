@@ -238,7 +238,67 @@ function resultNote(action, after, failed) {
   return 'sleight: ' + fields.join('; ') + '.' + (finish ? '\n' + finish : '');
 }
 
-export function createReadCompactor() {
+// A Save or Open panel's file browser lists every item of each folder it shows. In 4 of 8
+// textedit-save runs (2026-10-11) the Save sheet's tree ran 58,786 to 87,740 characters, 594 of
+// 1,230 lines being rows of the benchmark's temp folders, and Claude Code wrote the result to a file
+// that Claude then spent 2 to 5 calls filtering. Past FILE_LIST_KEEP rows in one list, the rest go
+// out as one line with their count. Selected rows always stay. Numbers on the lines kept don't change.
+const FILE_LIST_KEEP = 10;
+export function trimFileLists(text) {
+  if (typeof text !== 'string' || !text.includes('Open Finder item')) return text;
+  const lines = text.split('\n');
+  const depth = line => { const m = /^(?:[+-] )?(\t*)\d+ /.exec(line); return m ? m[1].length : -1; };
+  // The end of the block that starts at i: its line and every deeper line after it.
+  const blockEnd = i => { const d = depth(lines[i]); let j = i + 1; while (j < lines.length && depth(lines[j]) > d) j++; return j; };
+  // One file row is a few lines (container, icon, name; a list view row adds size, kind and date cells).
+  // A bigger block is a list or its parent, which is walked into instead.
+  const isFile = (i, j) => j - i <= 12 && lines.slice(i, j).some(line => line.includes('Open Finder item'));
+  const out = [];
+  let i = 0;
+  while (i < lines.length) {
+    const d = depth(lines[i]);
+    let j = d < 0 ? i + 1 : blockEnd(i);
+    if (d < 0 || !isFile(i, j)) { out.push(lines[i]); i++; continue; }
+    const run = [];
+    while (i < lines.length && depth(lines[i]) === d && isFile(i, j = blockEnd(i))) { run.push([i, j]); i = j; }
+    if (run.length <= FILE_LIST_KEEP) { for (const [a, b] of run) out.push(...lines.slice(a, b)); continue; }
+    let left = 0;
+    run.forEach(([a, b], n) => {
+      if (n < FILE_LIST_KEEP || lines.slice(a, b).some(line => /\((?:[^)]*, )?selected\b/.test(line))) out.push(...lines.slice(a, b));
+      else left++;
+    });
+    const lead = /^[+-] /.test(lines[run[0][0]]) ? lines[run[0][0]].slice(0, 2) : '';
+    out.push(`${lead}${'\t'.repeat(d)}sleight: ${left} more items in this list aren't shown. Go to Folder (super+shift+g) opens a folder by its path.`);
+  }
+  return out.join('\n');
+}
+
+// Whether text holds a full tree: a window header whose next lines aren't a diff of an earlier one.
+export function hasFullTree(text) {
+  if (typeof text !== 'string') return false;
+  for (const m of text.matchAll(/^Window: [^\n]*\n/gm)) {
+    const next = text.slice(m.index + m[0].length).split('\n', 3);
+    if (ELEMENT.test(next[0] ?? '') && !next.slice(1).some(line => /^sleight: (?:lines changed|no change since)/.test(line))) return true;
+  }
+  return false;
+}
+
+// A split acquisition's tree, left out when the rest of its call returns a full tree of the same app:
+// that later tree is newer, and in 74 of 150 results (2026-10-11) the acquisition's tree came first,
+// 370,328 of 1,620,273 characters Claude read. Text before the tree (the engine's docs) stays.
+export function dropAcquisitionTree(head, rest) {
+  const later = (rest ?? []).filter(c => c?.type === 'text').map(c => c.text).join('\n');
+  if (!hasFullTree(later)) return head;
+  return head.flatMap(item => {
+    if (item?.type !== 'text' || typeof item.text !== 'string') return [item];
+    const at = item.text.search(/^Window: /m);
+    if (at < 0) return [item];
+    const kept = item.text.slice(0, at).replace(/\n+$/, '');
+    return kept ? [{ ...item, text: kept }] : [];
+  });
+}
+
+export function createReadCompactor({ trimLists = false } = {}) {
   // window key -> { lines, valid }: the last full tree Claude got, and the
   // element numbers in it Claude knows are current (undefined: all of them).
   const seen = new Map();
@@ -367,7 +427,10 @@ export function createReadCompactor() {
       const out = content.map(item => {
         if (item?.type === 'text' && /sleight: an action in this call failed|engine's JavaScript session restarted/.test(item.text ?? '')) failed = true;
         if (item?.type !== 'text' || typeof item.text !== 'string' || !item.text.includes(GUARD_MARK)) {
-          if (item?.type === 'text' && typeof item.text === 'string') remember(item.text);
+          if (item?.type === 'text' && typeof item.text === 'string') {
+            remember(item.text);
+            if (trimLists) return { ...item, text: trimFileLists(item.text) };
+          }
           return item;
         }
         let out = '', seenText = '', pos = 0;
@@ -390,7 +453,7 @@ export function createReadCompactor() {
           if (end < 0) break;
           pos = end + GUARD_END.length;
         }
-        return { ...item, text: out };
+        return { ...item, text: trimLists ? trimFileLists(out) : out };
       });
       const note = action && resultNote(action, observedInResult, failed);
       if (note) out.push({ type: 'text', text: note });
