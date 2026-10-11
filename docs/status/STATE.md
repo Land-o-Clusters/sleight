@@ -30,8 +30,9 @@ GLM's selectall-check and richmove-paste. Merged since: richmove-format (`edd09e
 then stopped at a disabled Paste item twice (richmove-paste is the follow-up), and savelock-engine
 (`45f07e9`), with a review fix that refuses a TextEdit holding documents the probe didn't open.
 The owner now gets each lane as one paste-ready prompt with the model named.
-Codex hasn't started lease-select (Best Buy's lease refusals and tonight's browser-tab refusals),
-sim-readiness or speed-research. They wait for its quota to reset, with prompts ready. saveclose-research found the next speed lever for speed-research.
+Grok, handed out 02:55 UTC: speed-research and sim-readiness (moved off Codex) and savesheet-recipe
+(a result note with the one-call save when a Save sheet opens). Codex keeps lease-select (relay core),
+waiting for its quota. saveclose-research found the next speed lever for speed-research.
 Claude spends two or three calls inside the Save sheet, 6 to 9 s a run
 (`docs/design/save-then-close-2026-10-11.md`).
 
