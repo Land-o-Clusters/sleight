@@ -8,7 +8,8 @@ const authKeys = new Set(['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_C
 // Managed policy outranks flag settings. A private pass refuses its presence
 // rather than executing policy helpers or guessing whether it logs mail.
 export function assertPrivateClaudePolicy({ home = homedir(), username = userInfo().username,
-  stat = lstatSync, read = readFileSync, list = readdirSync } = {}) {
+  stat = lstatSync, read = readFileSync, list = readdirSync,
+  configDirs = [join(home, 'Library', 'Caches', 'sleight-bench', 'claude-config')] } = {}) {
   try {
     const metadata = path => {
       try { const value = stat(path); if (value.isSymbolicLink()) throw new Error(); return value; }
@@ -16,8 +17,17 @@ export function assertPrivateClaudePolicy({ home = homedir(), username = userInf
     };
     for (const path of ['/Library/Application Support/ClaudeCode/managed-settings.json',
       `/Library/Managed Preferences/${username}/com.anthropic.claudecode.plist`,
-      '/Library/Managed Preferences/com.anthropic.claudecode.plist', join(home, '.claude', 'remote-settings.json')]) {
+      '/Library/Managed Preferences/com.anthropic.claudecode.plist']) {
       if (metadata(path)) throw new Error();
+    }
+    // claude.ai writes remote-settings.json even when the account has no managed settings, as `{}`
+    // (here and in the benchmark's config folder, 2026-10-11). Only an empty one passes.
+    for (const path of [join(home, '.claude', 'remote-settings.json'), ...configDirs.map(dir => join(dir, 'remote-settings.json'))]) {
+      const remote = metadata(path);
+      if (!remote) continue;
+      if (!remote.isFile() || remote.size > 65536) throw new Error();
+      const value = JSON.parse(read(path, 'utf8'));
+      if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length) throw new Error();
     }
     const directory = '/Library/Application Support/ClaudeCode/managed-settings.d';
     const directoryInfo = metadata(directory);

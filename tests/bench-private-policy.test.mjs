@@ -42,3 +42,10 @@ test('private policy audit refuses unknown env destinations, executable configur
   const denied = fixture(); denied.stat = () => { throw Object.assign(new Error('private error text'), { code: 'EACCES' }); };
   assert.throws(() => assertPrivateClaudePolicy(denied), error => error.message === 'PRIVATE_MAIL_POLICY_UNPROVED');
 });
+
+test('an empty remote-settings file passes, in ~/.claude and the benchmark config folder; any content is refused', () => {
+  const bench = '/fixture/Library/Caches/sleight-bench/claude-config/remote-settings.json';
+  assert.doesNotThrow(() => assertPrivateClaudePolicy(fixture({ '/fixture/.claude/remote-settings.json': '{}', [bench]: '{}' })));
+  assert.throws(() => assertPrivateClaudePolicy(fixture({ [bench]: '{"hooks":{}}' })), /PRIVATE_MAIL_POLICY_UNPROVED/);
+  assert.throws(() => assertPrivateClaudePolicy(fixture({ '/fixture/.claude/remote-settings.json': '[]' })), /PRIVATE_MAIL_POLICY_UNPROVED/);
+});

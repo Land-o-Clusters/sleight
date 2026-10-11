@@ -427,6 +427,9 @@ if (!controller.signal.aborted && !isDryRun) {
 }
 try { if (!controller.signal.aborted) await checkArms(); }
 catch (error) {
+  // The private pass's table drops the reason, so the local log carries it (2026-10-11: two preflight
+  // failures said nothing).
+  console.error('preflight failed: ' + scrub(error.message));
   results.push({ phase: 'preflight', passed: false, reason: scrub(error.message) });
   controller.abort(error); process.exitCode = 1; save();
 }
@@ -496,7 +499,11 @@ pass: for (let run = 1; run <= runs; run++) {
         const recorded = results.at(-1);
         console.error(`${recorded.passed ? 'PASS' : isDryRun ? 'DRY' : recorded.outcome ? 'STOP' : 'FAIL'} ${armName} ${task.id} #${run} ${recorded.seconds ?? 0}s${recorded.reason ? ` (${recorded.reason})` : ''}`);
         if (result.cleanupError || result.permissionPrompt || result.permissionRefusal || result.observerError || result.appDialog || result.groupClean === false) {
-          console.error(task.privateMail ? 'STOP: private mail safety check failed.' : `STOP: ${scrub(result.cleanupError ?? result.reason ?? 'permission stop')}`);
+          // Which check and its code only (MIMESTREAM_…): codes carry no mail content.
+          const privateStop = () => ['cleanupError', 'permissionPrompt', 'permissionRefusal', 'observerError', 'appDialog'].filter(key => result[key])
+            .concat(result.groupClean === false ? ['groupClean'] : []).join(', ') + '; ' +
+            [result.cleanupError, result.reason, result.observerError].map(v => /^[A-Z][A-Z0-9_]+\b/.exec(String(v ?? ''))?.[0]).filter(Boolean).join(', ');
+          console.error(task.privateMail ? `STOP: private mail safety check failed (${privateStop()}).` : `STOP: ${scrub(result.cleanupError ?? result.reason ?? 'permission stop')}`);
           controller.abort(new Error('live safety stop'));
           process.exitCode = 1;
         }
