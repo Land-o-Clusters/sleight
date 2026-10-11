@@ -1,0 +1,314 @@
+{
+  "stamp": "2026-10-10T23-58-46-607Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "ownerPresent": false,
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "vscode-edit",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 5.27,
+        "group": {
+          "claude": 1.85,
+          "engine node": 0.56,
+          "mcp@latest": 0.46,
+          "node": 0.18,
+          "(Python)": 0.1,
+          "(git)": 0,
+          "osascript": 0.28,
+          "codex": 0.34,
+          "(osascript)": 0.04
+        },
+        "outside": {
+          "engine helper": 1.46
+        },
+        "split": {
+          "sleight": 0.5,
+          "engine": 2.02,
+          "client": 1.85,
+          "other": 0.9
+        }
+      },
+      "timing": {
+        "totalMs": 31002,
+        "modelMs": 24249,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 4675,
+        "engineMs": 4508,
+        "relayMs": 167,
+        "localMs": 0,
+        "guardReads": 5,
+        "guardReadMs": 113.45529199999874,
+        "guardReadFailures": 0,
+        "otherMs": 2078
+      },
+      "passed": true,
+      "seconds": 32.2,
+      "turns": 8,
+      "costUsd": 0.0178177,
+      "reportedCostUsd": 0.6040986,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 16,
+        "cacheRead": 543053,
+        "cacheWrite": 50703,
+        "output": 4490
+      },
+      "exitCode": 0,
+      "answer": "I replaced \"beta\" with \"delta\" in `a8a09c7a-edit.txt`, so the file now reads `alpha delta gamma`, and I saved it. It is still open in VS Code.\n\nThe save is not fully confirmed. The editor's text isn't exposed to accessibility, so I checked with a screenshot and a re-read of the window. The window ti"
+    },
+    {
+      "arm": "sleight",
+      "task": "cursor-edit",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 7.92,
+        "group": {
+          "claude": 2.01,
+          "engine node": 0.73,
+          "mcp@latest": 0.5,
+          "node": 0.19,
+          "Python": 0.07,
+          "osascript": 0.34,
+          "codex": 0.42
+        },
+        "outside": {
+          "Cursor": 2.19,
+          "engine helper": 1.47
+        },
+        "split": {
+          "sleight": 0.53,
+          "engine": 2.2,
+          "client": 2.01,
+          "other": 0.99
+        }
+      },
+      "timing": {
+        "totalMs": 35682,
+        "modelMs": 27606,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 4132,
+        "engineMs": 3261,
+        "relayMs": 23,
+        "localMs": 848,
+        "guardReads": 4,
+        "guardReadMs": 727.7811669999992,
+        "guardReadFailures": 0,
+        "otherMs": 3944
+      },
+      "passed": true,
+      "seconds": 36.9,
+      "turns": 12,
+      "costUsd": 0.020269,
+      "reportedCostUsd": 0.6435126,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 24,
+        "cacheRead": 836243,
+        "cacheWrite": 47686,
+        "output": 4734
+      },
+      "exitCode": 0,
+      "answer": "I replaced \"beta\" with \"delta\" in `c2bebf17-edit.txt`, saved it with Cmd+S, and left the file open. The editor now reads \"alpha delta gamma\" and the tab shows no unsaved marker.\n\nI couldn't confirm the write to disk directly because the save tool reported \"not confirmed\" and Bash is disabled here. T"
+    },
+    {
+      "arm": "sleight",
+      "task": "firefox-form",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.68,
+        "group": {
+          "claude": 1.58,
+          "engine node": 0.65,
+          "mcp@latest": 0.55,
+          "node": 0.2,
+          "Python": 0.07,
+          "osascript": 0.08,
+          "codex": 0.33
+        },
+        "outside": {
+          "engine helper": 1.22
+        },
+        "split": {
+          "sleight": 0.28,
+          "engine": 1.87,
+          "client": 1.58,
+          "other": 0.95
+        }
+      },
+      "timing": {
+        "totalMs": 25822,
+        "modelMs": 16675,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 6360,
+        "engineMs": 6343,
+        "relayMs": 17,
+        "localMs": 0,
+        "guardReads": 8,
+        "guardReadMs": 1880.4346259999975,
+        "guardReadFailures": 0,
+        "otherMs": 2787
+      },
+      "passed": true,
+      "seconds": 27.2,
+      "turns": 6,
+      "costUsd": 0.0099339,
+      "reportedCostUsd": 0.3274418,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 12,
+        "cacheRead": 349569,
+        "cacheWrite": 24305,
+        "output": 3152
+      },
+      "exitCode": 0,
+      "answer": "The form is submitted: the page in the \"Form 3fc55208\" window now shows a \"Submitted\" heading.\n\nI filled Name \"Morgan Reed\", Email \"morgan@example.test\", Team \"Design\", checked \"Send updates\", and Code \"3fc55208\", then clicked Submit. I left the window open and did not touch any other tabs or window"
+    },
+    {
+      "arm": "sleight",
+      "task": "firefox-grid",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 7.85,
+        "group": {
+          "claude": 2.4,
+          "engine node": 0.82,
+          "mcp@latest": 0.61,
+          "node": 0.27,
+          "osascript": 0.19,
+          "codex": 0.42
+        },
+        "outside": {
+          "engine helper": 3.14
+        },
+        "split": {
+          "sleight": 0.46,
+          "engine": 3.96,
+          "client": 2.4,
+          "other": 1.03
+        }
+      },
+      "timing": {
+        "totalMs": 57155,
+        "modelMs": 44434,
+        "calls": 11,
+        "refused": 0,
+        "toolMs": 10357,
+        "engineMs": 10311,
+        "relayMs": 46,
+        "localMs": 0,
+        "guardReads": 17,
+        "guardReadMs": 2162.5344199999945,
+        "guardReadFailures": 0,
+        "otherMs": 2364
+      },
+      "passed": true,
+      "seconds": 58.7,
+      "turns": 12,
+      "costUsd": 0.0245173,
+      "reportedCostUsd": 0.8051954000000001,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 24,
+        "cacheRead": 877477,
+        "cacheWrite": 58308,
+        "output": 8157
+      },
+      "exitCode": 0,
+      "answer": "Orchid's Budget is now 125, and the table is sorted ascending by Budget. The Firefox window is still open.\n\nFinal order: Cedar 90, Orchid 125, Harbor 140, Maple 180, Willow 220, Juniper 260, Birch 310, Elm 350, Aspen 390, Pine 430, Spruce 470, Oak 510. Every other budget matches its original value.\n"
+    },
+    {
+      "arm": "sleight",
+      "task": "firefox-spa",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 6.08,
+        "group": {
+          "claude": 2.11,
+          "engine node": 0.72,
+          "mcp@latest": 0.6,
+          "node": 0.28,
+          "osascript": 0.17,
+          "codex": 0.36
+        },
+        "outside": {
+          "engine helper": 1.84
+        },
+        "split": {
+          "sleight": 0.45,
+          "engine": 2.56,
+          "client": 2.11,
+          "other": 0.96
+        }
+      },
+      "timing": {
+        "totalMs": 30156,
+        "modelMs": 20532,
+        "calls": 11,
+        "refused": 0,
+        "toolMs": 7690,
+        "engineMs": 7650,
+        "relayMs": 40,
+        "localMs": 0,
+        "guardReads": 11,
+        "guardReadMs": 779.5190440000024,
+        "guardReadFailures": 0,
+        "otherMs": 1934
+      },
+      "passed": true,
+      "seconds": 31.6,
+      "turns": 12,
+      "costUsd": 0.0174003,
+      "reportedCostUsd": 0.5355056000000001,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 24,
+        "cacheRead": 802528,
+        "cacheWrite": 38253,
+        "output": 3444
+      },
+      "exitCode": 0,
+      "answer": "The research request was submitted for the Orchid project with code 272c7858. The window is left on the \"Request submitted\" screen (`#/complete`), and I haven't touched any other tabs or windows.\n\nBefore the form, a Firefox \"Make Firefox your primary browser?\" prompt was covering the page. I dismiss"
+    }
+  ]
+}

@@ -1,0 +1,182 @@
+{
+  "stamp": "2026-10-10T23-55-26-542Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "ownerPresent": false,
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "real-shop-target",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.85,
+        "group": {
+          "claude": 1.61,
+          "engine node": 0.57,
+          "mcp@latest": 0.66,
+          "node": 0.27,
+          "osascript": 0.07,
+          "codex": 0.23
+        },
+        "outside": {
+          "Safari": 0.88,
+          "engine helper": 0.56
+        },
+        "split": {
+          "sleight": 0.34,
+          "engine": 1.13,
+          "client": 1.61,
+          "other": 0.89
+        }
+      },
+      "timing": {
+        "totalMs": 13381,
+        "modelMs": 10086,
+        "calls": 1,
+        "refused": 0,
+        "toolMs": 1201,
+        "engineMs": 1197,
+        "relayMs": 4,
+        "localMs": 0,
+        "otherMs": 2094
+      },
+      "passed": false,
+      "reason": "answer does not name up&up Paper Towels, Goodfellow & Co Crewneck T-Shirt, Threshold Cozy Knit Throw",
+      "seconds": 15.2,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 2,
+      "costUsd": 0.005995,
+      "reportedCostUsd": 0.2212964,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 4,
+        "cacheRead": 92522,
+        "cacheWrite": 20722,
+        "output": 1850
+      },
+      "exitCode": 0,
+      "answer": "I stopped before doing any of the task. The Safari window (the only Safari window I looked at) shows a human verification challenge on a Target page: \"Press & hold to confirm you're a human (and not a bot).\" I did not interact with it.\n\n- **ZIP 55401:** not set.\n- **Cart:** nothing added. Paper Towe"
+    },
+    {
+      "arm": "sleight",
+      "task": "real-shop-bestbuy",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 8.76,
+        "group": {
+          "claude": 2.45,
+          "engine node": 0.93,
+          "mcp@latest": 0.55,
+          "node": 0.21,
+          "osascript": 0.22,
+          "codex": 0.38,
+          "(bash)": 0,
+          "(vibe-island-brid)": 0,
+          "(AgentPeekBridge)": 0
+        },
+        "outside": {
+          "Safari": 1.33,
+          "engine helper": 2.69
+        },
+        "split": {
+          "sleight": 0.43,
+          "engine": 3.62,
+          "client": 2.45,
+          "other": 0.93
+        }
+      },
+      "timing": {
+        "totalMs": 56565,
+        "modelMs": 50396,
+        "calls": 15,
+        "refused": 7,
+        "toolMs": 3926,
+        "engineMs": 3958,
+        "relayMs": -32,
+        "localMs": 0,
+        "guardReads": 2,
+        "guardReadMs": 0.006500000001324224,
+        "guardReadFailures": 0,
+        "otherMs": 2243
+      },
+      "passed": false,
+      "reason": "stopped at a CAPTCHA or bot check",
+      "seconds": 58.1,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 16,
+      "costUsd": 0.0317275,
+      "reportedCostUsd": 1.0391122,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 30,
+        "cacheRead": 1149941,
+        "cacheWrite": 76878,
+        "output": 9699
+      },
+      "exitCode": 0,
+      "answer": "I couldn't complete the smoke task. Nothing was added to the cart and the store wasn't set.\n\n- **Blocked:** Every click in Safari was refused by the computer-use input lease. The refusal said the window had changed, and it kept refusing after I re-acquired the app by bundle ID, reset the js session,"
+    }
+  ]
+}

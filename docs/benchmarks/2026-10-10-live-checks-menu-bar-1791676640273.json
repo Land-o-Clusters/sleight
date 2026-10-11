@@ -1,0 +1,10 @@
+{
+  "started": "2026-10-10T23:57:13.245Z",
+  "check": "menu-bar",
+  "ownerAway": true,
+  "dryRun": false,
+  "error": "osascript is not allowed assistive access. macOS hasn't given the app running Claude Code Accessibility permission. Turn it on under System Settings → Privacy & Security → Accessibility (for Terminal, iTerm or Claude, whichever runs this session).",
+  "passed": false,
+  "lockReleased": true,
+  "finished": "2026-10-10T23:57:20.273Z"
+}

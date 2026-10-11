@@ -1,0 +1,11 @@
+{
+  "started": "2026-10-10T23:50:13.823Z",
+  "check": "stale-number",
+  "ownerAway": true,
+  "dryRun": false,
+  "launched": false,
+  "error": "Calculator keypad buttons were not unique in the history-open tree",
+  "passed": false,
+  "lockReleased": true,
+  "finished": "2026-10-10T23:50:16.012Z"
+}

@@ -33,12 +33,12 @@ Open, in order of user impact (full list in [known-problems.md](../known-problem
   (`05903fa`, 6/6 on the TextEdit tasks). Likely cause (2026-10-10, inferred from tree sizes, not
   confirmed): a pending TextEdit capitalization suggestion took Cmd+A, so nothing was selected. The
   relay's settle read was there, so it isn't sleight's. Confirm with
-  `bench/small-fixes-textedit.mjs --quick` (`.dev/research/2026-10-10-select-all-typetext.md`) once
-  its helper is fixed: it refused twice on 2026-10-10 with "Ambiguous TextEdit process" while
-  AppKit listed one TextEdit.
+  `bench/small-fixes-textedit.mjs --quick` (`.dev/research/2026-10-10-select-all-typetext.md`). Its
+  "Ambiguous TextEdit process" refusal is fixed (`a021a7c`).
 - The TextEdit save lock: the Shift-event fix measured 0/10 hangs, but we don't know why it works.
-- Live checks for the unit-tested 1.1.0 changes: the helper resend, the stale-number remap and the
-  keyboard-tap notice.
+- Live checks for the unit-tested 1.1.0 changes: `bench/live-checks-1-1.mjs` (`5690bf2`) runs the
+  stale-number remap and `menu_bar`. The helper resend and the keyboard-tap notice skip, since
+  forcing them would mean killing OpenAI's helper or installing a tap.
 - Smaller ones: a moved word in rich text should keep the formatting it had, `/sleight stop` in the
   desktop app, TextEdit's orphan Save Panel diagnosis, a live `menu_bar` check, and desktop sessions
   that stay busy. Done 2026-10-10: the doctor's per-app read (`83188cf`, `ac9f0d2`), per-site flow
@@ -132,8 +132,7 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
    keeping sleight's guards, so it stops when the app isn't in the state the script expects. First
    version built 2026-10-09 (`sleight-mcp record` and `replay`, `docs/design/replay.md`). Done
    2026-10-10 (`e12aef4`): steps that wait for the app, and Claude taking over at the step that
-   stopped. Replay from the desktop app is in review
-   (`codex/replay-desktop`).
+   stopped. Replay from the desktop app merged on 2026-10-10.
 
 ## 5b. Before this release (owner, 2026-10-10)
 
@@ -143,9 +142,10 @@ dropped: a first-call hint (8/12 runs still called `getState` first), trimming t
 3. Shopping tasks: a local shop page (ZIP store lookup, search, add 3 items to cart) in both
    browsers, and one-run real-site smoke tasks.
 4. Electron and Gecko: tasks for VS Code, Cursor, Firefox, and read-only Slack, Discord and
-   WhatsApp. iPhone Mirroring with the owner at the Mac.
-5. A head-to-head with LCU again after these are merged. The owner approved installing a newer
-   LCU if one exists (2026-10-10).
+   WhatsApp. iPhone Mirroring with the owner at the Mac: the task is built (`1c0b4b5`) and needs
+   `--owner-present`.
+5. A head-to-head with LCU again after these are merged. LCU 0.11.2 is installed (owner's OK,
+   2026-10-10), and its arm is outside the repo (`bench/lcu-arm-setup.mjs`).
 6. Anthropic's directory listing (owner, 2026-10-10). Submission is at claude.ai/directory/manage
    from the public repo. The plugin folder passes the mechanical checks (50 files, the largest 142
    KB, an MIT license field). Unknown: how review treats the ChatGPT engine dependency, and whether
@@ -182,9 +182,9 @@ The owner's rule, in order: do what competitors do but better, then improve wher
 build what nobody has. Sources are `.dev/research/2026-10-04-competitors.md` and the README roadmap.
 
 - Separate results for "input sent", "the UI changed" and "saved", with a reason when unverified.
-  Merged 2026-10-10 (`f3d2790`, `8646071`), live 6/6 on Calculator and TextEdit. Before
-  release, Chess and Safari-form run with the owner away, and a save named through the panel's own
-  field still reads as "different document".
+  Merged 2026-10-10 (`f3d2790`, `8646071`), live 6/6 on Calculator and TextEdit, and 2/2 each on
+  Chess and Safari-form with the owner away (`docs/benchmarks/2026-10-10-away.md`). A save named
+  through Go to Folder and the panel's name field now reads as that file (`71c45ff`).
 - Done 2026-10-10 (`6ca6639`): sleight runs from Cursor or any MCP client, with Claude first in the docs.
 - One lease and consent broker shared by Claude, Codex and other runtimes (without leases, two
   sessions typing into one document doubled the text 5/5).

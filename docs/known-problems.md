@@ -18,6 +18,10 @@ our own runs. Dates and engine versions are given where they matter.
 
 ## Approvals and guards
 
+- On bestbuy.com in Safari (real-site smoke, 2026-10-10), the input lease refused every click
+  because the window had changed, and kept refusing after Claude acquired Safari again and reset the
+  session ([report](benchmarks/2026-10-10-away-2.md)). The cause, likely a title or URL that keeps
+  changing on that page, isn't confirmed. The run's trace has the refusals.
 - Routines accept only literal app acquisition, named-element clicks, native value replacement,
   typing and full AX reads. They refuse arbitrary code, shortcuts, paste, drags, focus and positions.
   Crash locks recover after the former process and its recorded relay groups are gone, or when a
@@ -193,7 +197,13 @@ our own runs. Dates and engine versions are given where they matter.
   same hang as `setValue` on 2026-10-05. One Shift press and release posted to TextEdit's process after
   the write prevents it: 0 hangs in 10 trials that edited, against 5 in 8 without it, and then 10
   `drag` moves in a row saved with no hang (2026-10-09). We don't know why the event helps, or what
-  held the lock. The [2026-10-10 follow-up](benchmarks/2026-10-10-save-lock.md) stopped before
+  held the lock. A review of the evidence (2026-10-10) favors the event giving TextEdit's main loop a
+  turn that finishes the Accessibility edit before Cmd+S blocks: idle time didn't help, since 10 s
+  waits still hung. NSDocument's autosave event monitor, whose mask covers flags-changed, and the
+  Shift modifier itself aren't ruled out. The fix applies only to sleight's own Accessibility writes
+  in `drag.js`, not to a `setValue` from `js`. A rewritten experiment on 2026-10-10 stalled in every
+  variant, Shift included, and the saves finished at 30 s, which points at its own harness
+  ([report](benchmarks/2026-10-10-away-2.md)). The [2026-10-10 follow-up](benchmarks/2026-10-10-save-lock.md) stopped before
   editing: the existing background TextEdit process returned `AXWindows -25204`. A new instance
   restored extra windows, then exact-fixture cleanup returned `AXRole -25204`. A later read-only
   check confirmed zero Accessibility windows in that same launch and released the retained live
@@ -529,7 +539,8 @@ our own runs. Dates and engine versions are given where they matter.
   The reruns on 2026-10-10 evening failed earlier, at `simctl openurl` (POSIX error 60, 3 times),
   and cleanup again refused to quit DeviceHub, whose launched PID it recorded as -1. By hand, with
   the same device, `openurl` took 0.4 to 6.5 s after a fresh boot, with DeviceHub running and
-  freshly launched. We don't know yet which step of the task makes it time out
+  freshly launched. A blocked event loop isn't the cause: with a live server in the same process, `openurl`
+  returned in 0.45 s blocking and 0.21 s async. We don't know yet which step of the task makes it time out
   ([report](benchmarks/2026-10-10-away.md)).
 - DeviceHub replaced its launch process during `simulator-flow` setup on 2026-10-10. Setup now
   accepts one same-bundle handoff after the recorded PID exits, and cleanup quits only a viewer

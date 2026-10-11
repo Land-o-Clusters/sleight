@@ -1,0 +1,54 @@
+{
+  "stamp": "2026-10-10T23-55-14-177Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "ownerPresent": false,
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "vscode-edit",
+      "run": 1,
+      "permissionRefusal": true,
+      "stderr": "[claude-code:unrecognized_model] {\"model\":\"claude-haiku-5-5\",\"query_source\":\"sdk\"}\n",
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": true,
+      "footprint": {
+        "cpuSeconds": 2.29,
+        "group": {
+          "claude": 0.98,
+          "engine node": 0.45,
+          "mcp@latest": 0.44,
+          "node": 0.18,
+          "osascript": 0.16,
+          "codex": 0.07,
+          "(open)": 0.01
+        },
+        "outside": {
+          "engine helper": 0
+        },
+        "split": {
+          "sleight": 0.34,
+          "engine": 0.45,
+          "client": 0.98,
+          "other": 0.52
+        }
+      },
+      "passed": false,
+      "reason": "computer-use permission refused: stopped",
+      "seconds": 6.9,
+      "models": [],
+      "exitCode": 143
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "started": "2026-10-10T23:50:16.052Z",
+  "check": "menu-bar",
+  "ownerAway": true,
+  "dryRun": false,
+  "error": "unknown tool: menu_bar",
+  "passed": false,
+  "lockReleased": true,
+  "finished": "2026-10-10T23:50:16.186Z"
+}
