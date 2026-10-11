@@ -310,7 +310,7 @@ export function createRelay({
   redactReceiptTitles = true,
   receiptWriter = writeReceipt,
   idleTurnEndMs,
-  simFocusNote = false,
+  simFocusNote = true,
   inputLease,
   onLeaseFault = () => {},
   engineForbiddenTargets = false,

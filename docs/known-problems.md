@@ -614,9 +614,16 @@ our own runs. Dates and engine versions are given where they matter.
   the phone in all six resized runs. The parked scaling branch associated its factors only with
   image replies containing a Window header. A first standalone screenshot had none. The original
   image was 2200 × 1600 pixels and the resized image 1568 × 1140. This explains those stored misses,
-  but a fresh reproduction and Safari focus timing remain pending. With `SLEIGHT_SIM_FOCUS_NOTE=1`, the relay includes the
-  image's dimensions in its screenshot reply, with unit proof only. The note is off by default and instructs Claude to
-  confirm visible focus before typing. Coordinates remain unchanged.
+  but a fresh reproduction and Safari focus timing remain pending. The screenshot reply now includes a
+  scale note, on by default, whenever the engine's screenshot is larger than Claude Code shows
+  unresized. Claude Code showed a 2200 × 1600 engine screenshot at 2000 × 1455 with a 1.10
+  multiplier (2026-10-10, one observation, so the 2000-pixel ceiling is unconfirmed at other sizes).
+  The note states the engine's pixel frame, the shown size and the exact multiplier, and asks Claude
+  to confirm visible focus before typing. `SLEIGHT_SIM_FOCUS_NOTE=0` turns it off. It has unit proof
+  only and changes what Claude does, so `simulator-form` must pass with it before release: 3 runs,
+  each first tap inside the phone and on the Message field, with turns per run against the
+  2026-10-09 base runs (7, 6 and 7 turns,
+  [raw](benchmarks/2026-10-09-shots-base.json)). Coordinates remain unchanged.
 - In the 1.0.0 pass, Claude's first tap in the simulator missed the Message field, and four later
   taps on the field followed by `typeText`, one with Device Hub's Capture Keyboard on, left it empty
   (1 of 3 runs). We don't know why the later taps didn't focus it.

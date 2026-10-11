@@ -24,10 +24,19 @@ test('a first headerless simulator screenshot gets its dimensions from the lease
   assert.match(note, /Capture Keyboard.*unchanged/);
 });
 
-test('the note reports transmitted image size instead of assuming a Retina multiplier', () => {
-  const note = simulatorScreenshotNote([png(1568, 1140)], target, imageSize);
-  assert.match(note, /1568 × 1140/);
-  assert.doesNotMatch(note, /2196|multiply.*2|double/);
+test('an oversized screenshot names the engine frame, the shown size and the exact factor', () => {
+  const note = simulatorScreenshotNote([png(2200, 1600)], target, imageSize);
+  assert.match(note, /engine screenshot 2200 × 1600 pixels/);
+  assert.match(note, /2000 × 1455/);
+  assert.match(note, /multiply each x and y by 1\.1/);
+  assert.match(note, /focus/);
+  assert.match(note, /Capture Keyboard.*unchanged/);
+});
+
+test('a screenshot no larger than Claude Code shows unresized gets no note', () => {
+  assert.equal(simulatorScreenshotNote([png(1568, 1140)], target, imageSize), undefined);
+  assert.equal(simulatorScreenshotNote([png(2000, 1200)], target, imageSize), undefined);
+  assert.equal(simulatorScreenshotNote([png(1200, 2000)], target, imageSize), undefined);
 });
 
 test('unowned, contradictory and ambiguous screenshots get no simulator advice', () => {
@@ -52,7 +61,7 @@ test('matching Simulator app identity permits advice without mutating pixels or 
   assert.deepEqual(content, before);
 });
 
-for (const enabled of [undefined, false, true]) test(`Simulator note is ${enabled === true ? 'enabled' : 'absent'} with simFocusNote=${enabled}`, async t => {
+for (const enabled of [undefined, false, true]) test(`Simulator note is ${enabled === false ? 'absent' : 'present'} with simFocusNote=${enabled === undefined ? 'default' : enabled}`, async t => {
   const streams = Array.from({ length: 4 }, () => new PassThrough());
   const [clientIn, clientOut, serverIn, serverOut] = streams;
   const bank = mkdtempSync('/private/tmp/sleight-simulator-note-');
@@ -73,8 +82,8 @@ for (const enabled of [undefined, false, true]) test(`Simulator note is ${enable
   reply(3, [picture]);
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(replies.find(message => message.id === 3).result.content[0], picture);
-  if (enabled === true) assert.match(replies.find(message => message.id === 3).result.content.at(-1).text, /2196 × 1598.*focus/);
-  else assert.deepEqual(replies.find(message => message.id === 3).result.content, [picture]);
+  if (enabled === false) assert.deepEqual(replies.find(message => message.id === 3).result.content, [picture]);
+  else assert.match(replies.find(message => message.id === 3).result.content.at(-1).text, /2196 × 1598.*1\.098/);
   call(4, 'await unknown.getScreenshot()'); reply(4, [picture]);
   call(5, 'await calc.getScreenshot()'); reply(5, [picture]);
   call(6, 'await sim.getScreenshot(); await calc.getScreenshot()'); reply(6, [picture]);

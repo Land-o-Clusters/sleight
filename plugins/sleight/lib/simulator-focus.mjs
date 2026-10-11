@@ -2,6 +2,11 @@
 const simulatorApp = app => ['Device Hub', 'DeviceHub', 'com.apple.dt.Devices'].includes(app) ? 'Device Hub'
   : ['Simulator', 'com.apple.iphonesimulator'].includes(app) ? 'Simulator' : undefined;
 
+// Claude Code shows an image unresized up to a 2000-pixel long edge and scales larger ones to it
+// (2026-10-10: a 2200 × 1600 engine screenshot reached Claude at 2000 × 1455 with a 1.10
+// multiplier in the image metadata).
+const SHOWN_LONG_EDGE = 2000;
+
 export function simulatorScreenshotNote(content, target, sizeOf) {
   const app = simulatorApp(target?.app);
   if (!app || typeof target.title !== 'string' || !target.title) return undefined;
@@ -9,6 +14,9 @@ export function simulatorScreenshotNote(content, target, sizeOf) {
   if (images.length !== 1 || typeof images[0].data !== 'string') return undefined;
   const size = sizeOf(images[0].data);
   if (!size || !Number.isSafeInteger(size.width) || !Number.isSafeInteger(size.height) || size.width <= 0 || size.height <= 0) return undefined;
+  const factor = Math.max(size.width, size.height) / SHOWN_LONG_EDGE;
+  // At or below the shown size the pixels Claude sees are the engine's, so no scale advice.
+  if (factor <= 1) return undefined;
   // A standalone screenshot has no header. The caller must supply its acquired window;
   // any header present must agree with that window before advice can name it.
   for (const block of content) {
@@ -20,7 +28,9 @@ export function simulatorScreenshotNote(content, target, sizeOf) {
     }
   }
   return `sleight: ${JSON.stringify(target.title)} in ${app}, engine screenshot ${size.width} × ${size.height} pixels. ` +
-    'Use app.click coordinates in these engine screenshot pixels; if your viewer downscales it, map each axis back to these dimensions once. ' +
-    'After tapping a Safari field, read a fresh screenshot and confirm visible focus before typeText. ' +
+    `The engine reads coordinates in these screenshot pixels. Claude Code shows this image smaller, at ` +
+    `${Math.round(size.width / factor)} × ${Math.round(size.height / factor)}, so multiply each x and y by ` +
+    `${Number(factor.toFixed(4))} before sending coordinates. ` +
+    'After tapping a Safari field, take a fresh screenshot and confirm visible focus before typeText. ' +
     'A missed tap does not establish a scale change. Leave Capture Keyboard unchanged.';
 }

@@ -122,10 +122,11 @@ This bounds retries. It cannot confirm that an engine which rejects cleanup rele
 
 ## Simulator focus note
 
-Set `SLEIGHT_SIM_FOCUS_NOTE=1` in the server's environment to add image dimensions and focus guidance
-to a standalone screenshot from an acquired Simulator or Device Hub handle. It asks Claude to check
-visible focus before typing and leave Capture Keyboard unchanged. The note is off by default until
-the affected `simulator-form` task runs with it while the owner is away. Coordinates are unchanged.
+Simulator and Device Hub screenshots can exceed what Claude Code shows unresized. Such a screenshot's
+reply states the engine's pixel frame, the shown size and the exact multiplier between them, and asks
+Claude to check visible focus before typing and leave Capture Keyboard unchanged. The note is on by
+default. Set `SLEIGHT_SIM_FOCUS_NOTE=0` to turn it off. Coordinates are unchanged. The affected
+`simulator-form` task must pass with it while the owner is away before release.
 
 ## Preapproved apps
 

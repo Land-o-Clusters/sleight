@@ -28,6 +28,10 @@ it. If an app needs approval, ask the user, or stop when a headless run refuses 
 - Each result shows what changed since the last full tree you saw of that window. A full read is
   `await app.getAXState({ disableDiffing: true })`. Use `await app.getScreenshot()` for canvases and
   images. It shows the picture itself. Don't sleep before a read, which waits on its own.
+- Simulator screenshots are larger than Claude Code shows you: a 2200 × 1600 engine screenshot
+  arrived at 2000 × 1455. When a reply's sleight note states the engine's pixel frame and a
+  multiplier, multiply each x and y by it before you tap, and after tapping a Safari field confirm
+  visible focus in a fresh screenshot before typing.
 - To choose among several windows, call `select_window` with `app` and an exact file `url` (or
   `title`), then acquire the app in a call of its own and check its Window and URL.
 - Use `waitFor` only for an element that appears late, such as a Save sheet after `super+s`:
