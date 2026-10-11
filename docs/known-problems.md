@@ -986,6 +986,23 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   (unreleased). The panel still names Claude under Claude Code, and it is unit-tested only: no live
   approval in another host has been checked. Unanswered relay forms expire after five minutes.
 
+## Battery reports
+
+The offline battery reporter has no live qualification yet. Codex model API time can be unavailable;
+its model and host scheduling gap is not a substitute. Sampled focus and window overlap count
+observed episodes and can miss events between samples. They cannot identify whether the agent or
+the owner caused a focus change. Shared engine helper CPU may include another session's work.
+
+The fixed bundle hash assigns approximately half the apps to each group, without forcing equal
+group sizes. The reporter requires matching run coordinates, completion times, flag values and setup
+metadata for a later flag A/B and leaves candidates unproven when evidence is missing. It compares the held-out sample
+without a statistical significance test, which limits claims about a population effect.
+Harness rows without bundle IDs need a saved task catalog. Calls without unique transcript links
+use harness metrics when present, and otherwise remain unmatched. Transcript call counts that
+disagree with the harness use the measured harness counts. Mixed setup or load reports are refused.
+The reporting lane supplies an
+unfilled [report template](benchmarks/battery-report-template.md).
+
 ## Desktop replay
 
 Routines have qualified live in part ([first live run](benchmarks/2026-10-10-routines-live.md)):
