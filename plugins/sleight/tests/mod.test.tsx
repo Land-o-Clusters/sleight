@@ -478,6 +478,20 @@ describe('sleight mod', () => {
     expect(JSON.stringify(contexts.at(-1))).toMatch(/Calculator.*disableDiffing/)
   })
 
+  test('a turn that used an app still ends the engine turn when the pane list fails', async ($, on) => {
+    const calls: string[] = []
+    on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [{ type: 'text', text: 'App: Calculator.' }] } }) as never)
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async (_$, e) => { calls.push(e.tool); return { value: { content: [] } } as never })
+    on('ui.panes', async () => { throw new Error('pane list unavailable') })
+    on('turn.start', async (_$, e) => ({ turnId: e.turnId }) as never)
+    on('turn.complete', async () => ({ text: '' }) as never)
+    await $.turn.start({ turnId: 'turn-1' } as never)
+    await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("Calculator")' } as never)
+    await $.turn.complete({ turnId: 'turn-1', answer: '', durationMs: 1, isAborted: false, reason: 'answer' } as never)
+    expect(calls).toEqual(['turn_ended'])
+  })
+
   test('Claude may not call turn_ended', async $ => {
     const refused = await $.tool.call({ tool: TURN_END_TOOL } as never)
     expect(String(refused.deny)).toMatch(/internal to sleight/)

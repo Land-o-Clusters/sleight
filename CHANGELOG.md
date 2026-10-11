@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The mod ends the engine turn after a turn that used an app even when Claude Code's pane list
+  fails. That failure used to skip `turn_ended`, so only the relay's 30 s idle timer ended the
+  turn. That may be one cause of desktop sessions that stay busy (inferred). A mod test covers it. It hasn't run live.
 - The browser-extension check, which decides whether the next session gets the browser API, runs after the engine's
   first call has answered, not during it. Its second engine used to overlap every session's first
   call: about 0.12 s on a quiet Mac, and 2.4 s against 1.2 s under load

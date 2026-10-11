@@ -213,9 +213,15 @@ async function snapshot($: any, app: string) {
   }
 }
 
+// A pane list that rejects counts as closed: the turn's end runs after this check, and an engine
+// turn that never ends keeps the session busy.
 async function isPaneOpen($: any): Promise<boolean> {
-  const panes = await $.ui.panes()
-  return panes.some((pane: { id: string }) => pane.id === PANE)
+  try {
+    const panes = await $.ui.panes()
+    return panes.some((pane: { id: string }) => pane.id === PANE)
+  } catch {
+    return false
+  }
 }
 
 // In Auto mode the classifier refused the pane's own snapshot, since no request of the person's
