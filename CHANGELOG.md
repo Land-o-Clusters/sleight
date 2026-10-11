@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `drag` uses one path for every app. Selected text tries Accessibility before posted
+  events. The guarded foreground fallback remains last. Text endpoints must share one area or field
+  with a non-blank selection. Covered windows use the same focused-selection check.
+  The TextEdit rich-text clipboard option and the Command-only text-drag modifier were removed.
+  The generic Shift event after Accessibility writes remains (10/13 save hangs without it,
+  0/10 with it in the original probes). The new regressions failed 10/10 against the old code;
+  the mocked window suite passes 122/122 across two bundle IDs. Live qualification is pending.
+
 - `open_file` tells Claude the exact `getApp` call to send next, and a Cmd+S on an open file reads
   "saved: observed" when the file on disk changed during the call. TextEdit in the background shows
   no edited state. Those saves used to read "not confirmed", and Claude spent a turn checking in
@@ -239,15 +247,7 @@
   a pane name like "General" no longer passes. The skill says to replace a whole document with
   select-all and `app.paste`, then compare before saving, outside the iOS simulator. Live byte
   checks and the TextEdit benchmark runs are pending (Sol, `codex/small-fixes`).
-- With `SLEIGHT_RICH_TEXT_MOVE=1`, covered TextEdit text moves prepare RTF when the selection and destination have different
-  formatting. They preserve readable clipboard items and formats, with attribute verification
-  before source deletion. Spelling annotations keep the plain path; initial RTF preparation
-  failure uses the existing plain move. Collected children report whether Paste may have been
-  pressed. A second child refuses Paste with less than five seconds remaining and bounds AX
-  messages to one second. Unconfirmed Paste recovery releases the clipboard reservation within
-  ten seconds. Restoration requires the exact staged generation and bytes, with a report of contents left.
-  The rich path stays off pending live qualification. The default keeps the existing plain move.
-  A read identifies a possible orphan Save panel once per window when only `Save Panel Accessory View` remains without
+- A read identifies a possible orphan Save panel once per window when only `Save Panel Accessory View` remains without
   AX windows. Unit tests pass. The first live attempt after the clipboard fix (2026-10-11) stopped
   before the move: another app's window covered TextEdit at the drag point, so the background path
   was skipped and the Accessibility path failed its checks
@@ -255,7 +255,7 @@
   [Review follow-up](docs/benchmarks/2026-10-10-textedit-fixes-2.md).
   [Third review](docs/benchmarks/2026-10-10-textedit-fixes-3.md).
 - `drag` refuses a drag another app covers and that has no selected text before raising or scanning
-  the window, outside TextEdit. It took 10 to 13 s to reach the same refusal in Chess and Finder.
+  the window in every app. It took 10 to 13 s to reach the same refusal in Chess and Finder.
 - Real-suite tasks for VS Code, Cursor, Firefox, Slack, Discord and WhatsApp (owner, 2026-10-10).
   `vscode-edit` and `cursor-edit` open a temp file, replace one word and save. Firefox reuses the
   local form, grid and spa fixtures. Slack, Discord and WhatsApp only open a named chat and

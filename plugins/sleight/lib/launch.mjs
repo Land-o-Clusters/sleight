@@ -28,7 +28,6 @@ import { createGrantAudit } from './preapproved-audit.mjs';
 import { BLOCKED_APP_TOOL, callBlockedApp, forbiddenTargetsAllowed, matchBlockedApp } from './blocked-apps.mjs';
 import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
 import { probeHelper, staleHelperJobs } from './helper-health.mjs';
-import { runRichTextMove, drainRichTextMoves, richPasteChildState, takeRichTextNotices } from './rich-text-drag.mjs';
 import { replayBridge } from './replay.mjs';
 import { serverFromChatGPTApp, setup } from './setup.mjs';
 
@@ -242,8 +241,6 @@ export async function stopHelpers() {
   // A cancelled drag may start its restoration helper after the child snapshot.
   // The whole operation owns that cleanup, so drain it before the launcher exits.
   await Promise.allSettled([...pendingDrags]);
-  // Give clipboard recovery a bounded window, then report any contents left on shutdown.
-  await drainRichTextMoves();
 }
 export function resumeHelpers() {
   if (ownedHelpers.size || pendingDrags.size) throw new Error('Owned helpers are not collected.');
@@ -323,12 +320,13 @@ const DRAG_TOOL = {
   description: 'A drag that holds the mouse down and moves in steps, for what app.drag in the js tool can\'t do, such as ' +
     'moving selected text (select it with js first). `from` and `to` are in the same frame as the app\'s engine ' +
     'screenshot, from that window\'s top-left corner. Pass `windowId` when several windows fit; an ambiguous target refuses. ' +
-    'Both points must be in window content; TextEdit requires the same text area. A lost-text error tells you to press Cmd+Z in the named window. ' +
-    'It tries background PID posting first, with a 500 ms hold. When another app covers the points, or the posted drag ' +
-    'leaves TextEdit text unchanged, it moves the text through Accessibility instead, with no pointer or focus change. ' +
-    'Only if that fails does it fall back to foreground, after the user has paused typing and using the mouse; ' +
+    'Both points must be in window content. A text drag requires a non-blank selection and both points in the same text area or field. ' +
+    'A lost-text error tells you to press Cmd+Z in the target app and named window. ' +
+    'Selected text moves through Accessibility first, with no pointer or focus change. If that makes no change, ' +
+    'it tries background PID posting with a 500 ms hold when the points are uncovered. ' +
+    'Only if those paths fail without changing text does it fall back to foreground, after the user has paused typing and using the mouse; ' +
     'an unavailable private window-local API also selects foreground before posting. The result names the path. ' +
-    'Foreground fallback moves the pointer and restores it and the front app. Other apps require readback to verify the move. ' +
+    'Foreground fallback moves the pointer and restores it and the front app. Non-text drags require readback to verify the move. ' +
     'For a line-end text drop, use the final glyph bounds, never a zero-length end-of-line range. The user approves each app once per session.',
   inputSchema: {
     type: 'object',
@@ -452,16 +450,14 @@ export function runScript(script, request, options = {}) {
   if (script === 'drag.js') request = { ...request, deadline: Date.now() + execOptions.timeout };
   return new Promise(resolve => {
     ownHelper(run('osascript', ['-l', 'JavaScript', join(LIB, script), JSON.stringify(request)], execOptions, (err, stdout, stderr) => {
-      const rich = script === 'drag.js' && !!request.richTextMove;
-      const pasteState = rich ? richPasteChildState(stderr, err?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') : undefined;
-      const diagnostic = String(stderr ?? '').split(/\r?\n/).filter(line => line !== 'sleight:rich-paste-posted').join('\n').trim();
+      const diagnostic = String(stderr ?? '').trim();
       try {
         resolve(JSON.parse(stdout));
       } catch {
         // A killed child prints nothing, and execFile's message is only the command line
         // (chess-drag, 2026-10-09). Say what happened instead.
         const timedOut = err?.killed && !diagnostic;
-        resolve({ ok: false, timedOut: !!timedOut, ...(rich ? { path: 'accessibility', richPasteState: pasteState } : {}), error: timedOut
+        resolve({ ok: false, timedOut: !!timedOut, error: timedOut
           ? `${script} timed out after ${execOptions.timeout / 1000} s and was stopped; whether it pressed anything is unknown. Read the window again before acting`
           : diagnostic || err?.message || 'no output' });
       }
@@ -481,7 +477,6 @@ async function performDrag(args, runLocal) {
   let result;
   try {
     result = await runLocal('drag.js', args);
-    if (result.richTextMove) result = await runRichTextMove(args, result.richTextMove, runLocal);
   }
   catch (e) { result = { ok: false, error: String(e.message || e) }; }
   finally {
@@ -631,7 +626,6 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     diagnoseRead: (app, control, readControl) => diagnoseReadFailure(app, control, { readControl, probeApp: appHealth.probe }),
     spaceProbe: app => appHealth.probe(app),
     guardMode: process.env.SLEIGHT_GUARD,
-    takeNotices: takeRichTextNotices,
     simFocusNote: process.env.SLEIGHT_SIM_FOCUS_NOTE !== '0',
     resultTrim: process.env.SLEIGHT_RESULT_TRIM === '1',
     firstCallBatch: ['merge', 'sheet'].includes(process.env.SLEIGHT_FIRST_CALL_BATCH) ? process.env.SLEIGHT_FIRST_CALL_BATCH : process.env.SLEIGHT_FIRST_CALL_BATCH !== '0',

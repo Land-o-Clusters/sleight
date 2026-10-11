@@ -1,13 +1,14 @@
-import { test } from 'node:test';
+import { test as nodeTest } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
+for (const defaultAppId of ['com.apple.TextEdit', 'org.sleight.NativeEditor']) {
+const test = (name, fn) => nodeTest(`${defaultAppId}: ${name}`, fn);
+
 // Only the native AX/CG boundary is replaced. run() does the real selection,
 // validation, coordinate conversion, mouse sequence and post-drop check.
-function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', setterFails = false, readFails = false, postFails = false, releaseFails = false, changeOnActivate = false, second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection, repairDeletesText = false, movedOnActivate = false, coveredEnd = false, coveredPid = 7, splitAreas = false, missingContent = false, extraElements = 0, stacked = false, raiseWorks = true, raiseActivates = false, offSpace = false, noWindows = false, appId = 'com.apple.TextEdit', busyChecks = 0, typesAt = null, ax = null, coverTitle = 'cover.txt', slowDelays = false } = {}) {
-  // Other apps have no selected text unless a test says so: Chess has no text area at all.
-  selection ??= appId === 'com.apple.TextEdit' ? 'alpha' : '';
+function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', setterFails = false, readFails = false, postFails = false, releaseFails = false, changeOnActivate = false, second = true, before = 'alpha beta gamma\n', after = 'beta gamma alpha\n', selection = 'alpha', areaRole = 'AXTextArea', repairDeletesText = false, movedOnActivate = false, coveredEnd = false, coveredPid = 7, splitAreas = false, missingContent = false, extraElements = 0, stacked = false, raiseWorks = true, raiseActivates = false, offSpace = false, noWindows = false, appId = defaultAppId, busyChecks = 0, typesAt = null, ax = null, coverTitle = 'cover.txt', slowDelays = false } = {}) {
   const events = [], restored = [], activations = [], pidEvents = [], mainWrites = [];
   let visited = 0, inputChecks = 0;
   let mainId = 22;
@@ -16,10 +17,10 @@ function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', se
   if (stacked) frames.set(22, { ...frames.get(11) });
   const values = new Map([[11, before], [22, before]]);
   const selected = new Map([[11, selection], [22, selection]]);
-  const proc = { windows: () => (second ? [11, 22] : [11]).map(id => {
+  const proc = { attributes: { byName: () => ({ value: () => ({ attributes: { byName: () => ({ value: () => selection }) } }) }) }, windows: () => (second ? [11, 22] : [11]).map(id => {
     const b = frames.get(id);
     const area = {
-      role: () => 'AXTextArea', position: () => [b.X + 5, b.Y + 30], size: () => [b.Width - 10, splitAreas ? 100 : b.Height - 35],
+      role: () => areaRole, position: () => [b.X + 5, b.Y + 30], size: () => [b.Width - 10, splitAreas ? 100 : b.Height - 35],
       value: () => { if (readFails && pidEvents.length) throw new Error('read unavailable'); return values.get(id); }, uiElements: () => [],
       attributes: { byName: name => ({
         get value() { return () => name === 'AXSelectedText' ? selected.get(id) : null; },
@@ -119,7 +120,7 @@ function harness({ background = false, backgroundAfter = 'beta gammaalpha\n', se
     ...(coveredEnd ? [{ id: 33, pid: coveredPid, owner: coveredPid === 7 ? 'TextEdit' : 'Other app', title: coverTitle, layer: 0, bounds: { X: 180, Y: 130, Width: 80, Height: 40 } }] : []),
     ...order.filter(id => second || id === 11).map(id => ({ id, pid: 7, owner: 'TextEdit', title: `${id}.txt`, layer: 0, bounds: { ...frames.get(id) } })),
   ];
-  const run = changes => JSON.parse(context.run([JSON.stringify({ app: 'TextEdit', from: [26.6, 38.5], to: [119, 38.5], ...changes })]));
+  const run = changes => JSON.parse(context.run([JSON.stringify({ app: defaultAppId, from: [26.6, 38.5], to: [119, 38.5], ...changes })]));
   return { run, events, restored, activations, pidEvents, values, mainWrites, delays, axWrites, visits: () => visited };
 }
 // Window 11's text area starts at x 105, so [150, 38.5] is past the line's end.
@@ -130,6 +131,50 @@ test('a covered text drop moves the text through Accessibility with no pointer, 
   assert.equal(h.values.get(11), 'beta gamma alpha\n'); assert.equal(r.spaceInserted, true);
   assert.equal(h.activations.length, 0); assert.equal(h.events.length, 0); assert.equal(h.pidEvents.length, 0);
   assert.equal(h.restored.length, 0);
+});
+test('generic validation refuses cross-area and blank text drags for every bundle', () => {
+  for (const appId of ['com.apple.TextEdit', 'org.sleight.NativeEditor']) {
+    for (const options of [{ splitAreas: true, selection: 'alpha' }, { selection: ' ' }, { selection: '' }]) {
+      const h = harness({ background: true, appId, ...options });
+      const r = h.run({ windowId: 11, ...(options.splitAreas ? { to: [119, 190] } : {}) });
+      assert.equal(r.ok, false, `${appId}: ${JSON.stringify(options)}`);
+      assert.equal(h.pidEvents.length, 0); assert.equal(h.events.length, 0);
+    }
+  }
+});
+test('every selected-text drag tries Accessibility before posted events', () => {
+  for (const appId of ['com.apple.TextEdit', 'org.sleight.NativeEditor']) {
+    for (const background of [true, false]) {
+    const h = harness({ background, appId, selection: 'alpha', ax: {} });
+    const r = h.run(pastEnd);
+    assert.equal(r.path, 'accessibility'); assert.equal(r.ok, true, r.error);
+    assert.equal(h.pidEvents.length, 0); assert.equal(h.events.length, 0);
+    assert.equal(h.axWrites.at(-1), 'settle');
+    }
+  }
+});
+test('every covered window without a focused selection refuses before raising', () => {
+  for (const appId of ['com.apple.TextEdit', 'org.sleight.NativeEditor']) {
+    const h = harness({ background: true, appId, selection: '', coveredEnd: true, coveredPid: 9 });
+    const r = h.run({ windowId: 11 });
+    assert.equal(r.ok, false); assert.match(r.error, /no selected text/);
+    assert.deepEqual(h.mainWrites, []); assert.deepEqual(h.delays, []);
+    assert.equal(h.pidEvents.length, 0); assert.equal(h.events.length, 0);
+    assert.doesNotMatch(r.error, /Chess pawn/);
+  }
+});
+test('posted text drags have no app-specific Command modifier', () => {
+  for (const appId of ['com.apple.TextEdit', 'org.sleight.NativeEditor']) {
+    const h = harness({ background: true, appId, selection: 'alpha' });
+    const r = h.run(pastEnd);
+    assert.equal(r.ok, true, r.error);
+    assert.equal(h.pidEvents.length, 28);
+    assert.ok(h.pidEvents.every(e => e.flags === 0));
+  }
+});
+test('drag dispatch contains no bundle-ID branch or rich-text mechanism', () => {
+  const source = readFileSync(new URL('../plugins/sleight/lib/drag.js', import.meta.url), 'utf8');
+  assert.equal(/target\.bundleIdentifier|isTextEdit|SLEIGHT_RICH_TEXT_MOVE|richTextMove|richClipboardState|textEditPasteItem|sameTextEditFormatting|pressRichPaste|richMove|pasteRich|verifyRich/.test(source), false);
 });
 test('an unchanged background drag moves the text through Accessibility before any foreground drag', () => {
   const h = harness({ background: true, backgroundAfter: 'alpha beta gamma\n', ax: {} }); const r = h.run(pastEnd);
@@ -172,7 +217,7 @@ test('the background path never waits for the person at the Mac', () => {
 });
 test('keys typed after the target takes focus stop the press and report it', () => {
   const h = harness({ typesAt: 'focused' }); const r = h.run({ windowId: 11 });
-  assert.equal(r.ok, false); assert.match(r.error, /typed while TextEdit was in front.*nothing was pressed/);
+  assert.equal(r.ok, false); assert.match(r.error, /typed while .* was in front.*nothing was pressed/);
   assert.equal(h.events.some(e => e.type === 1), false); assert.ok(h.restored.includes('app'));
 });
 test('keys typed during the drag turn a success into an error that says so', () => {
@@ -185,7 +230,7 @@ test('background text move uses PID posting, repairs spacing and never activates
   assert.equal(r.ok, true); assert.equal(r.path, 'background'); assert.equal(r.spaceInserted, true);
   assert.equal(r.textChanged, true); assert.equal(h.values.get(11), 'beta gamma alpha\n');
   assert.equal(h.pidEvents.length, 28); assert.equal(h.events.length, 0);
-  assert.ok(h.pidEvents.every(e => e.flags === 1 << 20));
+  assert.ok(h.pidEvents.every(e => e.flags === 0));
   assert.equal(h.activations.length, 0); assert.equal(h.restored.length, 0);
 });
 test('unchanged background text alone permits the foreground fallback', () => {
@@ -199,7 +244,7 @@ test('another app covering the drag points skips background posting and says whi
   assert.equal(h.pidEvents.length, 0);
 });
 test('a covered drag with no selected text, outside TextEdit, is refused before any raise or window scan', () => {
-  const h = harness({ background: true, coveredEnd: true, coveredPid: 9, appId: 'com.apple.Chess' }); const r = h.run({ windowId: 11 });
+  const h = harness({ background: true, coveredEnd: true, coveredPid: 9, appId: 'com.apple.Chess', areaRole: 'AXImage', selection: '' }); const r = h.run({ windowId: 11 });
   assert.equal(r.ok, false); assert.match(r.error, /Other app covers the window at the drag points, and this drag has no selected text/);
   assert.deepEqual(h.delays, [], 'no settle wait'); assert.equal(h.pidEvents.length, 0); assert.equal(h.events.length, 0);
 });
@@ -219,7 +264,7 @@ test('lost text, changed partial text and unreadable text never permit a second 
   }
 });
 test('non-text background posting reports unverified delivery without foreground repetition', () => {
-  const h = harness({ background: true, appId: 'com.apple.Chess' }); const r = h.run({ windowId: 11 });
+  const h = harness({ background: true, appId: 'com.apple.Chess', areaRole: 'AXImage', selection: '' }); const r = h.run({ windowId: 11 });
   assert.equal(r.path, 'background'); assert.equal(r.deliveryVerified, false);
   assert.equal(h.activations.length, 0); assert.equal(h.events.length, 0);
   assert.ok(h.pidEvents.every(e => e.flags === 0), 'Chess piece moves must not become Command drags');
@@ -283,7 +328,7 @@ test('single-window calls still work; a foreign or stale windowId cannot fall ba
 });
 test('non-TextEdit drags also reject title bars and toolbars', () => {
   for (const to of [[119, 10], [119, 25]]) {
-    const h = harness({ second: false, appId: 'com.apple.Chess' });
+    const h = harness({ second: false, appId: 'com.apple.Chess', areaRole: 'AXImage', selection: '' });
     assert.equal(h.run({ to }).ok, false); assert.equal(h.events.length, 0);
   }
 });
@@ -453,14 +498,8 @@ test('a drag that spent its time budget before pressing presses nothing', () => 
   }
 });
 test('a covered drag with no selected text presses nothing and points to the engine drag', () => {
-  const h = harness({ background: true, appId: 'com.apple.Chess', coveredEnd: true, coveredPid: 9 }); const r = h.run({ windowId: 11 });
+  const h = harness({ background: true, appId: 'com.apple.Chess', areaRole: 'AXImage', selection: '', coveredEnd: true, coveredPid: 9 }); const r = h.run({ windowId: 11 });
   assert.equal(r.ok, false); assert.match(r.error, /Use the engine's app\.drag.*nothing was pressed/);
   assert.equal(h.pidEvents.length, 0); assert.equal(h.events.length, 0); assert.equal(h.activations.length, 0);
 });
-test('a prepared rich paste cannot fall back to pointer input when the native path is unavailable', () => {
-  for (const options of [{ background: false }, { background: true, coveredEnd: true, coveredPid: 9 }]) {
-    const h = harness(options), result = h.run({ windowId: 11, richTextMove: { windowId: 11 } });
-    assert.equal(result.ok, false); assert.match(result.error, /rich|prepared/i);
-    assert.equal(h.activations.length, 0); assert.equal(h.events.length, 0); assert.equal(h.pidEvents.length, 0);
-  }
-});
+}

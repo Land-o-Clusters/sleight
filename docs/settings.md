@@ -26,19 +26,16 @@ Missing reads, failed or overlapping calls, and turns over 2,000 calls report un
 An accessibility change doesn't prove that a file is saved or unsaved. See the
 [design and limits](design/review-receipts.md).
 
-## Rich TextEdit moves
+## Text drags
 
-Set `SLEIGHT_RICH_TEXT_MOVE=1` in the relay's environment to try rich text preservation for
-covered TextEdit moves. Only the exact value `1` enables it. It is off until live qualification
-passes. Without it, covered rich moves use the existing Accessibility text edits, which can
-lose formatting. The opt-in stages RTF on the clipboard and verifies the pasted text and
-attributes before removing the source.
+`drag` tries Accessibility text edits first in every app, then background posted events,
+then the foreground fallback when the earlier attempts didn't change the text. Both points must
+share one text area or field with a non-blank selection. Non-text drags use the content-area
+check and require readback to confirm delivery.
 
-After an unconfirmed Paste, the shared clipboard reservation lasts at most ten seconds. Recovery
-restores the original only while the clipboard still has the exact staged bytes and generation;
-otherwise it leaves the current contents alone. The relay reports restoration or contents left,
-then discards its private snapshot. A queued Paste can still run after restoration, so read the
-document before continuing. See the [third review](benchmarks/2026-10-10-textedit-fixes-3.md).
+Accessibility text moves can lose rich formatting. The app-specific rich-text option was
+removed on 2026-10-11. Drag no longer stages text on the clipboard.
+See [drag limits](known-problems.md).
 
 ## Clipboard
 

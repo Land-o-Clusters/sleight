@@ -1,6 +1,6 @@
 // A drag that holds the mouse down and moves in steps, for what the engine's
-// instant drag can't do (moving selected text). Try window-targeted PID
-// posting first. Only unchanged text, or an unavailable native bridge before
+// instant drag can't do (moving selected text). Try Accessibility text writes
+// first, then window-targeted PID posting. Only unchanged text or no posting
 // posting, permits the foreground path. The relay asks first (launch.mjs).
 //
 //   osascript -l JavaScript drag.js '<json request>'
@@ -11,8 +11,6 @@
 
 ObjC.import('AppKit');
 ObjC.import('CoreGraphics');
-const richClipboardState = { paste: 'not-posted' };
-const richTextMoveEnabled = () => attempt(() => ObjC.unwrap($.NSProcessInfo.processInfo.environment.objectForKey('SLEIGHT_RICH_TEXT_MOVE')) === '1', false);
 
 // The person at the Mac. The foreground path takes the pointer and keyboard
 // focus for a few seconds, and keys typed then land in the target app: a
@@ -114,7 +112,7 @@ function content(win, bounds) {
   walk(win, bounds, 0);
   return { areas, toolbars };
 }
-function validatePoints(info, bounds, from, to, isTextEdit, app = 'TextEdit') {
+function validatePoints(info, bounds, from, to, app) {
   const start = at(bounds, from), end = at(bounds, to);
   for (const [name, point] of [['from', start], ['to', end]]) {
     if (!inside(bounds, point) || info.toolbars.some(b => inside(b, point)) || !info.areas.some(a => inside(a.bounds, point))) {
@@ -122,21 +120,13 @@ function validatePoints(info, bounds, from, to, isTextEdit, app = 'TextEdit') {
     }
   }
   let text = null;
-  if (isTextEdit) {
-    const areas = info.areas.filter(a => a.role === 'AXTextArea' && inside(a.bounds, start));
-    if (areas.length !== 1 || !inside(areas[0].bounds, end)) throw new Error('TextEdit from and to must be inside the same visible text area; nothing was pressed');
-    const el = areas[0].el;
+  const fields = info.areas.filter(a => ['AXTextArea', 'AXTextField'].includes(a.role) && inside(a.bounds, start));
+  if (fields.length) {
+    if (fields.length !== 1 || !inside(fields[0].bounds, end)) throw new Error(`${app} from and to must be inside the same visible text area or field; nothing was pressed`);
+    const el = fields[0].el;
     const value = el.value(), selected = el.attributes.byName('AXSelectedText').value();
-    if (typeof value !== 'string' || typeof selected !== 'string' || !selected.trim()) throw new Error('Select non-whitespace TextEdit text in this window before dragging; nothing was pressed');
-    text = { el, text: value, selected, app, isTextEdit: true };
-  } else {
-    // Any other app: a drag that starts in one text area or field with selected text, and ends in
-    // the same one, is a text move. Anything else stays an ordinary drag, as before.
-    const fields = info.areas.filter(a => ['AXTextArea', 'AXTextField'].includes(a.role) && inside(a.bounds, start));
-    const el = fields.length === 1 && inside(fields[0].bounds, end) ? fields[0].el : null;
-    const value = el && attempt(() => el.value(), null);
-    const selected = el && attempt(() => el.attributes.byName('AXSelectedText').value(), null);
-    if (typeof value === 'string' && typeof selected === 'string' && selected.trim()) text = { el, text: value, selected, app };
+    if (typeof value !== 'string' || typeof selected !== 'string' || !selected.trim()) throw new Error(`Select non-whitespace ${app} text in this window before dragging; nothing was pressed`);
+    text = { el, text: value, selected, app };
   }
   return { start, end, text };
 }
@@ -171,7 +161,7 @@ function repairTextDrop(snapshot) {
     settle();
     const at = after.indexOf(snapshot.selected);
     const expected = after.slice(0, at) + ' ' + after.slice(at);
-    if (snapshot.el.value() !== expected) throw new Error(`${snapshot.app ?? 'TextEdit'} did not confirm the spacing repair; read the text before continuing`);
+    if (snapshot.el.value() !== expected) throw new Error(`${snapshot.app} did not confirm the spacing repair; read the text before continuing`);
     return { spaceInserted: true };
   } catch (e) {
     return { spaceInserted: false, spacingError: String(e.message || e) };
@@ -180,7 +170,7 @@ function repairTextDrop(snapshot) {
 
 function finishTextDrop(snapshot, window) {
   if (!snapshot) return { spaceInserted: false };
-  const name = `${snapshot.app ?? 'TextEdit'} window ${window.id} (${window.title})`;
+  const name = `${snapshot.app} window ${window.id} (${window.title})`;
   if (snapshot.el.value() === snapshot.text) return {
     spaceInserted: false, textChanged: false,
     error: `Text in ${name} is unchanged after dragging; read it before continuing.`,
@@ -225,90 +215,7 @@ function settleAfterTextWrite(pid) {
 // The text area under a screen point, through the Accessibility C API, which
 // can map a point to a character and write text without the pointer or focus.
 // JXA can't pass struct pointers, so AXValues are built from an NSValue's bytes.
-function textEditPasteItem(app, get) {
-  const children = el => ObjC.castRefToObject(get(el, 'AXChildren'));
-  const value = (el, name) => attempt(() => ObjC.unwrap(ObjC.castRefToObject(get(el, name))), undefined);
-  const bar = children(ObjC.castRefToObject(get(app, 'AXMenuBar')));
-  let edit;
-  for (let i = 0; i < Math.min(Number(bar.count), 20); i++) {
-    const candidate = bar.objectAtIndex(i);
-    if (value(candidate, 'AXTitle') === 'Edit') { edit = candidate; break; }
-  }
-  if (!edit) throw new Error('TextEdit Edit menu was not found; nothing was changed');
-  const menus = children(edit);
-  if (Number(menus.count) !== 1) throw new Error('TextEdit Edit menu is ambiguous; nothing was changed');
-  const items = children(menus.objectAtIndex(0));
-  let disabled;
-  for (let i = 0; i < Math.min(Number(items.count), 200); i++) {
-    const item = items.objectAtIndex(i);
-    // AXMenuItemCmdModifiers omits Command unless NoCommand (8) is present. Zero is Cmd alone.
-    if (value(item, 'AXRole') === 'AXMenuItem' && String(value(item, 'AXMenuItemCmdChar')).toLowerCase() === 'v' &&
-        value(item, 'AXMenuItemCmdModifiers') === 0) {
-      if (value(item, 'AXEnabled') === true) return item;
-      disabled = disabled || item;
-    }
-  }
-  // AXEnabled false here is AppKit's answer for a background menu, not a stale attribute: the read
-  // above runs the validation pass, which without a key window cannot resolve a first-responder
-  // paste: and sets the flag false. A disabled item returns status 0 from AXPress and performs
-  // nothing, and no AX write re-enables it, so pressing would only stage a false consumption.
-  if (disabled) throw new Error("TextEdit's Paste menu item reads disabled: the menu was validated in the background without a key window, and AXPress on a disabled menu item returns status 0 and performs nothing (offline probe, 2026-10-11); nothing was pressed, the source is in place, and the staged clipboard is restored. Ask the user whether to move the word without its formatting, or to bring TextEdit to the front themselves and then retry");
-  throw new Error('No TextEdit Paste menu item; nothing was changed');
-}
-
-// Font names include bold/italic faces. Spelling, selection and paragraph annotations are not
-// visual character formatting and must never put a plain document on the clipboard path.
-function sameTextEditFormatting(a, b) {
-  const absent = value => value === undefined || value === null || value.isNil?.() === true;
-  const same = (left, right) => absent(left) || absent(right)
-    ? absent(left) && absent(right) : !!$.CFEqual(left, right);
-  // TextEdit's RTF writer re-encodes color components at five decimal places (\red220 becomes
-  // \csgenericrgb\c86275), so a faithful paste yields a CGColor that CFEqual rejects while the
-  // word looks the same: 4.9e-6 of full scale on the recorded 2026-10-11 move, against 0.0039
-  // for one 8-bit display level. Compare what a paste can re-encode in one generic RGB space,
-  // within half a display level; a color that cannot convert stays strict.
-  const sameColor = (left, right) => {
-    if (absent(left) || absent(right)) return absent(left) && absent(right);
-    if ($.CFEqual(left, right)) return true;
-    const components = color => attempt(() => {
-      const rgb = $.NSColor.colorWithCGColor(color).colorUsingColorSpace($.NSColorSpace.genericRGBColorSpace);
-      return rgb.isNil() ? null : [Number(rgb.redComponent), Number(rgb.greenComponent), Number(rgb.blueComponent), Number(rgb.alphaComponent)];
-    }, null);
-    const leftComponents = components(left), rightComponents = components(right);
-    return !!leftComponents && !!rightComponents &&
-      leftComponents.every((value, index) => Math.abs(value - rightComponents[index]) <= 0.002);
-  };
-  const af = a.objectForKey('AXFont'), bf = b.objectForKey('AXFont');
-  for (const key of ['AXFontName', 'AXFontSize']) {
-    if (!same(absent(af) ? null : af.objectForKey(key), absent(bf) ? null : bf.objectForKey(key))) return false;
-  }
-  for (const key of ['AXForegroundColor', 'AXBackgroundColor', 'AXUnderlineColor', 'AXUnderline']) {
-    const left = a.objectForKey(key), right = b.objectForKey(key);
-    if (key === 'AXUnderline' && (absent(left) || Number(left) === 0) && (absent(right) || Number(right) === 0)) continue;
-    if (key === 'AXForegroundColor' && (absent(left) || absent(right))) {
-      const black = value => absent(value) || attempt(() => {
-        const color = $.NSColor.colorWithCGColor(value).colorUsingColorSpace($.NSColorSpace.genericRGBColorSpace);
-        return Number(color.redComponent) === 0 && Number(color.greenComponent) === 0 && Number(color.blueComponent) === 0 && Number(color.alphaComponent) === 1;
-      }, false);
-      if (black(left) && black(right)) continue;
-    }
-    if (!(key === 'AXUnderline' ? same(left, right) : sameColor(left, right))) return false;
-  }
-  return true;
-}
-
-function pressRichPaste(paste, deadline, posted) {
-  const timeout = Number($.AXUIElementSetMessagingTimeout(paste, 1));
-  if (timeout) throw new Error('TextEdit Paste AX timeout could not be set: ' + timeout);
-  if (!Number.isFinite(deadline) || deadline - Date.now() < 5000) throw new Error('Less than 5 s remain before the child deadline; Paste was not pressed. Read the window again before retrying');
-  posted(); // cannotComplete may return while the callback continues in TextEdit.
-  $.NSFileHandle.fileHandleWithStandardError.writeData($('sleight:rich-paste-posted\n').dataUsingEncoding($.NSUTF8StringEncoding));
-  const pastedAt = Date.now(), status = Number($.AXUIElementPerformAction(paste, $('AXPress')));
-  if (status) throw new Error('TextEdit Paste action was not acknowledged: ' + status);
-  return pastedAt;
-}
-
-function axTextArea(pid, point, deadline) {
+function axTextArea(pid, point) {
   ObjC.import('ApplicationServices');
   ObjC.bindFunction('malloc', ['void*', ['unsigned long']]);
   ObjC.bindFunction('free', ['void', ['void*']]);
@@ -320,10 +227,6 @@ function axTextArea(pid, point, deadline) {
   const ask = (el, name, arg) => { const out = Ref(); const err = $.AXUIElementCopyParameterizedAttributeValue(el, $(name), arg, out); if (err) throw new Error(`AX ${name} failed (${err})`); return out[0]; };
   const set = (el, name, v) => { const err = $.AXUIElementSetAttributeValue(el, $(name), v); if (err) throw new Error(`AX write of ${name} failed (${err})`); };
   const app = $.AXUIElementCreateApplication(pid);
-  if (richTextMoveEnabled()) {
-    const timeout = Number($.AXUIElementSetMessagingTimeout(app, 1));
-    if (timeout) throw new Error('Text AX timeout could not be set: ' + timeout);
-  }
   const hit = Ref();
   // An app element hit-tests only that app's windows, so a covering app doesn't matter.
   if ($.AXUIElementCopyElementAtPosition(app, point.x, point.y, hit)) throw new Error('no accessibility element at the drop point');
@@ -342,8 +245,6 @@ function axTextArea(pid, point, deadline) {
     const m = /x:([-\d.]+) y:([-\d.]+) w:([-\d.]+) h:([-\d.]+)/.exec(described(ask(el, 'AXBoundsForRange', range(index, 1))));
     return m && { X: +m[1], Y: +m[2], Width: +m[3], Height: +m[4] };
   };
-  const attributed = (location, length) => ObjC.castRefToObject(ask(el, 'AXAttributedStringForRange', range(location, length)));
-  let sourceAttributes;
   return {
     value: () => ObjC.unwrap(ObjC.castRefToObject(get(el, 'AXValue'))),
     selection: () => rangeOf(get(el, 'AXSelectedTextRange')),
@@ -357,58 +258,6 @@ function axTextArea(pid, point, deadline) {
     replace: (location, length, text) => { set(el, 'AXSelectedTextRange', range(location, length)); set(el, 'AXSelectedText', $(text)); },
     select: (location, length) => set(el, 'AXSelectedTextRange', range(location, length)),
     settle: () => settleAfterTextWrite(pid),
-    richMove: (location, length, dest, insert) => {
-      sourceAttributes = attributed(location, length);
-      const text = ObjC.unwrap(ObjC.castRefToObject(get(el, 'AXValue')));
-      const target = attributed(Math.max(0, Math.min(dest - 1, text.length - 1)), 1).attributesAtIndexEffectiveRange(0, null);
-      let different = false;
-      for (let i = 0; i < length; i++) if (!sameTextEditFormatting(sourceAttributes.attributesAtIndexEffectiveRange(i, null), target)) different = true;
-      if (!different) return null;
-      const data = ObjC.castRefToObject(ask(el, 'AXRTFForRange', range(location, length)));
-      const source = $.NSAttributedString.alloc.initWithRTFDocumentAttributes(data, null);
-      if (source.isNil() || ObjC.unwrap(source.string) !== text.slice(location, location + length)) throw new Error('TextEdit did not supply the selected rich text; nothing was changed');
-      // JXA doesn't bridge NSAttributedString's initializers that take a string or attributed string
-      // (initWithAttributedString threw on every live rich move, 2026-10-10): build by appending.
-      const rich = $.NSMutableAttributedString.alloc.init;
-      rich.appendAttributedString(source);
-      const word = ObjC.unwrap(source.string), prefix = insert.startsWith(' ') && !word.startsWith(' ') ? ' ' : '';
-      const suffix = insert.length > prefix.length + word.length ? ' ' : '';
-      const space = () => {
-        const one = $.NSMutableAttributedString.alloc.init;
-        one.mutableString.appendString($(' '));
-        one.setAttributesRange(source.attributesAtIndexEffectiveRange(0, null), $.NSMakeRange(0, 1));
-        return one;
-      };
-      if (prefix) rich.insertAttributedStringAtIndex(space(), 0);
-      if (suffix) rich.appendAttributedString(space());
-      const rtf = rich.RTFFromRangeDocumentAttributes($.NSMakeRange(0, Number(rich.length)), $({}));
-      if (rtf.isNil()) throw new Error('TextEdit rich text could not be prepared; nothing was changed');
-      return { rtf: ObjC.unwrap(rtf.base64EncodedStringWithOptions(0)), sourceRTF: ObjC.unwrap(data.base64EncodedStringWithOptions(0)) };
-    },
-    pasteRich: (location, _insert, count, posted) => {
-      if (Number($.NSPasteboard.generalPasteboard.changeCount) !== count) throw new Error('Clipboard ownership changed before the rich paste; nothing was changed');
-      set(el, 'AXFocused', $(true));
-      set(el, 'AXSelectedTextRange', range(location, 0));
-      if (!$.CFEqual(ObjC.castRefToObject(get(app, 'AXFocusedUIElement')), ObjC.castRefToObject(el))) throw new Error('TextEdit focus changed before the rich paste; nothing was changed');
-      const before = ObjC.unwrap(ObjC.castRefToObject(get(el, 'AXValue')));
-      const paste = textEditPasteItem(app, get);
-      const caret = rangeOf(get(el, 'AXSelectedTextRange'));
-      if (caret.location !== location || caret.length !== 0 || ObjC.unwrap(ObjC.castRefToObject(get(el, 'AXValue'))) !== before ||
-          !$.CFEqual(ObjC.castRefToObject(get(app, 'AXFocusedUIElement')), ObjC.castRefToObject(el))) throw new Error('TextEdit text or focus changed before the rich paste; nothing was changed');
-      if (Number($.NSPasteboard.generalPasteboard.changeCount) !== count) throw new Error('Clipboard ownership changed before the rich paste; nothing was changed');
-      // Synchronous receipt before AXPress: collection without it proves Paste was not posted.
-      // A kill between this write and AXPress conservatively counts as possibly posted.
-      const pastedAt = pressRichPaste(paste, deadline, posted);
-      for (let i = 0; i < 30 && ObjC.unwrap(ObjC.castRefToObject(get(el, 'AXValue'))) === before; i++) delay(0.05);
-      return { pasteWaitMs: Date.now() - pastedAt };
-    },
-    verifyRich: (location, length) => {
-      if (!sourceAttributes) return false;
-      const actual = attributed(location, length);
-      if (ObjC.unwrap(sourceAttributes.string) !== ObjC.unwrap(actual.string)) return false;
-      for (let i = 0; i < length; i++) if (!sameTextEditFormatting(sourceAttributes.attributesAtIndexEffectiveRange(i, null), actual.attributesAtIndexEffectiveRange(i, null))) return false;
-      return true;
-    },
   };
 }
 
@@ -429,12 +278,11 @@ function dropIndex(area, p, text) {
   throw new Error('cannot find where the drop point falls in the text; nothing was changed');
 }
 
-// Moves the selected text to the drop point the way TextEdit's own drag does:
+// Moves selected text to the drop point, preserving word boundaries:
 // one space comes out with a word at the source, and one goes in at the drop
 // when the word would touch another. Checks the whole result, and on a mismatch
 // says to undo.
-function accessibilityMove(area, snapshot, end, window, prepared) {
-  if (prepared && !richTextMoveEnabled()) throw new Error('Rich text move opt-in is disabled; nothing was changed');
+function accessibilityMove(area, snapshot, end, window) {
   const before = area.value(), sel = area.selection();
   if (before !== snapshot.text || before.slice(sel.location, sel.location + sel.length) !== snapshot.selected) {
     throw new Error('the text or selection changed before the move; nothing was changed, read the window again');
@@ -456,46 +304,6 @@ function accessibilityMove(area, snapshot, end, window, prepared) {
   const expected = dest > srcEnd
     ? before.slice(0, cutFrom) + before.slice(cutTo, dest) + insert + before.slice(dest)
     : before.slice(0, dest) + insert + before.slice(dest, cutFrom) + before.slice(cutTo);
-  if (snapshot.isTextEdit && area.richMove && richTextMoveEnabled()) {
-    let rich;
-    try { rich = area.richMove(src, sel.length, dest, insert); }
-    catch (e) { if (prepared) throw e; } // Initial preparation is optional; keep the existing plain AX move.
-    const currentSelection = area.selection();
-    if (area.value() !== before || currentSelection.location !== sel.location || currentSelection.length !== sel.length) {
-      throw new Error('the text or selection changed before the move; nothing was changed, read the window again');
-    }
-    if (prepared && (!rich || prepared.pid !== snapshot.pid || prepared.text !== before || prepared.selected !== word || prepared.windowId !== window.id || prepared.sourceRTF !== rich.sourceRTF || prepared.rtf !== rich.rtf ||
-        prepared.dest !== dest || prepared.src !== src || prepared.cutFrom !== cutFrom || prepared.cutTo !== cutTo || prepared.insert !== insert)) {
-      throw new Error('the rich text or window changed before the move; nothing was changed, read the window again');
-    }
-    if (rich) {
-      if (!prepared) return { textChanged: false, richTextMove: { ...rich, pid: snapshot.pid, text: before, selected: word, windowId: window.id, dest, src, cutFrom, cutTo, insert } };
-      let after, deleting = false;
-      try {
-        const pasteTiming = area.pasteRich(dest, insert, prepared.clipboardCount, () => { richClipboardState.paste = 'pending'; });
-        after = area.value();
-        if (after !== before.slice(0, dest) + insert + before.slice(dest)) throw new Error('TextEdit did not confirm the rich text paste; the source was left in place');
-        richClipboardState.paste = 'consumed';
-        const prefixLength = insert.startsWith(' ') && !word.startsWith(' ') ? 1 : 0;
-        if (!area.verifyRich(dest + prefixLength, word.length)) throw new Error('TextEdit did not confirm the pasted formatting attributes; the source was left in place');
-        // Insert first in both directions. A failed paste can never delete the source.
-        deleting = true;
-        area.replace(cutFrom + (dest < src ? insert.length : 0), cutTo - cutFrom, '');
-        area.settle();
-        after = area.value();
-        const at = dest - (dest > srcEnd ? cutTo - cutFrom : 0) + prefixLength;
-        if (after !== expected) throw new Error('TextEdit did not confirm the complete rich text move');
-        if (!area.verifyRich(at, word.length)) throw new Error('TextEdit did not confirm the moved formatting attributes');
-        area.select(at, word.length);
-        return { textChanged: true, spaceInserted: insert !== word, richTextPreserved: true, richPasteState: richClipboardState.paste, ...pasteTiming };
-      } catch (e) {
-        attempt(() => area.settle());
-        const changed = attempt(() => area.value(), null) !== before;
-        const undo = deleting ? ' Press Cmd+Z twice if both edits took effect, or once if only the paste did. Read after each Undo.' : ' Press Cmd+Z once in that window, then read it before continuing.';
-        return { textChanged: changed, richPasteState: richClipboardState.paste, error: `${e.message || e}.${changed ? undo : ' Read the window before continuing.'}` };
-      }
-    }
-  }
   // The later edit first, so the earlier one's indices still hold.
   const edits = dest > srcEnd ? [[dest, 0, insert], [cutFrom, cutTo - cutFrom, '']] : [[cutFrom, cutTo - cutFrom, ''], [dest, 0, insert]];
   let after;
@@ -515,7 +323,7 @@ function accessibilityMove(area, snapshot, end, window, prepared) {
   if (after === before) throw new Error('the app ignored the Accessibility text writes');
   if (after !== expected) {
     return { lostText: typeof after !== 'string' || after.replace(/\s/gu, '').length < before.replace(/\s/gu, '').length,
-      error: `The text in ${snapshot.app ?? 'TextEdit'} window ${window.id} (${window.title}) isn't what the move should have made. Press Cmd+Z twice in that window, then read it again before continuing.` };
+      error: `The text in ${snapshot.app} window ${window.id} (${window.title}) isn't what the move should have made. Press Cmd+Z twice in that window, then read it again before continuing.` };
   }
   const movedAt = after.indexOf(word, dest > srcEnd ? dest - (cutTo - cutFrom) : dest);
   attempt(() => area.select(movedAt, word.length));
@@ -541,10 +349,10 @@ function backgroundBuilder() {
   const pointType = '{CGPoint="x"d"y"d}';
   ObjC.bindFunction('CGEventSetWindowLocation', ['void', ['id', pointType]]);
   ObjC.bindFunction('CGEventGetWindowLocation', [pointType, ['id']]);
-  return (type, point, main, command) => {
+  return (type, point, main) => {
     const b = main.bounds, local = $.CGPointMake(point.x - b.X, point.y - b.Y);
     const native = $.NSEvent.mouseEventWithTypeLocationModifierFlagsTimestampWindowNumberContextEventNumberClickCountPressure(
-      type, $.CGPointMake(local.x, b.Height - local.y), command ? 1 << 20 : 0,
+      type, $.CGPointMake(local.x, b.Height - local.y), 0,
       $.NSProcessInfo.processInfo.systemUptime, main.id, null, 1, 1, type === 2 ? 0 : 1);
     const event = $.objc_msgSend(native, 'CGEvent');
     if ($.CGEventGetType(event) !== type) throw new Error('NSEvent CGEvent bridge failed');
@@ -579,7 +387,7 @@ function focusedSelection(pid) {
   }, '');
 }
 
-const COVERED_NO_TEXT = cover => `${cover} covers the window at the drag points, and this drag has no selected text. Use the engine's app.drag in js instead: it reaches a covered window (it moved a covered Chess pawn where this tool's posts didn't); nothing was pressed`;
+const COVERED_NO_TEXT = cover => `${cover} covers the window at the drag points, and this drag has no selected text. Use the engine's app.drag in js instead: it reaches a covered window; nothing was pressed`;
 
 function raiseWindow(win) {
   attempt(() => { win.attributes.byName('AXMain').value = true; });
@@ -627,15 +435,6 @@ function run(argv) {
   };
   try {
     const request = JSON.parse(argv[0]);
-    const deadline = Number.isFinite(request.deadline) ? Math.min(request.deadline, startedAt + 30000) : startedAt + 30000;
-    richClipboardState.paste = 'not-posted';
-    // Clipboard recovery is read only. The old process must be gone before an unacknowledged
-    // queued Paste can no longer consume restored clipboard data. Never infer this from a timeout.
-    if (request.op === 'rich-paste-status') {
-      if (!Number.isInteger(request.pid) || request.pid <= 0) throw new Error('invalid rich paste process');
-      const running = $.NSRunningApplication.runningApplicationWithProcessIdentifier(request.pid);
-      return JSON.stringify({ ok: true, terminated: running.isNil() || running.isTerminated === true });
-    }
     const { app, from, to, holdMs = 500, steps = 25, settleMs = 1500 } = request;
     if (![from, to].every(p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite)) ||
         (request.windowId !== undefined && (!Number.isInteger(request.windowId) || request.windowId <= 0)) ||
@@ -657,21 +456,19 @@ function run(argv) {
       : { coordinates: request.screenshot ? 'window points: the latest screenshot is of another window size' : 'window points: no engine screenshot of this app yet' };
     // A drag no other app lets through is decided before any window scan: without selected text it
     // is refused below anyway, and the raise and scan took 10 to 13 s to get there (2026-10-09).
-    // TextEdit keeps the full path, which can move its text through Accessibility.
     const early = coveringApp(windows(true), main, { start: at(main.bounds, pointFrom), end: at(main.bounds, pointTo) });
-    if (early && ObjC.unwrap(target.bundleIdentifier) !== 'com.apple.TextEdit' && !focusedSelection(pid)) throw new Error(COVERED_NO_TEXT(early));
+    if (early && !focusedSelection(pid)) throw new Error(COVERED_NO_TEXT(early));
     const win = axWindow(pid, main);
     let build;
     try { build = backgroundBuilder(); }
     catch (e) { fallbackReason = `background unavailable: ${e.message || e}`; }
-    if (build) {
+    if (build || globalThis.SLEIGHT_ACCESSIBILITY_MOVE !== false) {
       previous = $.NSWorkspace.sharedWorkspace.frontmostApplication;
       raiseWindow(win);
       delay(settleMs / 1000);
       checkWindow(main, pid, win);
-      const isTextEdit = ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit';
       scanned = { info: content(win, main.bounds), bounds: main.bounds };
-      const points = validatePoints(scanned.info, main.bounds, pointFrom, pointTo, isTextEdit, app);
+      const points = validatePoints(scanned.info, main.bounds, pointFrom, pointTo, app);
       if (points.text) points.text.pid = pid;
       // Another document of this app must not receive the press: check fresh
       // own-app order at both ends, then other apps' coverage below.
@@ -694,36 +491,31 @@ function run(argv) {
       const byAccessibility = () => {
         if (globalThis.SLEIGHT_ACCESSIBILITY_MOVE === false) return null;
         let area;
-        try { area = axTextArea(pid, points.end, deadline); }
-        catch (e) { if (request.richTextMove) throw new Error(`prepared rich paste unavailable: ${e.message || e}`); fallbackReason += `; accessibility move unavailable: ${e.message || e}`; return null; }
+        try { area = axTextArea(pid, points.end); }
+        catch (e) { fallbackReason += `; accessibility move unavailable: ${e.message || e}`; return null; }
         try {
-          const outcome = accessibilityMove(area, points.text, points.end, main, request.richTextMove);
+          const outcome = accessibilityMove(area, points.text, points.end, main);
           path = 'accessibility';
-          return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, ...units, path, fallbackReason, richPasteState: richClipboardState.paste, ...outcome });
+          return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, ...units, path, fallbackReason, ...outcome });
         } catch (e) {
-          if (request.richTextMove) throw e;
           if (/changed before the move|inside the selection/.test(String(e.message))) throw e;
           fallbackReason += `; accessibility move failed: ${e.message || e}`;
           return null;
         }
       };
-      // Outside TextEdit, the posted mouse drag's text settings are unmeasured, so text moves go
-      // through Accessibility first.
-      if (points.text && (cover || !isTextEdit || request.richTextMove)) {
+      // Selected text uses the same pointer-free path in every app.
+      if (points.text) {
         const moved = byAccessibility();
         if (moved) return moved;
-        if (request.richTextMove) throw new Error('prepared rich paste unavailable; nothing was changed');
       }
       let sequence;
-      if (!cover) try {
+      if (!cover && build) try {
         const moves = Array.from({ length: steps }, (_, i) => ({
           x: points.start.x + (points.end.x - points.start.x) * (i + 1) / steps,
           y: points.start.y + (points.end.y - points.start.y) * (i + 1) / steps,
         }));
         // Prepare and validate every event, including the release, before down.
-        // Keep the measured TextEdit modifier. Other apps, including Chess,
-        // need an ordinary drag: Command can change the action's meaning.
-        const event = (type, p) => build(type, p, main, !!points.text && isTextEdit);
+        const event = (type, p) => build(type, p, main);
         sequence = [event(5, points.start), event(1, points.start),
           ...moves.map(p => event(6, p)), event(2, points.end)];
       } catch (e) { fallbackReason = `background unavailable: ${e.message || e}`; }
@@ -769,11 +561,8 @@ function run(argv) {
         fallbackReason = 'background text unchanged';
         backgroundSnapshot = points.text;
         unchangedText();
-        const moved = byAccessibility();
-        if (moved) return moved;
       }
     }
-    if (request.richTextMove) throw new Error('prepared rich paste unavailable; foreground fallback was skipped');
     unchangedText();
     waitForIdle();
     unchangedText();
@@ -795,7 +584,7 @@ function run(argv) {
     // Each content scan is hundreds of Apple Events. Reuse the background path's scan while the
     // window hasn't moved: two scans of Chess ran past the launcher's 30 s limit (2026-10-09).
     const info = scanned && sameBounds(scanned.bounds, main.bounds) ? scanned.info : content(win, main.bounds);
-    const { start, end, text } = validatePoints(info, main.bounds, pointFrom, pointTo, ObjC.unwrap(target.bundleIdentifier) === 'com.apple.TextEdit', app);
+    const { start, end, text } = validatePoints(info, main.bounds, pointFrom, pointTo, app);
     if (text) text.pid = pid;
     // Match the exact window at both endpoints, even for another window of
     // the same app. The engine cursor overlay lets events through.
@@ -832,7 +621,7 @@ function run(argv) {
     return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, ...units, holdMs, steps, path, fallbackReason, ...outcome });
   } catch (e) {
     const message = String(e.message || e);
-    return JSON.stringify({ ok: false, path, fallbackReason, ...units, richPasteState: richClipboardState.paste, error: message + (!didPress && richClipboardState.paste === 'not-posted' && !message.includes('nothing was pressed') ? '; nothing was pressed' : '') });
+    return JSON.stringify({ ok: false, path, fallbackReason, ...units, error: message + (!didPress && !message.includes('nothing was pressed') ? '; nothing was pressed' : '') });
   } finally {
     if (pressed && post) attempt(() => post($.kCGEventLeftMouseUp, current));
     if (saved) attempt(() => $.CGWarpMouseCursorPosition(saved));

@@ -258,7 +258,8 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
 - The engine's `app.drag` failed TextEdit text moves 9/9. Local `drag` passed the benchmark 3/3
   before the window/content guards. Later [two-window checks](benchmarks/2026-10-04-drag-window-guards.md)
   passed 8/8 (four refusals, four exact moves), with about 4.5 s of foreground pointer use per call.
-  Ambiguous windows require `windowId`. TextEdit endpoints must share a text area. AX scans refuse
+  Ambiguous windows require `windowId`. Text endpoints must share one text area or field with a
+  non-blank selection in every app. AX scans refuse
   above 300 elements or 12 levels ([review fixes](benchmarks/2026-10-04-drag-round-2.md)).
   Lost-text errors require Cmd+Z; whitespace-only selections refuse.
   [Spacing repair](benchmarks/2026-10-04-drag-polish.md) covers unique whole words at line ends.
@@ -272,13 +273,15 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   Screenshot points were used because AX square coordinates are reversed. Fixture cleanup was verified.
   Calculator content guards remain unmeasured.
   The [background prototype](benchmarks/2026-10-04-background-text-drag.md) moved TextEdit text
-  4/4 after correcting its drop geometry, but joined `gammaalpha`. The product now uses that path
-  first and repairs the verified space. It only works when no other app's window covers the drag
+  4/4 after correcting its drop geometry, but joined `gammaalpha`. Posted events repair the verified
+  space after a text move. Posting only works when no other app's window covers the drag
   points, because macOS picks the drop target from what's on screen there: 3/3 TextEdit moves with
-  the window uncovered, 0/3 with this Claude window over it (2026-10-05). When another app covers
-  either point, or the posted drag leaves the text unchanged, the tool moves the text through
-  Accessibility instead, with no pointer or focus change. It maps the drop point to a character, puts
-  the word there and takes it out at the source with TextEdit's spacing, then checks the whole text.
+  the window uncovered, 0/3 with this Claude window over it (2026-10-05). Since 2026-10-11, the tool
+  tries Accessibility first for selected text in every app, with no pointer or focus change.
+  If it doesn't change the text, uncovered points may use posted events,
+  then the guarded foreground fallback. It maps the drop point to a character, puts
+  the word there and takes it out at the source, adjusting one adjacent space for word moves,
+  then checks the whole text.
   After an Accessibility text write, TextEdit's next Cmd+S deadlocked on the document's save lock in 10
   of 13 probe trials with the file opened through the Open panel (0 of 3 opened with `open -g`), the
   same hang as `setValue` on 2026-10-05. One Shift press and release posted to TextEdit's process after
@@ -309,33 +312,21 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   check confirmed zero Accessibility windows in that same launch and released the retained live
   lock without app input. The event comparison has no new causal result.
   A bold red word lost both attributes in 1/1 covered RTF trials of the old move.
-  The opt-in fix (`SLEIGHT_RICH_TEXT_MOVE=1`) prepares RTF when the selection and destination have different visual character attributes. It checks
-  the pasted attributes before source deletion and preserves readable clipboard formats.
-  Unit tests pass. Live attempts stopped at off-Space windows and an occupied shared lock.
-  Undoing a completed move still takes two Cmd+Z.
-  [Original attempts](benchmarks/2026-10-09-textedit-fixes.md) and
-  [review follow-up](benchmarks/2026-10-10-textedit-fixes-2.md).
-  Rich preservation stays off pending live qualification. The default uses the existing plain
-  move. A collected child killed before its Paste receipt restores immediately. An unconfirmed
-  Paste retains the private original and clipboard reservation for at most ten seconds. At the
-  limit it restores only the exact staged bytes and generation, leaves other contents alone,
-  releases the lock and reports the result. A queued Paste may still consume the restored
-  original. Read the document before continuing. The child refuses Paste with less than five
-  seconds left and sets a one-second AX timeout. These checks cannot confirm consumption.
-  Shutdown gives recovery three seconds, then collects its clipboard helper, releases the
-  reservation and reports any clipboard left. The original snapshot is discarded at the recovery
-  limit or on exit. A clipboard write that fails without a mutation receipt has an uncertain generation.
-  Within the same time limit, recovery waits for either the original bytes or a later
-  explicit Copy. It cannot restore over that uncertain generation. A later copy ends recovery
-  with the new contents intact. These failure paths have unit coverage but have not been exercised live.
-  Spelling annotations do not select RTF, and initial RTF preparation failure uses the existing
-  plain move, which can lose rich formatting. Missing foreground color equals opaque black.
-  The direct Edit-menu lookup is not qualified on
-  localized macOS.
-  Since 2026-10-09 it also applies to a
-  selection in another app's text area or field, and there it runs first. Safari's web text areas
-  ignore Accessibility text writes (1/1), so `drag` falls back to its mouse paths there, as before.
-  Other apps' native text views should behave like TextEdit's, but none has been tried. The foreground drag is the last resort. On 2026-10-08 it took the owner's focus mid-sentence
+  The app-specific RTF clipboard path was removed on 2026-10-11. Accessibility moves still
+  write plain text and can lose formatting. Undoing a completed move takes two Cmd+Z.
+  Safari's web text areas ignored Accessibility text writes (1/1 on 2026-10-09), so the mouse
+  paths remain necessary when an app ignores the edits. The Command modifier was removed:
+  the [2026-10-04 probe](benchmarks/2026-10-04-background-text-drag.md) moved text without it,
+  and no measured benefit was found in the benchmark reports or drag history.
+  The new regression cases failed 10/10 against the old code. The mocked window suite passes 122/122,
+  with identical text-area and window geometry under TextEdit and a constructed editor bundle ID
+  (61 each).
+  Live checks of the shared path remain with sleight-arch: selected-text moves in background
+  TextEdit and one other native text app must conserve the full text and spacing. The front app
+  and pointer must be unchanged. The document must save without a hang. Chess must still move the intended
+  piece, with readback confirming its source and destination and no repeated uncertain drag.
+  The shared path has not been qualified live in another native text app. The foreground drag is
+  the last resort. On 2026-10-08 it took the owner's focus mid-sentence
   during a pass, and a typed space went into TextEdit, so it now waits for 2 s without any input (up
   to 10 s), and stops if keys are typed once it has taken focus. Before the
   named-window raise guard,
@@ -900,37 +891,13 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   to 107 (2026-10-10), the first failed 1 of 3 runs alone and both failed in a full check. At load 23
   the full check passed. Rerun `npm run check` when the load drops before reading a failure there as
   a bug.
-- The opt-in rich TextEdit move (`SLEIGHT_RICH_TEXT_MOVE=1`) hasn't completed live. JXA doesn't
-  bridge NSAttributedString's string initializers, so every rich move fell back to the plain move
-  until 2026-10-10 (fixed). The next live trial stopped at the clipboard helper's write check
-  before any paste; the helper now allows the types macOS adds beside `public.rtf` (fixed
-  2026-10-10). On 2026-10-11 the move pasted (the text changed, the clipboard came back byte for
-  byte) and then stopped with "TextEdit did not confirm the pasted formatting attributes", leaving
-  the source in place ([raw](benchmarks/2026-10-11-textedit-fixes-1791679610865.json)). Offline
-  loads of that record's RTFs answer the question it left open: the paste did not lose formatting.
-  TextEdit's RTF writer re-encodes the document's `\red220` (0.862745) as `\csgenericrgb\c86275`,
-  so the pasted word's color differed from the source's by 4.9e-6 of full scale (one 8-bit display
-  level is 0.0039), and the exact `CFEqual` comparison rejected it (1/1 offline, with a load of the
-  fixture document as the source read). `sameTextEditFormatting` now compares colors
-  by components in one generic RGB space within half a display level, and keeps font name, size
-  and underline exact. Whether TextEdit's own AX read of a pasted word matches under the fixed
-  comparison is unverified until a live move:
-  `SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background` must report
-  exactText and formatPreserved true and exit 0. The live runs after the fix, at 02:38 and 02:41 UTC on
-  2026-10-11, both stopped earlier, with "No enabled TextEdit Paste menu item": the text unchanged and the
-  clipboard restored (the 00:45 run got past it). Probes of a throwaway Cocoa app that day, never
-  TextEdit, measured why: a menu item's flag starts enabled, and the first Accessibility read of the
-  menu runs AppKit's validation pass, which without a key or main window cannot resolve a
-  first-responder `paste:` through the responder chain and sets the flag false; later reads answer
-  false again. AXPress on the disabled item returns status 0 and performs nothing, and nothing
-  reachable re-enables it: not AXFocused on the text area or the window, AXMain, AXFocusedWindow or
-  AXRaise, not a write of AXEnabled, and not Shift or Command-V events posted to the process, which
-  matches the posted-Cmd+S save finding above. So `textEditPasteItem` refuses to press a disabled
-  Cmd+V item. Its error states this cause and tells Claude to ask the user how to go on. Bringing
-  TextEdit to the front would take the user's focus, so only the user does it. Whether a background TextEdit
-  pastes only after it has been frontmost once since launch is unverified; it rests on the 00:45
-  run's instance, because an offline probe could not activate an app without taking the owner's
-  focus.
+- Rich-text preservation through the removed TextEdit clipboard path never completed a qualified
+  background move. On 2026-10-11, 2/2 runs stopped at a disabled Paste item with text unchanged
+  and clipboard restored. A throwaway Cocoa app showed that AppKit disables Paste during menu
+  validation without a key or main window, and AXPress then returns status 0 without pasting.
+  [Recorded failures](benchmarks/2026-10-11-textedit-fixes-1791679610865.json) and
+  [review](benchmarks/2026-10-10-textedit-fixes-3.md) retain the earlier attempts.
+  There is no rich-text preservation option in `drag` as of 2026-10-11.
 - Driving Helium's Claude Console tab from a session that had used the engine (2026-10-11), the input
   lease refused `browser.nameSession(...)` and later `tab.goto(...)` on a tab from `cua.getTab` with
   the native "bundle ID and full window header" refusal, after `cua.getState()`.

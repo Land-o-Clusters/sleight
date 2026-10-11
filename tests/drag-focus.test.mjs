@@ -44,7 +44,7 @@ test('the drag deadline starts in the launcher and overrides a caller-supplied d
     assert.equal(options.timeout, 30000);
     return execFile(process.execPath, ['-e', 'process.stdout.write("{}")'], callback);
   };
-  await runScript('drag.js', { richTextMove: {}, deadline: Number.MAX_SAFE_INTEGER }, run);
+  await runScript('drag.js', { deadline: Number.MAX_SAFE_INTEGER }, run);
   assert.ok(request.deadline >= before + 30000 && request.deadline <= Date.now() + 30000);
 });
 
@@ -56,17 +56,6 @@ test('a timed-out child is reported as a timeout, not as its command line', asyn
   assert.equal(result.ok, false); assert.equal(result.timedOut, true);
   assert.match(result.error, /drag\.js timed out after 30 s/); // the message names the configured limit
   assert.doesNotMatch(result.error, /Command failed/);
-});
-test('collected rich children killed before and after the Paste receipt report distinct states', async () => {
-  const { runScript } = await import('../plugins/sleight/lib/launch.mjs');
-  for (const posted of [false, true]) {
-    const source = `if (${posted}) require('node:fs').writeSync(2, 'sleight:rich-paste-posted\\n'); setTimeout(() => {}, 5000);`;
-    const run = (_command, _args, options, callback) => execFile(process.execPath, ['-e', source], { ...options, timeout: 500 }, callback);
-    const result = await runScript('drag.js', { richTextMove: { clipboardCount: 11 } }, run);
-    assert.equal(result.ok, false); assert.equal(result.timedOut, true);
-    assert.equal(result.richPasteState, posted ? 'pending' : 'not-posted');
-    assert.doesNotMatch(result.error, /sleight:rich-paste-posted|Command failed/);
-  }
 });
 function releaseContext(posted, physical) {
   const events = [];
