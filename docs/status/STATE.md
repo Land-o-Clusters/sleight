@@ -5,17 +5,20 @@ What is true now. One banner, replaced in place as work happens. Always-true rul
 
 ## Banner (2026-10-11 01:50 UTC)
 
-`pane/auto-mode` is pushed to private. Merged tonight: icloud-textedit (`b09b792`) and panel-busy
-(`88564db`), both squashed in `~/Projects/sleight-wt/merge-0611`. Review fixed icloud-textedit's
-launch, which left TextEdit's iCloud Open panel up, and turned a panel-busy finding into a mod fix
-(a failed pane list skipped `turn_ended`). The bench arms now get their own `CLAUDE_CONFIG_DIR`
-in API mode (OpenUsage, below). The live lock and hold are free.
+`pane/auto-mode` is pushed to private. Merged from Grok, each squashed in a scratch worktree after
+review: icloud-textedit (`b09b792`), panel-busy (`88564db`), chat-crash (`1700c80`),
+chess-points (`31ec715`), savelock-delivery (`94960bf`). Review fixes: icloud-textedit's launch left
+TextEdit's iCloud Open panel up; a panel-busy finding became a mod fix (a failed pane list skipped
+`turn_ended`); chat-crash dropped stopped rows from private results, which now keep a bare failed
+phase. The bench arms get their own `CLAUDE_CONFIG_DIR` in API mode (OpenUsage, below).
+savelock-delivery's `--delivery-check` ran live twice, and neither posted Cmd+S saved the background
+TextEdit. The experiment needs the engine's Cmd+S. Its brief, `.dev/prompts/lane-savelock-engine.md`,
+isn't handed out yet. The live lock and hold are free.
 
-Lanes out, started 2026-10-11 01:10 UTC in the owner's Grok and GLM sessions. Each pushes a
+Lanes out, started 2026-10-11 01:10 UTC in the owner's GLM sessions. Each pushes a
 `codex/<name>` branch to private and doesn't merge. Briefs are in `.dev/prompts/lane-<name>.md`,
 after `lane-rules-2026-10-11.md`. Evidence for all of them is in
 `docs/benchmarks/2026-10-11-evidence.md`.
-- Grok, still out: savelock-delivery, chess-points, chat-crash.
 - GLM, still out: selectall-check, richmove-placement, livechecks, shop-check, saveclose-research,
   release-docs (README, CHANGELOG, known-problems and ROADMAP). Each later lane that adds a doc
   conflicts on `package.json`'s lint list. Resolve by keeping both entries.
@@ -33,9 +36,10 @@ Next, in order:
 1. Review each lane's diff as it reports and fix what review finds. Squash it in a scratch worktree,
    run the full check there, and cherry-pick it onto `pane/auto-mode`.
 2. One owner-away window verifies the merged lanes live: the TextEdit tasks with the new launch
-   (only the helper ran live, 1.6 s warm), textedit-save with traces, Best Buy, the
+   (only the helper ran live, 1.6 s warm), the computed Chess points (waits live check), the chat
+   pass's saved rows, textedit-save with traces, Best Buy, the
    rich-text move (`SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background`),
-   the save-lock experiment, select-all, `stale-number`, Chess, simulator-form, the chat tasks.
+   select-all, `stale-number`, Chess, simulator-form, the chat tasks.
 3. Act on speed-research to close the gate, then the full release pass and the release (ROADMAP 5b).
 4. Confirm the bench arms' own config folder with one cluster once OpenUsage reads fresh (below).
 

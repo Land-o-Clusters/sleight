@@ -209,8 +209,11 @@ our own runs. Dates and engine versions are given where they matter.
   ([evidence](benchmarks/2026-10-11-evidence.md)). The helper had posted one S key-down with the
   Command flag and an S key-up with none. It now posts Command down, S down, S up with Command still
   held, and Command up. `node bench/textedit-save-lock.mjs --delivery-check` types one character (no
-  Accessibility write) and requires the file to change or AXEdited to clear within 2 s. Hang rates
-  after that delivery are unknown until sleight-arch's live check.
+  Accessibility write) and requires the file to change within 2 s. Live on 2026-10-11 (2 runs) the
+  typed character arrived but that Cmd+S didn't save either, and AXEdited read false throughout.
+  A Cmd+S posted to a background TextEdit's PID doesn't start a save. The 2026-10-08 hangs came
+  through the engine's `pressKey("super+s")`, so the experiment can't measure them until it sends
+  Cmd+S that way.
   The [2026-10-10 follow-up](benchmarks/2026-10-10-save-lock.md) stopped before
   editing: the existing background TextEdit process returned `AXWindows -25204`. A new instance
   restored extra windows, then exact-fixture cleanup returned `AXRole -25204`. A later read-only

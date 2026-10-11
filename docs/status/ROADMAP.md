@@ -36,6 +36,9 @@ Open, in order of user impact (full list in [known-problems.md](../known-problem
   `bench/small-fixes-textedit.mjs --quick` (`.dev/research/2026-10-10-select-all-typetext.md`). Its
   "Ambiguous TextEdit process" refusal is fixed (`a021a7c`).
 - The TextEdit save lock: the Shift-event fix measured 0/10 hangs, but we don't know why it works.
+  The experiment for that question doesn't work yet. A Cmd+S posted to a background TextEdit's PID
+  never saved in 2 live runs (2026-10-11). It needs the engine's Cmd+S and an Open-panel open, the
+  setup that hung (`.dev/prompts/lane-savelock-engine.md`).
 - Live checks for the unit-tested 1.1.0 changes: `bench/live-checks-1-1.mjs` (`5690bf2`) runs the
   stale-number remap and `menu_bar`. The helper resend and the keyboard-tap notice skip, since
   forcing them would mean killing OpenAI's helper or installing a tap.

@@ -174,6 +174,21 @@ test('save confirmation returns when the file changes or edited clears within 2 
     readState: async () => ({ edited: true }),
   });
   assert.equal(miss, null);
+  t = 0;
+  // AXEdited stayed false after a typed character on 2026-10-11, so false alone isn't a save.
+  const neverEdited = await watchSaveStart({
+    seed: 'seed\n', until: 2000, now: () => t, sleep: async ms => { t += ms; }, editedBefore: false,
+    readBytes: async () => 'seed\n',
+    readState: async () => ({ edited: false }),
+  });
+  assert.equal(neverEdited, null);
+});
+
+test('the delivery check judges the typed character by the text, not AXEdited', () => {
+  const src = readFileSync(new URL('../bench/textedit-save-lock.mjs', import.meta.url), 'utf8');
+  const chunk = src.slice(src.indexOf("run.phase === 'delivery-check'"), src.indexOf("run.phase === 'delivery-check'") + 1200);
+  assert.match(chunk, /run\.dirty\.text === seed/);
+  assert.match(chunk, /editedBefore: run\.dirty\.edited === true/);
 });
 
 test('the runner skips the Accessibility edit on a delivery-check step', () => {

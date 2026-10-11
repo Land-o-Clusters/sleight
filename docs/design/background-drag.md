@@ -86,8 +86,8 @@ The new probe gives every arm the same delay and compares the pair with a zero-m
 a Shift release alone, Escape and no event. It records saved bytes and dirty state before Cmd+S
 to identify runs already autosaved before the shortcut. An autosave racing the shortcut remains possible.
 On 2026-10-11 the posted Cmd+S never started a save (idle main thread 14 s later, autosave at about
-30 s). The helper now posts Command down/up around S. `--delivery-check` proves that chord on a
-file not written through Accessibility. Hang rates after delivery wait on a live run.
+30 s). Command down and up around S didn't save either (2 live runs, 2026-10-11), so the
+experiment needs the engine's Cmd+S. Hang rates after delivery wait on a live run.
 
 The historical Open-panel setup cannot be reproduced under this task's no-dialog rule. The
 existing background TextEdit process returned `AXWindows -25204` before any new input, which

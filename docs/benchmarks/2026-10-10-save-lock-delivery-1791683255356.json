@@ -1,0 +1,92 @@
+{
+  "started": "2026-10-11T01:47:34.496Z",
+  "opening": "open -n -g (owned isolated instance per run)",
+  "launchArgs": [
+    "-NSDocumentDebugSerialization",
+    "YES",
+    "-NSDocumentSerializationLoggingDelay",
+    "3",
+    "-ApplePersistenceIgnoreState",
+    "YES"
+  ],
+  "saveWaitMs": 2000,
+  "hangKeepMs": 0,
+  "engineUsed": false,
+  "pointerUsed": false,
+  "axWrite": false,
+  "deliveryCheck": true,
+  "lockTaken": true,
+  "runs": [
+    {
+      "index": 1,
+      "phase": "delivery-check",
+      "variant": "none",
+      "cycle": 1,
+      "bank": "/private/tmp/sleight-save-lock-rZDYSM",
+      "preflight": {
+        "background": true,
+        "existingProcessCount": 0,
+        "isolatedInstance": true
+      },
+      "launchRequestedAt": 1791683254572,
+      "attachAttempts": [
+        "Retry: AXWindows failed: -25204"
+      ],
+      "failedOperation": {
+        "id": 1,
+        "ok": false,
+        "error": "Retry: AXWindows failed: -25204",
+        "pid": 66947,
+        "background": true
+      },
+      "attach": {
+        "attached": true,
+        "pid": 66947,
+        "windows": 1,
+        "artifacts": []
+      },
+      "dirty": {
+        "axWrite": false,
+        "edited": false,
+        "text": "xseed\n"
+      },
+      "skipped": "Keyboard did not edit",
+      "cleanup": {
+        "pid": 66947,
+        "foregroundSame": true,
+        "ownedFront": false,
+        "windows": 1,
+        "method": "force",
+        "gone": true
+      }
+    }
+  ],
+  "gate": {
+    "proceed": true,
+    "hangs": 0,
+    "completed": 0,
+    "planned": 0,
+    "conclusion": "no gate"
+  },
+  "counts": {
+    "gate": {},
+    "variants": {
+      "none": {
+        "runs": 1,
+        "completed": 0,
+        "hangs": 0,
+        "saved": 0,
+        "skipped": 1,
+        "notDelivered": 0,
+        "msToSave": []
+      }
+    }
+  },
+  "helperExit": {
+    "code": 0,
+    "signal": null
+  },
+  "lockReleased": true,
+  "instanceMayRemain": false,
+  "finished": "2026-10-11T01:47:35.356Z"
+}

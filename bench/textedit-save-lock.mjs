@@ -41,13 +41,14 @@ export function parseArgs(args) {
   return { dryRun: args.includes('--dry-run'), deliveryCheck: args.includes('--delivery-check') };
 }
 
-// File bytes changing, or AXEdited going false, means Cmd+S started a save.
-export async function watchSaveStart({ readBytes, readState, until, seed, now = Date.now, sleep }) {
+// File bytes changing, or AXEdited going false after it was true, means Cmd+S started a save.
+// AXEdited stayed false after a typed character on 2026-10-11, so false alone proves nothing.
+export async function watchSaveStart({ readBytes, readState, until, seed, now = Date.now, sleep, editedBefore = true }) {
   for (;;) {
     const bytes = await readBytes();
     const state = await readState();
     const fileChanged = bytes !== seed;
-    const editedCleared = state.edited === false;
+    const editedCleared = editedBefore && state.edited === false;
     if (fileChanged || editedCleared) return { at: now(), fileChanged, editedCleared, bytes, edited: state.edited };
     if (now() >= until) return null;
     await sleep(100);
@@ -209,11 +210,11 @@ async function main() {
         if (run.phase === 'delivery-check') {
           const seed = await readFile(path, 'utf8');
           run.dirty = strip(await request({ op: 'dirty' }));
-          if (run.dirty.edited !== true) { run.skipped = 'Keyboard did not edit'; return; }
+          if (run.dirty.text === seed) { run.skipped = 'Keyboard did not edit'; return; }
           const { postedAt } = await request({ op: 'save' });
           run.savePostedAt = postedAt;
           const hit = await watchSaveStart({
-            seed, until: postedAt + DELIVERY_WAIT_MS, sleep,
+            seed, until: postedAt + DELIVERY_WAIT_MS, sleep, editedBefore: run.dirty.edited === true,
             readBytes: () => readFile(path, 'utf8'),
             readState: async () => strip(await request({ op: 'state' })),
           });
