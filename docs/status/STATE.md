@@ -3,7 +3,13 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-11 12:40 UTC, the away sitting is running)
+## Banner (2026-10-11 13:55 UTC, round 2 of the away runs)
+
+**Owner's OK, 13:54 UTC:** sleight-arch allows `127.0.0.1` in the Codex extension's site settings in Helium
+and Chrome, through the browsers' own UI, once no live run holds the lock. The extension's own
+site prompt dismissed the first extension task (it isn't an MCP elicitation). Lane browser-tasks-2
+(Safari setup fix, an `--extension-sites-allowed` gate) is running in Codex.
+
 
 **Running now, owner's OK at 12:33 UTC (sitting plus the battery's no-seed half):** the skill A/B
 rerun (`.dev/passes/ab-skill-r2.log`). After it, `.dev/passes/away-2026-10-11.sh` from this worktree
