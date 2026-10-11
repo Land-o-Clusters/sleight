@@ -215,7 +215,8 @@ const LIB = dirname(fileURLToPath(import.meta.url));
 // The skill's body, sent after the engine's first-call docs. Missing or unreadable means none.
 // Under the sheet A/B, the menu rule gets the call to send. 9 textedit-save runs opened Format in one call
 // and chose Make Plain Text in the next, 33.8 s over 11 calls (turn study, 2026-10-11).
-export function skillRules(path = join(LIB, '..', 'skills', 'drive-mac-apps', 'SKILL.md')) {
+export function skillRules(path = join(LIB, '..', 'skills', 'drive-mac-apps', 'SKILL.md'), env = process.env) {
+  if (env.SLEIGHT_PROMPT === 'lean') path = join(dirname(path instanceof URL ? fileURLToPath(path) : path), 'SKILL.lean.md');
   try { return readFileSync(path, 'utf8').replace(/^---\n[\s\S]*?\n---\n+/, '').trim() || undefined; }
   catch { return undefined; }
 }
@@ -342,7 +343,7 @@ const DRAG_TOOL = {
 };
 
 export function localToolDefinitions(env = process.env) {
-  return [
+  const tools = [
     ...(env.SLEIGHT_SELECT_WINDOW === '0' ? [] : [SELECT_WINDOW_TOOL]),
     ...(env.SLEIGHT_MENU_BAR === '0' ? [] : MENU_BAR_TOOLS),
     ...(env.SLEIGHT_HOVER === '0' ? [] : [HOVER_TOOL]),
@@ -350,6 +351,60 @@ export function localToolDefinitions(env = process.env) {
     ...(env.SLEIGHT_DRAG === '0' ? [] : [DRAG_TOOL]),
     ...(env.SLEIGHT_OPEN_FILE === '0' ? [] : [OPEN_FILE_TOOL]),
   ];
+  return env.SLEIGHT_PROMPT === 'lean' ? tools.map(leanToolDescription) : tools;
+}
+
+// Change only descriptions, including descriptions nested inside argument schemas.
+// Safety sentences stay in the original constants, shared by both variants.
+function leanToolDescription(tool) {
+  const descriptions = {
+    menu_bar: 'Status icons; menus use js. item=0. The user approves each app once per session.',
+    notifications: 'Banners. The user approves notifications once per session.',
+  };
+  const replacements = [
+    ['Use windowNumber to distinguish equal titles. ', ''],
+    ['`at` is relative to the selected window\'s top-left corner.', '`at`: window-relative.'],
+    ['If that makes no change, it tries background PID posting with a 500 ms hold when the points are uncovered.', 'Then uncovered PID posting (500 ms hold) if unchanged.'],
+    ['A drag that holds the mouse down and moves in steps, for what app.drag in the js tool can\'t do, such as moving selected text (select it with js first).', 'Stepped drag; select text with js first.'],
+    ['`from` and `to` are in the same frame as the app\'s engine screenshot, from that window\'s top-left corner.', '`from`/`to`: engine screenshot coordinates, window-relative.'],
+    ['The result names the path. ', ''],
+    ['Reports takeoverMs. ', ''],
+    ['`path` is absolute or starts with ~/.', 'Absolute or ~/ path.'],
+    ['App name or bundle ID, such as TextEdit or com.apple.TextEdit', 'App name or bundle ID'],
+    ['op "read" returns the window as numbered elements plus a screenshot file; "click" presses `element` (or a window-relative `point`, which brings the app to the front); "type" sends `text`; "key" presses `key` ("Return", "super+v"); "scroll" moves `amount` lines, positive up.',
+      'read: tree/image; click: element or `point`, which brings the app to the front. Other ops use their named argument.'],
+    ['Running app name, bundle ID or path', 'App name, bundle ID or path'],
+    ['Exact window title, use when no file URL is known', 'Exact title if no URL'],
+    ['Exact file URL from AXDocument, preferred over title', 'Exact AXDocument URL, preferred'],
+    ['Native window number, to distinguish equal titles', 'Native window number for equal titles'],
+    ['The app, as "apps" names it', 'Name from apps'],
+    ['How long to hold before moving (default 500)', 'Hold ms (default 500)'],
+    ['Moves between start and end (default 25)', 'Steps (default 25)'],
+    ['Exact window ID from the engine inventory or app state', 'Exact engine window ID'],
+    ['Hover dwell, default 1500 ms; increase only if needed', 'Dwell ms (default 1500); increase only if needed'],
+    ['click: the element number from read', 'click: number from read'],
+    ['click: window-relative [x, y]', 'click: window [x, y]'],
+    ['type: the exact text to send', 'type: exact text'],
+    ['key: Return, Tab, Escape, super+v, …', 'key: key or chord'],
+    ['The file to open', 'File path'],
+    ['App name, bundle ID or path', 'App'],
+    ['Exact title if no URL', 'Exact title'],
+    ['Exact AXDocument URL, preferred', 'Exact URL, preferred'],
+    ['Native window number for equal titles', 'Native window number'],
+    ['Name from apps', 'App'],
+    ['click: number from read', 'Element from read'],
+    ['click: window [x, y]', 'Window [x, y]'],
+    ['type: exact text', 'Exact text'],
+    ['key: key or chord', 'Key/chord'],
+    ['scroll: lines, positive up', 'Lines, positive up'],
+  ];
+  const visit = value => {
+    if (Array.isArray(value)) return value.map(visit);
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, key === 'description' ?
+      replacements.reduce((text, [from, to]) => text.replace(from, to), item) : visit(item)]));
+  };
+  return visit({ ...tool, description: descriptions[tool.name] ?? tool.description });
 }
 
 // Opening a document through an app's Open panel brought TextEdit to the front for about a second

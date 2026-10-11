@@ -104,9 +104,9 @@ const FIRST_CALL_RULE = 'execute exactly one of the API calls shown below, optio
 const FIRST_CALL_BATCH = 'start with one of the API calls shown below, assigning the app to a variable. For a Mac app you can name, start with `let app = await cua.getApp("Calculator")` (its name or bundle ID): it returns that app\'s UI state. Use cua.getState() only to find an app or browser you can\'t name. When you already know the first actions on that app, put them after it in the same call: sleight acquires the app and checks its window before they run. Chain every later action whose target you already know (keys, text, `{ id }` or `{ label }` clicks) in one call too, but end the call after a shortcut that opens or names a window (Cmd+N, Cmd+O, or Cmd+S on an untitled document): sleight stops the rest of a call when its window changes.';
 // An open menu in front of a window reads as "0 menu Secondary Actions: Cancel". Escape left it open in
 // 3 of 3 tries in the head-to-head (TextEdit and Finder, 2026-10-09), and its Cancel action closed it.
-export function openMenuNote(text) {
+export function openMenuNote(text, prompt) {
   const menu = typeof text === 'string' && /^\t*(\d+) menu (?:[^\n]*, )?Secondary Actions: [^\n]*\bCancel\b/m.exec(text);
-  return menu ? `sleight: a menu is open (element ${menu[1]}). Escape doesn't always close a menu in a background app; \`await app.performSecondaryAction(${menu[1]}, "Cancel")\` does.` : undefined;
+  return menu ? promptNotice(`sleight: a menu is open (element ${menu[1]}). Escape doesn't always close a menu in a background app; \`await app.performSecondaryAction(${menu[1]}, "Cancel")\` does.`, prompt) : undefined;
 }
 
 // SLEIGHT_FIRST_CALL_BATCH=merge, under A/B. Since 668b462 a call continues into a window its own
@@ -120,18 +120,50 @@ export function treeFreeFirstAction(code) {
   const first = ACTION.exec(typeof code === 'string' ? code : '');
   return !!first && (['pressKey', 'typeText', 'paste'].includes(first[1]) || (!!first[2] && ['click', 'doubleClick', 'rightClick', 'scroll', 'drag'].includes(first[1])));
 }
-export function batchingDescription(description, variant = true) {
-  const text = variant === 'merge' ? FIRST_CALL_MERGE : FIRST_CALL_BATCH;
+export function batchingDescription(description, variant = true, prompt) {
+  const text = prompt === 'lean' ? (variant === 'merge' ?
+    'start with `let app = await cua.getApp("<app>")`; batch known actions: sleight acquires the app and checks its window before they run. Do not end a call only to read the window before an action you already know: sleight waits for the app after each click, shortcut or Return, follows a Save or Open panel, a new window or a document saved under a name the call typed, and stops the rest of the call if any other window appears.' :
+    'start with `let app = await cua.getApp("<app>")`; batch known actions: sleight acquires the app and checks its window before they run. Chain known actions, but end the call after a shortcut that opens or names a window (Cmd+N, Cmd+O, or Cmd+S on an untitled document): sleight stops the rest of a call when its window changes.') :
+    variant === 'merge' ? FIRST_CALL_MERGE : FIRST_CALL_BATCH;
   return typeof description === 'string' && description.includes(FIRST_CALL_RULE) ? description.replace(FIRST_CALL_RULE, text) : description;
 }
 const TURN_END_DESCRIPTION = 'Internal to sleight: its hooks call this when a Claude turn ends. Never call it yourself.';
+
+// Applied only at sleight-authored notice sites, never to engine text or user data.
+export function promptNotice(text, prompt) {
+  if (prompt !== 'lean') return text;
+  return text
+    .replace('of the same image. getScreenshot() already shows its picture, so don\'t pass it to nodeRepl.emitImage too.', 'of an image; getScreenshot() already displays it. Omit emitImage.')
+    .replace('Escape doesn\'t always close a menu in a background app; ', 'Close it with ')
+    .replace('` does.', '`.')
+    .replace('A failed action without await can end the engine\'s session and lose every handle. ', '')
+    .replace('sleight will make it a full read because automatic recovery consumed the engine\'s UI diff.', '')
+    .replace('Change review: an action is still pending, so this read cannot take a later copy. ', 'Change review: pending action. ')
+    .replace(/Numbers in this window changed since your last full read, and .*? isn't one you've seen since\. /, '')
+    .replace(/this call computes an element number \(.*?\), and numbers in this window changed since your last full read\. /, 'Computed stale number. ')
+    .replace("sleight's blocked_app tool drives the app through macOS Accessibility instead: ", 'blocked_app: ')
+    .replace(/The SkyComputerUseService read path appears stuck: .*?answer Accessibility, but the control app's engine read also timed out\. /, 'Helper read path appears stuck. ')
+    .replace(/Reads of .*? timed out twice\. The app and helper cause was not determined; sleight could not distinguish them with its independent checks\. /, 'Read timeout; cause unknown. ')
+    .replace(/, while a fresh engine read of .*? responds\. /, '. ')
+    .replace('The helper answered the control read.', '')
+    .replace(/sleight: .*? has no Accessibility document windows, but macOS still lists "Save Panel Accessory View", a possible orphan Save panel\. /, 'sleight: possible orphan Save panel. ')
+    .replace(/sleight: the user is in a full-screen or Split View Space, and none of .*?'s windows are on it\. /, 'sleight: off-Space windows. ')
+    .replace('The engine reads coordinates in these screenshot pixels. Claude Code shows this image smaller, at ', 'Shown at ')
+    .replace(', engine screenshot ', ', ')
+    .replace('Computer use recovered for ', 'Recovered: ')
+    .replace('Change review could not take a later copy: ', 'Change review unavailable: ')
+    .replace("sleight: the app has no windows left, so the window this call closed was its last. Nothing more to read.", 'sleight: last window closed; nothing more to read.')
+    .replace("sleight: noWindowsAvailable means the engine found no window of this app on the current desktop. If the app has a window, it's on another Space (the user may be in full screen or Split View), minimized or hidden. Clicks may still reach it, but drags and some reads won't. ", 'sleight: noWindowsAvailable. ')
+    .replace("sleight: the engine's JavaScript session restarted before this call, so handles from earlier calls (such as `app`) are gone. An action that fails without `await` can end the session. ", 'sleight: JS restarted. ')
+    .replace("sleight: the engine couldn't reach its helper (SkyComputerUseService), so this call never reached an app. The helper quits after about 20 seconds idle and restarts on the next call, which can race. sleight already sent this call again once. ", 'sleight: helper failed; retry sent. ');
+}
 const SHUTDOWN_GRACE_MS = 3000;
 
 // Splits a stream into newline-delimited JSON-RPC messages.
 // getScreenshot() already shows its image, so passing it to nodeRepl.emitImage
 // shows it twice: 2 images per step, 64 in one iPhone Mirroring session
 // (2026-10-07). Drop exact repeats within a result and say so once.
-export function dropRepeatedImages(content) {
+export function dropRepeatedImages(content, prompt) {
   const seen = new Set();
   let dropped = 0;
   const kept = content.filter(block => {
@@ -142,7 +174,7 @@ export function dropRepeatedImages(content) {
   });
   if (!dropped) return content;
   const copies = dropped === 1 ? 'a repeated copy' : `${dropped} repeated copies`;
-  kept.push({ type: 'text', text: `sleight: dropped ${copies} of the same image. getScreenshot() already shows its picture, so don't pass it to nodeRepl.emitImage too.` });
+  kept.push({ type: 'text', text: promptNotice(`sleight: dropped ${copies} of the same image. getScreenshot() already shows its picture, so don't pass it to nodeRepl.emitImage too.`, prompt) });
   return kept;
 }
 
@@ -329,6 +361,7 @@ export function createRelay({
   // newer full one. Trimming Save-panel file lists with it lost (11/12, 2026-10-11) and is gone.
   resultTrim = false,
   firstCallRules,
+  prompt = process.env.SLEIGHT_PROMPT,
   diagnoseRead,
   // Notices from work that finished between calls (rich-text clipboard recovery), added to the next
   // tool result Claude gets, so they don't stay on stderr where Claude never looks.
@@ -539,9 +572,9 @@ export function createRelay({
   const helperDiagnosticReplies = new Map();
   const lateDiagnosticControls = new Map();
   let diagnosisGeneration = 0;
-  const diagnosisAdvice = (key, diagnosis) => diagnosis?.kind === 'app-save-panel'
+  const diagnosisAdvice = (key, diagnosis) => promptNotice(diagnosis?.kind === 'app-save-panel'
     ? panelAdvice(diagnosis.target, key) ?? 'Read or input refused while the same Save panel remains. Follow the earlier recovery advice, then read the app again.'
-    : readFailureAdvice(key, diagnosis);
+    : readFailureAdvice(key, diagnosis), prompt);
   const helperAdvice = key => diagnosisAdvice(key, helperStates.get(key)?.diagnosis);
   // Apps Claude was told this turn are off the current Space, and the reads that wait on that
   // check: call id -> { key, health }.
@@ -556,7 +589,7 @@ export function createRelay({
       .map(id => JSON.stringify([health.app ?? null, health.pid ?? null, id]));
     if (panels.every(id => savePanelsNoted.has(id))) return;
     panels.forEach(id => savePanelsNoted.add(id));
-    return savePanelNote(health);
+    return promptNotice(savePanelNote(health), prompt);
   }
 
   function invalidateDiagnostics() {
@@ -940,9 +973,9 @@ export function createRelay({
       if (leaseWindow.identityError) { leaseStop(msg, leaseWindow.identityError); return false; }
       const stale = name === 'js' ? compactor.staleIndex(leaseWindow, code) : undefined;
       if (stale) {
-        leaseStop(msg, stale.number !== undefined
+        leaseStop(msg, promptNotice(stale.number !== undefined
           ? `element ${stale.number} may be stale. Numbers in this window changed since your last full read, and ${stale.number} isn't one you've seen since. Use a number from a + line in the latest result, or read the window again with getAXState({ disableDiffing: true }) first.`
-          : `this call computes an element number (${stale.computed}), and numbers in this window changed since your last full read. Use a literal number from a + line in the latest result, or read the window again with getAXState({ disableDiffing: true }) first.`);
+          : `this call computes an element number (${stale.computed}), and numbers in this window changed since your last full read. Use a literal number from a + line in the latest result, or read the window again with getAXState({ disableDiffing: true }) first.`, prompt));
         return false;
       }
       if (engineForbiddenTargets && isForbiddenSettingsWindow(leaseWindow)) {
@@ -1545,7 +1578,7 @@ export function createRelay({
     }
     const needsFullRead = !healthPlan?.read && healthPlan?.keys?.find(key => helperFullReads.has(key));
     if (needsFullRead) {
-      toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: `Computer use recovered for ${needsFullRead}. Send a standalone app read before acting. sleight will make it a full read because automatic recovery consumed the engine's UI diff.` }] } });
+      toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: promptNotice(`Computer use recovered for ${needsFullRead}. Send a standalone app read before acting. sleight will make it a full read because automatic recovery consumed the engine's UI diff.`, prompt) }] } });
       return;
     }
     if (msg.method === 'tools/call' && msg.params?.name === 'js_reset') {
@@ -1568,7 +1601,7 @@ export function createRelay({
       typeof originalCode === 'string' && unawaitedAction(originalCode);
     if (unawaited) {
       toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text:
-        `sleight stopped this call before it ran: \u0060${unawaited}…)\u0060 has no await and more code follows it. A failed action without await can end the engine's session and lose every handle. Add await and send it again.` }] } });
+        promptNotice(`sleight stopped this call before it ran: \u0060${unawaited}…)\u0060 has no await and more code follows it. A failed action without await can end the engine's session and lose every handle. Add await and send it again.`, prompt) }] } });
       return;
     }
     if (flowRules && msg.method === 'tools/call' && ['js', 'drag', 'menu_bar', 'blocked_app'].includes(msg.params?.name)) {
@@ -1912,7 +1945,7 @@ export function createRelay({
           spaceNoted.add(check.key);
           const text = msg.result.content.filter(c => c.type === 'text').map(c => c.text).join('\n');
           const app = windowFromText(text)?.app ?? check.key;
-          msg.result.content.push({ type: 'text', text: offSpaceNote(app) });
+          msg.result.content.push({ type: 'text', text: promptNotice(offSpaceNote(app), prompt) });
           trace('off-space', { id: msg.id, app, health });
         }
         observeServerMessage(msg);
@@ -1994,13 +2027,13 @@ export function createRelay({
     // close worked (7 of 437 calls, 2026-10-07). Say so instead of reporting an error.
     if (jsCode !== undefined && msg.result?.isError && /\bsuper\+w\b|cmd\+w\b|command\+w\b/i.test(jsCode) &&
         (msg.result.content ?? []).some(c => c.type === 'text' && /noWindowsAvailable/.test(c.text ?? ''))) {
-      msg.result = { ...msg.result, isError: false, content: [{ type: 'text', text: 'sleight: the app has no windows left, so the window this call closed was its last. Nothing more to read.' }] };
+      msg.result = { ...msg.result, isError: false, content: [{ type: 'text', text: promptNotice('sleight: the app has no windows left, so the window this call closed was its last. Nothing more to read.', prompt) }] };
       closedLast = true;
     } else if (jsCode !== undefined && msg.result?.isError && Array.isArray(msg.result.content) &&
         msg.result.content.some(c => c.type === 'text' && /noWindowsAvailable/.test(c.text ?? ''))) {
       // The engine says this when the app's window is on another Space: the user in full
       // screen or Split View failed 8 of 21 runs on 2026-10-08, and Claude retried blind.
-      msg.result.content.push({ type: 'text', text: "sleight: noWindowsAvailable means the engine found no window of this app on the current desktop. If the app has a window, it's on another Space (the user may be in full screen or Split View), minimized or hidden. Clicks may still reach it, but drags and some reads won't. Don't retry the same call: ask the user to show the window on the current desktop, or open a window if the app has none." });
+      msg.result.content.push({ type: 'text', text: promptNotice("sleight: noWindowsAvailable means the engine found no window of this app on the current desktop. If the app has a window, it's on another Space (the user may be in full screen or Split View), minimized or hidden. Clicks may still reach it, but drags and some reads won't. Don't retry the same call: ask the user to show the window on the current desktop, or open a window if the app has none.", prompt) });
     }
     if (msg.method === undefined && jsCalls.delete(msg.id) && Array.isArray(msg.result?.content)) {
       const docs = msg.result.content.some(c => c.type === 'text' && /(^|\n)## Computer Use\n/.test(c.text ?? ''));
@@ -2010,7 +2043,7 @@ export function createRelay({
         compactor.reset();
         for (const action of resultCalls.values()) { action.before = undefined; action.overlap = true; }
         trace('engine-session-restarted', { id: msg.id });
-        msg.result.content.push({ type: 'text', text: "sleight: the engine's JavaScript session restarted before this call, so handles from earlier calls (such as `app`) are gone. An action that fails without `await` can end the session. Acquire the app again with `let app = await cua.getApp(…)`, and await every action." });
+        msg.result.content.push({ type: 'text', text: promptNotice("sleight: the engine's JavaScript session restarted before this call, so handles from earlier calls (such as `app`) are gone. An action that fails without `await` can end the session. Acquire the app again with `let app = await cua.getApp(…)`, and await every action.", prompt) });
       }
       // The engine's first call returns its docs and nothing else Claude can act on, so sleight's
       // own rules ride along here instead of costing Claude a skill turn (one per benchmark run).
@@ -2087,7 +2120,7 @@ export function createRelay({
       // the read's completion, after earlier action results have been recorded.
       const actionPending = [...changeCalls.values()].some(pending => !pending.safe);
       if (!confirmedBrowser && changeReview && !automatic && call.read && call.observe && actionPending && !msg.error && !msg.result?.isError) {
-        msg.result.content.push({ type: 'text', text: 'Change review: an action is still pending, so this read cannot take a later copy. Wait for its result, then take another standalone cua.getApp read before editing.' });
+        msg.result.content.push({ type: 'text', text: promptNotice('Change review: an action is still pending, so this read cannot take a later copy. Wait for its result, then take another standalone cua.getApp read before editing.', prompt) });
       }
       if (!confirmedBrowser && changeReview && !automatic && call.read && call.observe && !actionPending && !msg.error && !msg.result?.isError) {
         try {
@@ -2095,7 +2128,7 @@ export function createRelay({
           if (entry) trace('snapshot-after-read', { id: msg.id, path: entry.path, directory: changes.directory, snapshot: entry.snapshot });
         } catch (err) {
           trace('snapshot-read-failed', { id: msg.id, error: err.message });
-          msg.result.content.push({ type: 'text', text: `Change review could not take a later copy: ${err.message}. Reads remain available.` });
+          msg.result.content.push({ type: 'text', text: promptNotice(`Change review could not take a later copy: ${err.message}. Reads remain available.`, prompt) });
         }
       }
       if (!confirmedBrowser && changeReview && !call.safe) {
@@ -2196,7 +2229,7 @@ export function createRelay({
     // a call during that restart can fail before reaching any app (2026-10-05).
     if (msg.method === undefined && msg.result?.isError && Array.isArray(msg.result.content) &&
       msg.result.content.some(c => c.type === 'text' && /Sky Computer Use (?:native pipe|service) startup (?:request )?failed/.test(c.text ?? ''))) {
-      msg.result.content.push({ type: 'text', text: "sleight: the engine couldn't reach its helper (SkyComputerUseService), so this call never reached an app. The helper quits after about 20 seconds idle and restarts on the next call, which can race. sleight already sent this call again once. Call js_reset and retry. If that fails too, tell the user; `sleight-mcp --doctor` prints a fix when macOS won't relaunch the helper." });
+      msg.result.content.push({ type: 'text', text: promptNotice("sleight: the engine couldn't reach its helper (SkyComputerUseService), so this call never reached an app. The helper quits after about 20 seconds idle and restarts on the next call, which can race. sleight already sent this call again once. Call js_reset and retry. If that fails too, tell the user; `sleight-mcp --doctor` prints a fix when macOS won't relaunch the helper.", prompt) });
     }
     if (localNames.has('blocked_app') && msg.method === undefined && msg.result) {
       const text = (msg.result.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
@@ -2204,10 +2237,10 @@ export function createRelay({
       if (refused) {
         trace('blocked-app-refusal', { app: refused });
         msg.result = { ...msg.result, content: [...(msg.result.content ?? []), { type: 'text', text:
-          `The engine's helper refuses ${refused} before any approval, so the js tool cannot drive it. ` +
+          promptNotice(`The engine's helper refuses ${refused} before any approval, so the js tool cannot drive it. ` +
           "sleight's blocked_app tool drives the app through macOS Accessibility instead: the user approves " +
           'the app once per session, and each command send to a terminal is shown to them first. ' +
-          'Ask the user, then use blocked_app; its settings windows are refused.' }] };
+          'Ask the user, then use blocked_app; its settings windows are refused.', prompt) }] };
       }
     }
     if (msg.method === undefined) { reportPreapprovals(msg); finishedCall(msg.id); }
@@ -2280,7 +2313,7 @@ export function createRelay({
         .filter(t => !HIDDEN_TOOLS.has(t.name))
         .filter(t => !documentMode || t.name === 'js' || t.name === TURN_END_TOOL)
         .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t) : t))
-        .map(t => (firstCallBatch && t.name === 'js' ? { ...t, description: batchingDescription(t.description, firstCallBatch) } : t))
+        .map(t => (firstCallBatch && t.name === 'js' ? { ...t, description: batchingDescription(t.description, firstCallBatch, prompt) } : t))
         .concat(documentMode ? [DOCUMENT_TOOL, ...(localTools?.tools ?? []).filter(t => t.name === 'select_window')] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : [])
         // Claude Code defers MCP tools behind a search, which cost a turn before the first call, and
         // again before the first drag (3/3 textedit-drag runs, 2026-10-08). sleight's descriptions
@@ -2310,16 +2343,16 @@ export function createRelay({
         const target = handle && handleBundles.get(handle);
         const appId = msg.result._meta?.['codex/toolSurface']?.app?.appId;
         const note = target && (!appId || appId === target.appId) && simulatorScreenshotNote(msg.result.content, target, imageSize);
-        if (note) msg.result.content.push({ type: 'text', text: note });
+        if (note) msg.result.content.push({ type: 'text', text: promptNotice(note, prompt) });
       }
       if (!automatic && jsCode !== undefined) {
-        const note = openMenuNote(msg.result.content.filter(c => c.type === 'text').map(c => c.text).join('\n'));
+        const note = openMenuNote(msg.result.content.filter(c => c.type === 'text').map(c => c.text).join('\n'), prompt);
         if (note) msg.result.content.push({ type: 'text', text: note });
       }
       // sleight's own advice says getAXState({ disableDiffing: true }) gives a full read. Compacting
       // it to "no change" sent Claude to a screenshot instead (2026-10-08). Recovery's visible read
       // is full too.
-      if (!automatic) msg.result.content = compactor.process(dropRepeatedImages(msg.result.content),
+      if (!automatic) msg.result.content = compactor.process(dropRepeatedImages(msg.result.content, prompt),
         { forceFull: healthPlan?.fullVisible === true || /\bdisableDiffing\s*:\s*true\b/.test(jsCode ?? ''),
           action: closedLast ? undefined : resultCalls.get(msg.id), failed: !closedLast && (resultFailed || !!msg.result?.isError) });
     }

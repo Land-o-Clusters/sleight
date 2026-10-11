@@ -1,5 +1,14 @@
 # Known problems
 
+## Lean prompt
+
+`SLEIGHT_PROMPT=lean` has 0 live runs as of 2026-10-11. Its static instruction inventory is
+30.25% smaller, but task success, turns, model time and actual session context use are unmeasured.
+The inventory substitutes `<value>` for runtime data, counts notice templates once and excludes
+engine-provided docs, UI trees, images and native helper output. It cannot predict a session's
+token total or repeated-notice cost. Blocked-app names remain in verbatim safety text. The
+[design and live handoff](design/prompt-budget.md) specify the pending 36-run A/B.
+
 ## Parity battery
 
 The 31-app battery passed 41/41 offline tests (2026-10-11). Office and iWork
