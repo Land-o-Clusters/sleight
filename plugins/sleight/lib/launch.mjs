@@ -55,13 +55,16 @@ function compareVersions(a, b) {
   return 0;
 }
 
+// Setup is the default fix for a missing engine: it needs the ChatGPT app installed, not a Codex sign-in.
+const setupCommand = () => `\`${join(LIB, '..', 'bin', 'sleight-mcp').replace(homedir(), '~')} setup\``;
+
 export function resolveServer(env = process.env) {
   const codexHome = env.CODEX_HOME || join(homedir(), '.codex');
   const root = join(codexHome, ...PLUGIN_DIR);
   const fromBundle = () => {
     const fallback = serverFromChatGPTApp({ env });
     if (fallback.error) {
-      return { error: `no Codex computer-use plugin at ${root}. Install the ChatGPT desktop app and turn on Computer Use in Codex once.` };
+      return { error: `no Codex computer-use plugin at ${root}, and no engine in the ChatGPT app. Install the ChatGPT desktop app (no sign-in needed), then run ${setupCommand()}.` };
     }
     const serverEnv = { ...fallback.env };
     serverEnv.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES || 'computer';
@@ -149,7 +152,7 @@ export async function doctor({ env = process.env, log = console.log, app = proce
     ok &&= found;
     log(`${found ? 'ok     ' : 'MISSING'}   ${label}: ${path ?? '(not set)'}`);
   }
-  if (!ok) return 1;
+  if (!ok) { log(`Run ${setupCommand()} to install the helper and grant its permissions.`); return 1; }
   let preapproved, grantAudit;
   if (app !== undefined) {
     try {

@@ -37,10 +37,8 @@ and you keep working. sleight gives that engine to Claude Code.
 
 ## Install
 
-You need macOS on Apple Silicon, Claude Code 2.1.288 or later (the oldest version we've tested), and the
-[ChatGPT desktop app](https://chatgpt.com/download/) with Computer Use turned on in Codex at least
-once. That first run installs the engine's helper and gets macOS to grant it Accessibility and Screen
-Recording. You can sign out of Codex afterwards.
+You need macOS on Apple Silicon, Claude Code 2.1.288 or later (the oldest version we've tested) and the
+[ChatGPT desktop app](https://chatgpt.com/download/), which contains the engine.
 
 ```bash
 claude plugin marketplace add Land-o-Clusters/sleight
@@ -51,17 +49,22 @@ claude plugin install sleight@sleight
 ```
 
 Or, inside a Claude Code session, `/plugin marketplace add Land-o-Clusters/sleight` and then
-`/plugin install sleight@sleight`. Start a new session, then check the engine:
+`/plugin install sleight@sleight`. Then start a new session.
+
+If you already use Computer Use in ChatGPT or Codex, that's all: the engine's helper and its macOS
+permissions are in place.
+
+If you don't, you don't need a ChatGPT account or a Codex sign-in. Run setup once:
 
 ```bash
-~/.claude/plugins/marketplaces/sleight/plugins/sleight/bin/sleight-mcp --doctor
+~/.claude/plugins/marketplaces/sleight/plugins/sleight/bin/sleight-mcp setup
 ```
 
-`sleight-mcp setup` finds ChatGPT, runs OpenAI's helper installer when its status isn't OK, opens
-the Accessibility and Screen Recording panes so you can allow Codex Computer Use, and runs
-`--doctor`. ChatGPT has to be installed, but you don't need to sign in or open Codex: in a macOS
-user that never signed in, the engine started and listed apps (2026-10-10). Installing the helper takes
-an administrator's Touch ID or password.
+It runs OpenAI's helper installer, which asks for an administrator's Touch ID or password. Then it opens
+the Accessibility and Screen Recording panes, where you allow Codex Computer Use, and checks the
+engine with `--doctor`. The engine started and listed apps in a macOS user that never signed in to ChatGPT
+(2026-10-10). Setup itself hasn't yet been run in a fresh macOS user. `--doctor` on its own checks an
+existing install.
 
 And try it:
 
@@ -216,8 +219,8 @@ without asking for new ones. [Supported observations and limits](docs/design/rep
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `no Codex computer-use plugin at …` | Computer Use never enabled in ChatGPT | Open ChatGPT → Codex, turn on Computer Use, and run one task |
-| `--doctor` shows `MISSING computer-use helper` | The helper app was removed or never installed | Same as above |
+| `no Codex computer-use plugin at …` | ChatGPT isn't installed, or its engine was never set up | Install the ChatGPT app, then run `sleight-mcp setup` |
+| `--doctor` shows `MISSING computer-use helper` | The helper app was removed or never installed | Run `sleight-mcp setup` |
 | Repeated `timeoutReached` | An app or the helper stopped answering reads | Stop retries. sleight checks native Accessibility and a fresh read of another previously acquired app. Follow the resulting app advice; if evidence is incomplete, report that uncertainty |
 | The helper diagnosis reports two responsive AX apps and a timed-out control read | The engine's read path appears stuck | Tell the user. Only they should restart ChatGPT, which ends Codex sessions. Doctor's inventory result alone cannot distinguish an app hang |
 | Approval prompt never appears | Claude Code too old for form elicitation; the minimum version isn't recorded | Update Claude Code |

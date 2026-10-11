@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.2.3 (2026-10-11)
+
+- Install has two paths: with Computer Use already on in ChatGPT or Codex, installing sleight is
+  enough. Without it, `sleight-mcp setup` installs the helper and opens the permission panes, with no
+  ChatGPT account or Codex sign-in. The launcher's missing-engine error and `--doctor` point at setup.
+
 ## 1.2.2 (2026-10-11)
 
 - The pane shows the latest receipt's path as text. Claude Code 2.1.288, the oldest version we support,
