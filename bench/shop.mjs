@@ -150,19 +150,35 @@ export async function captureCartShot(ctx, response = {}) {
   return ctx.cartShot;
 }
 
+// A smoke run ends one of three ways: the cart is complete (true), Claude stopped at
+// an interactive human check as the prompt asks ({ outcome: 'human-check', reason }, a
+// result row of its own that doesn't pass), or a failure that names what went wrong. The stop verdict needs the
+// answer to name an interactive human check while saying it stopped, and the cart
+// screenshot the task already captures. A refused click or tool call is a refusal:
+// on bestbuy.com (2026-10-10) the input lease refused every click and the answer's
+// stray CAPTCHA mention scored the run as a CAPTCHA stop.
+const HUMAN_CHECK = /(press\s*&\s*hold|press and hold|captcha|bot check|unusual traffic|human verification|are you a human|verif(?:y|ied|ies)(?: that)? you(?:'re| are)? a human|confirm you(?:'re| are) a human|you(?:'re| are) a human)/i;
+const HUMAN_CHECK_DENIED = /\b(?:no|not a|never|without|wasn't a|isn't a|didn't (?:see|encounter|find))[^.!?\n]{0,40}?(press\s*&\s*hold|press and hold|captcha|bot check|unusual traffic|human verification)/i;
+const SAID_STOPPED = /\b(stop(?:ped|s)?|blocked|did not|didn't|could not|couldn't|not able to|not interact|unable to|gave up|halted)\b/i;
+const REFUSAL = /\b(?:lease[^.!?\n]{0,80}?refus|refus[^.!?\n]{0,80}?lease|(?:tool|engine|computer use|computer-use)[^.!?\n]{0,60}?refus|refus[^.!?\n]{0,60}?(?:tool|engine))/i;
+
 export function checkRealShop(ctx) {
   const spec = REAL_SHOP[ctx.shopSmoke];
   if (!spec) return 'unknown smoke shop task';
   const answer = String(ctx.answer ?? '');
-  if (/\b(captcha|bot check|unusual traffic|are you a human)\b/i.test(answer)) {
-    return 'stopped at a CAPTCHA or bot check';
-  }
+  const shot = ctx.cartShot;
+  const shotOk = Boolean(shot?.bytes && shot.bytes.length >= 800);
   const missing = spec.items.filter(item => !answer.toLowerCase().includes(item.name.toLowerCase()));
+  if (REFUSAL.test(answer)) return 'blocked by an input lease or tool refusal';
+  const named = answer.match(HUMAN_CHECK);
+  if (named && !HUMAN_CHECK_DENIED.test(answer) && SAID_STOPPED.test(answer)) {
+    return shotOk ? { outcome: 'human-check', reason: `stopped at a human check (${named[1].toLowerCase()}; cart screenshot captured)` }
+      : 'answer names a human check but no cart-page screenshot confirms it';
+  }
+  if (!missing.length && answer.includes(spec.zip) && shotOk) return true;
   if (missing.length) return `answer does not name ${missing.map(item => item.name).join(', ')}`;
   if (!answer.includes(spec.zip)) return 'answer does not name the store ZIP';
-  const shot = ctx.cartShot;
-  if (!shot?.bytes || shot.bytes.length < 800) return 'no cart-page screenshot';
-  return true;
+  return 'no cart-page screenshot';
 }
 
 function page(title, body) {

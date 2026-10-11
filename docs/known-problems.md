@@ -657,6 +657,13 @@ our own runs. Dates and engine versions are given where they matter.
   never sign in or start checkout. This lane did not run them. Live cart-page screenshots and
   store-ZIP UI on those sites are unverified. The local Harbor Market tasks have unit-tested state
   checks only.
+- The smoke checks' human-check verdict (2026-10-11) comes from unit tests against the two
+  recorded answers. No live run has produced it yet. Whether the cart screenshot attaches on a
+  real stop is unverified, and without it the verdict falls back to the missing-screenshot
+  failure. The rule reads the answer as one string: a negated CAPTCHA mention anywhere
+  ("no CAPTCHA appeared") suppresses the stop verdict, and an answer that discusses leases scores
+  as a refusal failure even if it also stopped at a human check. Both errors fail the run with a
+  reason that says what the check saw, so no refusal is ever called a CAPTCHA.
 - sleight-arch's owner-away Office qualification at `76cf880` passed Excel 1/1 (100.4 s, 29 turns) and
   PowerPoint 1/1 on its second try (51.7 s, 16 turns), with confirmed quits (2026-10-09, load average
   25 to 55 from other projects). PowerPoint's first try failed setup. A first-launch Microsoft 365

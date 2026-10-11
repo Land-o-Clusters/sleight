@@ -141,7 +141,10 @@ options. The check is the server-side store and cart. Both the sleight and Codex
 `real-shop-target` and `real-shop-bestbuy` are smoke tasks. Select them with `--tasks` and
 `--runs 1` only. They are not in the default real suite or the head-to-head. Safari only. The check
 is Claude's answer plus a cart-page screenshot. Sign-in and checkout are out of scope. Decline
-non-essential cookies, and stop at a CAPTCHA or bot check.
+non-essential cookies, and stop at a CAPTCHA or bot check. A complete cart passes. A stop at a
+human check that the answer names and the screenshot backs is recorded as `outcome: "human-check"`,
+not a pass. Everything else fails with the real reason, and a refused click or tool call is a
+refusal, never a human check.
 ### Electron and Firefox
 
 `vscode-edit`, `cursor-edit`, `firefox-form`, `firefox-grid`, `firefox-spa`, `slack-read`,

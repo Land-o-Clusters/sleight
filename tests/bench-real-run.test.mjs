@@ -346,3 +346,15 @@ test('a refused cleanup collects fixture helpers before releasing its live lock'
   assert.match(result.cleanupError, /process group/);
   assert.equal(existsSync(ctx.lockPath), false);
 });
+
+test('a check that returns a stop outcome records it with its reason and does not pass', async t => {
+  const execute = await runner(), ctx = fixture(t);
+  const result = await execute({ setup() {}, prompt: () => 'fixture',
+    check: () => ({ outcome: 'human-check', reason: 'stopped at a human check (press & hold; cart screenshot captured)' }),
+    cleanup() {} }, ctx, {
+    drive: async () => ({ code: 0, groupClean: true, out: { result: 'stopped' } }), permissionCheck: async () => false,
+  });
+  assert.equal(result.passed, false);
+  assert.equal(result.outcome, 'human-check');
+  assert.equal(result.reason, 'stopped at a human check (press & hold; cart screenshot captured)');
+});

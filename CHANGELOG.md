@@ -5,6 +5,13 @@
 - The mod ends the engine turn after a turn that used an app even when Claude Code's pane list
   fails. That failure used to skip `turn_ended`, so only the relay's 30 s idle timer ended the
   turn. That may be one cause of desktop sessions that stay busy (inferred). A mod test covers it. It hasn't run live.
+- The real-shop smoke check scores a stop at an interactive human check as its own outcome
+  (`outcome: "human-check"` in the results, STOP in the log), not a pass, when the answer states the
+  check and the captured cart screenshot backs it. A complete cart passes. Anything else fails with the real reason, and an input lease
+  or tool refusal is a refusal, never a human check. Target's correct stop at a "Press & hold"
+  check scored as a plain failure and Best Buy's lease refusal scored "stopped at a CAPTCHA or
+  bot check" (2026-10-10). Both recorded answers now score correctly, from unit tests against
+  the stored answers. No live run.
 - The browser-extension check, which decides whether the next session gets the browser API, runs after the engine's
   first call has answered, not during it. Its second engine used to overlap every session's first
   call: about 0.12 s on a quiet Mac, and 2.4 s against 1.2 s under load

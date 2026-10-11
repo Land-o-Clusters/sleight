@@ -486,7 +486,7 @@ pass: for (let run = 1; run <= runs; run++) {
         finishRun(results.at(-1));
         save();
         const recorded = results.at(-1);
-        console.error(`${recorded.passed ? 'PASS' : isDryRun ? 'DRY' : 'FAIL'} ${armName} ${task.id} #${run} ${recorded.seconds ?? 0}s${recorded.reason ? ` (${recorded.reason})` : ''}`);
+        console.error(`${recorded.passed ? 'PASS' : isDryRun ? 'DRY' : recorded.outcome ? 'STOP' : 'FAIL'} ${armName} ${task.id} #${run} ${recorded.seconds ?? 0}s${recorded.reason ? ` (${recorded.reason})` : ''}`);
         if (result.cleanupError || result.permissionPrompt || result.permissionRefusal || result.observerError || result.appDialog || result.groupClean === false) {
           console.error(task.privateMail ? 'STOP: private mail safety check failed.' : `STOP: ${scrub(result.cleanupError ?? result.reason ?? 'permission stop')}`);
           controller.abort(new Error('live safety stop'));

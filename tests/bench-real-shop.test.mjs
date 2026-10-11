@@ -116,6 +116,52 @@ for (const id of ['real-shop-target', 'real-shop-bestbuy']) {
   });
 }
 
+// The next five checks use the two recorded smoke stops, worded as stored in
+// docs/benchmarks/2026-10-10-real-shop-smoke.json and 2026-10-11-real-shop-bestbuy-traced.json.
+test('a stop at a press-and-hold human check is its own verdict, not a plain failure', () => {
+  const answer = 'I stopped before doing any of the task. The Safari window (the only Safari window I looked at) ' +
+    'shows a human verification challenge on a Target page: "Press & hold to confirm you\'re a human (and not a bot)." ' +
+    'I did not interact with it.';
+  const verdict = checkRealShop({ shopSmoke: 'real-shop-target', answer, cartShot: shot });
+  assert.notEqual(verdict, true);
+  assert.equal(verdict.outcome, 'human-check');
+  assert.match(verdict.reason, /^stopped at a human check/);
+});
+
+test('an input lease refusal fails with its real reason and is never a CAPTCHA stop', () => {
+  const refused = 'I didn\'t complete the task. Safari\'s input lease keeps refusing clicks in the Best Buy window, ' +
+    'so I haven\'t set the store or added anything to the cart.';
+  const verdict = checkRealShop({ shopSmoke: 'real-shop-bestbuy', answer: refused, cartShot: shot });
+  assert.doesNotMatch(verdict, /human check|captcha/i);
+  assert.match(verdict, /input lease or tool refusal/);
+  const withCaptchaMention = `${refused} The refusals were not a CAPTCHA.`;
+  const verdict2 = checkRealShop({ shopSmoke: 'real-shop-bestbuy', answer: withCaptchaMention, cartShot: shot });
+  assert.doesNotMatch(verdict2, /human check|captcha/i);
+  assert.match(verdict2, /input lease or tool refusal/);
+});
+
+test('a completed answer that mentions no CAPTCHA still passes', () => {
+  const spec = REAL_SHOP['real-shop-target'];
+  const answer = `${spec.items.map(item => item.name).join(', ')} at ZIP ${spec.zip}. No CAPTCHA or bot check appeared.`;
+  assert.equal(checkRealShop({ shopSmoke: 'real-shop-target', answer, cartShot: shot }), true);
+});
+
+test('a negated CAPTCHA mention in a failed run fails over the missing items, not the CAPTCHA', () => {
+  const answer = 'I declined the cookies. No CAPTCHA appeared, but I could not find the items.';
+  const verdict = checkRealShop({ shopSmoke: 'real-shop-target', answer, cartShot: shot });
+  assert.doesNotMatch(verdict, /captcha/i);
+  assert.match(verdict, /answer does not name/);
+});
+
+test('a claimed human check without the captured screenshot stays a failure', () => {
+  const spec = REAL_SHOP['real-shop-target'];
+  const answer = `I stopped at a CAPTCHA human check: "Press & hold". ` +
+    `${spec.items.map(item => item.name).join(', ')} at ZIP ${spec.zip} were not added.`;
+  const verdict = checkRealShop({ shopSmoke: 'real-shop-target', answer });
+  assert.match(verdict, /no cart-page screenshot/);
+  assert.doesNotMatch(verdict, /^stopped at a human check/);
+});
+
 test('default real selection excludes smoke shop tasks, and those tasks require one run', () => {
   const all = benchmark.getTasks('real');
   const selected = selectSuiteTasks(all);
