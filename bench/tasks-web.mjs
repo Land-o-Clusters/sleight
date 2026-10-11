@@ -1,6 +1,8 @@
 import { serveWebPage, checkWeb } from './real-server.mjs';
 import { acquireFixture } from './real-run.mjs';
-import { openFixture, closeFixtures } from './real-fixture.mjs';
+import { openFixture, closeFixtures, webBrowsers } from './real-fixture.mjs';
+
+export { webBrowsers };
 
 const instructions = {
   grid: () => 'Find the row whose Project is Orchid, change only its Budget from 275 to 125, then sort Budget ascending. Keep every other row and value unchanged.',
@@ -27,16 +29,6 @@ const instructions = {
   accordion: () => 'Expand only Marine, read its code, enter that code in Marine code, then Submit code. Leave Marine expanded and the other sections collapsed.',
   delayed: () => 'Wait for the report content to load, read its report code, enter that code in Report code, then Submit report code.',
 };
-
-// Browser identity and extension capability are data, never a name-based path.
-// The two older Firefox grid/spa implementations retain their IDs and setup.
-export const webBrowsers = [
-  { id: 'safari', app: 'Safari', bundle: 'com.apple.Safari', extension: false, legacyKinds: [] },
-  { id: 'helium', app: 'Helium', bundle: 'net.imput.helium', extension: true, legacyKinds: [] },
-  { id: 'chrome', app: 'Google Chrome', bundle: 'com.google.Chrome', extension: true, legacyKinds: [] },
-  { id: 'firefox', app: 'Firefox', bundle: 'org.mozilla.firefox', extension: false, legacyKinds: ['grid', 'spa'] },
-  { id: 'arc', app: 'Arc', bundle: 'company.thebrowser.Browser', extension: true, legacyKinds: [] },
-];
 
 async function cleanup(ctx) {
   try { await closeFixtures(ctx); }

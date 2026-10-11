@@ -233,7 +233,7 @@ before it touches the app.
 ### Browser depth fixtures
 
 The browser-task catalog has 16 page kinds across 5 native browsers and 3 extension browsers
-(2026-10-11, offline checks only). The 6 earlier kinds and their checks retain their IDs. Firefox's
+(2026-10-11). The 6 earlier kinds and their checks retain their IDs. Firefox's
 earlier `firefox-grid` and `firefox-spa` keep their existing setup too. The 10 new kinds are:
 
 | Kind | Required page state |
@@ -255,23 +255,43 @@ and `arc`. Extension IDs append `-extension` for Helium, Google Chrome and Arc. 
 Native runs use the engine's app API. Extension runs require a connected extension for the named
 browser, use `cua.createBrowserTab`, and require `--surfaces browser,computer`. Without that flag,
 default selection omits extension variants and explicit selection refuses them before the live lock.
+Extension selections also require `--extension-sites-allowed`. The owner must first allow
+`127.0.0.1` in the extension's site settings. The flag records that prerequisite; it grants no
+permission and answers no browser prompt. Missing it refuses the pass before driver preflight.
+
+The 13:46 UTC pass on 2026-10-11 recorded 5 result rows before stopping
+(`bench/results/2026-10-11T13-46-12-844Z.json`). `safari-validation` failed fixture setup on both
+arms before a model call, with "Fixture menu item unavailable or ambiguous". `helium-validation`
+passed on sleight in 19.3 s and failed its unchanged state check on Codex in 28.5 s.
+`helium-validation-extension` stopped on its browser site-permission prompt after 18.6 s.
+The earlier 13:14 UTC pass ran the 12 older Safari and Helium IDs on both arms without a failure.
+Setup now selects their earlier helper and launch paths from browser table data. Browsers without
+a helper path retain the JXA New Window fixture. All 4 added regression tests failed before the
+change and passed after it. The routing and runner files passed 60/60 tests without driving an app.
 
 Each loopback server compares exact reported control state, independently of the driver's answer.
 Iframe and second-tab pages have separate state endpoints and request records. A first-page snapshot
 cannot replace either page's record. All 10 new kinds have offline tests for accepted state, near misses and
 their generated event handlers. Browser rendering and real input await sleight-arch's live check.
 
-The live matrix is 80 new task IDs (50 native, 30 extension), once per arm, 160 runs total. Print
-the IDs without launching a browser:
+The next live check excludes Arc: 40 native IDs in Safari, Helium, Google Chrome and Firefox,
+then 20 extension IDs in Helium and Google Chrome, once per arm, 120 runs total. Arc's 20 IDs
+remain unqualified. Print the two lists without launching a browser:
 
 ```bash
-node --input-type=module -e "import {webTasks} from './bench/tasks-web.mjs'; import {depthKinds} from './bench/web-pages/depth.mjs'; console.log(webTasks.filter(t => depthKinds.includes(t.webKind)).map(t => t.id).join(','))"
+node --input-type=module -e "import {webTasks} from './bench/tasks-web.mjs'; import {depthKinds} from './bench/web-pages/depth.mjs'; const tasks = webTasks.filter(t => depthKinds.includes(t.webKind) && !t.id.startsWith('arc-')); for (const surface of ['native', 'extension']) console.log(surface + ': ' + tasks.filter(t => t.surface === surface).map(t => t.id).join(','))"
 ```
 
-Then sleight-arch runs the complete list with the owner away:
+sleight-arch runs the native list with the owner away:
 
 ```bash
-node bench/run.mjs --suite real --arm sleight,codex --tasks <ids> --runs 1 --owner-away --surfaces browser,computer
+node bench/run.mjs --suite real --arm sleight,codex --tasks <native-ids> --runs 1 --owner-away --surfaces browser,computer
+```
+
+After the owner allows `127.0.0.1` in both extensions' site settings, sleight-arch runs:
+
+```bash
+node bench/run.mjs --suite real --arm sleight,codex --tasks <extension-ids> --runs 1 --owner-away --surfaces browser,computer --extension-sites-allowed
 ```
 
 Publish every run, including setup, permission, task and cleanup failures. Traces must identify the

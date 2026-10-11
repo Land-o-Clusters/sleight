@@ -889,15 +889,27 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   Excel correctly stopped on “Start Using Excel”. PowerPoint did not run. The
   [brief-10 report](benchmarks/2026-10-09-real-use-tasks-10.md) traces Word's retained process and
   records the fix: both running cases receive bounded initial-read retries. Live proof is pending.
-- The browser-depth expansion has 0 live runs (2026-10-11). Its 10 new page kinds have offline
+- The browser-depth pass at 13:46 UTC on 2026-10-11 stopped after 5 result rows
+  (`bench/results/2026-10-11T13-46-12-844Z.json`). Safari's validation fixture failed on both arms
+  before a model call because the JXA New Window menu item was unavailable or ambiguous.
+  Helium validation passed on sleight in 19.3 s and failed Codex's state check in 28.5 s; that
+  check is unchanged. Helium's extension task stopped on its browser site-permission prompt
+  after 18.6 s. The hook used for benchmark approvals cannot answer that prompt. Extension selections
+  now refuse before driver preflight unless `--extension-sites-allowed` is present. The owner
+  must first allow `127.0.0.1` in the extension's site settings. The flag does not verify those
+  settings or answer prompts. A permission refusal still stops the pass.
+  The 10 new page kinds have offline
   server-state and generated-handler coverage, including wrong rows, a drop one slot off, wrong
   tabs and values entered on the reference tab. Those tests do not render a browser, exercise a
   native date popup, dispatch pointer input or measure the 1 to 3 s delay against a real clock.
-  All 5 browsers use the same New Window fixture mechanism; Chrome, Firefox and Arc setup and
-  retained-window cleanup need live proof. Extension variants require a connected, identifiable
+  Safari and Helium now select their earlier helper and launch paths from browser table data;
+  the correction has 0 live runs. Chrome, Firefox and Arc retain the JXA New Window path. Their
+  setup and retained-window cleanup need live proof. Extension variants require a connected, identifiable
   Helium, Google Chrome or Arc extension. The runner's `surface` field records the API choice. Traces must
   confirm the API actually used. Extension turn-end cleanup and reference-tab closure also need
-  live proof. sleight-arch must publish all 160 runs of the 80 new IDs on both arms. The older six
+  live proof. sleight-arch must run the 40 native IDs without Arc on both arms once, then the
+  20 extension IDs without Arc on both arms once after the owner allows the loopback site,
+  and publish all 120 runs. Arc's 20 new IDs remain unqualified. The older six
   page kinds keep their checks, and Firefox's older grid and SPA keep their earlier setup.
 - sleight-arch's owner-away pass at `b284b05` passed 11 web tasks once each (2026-10-09).
   Word made its edits and saved, but its ZIP entry was rejected without identifying it. The file

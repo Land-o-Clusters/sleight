@@ -8,9 +8,19 @@ import { heliumHelper } from './real-helium.mjs';
 
 const execute = promisify(execFile);
 const script = fileURLToPath(new URL('./real-fixture.js', import.meta.url));
+
+// Setup capabilities belong to browser data. The older Firefox grid/spa tasks
+// retain their IDs and setup outside this catalog.
+export const webBrowsers = [
+  { id: 'safari', app: 'Safari', bundle: 'com.apple.Safari', extension: false, legacyKinds: [], fixtureHelper: 'created-window', fixtureLaunch: 'retained-url' },
+  { id: 'helium', app: 'Helium', bundle: 'net.imput.helium', extension: true, legacyKinds: [], fixtureHelper: 'created-window', fixtureLaunch: 'new-instance' },
+  { id: 'chrome', app: 'Google Chrome', bundle: 'com.google.Chrome', extension: true, legacyKinds: [], fixtureHelper: 'accessibility', fixtureLaunch: 'file-menu' },
+  { id: 'firefox', app: 'Firefox', bundle: 'org.mozilla.firefox', extension: false, legacyKinds: ['grid', 'spa'], fixtureHelper: 'accessibility', fixtureLaunch: 'file-menu' },
+  { id: 'arc', app: 'Arc', bundle: 'company.thebrowser.Browser', extension: true, legacyKinds: [], fixtureHelper: 'accessibility', fixtureLaunch: 'file-menu' },
+];
+
 async function fixtureHelper(request, signal) {
-  if (request.fixtureKind === 'web-page') return { command: '/usr/bin/osascript', args: ['-l', 'JavaScript', script] };
-  return ['net.imput.helium', 'com.apple.Safari'].includes(request.bundle)
+  return webBrowsers.find(browser => browser.bundle === request.bundle)?.fixtureHelper === 'created-window'
     ? { command: await heliumHelper(signal), args: [] }
     : { command: '/usr/bin/osascript', args: ['-l', 'JavaScript', script] };
 }
@@ -19,7 +29,9 @@ async function fixtureHelper(request, signal) {
 // window inventory or an Apple Event. Only a retained reference permits closing
 // a window; a missing reference leaves cleanup unconfirmed.
 export async function openFixture(ctx, request, { run = runOwned, open = execute, launch, helper = fixtureHelper } = {}) {
-  if ((request.fixtureKind === 'web-page' || request.bundle === 'com.apple.Safari') && ctx.ownerAway !== true) {
+  const fixtureLaunch = webBrowsers.find(browser => browser.bundle === request.bundle)?.fixtureLaunch;
+  const blankWindow = fixtureLaunch === 'retained-url' || (request.fixtureKind === 'web-page' && fixtureLaunch !== 'new-instance');
+  if ((request.fixtureKind === 'web-page' || fixtureLaunch === 'retained-url') && ctx.ownerAway !== true) {
     throw Object.assign(new Error('Browser blank-window setup requires an explicit owner-away boundary'), { noMutation: true });
   }
   request = { ...request, stopOnAppDialog: ctx.stopOnAppDialog || request.stopOnAppDialog, ownerAway: ctx.ownerAway === true };
@@ -147,19 +159,19 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
     } finally { clearTimeout(timer); }
   };
   try {
-  if (request.fixtureKind === 'web-page' || request.bundle === 'com.apple.Safari') {
+  if (blankWindow) {
     await waitStage('launch');
     beginLaunch();
-    await open('/usr/bin/open', request.fixtureKind === 'web-page' ? ['-g', '-b', request.bundle] : ['-g', '-a', 'Safari'], { signal, timeout: 15000 });
+    await open('/usr/bin/open', fixtureLaunch === 'retained-url' ? ['-g', '-a', request.app] : ['-g', '-b', request.bundle], { signal, timeout: 15000 });
   }
   await waitStage('armed');
   signal?.throwIfAborted();
   if (launch) await launch(beginLaunch);
-  else if (request.fixtureKind === 'web-page') {
+  else if (request.fixtureKind === 'web-page' && fixtureLaunch !== 'retained-url' && fixtureLaunch !== 'new-instance') {
     await open('/usr/bin/open', ['-g', '-b', request.bundle, request.target], { signal, timeout: 15000 });
-  } else if (request.bundle !== 'com.apple.Safari') {
+  } else if (fixtureLaunch !== 'retained-url') {
     beginLaunch();
-    const args = request.app === 'Helium'
+    const args = fixtureLaunch === 'new-instance'
       ? ['-n', '-g', '-a', request.app, '--args', '--new-window', request.target]
       : ['-g', '-a', request.app, ...(request.target ? [request.target] : [])];
     await open('/usr/bin/open', args, { signal, timeout: 15000 });

@@ -191,6 +191,9 @@ const selected = selectSuiteTasks(suiteTasks.filter(task => task.surface !== 'ex
 if (selected.some(task => task.surface === 'extension') && realSurfaces !== 'browser,computer') {
   throw new Error('extension tasks require --surfaces browser,computer');
 }
+if (selected.some(task => task.surface === 'extension') && !process.argv.includes('--extension-sites-allowed')) {
+  throw new Error('extension tasks require --extension-sites-allowed; the owner must first allow 127.0.0.1 in the extension\'s site settings');
+}
 assertShopSmokeRuns(selected, runs);
 // Tasks in the owner's real accounts run only with the owner at the Mac and watching (LAWS, 2026-10-11).
 if (selected.some(task => task.ownerPresent) && !ownerPresent) throw new Error('owner-present tasks (iPhone Mirroring, Mail, Mimestream and chat reads) require --owner-present');

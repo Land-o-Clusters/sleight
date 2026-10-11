@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext, Script } from 'node:vm';
 import * as server from '../bench/real-server.mjs';
 import { acquireFixture } from '../bench/real-run.mjs';
-import { closeFixtures } from '../bench/real-fixture.mjs';
+import { closeFixtures, webBrowsers } from '../bench/real-fixture.mjs';
 
 const kinds = ['grid', 'editor', 'dense', 'spa', 'nested', 'infinite'];
 const rows = [
@@ -113,6 +113,7 @@ test('all web tasks close their server even when owned-window cleanup fails', as
   const source = readFileSync(new URL('../bench/tasks-web.mjs', import.meta.url), 'utf8')
     .replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
   const tasks = runInNewContext(`${source}\nwebTasks`, {
+    webBrowsers,
     serveWebPage: server.serveWebPage, checkWeb: server.checkWeb,
     closeFixtures: async ctx => { await ctx.windowLeases[0].close(); },
   });
@@ -284,6 +285,7 @@ test('all web tasks retain server cleanup when browser acquisition fails without
   const source = readFileSync(new URL('../bench/tasks-web.mjs', import.meta.url), 'utf8')
     .replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
   const tasks = runInNewContext(`${source}\nwebTasks`, {
+    webBrowsers,
     serveWebPage: server.serveWebPage, checkWeb: server.checkWeb, acquireFixture, closeFixtures,
     openFixture: async (ctx, request) => {
       assert.equal(request.target, ctx.url);

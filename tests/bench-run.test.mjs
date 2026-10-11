@@ -96,6 +96,16 @@ test('extension tasks require both surfaces before any live lock or fixture', as
   assert.equal(result.calls.includes('real run'), false);
 });
 
+for (const explicit of [false, true]) test(`extension site permission is required before starting ${explicit ? 'selected' : 'default'} extension tasks`, async () => {
+  const task = { id: 'helium-validation-extension', app: 'Helium', surface: 'extension' };
+  const result = await runner({ tasks: [task], extraArgs: ['--surfaces', 'browser,computer', ...(explicit ? ['--tasks', task.id] : [])] });
+  assert.match(result.error?.message ?? '', /--extension-sites-allowed/);
+  assert.match(result.error.message, /owner.*allow 127\.0\.0\.1.*extension.*site settings/i);
+  assert.equal(result.calls.includes('lock'), false);
+  assert.equal(result.calls.includes('real run'), false);
+  assert.equal(result.envs.length, 0, 'refuse before any driver or engine preflight');
+});
+
 test('default computer-only selection omits extension variants', async () => {
   const result = await runner({ tasks: [
     { id: 'chrome-validation', app: 'Google Chrome', surface: 'native' },
@@ -106,7 +116,7 @@ test('default computer-only selection omits extension variants', async () => {
 });
 
 test('every native and extension result records its surface on both arms, including failures', async () => {
-  const result = await runner({ arm: 'sleight,codex', extraArgs: ['--surfaces', 'browser,computer'], tasks: [
+  const result = await runner({ arm: 'sleight,codex', extraArgs: ['--surfaces', 'browser,computer', '--extension-sites-allowed'], tasks: [
     { id: 'chrome-validation', app: 'Google Chrome', surface: 'native' },
     { id: 'chrome-validation-extension', app: 'Google Chrome', surface: 'extension' },
   ] });
