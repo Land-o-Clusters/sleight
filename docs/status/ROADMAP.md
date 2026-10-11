@@ -8,6 +8,18 @@ This release is due 2026-10-10 (owner). Codex is out of quota, so Grok and GLM l
 work in `.dev/prompts/lane-*.md`. sleight-arch merges it and runs the live checks before the release. The tracks run in parallel. Live runs that can take the owner's pointer or keyboard wait until
 they're away. Sol works track 4, and sleight-arch works tracks 2 and 3 while the owner is at the Mac.
 
+## 0. App-agnostic, and parity with Codex (owner, 2026-10-11), before the release
+
+1. Clean up what exists: lanes generic-drag and generic-mechanisms (`.dev/prompts/`), from an audit
+   that found about 15 places where code depends on one app.
+2. Slim the skill: `SKILL-slim.md` against the current skill and no skill, A/B running; textedit-save
+   in the away sitting.
+3. Run the parity battery on about 25 popular apps (approved, LAWS), side by side with Codex, with generic
+   fixture and check kinds, window order recorded per run. Rules are mined on half the apps and
+   proven on the other half. Lanes battery-harness and battery-report. The owner starts it in a
+   fresh context.
+4. Give the user's front app back when a launch takes it, as a generic mechanism.
+
 ## 1. Release 1.0 (done: v1.0.0, 2026-10-09)
 
 1. The Chess and simulator head-to-head and a release pass, with the owner away (running 2026-10-09).
