@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.2.4 (2026-10-11)
+
+- README: updating is right after install, with Claude Code's auto-update switch for the sleight
+  marketplace (off by default for marketplaces outside Anthropic's own) and the one-line update.
+- `SLEIGHT_PROMPT=lean` makes everything Claude reads from sleight 30% smaller (23,629 to 16,482
+  characters) for an A/B. The default text is unchanged until that A/B runs.
+
 ## 1.2.3 (2026-10-11)
 
 - Install has two paths: with Computer Use already on in ChatGPT or Codex, installing sleight is

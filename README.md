@@ -77,8 +77,19 @@ A yes covers that app for the rest of the session, and "Always allow" covers it 
 marked "Always allow" in Codex or ChatGPT don't ask, because the engine approves them itself
 ([settings](docs/settings.md#approval-scope)).
 
-To update, run `claude plugin marketplace update sleight` and `claude plugin update sleight@sleight`,
-then start a new session. A running session keeps the version it started with.
+### Update
+
+With auto-update on, Claude Code installs each new sleight release by itself. Turn it on once from
+`/plugin` in a session: the **Marketplaces** tab, sleight, **Enable auto-update**. Claude Code leaves it
+off for marketplaces outside Anthropic's own.
+
+To update now, pick **Update marketplace** in the same place, or run:
+
+```bash
+claude plugin marketplace update sleight && claude plugin update sleight@sleight
+```
+
+Then start a new session. A running session keeps the version it started with.
 
 Also runs as a plain MCP server: see [other hosts](docs/other-hosts.md).
 
