@@ -576,7 +576,9 @@ pass: for (let run = 1; run <= runs; run++) {
       }
     }
     if (!isDryRun && unlock) for (const cleanup of [closeBenchTextEdit, quitChess, quitSimApp]) {
-      try { await cleanup(suite === 'real' || cleanup === quitSimApp || armNames.some(name => ARMS[name].generic) ? { ownedOnly: true } : undefined); }
+      // TextEdit tasks launch TextEdit themselves (launchBenchTextEdit), so the pass quits it again.
+      try { await cleanup(suite === 'real' || cleanup === quitSimApp || armNames.some(name => ARMS[name].generic) ? { ownedOnly: true }
+        : cleanup === closeBenchTextEdit ? { quit: true } : undefined); }
       catch (error) { console.error(privatePass ? 'Pass cleanup failed: PRIVATE_MAIL_CLEANUP_UNCONFIRMED' : `Pass cleanup failed: ${error.message}`); process.exitCode = 1; }
     }
     save();

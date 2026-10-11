@@ -397,6 +397,9 @@ test('Codex default approvals contain only the five core benchmark bundle IDs', 
   assert.deepEqual(result.calls.find(c => Array.isArray(c) && c[0] === 'approve'),
     ['approve', 'com.apple.calculator', 'com.apple.TextEdit', 'com.apple.Chess', 'com.apple.iphonesimulator', 'com.apple.dt.Devices']);
   assert.deepEqual(result.tailScopes.map(scope => scope?.ownedOnly), [undefined, undefined, true]);
+  // TextEdit tasks launch TextEdit themselves since 2026-10-11, so a default pass quits it at the end
+  // (closeBenchTextEdit still quits only when every open document is the pass's own).
+  assert.equal(result.tailScopes[0]?.quit, true);
 });
 
 test('a Codex real run drives through Codex with the real apps approved and the pass signal', async () => {

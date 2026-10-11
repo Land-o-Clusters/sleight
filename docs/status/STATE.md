@@ -53,11 +53,15 @@ Next, in order:
 4. Confirm the bench arms' own config folder with one cluster once OpenUsage reads fresh (below).
 
 **Waiting on the owner:**
-- The benchmark's API key answers "Credit balance is too low" (2026-10-11 01:58 UTC): textedit-save
-  failed 0/3 at once with it (`bench/results/2026-10-11T01-57-31-271Z.json`), and a one-line
-  `claude -p` on the key fails the same way with or without the arms' config folder. Our ledger
-  shows $4.50 spent this month. Live bench runs on the key stop until credit is added to that key's
-  account, or the owner picks `--auth login`, which shares the login's rate limit with OpenUsage.
+- Bench auth (owner, 2026-10-11 02:10 UTC): live runs use the owner's login (`--auth login`) until
+  they decide. The key's $200 is a promotional grant (the "API credit (Max 20x)", $199.73 left,
+  expires 2026-11-08) that covers "Agent SDK, API, Batch API, Playground, Managed Agents". Direct
+  Messages API calls on the key work (Haiku and Sonnet, 2026-10-11). Anything sent through the
+  `claude` binary gets "Credit balance is too low": `claude -p` and the Agent SDK 0.3.296 alike. Bench
+  runs on the key passed until 00:43 UTC and fail from about 01:00 at $0 (inferred: billing began
+  counting that traffic as Claude Code). Owner's choice: buy a little credit, or stay on the login.
+  Faking the traffic's product or a bare-API arm are out (the latter isn't Claude Code plus sleight).
+  textedit-save on the login passed 3/3 (93.4, 40.2, 45.6 s, `bench/results/2026-10-11T02-00-43-494Z.json`).
 - `Untitled 10.txt` in the iCloud TextEdit folder, a benchmark leftover: move it to the Trash or keep.
 - Windows (ROADMAP track 6): on the 2020 Intel MacBook Pro, register for the Windows 11 Enterprise
   evaluation, download it and VMware Fusion, install ChatGPT, turn on OpenSSH. Then sleight-arch

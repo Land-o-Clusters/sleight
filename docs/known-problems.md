@@ -782,6 +782,13 @@ our own runs. Dates and engine versions are given where they matter.
   pasted formatting attributes", with the source left in place
   ([raw](benchmarks/2026-10-11-textedit-fixes-1791679610865.json)). We don't know yet whether the
   paste lost the bold red formatting or the check compares attributes TextEdit changes on paste.
+- Driving Helium's Claude Console tab from a session that had used the engine (2026-10-11), the input
+  lease refused `browser.nameSession(...)` and later `tab.goto(...)` on a tab from `cua.getTab` with
+  "a bundle ID and full window header are required", the native-app refusal, after `cua.getState()`.
+  `cua.createBrowserTab(browser.browserId, url)` went through each time. Some of those calls were sent
+  in parallel with others, so the evidence is unclean. Likely cause: a handle stays a browser handle
+  only after the engine reply marks the call `browserUse` (`browserHandles` in `relay.mjs`), and
+  the refused handles weren't confirmed. Not reproduced in a test yet.
 - With every test file running at once, the app-health restart test and the doctor's pipe test each
   failed one full check at load 9 to 11 (2026-10-10) and passed 5 of 5 and 3 of 3 runs alone.
   `npm test` now runs 4 files at a time.
