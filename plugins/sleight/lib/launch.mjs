@@ -211,6 +211,13 @@ export function approvalLogging(preapproved, env = process.env, auditDirectory) 
 const LIB = dirname(fileURLToPath(import.meta.url));
 
 // The skill's body, sent after the engine's first-call docs. Missing or unreadable means none.
+// Under the sheet A/B, the menu rule gets the call to send. 9 textedit-save runs opened Format in one call
+// and chose Make Plain Text in the next, 33.8 s over 11 calls (turn study, 2026-10-11).
+const MENU_RULE = 'or click\n  the menu and its item in one call.';
+const MENU_RULE_SHEET = 'or open the\n  menu and choose its item by label in the same call: `await app.click({ label: "Format" }); await\n  app.click({ label: "Make Plain Text" })`. sleight waits for the menu between them.';
+export function sheetRules(rules) {
+  return typeof rules === 'string' && rules.includes(MENU_RULE) ? rules.replace(MENU_RULE, MENU_RULE_SHEET) : rules;
+}
 export function skillRules(path = join(LIB, '..', 'skills', 'drive-mac-apps', 'SKILL.md')) {
   try { return readFileSync(path, 'utf8').replace(/^---\n[\s\S]*?\n---\n+/, '').trim() || undefined; }
   catch { return undefined; }
@@ -668,7 +675,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     trace: relayTrace,
     guardTiming: !!process.env.SLEIGHT_TRACE,
     traceCode: process.env.SLEIGHT_TRACE_CODE === '1',
-    firstCallRules: skillRules(),
+    firstCallRules: process.env.SLEIGHT_FIRST_CALL_BATCH === 'sheet' ? sheetRules(skillRules()) : skillRules(),
     keyboardTaps: () => appHealth.keyboardTaps(),
     windowIdentity: window => appHealth.windowIdentity(window),
     beginStop: () => { stoppingForReceipt = true; },

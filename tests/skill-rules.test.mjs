@@ -26,3 +26,13 @@ test('the skill routes iPhone Mirroring past scroll to Settings search', () => {
   assert.match(rules, /app\.scroll/);
   assert.match(rules, /0\.3, 0\.6 or 1 page/);
 });
+
+test('under the sheet A/B the menu rule names the label clicks to send in one call', async () => {
+  const { skillRules, sheetRules } = await import('../plugins/sleight/lib/launch.mjs');
+  const rules = skillRules();
+  assert.match(rules, /click\n  the menu and its item in one call\./);
+  const sheet = sheetRules(rules);
+  assert.match(sheet, /await app\.click\(\{ label: "Format" \}\); await\n  app\.click\(\{ label: "Make Plain Text" \}\)/);
+  assert.doesNotMatch(sheet, /click\n  the menu and its item in one call\./);
+  assert.equal(sheetRules('other rules'), 'other rules');
+});
