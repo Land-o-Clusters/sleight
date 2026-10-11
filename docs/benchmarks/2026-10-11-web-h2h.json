@@ -1,0 +1,3383 @@
+{
+  "stamp": "2026-10-11T13-14-50-904Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "ownerPresent": false,
+  "arms": [
+    "sleight",
+    "codex"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "safari-grid",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.06,
+        "group": {
+          "claude": 1.25,
+          "engine node": 0.57,
+          "mcp@latest": 0.45,
+          "node": 0.18,
+          "osascript": 0.17,
+          "codex": 0.27
+        },
+        "outside": {
+          "Safari": 0.32,
+          "engine helper": 0.85
+        },
+        "split": {
+          "sleight": 0.35,
+          "engine": 1.42,
+          "client": 1.25,
+          "other": 0.72
+        }
+      },
+      "timing": {
+        "totalMs": 17595,
+        "modelMs": 14142,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 2891,
+        "engineMs": 2759,
+        "relayMs": 12,
+        "localMs": 120,
+        "guardReads": 2,
+        "guardReadMs": 155.9847499999987,
+        "guardReadFailures": 0,
+        "otherMs": 562
+      },
+      "passed": true,
+      "seconds": 19,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 5,
+      "costUsd": 0.0137771,
+      "reportedCostUsd": 0.3554534,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 10,
+        "cacheRead": 169792,
+        "cacheWrite": 53891,
+        "output": 2600
+      },
+      "exitCode": 0,
+      "answer": "Orchid's budget is now 125, and the Budget column is sorted ascending in the same Safari window, which I left open. Cedar 90 comes first and Oak 510 last, with all 12 rows and their other values unchanged."
+    },
+    {
+      "arm": "codex",
+      "task": "safari-grid",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 4,
+      "engineMs": 3073,
+      "footprint": {
+        "cpuSeconds": 3.59,
+        "group": {
+          "codex": 1.31,
+          "node": 0.14,
+          "engine node": 0.64,
+          "codex-code-mode-host": 0.09
+        },
+        "outside": {
+          "Safari": 0.35,
+          "engine helper": 1.06
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 1.7,
+          "client": 1.31,
+          "other": 0.23
+        }
+      },
+      "passed": true,
+      "seconds": 30.7,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 6,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 161596,
+        "cacheRead": 136064,
+        "cacheWrite": 0,
+        "output": 487
+      },
+      "exitCode": 0,
+      "answer": "Changed Orchid’s Budget from 275 to 125 and sorted Budget ascending. Verified every other row and value is unchanged. Left the Safari window open."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-grid",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.67,
+        "group": {
+          "claude": 1.29,
+          "engine node": 0.61,
+          "mcp@latest": 0.47,
+          "node": 0.19,
+          "osascript": 0.09,
+          "codex": 0.35
+        },
+        "outside": {
+          "Helium": 0.48,
+          "engine helper": 1.19
+        },
+        "split": {
+          "sleight": 0.28,
+          "engine": 1.8,
+          "client": 1.29,
+          "other": 0.82
+        }
+      },
+      "timing": {
+        "totalMs": 20150,
+        "modelMs": 14850,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 4544,
+        "engineMs": 4533,
+        "relayMs": 11,
+        "localMs": 0,
+        "guardReads": 5,
+        "guardReadMs": 1176.3300840000002,
+        "guardReadFailures": 0,
+        "otherMs": 756
+      },
+      "passed": true,
+      "seconds": 21.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 6,
+      "costUsd": 0.0092445,
+      "reportedCostUsd": 0.2381508,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 12,
+        "cacheRead": 263989,
+        "cacheWrite": 26277,
+        "output": 2696
+      },
+      "exitCode": 0,
+      "answer": "The Orchid budget is now 125 and the table is sorted by Budget ascending in the `grid 26147ebd` Helium window, which I left open.\n\nThe sorted order is Cedar 90, Orchid 125, Harbor 140, Maple 180, Willow 220, Juniper 260, Birch 310, Elm 350, Aspen 390, Pine 430, Spruce 470, Oak 510. All 12 rows are s"
+    },
+    {
+      "arm": "codex",
+      "task": "helium-grid",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 3,
+      "engineMs": 2474,
+      "footprint": {
+        "cpuSeconds": 2.83,
+        "group": {
+          "codex": 1.02,
+          "engine node": 0.64,
+          "node": 0.13,
+          "codex-code-mode-host": 0.06
+        },
+        "outside": {
+          "Helium": 0.31,
+          "engine helper": 0.67
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 1.31,
+          "client": 1.02,
+          "other": 0.19
+        }
+      },
+      "passed": true,
+      "seconds": 22.4,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 5,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 105363,
+        "cacheRead": 79488,
+        "cacheWrite": 0,
+        "output": 363
+      },
+      "exitCode": 0,
+      "answer": "Changed Orchid’s Budget from 275 to 125 and sorted Budget ascending. Verified all other rows and values are unchanged. Left the Helium window open."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-editor",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.7,
+        "group": {
+          "claude": 1.3,
+          "engine node": 0.62,
+          "mcp@latest": 0.44,
+          "node": 0.18,
+          "(Python)": 0.06,
+          "(git)": 0,
+          "osascript": 0.08,
+          "codex": 0.36
+        },
+        "outside": {
+          "Safari": 0.45,
+          "engine helper": 1.21
+        },
+        "split": {
+          "sleight": 0.26,
+          "engine": 1.83,
+          "client": 1.3,
+          "other": 0.86
+        }
+      },
+      "timing": {
+        "totalMs": 24400,
+        "modelMs": 19408,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 4344,
+        "engineMs": 4326,
+        "relayMs": 18,
+        "localMs": 0,
+        "guardReads": 5,
+        "guardReadMs": 1189.5861669999995,
+        "guardReadFailures": 0,
+        "otherMs": 648
+      },
+      "passed": true,
+      "seconds": 25.9,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 6,
+      "costUsd": 0.010005,
+      "reportedCostUsd": 0.2637886,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 12,
+        "cacheRead": 267528,
+        "cacheWrite": 27635,
+        "output": 3603
+      },
+      "exitCode": 0,
+      "answer": "The planning document now has \"ship carefully\" in bold and a third bullet, \"Archive notes 210b71c6\", under the existing two. I checked this in the screenshot of the Safari window. The title, headings, paragraph text and the first two bullets are unchanged. I didn't touch any other tabs or windows, a"
+    },
+    {
+      "arm": "codex",
+      "task": "safari-editor",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 4,
+      "engineMs": 2894,
+      "footprint": {
+        "cpuSeconds": 3.22,
+        "group": {
+          "codex": 1.18,
+          "engine node": 0.69,
+          "node": 0.1,
+          "codex-code-mode-host": 0.05
+        },
+        "outside": {
+          "Safari": 0.31,
+          "engine helper": 0.89
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 1.58,
+          "client": 1.18,
+          "other": 0.15
+        }
+      },
+      "passed": true,
+      "seconds": 26.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 6,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 157234,
+        "cacheRead": 125696,
+        "cacheWrite": 0,
+        "output": 493
+      },
+      "exitCode": 0,
+      "answer": "Bolded only “ship carefully” and added the third bullet “Archive notes c4c1a7ff”. All other text remains unchanged, and the Safari window is open."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-editor",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 10.5,
+        "group": {
+          "claude": 1.82,
+          "engine node": 0.88,
+          "mcp@latest": 0.5,
+          "node": 0.18,
+          "osascript": 0.25,
+          "codex": 0.45,
+          "(bash)": 0.01,
+          "(AgentPeekBridge)": 0.01,
+          "(zsh)": 0
+        },
+        "outside": {
+          "Helium": 2.16,
+          "engine helper": 4.24
+        },
+        "split": {
+          "sleight": 0.43,
+          "engine": 5.12,
+          "client": 1.82,
+          "other": 0.97
+        }
+      },
+      "timing": {
+        "totalMs": 67659,
+        "modelMs": 42878,
+        "calls": 9,
+        "refused": 0,
+        "toolMs": 23778,
+        "engineMs": 23631,
+        "relayMs": 31,
+        "localMs": 116,
+        "guardReads": 61,
+        "guardReadMs": 15976.831627000007,
+        "guardReadFailures": 0,
+        "otherMs": 1003
+      },
+      "passed": true,
+      "seconds": 69,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 10,
+      "costUsd": 0.0189997,
+      "reportedCostUsd": 0.5108368,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 20,
+        "cacheRead": 516884,
+        "cacheWrite": 48592,
+        "output": 8221
+      },
+      "exitCode": 0,
+      "answer": "The planning document now has \"ship carefully\" in bold, and the third bullet \"Archive notes 7caa4b8c\" is at the end of the list. The title, heading, paragraph text and the two original bullets are unchanged. The Helium window is still open.\n\nMy first bold attempt landed one character off (\"ip carefu"
+    },
+    {
+      "arm": "codex",
+      "task": "helium-editor",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 9,
+      "engineMs": 5536,
+      "footprint": {
+        "cpuSeconds": 5.21,
+        "group": {
+          "codex": 1.44,
+          "engine node": 0.76,
+          "node": 0.12,
+          "codex-code-mode-host": 0.1
+        },
+        "outside": {
+          "Helium": 0.68,
+          "engine helper": 2.11
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 2.87,
+          "client": 1.44,
+          "other": 0.22
+        }
+      },
+      "passed": true,
+      "seconds": 60.2,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 11,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 316021,
+        "cacheRead": 292608,
+        "cacheWrite": 0,
+        "output": 1100
+      },
+      "exitCode": 0,
+      "answer": "Bolded only “ship carefully” and added the third bullet “Archive notes d7c2bb96”. The title, heading, paragraph text, and existing bullets remain unchanged. Left the window open."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-dense",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.04,
+        "group": {
+          "claude": 1.15,
+          "engine node": 0.6,
+          "mcp@latest": 0.57,
+          "node": 0.2,
+          "osascript": 0.23,
+          "codex": 0.21,
+          "uv": 0.02,
+          "(Python)": 0.05,
+          "python3": 0.08,
+          "(git)": 0.01
+        },
+        "outside": {
+          "Safari": 0.2,
+          "engine helper": 0.72
+        },
+        "split": {
+          "sleight": 0.43,
+          "engine": 1.32,
+          "client": 1.15,
+          "other": 0.94
+        }
+      },
+      "timing": {
+        "totalMs": 10977,
+        "modelMs": 7728,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 2659,
+        "engineMs": 2498,
+        "relayMs": 9,
+        "localMs": 152,
+        "guardReads": 1,
+        "guardReadMs": 0.002957999999580352,
+        "guardReadFailures": 0,
+        "otherMs": 590
+      },
+      "passed": true,
+      "seconds": 12.8,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 4,
+      "costUsd": 0.0093009,
+      "reportedCostUsd": 0.2350618,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 8,
+        "cacheRead": 152399,
+        "cacheWrite": 35498,
+        "output": 1353
+      },
+      "exitCode": 0,
+      "answer": "The \"Tidal observatory field notes\" article is now open and visible in the Safari window \"Personal — dense 68b92223\". The page heading reads \"Tidal observatory field notes\", the URL is `127.0.0.1:61426/68b92223/article/link-173`, and the window is still open. I didn't touch any other tabs or windows"
+    },
+    {
+      "arm": "codex",
+      "task": "safari-dense",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 3,
+      "engineMs": 2305,
+      "footprint": {
+        "cpuSeconds": 2.68,
+        "group": {
+          "codex": 0.86,
+          "engine node": 0.69,
+          "node": 0.11,
+          "codex-code-mode-host": 0.05
+        },
+        "outside": {
+          "Safari": 0.28,
+          "engine helper": 0.69
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 1.38,
+          "client": 0.86,
+          "other": 0.16
+        }
+      },
+      "passed": true,
+      "seconds": 20,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 5,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 139595,
+        "cacheRead": 95488,
+        "cacheWrite": 0,
+        "output": 361
+      },
+      "exitCode": 0,
+      "answer": "Opened “Tidal observatory field notes” and left the article visible in the Safari window. The window remains open."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-dense",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.81,
+        "group": {
+          "claude": 1.24,
+          "engine node": 0.62,
+          "mcp@latest": 0.5,
+          "node": 0.19,
+          "osascript": 0.1,
+          "codex": 0.33,
+          "uv": 0.01,
+          "python3": 0.11
+        },
+        "outside": {
+          "Helium": 0.57,
+          "engine helper": 1.14
+        },
+        "split": {
+          "sleight": 0.29,
+          "engine": 1.76,
+          "client": 1.24,
+          "other": 0.95
+        }
+      },
+      "timing": {
+        "totalMs": 17344,
+        "modelMs": 13068,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 3677,
+        "engineMs": 3657,
+        "relayMs": 20,
+        "localMs": 0,
+        "guardReads": 2,
+        "guardReadMs": 0.007001000000855129,
+        "guardReadFailures": 0,
+        "otherMs": 599
+      },
+      "passed": true,
+      "seconds": 18.8,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 5,
+      "costUsd": 0.0144132,
+      "reportedCostUsd": 0.36463059999999997,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 10,
+        "cacheRead": 250753,
+        "cacheWrite": 53916,
+        "output": 2243
+      },
+      "exitCode": 0,
+      "answer": "The \"Tidal observatory field notes\" article is open and visible in the Helium window, which is the only window I touched.\n\nI got there by scrolling the archive list to items 140–240, where the link sits, and clicking it. The article is at `127.0.0.1:61682/5dd93f18/article/link-173` and shows the hea"
+    },
+    {
+      "arm": "codex",
+      "task": "helium-dense",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 5,
+      "engineMs": 3762,
+      "footprint": {
+        "cpuSeconds": 3.98,
+        "group": {
+          "codex": 1.31,
+          "engine node": 0.73,
+          "node": 0.13,
+          "codex-code-mode-host": 0.07
+        },
+        "outside": {
+          "Helium": 0.62,
+          "engine helper": 1.12
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 1.85,
+          "client": 1.31,
+          "other": 0.2
+        }
+      },
+      "passed": true,
+      "seconds": 29.5,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 7,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 212860,
+        "cacheRead": 184448,
+        "cacheWrite": 0,
+        "output": 427
+      },
+      "exitCode": 0,
+      "answer": "Opened “Tidal observatory field notes” and left the article visible in the Helium window, which remains open for cleanup."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-spa",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 5.86,
+        "group": {
+          "claude": 1.67,
+          "engine node": 0.68,
+          "mcp@latest": 0.46,
+          "node": 0.18,
+          "(Python)": 0.06,
+          "osascript": 0.29,
+          "codex": 0.34,
+          "(bash)": 0.01,
+          "(AgentPeekBridge)": 0.01,
+          "(zsh)": 0
+        },
+        "outside": {
+          "Safari": 0.75,
+          "engine helper": 1.41
+        },
+        "split": {
+          "sleight": 0.47,
+          "engine": 2.09,
+          "client": 1.67,
+          "other": 0.88
+        }
+      },
+      "timing": {
+        "totalMs": 26738,
+        "modelMs": 19059,
+        "calls": 10,
+        "refused": 0,
+        "toolMs": 6696,
+        "engineMs": 6546,
+        "relayMs": 32,
+        "localMs": 118,
+        "guardReads": 10,
+        "guardReadMs": 705.3160840000032,
+        "guardReadFailures": 0,
+        "otherMs": 983
+      },
+      "passed": true,
+      "seconds": 28.3,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 11,
+      "costUsd": 0.0146578,
+      "reportedCostUsd": 0.362248,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 22,
+        "cacheRead": 545225,
+        "cacheWrite": 38339,
+        "output": 3071
+      },
+      "exitCode": 0,
+      "answer": "The request is submitted. The Safari window (Personal — spa 35b8c0bb) now shows the \"Request submitted\" screen at 127.0.0.1:61922/35b8c0bb/#/complete, and I left it open without touching any other tabs or windows.\n\nI went through Requests, then New request, set Category to Research, entered Orchid a"
+    },
+    {
+      "arm": "codex",
+      "task": "safari-spa",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 9,
+      "engineMs": 5263,
+      "footprint": {
+        "cpuSeconds": 4.75,
+        "group": {
+          "codex": 1.24,
+          "engine node": 0.7,
+          "node": 0.13,
+          "codex-code-mode-host": 0.1
+        },
+        "outside": {
+          "Safari": 0.73,
+          "engine helper": 1.85
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 2.55,
+          "client": 1.24,
+          "other": 0.23
+        }
+      },
+      "passed": true,
+      "seconds": 45.2,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 11,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 319110,
+        "cacheRead": 284928,
+        "cacheWrite": 0,
+        "output": 812
+      },
+      "exitCode": 0,
+      "answer": "Submitted with Category Research, Project Orchid, and Code `33d70c1c`. The “Request submitted” screen remains visible, and the Safari window is open."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-spa",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 7.47,
+        "group": {
+          "claude": 1.9,
+          "engine node": 0.77,
+          "mcp@latest": 0.61,
+          "node": 0.24,
+          "osascript": 0.1,
+          "codex": 0.32,
+          "(bash)": 0,
+          "(vibe-island-brid)": 0.01
+        },
+        "outside": {
+          "Helium": 1.3,
+          "engine helper": 2.22
+        },
+        "split": {
+          "sleight": 0.34,
+          "engine": 2.99,
+          "client": 1.9,
+          "other": 0.94
+        }
+      },
+      "timing": {
+        "totalMs": 39262,
+        "modelMs": 28615,
+        "calls": 14,
+        "refused": 0,
+        "toolMs": 9503,
+        "engineMs": 9471,
+        "relayMs": 32,
+        "localMs": 0,
+        "guardReads": 15,
+        "guardReadMs": 2126.935622,
+        "guardReadFailures": 0,
+        "otherMs": 1144
+      },
+      "passed": true,
+      "seconds": 41,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 15,
+      "costUsd": 0.0168221,
+      "reportedCostUsd": 0.4153920000000001,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 30,
+        "cacheRead": 766185,
+        "cacheWrite": 34751,
+        "output": 4414
+      },
+      "exitCode": 0,
+      "answer": "The request was submitted and the Helium window now shows the \"Request submitted\" screen, left open for cleanup.\n\nI made one misstep along the way: a click on the Project field landed on the still-open Category menu and changed Category to Operations. I set it back to Research, confirmed Project was"
+    },
+    {
+      "arm": "codex",
+      "task": "helium-spa",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 9,
+      "engineMs": 5044,
+      "footprint": {
+        "cpuSeconds": 4.92,
+        "group": {
+          "codex": 1.32,
+          "engine node": 0.75,
+          "node": 0.1,
+          "codex-code-mode-host": 0.08
+        },
+        "outside": {
+          "Helium": 0.76,
+          "engine helper": 1.91
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 2.66,
+          "client": 1.32,
+          "other": 0.18
+        }
+      },
+      "passed": true,
+      "seconds": 47.3,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 11,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 312082,
+        "cacheRead": 290432,
+        "cacheWrite": 0,
+        "output": 854
+      },
+      "exitCode": 0,
+      "answer": "Submitted the Research request for Orchid with code `7930452a`. The “Request submitted” screen remains visible, and the Helium window is open for cleanup."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-nested",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 6.85,
+        "group": {
+          "claude": 1.83,
+          "engine node": 0.65,
+          "mcp@latest": 0.49,
+          "node": 0.19,
+          "osascript": 0.29,
+          "codex": 0.39,
+          "(bash)": 0.01,
+          "(AgentPeekBridge)": 0.01,
+          "(zsh)": 0
+        },
+        "outside": {
+          "Safari": 0.62,
+          "engine helper": 2.37
+        },
+        "split": {
+          "sleight": 0.48,
+          "engine": 3.02,
+          "client": 1.83,
+          "other": 0.9
+        }
+      },
+      "timing": {
+        "totalMs": 46244,
+        "modelMs": 37609,
+        "calls": 11,
+        "refused": 0,
+        "toolMs": 7829,
+        "engineMs": 7682,
+        "relayMs": 32,
+        "localMs": 115,
+        "guardReads": 7,
+        "guardReadMs": 0.026791000002958754,
+        "guardReadFailures": 0,
+        "otherMs": 806
+      },
+      "passed": true,
+      "seconds": 47.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 12,
+      "costUsd": 0.0186829,
+      "reportedCostUsd": 0.4710104,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 24,
+        "cacheRead": 648872,
+        "cacheWrite": 48844,
+        "output": 4846
+      },
+      "exitCode": 0,
+      "answer": "The Coral report is selected and the path is still expanded: Collections → Science → Marine → Station → Reports. The window is left open.\n\nThe selection shows as \"Coral report e5d5a7b6\" in the text below the tree. The Coral report button itself doesn't show a highlight, so the text below is the only"
+    },
+    {
+      "arm": "codex",
+      "task": "safari-nested",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 9,
+      "engineMs": 6181,
+      "footprint": {
+        "cpuSeconds": 4.99,
+        "group": {
+          "codex": 1.43,
+          "engine node": 0.64,
+          "node": 0.1,
+          "codex-code-mode-host": 0.09
+        },
+        "outside": {
+          "Safari": 0.5,
+          "engine helper": 2.23
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 2.87,
+          "client": 1.43,
+          "other": 0.19
+        }
+      },
+      "passed": true,
+      "seconds": 54.5,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 11,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 316541,
+        "cacheRead": 293632,
+        "cacheWrite": 0,
+        "output": 812
+      },
+      "exitCode": 0,
+      "answer": "Expanded Collections → Science → Marine → Station → Reports and selected “Coral report 1bbf85a1.” The full path and selection are visible, and the Safari window remains open."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-nested",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.91,
+        "group": {
+          "claude": 1.41,
+          "engine node": 0.59,
+          "mcp@latest": 0.5,
+          "node": 0.18,
+          "osascript": 0.13,
+          "codex": 0.28,
+          "uv": 0.01,
+          "(Python)": 0.05,
+          "python3": 0.08,
+          "(git)": 0.01
+        },
+        "outside": {
+          "Helium": 0.53,
+          "engine helper": 1.14
+        },
+        "split": {
+          "sleight": 0.31,
+          "engine": 1.73,
+          "client": 1.41,
+          "other": 0.93
+        }
+      },
+      "timing": {
+        "totalMs": 18321,
+        "modelMs": 13204,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 4370,
+        "engineMs": 4347,
+        "relayMs": 23,
+        "localMs": 0,
+        "guardReads": 6,
+        "guardReadMs": 0.01954200000000128,
+        "guardReadFailures": 0,
+        "otherMs": 747
+      },
+      "passed": true,
+      "seconds": 19.8,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 8,
+      "costUsd": 0.0101987,
+      "reportedCostUsd": 0.2521946,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 16,
+        "cacheRead": 365553,
+        "cacheWrite": 27548,
+        "output": 2064
+      },
+      "exitCode": 0,
+      "answer": "The Coral report is selected and the path is still expanded in the Helium window at 127.0.0.1:64321/5fdd469b/.\n\nI clicked Collections, then expanded Science, Marine, Station and Reports in turn. Selecting \"Coral report 5fdd469b\" opened it, and the content area now shows \"Coral report 5fdd469b\" as th"
+    },
+    {
+      "arm": "codex",
+      "task": "helium-nested",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 8,
+      "engineMs": 4064,
+      "footprint": {
+        "cpuSeconds": 4.56,
+        "group": {
+          "codex": 1.4,
+          "engine node": 0.76,
+          "node": 0.1,
+          "codex-code-mode-host": 0.09
+        },
+        "outside": {
+          "Helium": 0.64,
+          "engine helper": 1.57
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 2.33,
+          "client": 1.4,
+          "other": 0.19
+        }
+      },
+      "passed": true,
+      "seconds": 40.2,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 10,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 282906,
+        "cacheRead": 260096,
+        "cacheWrite": 0,
+        "output": 544
+      },
+      "exitCode": 0,
+      "answer": "Expanded Collections → Science → Marine → Station → Reports and selected “Coral report 17fb8c03.” The full path and selection are visible, and the Helium window remains open."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-infinite",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 6.01,
+        "group": {
+          "claude": 1.58,
+          "engine node": 0.67,
+          "mcp@latest": 0.48,
+          "node": 0.19,
+          "osascript": 0.16,
+          "codex": 0.4,
+          "(bash)": 0,
+          "(vibe-island-brid)": 0.01
+        },
+        "outside": {
+          "Safari": 0.7,
+          "engine helper": 1.82
+        },
+        "split": {
+          "sleight": 0.35,
+          "engine": 2.49,
+          "client": 1.58,
+          "other": 0.89
+        }
+      },
+      "timing": {
+        "totalMs": 27923,
+        "modelMs": 20106,
+        "calls": 9,
+        "refused": 0,
+        "toolMs": 7022,
+        "engineMs": 6991,
+        "relayMs": 31,
+        "localMs": 0,
+        "guardReads": 8,
+        "guardReadMs": 0.03316799999720388,
+        "guardReadFailures": 0,
+        "otherMs": 795
+      },
+      "passed": true,
+      "seconds": 29.3,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 10,
+      "costUsd": 0.015271,
+      "reportedCostUsd": 0.3807628,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 20,
+        "cacheRead": 524389,
+        "cacheWrite": 41733,
+        "output": 3357
+      },
+      "exitCode": 0,
+      "answer": "Record 87 is reviewed in the target window. I entered \"Reviewed c12117d1\" as the review note and clicked Confirm review. The dialog is closed and the page now shows \"Record 87 reviewed\". I didn't touch any other tabs or windows, and the window is left open."
+    },
+    {
+      "arm": "codex",
+      "task": "safari-infinite",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 10,
+      "engineMs": 6577,
+      "footprint": {
+        "cpuSeconds": 5.41,
+        "group": {
+          "codex": 1.39,
+          "engine node": 0.68,
+          "node": 0.1,
+          "codex-code-mode-host": 0.1
+        },
+        "outside": {
+          "Safari": 0.64,
+          "engine helper": 2.5
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 3.18,
+          "client": 1.39,
+          "other": 0.2
+        }
+      },
+      "passed": true,
+      "seconds": 50,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 12,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 357035,
+        "cacheRead": 320128,
+        "cacheWrite": 0,
+        "output": 943
+      },
+      "exitCode": 0,
+      "answer": "Record 87 was confirmed with “Reviewed 2c3cb2b1”. The dialog is closed, “Record 87 reviewed” is visible, and the Safari window remains open."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-infinite",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.86,
+        "group": {
+          "claude": 1.29,
+          "engine node": 0.58,
+          "mcp@latest": 0.49,
+          "node": 0.18,
+          "osascript": 0.07,
+          "codex": 0.29,
+          "(open)": 0
+        },
+        "outside": {
+          "Helium": 0.68,
+          "engine helper": 1.28
+        },
+        "split": {
+          "sleight": 0.25,
+          "engine": 1.86,
+          "client": 1.29,
+          "other": 0.78
+        }
+      },
+      "timing": {
+        "totalMs": 17744,
+        "modelMs": 9462,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 7611,
+        "engineMs": 7594,
+        "relayMs": 17,
+        "localMs": 0,
+        "guardReads": 9,
+        "guardReadMs": 2367.2628330000002,
+        "guardReadFailures": 0,
+        "otherMs": 671
+      },
+      "passed": true,
+      "seconds": 19.3,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 5,
+      "costUsd": 0.0074829,
+      "reportedCostUsd": 0.18894919999999998,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 10,
+        "cacheRead": 208146,
+        "cacheWrite": 22912,
+        "output": 1636
+      },
+      "exitCode": 0,
+      "answer": "Record 87 is reviewed. I entered \"Reviewed 6860fb21\" in the Review note field, clicked Confirm review, and the dialog closed. The page now shows \"Record 87 reviewed\" in the records list.\n\nI did not see the note text after submitting, since the dialog closed. The page shows only the confirmation, so "
+    },
+    {
+      "arm": "codex",
+      "task": "helium-infinite",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 11,
+      "engineMs": 7957,
+      "footprint": {
+        "cpuSeconds": 6.06,
+        "group": {
+          "codex": 1.44,
+          "engine node": 0.92,
+          "node": 0.1,
+          "codex-code-mode-host": 0.11
+        },
+        "outside": {
+          "Helium": 0.93,
+          "engine helper": 2.56
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 3.48,
+          "client": 1.44,
+          "other": 0.21
+        }
+      },
+      "passed": true,
+      "seconds": 57.9,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 13,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 391041,
+        "cacheRead": 365184,
+        "cacheWrite": 0,
+        "output": 1031
+      },
+      "exitCode": 0,
+      "answer": "Record 87 was confirmed with “Reviewed 3ce53715”. The dialog is closed, “Record 87 reviewed” is visible, and the Helium window remains open."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-grid",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 2.55,
+        "group": {
+          "claude": 1.18,
+          "engine node": 0.57,
+          "mcp@latest": 0,
+          "node": 0.18,
+          "osascript": 0.07,
+          "codex": 0.26,
+          "(osascript)": 0
+        },
+        "outside": {
+          "Safari": 0.29,
+          "engine helper": 0
+        },
+        "split": {
+          "sleight": 0.25,
+          "engine": 0.57,
+          "client": 1.18,
+          "other": 0.26
+        }
+      },
+      "timing": {
+        "totalMs": 17095,
+        "modelMs": 13370,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 3230,
+        "engineMs": 3218,
+        "relayMs": 12,
+        "localMs": 0,
+        "guardReads": 5,
+        "guardReadMs": 1144.6819999999989,
+        "guardReadFailures": 0,
+        "otherMs": 495
+      },
+      "passed": true,
+      "seconds": 18.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 4,
+      "costUsd": 0.0080415,
+      "reportedCostUsd": 0.21265820000000002,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 8,
+        "cacheRead": 162306,
+        "cacheWrite": 25513,
+        "output": 2630
+      },
+      "exitCode": 0,
+      "answer": "I changed Orchid's budget from 275 to 125 and sorted the table by Budget ascending in the \"Personal — grid 1c14f71b\" Safari window. The rows now read Cedar 90, Orchid 125, Harbor 140, Maple 180, Willow 220, Juniper 260, Birch 310, Elm 350, Aspen 390, Pine 430, Spruce 470, Oak 510. The other budget v"
+    },
+    {
+      "arm": "codex",
+      "task": "safari-grid",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 3,
+      "engineMs": 3010,
+      "footprint": {
+        "cpuSeconds": 2.97,
+        "group": {
+          "codex": 1.08,
+          "engine node": 0.74,
+          "node": 0.1,
+          "codex-code-mode-host": 0.05
+        },
+        "outside": {
+          "Safari": 0.24,
+          "engine helper": 0.76
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 1.5,
+          "client": 1.08,
+          "other": 0.15
+        }
+      },
+      "passed": true,
+      "seconds": 21.4,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 5,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 130773,
+        "cacheRead": 96128,
+        "cacheWrite": 0,
+        "output": 369
+      },
+      "exitCode": 0,
+      "answer": "Changed Orchid’s Budget from 275 to 125 and sorted Budget ascending. Verified all other rows and values stayed unchanged. Left the Safari window open."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-grid",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.98,
+        "group": {
+          "claude": 1.39,
+          "engine node": 0.62,
+          "mcp@latest": 0.56,
+          "node": 0.22,
+          "Python": 0.07,
+          "(git)": 0.02,
+          "osascript": 0.19,
+          "codex": 0.28,
+          "(bash)": 0.01,
+          "(vibe-island-brid)": 0.01
+        },
+        "outside": {
+          "Helium": 0.49,
+          "engine helper": 1.12
+        },
+        "split": {
+          "sleight": 0.41,
+          "engine": 1.74,
+          "client": 1.39,
+          "other": 0.95
+        }
+      },
+      "timing": {
+        "totalMs": 18076,
+        "modelMs": 12758,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 4593,
+        "engineMs": 4567,
+        "relayMs": 26,
+        "localMs": 0,
+        "guardReads": 5,
+        "guardReadMs": 988.5167499999975,
+        "guardReadFailures": 0,
+        "otherMs": 725
+      },
+      "passed": true,
+      "seconds": 19.5,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 6,
+      "costUsd": 0.010522,
+      "reportedCostUsd": 0.26611759999999995,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 12,
+        "cacheRead": 271548,
+        "cacheWrite": 33484,
+        "output": 2217
+      },
+      "exitCode": 0,
+      "answer": "Orchid's budget is now 125 and the Budget column is sorted ascending. Cedar 90, Orchid 125, Harbor 140, Maple 180, Willow 220, Juniper 260, Birch 310, Elm 350, Aspen 390, Pine 430, Spruce 470, Oak 510. The Helium window is still open, and I did not touch any other tabs or windows.\n\nMy first attempt,"
+    },
+    {
+      "arm": "codex",
+      "task": "helium-grid",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 4,
+      "engineMs": 2541,
+      "footprint": {
+        "cpuSeconds": 3.24,
+        "group": {
+          "codex": 1.24,
+          "engine node": 0.7,
+          "node": 0.1,
+          "codex-code-mode-host": 0.05
+        },
+        "outside": {
+          "Helium": 0.35,
+          "engine helper": 0.8
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 1.5,
+          "client": 1.24,
+          "other": 0.15
+        }
+      },
+      "passed": true,
+      "seconds": 27.5,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 6,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 158839,
+        "cacheRead": 126592,
+        "cacheWrite": 0,
+        "output": 470
+      },
+      "exitCode": 0,
+      "answer": "Changed Orchid’s Budget from 275 to 125 and sorted Budget ascending. Verified every other row and value is unchanged. Left the Helium window open."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-editor",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 5.5,
+        "group": {
+          "claude": 1.46,
+          "engine node": 0.59,
+          "mcp@latest": 0.47,
+          "node": 0.25,
+          "bash": 0.02,
+          "(bash)": 0,
+          "(Python)": 0.02,
+          "osascript": 0.19,
+          "codex": 0.45,
+          "(vibe-island-brid)": 0.01,
+          "(uv)": 0.01,
+          "(python3.14)": 0.19
+        },
+        "outside": {
+          "Safari": 0.49,
+          "engine helper": 1.35
+        },
+        "split": {
+          "sleight": 0.44,
+          "engine": 1.94,
+          "client": 1.46,
+          "other": 1.17
+        }
+      },
+      "timing": {
+        "totalMs": 29162,
+        "modelMs": 23344,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 4800,
+        "engineMs": 4653,
+        "relayMs": 17,
+        "localMs": 130,
+        "guardReads": 5,
+        "guardReadMs": 1233.540208999997,
+        "guardReadFailures": 0,
+        "otherMs": 1018
+      },
+      "passed": true,
+      "seconds": 30.7,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 7,
+      "costUsd": 0.0109665,
+      "reportedCostUsd": 0.292755,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 14,
+        "cacheRead": 305820,
+        "cacheWrite": 28247,
+        "output": 4515
+      },
+      "exitCode": 0,
+      "answer": "The edit is done in the \"Personal — editor 41a202c2\" Safari window, and I left it open.\n\n- \"ship carefully\" is bold in the paragraph, and the rest of the paragraph is unchanged.\n- A third bullet, \"Archive notes 41a202c2\", is now below \"Review draft\" and \"Publish release\".\n- The title, headings, para"
+    },
+    {
+      "arm": "codex",
+      "task": "safari-editor",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 9,
+      "engineMs": 4647,
+      "footprint": {
+        "cpuSeconds": 5.87,
+        "group": {
+          "codex": 1.45,
+          "engine node": 0.73,
+          "node": 0.12,
+          "codex-code-mode-host": 0.1
+        },
+        "outside": {
+          "Safari": 0.7,
+          "engine helper": 2.77
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 3.5,
+          "client": 1.45,
+          "other": 0.22
+        }
+      },
+      "passed": true,
+      "seconds": 63.7,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 11,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 326919,
+        "cacheRead": 302336,
+        "cacheWrite": 0,
+        "output": 1407
+      },
+      "exitCode": 0,
+      "answer": "Done. Bolded only “ship carefully” and appended “Archive notes 3abdcc94” as the third bullet. All other content is unchanged, and the Safari window remains open."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-editor",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.64,
+        "group": {
+          "claude": 1.6,
+          "engine node": 0.68,
+          "mcp@latest": 0.46,
+          "node": 0.18,
+          "bash": 0.01,
+          "Python": 0.01,
+          "(bash)": 0,
+          "(Python)": 0.01,
+          "(grep)": 0,
+          "osascript": 0.15,
+          "codex": 0.39
+        },
+        "outside": {
+          "Helium": 1.15,
+          "engine helper": 0
+        },
+        "split": {
+          "sleight": 0.33,
+          "engine": 0.68,
+          "client": 1.6,
+          "other": 0.88
+        }
+      },
+      "timing": {
+        "totalMs": 42951,
+        "modelMs": 30289,
+        "calls": 7,
+        "refused": 0,
+        "toolMs": 11860,
+        "engineMs": 11828,
+        "relayMs": 32,
+        "localMs": 0,
+        "guardReads": 25,
+        "guardReadMs": 5680.837751999994,
+        "guardReadFailures": 0,
+        "otherMs": 802
+      },
+      "passed": true,
+      "seconds": 44.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 8,
+      "costUsd": 0.0135621,
+      "reportedCostUsd": 0.3636516000000001,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 16,
+        "cacheRead": 384338,
+        "cacheWrite": 33988,
+        "output": 5839
+      },
+      "exitCode": 0,
+      "answer": "I bolded \"ship carefully\" in the Release checklist paragraph and appended the bullet \"Archive notes 4dd57c1e\" after \"Publish release\" in the Helium editor window. The title, heading, paragraph text, and the two existing bullets are unchanged.\n\nMy first bold attempt landed on \"ip carefully e\" because"
+    },
+    {
+      "arm": "codex",
+      "task": "helium-editor",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 6,
+      "engineMs": 4100,
+      "footprint": {
+        "cpuSeconds": 4.61,
+        "group": {
+          "codex": 1.28,
+          "engine node": 0.7,
+          "node": 0.1,
+          "codex-code-mode-host": 0.07
+        },
+        "outside": {
+          "Helium": 0.65,
+          "engine helper": 1.81
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 2.51,
+          "client": 1.28,
+          "other": 0.17
+        }
+      },
+      "passed": true,
+      "seconds": 48.9,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 8,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 227783,
+        "cacheRead": 204928,
+        "cacheWrite": 0,
+        "output": 893
+      },
+      "exitCode": 0,
+      "answer": "Done. Bolded only “ship carefully” and added the third bullet “Archive notes fbc791cf”. All other content is unchanged, and the Helium window remains open."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-dense",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 3.84,
+        "group": {
+          "claude": 1.18,
+          "engine node": 0.54,
+          "mcp@latest": 0.49,
+          "node": 0.18,
+          "osascript": 0.18,
+          "(node)": 0.01,
+          "codex": 0.23
+        },
+        "outside": {
+          "Safari": 0.23,
+          "engine helper": 0.8
+        },
+        "split": {
+          "sleight": 0.37,
+          "engine": 1.34,
+          "client": 1.18,
+          "other": 0.72
+        }
+      },
+      "timing": {
+        "totalMs": 15707,
+        "modelMs": 12688,
+        "calls": 3,
+        "refused": 0,
+        "toolMs": 2467,
+        "engineMs": 2335,
+        "relayMs": 15,
+        "localMs": 117,
+        "guardReads": 1,
+        "guardReadMs": 0.006874999999126885,
+        "guardReadFailures": 0,
+        "otherMs": 552
+      },
+      "passed": true,
+      "seconds": 17.4,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 4,
+      "costUsd": 0.0099243,
+      "reportedCostUsd": 0.2574948,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 8,
+        "cacheRead": 152839,
+        "cacheWrite": 36303,
+        "output": 2269
+      },
+      "exitCode": 0,
+      "answer": "The \"Tidal observatory field notes\" article is open and visible in the Safari window \"Personal — dense 49a0f7d4\" (URL `127.0.0.1:49870/49a0f7d4/article/link-173`). I clicked the link on the archive page and didn't touch any other tabs or windows, and the window is left open.\n\nThe article page has no"
+    },
+    {
+      "arm": "codex",
+      "task": "safari-dense",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 3,
+      "engineMs": 2186,
+      "footprint": {
+        "cpuSeconds": 2.83,
+        "group": {
+          "codex": 1.1,
+          "engine node": 0.68,
+          "node": 0.09,
+          "codex-code-mode-host": 0.04
+        },
+        "outside": {
+          "Safari": 0.25,
+          "engine helper": 0.67
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 1.35,
+          "client": 1.1,
+          "other": 0.13
+        }
+      },
+      "passed": true,
+      "seconds": 19.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 5,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 141584,
+        "cacheRead": 114816,
+        "cacheWrite": 0,
+        "output": 276
+      },
+      "exitCode": 0,
+      "answer": "Opened “Tidal observatory field notes” and left the article visible in the specified Safari window. The window remains open for cleanup."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-dense",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.52,
+        "group": {
+          "claude": 1.29,
+          "engine node": 0.59,
+          "mcp@latest": 0.49,
+          "node": 0.18,
+          "(bash)": 0,
+          "osascript": 0.09,
+          "codex": 0.27,
+          "(AgentPeekBridge)": 0
+        },
+        "outside": {
+          "Helium": 0.58,
+          "engine helper": 1.03
+        },
+        "split": {
+          "sleight": 0.27,
+          "engine": 1.62,
+          "client": 1.29,
+          "other": 0.76
+        }
+      },
+      "timing": {
+        "totalMs": 15205,
+        "modelMs": 11018,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 3563,
+        "engineMs": 3538,
+        "relayMs": 25,
+        "localMs": 0,
+        "guardReads": 2,
+        "guardReadMs": 0.006665999999313499,
+        "guardReadFailures": 0,
+        "otherMs": 624
+      },
+      "passed": true,
+      "seconds": 16.7,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 5,
+      "costUsd": 0.0120823,
+      "reportedCostUsd": 0.30478479999999997,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 10,
+        "cacheRead": 237349,
+        "cacheWrite": 43679,
+        "output": 1944
+      },
+      "exitCode": 0,
+      "answer": "The \"Tidal observatory field notes\" article is now open and visible in the Helium window at `127.0.0.1:50111/723b0178/article/link-173`. I left the window open and did not touch any other tabs or windows.\n\nThe archive lists 100 items at a time, so I scrolled the page to load the 140–240 range, where"
+    },
+    {
+      "arm": "codex",
+      "task": "helium-dense",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 4,
+      "engineMs": 3338,
+      "footprint": {
+        "cpuSeconds": 3.58,
+        "group": {
+          "codex": 1.21,
+          "engine node": 0.69,
+          "node": 0.1,
+          "codex-code-mode-host": 0.06
+        },
+        "outside": {
+          "Helium": 0.57,
+          "engine helper": 0.95
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 1.64,
+          "client": 1.21,
+          "other": 0.16
+        }
+      },
+      "passed": true,
+      "seconds": 32.3,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 6,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 172778,
+        "cacheRead": 141568,
+        "cacheWrite": 0,
+        "output": 506
+      },
+      "exitCode": 0,
+      "answer": "Opened “Tidal observatory field notes” and left the article visible in the Helium window. The window remains open for cleanup."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-spa",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 5.89,
+        "group": {
+          "claude": 1.74,
+          "engine node": 0.66,
+          "mcp@latest": 0.51,
+          "node": 0.19,
+          "osascript": 0.29,
+          "codex": 0.36
+        },
+        "outside": {
+          "Safari": 0.74,
+          "engine helper": 1.4
+        },
+        "split": {
+          "sleight": 0.48,
+          "engine": 2.06,
+          "client": 1.74,
+          "other": 0.87
+        }
+      },
+      "timing": {
+        "totalMs": 28286,
+        "modelMs": 20450,
+        "calls": 10,
+        "refused": 0,
+        "toolMs": 6831,
+        "engineMs": 6677,
+        "relayMs": 35,
+        "localMs": 119,
+        "guardReads": 10,
+        "guardReadMs": 678.9247499999992,
+        "guardReadFailures": 0,
+        "otherMs": 1005
+      },
+      "passed": true,
+      "seconds": 30.2,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 11,
+      "costUsd": 0.0146733,
+      "reportedCostUsd": 0.3628316,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 22,
+        "cacheRead": 545818,
+        "cacheWrite": 38312,
+        "output": 3101
+      },
+      "exitCode": 0,
+      "answer": "The request is submitted. The Safari window (Personal — spa 0ee8261b) now shows the \"Request submitted\" screen, and I've left it open. I didn't touch any other tabs or windows.\n\nThe request has Research as the category, Orchid as the project, and 0ee8261b as the code."
+    },
+    {
+      "arm": "codex",
+      "task": "safari-spa",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 7,
+      "engineMs": 4530,
+      "footprint": {
+        "cpuSeconds": 4.81,
+        "group": {
+          "codex": 1.46,
+          "engine node": 0.69,
+          "node": 0.17,
+          "codex-code-mode-host": 0.09
+        },
+        "outside": {
+          "Safari": 0.66,
+          "engine helper": 1.74
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 2.43,
+          "client": 1.46,
+          "other": 0.26
+        }
+      },
+      "passed": true,
+      "seconds": 41.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 9,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 255904,
+        "cacheRead": 234112,
+        "cacheWrite": 0,
+        "output": 671
+      },
+      "exitCode": 0,
+      "answer": "Submitted with Category Research, Project Orchid, and Code 052854b9. The “Request submitted” screen remains visible, and the Safari window is open."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-spa",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 8.06,
+        "group": {
+          "claude": 2.21,
+          "engine node": 0.72,
+          "mcp@latest": 0.48,
+          "node": 0.19,
+          "Python": 0.04,
+          "osascript": 0.19,
+          "codex": 0.37,
+          "(bash)": 0.01,
+          "(AgentPeekBridge)": 0.01,
+          "(zsh)": 0
+        },
+        "outside": {
+          "Helium": 1.45,
+          "engine helper": 2.39
+        },
+        "split": {
+          "sleight": 0.38,
+          "engine": 3.11,
+          "client": 2.21,
+          "other": 0.91
+        }
+      },
+      "timing": {
+        "totalMs": 42933,
+        "modelMs": 30980,
+        "calls": 17,
+        "refused": 0,
+        "toolMs": 10700,
+        "engineMs": 10533,
+        "relayMs": 51,
+        "localMs": 116,
+        "guardReads": 16,
+        "guardReadMs": 2275.446580999992,
+        "guardReadFailures": 0,
+        "otherMs": 1253
+      },
+      "passed": true,
+      "seconds": 44.5,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 18,
+      "costUsd": 0.0191431,
+      "reportedCostUsd": 0.46923819999999994,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 36,
+        "cacheRead": 934121,
+        "cacheWrite": 36554,
+        "output": 4975
+      },
+      "exitCode": 0,
+      "answer": "The request is submitted and the Helium window is showing the \"Request submitted\" screen, which I'm leaving open.\n\nI submitted with Category Research, Project Orchid, and Code 2eb194fd. Partway through, a click landed on the still-open Category dropdown and switched it to Operations. I set it back t"
+    },
+    {
+      "arm": "codex",
+      "task": "helium-spa",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 12,
+      "engineMs": 7293,
+      "footprint": {
+        "cpuSeconds": 5.72,
+        "group": {
+          "codex": 1.48,
+          "engine node": 0.67,
+          "node": 0.1,
+          "codex-code-mode-host": 0.1
+        },
+        "outside": {
+          "Helium": 1.06,
+          "engine helper": 2.31
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 2.98,
+          "client": 1.48,
+          "other": 0.2
+        }
+      },
+      "passed": true,
+      "seconds": 49.9,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 14,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 421847,
+        "cacheRead": 397696,
+        "cacheWrite": 0,
+        "output": 742
+      },
+      "exitCode": 0,
+      "answer": "Submitted the request with Research, Orchid, and code `5b810b85`. The Request submitted screen is visible, and the Helium window remains open."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-nested",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 6.1,
+        "group": {
+          "claude": 1.69,
+          "engine node": 0.7,
+          "mcp@latest": 0.55,
+          "node": 0.21,
+          "osascript": 0.3,
+          "codex": 0.37
+        },
+        "outside": {
+          "Safari": 0.51,
+          "engine helper": 1.77
+        },
+        "split": {
+          "sleight": 0.51,
+          "engine": 2.47,
+          "client": 1.69,
+          "other": 0.92
+        }
+      },
+      "timing": {
+        "totalMs": 34387,
+        "modelMs": 26683,
+        "calls": 10,
+        "refused": 0,
+        "toolMs": 6792,
+        "engineMs": 6639,
+        "relayMs": 25,
+        "localMs": 128,
+        "guardReads": 6,
+        "guardReadMs": 0.021791999998640676,
+        "guardReadFailures": 0,
+        "otherMs": 912
+      },
+      "passed": true,
+      "seconds": 36.2,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 11,
+      "costUsd": 0.0157989,
+      "reportedCostUsd": 0.3993542,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 22,
+        "cacheRead": 548881,
+        "cacheWrite": 40942,
+        "output": 4239
+      },
+      "exitCode": 0,
+      "answer": "Collections, Science, Marine, Station and Reports are all expanded, and \"Coral report 5e44e57c\" is selected. The page's editing area now shows \"Coral report 5e44e57c\" below the tree.\n\nThe report button itself has no visible highlight, and the pointer overlay sits on top of it, so the selection is co"
+    },
+    {
+      "arm": "codex",
+      "task": "safari-nested",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 10,
+      "engineMs": 6079,
+      "footprint": {
+        "cpuSeconds": 4.83,
+        "group": {
+          "codex": 1.34,
+          "engine node": 0.75,
+          "node": 0.1,
+          "codex-code-mode-host": 0.1
+        },
+        "outside": {
+          "Safari": 0.48,
+          "engine helper": 2.06
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 2.81,
+          "client": 1.34,
+          "other": 0.2
+        }
+      },
+      "passed": true,
+      "seconds": 51.9,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 12,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 352623,
+        "cacheRead": 328960,
+        "cacheWrite": 0,
+        "output": 925
+      },
+      "exitCode": 0,
+      "answer": "Expanded Collections → Science → Marine → Station → Reports and selected “Coral report 0e7891fb.” The whole path and selection remain visible, and the Safari window is open."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-nested",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 5.26,
+        "group": {
+          "claude": 1.55,
+          "engine node": 0.63,
+          "mcp@latest": 0.53,
+          "node": 0.19,
+          "osascript": 0.15,
+          "codex": 0.32
+        },
+        "outside": {
+          "Helium": 0.58,
+          "engine helper": 1.31
+        },
+        "split": {
+          "sleight": 0.34,
+          "engine": 1.94,
+          "client": 1.55,
+          "other": 0.85
+        }
+      },
+      "timing": {
+        "totalMs": 21861,
+        "modelMs": 16365,
+        "calls": 8,
+        "refused": 0,
+        "toolMs": 4703,
+        "engineMs": 4666,
+        "relayMs": 37,
+        "localMs": 0,
+        "guardReads": 6,
+        "guardReadMs": 0.022083999997903447,
+        "guardReadFailures": 0,
+        "otherMs": 793
+      },
+      "passed": true,
+      "seconds": 23.3,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 9,
+      "costUsd": 0.0117134,
+      "reportedCostUsd": 0.2918552,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 18,
+        "cacheRead": 422291,
+        "cacheWrite": 30741,
+        "output": 2681
+      },
+      "exitCode": 0,
+      "answer": "The \"Coral report ae21c425\" path is expanded in the Helium window: Collections, then Science, Marine, Station and Reports. The report button is selected and its heading shows in the page. The window is left open, and I did not touch any other tabs or windows."
+    },
+    {
+      "arm": "codex",
+      "task": "helium-nested",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 8,
+      "engineMs": 4035,
+      "footprint": {
+        "cpuSeconds": 4.32,
+        "group": {
+          "codex": 1.32,
+          "engine node": 0.76,
+          "node": 0.1,
+          "codex-code-mode-host": 0.08
+        },
+        "outside": {
+          "Helium": 0.59,
+          "engine helper": 1.47
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 2.23,
+          "client": 1.32,
+          "other": 0.18
+        }
+      },
+      "passed": true,
+      "seconds": 37,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 10,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 280571,
+        "cacheRead": 258304,
+        "cacheWrite": 0,
+        "output": 751
+      },
+      "exitCode": 0,
+      "answer": "Expanded Collections → Science → Marine → Station → Reports and selected “Coral report 19eeb66c.” The whole path and selection are visible, and the Helium window remains open."
+    },
+    {
+      "arm": "sleight",
+      "task": "safari-infinite",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 5.98,
+        "group": {
+          "claude": 1.64,
+          "engine node": 0.74,
+          "mcp@latest": 0.52,
+          "node": 0.18,
+          "osascript": 0.16,
+          "codex": 0.37
+        },
+        "outside": {
+          "Safari": 0.63,
+          "engine helper": 1.74
+        },
+        "split": {
+          "sleight": 0.34,
+          "engine": 2.48,
+          "client": 1.64,
+          "other": 0.89
+        }
+      },
+      "timing": {
+        "totalMs": 27762,
+        "modelMs": 19370,
+        "calls": 9,
+        "refused": 0,
+        "toolMs": 7544,
+        "engineMs": 7507,
+        "relayMs": 37,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 795.3359560000008,
+        "guardReadFailures": 0,
+        "otherMs": 848
+      },
+      "passed": true,
+      "seconds": 29.2,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 10,
+      "costUsd": 0.0154619,
+      "reportedCostUsd": 0.38429359999999996,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 20,
+        "cacheRead": 528218,
+        "cacheWrite": 42846,
+        "output": 3217
+      },
+      "exitCode": 0,
+      "answer": "Record 87 is reviewed. I scrolled until all 100 records loaded, opened Record 87, entered \"Reviewed 77eae0c9\" as the review note, and clicked Confirm review. The dialog closed and the page now shows \"Record 87 reviewed\". I only used the Safari window showing `127.0.0.1:52542/77eae0c9/` and left it o"
+    },
+    {
+      "arm": "codex",
+      "task": "safari-infinite",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 11,
+      "engineMs": 6815,
+      "footprint": {
+        "cpuSeconds": 5.87,
+        "group": {
+          "codex": 1.48,
+          "engine node": 0.7,
+          "node": 0.1,
+          "codex-code-mode-host": 0.09
+        },
+        "outside": {
+          "Safari": 0.69,
+          "engine helper": 2.81
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 3.51,
+          "client": 1.48,
+          "other": 0.19
+        }
+      },
+      "passed": true,
+      "seconds": 60.7,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 13,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 399710,
+        "cacheRead": 373120,
+        "cacheWrite": 0,
+        "output": 713
+      },
+      "exitCode": 0,
+      "answer": "Record 87 was confirmed with “Reviewed 091db1d6”. The dialog is closed, “Record 87 reviewed” is visible, and the Safari window remains open."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-infinite",
+      "run": 2,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 5.36,
+        "group": {
+          "claude": 1.38,
+          "engine node": 0.6,
+          "mcp@latest": 0.53,
+          "node": 0.18,
+          "(Python)": 0.06,
+          "(git)": 0,
+          "osascript": 0.16,
+          "codex": 0.29
+        },
+        "outside": {
+          "Helium": 0.7,
+          "engine helper": 1.46
+        },
+        "split": {
+          "sleight": 0.34,
+          "engine": 2.06,
+          "client": 1.38,
+          "other": 0.88
+        }
+      },
+      "timing": {
+        "totalMs": 20095,
+        "modelMs": 11786,
+        "calls": 5,
+        "refused": 0,
+        "toolMs": 7602,
+        "engineMs": 7577,
+        "relayMs": 25,
+        "localMs": 0,
+        "guardReads": 9,
+        "guardReadMs": 1846.4898339999972,
+        "guardReadFailures": 0,
+        "otherMs": 707
+      },
+      "passed": true,
+      "seconds": 21.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 6,
+      "costUsd": 0.0091177,
+      "reportedCostUsd": 0.2285038,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 12,
+        "cacheRead": 265579,
+        "cacheWrite": 27696,
+        "output": 1843
+      },
+      "exitCode": 0,
+      "answer": "Record 87 is confirmed as reviewed. The dialog is closed and the page shows \"Record 87 reviewed\" with the record list still loaded. I left the Helium window open and did not touch any other tabs or windows."
+    },
+    {
+      "arm": "codex",
+      "task": "helium-infinite",
+      "run": 2,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 11,
+      "engineMs": 7390,
+      "footprint": {
+        "cpuSeconds": 6.01,
+        "group": {
+          "codex": 1.4,
+          "engine node": 0.76,
+          "node": 0.12,
+          "codex-code-mode-host": 0.1
+        },
+        "outside": {
+          "Helium": 1,
+          "engine helper": 2.63
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 3.39,
+          "client": 1.4,
+          "other": 0.22
+        }
+      },
+      "passed": true,
+      "seconds": 63,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": false,
+          "running": true,
+          "pid": 20805,
+          "launched": true,
+          "fresh": false
+        }
+      ],
+      "turns": 13,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 384930,
+        "cacheRead": 347904,
+        "cacheWrite": 0,
+        "output": 1043
+      },
+      "exitCode": 0,
+      "answer": "Record 87 was confirmed with “Reviewed d33d9a06”. The dialog is closed, “Record 87 reviewed” is visible, and the Helium window remains open."
+    }
+  ]
+}

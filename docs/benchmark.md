@@ -66,6 +66,33 @@ Codex does not expose isolated model API time in its CLI stream, so its `modelMs
 model-gap measurement includes host scheduling. [Battery limits](known-problems.md#parity-battery)
 list what these checks cannot establish.
 
+## Browser head-to-head
+
+sleight against Codex on the 12 web tasks (grid, editor, dense, spa, nested and infinite pages in
+Safari and Helium, native windows), 2 runs each, the owner away, 13:14 to 13:45 UTC on 2026-10-11
+([raw](benchmarks/2026-10-11-web-h2h.json)). Claude ran Haiku 5.5 at high and Codex gpt-6.1-sol at
+high. The arms differ in model as well as harness. Codex lanes ran their checks on the same Mac
+for part of the pass. Both arms passed 24/24. sleight averaged 28.5 s a run (median 24.6 s), Codex
+41.8 s (median 43.4 s), and sleight was faster on 11 of 12 tasks.
+
+| Task | sleight s | Codex s | sleight turns | Codex turns |
+|---|---|---|---|---|
+| safari-grid | 18.8 | 26.0 | 4.5 | 5.5 |
+| safari-editor | 28.3 | 45.2 | 6.5 | 8.5 |
+| safari-dense | 15.1 | 19.8 | 4 | 5 |
+| safari-spa | 29.2 | 43.4 | 11 | 10 |
+| safari-nested | 41.9 | 53.2 | 11.5 | 11.5 |
+| safari-infinite | 29.2 | 55.4 | 10 | 12.5 |
+| helium-grid | 20.6 | 24.9 | 6 | 5.5 |
+| helium-editor | 56.8 | 54.5 | 9 | 9.5 |
+| helium-dense | 17.8 | 30.9 | 5 | 6.5 |
+| helium-spa | 42.8 | 48.6 | 16.5 | 12.5 |
+| helium-nested | 21.6 | 38.6 | 8.5 | 10 |
+| helium-infinite | 20.5 | 60.5 | 5.5 | 13 |
+
+sleight used more CPU: 5.48 s of its own processes a run against 4.45 s for Codex, counting Claude
+Code's process in sleight's arm.
+
 ## Earlier benchmarks
 
 `bench/` runs each task through headless `claude -p` and checks it outside the agent, against the file
