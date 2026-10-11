@@ -786,7 +786,11 @@ our own runs. Dates and engine versions are given where they matter.
   and underline exact. Whether TextEdit's own AX read of a pasted word matches under the fixed
   comparison is unverified until a live move:
   `SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background` must report
-  exactText and formatPreserved true and exit 0.
+  exactText and formatPreserved true and exit 0. The live runs after the fix, at 02:38 and 02:41 UTC on
+  2026-10-11, both stopped earlier, with "No enabled TextEdit Paste menu item": the text unchanged and the
+  clipboard restored. sleight requires the Paste item's AXEnabled, and in a background TextEdit that
+  may read false (inferred: no key window, or validation from an earlier moment). The 00:45 run got
+  past it.
 - Driving Helium's Claude Console tab from a session that had used the engine (2026-10-11), the input
   lease refused `browser.nameSession(...)` and later `tab.goto(...)` on a tab from `cua.getTab` with
   "a bundle ID and full window header are required", the native-app refusal, after `cua.getState()`.

@@ -1,0 +1,389 @@
+{
+  "started": "2026-10-11T02:40:11.338Z",
+  "bank": "/private/tmp/sleight-textedit-fixes-dA5zZM",
+  "plain": false,
+  "legacy": false,
+  "move": true,
+  "orphan": false,
+  "misspelled": false,
+  "openBackground": true,
+  "richTextMoveEnabled": true,
+  "load": [
+    4.14208984375,
+    3.68603515625,
+    3.75390625
+  ],
+  "trials": [
+    {
+      "op": "preflight",
+      "result": {
+        "id": 0,
+        "ok": true,
+        "running": false,
+        "foregroundTextEdit": false,
+        "documents": null,
+        "frontPid": 20805,
+        "hidden": null,
+        "onScreenWindows": null
+      }
+    },
+    {
+      "op": "open",
+      "result": {
+        "id": 1,
+        "ok": true,
+        "text": "alpha beta gamma\n",
+        "selected": "",
+        "foregroundSame": true,
+        "attributedText": "alpha beta gamma\n",
+        "spellingAnnotations": [
+          {
+            "key": "AXMisspelled",
+            "marked": false
+          },
+          {
+            "key": "AXMarkedMisspelled",
+            "marked": false
+          }
+        ],
+        "characters": [
+          {
+            "index": 0,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1",
+            "rgba": [
+              0.86275,
+              0,
+              0,
+              1
+            ]
+          },
+          {
+            "index": 4,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1",
+            "rgba": [
+              0.86275,
+              0,
+              0,
+              1
+            ]
+          },
+          {
+            "index": 6,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          },
+          {
+            "index": 11,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          },
+          {
+            "index": 15,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          }
+        ]
+      }
+    },
+    {
+      "op": "prepare",
+      "result": {
+        "id": 2,
+        "ok": true,
+        "app": "TextEdit",
+        "windowId": 294047,
+        "from": [
+          20.951660000000004,
+          108.5
+        ],
+        "to": [
+          126.27539100000001,
+          108.5
+        ],
+        "settleMs": 0,
+        "covered": true,
+        "foregroundSame": true,
+        "candidates": [
+          {
+            "fixtureName": true,
+            "position": [
+              217,
+              99
+            ],
+            "size": [
+              600,
+              400
+            ],
+            "documentMatches": true
+          }
+        ],
+        "cgBounds": {
+          "X": 217,
+          "Height": 400,
+          "Y": 99,
+          "Width": 600
+        }
+      }
+    },
+    {
+      "op": "drag",
+      "load": [
+        4.14208984375,
+        3.68603515625,
+        3.75390625
+      ],
+      "result": {
+        "ok": true,
+        "app": "TextEdit",
+        "windowId": 294047,
+        "from": [
+          20.951660000000004,
+          108.5
+        ],
+        "to": [
+          126.27539100000001,
+          108.5
+        ],
+        "coordinates": "window points: no engine screenshot of this app yet",
+        "path": "accessibility",
+        "fallbackReason": "background skipped: Helium covers the window at the drag points",
+        "richPasteState": "not-posted",
+        "textChanged": false,
+        "richTextMove": {
+          "rtf": "e1xydGYxXGFuc2lcYW5zaWNwZzEyNTJcY29jb2FydGYyOTA3Clxjb2NvYXRleHRzY2FsaW5nMFxjb2NvYXBsYXRmb3JtMHtcZm9udHRibFxmMFxmc3dpc3NcZmNoYXJzZXQwIEhlbHZldGljYS1Cb2xkO30Ke1xjb2xvcnRibDtccmVkMjU1XGdyZWVuMjU1XGJsdWUyNTU7XHJlZDIyMFxncmVlbjBcYmx1ZTA7fQp7XCpcZXhwYW5kZWRjb2xvcnRibDs7XGNzZ2VuZXJpY3JnYlxjODYyNzVcYzBcYzA7fQpccGFyZFx0eDU2MFx0eDExMjBcdHgxNjgwXHR4MjI0MFx0eDI4MDBcdHgzMzYwXHR4MzkyMFx0eDQ0ODBcdHg1MDQwXHR4NTYwMFx0eDYxNjBcdHg2NzIwXHBhcmRpcm5hdHVyYWxccGFydGlnaHRlbmZhY3RvcjAKClxmMFxiXGZzMjggXGNmMiAgYWxwaGF9",
+          "sourceRTF": "e1xydGYxXGFuc2lcYW5zaWNwZzEyNTJcY29jb2FydGYyOTA3Clxjb2NvYXRleHRzY2FsaW5nMFxjb2NvYXBsYXRmb3JtMHtcZm9udHRibFxmMFxmc3dpc3NcZmNoYXJzZXQwIEhlbHZldGljYS1Cb2xkO30Ke1xjb2xvcnRibDtccmVkMjU1XGdyZWVuMjU1XGJsdWUyNTU7XHJlZDIyMFxncmVlbjBcYmx1ZTA7fQp7XCpcZXhwYW5kZWRjb2xvcnRibDs7XGNzZ2VuZXJpY3JnYlxjODYyNzVcYzBcYzA7fQpccGFyZFx0eDU2MFx0eDExMjBcdHgxNjgwXHR4MjI0MFx0eDI4MDBcdHgzMzYwXHR4MzkyMFx0eDQ0ODBcdHg1MDQwXHR4NTYwMFx0eDYxNjBcdHg2NzIwXHBhcmRpcm5hdHVyYWxccGFydGlnaHRlbmZhY3RvcjAKClxmMFxiXGZzMjggXGNmMiBhbHBoYX0=",
+          "pid": 28739,
+          "text": "alpha beta gamma\n",
+          "selected": "alpha",
+          "windowId": 294047,
+          "dest": 16,
+          "src": 0,
+          "cutFrom": 0,
+          "cutTo": 6,
+          "insert": " alpha"
+        }
+      }
+    },
+    {
+      "op": "drag",
+      "load": [
+        4.05029296875,
+        3.67431640625,
+        3.7490234375
+      ],
+      "result": {
+        "ok": false,
+        "app": "TextEdit",
+        "windowId": 294047,
+        "from": [
+          20.951660000000004,
+          108.5
+        ],
+        "to": [
+          126.27539100000001,
+          108.5
+        ],
+        "coordinates": "window points: no engine screenshot of this app yet",
+        "path": "accessibility",
+        "fallbackReason": "background skipped: Helium covers the window at the drag points",
+        "richPasteState": "not-posted",
+        "textChanged": false,
+        "error": "No enabled TextEdit Paste menu item; nothing was changed. Read the window before continuing."
+      }
+    },
+    {
+      "op": "read",
+      "result": {
+        "id": 3,
+        "ok": true,
+        "text": "alpha beta gamma\n",
+        "selected": "",
+        "foregroundSame": true,
+        "attributedText": "alpha beta gamma\n",
+        "spellingAnnotations": [
+          {
+            "key": "AXMisspelled",
+            "marked": false
+          },
+          {
+            "key": "AXMarkedMisspelled",
+            "marked": false
+          }
+        ],
+        "characters": [
+          {
+            "index": 0,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1",
+            "rgba": [
+              0.86275,
+              0,
+              0,
+              1
+            ]
+          },
+          {
+            "index": 4,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1",
+            "rgba": [
+              0.86275,
+              0,
+              0,
+              1
+            ]
+          },
+          {
+            "index": 6,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          },
+          {
+            "index": 11,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          },
+          {
+            "index": 15,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          }
+        ]
+      }
+    },
+    {
+      "op": "save",
+      "result": {
+        "id": 4,
+        "ok": true,
+        "saved": true,
+        "characters": [
+          {
+            "index": 0,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1",
+            "rgba": [
+              0.86275,
+              0,
+              0,
+              1
+            ]
+          },
+          {
+            "index": 4,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1",
+            "rgba": [
+              0.86275,
+              0,
+              0,
+              1
+            ]
+          },
+          {
+            "index": 6,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          },
+          {
+            "index": 11,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          },
+          {
+            "index": 15,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          }
+        ]
+      }
+    },
+    {
+      "op": "close",
+      "result": {
+        "id": 5,
+        "ok": true,
+        "closed": true,
+        "foregroundSame": true
+      }
+    }
+  ],
+  "source": {
+    "bench/textedit-fixes.mjs": "02fe6b573dfa5779b12c4da30a7240d4eb2931c81c39d1738b65aee75b56b85b",
+    "bench/textedit-fixes-fixture.js": "5db2d943c12746ffee77db75416348090f45631abdf3cd9f5081c6a70620669b",
+    "bench/textedit-fixes-drag.js": "10da9678ac0b0853a39850b1adeef9060267fd72484cced8a8a1c06698a12edc",
+    "bench/textedit-fixes-check.mjs": "33d7617c66feafcfe8b80d3da7077628940c3f26e2ba6ab09252d3eeb35f81f9",
+    "plugins/sleight/lib/drag.js": "b80dde9a7f3667d086f9747246a7f2c7cc00a524fe2e2aa3910cb744d98662c5",
+    "plugins/sleight/lib/rich-text-drag.mjs": "278c92d04bc81a7106007f58fc2cbd360c9774ddee10d8db882545d8d68399b9",
+    "plugins/sleight/lib/clipboard.mjs": "ec9ef8529386028b0a721718486726fe81fb10930ac43d7e257f68a94b9adf00",
+    "plugins/sleight/lib/clipboard.js": "ad6a3c1f34bd434a41acffa151c512f65b295f2e3cf66f2d745d9f93b7a448fa",
+    "plugins/sleight/lib/app-health.js": "e9d52540407b244c6fd601c8023630bce65023720406968bf804da9cbf99f7eb"
+  },
+  "health": {
+    "status": "absent"
+  },
+  "backgroundOpen": true,
+  "moveResult": {
+    "ok": false,
+    "app": "TextEdit",
+    "windowId": 294047,
+    "from": [
+      20.951660000000004,
+      108.5
+    ],
+    "to": [
+      126.27539100000001,
+      108.5
+    ],
+    "coordinates": "window points: no engine screenshot of this app yet",
+    "path": "accessibility",
+    "fallbackReason": "background skipped: Helium covers the window at the drag points",
+    "richPasteState": "not-posted",
+    "textChanged": false,
+    "error": "No enabled TextEdit Paste menu item; nothing was changed. Read the window before continuing.",
+    "clipboardRestored": true
+  },
+  "clipboardBytesPreserved": true,
+  "exactText": false,
+  "formatPreserved": false,
+  "documentClosed": true,
+  "error": "Move, formatting, plain-path or clipboard verification failed",
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixtureCollected": true,
+  "lockReleased": true,
+  "finished": "2026-10-11T02:40:23.443Z",
+  "loadAfter": [
+    4.3662109375,
+    3.74609375,
+    3.77392578125
+  ]
+}

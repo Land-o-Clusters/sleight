@@ -26,7 +26,9 @@ savelock-engine. The bench arms get their own
 `CLAUDE_CONFIG_DIR` in API mode (OpenUsage, below). The live lock and hold are free.
 
 Lanes out (each pushes `codex/<name>` to private and doesn't merge; briefs in `.dev/prompts/`):
-GLM's selectall-check and richmove-format, Grok's savelock-engine (the last two handed out 02:20 UTC).
+GLM's selectall-check and Grok's savelock-engine (handed out 02:20 UTC). richmove-format merged
+(`edd09ee`). Its live check then stopped at a disabled Paste item twice, and richmove-paste (GLM)
+is the follow-up.
 The owner now gets each lane as one paste-ready prompt with the model named.
 Codex hasn't started lease-select (Best Buy's lease refusals and tonight's browser-tab refusals),
 sim-readiness or speed-research. They wait for its quota to reset, with prompts ready. saveclose-research found the next speed lever for speed-research.
