@@ -15,13 +15,16 @@ in the Save sheet, in a run that didn't record Claude's code. VS Code, Cursor an
 5/5. Merged: spawns, the results page fix, the rich-text clipboard fix, the save-lock experiment
 script. Codex is out of quota until later tonight (owner).
 
-Next, in order (evidence for each in `docs/benchmarks/2026-10-11-evidence.md`):
-1. Codex builds four briefs once its quota resets (`.dev/prompts/sol-common-2026-10-11.md` first):
-   `sol-lease-select.md` (Best Buy's lease refusals), `sol-bench-textedit.md` (iCloud leftovers,
-   select-all, save-lock delivery, rich-move placement), `sol-bench-fixtures.md` (simulator
-   readiness, stale-number, Chess points, shop and chat checks) and `sol-research-speed.md`.
-2. sleight-arch reviews and merges them, then one away window verifies them all live.
-3. The release gate (ROADMAP 3.5 and 5b.1) and the release pass. The owner takes Windows and the
+Lanes out (2026-10-11 01:10 UTC, briefs in `.dev/prompts/lane-*.md` after
+`lane-rules-2026-10-11.md`). Grok has icloud-textedit, savelock-delivery, chess-points, chat-crash
+and panel-busy. GLM has selectall-check, richmove-placement, livechecks, shop-check,
+saveclose-research and release-docs. Codex, once its quota resets, takes lease-select,
+sim-readiness and speed-research. Evidence for all of them is in
+`docs/benchmarks/2026-10-11-evidence.md`.
+
+Next, in order:
+1. Review and merge each lane as it reports, then one away window verifies them live.
+2. The release gate (ROADMAP 3.5 and 5b.1) and the release pass. The owner takes Windows and the
    directory listing tomorrow.
 
 **Where work goes.** Work in progress is private between releases (LAWS): `remote.pushDefault
