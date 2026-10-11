@@ -1,0 +1,187 @@
+{
+  "stamp": "2026-10-11T15-32-46-442Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "ownerPresent": false,
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "real-shop-target",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 27.96,
+        "group": {
+          "claude": 4.85,
+          "engine node": 1.59,
+          "mcp@latest": 0.7,
+          "node": 0.33,
+          "osascript": 0.4,
+          "codex": 0.36,
+          "(node)": 0.03,
+          "(bash)": 0,
+          "(vibe-island-brid)": 0.01
+        },
+        "outside": {
+          "Safari": 8.39,
+          "engine helper": 11.3
+        },
+        "split": {
+          "sleight": 0.76,
+          "engine": 12.89,
+          "client": 4.85,
+          "other": 1.07
+        }
+      },
+      "timing": {
+        "totalMs": 183621,
+        "modelMs": 138256,
+        "calls": 43,
+        "refused": 0,
+        "toolMs": 42596,
+        "engineMs": 41976,
+        "relayMs": 154,
+        "localMs": 466,
+        "guardReads": 55,
+        "guardReadMs": 15605.447627999996,
+        "guardReadFailures": 0,
+        "otherMs": 2769
+      },
+      "passed": false,
+      "reason": "answer does not name up&up Paper Towels, Goodfellow & Co Crewneck T-Shirt, Threshold Cozy Knit Throw",
+      "seconds": 185.7,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 45,
+      "costUsd": 0.1131148,
+      "reportedCostUsd": 2.845464,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 88,
+        "cacheRead": 3815955,
+        "cacheWrite": 294884,
+        "output": 24828
+      },
+      "exitCode": 0,
+      "answer": "The cart page now shows all three items, with an estimated total of $59.55 for pickup at Mpls Nicollet Mall. I stopped before sign-in and checkout.\n\n- **Paper towels:** Make-A-Size 6 Triple Rolls, qty 1, $14.99. It isn't a \"Giant Rolls\" listing, so please confirm it's acceptable.\n- **T-shirt:** Good"
+    },
+    {
+      "arm": "sleight",
+      "task": "real-shop-bestbuy",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 21.49,
+        "group": {
+          "claude": 3.82,
+          "engine node": 1.1,
+          "mcp@latest": 0.71,
+          "node": 0.29,
+          "osascript": 0.2,
+          "codex": 0.35,
+          "(AgentPeekBridge)": 0,
+          "(sh)": 0
+        },
+        "outside": {
+          "Safari": 6.11,
+          "engine helper": 8.91
+        },
+        "split": {
+          "sleight": 0.49,
+          "engine": 10.01,
+          "client": 3.82,
+          "other": 1.06
+        }
+      },
+      "timing": {
+        "totalMs": 146954,
+        "modelMs": 102130,
+        "calls": 31,
+        "refused": 0,
+        "toolMs": 42483,
+        "engineMs": 42285,
+        "relayMs": 82,
+        "localMs": 116,
+        "guardReads": 29,
+        "guardReadMs": 5897.549541000013,
+        "guardReadFailures": 0,
+        "otherMs": 2341
+      },
+      "passed": false,
+      "reason": "answer does not name Duracell Coppertop AA batteries",
+      "seconds": 148.8,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 33,
+      "costUsd": 0.0851971,
+      "reportedCostUsd": 2.1404662,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 64,
+        "cacheRead": 2717728,
+        "cacheWrite": 230329,
+        "output": 16005
+      },
+      "exitCode": 0,
+      "answer": "All three items are in the cart, and the cart page is still open in the same Safari window. I did not sign in or start checkout.\n\n- **ZIP 55401:** store set to Roseville, MN (nearest Best Buy, about 5.5 miles).\n- **Duracell AA batteries, 16-pack:** Best Buy's listing is titled \"Duracell - AA Batteri"
+    }
+  ]
+}

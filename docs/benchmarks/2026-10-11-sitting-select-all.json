@@ -1,0 +1,588 @@
+{
+  "trials": [
+    {
+      "mode": "direct",
+      "condition": "pasted-seed-batch-type",
+      "repetition": 1,
+      "expected": "engine01",
+      "seed": {
+        "id": 10,
+        "ok": true,
+        "text": "Engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "after": {
+        "id": 13,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "saved": "engine01",
+      "exact": true
+    },
+    {
+      "mode": "direct",
+      "condition": "pasted-seed-observed-type",
+      "repetition": 1,
+      "expected": "engine01",
+      "seed": {
+        "id": 20,
+        "ok": true,
+        "text": "Engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "afterSelect": {
+        "id": 23,
+        "ok": true,
+        "text": "Engine01",
+        "selected": "Engine01",
+        "foregroundSame": true
+      },
+      "beforeSave": {
+        "id": 26,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "after": {
+        "id": 29,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "saved": "engine01",
+      "exact": true
+    },
+    {
+      "mode": "direct",
+      "condition": "typed-seed-batch-type",
+      "repetition": 1,
+      "expected": "engine01",
+      "seed": {
+        "id": 36,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "after": {
+        "id": 39,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "saved": "engine01",
+      "exact": true
+    },
+    {
+      "mode": "direct",
+      "condition": "typed-seed-observed-type",
+      "repetition": 1,
+      "expected": "engine01",
+      "seed": {
+        "id": 46,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "afterSelect": {
+        "id": 49,
+        "ok": true,
+        "text": "engine01",
+        "selected": "engine01",
+        "foregroundSame": true
+      },
+      "beforeSave": {
+        "id": 52,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "after": {
+        "id": 55,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "saved": "engine01",
+      "exact": true
+    },
+    {
+      "mode": "direct",
+      "condition": "typed-seed-observed-paste",
+      "repetition": 1,
+      "expected": "engine01",
+      "seed": {
+        "id": 62,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "afterSelect": {
+        "id": 65,
+        "ok": true,
+        "text": "engine01",
+        "selected": "engine01",
+        "foregroundSame": true
+      },
+      "beforeSave": {
+        "id": 68,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "after": {
+        "id": 71,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "saved": "engine01",
+      "exact": true
+    },
+    {
+      "mode": "direct",
+      "condition": "typed-seed-escape-type",
+      "repetition": 1,
+      "expected": "engine01",
+      "seed": {
+        "id": 78,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "after": {
+        "id": 83,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "saved": "engine01",
+      "exact": true
+    },
+    {
+      "mode": "default",
+      "condition": "pasted-seed-batch-type",
+      "repetition": 1,
+      "expected": "engine01",
+      "seed": {
+        "id": 92,
+        "ok": true,
+        "text": "Engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "after": {
+        "id": 95,
+        "ok": true,
+        "text": "engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "saved": "engine01",
+      "exact": true
+    },
+    {
+      "mode": "default",
+      "condition": "pasted-seed-observed-type",
+      "repetition": 1,
+      "expected": "engine01",
+      "seed": {
+        "id": 102,
+        "ok": true,
+        "text": "Engine01",
+        "selected": "",
+        "foregroundSame": true
+      },
+      "afterSelect": {
+        "id": 105,
+        "ok": true,
+        "text": "Engine01",
+        "selected": "Engine01",
+        "foregroundSame": true
+      }
+    }
+  ],
+  "records": [
+    {
+      "code": "var app = await cua.getApp(\"TextEdit\")",
+      "ms": 924.154917,
+      "isError": false,
+      "reportedOwnedWindow": true,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\"); await app.paste(\"\")",
+      "ms": 2302.488458,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.paste(\"Engine01\")",
+      "ms": 195.55399999999963,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+s\")",
+      "ms": 50.64058399999976,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\"); await app.typeText(\"engine01\"); await app.pressKey(\"super+s\")",
+      "ms": 179.66412500000024,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\"); await app.paste(\"\")",
+      "ms": 2119.2252909999997,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.paste(\"Engine01\")",
+      "ms": 215.23591699999997,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+s\")",
+      "ms": 74.87033400000018,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\")",
+      "ms": 54.972499999999854,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.typeText(\"engine01\")",
+      "ms": 76.56158400000004,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+s\")",
+      "ms": 65.43954200000007,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\"); await app.paste(\"\")",
+      "ms": 2134.8524159999997,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"e\"); await app.pressKey(\"n\"); await app.pressKey(\"g\"); await app.pressKey(\"i\"); await app.pressKey(\"n\"); await app.pressKey(\"e\"); await app.pressKey(\"0\"); await app.pressKey(\"1\")",
+      "ms": 411.5025000000005,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+s\")",
+      "ms": 53.44445799999994,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\"); await app.typeText(\"engine01\"); await app.pressKey(\"super+s\")",
+      "ms": 180.8367500000004,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\"); await app.paste(\"\")",
+      "ms": 2128.458833999999,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"e\"); await app.pressKey(\"n\"); await app.pressKey(\"g\"); await app.pressKey(\"i\"); await app.pressKey(\"n\"); await app.pressKey(\"e\"); await app.pressKey(\"0\"); await app.pressKey(\"1\")",
+      "ms": 430.88458400000127,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+s\")",
+      "ms": 51.830291999998735,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\")",
+      "ms": 50.816124999999374,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.typeText(\"engine01\")",
+      "ms": 71.38216599999942,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+s\")",
+      "ms": 49.96258300000045,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\"); await app.paste(\"\")",
+      "ms": 2120.7890000000007,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"e\"); await app.pressKey(\"n\"); await app.pressKey(\"g\"); await app.pressKey(\"i\"); await app.pressKey(\"n\"); await app.pressKey(\"e\"); await app.pressKey(\"0\"); await app.pressKey(\"1\")",
+      "ms": 416.28720799999974,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+s\")",
+      "ms": 52.47125000000051,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\")",
+      "ms": 51.04391599999872,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.paste(\"engine01\")",
+      "ms": 211.48966599999767,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+s\")",
+      "ms": 57.212124999998196,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\"); await app.paste(\"\")",
+      "ms": 2124.998166000001,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"e\"); await app.pressKey(\"n\"); await app.pressKey(\"g\"); await app.pressKey(\"i\"); await app.pressKey(\"n\"); await app.pressKey(\"e\"); await app.pressKey(\"0\"); await app.pressKey(\"1\")",
+      "ms": 405.1857080000009,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+s\")",
+      "ms": 50.33324999999968,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"Escape\")",
+      "ms": 52.68904199999815,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\"); await app.typeText(\"engine01\"); await app.pressKey(\"super+s\")",
+      "ms": 169.79270800000086,
+      "isError": false,
+      "reportedOwnedWindow": null,
+      "responseBodyOmitted": true
+    },
+    {
+      "client": "direct",
+      "event": "engine-close",
+      "code": 0,
+      "signal": null
+    },
+    {
+      "code": "var app = await cua.getApp(\"TextEdit\")",
+      "ms": 944.6156249999985,
+      "isError": false,
+      "reportedOwnedWindow": true,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\"); await app.paste(\"\")",
+      "ms": 3004.795957999999,
+      "isError": false,
+      "reportedOwnedWindow": true,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.paste(\"Engine01\")",
+      "ms": 585.7544589999998,
+      "isError": false,
+      "reportedOwnedWindow": true,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+s\")",
+      "ms": 550.1663340000014,
+      "isError": false,
+      "reportedOwnedWindow": true,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\"); await app.typeText(\"engine01\"); await app.pressKey(\"super+s\")",
+      "ms": 1093.273000000001,
+      "isError": false,
+      "reportedOwnedWindow": true,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\"); await app.paste(\"\")",
+      "ms": 3054.3317499999976,
+      "isError": false,
+      "reportedOwnedWindow": true,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.paste(\"Engine01\")",
+      "ms": 635.2594170000011,
+      "isError": false,
+      "reportedOwnedWindow": true,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+s\")",
+      "ms": 697.8021249999983,
+      "isError": false,
+      "reportedOwnedWindow": true,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.pressKey(\"super+a\")",
+      "ms": 571.0078329999997,
+      "isError": false,
+      "reportedOwnedWindow": true,
+      "responseBodyOmitted": true
+    },
+    {
+      "code": "await app.typeText(\"engine01\")",
+      "ms": 497.83620900000096,
+      "isError": false,
+      "reportedOwnedWindow": true,
+      "responseBodyOmitted": true
+    },
+    {
+      "op": "read",
+      "error": "Fixture helper timeout"
+    },
+    {
+      "client": "default",
+      "event": "engine-close",
+      "code": 0,
+      "signal": null
+    },
+    {
+      "op": "end-owned",
+      "error": "Fixture helper timeout"
+    }
+  ],
+  "started": "2026-10-11T15:29:03.602Z",
+  "repetitions": 1,
+  "bank": "/private/tmp/sleight-exact-TU5rLq",
+  "source": {
+    "plugins/sleight/lib/relay.mjs": "df7050ddbd87805e5a558c6327c83d0afa355921923b5ce9409e8dbbb9563a44",
+    "bench/small-fixes-textedit.js": "988b8b169763dbb58d015561b2f41739ec335d56faceca9505b2a963be647e89",
+    "bench/small-fixes-textedit.mjs": "2482856242b69cdde6d9f30eadc2af7e4feb81982e1067807eaae3e6f85095f3",
+    "bench/small-fixes-textedit-lib.mjs": "85f2bf5d3f4fd85295c63035b66dca398da1063b1e4cf5c5eaf991dcc9eb33cf"
+  },
+  "preflight": {
+    "id": 0,
+    "ok": true,
+    "running": false,
+    "foregroundTextEdit": false,
+    "pids": []
+  },
+  "launch": {
+    "command": "/usr/bin/open",
+    "argv": [
+      "-g",
+      "-b",
+      "com.apple.TextEdit",
+      "/private/tmp/sleight-exact-TU5rLq/exact.txt",
+      "--args",
+      "-ApplePersistenceIgnoreState",
+      "YES",
+      "-NSShowAppCentricOpenPanelInsteadOfUntitledFile",
+      "NO"
+    ]
+  },
+  "attachAttempts": [],
+  "attach": {
+    "id": 1,
+    "ok": true,
+    "attached": true,
+    "pid": 22034,
+    "ownedInstance": true
+  },
+  "attached": true,
+  "engineVersion": "26.1007.21159",
+  "error": "Fixture helper timeout",
+  "engineCollected": true,
+  "ownedInstanceQuitError": "Fixture helper timeout",
+  "fixtureExit": {
+    "code": null,
+    "signal": "SIGTERM"
+  },
+  "fixtureCollected": true,
+  "lockRetained": "Owned TextEdit instance not confirmed gone; operator inspection required",
+  "finished": "2026-10-11T15:30:10.434Z",
+  "exactCount": 7,
+  "completedCount": 7
+}

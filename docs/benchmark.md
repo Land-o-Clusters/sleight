@@ -795,6 +795,18 @@ passing, when its keyboard guard saw a tap from a process that had already exite
 ([raw](benchmarks/2026-10-11-h2h-normal-partial.json)). Earlier starts that day stopped
 before any run, on the guard or a missing flag, and the guard was fixed after each.
 
+The rest of the sitting ran from 15:06 to 15:39 UTC. In the owner's normal setup both arms passed
+9/9, sleight at 27.1 s and 7.44 turns a run against 36.2 s and 7.78, with 5.94 against 4.30 CPU
+seconds ([raw](benchmarks/2026-10-11-h2h-normal.json)). textedit-drag passed 3/3 at 30.7 to 33.2 s
+and 8 turns on the generic drag path. The menu-bar live check passed. stale-number failed with
+Calculator showing 7 instead of 56. simulator-form failed at cleanup, when `simctl shutdown`
+returned error 405, after 8 turns and 35.2 s. Both shop smoke tasks filled their carts and stopped
+before checkout, and both failed their checks, which expect exact product titles the retailers'
+listings don't use. A second Best Buy run found the first run's guest cart still in Safari. The
+Chess, save-lock and select-all harnesses failed their own setup (a replaced Chess process, a
+TextEdit document window that never opened, a TextEdit that stopped answering). Those steps
+have no result. Raw files are under `benchmarks/2026-10-11-sitting-*.json`.
+
 `node bench/away-sitting.mjs --dry-run` prints 13 steps from STATE's away list at `d21965c`.
 It reads the list and past result files without launching a harness, starting a watcher or taking
 the live lock. A changed list stops planning until its command mapping is reviewed.

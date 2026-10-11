@@ -1,0 +1,13 @@
+{
+  "started": "2026-10-11T15:32:40.917Z",
+  "check": "menu-bar",
+  "ownerAway": true,
+  "dryRun": false,
+  "rawError": "osascript is not allowed assistive access. macOS hasn't given the app running Claude Code Accessibility permission. Turn it on under System Settings → Privacy & Security → Accessibility (for Terminal, iTerm or Claude, whichever runs this session).",
+  "skipped": true,
+  "passed": false,
+  "needsAccessibility": "~/Library/Application Support/Claude/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude",
+  "reason": "needs the owner to grant Accessibility to ~/Library/Application Support/Claude/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude",
+  "lockReleased": true,
+  "finished": "2026-10-11T15:32:46.375Z"
+}

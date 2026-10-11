@@ -1,0 +1,25 @@
+{
+  "started": "2026-10-11T15:32:36.626Z",
+  "check": "stale-number",
+  "ownerAway": true,
+  "dryRun": false,
+  "launched": false,
+  "numbers": [
+    29,
+    38,
+    41,
+    39,
+    71
+  ],
+  "display": "7",
+  "judgment": {
+    "passed": false,
+    "named": true,
+    "displayOk": false,
+    "reason": "display 7 was not 56"
+  },
+  "passed": false,
+  "error": "display 7 was not 56",
+  "lockReleased": true,
+  "finished": "2026-10-11T15:32:40.856Z"
+}

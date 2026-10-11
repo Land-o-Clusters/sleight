@@ -3,7 +3,18 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-11 13:55 UTC, round 2 of the away runs)
+## Banner (2026-10-11 15:45 UTC, the away sitting done as far as its harnesses allow)
+
+Measured today, owner away (docs/benchmark.md): clean-arms head-to-head 9/9 each, sleight 22.0 s a
+run against Codex 44.6 s at 4.68 against 4.84 CPU seconds; normal setup 9/9 each, 27.1 s against
+36.2 s at 5.94 against 4.30 CPU seconds; browser head-to-head 24/24 each, 28.5 s against 41.8 s;
+textedit-drag 3/3 and menu-bar passed. The app-agnostic skill replaced the old one after two A/Bs.
+Failed or blocked: stale-number (display 7, not 56), simulator-form (simctl shutdown error 405 at
+cleanup), both shop smoke checks (titles differ from the retailers' listings; carts filled), and the
+Chess, save-lock and select-all harnesses at their own setup. The battery and the 40 native browser
+tasks stopped on harness cleanup. Lanes web-cleanup, owned-abort and prune-budget
+(`.dev/prompts/`) are with the owner for Codex. Guest carts with test items are left in Safari on
+Target and Best Buy, and one benchmark Helium window on 127.0.0.1 is open, for the owner to close.
 
 **Owner's OK, 13:54 UTC:** sleight-arch allows `127.0.0.1` in the Codex extension's site settings in Helium
 and Chrome, through the browsers' own UI, once no live run holds the lock. The extension's own

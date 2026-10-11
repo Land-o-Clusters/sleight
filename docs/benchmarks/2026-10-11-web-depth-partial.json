@@ -1,0 +1,1510 @@
+{
+  "stamp": "2026-10-11T13-46-12-844Z",
+  "suite": "real",
+  "surfaces": "browser,computer",
+  "ownerAway": true,
+  "ownerPresent": false,
+  "arms": [
+    "sleight",
+    "codex"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "safari-validation",
+      "run": 1,
+      "passed": false,
+      "reason": "Fixture setup failed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "observedBundle": "com.apple.Safari",
+          "pids": [
+            16819
+          ],
+          "setupCase": "already-running",
+          "menuItems": [
+            "New <profile> Window",
+            "New <profile> Window",
+            "New Private Window",
+            "New Tab",
+            "New Tab at End",
+            "New Empty Tab Group",
+            "New Tab Group with This Tab",
+            "Open File…",
+            "Open Location…",
+            "",
+            "Close Window",
+            "Close Window",
+            "Close All Windows",
+            "Close All Windows",
+            "Close Tab",
+            "Close Other Tabs",
+            "Delete Tab Group",
+            "Save As…",
+            "Save As…",
+            "",
+            "Share…",
+            "",
+            "Export as PDF…",
+            "Add to Dock…",
+            "",
+            "Import Browsing Data from File or Folder…",
+            "Export Browsing Data to File…",
+            "",
+            "Import From Browser",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Print…"
+          ],
+          "menuCommands": [
+            {
+              "title": "New Personal Window",
+              "enabled": true
+            },
+            {
+              "title": "New Work Window",
+              "enabled": true
+            },
+            {
+              "title": "New Private Window",
+              "enabled": true
+            },
+            {
+              "title": "New Tab",
+              "enabled": true
+            },
+            {
+              "title": "New Tab at End",
+              "enabled": true
+            },
+            {
+              "title": "New Empty Tab Group",
+              "enabled": false
+            },
+            {
+              "title": "New Tab Group with This Tab",
+              "enabled": false
+            },
+            {
+              "title": "Open File…",
+              "enabled": true
+            },
+            {
+              "title": "Open Location…",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Close Window",
+              "enabled": false
+            },
+            {
+              "title": "Close Window",
+              "enabled": false
+            },
+            {
+              "title": "Close All Windows",
+              "enabled": false
+            },
+            {
+              "title": "Close All Windows",
+              "enabled": false
+            },
+            {
+              "title": "Close Tab",
+              "enabled": false
+            },
+            {
+              "title": "Close Other Tabs",
+              "enabled": false
+            },
+            {
+              "title": "Delete Tab Group",
+              "enabled": false
+            },
+            {
+              "title": "Save As…",
+              "enabled": false
+            },
+            {
+              "title": "Save As…",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Share…",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Export as PDF…",
+              "enabled": false
+            },
+            {
+              "title": "Add to Dock…",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Import Browsing Data from File or Folder…",
+              "enabled": true
+            },
+            {
+              "title": "Export Browsing Data to File…",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Import From Browser",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Print…",
+              "enabled": false
+            }
+          ],
+          "menuCancelled": true,
+          "menuCancelMethod": "AXCancel",
+          "fresh": false,
+          "cleanup": "unconfirmed"
+        }
+      ],
+      "cleanupUnconfirmed": true,
+      "fixtureDir": "<temp>/sleight-bench/2026-10-11T13-46-12-844Z/sleight-safari-validation-1",
+      "surface": "native",
+      "models": []
+    },
+    {
+      "arm": "codex",
+      "task": "safari-validation",
+      "run": 1,
+      "passed": false,
+      "reason": "Fixture setup failed: ~/Projects/sleight/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "observedBundle": "com.apple.Safari",
+          "pids": [
+            16819
+          ],
+          "setupCase": "already-running",
+          "menuItems": [
+            "New <profile> Window",
+            "New <profile> Window",
+            "New Private Window",
+            "New Tab",
+            "New Tab at End",
+            "New Empty Tab Group",
+            "New Tab Group with This Tab",
+            "Open File…",
+            "Open Location…",
+            "",
+            "Close Window",
+            "Close Window",
+            "Close All Windows",
+            "Close All Windows",
+            "Close Tab",
+            "Close Other Tabs",
+            "Delete Tab Group",
+            "Save As…",
+            "Save As…",
+            "",
+            "Share…",
+            "",
+            "Export as PDF…",
+            "Add to Dock…",
+            "",
+            "Import Browsing Data from File or Folder…",
+            "Export Browsing Data to File…",
+            "",
+            "Import From Browser",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Print…"
+          ],
+          "menuCommands": [
+            {
+              "title": "New Personal Window",
+              "enabled": true
+            },
+            {
+              "title": "New Work Window",
+              "enabled": true
+            },
+            {
+              "title": "New Private Window",
+              "enabled": true
+            },
+            {
+              "title": "New Tab",
+              "enabled": true
+            },
+            {
+              "title": "New Tab at End",
+              "enabled": true
+            },
+            {
+              "title": "New Empty Tab Group",
+              "enabled": false
+            },
+            {
+              "title": "New Tab Group with This Tab",
+              "enabled": false
+            },
+            {
+              "title": "Open File…",
+              "enabled": true
+            },
+            {
+              "title": "Open Location…",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Close Window",
+              "enabled": false
+            },
+            {
+              "title": "Close Window",
+              "enabled": false
+            },
+            {
+              "title": "Close All Windows",
+              "enabled": false
+            },
+            {
+              "title": "Close All Windows",
+              "enabled": false
+            },
+            {
+              "title": "Close Tab",
+              "enabled": false
+            },
+            {
+              "title": "Close Other Tabs",
+              "enabled": false
+            },
+            {
+              "title": "Delete Tab Group",
+              "enabled": false
+            },
+            {
+              "title": "Save As…",
+              "enabled": false
+            },
+            {
+              "title": "Save As…",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Share…",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Export as PDF…",
+              "enabled": false
+            },
+            {
+              "title": "Add to Dock…",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Import Browsing Data from File or Folder…",
+              "enabled": true
+            },
+            {
+              "title": "Export Browsing Data to File…",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Import From Browser",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Print…",
+              "enabled": false
+            }
+          ],
+          "menuCancelled": true,
+          "menuCancelMethod": "AXCancel",
+          "fresh": false,
+          "cleanup": "unconfirmed"
+        }
+      ],
+      "cleanupUnconfirmed": true,
+      "fixtureDir": "<temp>/sleight-bench/2026-10-11T13-46-12-844Z/codex-safari-validation-1",
+      "surface": "native",
+      "models": []
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-validation",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.9,
+        "group": {
+          "claude": 1.28,
+          "engine node": 0.81,
+          "mcp@latest": 0.48,
+          "node": 0.19,
+          "osascript": 0.07,
+          "codex": 0.26
+        },
+        "outside": {
+          "Helium": 0.66,
+          "engine helper": 1.15
+        },
+        "split": {
+          "sleight": 0.26,
+          "engine": 1.96,
+          "client": 1.28,
+          "other": 0.74
+        }
+      },
+      "timing": {
+        "totalMs": 17933,
+        "modelMs": 11110,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 6131,
+        "engineMs": 6118,
+        "relayMs": 13,
+        "localMs": 0,
+        "guardReads": 10,
+        "guardReadMs": 3236.2677510000026,
+        "guardReadFailures": 0,
+        "otherMs": 692
+      },
+      "passed": true,
+      "seconds": 19.3,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 20805,
+          "observedBundle": "net.imput.helium",
+          "pids": [
+            20805
+          ],
+          "setupCase": "already-running",
+          "menuItems": [
+            "New Tab",
+            "New Window",
+            "New <profile> Window",
+            "Reopen Closed Tab",
+            "Open File…",
+            "Open Location…",
+            "",
+            "Close All",
+            "Close Window",
+            "Save Page As…",
+            "",
+            "Share",
+            "",
+            "Print…",
+            "Print Using System Dialog…"
+          ],
+          "menuCommands": [
+            {
+              "title": "New Tab",
+              "enabled": true
+            },
+            {
+              "title": "New Window",
+              "enabled": true
+            },
+            {
+              "title": "New Incognito Window",
+              "enabled": true
+            },
+            {
+              "title": "Reopen Closed Tab",
+              "enabled": true
+            },
+            {
+              "title": "Open File…",
+              "enabled": true
+            },
+            {
+              "title": "Open Location…",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Close All",
+              "enabled": true
+            },
+            {
+              "title": "Close Window",
+              "enabled": false
+            },
+            {
+              "title": "Save Page As…",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Share",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Print…",
+              "enabled": false
+            },
+            {
+              "title": "Print Using System Dialog…",
+              "enabled": false
+            }
+          ],
+          "readiness": {
+            "focused": {
+              "present": true,
+              "matches": true,
+              "documentKind": "web-url",
+              "titleMatches": true,
+              "pathAvailable": false,
+              "pathMatchesNormalizedTarget": false
+            },
+            "main": {
+              "present": true,
+              "matches": true,
+              "documentKind": "web-url",
+              "titleMatches": true,
+              "pathAvailable": false,
+              "pathMatchesNormalizedTarget": false
+            }
+          },
+          "fresh": false
+        }
+      ],
+      "surface": "native",
+      "turns": 5,
+      "costUsd": 0.0124069,
+      "reportedCostUsd": 0.3154968,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 10,
+        "cacheRead": 174184,
+        "cacheWrite": 48648,
+        "output": 1869
+      },
+      "exitCode": 0,
+      "answer": "The registration is submitted with no validation errors, and the page shows \"Registration submitted.\"\n\nI submitted the draft to reveal the errors (Email invalid, Seats not a positive whole number, Code required). I then set Email to `team@example.test`, Seats to `3`, and Code to `fd0a13ff`, and resu"
+    },
+    {
+      "arm": "codex",
+      "task": "helium-validation",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 4,
+      "engineMs": 2845,
+      "footprint": {
+        "cpuSeconds": 3.14,
+        "group": {
+          "codex": 1,
+          "engine node": 0.62,
+          "node": 0.13,
+          "codex-code-mode-host": 0.06
+        },
+        "outside": {
+          "Helium": 0.38,
+          "engine helper": 0.95
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 1.57,
+          "client": 1,
+          "other": 0.19
+        }
+      },
+      "passed": false,
+      "reason": "page state does not match the validation task",
+      "seconds": 28.5,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 20805,
+          "observedBundle": "net.imput.helium",
+          "pids": [
+            20805
+          ],
+          "setupCase": "already-running",
+          "menuItems": [
+            "New Tab",
+            "New Window",
+            "New <profile> Window",
+            "Reopen Closed Tab",
+            "Open File…",
+            "Open Location…",
+            "",
+            "Close All",
+            "Close Window",
+            "Save Page As…",
+            "",
+            "Share",
+            "",
+            "Print…",
+            "Print Using System Dialog…"
+          ],
+          "menuCommands": [
+            {
+              "title": "New Tab",
+              "enabled": true
+            },
+            {
+              "title": "New Window",
+              "enabled": true
+            },
+            {
+              "title": "New Incognito Window",
+              "enabled": true
+            },
+            {
+              "title": "Reopen Closed Tab",
+              "enabled": true
+            },
+            {
+              "title": "Open File…",
+              "enabled": true
+            },
+            {
+              "title": "Open Location…",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Close All",
+              "enabled": true
+            },
+            {
+              "title": "Close Window",
+              "enabled": false
+            },
+            {
+              "title": "Save Page As…",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Share",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Print…",
+              "enabled": false
+            },
+            {
+              "title": "Print Using System Dialog…",
+              "enabled": false
+            }
+          ],
+          "readiness": {
+            "focused": {
+              "present": true,
+              "matches": true,
+              "documentKind": "web-url",
+              "titleMatches": true,
+              "pathAvailable": false,
+              "pathMatchesNormalizedTarget": false
+            },
+            "main": {
+              "present": true,
+              "matches": true,
+              "documentKind": "web-url",
+              "titleMatches": true,
+              "pathAvailable": false,
+              "pathMatchesNormalizedTarget": false
+            }
+          },
+          "fresh": false
+        }
+      ],
+      "surface": "native",
+      "turns": 6,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 157657,
+        "cacheRead": 137984,
+        "cacheWrite": 0,
+        "output": 489
+      },
+      "exitCode": 0,
+      "answer": "Registration submitted with no validation errors using Email `team@example.test`, Seats `3`, and Code `a3ac552c`. The Helium window remains open."
+    },
+    {
+      "arm": "sleight",
+      "task": "helium-validation-extension",
+      "run": 1,
+      "permissionRefusal": true,
+      "stderr": "[claude-code:unrecognized_model] {\"model\":\"claude-haiku-5-5\",\"query_source\":\"sdk\"}\n",
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": true,
+      "footprint": {
+        "cpuSeconds": 4.48,
+        "group": {
+          "claude": 1.25,
+          "engine node": 1.17,
+          "mcp@latest": 0.55,
+          "node": 0.21,
+          "bash": 0.01,
+          "python3": 0.01,
+          "(grep)": 0,
+          "(bash)": 0,
+          "osascript": 0.09,
+          "codex": 0.26,
+          "(AgentPeekBridge)": 0.01,
+          "(vibe-island-brid)": 0
+        },
+        "outside": {
+          "Helium": 0.25,
+          "engine helper": 0.67
+        },
+        "split": {
+          "sleight": 0.3,
+          "engine": 1.84,
+          "client": 1.25,
+          "other": 0.84
+        }
+      },
+      "passed": false,
+      "reason": "computer-use permission refused: stopped",
+      "seconds": 18.6,
+      "fixtureDiagnostics": [
+        {
+          "app": "Helium",
+          "bundle": "net.imput.helium",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 20805,
+          "observedBundle": "net.imput.helium",
+          "pids": [
+            20805
+          ],
+          "setupCase": "already-running",
+          "menuItems": [
+            "New Tab",
+            "New Window",
+            "New <profile> Window",
+            "Reopen Closed Tab",
+            "Open File…",
+            "Open Location…",
+            "",
+            "Close All",
+            "Close Window",
+            "Save Page As…",
+            "",
+            "Share",
+            "",
+            "Print…",
+            "Print Using System Dialog…"
+          ],
+          "menuCommands": [
+            {
+              "title": "New Tab",
+              "enabled": true
+            },
+            {
+              "title": "New Window",
+              "enabled": true
+            },
+            {
+              "title": "New Incognito Window",
+              "enabled": true
+            },
+            {
+              "title": "Reopen Closed Tab",
+              "enabled": true
+            },
+            {
+              "title": "Open File…",
+              "enabled": true
+            },
+            {
+              "title": "Open Location…",
+              "enabled": true
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Close All",
+              "enabled": true
+            },
+            {
+              "title": "Close Window",
+              "enabled": false
+            },
+            {
+              "title": "Save Page As…",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Share",
+              "enabled": false
+            },
+            {
+              "title": "",
+              "enabled": false
+            },
+            {
+              "title": "Print…",
+              "enabled": false
+            },
+            {
+              "title": "Print Using System Dialog…",
+              "enabled": false
+            }
+          ],
+          "readiness": {
+            "focused": {
+              "present": true,
+              "matches": true,
+              "documentKind": "web-url",
+              "titleMatches": true,
+              "pathAvailable": false,
+              "pathMatchesNormalizedTarget": false
+            },
+            "main": {
+              "present": true,
+              "matches": true,
+              "documentKind": "web-url",
+              "titleMatches": true,
+              "pathAvailable": false,
+              "pathMatchesNormalizedTarget": false
+            }
+          },
+          "fresh": false
+        }
+      ],
+      "surface": "extension",
+      "models": [],
+      "exitCode": 143
+    }
+  ]
+}

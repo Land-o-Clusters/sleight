@@ -1,0 +1,104 @@
+{
+  "stamp": "2026-10-11T15-38-31-812Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "ownerPresent": false,
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "real-shop-bestbuy",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 7.46,
+        "group": {
+          "claude": 1.61,
+          "engine node": 0.66,
+          "mcp@latest": 0.59,
+          "node": 0.22,
+          "bash": 0.02,
+          "(bash)": 0,
+          "(python3.9)": 0.01,
+          "(grep)": 0,
+          "osascript": 0.09,
+          "codex": 0.38
+        },
+        "outside": {
+          "Safari": 1.48,
+          "engine helper": 2.4
+        },
+        "split": {
+          "sleight": 0.31,
+          "engine": 3.06,
+          "client": 1.61,
+          "other": 1
+        }
+      },
+      "timing": {
+        "totalMs": 36858,
+        "modelMs": 26024,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 9916,
+        "engineMs": 9884,
+        "relayMs": 32,
+        "localMs": 0,
+        "guardReads": 6,
+        "guardReadMs": 1434.8294989999995,
+        "guardReadFailures": 0,
+        "otherMs": 918
+      },
+      "passed": false,
+      "reason": "answer does not name Duracell Coppertop AA batteries, SanDisk Ultra USB flash drive",
+      "seconds": 38.5,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "turns": 7,
+      "costUsd": 0.0162759,
+      "reportedCostUsd": 0.42375680000000004,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 14,
+        "cacheRead": 382479,
+        "cacheWrite": 50261,
+        "output": 4795
+      },
+      "exitCode": 0,
+      "answer": "The smoke run is done, but the cart was already populated when I got there, so I didn't add anything.\n\n- **Store:** I searched ZIP 55401 in the store locator. The nearest store is Roseville, MN 55113 (5.5 miles), which was already selected, so the store is unchanged.\n- **Items in the cart** (quantit"
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "started": "2026-10-11T15:28:23.543Z",
+  "opening": "Open panel (engine Cmd+O, Cmd+Shift+G)",
+  "saveWaitMs": 2000,
+  "hangKeepMs": 0,
+  "engineUsed": true,
+  "pointerUsed": false,
+  "axWrite": false,
+  "deliveryCheck": true,
+  "captureOpenPanel": false,
+  "cleanup": "pid-lookup",
+  "records": [
+    {
+      "stage": "document",
+      "captured": true,
+      "isError": false
+    },
+    {
+      "event": "engine-close",
+      "code": 0,
+      "signal": null
+    }
+  ],
+  "lockTaken": true,
+  "engineVersion": "26.1007.21159",
+  "runs": [
+    {
+      "index": 1,
+      "phase": "delivery-check",
+      "variant": "none",
+      "cycle": 1,
+      "bank": "/private/tmp/sleight-save-lock-pPWtHy",
+      "preflight": {
+        "background": true,
+        "existingProcessCount": 1,
+        "pid": 21126,
+        "isolatedInstance": false
+      },
+      "openRequestedAt": 1791732508624,
+      "attachAttempts": [
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet",
+        "Retry: Owned document window not open yet"
+      ],
+      "failedOperation": {
+        "id": 24,
+        "ok": false,
+        "error": "Retry: Owned document window not open yet",
+        "pid": 21126,
+        "background": true
+      },
+      "skipped": "Attach refused: Retry: Owned document window not open yet"
+    }
+  ],
+  "gate": {
+    "proceed": true,
+    "hangs": 0,
+    "completed": 0,
+    "planned": 0,
+    "conclusion": "no gate"
+  },
+  "stopped": "Owned document not confirmed closed: undefined",
+  "counts": {
+    "gate": {},
+    "variants": {
+      "none": {
+        "runs": 1,
+        "completed": 0,
+        "hangs": 0,
+        "saved": 0,
+        "skipped": 1,
+        "notDelivered": 0,
+        "msToSave": []
+      }
+    }
+  },
+  "engineCollected": true,
+  "healthClosed": true,
+  "helperExit": {
+    "code": 0,
+    "signal": null
+  },
+  "lockRetained": "Run 1: owned TextEdit document not confirmed closed; operator inspection required",
+  "instanceMayRemain": true,
+  "finished": "2026-10-11T15:28:36.849Z"
+}

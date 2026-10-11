@@ -1,0 +1,218 @@
+{
+  "stamp": "2026-10-11T15-16-24-695Z",
+  "arms": [
+    "sleight"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 1,
+      "passed": true,
+      "seconds": 30.7,
+      "turns": 8,
+      "costUsd": 0.0107081,
+      "reportedCostUsd": 0.27801739999999997,
+      "usage": {
+        "input": 16,
+        "cacheRead": 342742,
+        "cacheWrite": 27253,
+        "output": 3657
+      },
+      "timing": {
+        "totalMs": 29275,
+        "modelMs": 20995,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 7331,
+        "engineMs": 3946,
+        "relayMs": 16,
+        "localMs": 3369,
+        "guardReads": 4,
+        "guardReadMs": 1076.4869590000044,
+        "guardReadFailures": 0,
+        "otherMs": 949
+      },
+      "footprint": {
+        "cpuSeconds": 6.52,
+        "group": {
+          "claude": 1.4,
+          "engine node": 1.04,
+          "mcp@latest": 0.45,
+          "node": 0.21,
+          "osascript": 0.35,
+          "codex": 0.38,
+          "(uv)": 0.01,
+          "(python3.14)": 0.18
+        },
+        "outside": {
+          "TextEdit": 1.04,
+          "engine helper": 1.46
+        },
+        "split": {
+          "sleight": 0.56,
+          "engine": 2.5,
+          "client": 1.4,
+          "other": 1.02
+        }
+      },
+      "appWindows": {
+        "samples": 6,
+        "onScreen": 5,
+        "offScreenOnly": 1,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "The file is saved and closed. The text in the document reads \"beta gamma alpha\".\n\nI dragged the selected \"alpha\" to the end of the line using the mouse drag tool, without typing or cut/paste. TextEdit reported the text change with an inserted space, and the accessibility value confirmed \"beta gamma ",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 2,
+      "passed": true,
+      "seconds": 31.1,
+      "turns": 8,
+      "costUsd": 0.009874,
+      "reportedCostUsd": 0.2519688,
+      "usage": {
+        "input": 16,
+        "cacheRead": 342849,
+        "cacheWrite": 24807,
+        "output": 2965
+      },
+      "timing": {
+        "totalMs": 29497,
+        "modelMs": 17170,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 11221,
+        "engineMs": 8010,
+        "relayMs": 19,
+        "localMs": 3192,
+        "guardReads": 3,
+        "guardReadMs": 0.01279199999953562,
+        "guardReadFailures": 0,
+        "otherMs": 1106
+      },
+      "footprint": {
+        "cpuSeconds": 6.04,
+        "group": {
+          "claude": 1.44,
+          "engine node": 0.95,
+          "mcp@latest": 0.47,
+          "node": 0.18,
+          "osascript": 0.39,
+          "codex": 0.37,
+          "uv": 0.02,
+          "Python": 0.03,
+          "python3": 0.02
+        },
+        "outside": {
+          "TextEdit": 0.8,
+          "engine helper": 1.37
+        },
+        "split": {
+          "sleight": 0.57,
+          "engine": 2.32,
+          "client": 1.44,
+          "other": 0.91
+        }
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 4,
+        "offScreenOnly": 3,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "The file now reads \"beta gamma alpha\". I dragged the selected \"alpha\" to the end of the line, saved, and closed the window. The drag went through the accessibility path, and TextEdit inserted the space before \"alpha\" on its own.",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    },
+    {
+      "arm": "sleight",
+      "task": "textedit-drag",
+      "run": 3,
+      "passed": true,
+      "seconds": 33.2,
+      "turns": 8,
+      "costUsd": 0.0095898,
+      "reportedCostUsd": 0.24889060000000002,
+      "usage": {
+        "input": 16,
+        "cacheRead": 339733,
+        "cacheWrite": 22252,
+        "output": 3481
+      },
+      "timing": {
+        "totalMs": 31641,
+        "modelMs": 19481,
+        "calls": 6,
+        "refused": 0,
+        "toolMs": 11106,
+        "engineMs": 7883,
+        "relayMs": 15,
+        "localMs": 3208,
+        "guardReads": 3,
+        "guardReadMs": 247.0463329999975,
+        "guardReadFailures": 0,
+        "otherMs": 1054
+      },
+      "footprint": {
+        "cpuSeconds": 6.13,
+        "group": {
+          "claude": 1.48,
+          "engine node": 0.8,
+          "mcp@latest": 0.48,
+          "node": 0.18,
+          "Python": 0.05,
+          "<defunct>": 0,
+          "osascript": 0.35,
+          "(osascript)": 0.08,
+          "codex": 0.35,
+          "(node)": 0.04,
+          "(bash)": 0.01,
+          "(AgentPeekBridge)": 0.01,
+          "(vibe-island-brid)": 0
+        },
+        "outside": {
+          "TextEdit": 0.83,
+          "engine helper": 1.47
+        },
+        "split": {
+          "sleight": 0.65,
+          "engine": 2.27,
+          "client": 1.48,
+          "other": 0.9
+        }
+      },
+      "appWindows": {
+        "samples": 7,
+        "onScreen": 5,
+        "offScreenOnly": 2,
+        "none": 0
+      },
+      "exitCode": 0,
+      "groupClean": true,
+      "cancelled": false,
+      "answer": "The document now reads \"beta gamma alpha\". I moved \"alpha\" to the end of the line by dragging the selection with the mouse, then saved and closed the window.\n\nThe drag inserted a space before \"alpha\" so the words read correctly, and the file is saved on disk. Nothing else was typed or pasted.",
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    }
+  ]
+}

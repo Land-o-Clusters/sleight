@@ -1,0 +1,174 @@
+{
+  "stamp": "2026-10-11T14-19-10-653Z",
+  "suite": "real",
+  "surfaces": "computer",
+  "ownerAway": true,
+  "ownerPresent": false,
+  "arms": [
+    "sleight",
+    "codex"
+  ],
+  "armMetadata": {},
+  "model": "claude-haiku-5-5",
+  "effort": "high",
+  "claude": "claude",
+  "auth": "api",
+  "armSetup": "normal",
+  "results": [
+    {
+      "arm": "sleight",
+      "task": "safari-validation",
+      "run": 1,
+      "groupClean": true,
+      "timedOut": false,
+      "cancelled": false,
+      "footprint": {
+        "cpuSeconds": 4.19,
+        "group": {
+          "claude": 1.22,
+          "engine node": 0.54,
+          "mcp@latest": 0.55,
+          "node": 0.19,
+          "Python": 0.01,
+          "bash": 0.01,
+          "(bash)": 0,
+          "osascript": 0.07,
+          "codex": 0.21
+        },
+        "outside": {
+          "Safari": 0.37,
+          "engine helper": 1.02
+        },
+        "split": {
+          "sleight": 0.26,
+          "engine": 1.56,
+          "client": 1.22,
+          "other": 0.78
+        }
+      },
+      "timing": {
+        "totalMs": 16647,
+        "modelMs": 11539,
+        "calls": 4,
+        "refused": 0,
+        "toolMs": 4526,
+        "engineMs": 4513,
+        "relayMs": 13,
+        "localMs": 0,
+        "guardReads": 5,
+        "guardReadMs": 953.9425009999986,
+        "guardReadFailures": 0,
+        "otherMs": 582
+      },
+      "passed": true,
+      "seconds": 18.4,
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false
+        }
+      ],
+      "surface": "native",
+      "turns": 5,
+      "costUsd": 0.0128103,
+      "reportedCostUsd": 0.3256606,
+      "models": [
+        "claude-haiku-5-5"
+      ],
+      "usage": {
+        "input": 10,
+        "cacheRead": 176653,
+        "cacheWrite": 50474,
+        "output": 1896
+      },
+      "exitCode": 0,
+      "answer": "The registration is submitted in the \"validation e0146c1a\" Safari window, and the page shows \"Registration submitted\" with no validation errors.\n\n- **First submit:** revealed errors for Email, Seats, and Code.\n- **Corrections:** Email is `team@example.test`, Seats is `3`, and Code is `e0146c1a`.\n- *"
+    },
+    {
+      "arm": "codex",
+      "task": "safari-validation",
+      "run": 1,
+      "groupClean": true,
+      "cancelled": false,
+      "timedOut": false,
+      "toolCalls": 5,
+      "engineMs": 3443,
+      "footprint": {
+        "cpuSeconds": 3.58,
+        "group": {
+          "codex": 1.13,
+          "engine node": 0.6,
+          "node": 0.11,
+          "codex-code-mode-host": 0.06
+        },
+        "outside": {
+          "Safari": 0.44,
+          "engine helper": 1.24
+        },
+        "split": {
+          "sleight": 0,
+          "engine": 1.84,
+          "client": 1.13,
+          "other": 0.17
+        }
+      },
+      "passed": false,
+      "seconds": 29.5,
+      "cleanupError": "Owned fixture window cleanup unconfirmed: Owned Helium window is still open",
+      "fixtureDiagnostics": [
+        {
+          "app": "Safari",
+          "bundle": "com.apple.Safari",
+          "retries": [],
+          "totalWaitMs": 0,
+          "actionTaken": true,
+          "running": true,
+          "launched": true,
+          "pid": 16819,
+          "creation": {
+            "blank": true,
+            "count": 1,
+            "documentScheme": "absent",
+            "titleKind": "start-page"
+          },
+          "navigation": {
+            "addressFieldCount": 1
+          },
+          "fresh": false,
+          "closeFailure": "Owned Helium window is still open"
+        }
+      ],
+      "fixtureDir": "<temp>/sleight-bench/2026-10-11T14-19-10-653Z/codex-safari-validation-1",
+      "surface": "native",
+      "turns": 7,
+      "costUsd": 0,
+      "models": [
+        "gpt-6.1-sol"
+      ],
+      "usage": {
+        "input": 173710,
+        "cacheRead": 128000,
+        "cacheWrite": 0,
+        "output": 459
+      },
+      "exitCode": 0,
+      "answer": "Registration submitted successfully with no validation errors. Email is `team@example.test`, Seats is `3`, and Code is `bce9f501`. The Safari window remains open."
+    }
+  ]
+}
