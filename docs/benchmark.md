@@ -526,6 +526,12 @@ those two skipped at setup). Without the rules calculator-click took 5 to 9 turn
 dropped the current skill's `{ id: "Seven" }` and `{ label: "Multiply" }` examples, the likely cause,
 which isn't confirmed. textedit-edit was within a second across all three.
 
+A rerun after the slim skill got placeholder ID and label examples (`ebedb7e`, 12:32 to 12:43 UTC,
+the same tasks and counts, the owner away, [raw](benchmarks/2026-10-11-skill-ab-2.json)) passed all
+36 runs. Slim (86 lines) and current both took 4.58 turns a run, at 14.5 s and 15.6 s, with 8.0 and
+9.2 s of model time. With no sleight rules it took 5.75 turns and 18.6 s, and calculator-click took 4
+to 7 turns against 3 for both skills. Slim's calculator-click runs all took 3 turns this time.
+
 The head-to-head at the owner's normal load (2026-10-09, the owner away, load 6 to 24, Sonnet 5.5 at
 medium against gpt-6.1-sol at medium) alternated sleight and Codex task by task. The default tasks
 ran 3 times per arm ([`h2h-normal-default`](benchmarks/2026-10-09-h2h-normal-default.json)) and six
