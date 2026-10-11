@@ -37,7 +37,9 @@ limit with the owner's usage meter, which got 429s after each pass. A pass stops
 spend, kept in `~/Library/Logs/sleight/bench-api-spend.json`, reaches `SLEIGHT_BENCH_API_CAP_USD`
 (default $200, the monthly API credit that comes with the owner's Max plan). `--auth login` runs on
 the login, and each results file records which one ran. Mimestream rows don't record a cost, so the
-cap doesn't count them.
+cap doesn't count them. On the key, the arms also get their own Claude Code config folder
+(`~/Library/Caches/sleight-bench/claude-config`, linked to the owner's settings and plugins), where
+Claude Code couldn't find the owner's login (2026-10-11).
 
 Getting a fair comparison took three tries, and every run is published. In the first (12/15 each,
 [`2026-10-03-sleight-vs-lcu.json`](benchmarks/2026-10-03-sleight-vs-lcu.json)) the sleight arm

@@ -3,19 +3,22 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-11 01:20 UTC, flushed before the owner's clear)
+## Banner (2026-10-11 01:50 UTC)
 
-`pane/auto-mode` is at `8b1fae0`, pushed to private, with nothing uncommitted. Nothing of
-sleight-arch's is running, and the live lock and hold are free. Calculator (pid 90338) was left
-open from earlier runs.
+`pane/auto-mode` is pushed to private. Merged tonight: icloud-textedit (`b09b792`) and panel-busy
+(`88564db`), both squashed in `~/Projects/sleight-wt/merge-0611`. Review fixed icloud-textedit's
+launch, which left TextEdit's iCloud Open panel up, and turned a panel-busy finding into a mod fix
+(a failed pane list skipped `turn_ended`). The bench arms now get their own `CLAUDE_CONFIG_DIR`
+in API mode (OpenUsage, below). The live lock and hold are free.
 
 Lanes out, started 2026-10-11 01:10 UTC in the owner's Grok and GLM sessions. Each pushes a
 `codex/<name>` branch to private and doesn't merge. Briefs are in `.dev/prompts/lane-<name>.md`,
 after `lane-rules-2026-10-11.md`. Evidence for all of them is in
 `docs/benchmarks/2026-10-11-evidence.md`.
-- Grok: icloud-textedit, savelock-delivery, chess-points, chat-crash, panel-busy.
-- GLM: selectall-check, richmove-placement, livechecks, shop-check, saveclose-research,
-  release-docs (README, CHANGELOG, known-problems and ROADMAP).
+- Grok, still out: savelock-delivery, chess-points, chat-crash.
+- GLM, still out: selectall-check, richmove-placement, livechecks, shop-check, saveclose-research,
+  release-docs (README, CHANGELOG, known-problems and ROADMAP). Each later lane that adds a doc
+  conflicts on `package.json`'s lint list. Resolve by keeping both entries.
 - Codex hasn't started lease-select (Best Buy's lease refusals), sim-readiness or speed-research.
   They wait for its quota to reset.
 
@@ -29,11 +32,12 @@ VS Code, Cursor and Firefox passed 5/5. textedit-save with code traces passed 3/
 Next, in order:
 1. Review each lane's diff as it reports and fix what review finds. Squash it in a scratch worktree,
    run the full check there, and cherry-pick it onto `pane/auto-mode`.
-2. One owner-away window verifies the merged lanes live: textedit-save with traces, Best Buy, the
+2. One owner-away window verifies the merged lanes live: the TextEdit tasks with the new launch
+   (only the helper ran live, 1.6 s warm), textedit-save with traces, Best Buy, the
    rich-text move (`SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background`),
    the save-lock experiment, select-all, `stale-number`, Chess, simulator-form, the chat tasks.
 3. Act on speed-research to close the gate, then the full release pass and the release (ROADMAP 5b).
-4. Isolate the bench arms from the owner's Claude login (below, OpenUsage), before the next pass.
+4. Confirm the bench arms' own config folder with one cluster once OpenUsage reads fresh (below).
 
 **Waiting on the owner:**
 - `Untitled 10.txt` in the iCloud TextEdit folder, a benchmark leftover: move it to the Trash or keep.
@@ -125,11 +129,15 @@ Branches and worktrees (`~/Projects/sleight-wt/<name>`):
 
 - OpenUsage's Claude reads still get 429s with the bench on the API key (disk-audit session,
   2026-10-11). Each throttle began 3 to 5 minutes after a cluster's first bench run, API key or
-  login: 07:04 to 07:07, 10:27 to 10:30, 14:01 to 14:06 UTC. Inferred: `claude -p` in an arm still
-  reaches the owner's keychain login, which OpenUsage also reads (its log shows ~2,000
-  `keychainCurrentUser refresh=yes` lines). Next for sleight-arch: give each arm a bench-only
-  `CLAUDE_CONFIG_DIR` (check that the arm then can't find the owner's login), run one cluster, and
-  confirm OpenUsage gets fresh reads throughout (grep its log for "plugin:claude").
+  login: 07:04 to 07:07, 10:27 to 10:30, 14:01 to 14:06 UTC on 2026-10-10. Done: in API mode each
+  arm runs with `CLAUDE_CONFIG_DIR=~/Library/Caches/sleight-bench/claude-config`, which links the
+  owner's settings, plugins, skills, commands, hooks and dev-mods. Without the key, Claude Code
+  there didn't find a login (no key source, model call failed with 0 tokens). With it, the folder got a
+  3-field `oauthAccount` for the owner's account, likely from the key's own lookup. Against the
+  bench theory, OpenUsage has been limited since 2026-10-10 22:18 UTC without a break. That
+  includes the 45 minutes before 01:43 with no bench run. Its throttles go back to 2026-10-04. Still to do: once OpenUsage
+  reads fresh again (`grep "plugin:claude" ~/Library/Logs/OpenUsage/OpenUsage.log`), run one
+  calculator-click cluster and check its reads during and after it.
 
 - Safari fixture windows, Preview `Pages-*.pdf`, Word and Excel fixture documents were left on
   their screen on 2026-10-09. Check the iCloud TextEdit files only by exact content, never by browsing.

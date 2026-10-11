@@ -1,13 +1,30 @@
 // The benchmark's Claude arms can run on an Anthropic API key instead of the owner's login.
 // Runs on the login shared a rate limit with the owner's usage meter (OpenUsage got 429s after
 // each pass, 2026-10-10), so the owner put the benchmark on their monthly API credit with a cap.
-import { closeSync, constants, fstatSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, constants, existsSync, fstatSync, mkdirSync, openSync, readFileSync, renameSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 export const KEY_FILE = join(homedir(), '.config', 'sleight-bench', 'anthropic-api-key');
 export const LEDGER_FILE = join(homedir(), 'Library', 'Logs', 'sleight', 'bench-api-spend.json');
 export const DEFAULT_CAP_USD = 200;
+export const CONFIG_DIR = join(homedir(), 'Library', 'Caches', 'sleight-bench', 'claude-config');
+
+// OpenUsage's Claude reads kept getting 429s 3 to 5 minutes into each bench cluster even with the
+// arms on the API key (2026-10-11), likely because an arm still found the owner's login. With its
+// own CLAUDE_CONFIG_DIR and no key, Claude Code found no login (2026-10-11: no key source, and its
+// model call failed with zero tokens). The folder links what the
+// owner's normal setup loads from ~/.claude, so normal arms keep their plugins, skills and hooks.
+const SHARED_CONFIG = ['settings.json', 'plugins', 'skills', 'commands', 'agents', 'hooks', 'output-styles', 'dev-mods'];
+export function prepareConfigDir({ dir = CONFIG_DIR, source = join(homedir(), '.claude') } = {}) {
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  chmodSync(dir, 0o700);
+  for (const name of SHARED_CONFIG) {
+    const link = join(dir, name);
+    try { unlinkSync(link); } catch (err) { if (err.code !== 'ENOENT') throw err; }
+    if (existsSync(join(source, name))) symlinkSync(join(source, name), link);
+  }
+}
 
 const month = (now = new Date()) => now.toISOString().slice(0, 7);
 
@@ -72,7 +89,8 @@ export function addSpend(usd, file = LEDGER_FILE, now = new Date()) {
 // mode: 'auto' uses the key when its file exists, 'api' requires it, 'login' never uses it.
 // API mode refuses to start once this month's recorded spend reaches the cap, rather than falling
 // back to the login without saying so.
-export function benchAuth({ mode = 'auto', capUsd = DEFAULT_CAP_USD, keyFile = KEY_FILE, ledgerFile = LEDGER_FILE, now } = {}) {
+export function benchAuth({ mode = 'auto', capUsd = DEFAULT_CAP_USD, keyFile = KEY_FILE, ledgerFile = LEDGER_FILE, now,
+  configDir = CONFIG_DIR, prepare = prepareConfigDir } = {}) {
   if (!['auto', 'api', 'login'].includes(mode)) throw new Error(`--auth must be auto, api or login, not ${mode}`);
   if (mode === 'login') return { mode: 'login', env: {}, unset: [] };
   const key = readKey(keyFile);
@@ -86,5 +104,6 @@ export function benchAuth({ mode = 'auto', capUsd = DEFAULT_CAP_USD, keyFile = K
       '(SLEIGHT_BENCH_API_CAP_USD). Raise the cap, or run on the login with --auth login.');
   }
   // An auth token or OAuth token in the environment would win over the key, so the arms drop them.
-  return { mode: 'api', env: { ANTHROPIC_API_KEY: key }, unset: ['ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'], spent, capUsd };
+  prepare({ dir: configDir });
+  return { mode: 'api', env: { ANTHROPIC_API_KEY: key, CLAUDE_CONFIG_DIR: configDir }, unset: ['ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'], spent, capUsd };
 }

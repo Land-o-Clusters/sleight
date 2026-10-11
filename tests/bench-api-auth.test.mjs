@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readlinkSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSpend, benchAuth, monthSpend, readKey } from '../bench/api-auth.mjs';
+import { addSpend, benchAuth, monthSpend, prepareConfigDir, readKey } from '../bench/api-auth.mjs';
 
 const KEY = 'sk-ant-api03-abc_DEF-123';
 function keyFile(content = KEY, mode = 0o600) {
@@ -44,9 +44,12 @@ test('auto uses the key when present, api requires it, login never uses it, and 
   const { file } = keyFile();
   const ledger = join(mkdtempSync(join(tmpdir(), 'bench-ledger-')), 'spend.json');
   const now = new Date('2026-10-10T05:00:00Z');
-  const api = benchAuth({ keyFile: file, ledgerFile: ledger, now });
+  const configDir = join(mkdtempSync(join(tmpdir(), 'bench-config-')), 'claude-config');
+  const prepared = [];
+  const api = benchAuth({ keyFile: file, ledgerFile: ledger, now, configDir, prepare: options => prepared.push(options.dir) });
   assert.equal(api.mode, 'api');
-  assert.deepEqual(api.env, { ANTHROPIC_API_KEY: KEY });
+  assert.deepEqual(api.env, { ANTHROPIC_API_KEY: KEY, CLAUDE_CONFIG_DIR: configDir });
+  assert.deepEqual(prepared, [configDir]);
   assert.deepEqual(api.unset, ['ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN']);
   assert.equal(benchAuth({ mode: 'login', keyFile: file, ledgerFile: ledger, now }).mode, 'login');
   const missing = join(tmpdir(), 'no-such-bench-key');
@@ -67,4 +70,21 @@ test('run cost comes from token counts at API prices, and an unknown model keeps
   assert.equal(runCost(mixed), 2.5);
   assert.equal(runCost({ total_cost_usd: 0.3 }), 0.3);
   assert.equal(runCost(undefined), undefined);
+});
+
+test('the arms\' config folder links the owner\'s settings and plugins but not their login', () => {
+  const root = mkdtempSync(join(tmpdir(), 'bench-config-'));
+  const source = join(root, 'claude'), dir = join(root, 'claude-config');
+  mkdirSync(join(source, 'plugins'), { recursive: true });
+  writeFileSync(join(source, 'settings.json'), '{}');
+  writeFileSync(join(source, '.credentials.json'), '{}');
+  writeFileSync(join(source, 'history.jsonl'), '');
+  prepareConfigDir({ dir, source });
+  prepareConfigDir({ dir, source });
+  assert.equal(readlinkSync(join(dir, 'settings.json')), join(source, 'settings.json'));
+  assert.equal(readlinkSync(join(dir, 'plugins')), join(source, 'plugins'));
+  assert.equal(existsSync(join(dir, '.credentials.json')), false);
+  assert.equal(existsSync(join(dir, 'history.jsonl')), false);
+  assert.equal(existsSync(join(dir, 'skills')), false);
+  assert.equal(lstatSync(dir).mode & 0o077, 0);
 });
