@@ -157,7 +157,20 @@ read only). One engine read of each app, no input, is in
 WhatsApp were thin (15, 24 and 19 elements). VS Code and Cursor had no text fields. None of the
 six had button IDs. The tasks are unit-tested. sleight-arch runs them live. The chat reads work in
 the owner's real accounts, so `slack-read`, `discord-read` and `whatsapp-read` run only with the
-owner present (`--owner-present`, owner 2026-10-11).
+owner present (`--owner-present`, owner 2026-10-11). Before Claude acts, a separate AX helper reads
+the selected conversation title and an explicit author control in its newest message. It requires
+one message list, increasing message IDs and a scrollbar at its maximum. Missing evidence stops
+with `CHAT_CONVERSATION_UNPROVED`, `CHAT_MESSAGE_LIST_UNPROVED`, `CHAT_NEWEST_UNPROVED` or
+`CHAT_AUTHOR_UNPROVED`. It never reads message bodies. An app that was closed starts with
+`open -g -b`. Cleanup quits only the recorded PID with the same launch timestamp. Diagnostics keep
+launch ownership, frontmost bundle IDs before and after launch, dialog categories, AX role counts
+and the results of enabling and restoring `AXManualAccessibility` and `AXEnhancedUserInterface`.
+Published rows still contain only verdicts, timings and salted hashes. Offline, 29 new tests failed
+on `464e0ba` and passed with this change. Both chat and Electron files passed 42/42 tests. No chat
+task has run live with this observer. sleight-arch must run each task once open and once closed,
+with the owner watching. Each of the six runs must prove the baseline or record its refusal and
+restore AX switches. An already-open app must stay running, and a launched app must quit. Inspect
+frontmost changes and any sign-in, update or permission window without answering it.
 
 `iphone-mirroring-settings` reports the iOS version from Settings > General > About in iPhone Mirroring. Select it with `--owner-present`. Default passes and the head-to-head skip it. The benchmark approves iPhone Mirroring only in `--owner-present` runs, since headless runs can't show a prompt. Published rows keep the answer and timings with no screenshot. Every owner-present task (iPhone Mirroring, Mail, Mimestream, chat reads) is skipped by default passes and the head-to-head, and an `--owner-away` pass refuses a selected one before any app operation.
 

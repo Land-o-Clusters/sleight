@@ -94,14 +94,14 @@ test('Firefox already running is opened and not quit', async () => {
   assert.deepEqual(calls, [['open', 'org.mozilla.firefox', ctx.url]]);
 });
 
-test('AX observation returns only the selected conversation and newest static-text author', () => {
-  assert.deepEqual(observationFromAX([
+test('AX observation refuses an unstructured list of static text', () => {
+  assert.equal(observationFromAX([
     { role: 'row', title: 'Invented channel', selected: true },
     { role: 'row', title: 'Other channel', selected: false },
     { role: 'static text', title: 'Invented Older' },
     { role: 'static text', title: 'Invented Author' },
     { role: 'text area', title: 'Message' },
-  ]), { target: 'Invented channel', author: 'Invented Author' });
+  ]), null);
   assert.equal(observationFromAX([{ role: 'row', title: 'Invented channel', selected: true }]), null);
   assert.equal(observationFromAX(undefined), null);
 });
@@ -131,12 +131,12 @@ for (const kind of ['slack', 'discord', 'whatsapp']) {
   });
 }
 
-test('chat setup refuses a launch and keeps author strings off enumerable context', async t => {
+test('chat setup refuses an unowned launch receipt and keeps author strings off enumerable context', async t => {
   const ctx = context(t);
   await assert.rejects(setupChat(ctx, 'slack', { adapter: async () => ({
     running: true, launched: true, expected: 'Invented Author', target: 'Invented channel',
     terms: ['Invented channel'], prompt: 'Open it.',
-  }) }), e => e.code === 'CHAT_LAUNCH_REFUSED');
+  }) }), e => e.code === 'CHAT_WINDOW_OWNERSHIP_UNPROVED');
   const ready = await acquiredChat(t);
   const text = JSON.stringify({ ...ready, answer: undefined });
   for (const secret of ['Invented Author', 'Invented channel']) assert.equal(text.includes(secret), false);
@@ -148,13 +148,12 @@ test('chat setup refuses a launch and keeps author strings off enumerable contex
   assert.doesNotMatch(prompt, /mcp__|getApp/);
 });
 
-test('live chat adapter refuses a missing app and never launches', async t => {
-  await assert.rejects(setupChat(context(t), 'slack', { running: async () => true }),
+test('chat adapter requires the owner and refuses a missing independent AX baseline', async t => {
+  await assert.rejects(setupChat(context(t), 'slack', { native: async () => assert.fail('owner gate must run first') }),
     e => e.code === 'CHAT_OWNER_PRESENT_UNPROVED' && e.noMutation === true);
-  const missing = { ...context(t), ownerPresent: true };
-  await assert.rejects(setupChat(missing, 'slack', { running: async () => false }), e => e.code === 'CHAT_NOT_RUNNING');
   const unproved = { ...context(t), ownerPresent: true };
-  await assert.rejects(setupChat(unproved, 'slack', { running: async () => true }), e => e.code === 'CHAT_BASELINE_UNPROVED');
+  await assert.rejects(setupChat(unproved, 'slack', { native: async (_ctx, _kind, operation) => operation === 'table' ?
+    { processes: [{ pid: 42, launchedAt: 100 }], frontmost: null } : { nodes: [] } }), e => e.code === 'CHAT_CONVERSATION_UNPROVED');
 });
 
 test('chat dry preparation stores no author and Firefox web tasks keep independent page checks', async t => {

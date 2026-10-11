@@ -582,8 +582,27 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   Slack 15 elements and 483 characters, Firefox 24 / 898, WhatsApp 19 / 940. None of those three
   had a text field. Slack's 3 buttons had neither IDs nor labels. Discord was not thin (251
   elements, 1 labeled text field, 46 buttons). VS Code and Cursor had 116 and 139 elements, 0
-  text fields, and no button IDs. Chat tasks keep authors out of published results. Live
-  qualification of the new tasks is unverified.
+  text fields, and no button IDs. Chat tasks keep authors out of published results. The separate
+  chat AX observer has zero live runs as of 2026-10-11. Slack's native AX count is unmeasured,
+  Discord's is unmeasured and WhatsApp's is unmeasured. The engine counts above do not measure
+  native AX after enabling its app-level switches. [Chromium documents the accessibility switch](https://www.chromium.org/developers/design-documents/accessibility/);
+  whether either switch expands these three apps' trees is unverified. The helper attempts only
+  readable, settable switches whose earlier values it can restore, and records unsupported or
+  unreadable switches. Its conversation, list, message and author identifiers have fake-tree
+  coverage, but no app's identifier schema is qualified. A missing identifier, an authorless
+  grouped message, multiple lists or windows, or missing scrollbar proof stops setup. Bodies and
+  generic static text never substitute for author evidence. A new incoming message can make the
+  pre-action author stale. Dialog classification uses English window titles and modal roles;
+  embedded sign-in or update pages without those signals may stop on missing baseline evidence
+  instead. Frontmost samples cover before and after launch, not a transient change between them.
+  The native launch step rechecks the process table and preserves a process started before its
+  dispatch timestamp. A simultaneous owner launch during `open -g -b` cannot be attributed with
+  certainty to the benchmark. PID and launch timestamp checks refuse a replacement at cleanup.
+  A permission stop, unknown launch ownership or failed AX restoration leaves cleanup unconfirmed
+  for sleight-arch to inspect. No dialog is answered and no process is force-quit. During offline
+  regression work, one test invoked the default Slack open command before its fake launch adapter
+  was attached. It returned `CHAT_LAUNCH_FAILED`. Whether an app launched is unverified. The test
+  now supplies both launch adapters. No app was quit to undo that attempt without ownership proof.
 - A Save or Open sheet showing a folder with many items reads as a very large tree: 198 file rows
   made one read of TextEdit's Save sheet 57,000 characters (2026-10-10), past Claude Code's tool
   output limit, so Claude saw only a pointer to a file, and every guard read of it took 1.4 to
