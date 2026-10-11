@@ -26,9 +26,9 @@ savelock-engine. The bench arms get their own
 `CLAUDE_CONFIG_DIR` in API mode (OpenUsage, below). The live lock and hold are free.
 
 Lanes out (each pushes `codex/<name>` to private and doesn't merge; briefs in `.dev/prompts/`):
-GLM's selectall-check and Grok's savelock-engine (handed out 02:20 UTC). richmove-format merged
-(`edd09ee`). Its live check then stopped at a disabled Paste item twice, and richmove-paste (GLM)
-is the follow-up.
+GLM's selectall-check and richmove-paste. Merged since: richmove-format (`edd09ee`), whose live check
+then stopped at a disabled Paste item twice (richmove-paste is the follow-up), and savelock-engine
+(`45f07e9`), with a review fix that refuses a TextEdit holding documents the probe didn't open.
 The owner now gets each lane as one paste-ready prompt with the model named.
 Codex hasn't started lease-select (Best Buy's lease refusals and tonight's browser-tab refusals),
 sim-readiness or speed-research. They wait for its quota to reset, with prompts ready. saveclose-research found the next speed lever for speed-research.
@@ -50,9 +50,11 @@ Next, in order:
    TextEdit launch: textedit-save 3/3 and textedit-edit 3/3 (`bench/results/2026-10-11T02-00-43-494Z.json`,
    `…T02-11-10-111Z.json`), with TextEdit quit after the second. Left: textedit-drag, the computed Chess points (waits live check), the chat
    pass's saved rows, `stale-number` and `menu-bar` (live-checks-1-1), the shop smoke outcomes,
-   textedit-save with traces, Best Buy, select-all, simulator-form, the chat tasks. The rich-text
-   move (`SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background`) waits for
-   richmove-format.
+   textedit-save with traces, Best Buy, select-all, simulator-form, the chat tasks, and the save-lock
+   experiment (`node bench/textedit-save-lock.mjs --delivery-check`, then the full run; finishing its
+   Open panel can bring TextEdit forward). The rich-text move
+   (`SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background`) waits for
+   richmove-paste.
 3. Act on speed-research to close the gate, then the full release pass and the release (ROADMAP 5b).
 4. Confirm the bench arms' own config folder with one cluster once OpenUsage reads fresh (below).
 
