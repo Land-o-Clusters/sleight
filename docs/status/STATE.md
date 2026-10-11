@@ -17,6 +17,9 @@ tasks stopped on harness cleanup. Lanes web-cleanup, owned-abort and prune-budge
 Target and Best Buy, and one benchmark Helium window on 127.0.0.1 is open, for the owner to close.
 Allowing 127.0.0.1 in the extension (owner's OK) didn't happen: the engine's read of Helium timed
 out twice, and the lease needs it first (known-problems). The owner sets it in the extension at the Mac.
+Lead for a lane: stale-number sent clear, 7, times, 8, equals by number in one call with Calculator's
+history open (the first click renumbers the rest). sleight named the remap, but the display read 7,
+so the later clicks after the remap didn't land (docs/benchmarks/2026-10-11-sitting-stale-number.json).
 
 **Owner's OK, 13:54 UTC:** sleight-arch allows `127.0.0.1` in the Codex extension's site settings in Helium
 and Chrome, through the browsers' own UI, once no live run holds the lock. The extension's own
