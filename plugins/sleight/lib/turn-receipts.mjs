@@ -7,6 +7,7 @@ import { join, resolve, parse, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { windowFromText, GUARD_MARK, GUARD_END } from './document-scope.mjs';
 import { isLeaseRead } from './input-lease.mjs';
+import { withoutSecureFields, fieldObservation, compareFields, renderFields } from './unsaved-review.mjs';
 
 const METHODS = new Set(['click', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction', 'paste', 'pressKey', 'typeText']);
 const keyOf = window => JSON.stringify([window.app, window.title, window.url]);
@@ -105,21 +106,29 @@ function actionsOf(code, secrets) {
   return actions;
 }
 
-function observation(content) {
+function observation(content, review) {
   let text = typeof content === 'string' ? content : (content ?? []).filter(c => c?.type === 'text' && typeof c.text === 'string').map(c => c.text).join('\n');
   // Prefer the existing guard's final full tree to intermediate output or the engine's diff.
   const mark = text.lastIndexOf(GUARD_MARK);
-  if (mark >= 0) text = text.slice(mark + GUARD_MARK.length).split(GUARD_END)[0];
+  if (mark >= 0) {
+    const end = text.indexOf(GUARD_END, mark + GUARD_MARK.length);
+    if (end < 0) return undefined;
+    text = text.slice(mark + GUARD_MARK.length, end);
+  }
   const window = windowFromText(text);
   if (!window) return undefined;
+  const safe = withoutSecureFields(text);
+  text = safe.text;
   const lines = text.split('\n');
   const full = lines.filter(line => /^\t*\d+ /.test(line));
   const diff = lines.filter(line => /^[+~\-] ?\t*\d+ /.test(line));
   // Keep comparison hashes and fixed control labels, not document text between turns.
   const revert = [...new Set(full.filter(line => !/disabled/i.test(line)).flatMap(line =>
     /^\t*\d+ (?:menu item|button) (?:Description: )?(Revert [Tt]o Saved|Undo(?: Typing| Paste| Cut| Delete)?)(?=,|$)/.exec(line)?.[1] ?? []))];
-  return { window, full: full.map(line => digest(line.replace(/^(\t*)\d+ /, '$1'))),
-    values: full.filter(line => /\bValue:/.test(line)).map(digest), diff: diff.length, revert,
+  const fields = review && !safe.selectionInvalid ? fieldObservation(text, safe.excluded, safe.selection) : undefined;
+  return { window, ...(review ? { fields } : {}), full: full.map(line => digest(line.replace(/^(\t*)\d+ /, '$1'))),
+    values: fields ? fields.fields.flatMap(field => Object.values(field.properties).map(value => value.fingerprint))
+      : [...full.filter(line => /\bValue:/.test(line)).map(digest), ...(safe.selection ? [safe.selection.fingerprint] : [])], diff: diff.length, revert,
     unchanged: /sleight: no change since the last full tree/.test(text),
     modified: /\b(?:Edited|Modified|Unsaved)\b/i.test(window.title) || /\b(?:AXDocumentEdited|DocumentEdited|modified): (?:true|1)/i.test(text) };
 }
@@ -135,7 +144,7 @@ function compare(before, after) {
   const changed = a.filter((line, i) => line !== b[i]).length + Math.max(0, b.length - a.length);
   const beforeValues = before.values, afterValues = after.values;
   const valueChanges = afterValues.filter((line, i) => line !== beforeValues[i]);
-  return { change: changed ? 'changed' : 'unchanged', detail: `${changed} accessibility lines changed; ${valueChanges.length} value fields changed (contents redacted).` };
+  return { change: changed || valueChanges.length ? 'changed' : 'unchanged', detail: `${changed} accessibility lines changed; ${valueChanges.length} value fields changed (contents redacted).` };
 }
 
 export class TurnJournal {
@@ -196,7 +205,7 @@ export class TurnJournal {
       if (call.completed) continue;
       call.completed = true; pending--;
       const failed = call.reply.failed;
-      const after = observation(call.text ?? call.content);
+      const after = observation(call.text ?? call.content, review);
       delete call.text; delete call.content;
       const before = call.before;
       const summary = call.summary;
@@ -212,6 +221,11 @@ export class TurnJournal {
         windows.set(key, entry);
       } else if (call.mutating) {
         windows.set(`unknown-${summaries.indexOf(summary)}`, { window: { app: null, title: null }, uncertain: true });
+      }
+      if (!call.mutating && (failed || overlaps.has(call) || !after)) {
+        const entry = before && windows.get(keyOf(before.window));
+        if (entry) { entry.uncertain = true; entry.after = undefined; }
+        current = undefined;
       }
       if (after && !failed && !overlaps.has(call)) {
         const key = keyOf(after.window);
@@ -231,10 +245,12 @@ export class TurnJournal {
     }
     this.last = omitted ? undefined : current;
     for (const call of calls) { delete call.text; delete call.content; delete call.before; delete call.localTarget; }
-    const changes = [...windows.values()].map(entry => {
+    const changes = [...windows.values()].map((entry, index) => {
       const difference = entry.uncertain ? { change: 'unknown', detail: 'No trustworthy final observation; changes may have occurred.' } : compare(entry.before, entry.after);
       const controls = entry.uncertain ? [] : entry.after?.revert ?? [];
-      return { app: entry.window.app, window: entry.window.title, document: documentName(entry.window), ...difference, modified: entry.after?.modified ?? false, revert: controls };
+      return { app: entry.window.app, window: entry.window.title, document: documentName(entry.window), ...difference, modified: entry.after?.modified ?? false, revert: controls,
+        ...(review ? { reviewWindow: index + 1, fields: compareFields(entry.before?.fields, entry.after?.fields,
+          !entry.uncertain && entry.before && entry.after && keyOf(entry.before.window) === keyOf(entry.after.window)) } : {}) };
     });
     // A name echoes typed text whole (a Save panel names a file what was typed), so redact a value
     // only as the whole name or a whole word in one; a substring match shredded TextEdit itself.
@@ -258,8 +274,8 @@ export class TurnJournal {
     // Render the review after title redaction too; the prose never contains a hidden title.
     const receipt = scrub({ version: 1, session, turn, at: new Date().toISOString(), calls: summaries, windows: changes, omitted });
     if (review) receipt.review = (omitted ? `Partial review: ${omitted} calls omitted; final state is unknown.\n` : '') +
-      (receipt.windows.filter(w => w.change !== 'unchanged' || w.modified).map(w =>
-        `${w.app ?? 'Unknown app'}, ${this.redactTitles ? '[redacted window]' : JSON.stringify(w.window)}: ${w.change}${w.modified ? ', modified' : ''}. ${w.detail} Leave it as it is${w.revert.length ? `, or use ${w.revert.join(' / ')} in that app` : '; no native revert control was observed'}.`).join('\n') || 'No changed or modified windows observed in this turn.');
+      (receipt.windows.map(w =>
+        `Window ${w.reviewWindow}, ${w.app ?? 'Unknown app'}, ${this.redactTitles ? '[redacted window]' : JSON.stringify(w.window)}: ${w.change}${w.modified ? ', modified' : ''}. ${w.detail}\n${renderFields(w.fields)}\nLeave it as it is${w.revert.length ? `, or use ${w.revert.join(' / ')} in that app` : '; no native revert control was observed'}.`).join('\n') || 'No changed or modified windows observed in this turn.');
     return receipt;
   }
 }

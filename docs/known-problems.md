@@ -66,6 +66,25 @@ our own runs. Dates and engine versions are given where they matter.
   only where it is the whole name or a whole word in one: typing "x" leaves "TextEdit" intact, and
   a document named "opulently.txt" keeps its name when "opulent" was typed (a unit test,
   2026-10-10).
+- Unsaved field review (`SLEIGHT_STATE_REVIEW=1`) compares the first and last full observations
+  for windows with attempted input. A baseline may come from the previous turn; it is not a
+  fresh read before each action. Other people's edits can appear. Text and popup values and
+  selected text are length markers. A same-length replacement shows equal lengths with a
+  change reported. Checkbox states and selection flags are shown. Labels and AX identifiers
+  are omitted from display. Secure, password and protected nodes and descendants are excluded
+  before hashing. A native selected-text footer is excluded whenever a secure node is present,
+  since the footer has no field identity. An absent footer doesn't prove an empty selection.
+  Rootless, truncated or malformed observations have no field comparison. An app that doesn't
+  mark a secure field cannot be recognized. Raw engine
+  replies and an independently enabled raw trace remain outside this redaction.
+  Canvases, pixels-only apps such as iPhone Mirroring and unsupported controls have no field
+  review. Added, removed or ambiguous fields make review partial. At most 100 changed fields
+  per window are shown, with a count of omitted changes. Window identity still depends on the
+  app, title and URL. Windows with identical headers cannot be distinguished. Window numbers
+  distinguish redacted titles in one receipt only. The guard runs in Claude's JavaScript and
+  is not a security boundary. The user uses any observed native Undo or Revert control in the
+  app. sleight doesn't send undo input. Live behavior is unverified.
+  [Design and live checklist](design/unsaved-review.md).
 - [Verified results](design/verified-results.md) add a line to native `js` replies from reads the
   relay already has. A changed value or window is an observation after input, and a person's own
   activity can cause it too. Missing or degraded reads leave the result unverified. A save is

@@ -13,6 +13,11 @@
   against the old code. The focused broker and lease suite passed 51/51 offline.
   Native Codex participation is unverified. The [design](docs/design/lease-broker.md)
   gives the owner opt-in and sleight-arch's live check.
+- `SLEIGHT_STATE_REVIEW=1` adds redacted before/after values, checkbox states and selections to
+  the turn receipt and pane. It uses existing full reads, with 0 added engine reads. Secure fields
+  and their descendants are excluded; missing or ambiguous observations leave review unavailable
+  or partial. Native Undo remains the user's action in the app. No live run.
+  [Design and live checklist](docs/design/unsaved-review.md).
 - The mod ends the engine turn after a turn that used an app even when Claude Code's pane list
   fails. That failure used to skip `turn_ended`, so only the relay's 30 s idle timer ended the
   turn. That may be one cause of desktop sessions that stay busy (inferred). A mod test covers it. It hasn't run live.

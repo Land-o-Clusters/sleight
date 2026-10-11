@@ -130,3 +130,14 @@ test('receipt stderr contains counts and no path, title, review or owner data', 
   assert.doesNotMatch(log, /Private|full name|\/private\/tmp|Leave|Undo/);
   assert.match(log, /2 calls.*1 windows/);
 });
+
+test('field review reaches the pane transport without receipt files or added engine calls', t => {
+  const h = harness(t, { receipts: false }); edit(h); h.end(3); h.reply(3, 'ended');
+  assert.equal(h.receipts.length, 0);
+  assert.equal(h.sent.length, 3);
+  const result = h.received.at(-1).result;
+  assert.match(result._meta['sleight/receipt'].review, /text area 1, value: \[redacted 6 chars\] -> \[redacted 14 chars\]/);
+  const fallback = result.content.find(c => c.text?.startsWith('sleight-receipt: '));
+  assert.match(JSON.parse(fallback.text.slice('sleight-receipt: '.length)).review, /redacted 14 chars/);
+  assert.doesNotMatch(JSON.stringify(result), /secret content/);
+});

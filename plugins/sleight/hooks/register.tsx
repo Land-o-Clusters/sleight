@@ -450,7 +450,7 @@ export const register: Register = on => {
         </Box>
         {latest?.path?.startsWith('/') && <Link href={`file://${latest.path.split('/').map(encodeURIComponent).join('/')}`} label="Open latest receipt" />}
         {latest?.unavailable && <Text>Receipt unavailable; the private file could not be written.</Text>}
-        {latest?.review && <Text wrap="truncate-end">{latest.review}</Text>}
+        {latest?.review && <Text>{latest.review}</Text>}
         <Text bold>Actions</Text>
         {entries.length === 0 && <Text dimColor>None yet.</Text>}
         {/* Newest first, so the latest action stays visible however short the pane is. */}

@@ -327,6 +327,22 @@ describe('sleight mod', () => {
     expect(await ui.find({ key: 'record' })).toBeDefined()
   })
 
+  test('the pane lets a before/after review wrap on both surfaces', async ($, on) => {
+    const review = 'Window 1, TextEdit: changed.\ntext entry area 1, value: [redacted 16 chars] -> [redacted 17 chars]\nLeave it as it is.'
+    on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [] } }) as never)
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async (_$, e) => ({ value: { content: e.tool === 'turn_ended' ? [{ type: 'text',
+      text: 'sleight-receipt: ' + JSON.stringify({ review }) }] : [] } }) as never)
+    await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("TextEdit")' } as never)
+    for (const surface of SURFACES) {
+      const ui = await $.ui.mount({ ...PANE, surface, props: { bodyColumns: 40 } as never })
+      await ui.press({ key: 'refresh' })
+      const node = await ui.find({ type: 'Text', text: /text entry area 1, value:/ })
+      expect(node).toBeDefined()
+      expect((node as { props?: { wrap?: string } }).props?.wrap).not.toBe('truncate-end')
+    }
+  })
+
   test('a js call this mod didn\'t raise never gets its snapshot allowance', async ($, on) => {
     // Stands in for the engine's own check. The test's query is not sleight's origin, so this decides.
     on('tool.check', async () => ({ decision: 'ask', reason: 'core check' }) as never)
