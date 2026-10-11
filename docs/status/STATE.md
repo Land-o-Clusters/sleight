@@ -53,6 +53,11 @@ Next, in order:
 4. Confirm the bench arms' own config folder with one cluster once OpenUsage reads fresh (below).
 
 **Waiting on the owner:**
+- The benchmark's API key answers "Credit balance is too low" (2026-10-11 01:58 UTC): textedit-save
+  failed 0/3 at once with it (`bench/results/2026-10-11T01-57-31-271Z.json`), and a one-line
+  `claude -p` on the key fails the same way with or without the arms' config folder. Our ledger
+  shows $4.50 spent this month. Live bench runs on the key stop until credit is added to that key's
+  account, or the owner picks `--auth login`, which shares the login's rate limit with OpenUsage.
 - `Untitled 10.txt` in the iCloud TextEdit folder, a benchmark leftover: move it to the Trash or keep.
 - Windows (ROADMAP track 6): on the 2020 Intel MacBook Pro, register for the Windows 11 Enterprise
   evaluation, download it and VMware Fusion, install ChatGPT, turn on OpenSSH. Then sleight-arch
