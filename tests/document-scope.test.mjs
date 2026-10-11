@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
 import { GUARD_END, GUARD_MARK, guardedCode, hasIdentifier, hasLabel, readCode, windowFromText, windowMatches } from '../plugins/sleight/lib/document-scope.mjs';
 
-test('setValue settles native text areas in a non-listed app before the next save', async () => {
+test('setValue on a text area sends no modifier-only key, which the engine refuses', async () => {
   const window = { title: 'Fixture', app: 'Fixture Editor', url: null };
   const events = [];
   const raw = {
@@ -14,7 +14,7 @@ test('setValue settles native text areas in a non-listed app before the next sav
   const context = { app: raw, cua: { getApp: async () => raw }, nodeRepl: { write() {} } };
   const result = await runInNewContext(`(async () => { ${guardedCode('const result = await app.setValue({ id: "body" }, "fixture"); await app.pressKey("super+s"); return result;', window)} })()`, context);
   assert.equal(result, 'written');
-  assert.deepEqual(events, [['write', 1, 'fixture'], ['key', 'shift'], ['key', 'super+s']]);
+  assert.deepEqual(events, [['write', 1, 'fixture'], ['key', 'super+s']]);
   events.length = 0;
   await runInNewContext(`(async () => { ${guardedCode('await app.setValue(2, "name");', window)} })()`, context);
   assert.deepEqual(events, [['write', 2, 'name']]);

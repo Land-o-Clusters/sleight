@@ -294,10 +294,10 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   held the lock. A review of the evidence (2026-10-10) favors the event giving TextEdit's main loop a
   turn that finishes the Accessibility edit before Cmd+S blocks: idle time didn't help, since 10 s
   waits still hung. NSDocument's autosave event monitor, whose mask covers flags-changed, and the
-  Shift modifier itself aren't ruled out. The guard now awaits an engine Shift press after a
-  `setValue` on any native text area, before returning to the caller. Offline tests check its
-  ordering before Cmd+S. Whether the engine's Shift press matches the native flags-changed pair
-  in `drag.js`, and whether it prevents a save hang, need live proof. A rewritten experiment on 2026-10-10 stalled in every
+  Shift modifier itself aren't ruled out. The same press can't follow a `setValue`, which runs
+  in the engine: the engine refuses a key press with only modifiers (`-10005
+  keyPressIncludedNoNonModifierKeys`, 2/2 live, 2026-10-11). In a background TextEdit opened with
+  `open -g`, `setValue` then the engine's Cmd+S saved 3/3 without it. A rewritten experiment on 2026-10-10 stalled in every
   variant, Shift included, and the saves finished at about 30 s, which points at its own harness
   ([report](benchmarks/2026-10-10-away-2.md)). The night rerun (30 of 30 runs with AppKit
   serialization logging on, then 10 of 10 without) stalled again in every variant, and a `sample`
@@ -319,7 +319,10 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   lock without app input. The event comparison has no new causal result.
   A bold red word lost both attributes in 1/1 covered RTF trials of the old move.
   The app-specific RTF clipboard path was removed on 2026-10-11. Accessibility moves still
-  write plain text and can lose formatting. Undoing a completed move takes two Cmd+Z.
+  write plain text: on 2026-10-11, 3/3 background moves of a bold red word in a covered TextEdit
+  window came out plain black Helvetica, with the text, spacing, front app and pointer right (about
+  6.6 s a drag). Uncovered windows now take the same path. Whether the posted drag they used before
+  kept formatting was never measured. Undoing a completed move takes two Cmd+Z.
   Safari's web text areas ignored Accessibility text writes (1/1 on 2026-10-09), so the mouse
   paths remain necessary when an app ignores the edits. The Command modifier was removed:
   the [2026-10-04 probe](benchmarks/2026-10-04-background-text-drag.md) moved text without it,
@@ -644,8 +647,8 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   message named a stuck helper. Quitting TextEdit recovered it every time. The relay now checks
   target AX and a fresh engine read of another acquired app before advising an app quit or helper
   restart. The skill tells Claude to select and type in TextEdit
-  instead of using `setValue`, and to use Cmd+S or File > Save As. The guard's generic Shift settle
-  after text-area `setValue` has no live save proof. That skill advice still applies.
+  instead of using `setValue`, and to use Cmd+S or File > Save As. That advice still applies, since a
+  `setValue` in a document opened through the Open panel hasn't been retried.
 - On 2026-10-06 TextEdit timed out every engine read after an AppleScript `close every document
   saving no`. It still answered AppleScript, but its only window was an orphan "Save Panel Accessory
   View" that Accessibility didn't list. The relay's message again named a stuck helper, while

@@ -8,7 +8,6 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { acquireLiveLock } from './live-lock.mjs';
-import { runRichTextMove, recoverPendingRichTextMove, drainRichTextMoves, richPasteChildState } from '../plugins/sleight/lib/rich-text-drag.mjs';
 import { createNativeClipboardIO } from '../plugins/sleight/lib/clipboard.mjs';
 import { probeAppHealth } from '../plugins/sleight/lib/read-failure.mjs';
 import { textEditFormatPreserved } from './textedit-fixes-check.mjs';
@@ -22,10 +21,10 @@ const misspelled = process.argv.includes('--misspelled'), openBackground = proce
 const path = join(bank, plain ? 'fixture.txt' : 'fixture.rtf');
 const word = misspelled ? 'zzzxq' : 'alpha';
 const report = { started: new Date().toISOString(), bank, plain, legacy, move, orphan, misspelled, openBackground,
-  richTextMoveEnabled: process.env.SLEIGHT_RICH_TEXT_MOVE === '1', load: loadavg(), trials: [] };
-report.source = Object.fromEntries(await Promise.all(['bench/textedit-fixes.mjs', 'bench/textedit-fixes-fixture.js', 'bench/textedit-fixes-drag.js', 'bench/textedit-fixes-check.mjs', 'plugins/sleight/lib/drag.js', 'plugins/sleight/lib/rich-text-drag.mjs', 'plugins/sleight/lib/clipboard.mjs', 'plugins/sleight/lib/clipboard.js', 'plugins/sleight/lib/app-health.js'].map(async name =>
+  load: loadavg(), trials: [] };
+report.source = Object.fromEntries(await Promise.all(['bench/textedit-fixes.mjs', 'bench/textedit-fixes-fixture.js', 'bench/textedit-fixes-drag.js', 'bench/textedit-fixes-check.mjs', 'plugins/sleight/lib/drag.js', 'plugins/sleight/lib/clipboard.mjs', 'plugins/sleight/lib/clipboard.js', 'plugins/sleight/lib/app-health.js'].map(async name =>
   [name, createHash('sha256').update(await readFile(join(root, name))).digest('hex')])));
-let release, child, collected, helperStopped = false, helperCollected = false, clipboardPending = false, preflight, opened = false, closed = false, cancelled = false;
+let release, child, collected, helperStopped = false, helperCollected = false, preflight, opened = false, closed = false, cancelled = false;
 process.once('SIGINT', () => { cancelled = true; });
 const ensureFree = async () => {
   if (cancelled) throw new Error('Cancelled');
@@ -103,39 +102,32 @@ try {
         const before = await io({ op: 'read' });
         const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
         const run = async (_script, prepared) => {
-          if (prepared.op !== 'rich-paste-status') await ensureFree(); // read-only recovery remains possible after cancellation
-          const trial = { op: prepared.op ?? 'drag', load: loadavg() }; report.trials.push(trial);
-          const script = prepared.op === 'rich-paste-status' ? join(root, 'plugins/sleight/lib/drag.js') : join(root, 'bench/textedit-fixes-drag.js');
-          const payload = prepared.op === 'rich-paste-status' ? prepared : { source, args: { ...prepared, deadline: Date.now() + 30000 }, frontPid: preflight.frontPid };
+          await ensureFree();
+          const trial = { op: 'drag', load: loadavg() }; report.trials.push(trial);
+          const script = join(root, 'bench/textedit-fixes-drag.js');
+          const payload = { source, args: { ...prepared, deadline: Date.now() + 30000 }, frontPid: preflight.frontPid };
           try {
             const { stdout } = await promisify(execFile)('/usr/bin/osascript', ['-l', 'JavaScript', script, JSON.stringify(payload)], { timeout: 30000, maxBuffer: 4 * 1024 * 1024 });
             trial.result = JSON.parse(stdout); return trial.result;
           } catch (error) {
             trial.error = error.killed ? 'Drag child timed out and was collected' : error.message;
-            if (prepared.richTextMove) trial.richPasteState = richPasteChildState(error.stderr, error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER');
-            return { ok: false, path: 'accessibility', error: trial.error, ...(trial.richPasteState ? { richPasteState: trial.richPasteState } : {}) };
+            return { ok: false, path: 'accessibility', error: trial.error };
           }
         };
-        let result = await run('drag.js', args);
-        if (result.richTextMove) result = await runRichTextMove(args, result.richTextMove, run);
+        const result = await run('drag.js', args);
         report.moveResult = result;
-        clipboardPending = result.clipboardRecoveryRequired === true;
-        if (clipboardPending) throw new Error('Rich paste unconfirmed; fixture cleanup and empty-app recovery required before clipboard restoration');
         const after = await io({ op: 'read' });
         report.clipboardBytesPreserved = same(before.items, after.items);
         const final = await request('read'); report.exactText = final.text === `beta gamma ${word}\n`;
         const saved = await request('save');
+        // Recorded, not required: drag's Accessibility move writes plain text (known problems).
         report.formatPreserved = plain || textEditFormatPreserved(initial, final, saved);
-        if (!result.ok || !report.exactText || !report.clipboardBytesPreserved || !report.formatPreserved || plain && result.richTextPreserved) throw new Error('Move, formatting, plain-path or clipboard verification failed');
+        if (!result.ok || !report.exactText || !report.clipboardBytesPreserved) throw new Error('Move, text or clipboard verification failed');
       } finally { await io.close(); }
     } else await request('rtf-read');
     }
   } finally {
     if (opened && !closed) { try { closed = (await request('close')).closed; report.documentClosed = closed; } catch (error) { report.documentCleanupError = error.message; } }
-    if (clipboardPending && closed && preflight.documents === 0) {
-      try { report.emptyAppRecovery = await request('quit-empty'); report.clipboardRecovered = await recoverPendingRichTextMove(); clipboardPending = !report.clipboardRecovered; }
-      catch (error) { report.clipboardRecoveryError = error.message; }
-    }
     lines.close();
   }
 } catch (error) { report.error = error.message; process.exitCode = 1; }
@@ -150,7 +142,7 @@ finally {
     report.fixtureCollected = helperCollected;
     if (!helperCollected) { child.unref(); child.stdin.destroy(); child.stdout.destroy(); child.stderr.destroy(); }
   }
-  if (release && (!opened || closed) && !clipboardPending && (!child || helperCollected)) { await release(); report.lockReleased = true; }
+  if (release && (!opened || closed) && (!child || helperCollected)) { await release(); report.lockReleased = true; }
   else if (release) report.lockRetained = 'Fixture cleanup unconfirmed; operator inspection required';
   report.finished = new Date().toISOString();
   report.loadAfter = loadavg();
@@ -159,13 +151,4 @@ finally {
   await writeFile(join(bank, 'results.json'), published + '\n');
   await writeFile(output, published + '\n');
   console.log(`Published ${output.replaceAll(homedir(), '~')}`);
-  if (clipboardPending) {
-    const drained = await drainRichTextMoves({ notice: message => { report.clipboardShutdownNote = message; console.error(message); } });
-    report.clipboardRecovered = !drained.clipboardLeft;
-    report.clipboardLeft = drained.clipboardLeft;
-    if (release && closed && helperCollected) { await release(); report.lockReleased = true; delete report.lockRetained; }
-    const recovered = JSON.stringify(report, null, 2).replaceAll(homedir(), '~').replaceAll(userInfo().username, '[owner]');
-    await writeFile(join(bank, 'results.json'), recovered + '\n');
-    await writeFile(output, recovered + '\n');
-  }
 }

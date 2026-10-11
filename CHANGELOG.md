@@ -11,9 +11,10 @@
   the mocked window suite passes 122/122 across two bundle IDs. Live qualification is pending.
 - Screenshot scale notes above a 2000-pixel long edge now cover any app, alongside
   orphan AppKit Save panels, demonstration capture by bundle ID, browser identification from
-  HTTP and HTTPS registrations, and Shift settle after guarded text-area `setValue`.
-  The new offline tests failed 9/9 against the old code. The passive observer's Swift source
-  typechecks. Live proof is pending for each mechanism, including TextEdit `setValue` then Cmd+S.
+  HTTP and HTTPS registrations. The new offline tests failed 9/9 against the old code. The passive
+  observer's Swift source typechecks. Live proof is pending for each mechanism. A Shift press
+  after `setValue` was dropped before release: the engine refuses a key press with only modifiers
+  (2/2 live, 2026-10-11), so it would have failed every `setValue` on a text area.
 - `open_file` tells Claude the exact `getApp` call to send next, and a Cmd+S on an open file reads
   "saved: observed" when the file on disk changed during the call. TextEdit in the background shows
   no edited state. Those saves used to read "not confirmed", and Claude spent a turn checking in
