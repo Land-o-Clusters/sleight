@@ -228,7 +228,9 @@ async function watch(controller) {
           const path = await execute('/bin/ps', ['-o', 'comm=', '-p', String(pid)], { timeout: 2000 }).then(r => r.stdout.trim(), () => '');
           const bundle = await execute('/usr/bin/lsappinfo', ['info', '-only', 'bundleid', String(pid)], { timeout: 2000 }).then(r => r.stdout.trim(), () => '');
           paths.set(pid, scrub(path || bundle || 'unknown'));
-          if (ENGINE_HELPER.test(path) || ENGINE_HELPER.test(bundle)) engine.add(pid);
+          // A tap whose process has already exited can't hold the keyboard: the third start stopped on
+          // one with no name and no process left (2026-10-11).
+          if (ENGINE_HELPER.test(path) || ENGINE_HELPER.test(bundle) || !path) engine.add(pid);
         }
         const reason = tapReport(stdout, tapsBefore, engine, paths); if (reason) stop(reason);
       } catch { stop('keyboard watcher failed'); }
