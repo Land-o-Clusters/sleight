@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { BENCH_APPS, REAL_APPS } from '../bench/tasks.mjs';
 import { selectSuiteTasks, assertShopSmokeRuns } from '../bench/shop.mjs';
-import { privateMailResult, publicPrivateMailRow } from '../bench/private-mail.mjs';
+import { privateMailResult, publicPrivateMailRow, publicPrivateMailRows } from '../bench/private-mail.mjs';
 import { privateDriverEnvironment } from '../bench/driver.mjs';
 import { guardGenericOperation } from '../bench/generic-approval.mjs';
 import { genericSettings } from '../bench/plugin-arm.mjs';
@@ -30,7 +30,7 @@ async function runner({ extraArgs = [], suite = 'real', arm = 'sleight', outcome
     dirname, join, fileURLToPath: () => '/fixture/bench/run.mjs', homedir: () => '/owner', tmpdir: () => '/private/tmp/unit',
     existsSync: path => path === '/tmp/sleight-hold' ? holdAfterPreflight && preflightDone : true, realpathSync: path => path, mkdirSync: path => directories.push(path), rmdirSync() {}, statSync: () => ({ dev: 1, ino: 1 }),
     writeFileSync: (path, value) => { files.set(path, JSON.parse(value)); saved.push(JSON.parse(value)); }, randomBytes: () => ({ toString: () => 'nonce' }),
-    privateMailResult, publicPrivateMailRow,
+    privateMailResult, publicPrivateMailRow, publicPrivateMailRows,
     privateDriverEnvironment, assertPrivateClaudePolicy: () => calls.push('policy audit'),
     DEFAULT_CAP_USD: 200, runCost: out => out?.total_cost_usd, archiveOldRuns: () => [], benchAuth: () => auth, addSpend: usd => { calls.push(['spend', usd]); return spend(usd); },
     prepareGenericArm: () => {
@@ -246,6 +246,35 @@ test('private mail runner publishes only hashed rows and keeps the driver epheme
     assert.equal(args[args.indexOf('--settings') + 1], '/fixture/bench/private-settings.json');
   }
   assert.equal(result.directories.some(dir => dir.includes('sleight-real-evidence')), false);
+});
+
+test('private mail preflight and chat setup-failure rows save without crashing the pass', async () => {
+  const preflight = await runner({ privateMail: true, extraServer: 'lcu' });
+  assert.equal(preflight.error, undefined);
+  assert.equal(preflight.exitCode, 1);
+  assert.equal(preflight.calls.includes('real run'), false);
+  assert.ok(preflight.saved.length);
+  assert.ok(preflight.saved.at(-1).results.length);
+  for (const file of preflight.saved) {
+    for (const row of file.results) assert.deepEqual(Object.keys(row).filter(key => !['arm', 'phase', 'passed'].includes(key)), []);
+    assert.ok(file.results.every(row => row.passed === false));
+  }
+  assert.equal(JSON.stringify(preflight.saved).includes('lcu'), false);
+  const slack = { id: 'slack-read', app: 'Slack', privateMail: true,
+    privateExpected: () => 'Invented Author', privateTerms: () => ['private label'] };
+  const setup = await runner({ privateMail: true, tasks: [slack], extraArgs: ['--tasks', 'slack-read'],
+    outcome: { passed: false, reason: 'CHAT_NOT_RUNNING', fixtureDiagnostics: [{ app: 'Slack' }] } });
+  assert.equal(setup.error, undefined);
+  assert.equal(setup.exitCode, 1);
+  assert.equal(setup.saved.at(-1).results.length, 3);
+  for (const row of setup.saved.at(-1).results) {
+    assert.equal(row.task, 'slack-read');
+    assert.ok(Number.isSafeInteger(row.run) && row.run >= 1);
+    assert.equal(row.passed, false);
+    assert.deepEqual(Object.keys(row), ['arm', 'task', 'run', 'passed', 'seconds', 'turns', 'expectedHash', 'actualHash']);
+  }
+  assert.equal(JSON.stringify(setup.saved).includes('Invented'), false);
+  assert.equal(JSON.stringify(setup.saved).includes('CHAT_NOT_RUNNING'), false);
 });
 
 test('private mail safety and keyboard stops suppress raw diagnostics', async () => {

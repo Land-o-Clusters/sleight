@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { privateMailResult, publicPrivateMailRow, publishPrivateMailResults } from '../bench/private-mail.mjs';
+import { privateMailResult, publicPrivateMailRow, publicPrivateMailRows, publishPrivateMailResults } from '../bench/private-mail.mjs';
 
 test('private mail results expose only verdict, timing, turns and salted answer hashes', () => {
   const task = { id: 'mimestream-label', privateExpected: () => 'private answer' };
@@ -42,6 +42,26 @@ test('chat read results hash the author the same way as private mail and drop th
   assert.equal(row.expectedHash, row.actualHash);
   assert.equal(JSON.stringify(row).includes('Invented'), false);
   assert.throws(() => privateMailResult({ ...task, id: 'slack-write' }, {}, result, { arm: 'sleight', run: 1 }),
+    /PRIVATE_MAIL_RESULT_INVALID/);
+});
+
+test('private pass save keeps setup-stop rows as a bare failed phase and still refuses unknown tasks and raw hashes', () => {
+  const hashed = privateMailResult({ id: 'slack-read', privateExpected: () => 'Invented Author' }, {},
+    { passed: false, seconds: 0, reason: 'CHAT_NOT_RUNNING' }, { arm: 'sleight', run: 1 });
+  assert.deepEqual(publicPrivateMailRows([
+    { phase: 'preflight', passed: false, reason: 'sleight arm also loads lcu' },
+    { arm: 'sleight', phase: 'configuration', passed: false, reason: 'CHAT_OWNER_AWAY_UNPROVED' },
+    hashed,
+  ]), [{ phase: 'preflight', passed: false }, { arm: 'sleight', phase: 'configuration', passed: false }, hashed]);
+  assert.deepEqual(publicPrivateMailRows([{ arm: 'Invented Author', phase: 'Invented Author', passed: true }]), [{ phase: 'stop', passed: false }]);
+  assert.equal(JSON.stringify(publicPrivateMailRows([{ phase: 'preflight', passed: false, reason: 'Invented Author' }]))
+    .includes('Invented'), false);
+  assert.throws(() => publicPrivateMailRows([{ arm: 'sleight', task: 'safari-shop', run: 1, passed: false }]),
+    /PRIVATE_MAIL_RESULT_INVALID/);
+  assert.throws(() => publicPrivateMailRows([{ arm: 'sleight', task: 'slack-read', run: 1, passed: false,
+    expectedHash: 'Invented Author' }]), /PRIVATE_MAIL_RESULT_INVALID/);
+  assert.throws(() => publicPrivateMailRows([{ expectedHash: 'Invented Author' }]), /PRIVATE_MAIL_RESULT_INVALID/);
+  assert.throws(() => publicPrivateMailRows([{ passed: false, answer: 'Invented Author' }]),
     /PRIVATE_MAIL_RESULT_INVALID/);
 });
 

@@ -44,7 +44,7 @@ import { observePermission } from './real-permission.mjs';
 import { runOwned } from './preapproved-process.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
 import { runDriver, privateDriverEnvironment } from './driver.mjs';
-import { privateMailResult, publicPrivateMailRow, publishPrivateMailResults } from './private-mail.mjs';
+import { privateMailResult, publicPrivateMailRows, publishPrivateMailResults } from './private-mail.mjs';
 import { assertPrivateClaudePolicy } from './private-policy.mjs';
 import { DEFAULT_CAP_USD, addSpend, benchAuth, runCost } from './api-auth.mjs';
 import { archiveOldRuns } from './run-archive.mjs';
@@ -355,7 +355,7 @@ const file = join(resultsDir, `${stamp}${isDryRun ? '-dry' : isSetupOnly ? '-set
 const save = () => {
   if (privatePass) {
     if (!fullName) throw new Error('PRIVATE_MAIL_OWNER_AUDIT_UNAVAILABLE');
-    const json = JSON.stringify({ results: results.map(publicPrivateMailRow) }, null, 2);
+    const json = JSON.stringify({ results: publicPrivateMailRows(results) }, null, 2);
     publishPrivateMailResults(file, json, { ownerName: fullName,
       terms: realContexts.flatMap(ctx => ctx.privateTask.privateTerms(ctx)) });
     return;

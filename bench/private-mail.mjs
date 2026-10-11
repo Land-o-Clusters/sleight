@@ -33,6 +33,18 @@ export function publicPrivateMailRow(row) {
     expectedHash: digest(row.expectedHash), actualHash: digest(row.actualHash) };
 }
 
+// Preflight and pass-stop rows have no run. They used to crash publication, so a chat pass saved
+// nothing (2026-10-10). They're published as a failed phase so the file still shows that the pass
+// stopped, with no reason text, which can quote what an app showed. A numbered row still has to be
+// a known private task with only digest fields.
+export function publicPrivateMailRows(results) {
+  return results.map(row => {
+    if (Number.isSafeInteger(row.run) && row.run >= 1) return publicPrivateMailRow(row);
+    if (row.expectedHash != null || row.actualHash != null || row.answer != null) throw new Error('PRIVATE_MAIL_RESULT_INVALID');
+    return { ...(row.arm === 'sleight' && { arm: row.arm }), phase: /^[a-z-]{1,32}$/.test(row.phase ?? '') ? row.phase : 'stop', passed: false };
+  });
+}
+
 // The patterns travel over stdin. Quiet literal grep cannot print a matching
 // line or expose a label in the process argument vector. Publish atomically
 // only after checking the exact bytes destined for the results file.
