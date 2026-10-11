@@ -566,7 +566,15 @@ our own runs. Dates and engine versions are given where they matter.
   if the panel is hidden or will not close. Normal document windows and failed AX reads prevent
   that diagnosis. It also depends on Screen Recording permission: macOS otherwise omits the CG
   window names used to recognize the panel. Missing names prevent the orphan note. Unit tests pass.
-  The temporary-file reproduction and localized titles remain unchecked.
+  Reproduced on 2026-10-11 through the engine: a background TextEdit with one temporary file,
+  `pressKey("super+alt+shift+s")` (the Save As sheet opened), then `close every document saving no`
+  left 0 AX windows and 0 documents while CoreGraphics still listed `Save Panel Accessory View`.
+  The next engine read didn't time out: TextEdit showed its Open panel and the read returned it, so
+  the orphan alone doesn't explain the 2026-10-06 timeouts, and the cause of those is unknown.
+  `bench/textedit-fixes.mjs --orphan` can't reproduce it, because Save As keys posted to a
+  background TextEdit's process don't open the sheet
+  ([raw](benchmarks/2026-10-11-textedit-fixes-1791691833392.json)). Localized titles remain
+  unchecked.
 - A benchmark run can act on a TextEdit document it didn't open. In a head-to-head on 2026-10-10,
   Claude typed into two leftover iCloud documents and a Save sheet moved one of them, empty, into
   the task's folder ([report](benchmarks/2026-10-10-h2h-guard.md)). The owner-away head-to-heads

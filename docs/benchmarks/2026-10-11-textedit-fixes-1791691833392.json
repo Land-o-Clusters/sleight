@@ -1,0 +1,246 @@
+{
+  "started": "2026-10-11T04:10:31.251Z",
+  "bank": "/private/tmp/sleight-textedit-fixes-b6yEhd",
+  "plain": false,
+  "legacy": false,
+  "move": false,
+  "orphan": true,
+  "misspelled": false,
+  "openBackground": true,
+  "richTextMoveEnabled": false,
+  "load": [
+    5.9150390625,
+    4.59765625,
+    5.11083984375
+  ],
+  "trials": [
+    {
+      "op": "preflight",
+      "result": {
+        "id": 0,
+        "ok": true,
+        "running": false,
+        "foregroundTextEdit": false,
+        "documents": null,
+        "frontPid": 246,
+        "hidden": null,
+        "onScreenWindows": null
+      }
+    },
+    {
+      "op": "open",
+      "result": {
+        "id": 1,
+        "ok": true,
+        "text": "alpha beta gamma\n",
+        "selected": "",
+        "foregroundSame": true,
+        "attributedText": "alpha beta gamma\n",
+        "spellingAnnotations": [
+          {
+            "key": "AXMisspelled",
+            "marked": false
+          },
+          {
+            "key": "AXMarkedMisspelled",
+            "marked": false
+          }
+        ],
+        "characters": [
+          {
+            "index": 0,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1",
+            "rgba": [
+              0.86275,
+              0,
+              0,
+              1
+            ]
+          },
+          {
+            "index": 4,
+            "font": "Helvetica-Bold",
+            "size": 14,
+            "color": "Generic RGB colorspace hdrm(1) 0.86275 0 0 1",
+            "rgba": [
+              0.86275,
+              0,
+              0,
+              1
+            ]
+          },
+          {
+            "index": 6,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          },
+          {
+            "index": 11,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          },
+          {
+            "index": 15,
+            "font": "Helvetica",
+            "size": 14,
+            "color": null,
+            "rgba": null
+          }
+        ]
+      }
+    },
+    {
+      "op": "save-as",
+      "result": {
+        "id": 2,
+        "ok": true,
+        "requested": true
+      }
+    },
+    {
+      "op": "panel-state",
+      "result": {
+        "id": 3,
+        "ok": true,
+        "documents": 1,
+        "axWindows": 1,
+        "foregroundSame": true,
+        "cgWindows": [
+          {
+            "id": 295631,
+            "panel": false,
+            "fixture": true,
+            "onScreen": true
+          },
+          {
+            "id": 295630,
+            "panel": false,
+            "fixture": false,
+            "onScreen": false
+          }
+        ]
+      }
+    },
+    {
+      "op": "close",
+      "result": {
+        "id": 4,
+        "ok": true,
+        "closed": true,
+        "foregroundSame": true
+      }
+    },
+    {
+      "op": "panel-state",
+      "result": {
+        "id": 5,
+        "ok": true,
+        "documents": 0,
+        "axWindows": 0,
+        "foregroundSame": true,
+        "cgWindows": [
+          {
+            "id": 295631,
+            "panel": false,
+            "fixture": true,
+            "onScreen": true
+          },
+          {
+            "id": 295630,
+            "panel": false,
+            "fixture": false,
+            "onScreen": false
+          }
+        ]
+      }
+    }
+  ],
+  "source": {
+    "bench/textedit-fixes.mjs": "02fe6b573dfa5779b12c4da30a7240d4eb2931c81c39d1738b65aee75b56b85b",
+    "bench/textedit-fixes-fixture.js": "5db2d943c12746ffee77db75416348090f45631abdf3cd9f5081c6a70620669b",
+    "bench/textedit-fixes-drag.js": "10da9678ac0b0853a39850b1adeef9060267fd72484cced8a8a1c06698a12edc",
+    "bench/textedit-fixes-check.mjs": "33d7617c66feafcfe8b80d3da7077628940c3f26e2ba6ab09252d3eeb35f81f9",
+    "plugins/sleight/lib/drag.js": "1ce9eb000830a7949ec55360ef2fe7d657632594ad03931e8f52773d370fba5f",
+    "plugins/sleight/lib/rich-text-drag.mjs": "278c92d04bc81a7106007f58fc2cbd360c9774ddee10d8db882545d8d68399b9",
+    "plugins/sleight/lib/clipboard.mjs": "ec9ef8529386028b0a721718486726fe81fb10930ac43d7e257f68a94b9adf00",
+    "plugins/sleight/lib/clipboard.js": "ad6a3c1f34bd434a41acffa151c512f65b295f2e3cf66f2d745d9f93b7a448fa",
+    "plugins/sleight/lib/app-health.js": "e9d52540407b244c6fd601c8023630bce65023720406968bf804da9cbf99f7eb"
+  },
+  "health": {
+    "status": "absent"
+  },
+  "backgroundOpen": true,
+  "beforeClose": {
+    "id": 3,
+    "ok": true,
+    "documents": 1,
+    "axWindows": 1,
+    "foregroundSame": true,
+    "cgWindows": [
+      {
+        "id": 295631,
+        "panel": false,
+        "fixture": true,
+        "onScreen": true
+      },
+      {
+        "id": 295630,
+        "panel": false,
+        "fixture": false,
+        "onScreen": false
+      }
+    ]
+  },
+  "documentClosed": true,
+  "afterClose": {
+    "id": 5,
+    "ok": true,
+    "documents": 0,
+    "axWindows": 0,
+    "foregroundSame": true,
+    "cgWindows": [
+      {
+        "id": 295631,
+        "panel": false,
+        "fixture": true,
+        "onScreen": true
+      },
+      {
+        "id": 295630,
+        "panel": false,
+        "fixture": false,
+        "onScreen": false
+      }
+    ]
+  },
+  "orphanHealth": {
+    "status": "responding",
+    "pid": 82833,
+    "windows": 0,
+    "minimized": 0,
+    "hidden": false,
+    "onScreen": 1,
+    "allWindows": 2,
+    "fullScreenSpace": false
+  },
+  "orphanReproduced": false,
+  "error": "No orphan Save panel reproduced",
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixtureCollected": true,
+  "lockReleased": true,
+  "finished": "2026-10-11T04:10:33.390Z",
+  "loadAfter": [
+    5.9150390625,
+    4.59765625,
+    5.11083984375
+  ]
+}

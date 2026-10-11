@@ -3,62 +3,55 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-11 03:55 UTC, flushed before the owner's clear)
+## Banner (2026-10-11 04:20 UTC)
 
-`pane/auto-mode` is at `4ee20df` plus this flush, pushed to private (`Land-o-Clusters/sleight-dev`),
-nothing uncommitted. `npm run check` 1,744 tests. Merged on 2026-10-11, each reviewed and squashed:
-icloud-textedit, panel-busy, chat-crash, chess-points, savelock-delivery, livechecks,
-saveclose-research, shop-check, release-docs, richmove-format, savelock-engine, savesheet-recipe,
-sim-readiness, speed-research, iphone-settle, richmove-paste, sim-scale-note, selectall-check (git log
-has each). Not merged, on purpose: `codex/richmove-placement` (my brief misread the evidence).
+`pane/auto-mode` is pushed to private (`Land-o-Clusters/sleight-dev`) with this banner, nothing
+uncommitted. `npm run check` 1,754 tests plus 30 mod tests, `lint:prose` clean. Merged since the
+clear, each reviewed and squashed: lease-select (Grok, `9c8d9c1`) and owner-present-mail (GLM,
+`872afe3`). Not merged, on purpose: `codex/richmove-placement`.
 
-**Running at the clear (survives it):** the first-call A/B, `nohup .dev/passes/ab-firstcall-0611.sh`
-(pid 45717, started 03:47 UTC). It alternates default and `SLEIGHT_FIRST_CALL_BATCH=app` for 2 rounds, each
-calculator-click, textedit-edit and textedit-save x2, `SLEIGHT_TRACE_CODE=1`, on the API key,
-background only. Progress and results files are in `.dev/passes/ab-firstcall.log`, which ends with `done`.
-Then compare per arm from the transcripts in
-`~/Library/Caches/sleight-bench/claude-config/projects/`: share of runs whose first `js` call is a
-bare `await cua.getState()` (50 of 80 recent runs before), turns, model time per turn, total time,
-passes. If `app` wins with every run passing, make it the default with no opt-out (owner, 2026-10-11)
-and drop the variant. The textedit-save runs also show whether Claude follows the save-sheet note
-(`49356a7`): the share of runs where Go to Folder through the final Return share one call (0 of 3
-before). The A/B is also the OpenUsage check below. An OpenUsage log watcher and the A/B waiter died
-at the clear. Nothing else of sleight-arch's runs, and the live lock and hold are free.
+Done since the clear:
+- The first-call A/B (`docs/benchmarks/2026-10-11-firstcall-ab.json`): the wording naming
+  `cua.getApp` passed 12/12 against 11/11 (one default run skipped at setup), first calls on
+  `getState` 0/12 against 8/11, 7.17 turns against 7.91, 27.0 s against 30.6 s a run. It's the
+  default since `a43945d`, and the `app` variant is gone. All 8 textedit-save runs sent Go to Folder
+  through the final Return in one call (0 of 3 before the save-sheet note).
+- calculator-click's "no change" re-read is fixed (`fef67fe`): 8/8 runs made one acting call and
+  no read after it, 3 turns and 10.3 to 11.6 s with the new wording, against Codex's 4 turns.
+- `SLEIGHT_GUARD=batch` is dropped, because Calculator renumbers every button on the first click that closes
+  the history, so a skipped read could press the wrong button. Save-then-close stays split (0 of 24
+  and 0 of 9 merged).
+- TextEdit's orphan Save panel reproduced live through the engine, and the read after it worked
+  (known-problems). The 2026-10-06 timeouts' cause stays unknown.
+- OpenUsage has had every real read rate-limited since 2026-10-10 07:07 UTC (its own backoff is
+  about 65 min). Episodes go back to 2026-10-04, before the bench used the API key. The A/B ran in a
+  cooldown, so it neither clears nor convicts the bench. Next real read about 04:47 UTC.
 
-**Lanes out** (each pushes `codex/<name>` to private and doesn't merge; briefs in `.dev/prompts/`;
-the owner gets every lane as one paste-ready prompt with the model named, in a fresh chat):
-- Grok: lease-select (Best Buy's lease refusals and the input lease refusing browser-tab handles).
-  Relay core: review closely. Last lane before the away sitting.
-- GLM: owner-present-mail (Mail, Mimestream and the chat tasks require `--owner-present`, not
-  `--owner-away`, per LAWS 2026-10-11).
-- Codex, when its quota resets: lease-broker and unsaved-review (ROADMAP 6), prompts in
-  `.dev/prompts/lane-lease-broker.md` and `lane-unsaved-review.md` (also sent in chat).
+**Lanes out** (each pushes `codex/<name>` to private and doesn't merge; prompts in `.dev/prompts/`,
+given to the owner as paste-ready blocks). Codex (gpt-6.1-sol) has lease-broker and unsaved-review,
+both from `37aeddc`.
 
 Results that matter for the release gate (ROADMAP 3.5, 5b.1): speed-research found the clean-arms CPU
 gap to Codex (51.8 s against 42.8 s) was 8.6 s from two failed textedit-save runs, and the seven runs
 both arms passed differ by 0.4 s. Those failures were iCloud leftovers, fixed (`b09b792`), and
-textedit-save then passed 3/3 twice. So the gate may be met. The away sitting's head-to-head decides.
-The next lever is turns (model time is two thirds of a run): the first-call A/B and the save-sheet
-note. `SLEIGHT_GUARD=batch` (about 1 s a pass, against a LAWS read) is not built.
+textedit-save then passed 3/3 twice. The away sitting's head-to-head decides.
 
-Live on 2026-10-11 with the owner present: iPhone Mirroring 3/3 (`bench/results/2026-10-11T03-35-55-975Z.json`,
-two runs through Settings in 40.1 s / 9 turns and 41.7 s / 10, no stray tap); `/sleight stop` on
-installed 1.1.0 ended the turn at once (Calculator stopped at 208 of 1000); calculator-click 3/3 and
-textedit-save and textedit-edit 3/3 each. The opt-in rich move stays off: macOS disables Paste in a
-TextEdit that has never been frontmost (`323183d`).
+Live on 2026-10-11 with the owner present: iPhone Mirroring 3/3 (`bench/results/2026-10-11T03-35-55-975Z.json`),
+`/sleight stop` on installed 1.1.0 ended the turn at once, calculator-click 3/3 and textedit-save and
+textedit-edit 3/3 each. The opt-in rich move stays off: macOS disables Paste in a TextEdit that has
+never been frontmost (`323183d`).
 
 Next, in order:
-1. Finish the first-call A/B (above) and act on it.
-2. Review and merge lease-select and owner-present-mail as they report.
-3. Then ask the owner for the one away sitting (owner: no partial windows), with the run order and
+1. Review and merge lease-broker and unsaved-review as they report, then run their live checks.
+2. Then ask the owner for the one away sitting (owner: no partial windows), with the run order and
    length (about 75 to 90 min): the Codex head-to-head with clean arms and the owner's setup,
-   textedit-drag, Chess with computed points (waits live check), simulator-form x3 (checks the
-   2000 px scale note and sim-readiness), the save-lock experiment (`--delivery-check`, then the
-   full run), select-all (`bench/small-fixes-textedit.mjs --quick`), live-checks-1-1 (`stale-number`,
-   `menu-bar`, which reports "needs Accessibility"), the shop smoke tasks with outcomes, Best Buy.
-4. With the owner watching, after owner-present-mail merges, run Mail, Mimestream and the chat tasks
-   once each with `--owner-present`.
-5. If the gate is met, the full release pass and the release (ROADMAP 5b), including README's
+   textedit-drag, Chess with computed points, simulator-form x3, the save-lock experiment
+   (`--delivery-check`, then the full run), select-all (`bench/small-fixes-textedit.mjs --quick`),
+   live-checks-1-1 (`stale-number`, `menu-bar`), the shop smoke tasks, Best Buy (lease-select's live
+   check), the quiet-box CPU comparison.
+3. With the owner watching, run Mail, Mimestream and the chat tasks once each with `--owner-present`,
+   and lease-select's Helium Console check.
+4. If the gate is met, the full release pass and the release (ROADMAP 5b), including README's
    release-pass numbers, then update the owner's installed copy and confirm its `gitCommitSha`.
 
 **Waiting on the owner:** whether to release if the gate isn't met. Parked by the owner: the

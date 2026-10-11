@@ -48,10 +48,11 @@ Open, in order of user impact (full list in [known-problems.md](../known-problem
   forcing them would mean killing OpenAI's helper or installing a tap.
 - Smaller ones: a moved word in rich text should keep the formatting it had (blocked 2026-10-11: macOS
   disables Paste in a TextEdit that has never been frontmost; the opt-in stays off), `/sleight stop` in the
-  desktop app, TextEdit's orphan Save Panel diagnosis, a live `menu_bar` check, and desktop sessions
+  desktop app, a live `menu_bar` check, and desktop sessions
   that stay busy. Done 2026-10-10: the doctor's per-app read (`83188cf`, `ac9f0d2`), per-site flow
   rules (`83188cf`), localized Settings titles in `blocked_app` and the clipboard helper (`05903fa`).
-  Stays manual: removing the helper's stale launchd job, since that changes OpenAI's helper state
+  TextEdit's orphan Save panel reproduced live on 2026-10-11 through the engine, and the read after
+  it worked, so the 2026-10-06 timeouts' cause is unknown (known-problems). Stays manual: removing the helper's stale launchd job, since that changes OpenAI's helper state
   (doctor prints the command).
 
 ## 3. Performance (owner's goal: lightning fast)
@@ -93,10 +94,14 @@ only with a measured reason. In order:
    click. The engine's description says to send only an acquisition first, and 798 of 799 sessions
    did. Rewriting that sentence is the default since 2026-10-09, after an A/B cut turns from 208 to
    168 in 24 runs a side (`docs/benchmark.md`). Merging later calls (save-then-close, keys after a
-   click) is still open: wording that asked for it (`SLEIGHT_FIRST_CALL_BATCH=merge`) cut total time
-   20% in 24 runs against 18 on Haiku, but save and close never shared a call, so it stays opt-in
-   (`docs/benchmarks/2026-10-10-merge-ab.md`). The cost of guard reads before each numbered action
-   in a batch is open too.
+   click) stays as it is: wording that asked for it (`SLEIGHT_FIRST_CALL_BATCH=merge`) got save and
+   close into one call in 0 of 24 runs, and 0 of 9 traced runs since
+   (`docs/design/save-then-close-2026-10-11.md`). Done 2026-10-11 (`a43945d`): the first-call
+   wording names `cua.getApp`, which took first calls on `getState` from 8 of 11 runs to 0 of 12 and
+   total time from 30.6 s to 27.0 s a run. Dropped 2026-10-11: skipping the guard read before later
+   clicks (`SLEIGHT_GUARD=batch`). It would resolve those clicks against the call's first tree, and
+   Calculator renumbers every button when its first click closes the history, so a click by ID could
+   press the wrong button.
 5. A release only when the head-to-head shows sleight at Codex's speed and footprint, with the numbers
    published. On 2026-10-10 (Haiku, engine 26.1007.21159) time and turns were at
    parity (263 s against 257 s, 61 turns each) and CPU wasn't (76.5 s against 60.2 s over six runs),
@@ -109,8 +114,10 @@ only with a measured reason. In order:
    (LAWS). At `d575dcf` sleight led on total time and turns (313.3 s and 79 against 340.2 s and 83)
    and still trailed on own CPU (78.2 s against 54.3 s, with the owner's plugins loaded) and on
    calculator-click. There, in 2 of 3 runs, the batch result read "no change" after 7 clicks, and
-   Claude read again (`docs/benchmarks/2026-10-10-h2h-afternoon.md`). Next: find that result's
-   cause from full traces. Then run the quiet-box CPU comparison.
+   Claude read again (`docs/benchmarks/2026-10-10-h2h-afternoon.md`). Fixed in `fef67fe`: an acting
+   call that ends on the tree Claude last saw gets that tree whole. In 8 of 8 runs on 2026-10-11 the
+   clicks went in one call with no read after it, 3 turns and 10.3 to 11.6 s a run with the new
+   first-call wording, against Codex's 4 turns and 14.4 to 16.1 s. Next: the quiet-box CPU comparison.
 
 Done: the relay "spike" was a timing bug (real relay time is about 0.4 s a pass). Measured and
 dropped: a first-call hint (8/12 runs still called `getState` first), trimming the engine's docs
