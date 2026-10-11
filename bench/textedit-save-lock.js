@@ -216,8 +216,22 @@ function run() {
       else throw new Error('Unknown event variant');
       delay(0.1); return { posted: r.variant, ...out };
     }
+    if (r.op === 'dirty') {
+      // kVK_ANSI_X. Posted keys, not an Accessibility text write.
+      key(7, 0, 'down'); delay(0.05); key(7, 0, 'up'); delay(0.1);
+      return { axWrite: false, edited: optional(win, 'AXEdited') === true, text: value(area, 'AXValue') };
+    }
+    if (r.op === 'state') {
+      return { edited: optional(win, 'AXEdited') === true, text: value(area, 'AXValue') };
+    }
     if (r.op === 'save') {
-      key(1, $.kCGEventFlagMaskCommand, 'down'); const postedAt = Date.now(); delay(0.05); key(1, 0, 'up');
+      // Command down/up (kVK_Command = 55) around S, with Command held on both S events.
+      // S-down with only the Command flag, then S-up with none, never started a save
+      // (2026-10-11 evidence: idle main thread 14 s later, autosave at ~30 s).
+      key(55, $.kCGEventFlagMaskCommand, 'down'); delay(0.05);
+      key(1, $.kCGEventFlagMaskCommand, 'down'); const postedAt = Date.now(); delay(0.05);
+      key(1, $.kCGEventFlagMaskCommand, 'up'); delay(0.05);
+      key(55, 0, 'up');
       return { saveRequested: true, postedAt };
     }
     throw new Error('Unknown operation');

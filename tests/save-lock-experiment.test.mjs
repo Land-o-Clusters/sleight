@@ -104,3 +104,83 @@ test('no window, or no owned window yet, asks for a retry', () => {
   assert.equal(acceptOwnedWindows([]).retry, true);
   assert.equal(acceptOwnedWindows([{ document: null, modal: false, sheet: false, text: '' }]).retry, true);
 });
+
+function block(source, op) {
+  const start = source.indexOf(`if (r.op === '${op}')`);
+  assert.ok(start >= 0, `helper has op ${op}`);
+  const next = source.indexOf('if (r.op ===', start + 1);
+  return source.slice(start, next === -1 ? undefined : next);
+}
+
+test('Cmd+S posts Command down and up around S, and keeps Command held on S-up', () => {
+  const save = block(helper, 'save');
+  assert.match(save, /key\(55,/);
+  assert.match(save, /key\(1, \$\.kCGEventFlagMaskCommand, 'down'\)/);
+  assert.match(save, /key\(1, \$\.kCGEventFlagMaskCommand, 'up'\)/);
+  assert.doesNotMatch(save, /key\(1, 0, 'up'\)/);
+});
+
+test('dirty types a character and never writes text through Accessibility', () => {
+  const dirty = block(helper, 'dirty');
+  assert.doesNotMatch(dirty, /AXUIElementSetAttributeValue/);
+  assert.match(dirty, /key\(/);
+});
+
+test('a delivery-check plan runs its one step without a hang gate', async () => {
+  const report = {}, seen = [];
+  await runExperiment({
+    plan: [{ index: 1, phase: 'delivery-check', variant: 'none', cycle: 1 }],
+    report,
+    runOne: async run => { seen.push(run.phase); run.hang = false; run.msToSave = 80; },
+  });
+  assert.deepEqual(seen, ['delivery-check']);
+  assert.equal(report.runs.length, 1);
+  assert.equal(report.gate.proceed, true);
+});
+
+test('--delivery-check is accepted and names a 2 s confirmation', async () => {
+  const { parseArgs, DELIVERY_WAIT_MS, buildDeliveryCheckPlan } = await import('../bench/textedit-save-lock.mjs');
+  assert.equal(typeof parseArgs, 'function');
+  assert.deepEqual(parseArgs(['--delivery-check']), { dryRun: false, deliveryCheck: true });
+  assert.deepEqual(parseArgs(['--dry-run', '--delivery-check']), { dryRun: true, deliveryCheck: true });
+  assert.throws(() => parseArgs(['--live']), /supported/);
+  assert.equal(DELIVERY_WAIT_MS, 2000);
+  const plan = buildDeliveryCheckPlan();
+  assert.equal(plan.length, 1);
+  assert.equal(plan[0].phase, 'delivery-check');
+});
+
+test('save confirmation returns when the file changes or edited clears within 2 s', async () => {
+  const { watchSaveStart } = await import('../bench/textedit-save-lock.mjs');
+  let t = 0;
+  const hit = await watchSaveStart({
+    seed: 'seed\n', until: 2000, now: () => t, sleep: async ms => { t += ms; },
+    readBytes: async () => (t >= 150 ? 'xseed\n' : 'seed\n'),
+    readState: async () => ({ edited: true }),
+  });
+  assert.equal(hit.fileChanged, true);
+  assert.ok(hit.at <= 2000);
+  t = 0;
+  const cleared = await watchSaveStart({
+    seed: 'seed\n', until: 2000, now: () => t, sleep: async ms => { t += ms; },
+    readBytes: async () => 'seed\n',
+    readState: async () => ({ edited: t >= 100 ? false : true }),
+  });
+  assert.equal(cleared.editedCleared, true);
+  t = 0;
+  const miss = await watchSaveStart({
+    seed: 'seed\n', until: 2000, now: () => t, sleep: async ms => { t += ms; },
+    readBytes: async () => 'seed\n',
+    readState: async () => ({ edited: true }),
+  });
+  assert.equal(miss, null);
+});
+
+test('the runner skips the Accessibility edit on a delivery-check step', () => {
+  const src = readFileSync(new URL('../bench/textedit-save-lock.mjs', import.meta.url), 'utf8');
+  const start = src.indexOf("run.phase === 'delivery-check'");
+  assert.ok(start >= 0, 'runOne branches on delivery-check');
+  const chunk = src.slice(start, start + 900);
+  assert.match(chunk, /op: 'dirty'/);
+  assert.doesNotMatch(chunk, /op: 'edit'/);
+});

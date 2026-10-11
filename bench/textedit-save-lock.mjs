@@ -1,6 +1,8 @@
 // TextEdit save-lock experiment: after an Accessibility text write, does a PID-local event or an
 // Apple Event keep TextEdit's next Cmd+S from hanging? No engine, pointer, clipboard or activation.
-//   node bench/textedit-save-lock.mjs [--dry-run]
+//   node bench/textedit-save-lock.mjs [--dry-run] [--delivery-check]
+// --delivery-check opens a file, types one character (no AX write), posts Cmd+S with Command
+// down/up around S, and confirms the file changed or AXEdited cleared within 2 s.
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createInterface } from 'node:readline';
@@ -13,7 +15,7 @@ import { cleanupFailedTextEditLaunch } from './textedit-save-lock-cleanup-run.mj
 
 export const VARIANTS = ['none', 'shift-pair', 'escape', 'keyup-only', 'applescript-read'];
 export const GATE_RUNS = 5, GATE_MIN_HANGS = 3, VARIANT_RUNS = Number(process.env.SAVE_LOCK_VARIANT_RUNS) || 5;
-export const SAVE_WAIT_MS = 10000, HANG_KEEP_MS = 20000, LOG_LINES = 400;
+export const SAVE_WAIT_MS = 10000, HANG_KEEP_MS = 20000, LOG_LINES = 400, DELIVERY_WAIT_MS = 2000;
 // The two serialization defaults make AppKit log document work that blocks for 3 s or more.
 // ApplePersistenceIgnoreState keeps the new instance from restoring windows, which stopped the
 // 2026-10-10 05:40Z attempt.
@@ -27,6 +29,29 @@ export function buildPlan({ gateRuns = GATE_RUNS, variantRuns = VARIANT_RUNS, va
   for (let cycle = 1; cycle <= gateRuns; cycle++) steps.push({ phase: 'gate', variant: 'none', cycle });
   for (let cycle = 1; cycle <= variantRuns; cycle++) for (const variant of variants) steps.push({ phase: 'variants', variant, cycle });
   return steps.map((step, i) => ({ index: i + 1, ...step }));
+}
+
+export function buildDeliveryCheckPlan() {
+  return [{ index: 1, phase: 'delivery-check', variant: 'none', cycle: 1 }];
+}
+
+export function parseArgs(args) {
+  const allowed = new Set(['--dry-run', '--delivery-check']);
+  for (const a of args) if (!allowed.has(a)) throw new Error('Only --dry-run and --delivery-check are supported');
+  return { dryRun: args.includes('--dry-run'), deliveryCheck: args.includes('--delivery-check') };
+}
+
+// File bytes changing, or AXEdited going false, means Cmd+S started a save.
+export async function watchSaveStart({ readBytes, readState, until, seed, now = Date.now, sleep }) {
+  for (;;) {
+    const bytes = await readBytes();
+    const state = await readState();
+    const fileChanged = bytes !== seed;
+    const editedCleared = state.edited === false;
+    if (fileChanged || editedCleared) return { at: now(), fileChanged, editedCleared, bytes, edited: state.edited };
+    if (now() >= until) return null;
+    await sleep(100);
+  }
 }
 
 // A run counts only when its save was requested after the variant reached TextEdit.
@@ -62,7 +87,9 @@ export async function runExperiment({ plan, runOne, report }) {
   const gateRuns = () => report.runs.filter(r => r.phase === 'gate');
   for (const step of plan) {
     if (step.phase !== 'gate' && !report.gate) {
-      report.gate = gateDecision(gateRuns(), gatePlanned);
+      report.gate = gatePlanned === 0
+        ? { proceed: true, hangs: 0, completed: 0, planned: 0, conclusion: 'no gate' }
+        : gateDecision(gateRuns(), gatePlanned);
       if (!report.gate.proceed) break;
     }
     const run = { ...step };
@@ -85,27 +112,31 @@ export function scrub(text, { home = homedir(), names = [] } = {}) {
 const FATAL = /Live hold|Cancelled|Foreground changed|channel uncertain|Fixture helper closed|Accessibility unavailable|TextEdit is foreground/;
 const RETRY = /^Retry: |-25204$/;
 
-function printPlan(plan) {
+function printPlan(plan, { deliveryCheck = false } = {}) {
   console.log('Dry run: nothing launched, no lock taken, no file written.');
   console.log(`Launch per run: ${launchCommand('/private/tmp/sleight-save-lock-XXXXXX/trial.txt').flat().join(' ')}`);
-  console.log(`Gate: ${GATE_RUNS} runs without an event, ${SAVE_WAIT_MS / 1000} s after Cmd+S; variants run only if at least ${GATE_MIN_HANGS} hang.`);
-  for (const s of plan) console.log(`${String(s.index).padStart(2)}  ${s.phase.padEnd(8)}  cycle ${s.cycle}  ${s.variant}`);
-  console.log(`A hang keeps its instance ${HANG_KEEP_MS / 1000} s, then captures log show --last 30s for that TextEdit PID.`);
-  console.log('Results: docs/benchmarks/2026-10-10-save-lock-experiment-<stamp>.json');
+  if (deliveryCheck) {
+    console.log(`Delivery check: type one character (no AX write), Cmd+S with Command down/up around S, confirm the file changes or AXEdited clears within ${DELIVERY_WAIT_MS / 1000} s.`);
+  } else {
+    console.log(`Gate: ${GATE_RUNS} runs without an event, ${SAVE_WAIT_MS / 1000} s after Cmd+S; variants run only if at least ${GATE_MIN_HANGS} hang.`);
+  }
+  for (const s of plan) console.log(`${String(s.index).padStart(2)}  ${s.phase.padEnd(14)}  cycle ${s.cycle}  ${s.variant}`);
+  if (!deliveryCheck) console.log(`A hang keeps its instance ${HANG_KEEP_MS / 1000} s, then captures log show --last 30s for that TextEdit PID.`);
+  console.log(`Results: docs/benchmarks/2026-10-10-save-lock-${deliveryCheck ? 'delivery' : 'experiment'}-<stamp>.json`);
 }
 
 async function main() {
-  const args = process.argv.slice(2);
-  if (args.some(a => a !== '--dry-run')) throw new Error('Only --dry-run is supported');
-  const plan = buildPlan();
-  if (args.includes('--dry-run')) return printPlan(plan);
+  const args = parseArgs(process.argv.slice(2));
+  const plan = args.deliveryCheck ? buildDeliveryCheckPlan() : buildPlan();
+  if (args.dryRun) return printPlan(plan, args);
 
   const root = fileURLToPath(new URL('../', import.meta.url));
   const execute = promisify(execFile);
   const names = [userInfo().username];
   try { names.unshift((await execute('/usr/bin/id', ['-F'])).stdout.trim()); } catch {}
   const report = { started: new Date().toISOString(), opening: 'open -n -g (owned isolated instance per run)', launchArgs: LAUNCH_ARGS,
-    saveWaitMs: SAVE_WAIT_MS, hangKeepMs: HANG_KEEP_MS, engineUsed: false, pointerUsed: false };
+    saveWaitMs: args.deliveryCheck ? DELIVERY_WAIT_MS : SAVE_WAIT_MS, hangKeepMs: args.deliveryCheck ? 0 : HANG_KEEP_MS,
+    engineUsed: false, pointerUsed: false, axWrite: !args.deliveryCheck, deliveryCheck: args.deliveryCheck };
   let release, child, closed, input, request, cancelled = false, ended = false, channelUncertain = false, unconfirmed;
   process.once('SIGINT', () => { cancelled = true; });
   const free = async () => {
@@ -175,6 +206,24 @@ async function main() {
             await sleep(250);
           }
         }
+        if (run.phase === 'delivery-check') {
+          const seed = await readFile(path, 'utf8');
+          run.dirty = strip(await request({ op: 'dirty' }));
+          if (run.dirty.edited !== true) { run.skipped = 'Keyboard did not edit'; return; }
+          const { postedAt } = await request({ op: 'save' });
+          run.savePostedAt = postedAt;
+          const hit = await watchSaveStart({
+            seed, until: postedAt + DELIVERY_WAIT_MS, sleep,
+            readBytes: () => readFile(path, 'utf8'),
+            readState: async () => strip(await request({ op: 'state' })),
+          });
+          run.saveStarted = hit !== null;
+          run.fileChanged = Boolean(hit?.fileChanged);
+          run.editedCleared = Boolean(hit?.editedCleared);
+          run.hang = hit === null;
+          run.msToSave = hit === null ? null : hit.at - postedAt;
+          return;
+        }
         const expected = `probe-${run.index}\n`;
         run.edit = strip(await request({ op: 'edit', text: expected }));
         if (run.edit.edited !== true) { run.skipped = 'Accessibility write not confirmed'; return; }
@@ -222,7 +271,7 @@ async function main() {
     }
     // A dead helper can't quit an unedited launch, so the recorded-launch cleanup takes over.
     // It releases the lock itself when it confirms the quit.
-    if (release && unconfirmed && !unconfirmed.edit && !cancelled) {
+    if (release && unconfirmed && !unconfirmed.edit && !unconfirmed.dirty && !cancelled) {
       const trial = { ...unconfirmed, failedOperation: { ...unconfirmed.failedOperation, pid: unconfirmed.attach?.pid ?? unconfirmed.failedOperation?.pid } };
       if (await cleanupFailedTextEditLaunch({ report, trial, bank: unconfirmed.bank })) {
         unconfirmed.cleanup = { method: 'recorded-launch-cleanup', gone: true }; unconfirmed = undefined; release = undefined; report.lockReleased = true;
@@ -231,13 +280,19 @@ async function main() {
     if (release && !unconfirmed) { await release(); report.lockReleased = true; }
     else if (release) report.lockRetained = `Run ${unconfirmed.index}: owned TextEdit instance not confirmed gone; operator inspection required`;
     if (report.stopped || report.error) process.exitCode = 1;
+    if (args.deliveryCheck && report.runs?.some(r => r.saveStarted !== true && !r.skipped && !r.error)) process.exitCode = 1;
     report.instanceMayRemain = Boolean(unconfirmed);
     report.finished = new Date().toISOString();
     const published = scrub(JSON.stringify(report, null, 2), { names });
-    const output = join(root, 'docs/benchmarks', `2026-10-10-save-lock-experiment-${Date.now()}.json`);
+    const output = join(root, 'docs/benchmarks', `2026-10-10-save-lock-${args.deliveryCheck ? 'delivery' : 'experiment'}-${Date.now()}.json`);
     await writeFile(output, published + '\n');
     console.log(`Gate: ${report.gate?.conclusion ?? 'not reached'}${report.stopped ? `; stopped: ${report.stopped}` : ''}`);
-    for (const [variant, c] of Object.entries(report.counts?.variants ?? {})) console.log(`${variant}: ${c.hangs}/${c.completed} hung, ${c.skipped} skipped, ${c.notDelivered} not delivered`);
+    if (args.deliveryCheck) {
+      const run = report.runs?.[0];
+      console.log(`Delivery: saveStarted=${run?.saveStarted ?? false} fileChanged=${run?.fileChanged ?? false} editedCleared=${run?.editedCleared ?? false} msToSave=${run?.msToSave ?? null}`);
+    } else {
+      for (const [variant, c] of Object.entries(report.counts?.variants ?? {})) console.log(`${variant}: ${c.hangs}/${c.completed} hung, ${c.skipped} skipped, ${c.notDelivered} not delivered`);
+    }
     console.log(`Published ${scrub(output)}`);
   }
 }

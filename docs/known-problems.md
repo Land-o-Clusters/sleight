@@ -203,7 +203,15 @@ our own runs. Dates and engine versions are given where they matter.
   Shift modifier itself aren't ruled out. The fix applies only to sleight's own Accessibility writes
   in `drag.js`, not to a `setValue` from `js`. A rewritten experiment on 2026-10-10 stalled in every
   variant, Shift included, and the saves finished at 30 s, which points at its own harness
-  ([report](benchmarks/2026-10-10-away-2.md)). The [2026-10-10 follow-up](benchmarks/2026-10-10-save-lock.md) stopped before
+  ([report](benchmarks/2026-10-10-away-2.md)). A `sample` 14 s after Cmd+S on 2026-10-11 showed
+  TextEdit's main thread idle in its event loop and the helper idle on its input pipe; the file was
+  written at about 30 s by autosave in every variant
+  ([evidence](benchmarks/2026-10-11-evidence.md)). The helper had posted one S key-down with the
+  Command flag and an S key-up with none. It now posts Command down, S down, S up with Command still
+  held, and Command up. `node bench/textedit-save-lock.mjs --delivery-check` types one character (no
+  Accessibility write) and requires the file to change or AXEdited to clear within 2 s. Hang rates
+  after that delivery are unknown until sleight-arch's live check.
+  The [2026-10-10 follow-up](benchmarks/2026-10-10-save-lock.md) stopped before
   editing: the existing background TextEdit process returned `AXWindows -25204`. A new instance
   restored extra windows, then exact-fixture cleanup returned `AXRole -25204`. A later read-only
   check confirmed zero Accessibility windows in that same launch and released the retained live
