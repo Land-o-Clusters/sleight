@@ -7,7 +7,7 @@ export const CHAT_APPS = {
   whatsapp: { id: 'whatsapp-read', app: 'WhatsApp', bundle: 'net.whatsapp.WhatsApp' },
 };
 const kinds = new Set(Object.keys(CHAT_APPS));
-const codes = new Set(['CHAT_OWNER_AWAY_UNPROVED', 'CHAT_NOT_RUNNING', 'CHAT_LAUNCH_REFUSED',
+const codes = new Set(['CHAT_OWNER_PRESENT_UNPROVED', 'CHAT_NOT_RUNNING', 'CHAT_LAUNCH_REFUSED',
   'CHAT_BASELINE_UNPROVED', 'CHAT_WINDOW_OWNERSHIP_UNPROVED', 'CHAT_SETUP_FAILED']);
 const failure = (code, noMutation = false) => Object.assign(new Error(code), { code, noMutation });
 const safeCode = error => codes.has(error?.code) ? error.code : 'CHAT_SETUP_FAILED';
@@ -39,7 +39,7 @@ export async function setupChat(ctx, kind, { adapter = openChat, running = appRu
   const state = stateFor(ctx);
   const spec = CHAT_APPS[kind];
   if (!spec || !kinds.has(kind)) throw failure('CHAT_SETUP_FAILED', true);
-  if (adapter === openChat && ctx.ownerAway !== true) throw failure('CHAT_OWNER_AWAY_UNPROVED', true);
+  if (adapter === openChat && ctx.ownerPresent !== true) throw failure('CHAT_OWNER_PRESENT_UNPROVED', true);
   ctx.signal?.throwIfAborted();
   const diagnostic = { app: spec.app, bundle: spec.bundle, actionTaken: false, cleanup: 'nothing created' };
   (ctx.fixtureDiagnostics ??= []).push(diagnostic);

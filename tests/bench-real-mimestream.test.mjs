@@ -41,14 +41,22 @@ async function acquired(ctx, kind = 'message', options = {}) {
   return { before, after, calls, receipt };
 }
 
-test('dry preparation stores no private mailbox data and refuses live setup while owner-away is unproved', async t => {
+test('dry preparation stores no private mailbox data and refuses live setup while owner presence is unproved', async t => {
   const ctx = context(t);
   mail.prepareMimestream(ctx);
   assert.equal(mail.expectedMimestream(ctx), null);
   assert.deepEqual(mail.labelsMimestream(ctx), []);
-  await assert.rejects(mail.setupMimestream(ctx, 'message'), e => e.code === 'MIMESTREAM_OWNER_AWAY_UNPROVED' && e.noMutation === true);
+  await assert.rejects(mail.setupMimestream(ctx, 'message'), e => e.code === 'MIMESTREAM_OWNER_PRESENT_UNPROVED' && e.noMutation === true);
   assert.equal(ctx.windowLeases, undefined);
   await mail.cleanupMimestream(ctx);
+});
+
+test('openMimestream refuses without --owner-present before compiling or running the helper', async t => {
+  const ctx = context(t);
+  await assert.rejects(mail.openMimestream(ctx, 'label', () => {}, {
+    helper: async () => { throw new Error('helper must not compile'); },
+    run: async () => { throw new Error('helper must not run'); },
+  }), e => e.noMutation === true && e.code === 'MIMESTREAM_OWNER_PRESENT_UNPROVED');
 });
 
 for (const kind of ['label', 'message', 'thread', 'scroll', 'search']) {
@@ -179,9 +187,12 @@ test('scroll requires the message-body bottom and thread requires a current disp
 });
 
 test('native unconfirmed setup cleanup is preserved after helper collection', async t => {
-  const ctx = context(t); ctx.ownerAway = true;
+  const ctx = context(t); ctx.ownerPresent = true;
   const adapter = (ctx, kind, attach) => mail.openMimestream(ctx, kind, attach, {
     helper: async () => 'invented-helper', run: async (command, args, options) => {
+      const payload = JSON.parse(args[0]);
+      assert.equal(payload.ownerPresent, true);
+      assert.equal('ownerAway' in payload, false);
       options.onStdout(JSON.stringify({ stage: 'private-terms', labels: ['Invented observed label'] }) + '\n');
       options.onStdout(JSON.stringify({ stage: 'setup-failure', actionTaken: true, cleanup: 'unconfirmed' }) + '\n');
       return { exit: { code: 1 }, groupClean: true, stderr: 'MIMESTREAM_BASELINE_UNPROVED', stdout: '' };
@@ -196,7 +207,7 @@ test('native unconfirmed setup cleanup is preserved after helper collection', as
 });
 
 test('a dialog callback failure still stops and collects the helper without AX cleanup', async t => {
-  const ctx = context(t); ctx.ownerAway = true;
+  const ctx = context(t); ctx.ownerPresent = true;
   ctx.onAppDialog = () => { throw new Error('Invented callback private content'); };
   let stopped = false;
   const adapter = (ctx, kind, attach) => mail.openMimestream(ctx, kind, attach, {
@@ -213,7 +224,7 @@ test('a dialog callback failure still stops and collects the helper without AX c
 });
 
 test('a launched helper lost before any receipt cannot clear unresolved acquisition', async t => {
-  const ctx = context(t); ctx.ownerAway = true;
+  const ctx = context(t); ctx.ownerPresent = true;
   const adapter = (ctx, kind, attach) => mail.openMimestream(ctx, kind, attach, {
     helper: async () => 'invented-helper', run: async () => ({ exit: { code: null, signal: 'SIGTERM' },
       groupClean: true, stderr: '', stdout: '', cancelled: true }),
@@ -226,7 +237,7 @@ test('a launched helper lost before any receipt cannot clear unresolved acquisit
 });
 
 test('private terms from the source window survive a different ready-window label receipt and cleanup', async t => {
-  const ctx = context(t); ctx.ownerAway = true;
+  const ctx = context(t); ctx.ownerPresent = true;
   const adapter = (ctx, kind, attach) => mail.openMimestream(ctx, kind, attach, {
     helper: async () => 'invented-helper', run: async (command, args, options) => {
       options.onStdout(JSON.stringify({ stage: 'private-terms', labels: ['Invented source label'] }) + '\n');
@@ -261,4 +272,12 @@ test('native capability decisions require explicit counts, read proof, and uniqu
     explicitReadRequired: true, ambiguousCreationRefused: true, dialogStops: true, existingWindowsClosed: 0,
     preactionCountsRequired: true, onlyProvedLabels: true, unreadSelectionRefused: true,
     duplicateSubjectsRefused: true, searchQueryBoundRequired: true });
+});
+
+test('native Mimestream helper refuses a request without the owner-present boundary before any AX use', async t => {
+  const helper = await mail.mimestreamHelper(t.signal);
+  const result = await runOwned(helper, [JSON.stringify({ control: '/private/tmp/x.json', nonce: 'unit', kind: 'label' })],
+    { timeoutMs: 15000, signal: t.signal });
+  assert.equal(result.exit.code, 1, result.stdout);
+  assert.equal(result.stderr.trim(), 'MIMESTREAM_OWNER_PRESENT_UNPROVED');
 });

@@ -184,7 +184,8 @@ const wanted = option('tasks', undefined)?.split(',');
 const claudeBin = process.env.CLAUDE_BIN || 'claude';
 const selected = selectSuiteTasks(suiteTasks, wanted);
 assertShopSmokeRuns(selected, runs);
-if (selected.some(task => task.ownerPresent) && !ownerPresent) throw new Error('iPhone Mirroring requires --owner-present');
+// Tasks in the owner's real accounts run only with the owner at the Mac and watching (LAWS, 2026-10-11).
+if (selected.some(task => task.ownerPresent) && !ownerPresent) throw new Error('owner-present tasks (iPhone Mirroring, Mail, Mimestream and chat reads) require --owner-present');
 if (calculatorGate && (isDryRun || selected.some(task => task.id !== 'calculator-click'))) throw new Error('--calculator-gate requires a live calculator-click pass');
 const privatePass = selected.some(task => task.privateMail);
 if (privatePass && (selected.some(task => !task.privateMail) || armNames.some(name => name !== 'sleight'))) {

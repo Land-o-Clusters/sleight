@@ -49,7 +49,7 @@ export async function mailHelper(signal) {
 }
 
 export async function openMailImport(fixture, ctx, { helper = mailHelper, run = runOwned } = {}) {
-  if (ctx.ownerAway !== true) throw Object.assign(new Error('MAIL_OWNER_AWAY_UNPROVED: no Mail operation performed'), { noMutation: true });
+  if (ctx.ownerPresent !== true) throw Object.assign(new Error('MAIL_OWNER_PRESENT_UNPROVED: --owner-present required; no Mail operation performed'), { noMutation: true });
   const command = await helper(ctx.signal), control = join(ctx.dir, 'mail-control.json');
   const controller = new AbortController(), stages = new Map();
   const stage = id => { if (!stages.has(id)) stages.set(id, Promise.withResolvers()); return stages.get(id); };
@@ -82,7 +82,7 @@ export async function openMailImport(fixture, ctx, { helper = mailHelper, run = 
   ctx.mailImport = lease;
   (ctx.windowLeases ??= []).push(lease);
   const response = run(command, [JSON.stringify({ ...fixture, messages: undefined, files: undefined, answers: undefined,
-    nonce: ctx.nonce, control, ownerAway: true })], {
+    nonce: ctx.nonce, control, ownerPresent: true })], {
     signal: AbortSignal.any([controller.signal, ctx.cleanupSignal].filter(Boolean)), timeoutMs: 600000,
     onStdout: chunk => {
       buffered += String(chunk);
@@ -274,8 +274,8 @@ export async function setupMailImport(ctx, { importer } = {}) {
   prepareMailFixture(ctx);
   const diagnostic = { app: 'Mail', bundle: 'com.apple.mail', actionTaken: false, cleanup: 'nothing created' };
   (ctx.fixtureDiagnostics ??= []).push(diagnostic);
-  if (!importer && ctx.ownerAway !== true) throw Object.assign(new Error('MAIL_IMPORT_OWNERSHIP_UNPROVED: explicit owner-away boundary required before creating Mail import UI; no Mail operation performed'),
-    { code: 'MAIL_IMPORT_OWNERSHIP_UNPROVED', noMutation: true });
+  if (!importer && ctx.ownerPresent !== true) throw Object.assign(new Error('MAIL_IMPORT_OWNER_PRESENT_UNPROVED: --owner-present required before creating Mail import UI; no Mail operation performed'),
+    { code: 'MAIL_IMPORT_OWNER_PRESENT_UNPROVED', noMutation: true });
   importer ??= openMailImport;
   ctx.signal?.throwIfAborted();
   ctx.cleanupSignal?.throwIfAborted();

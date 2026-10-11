@@ -52,6 +52,8 @@ const firefoxTasks = [
 
 const chatTasks = Object.entries(CHAT_APPS).map(([kind, spec]) => ({
   id: spec.id, app: spec.app, bundle: spec.bundle, privateMail: true,
+  // The owner's real chat accounts: only with the owner watching (LAWS, 2026-10-11).
+  ownerPresent: true,
   prepare: prepareChat, setup: ctx => setupChat(ctx, kind),
   prompt: promptChat, check: checkChat, cleanup: cleanupChat,
   privateExpected: expectedChat, privateTerms: labelsChat,

@@ -7,7 +7,7 @@ import { swiftModuleCache } from './swift-cache.mjs';
 
 const privateState = new WeakMap();
 const kinds = new Set(['label', 'message', 'thread', 'scroll', 'search']);
-const codes = new Set(['MIMESTREAM_OWNER_AWAY_UNPROVED', 'MIMESTREAM_APP_DIALOG_STOP', 'MIMESTREAM_NOT_RUNNING',
+const codes = new Set(['MIMESTREAM_OWNER_PRESENT_UNPROVED', 'MIMESTREAM_APP_DIALOG_STOP', 'MIMESTREAM_NOT_RUNNING',
   'MIMESTREAM_ACCESSIBILITY_UNAVAILABLE', 'MIMESTREAM_PROCESS_AMBIGUOUS', 'MIMESTREAM_WINDOW_OWNERSHIP_UNPROVED',
   'MIMESTREAM_BASELINE_UNPROVED', 'MIMESTREAM_NATIVE_CAPABILITY_UNSUPPORTED', 'MIMESTREAM_HELPER_UNCOLLECTED',
   'MIMESTREAM_SETUP_FAILED', 'MIMESTREAM_CLEANUP_UNCONFIRMED', 'MIMESTREAM_COMPILATION_FAILED']);
@@ -44,7 +44,7 @@ export async function setupMimestream(ctx, kind, { adapter = openMimestream } = 
   prepareMimestream(ctx);
   const state = stateFor(ctx);
   if (!kinds.has(kind)) throw failure('MIMESTREAM_NATIVE_CAPABILITY_UNSUPPORTED', true);
-  if (adapter === openMimestream && ctx.ownerAway !== true) throw failure('MIMESTREAM_OWNER_AWAY_UNPROVED', true);
+  if (adapter === openMimestream && ctx.ownerPresent !== true) throw failure('MIMESTREAM_OWNER_PRESENT_UNPROVED', true);
   ctx.signal?.throwIfAborted();
   ctx.cleanupSignal?.throwIfAborted();
   const diagnostic = { app: 'Mimestream', bundle: 'com.mimestream.Mimestream', actionTaken: false, cleanup: 'nothing created' };
@@ -161,7 +161,7 @@ export async function mimestreamHelper(signal) {
 }
 
 export async function openMimestream(ctx, kind, attach, { helper = mimestreamHelper, run = runOwned } = {}) {
-  if (ctx.ownerAway !== true) throw failure('MIMESTREAM_OWNER_AWAY_UNPROVED', true);
+  if (ctx.ownerPresent !== true) throw failure('MIMESTREAM_OWNER_PRESENT_UNPROVED', true);
   const control = join(ctx.dir, 'mimestream-control.json'), controller = new AbortController(), stages = new Map();
   const stage = id => { if (!stages.has(id)) stages.set(id, Promise.withResolvers()); return stages.get(id); };
   let response, buffered = '', counter = 0, stopped = false;
@@ -188,7 +188,7 @@ export async function openMimestream(ctx, kind, attach, { helper = mimestreamHel
   const nativeState = stateFor(ctx);
   nativeState.helperLaunched = true;
   nativeState.diagnostic.cleanup = 'unconfirmed';
-  response = run(command, [JSON.stringify({ nonce: ctx.nonce, kind, control, ownerAway: true })], {
+  response = run(command, [JSON.stringify({ nonce: ctx.nonce, kind, control, ownerPresent: true })], {
     signal: AbortSignal.any([controller.signal, ctx.cleanupSignal, ctx.signal].filter(Boolean)), timeoutMs: 600000,
     onStdout: chunk => {
       buffered += String(chunk);

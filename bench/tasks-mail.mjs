@@ -9,7 +9,8 @@ const requests = {
 };
 
 export const mailTasks = Object.entries(requests).map(([id, request]) => ({
-  id, app: 'Mail', prepare: prepareMailFixture, setup: setupMailImport,
+  id, app: 'Mail', ownerPresent: true, // The owner's real Mail app: only with the owner watching (LAWS, 2026-10-11).
+  prepare: prepareMailFixture, setup: setupMailImport,
   prompt: ctx => `Using computer use in the run-owned Mail viewer, navigate only the local On My Mac imported mailbox "${ctx.mail.name}". ` +
     request + ' Return JSON with exactly one field, {"answer":"the exact requested value"}. ' +
     'Do not compose, reply, forward, send, move, copy, flag, delete, mark read or unread, rename, create mailboxes, or change any mail or settings. ' +

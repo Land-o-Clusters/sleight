@@ -362,8 +362,8 @@ final class Session {
 func main() throws {
     if CommandLine.arguments.dropFirst().first == "--self-test" { try selfTest(); return }
     guard let data = CommandLine.arguments.dropFirst().first?.data(using: .utf8), let request = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-        request["ownerAway"] as? Bool == true, let control = request["control"] as? String,
-        let name = request["name"] as? String, name.hasPrefix("Sleight-Mail-"), let root = request["root"] as? String, root.hasSuffix("/" + name), request["folders"] is [String] else { throw MailError("MAIL_OWNER_AWAY_OR_REQUEST_UNPROVED") }
+        request["ownerPresent"] as? Bool == true, let control = request["control"] as? String,
+        let name = request["name"] as? String, name.hasPrefix("Sleight-Mail-"), let root = request["root"] as? String, root.hasSuffix("/" + name), request["folders"] is [String] else { throw MailError("MAIL_OWNER_PRESENT_OR_REQUEST_UNPROVED") }
     guard AXIsProcessTrusted() else { throw MailError("MAIL_ACCESSIBILITY_UNAVAILABLE: no permission request made") }
     let running = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.mail")
     guard running.count <= 1 else { throw MailError("MAIL_PROCESS_AMBIGUOUS") }

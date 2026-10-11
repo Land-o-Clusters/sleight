@@ -421,8 +421,8 @@ func main() throws {
     var request: [String: Any] = [:]
     if !schema {
         guard let data = CommandLine.arguments.dropFirst().first?.data(using: .utf8), let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            object["ownerAway"] as? Bool == true, object["control"] is String, object["nonce"] is String,
-            let kind = object["kind"] as? String, ["label", "message", "thread", "scroll", "search"].contains(kind) else { throw FixtureError("MIMESTREAM_OWNER_AWAY_UNPROVED") }
+            object["ownerPresent"] as? Bool == true, object["control"] is String, object["nonce"] is String,
+            let kind = object["kind"] as? String, ["label", "message", "thread", "scroll", "search"].contains(kind) else { throw FixtureError("MIMESTREAM_OWNER_PRESENT_UNPROVED") }
         request = object
     }
     guard AXIsProcessTrusted() else { try emit(["stage": "untouched", "actionTaken": false]); throw FixtureError("MIMESTREAM_ACCESSIBILITY_UNAVAILABLE") }

@@ -149,10 +149,11 @@ test('chat setup refuses a launch and keeps author strings off enumerable contex
 });
 
 test('live chat adapter refuses a missing app and never launches', async t => {
-  await assert.rejects(setupChat(context(t), 'slack', { running: async () => true }), e => e.code === 'CHAT_OWNER_AWAY_UNPROVED');
-  const missing = { ...context(t), ownerAway: true };
+  await assert.rejects(setupChat(context(t), 'slack', { running: async () => true }),
+    e => e.code === 'CHAT_OWNER_PRESENT_UNPROVED' && e.noMutation === true);
+  const missing = { ...context(t), ownerPresent: true };
   await assert.rejects(setupChat(missing, 'slack', { running: async () => false }), e => e.code === 'CHAT_NOT_RUNNING');
-  const unproved = { ...context(t), ownerAway: true };
+  const unproved = { ...context(t), ownerPresent: true };
   await assert.rejects(setupChat(unproved, 'slack', { running: async () => true }), e => e.code === 'CHAT_BASELINE_UNPROVED');
 });
 

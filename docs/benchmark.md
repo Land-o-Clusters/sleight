@@ -125,13 +125,15 @@ Mail adds `mail-folder`, `mail-message`, `mail-thread`, `mail-attachment` and `m
 local invented mailbox. All 20 dry fixtures ran. The architect's later desktop pass passed 11 web
 tasks once each. Word continued past its Replace All result dialog and saved; its checker then
 rejected a ZIP entry. Excel stopped during cold setup, and PowerPoint did not run. Office remains
-unqualified. Mail waits until the owner can watch it.
+unqualified. The Mail tasks run in the owner's real Mail app, so they run only with the owner
+present (`--owner-present`, owner 2026-10-11). Default passes and the head-to-head skip them.
 
 Brief 7b adds `mimestream-label`, `mimestream-message`, `mimestream-thread`, `mimestream-scroll`
 and `mimestream-search` on the owner's signed-in Gmail. Select those IDs in a separate sleight pass.
 Their results retain only verdicts, seconds, turns and salted answer hashes. The adapter requires
 explicit read state and unchanged mailbox counts, preserves Mimestream, and closes only its new
-window. Live qualification waits until the owner can watch it.
+window. These tasks also require `--owner-present`; the helper refuses the request without it
+before it touches the app.
 
 ### Shop tasks
 
@@ -153,9 +155,11 @@ refusal, never a human check.
 read only). One engine read of each app, no input, is in
 [2026-10-10-electron-firefox.md](benchmarks/2026-10-10-electron-firefox.md). Slack, Firefox and
 WhatsApp were thin (15, 24 and 19 elements). VS Code and Cursor had no text fields. None of the
-six had button IDs. The tasks are unit-tested. sleight-arch runs them live.
+six had button IDs. The tasks are unit-tested. sleight-arch runs them live. The chat reads work in
+the owner's real accounts, so `slack-read`, `discord-read` and `whatsapp-read` run only with the
+owner present (`--owner-present`, owner 2026-10-11).
 
-`iphone-mirroring-settings` reports the iOS version from Settings > General > About in iPhone Mirroring. Select it with `--owner-present`. Default passes and the head-to-head skip it. The benchmark approves iPhone Mirroring only in `--owner-present` runs, since headless runs can't show a prompt. Published rows keep the answer and timings with no screenshot.
+`iphone-mirroring-settings` reports the iOS version from Settings > General > About in iPhone Mirroring. Select it with `--owner-present`. Default passes and the head-to-head skip it. The benchmark approves iPhone Mirroring only in `--owner-present` runs, since headless runs can't show a prompt. Published rows keep the answer and timings with no screenshot. Every owner-present task (iPhone Mirroring, Mail, Mimestream, chat reads) is skipped by default passes and the head-to-head, and an `--owner-away` pass refuses a selected one before any app operation.
 
 ## Time per run
 

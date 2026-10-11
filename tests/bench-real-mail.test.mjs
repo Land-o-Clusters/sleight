@@ -59,9 +59,10 @@ test('fixture contains sixty invented MIME messages, reply references, attachmen
   assert.ok(ctx.mail.messages.every(m => m.sender.endsWith('@example.test')));
 });
 
-test('setup fails before any Mail operation when native import ownership is unproved', async t => {
+test('setup fails before any Mail operation when owner presence is unproved', async t => {
   const ctx = context(t);
-  await assert.rejects(mail.setupMailImport(ctx), e => e.noMutation === true && e.code === 'MAIL_IMPORT_OWNERSHIP_UNPROVED');
+  await assert.rejects(mail.setupMailImport(ctx),
+    e => e.noMutation === true && e.code === 'MAIL_IMPORT_OWNER_PRESENT_UNPROVED' && /owner-present/.test(e.message));
   assert.equal(ctx.mailImport, undefined);
   await mail.cleanupMailImport(ctx);
   assert.equal(ctx.fixtureDiagnostics[0].cleanup, 'nothing created');
@@ -174,17 +175,29 @@ test('five Mail tasks prohibit owner mail access and every mailbox mutation', t 
   }
 });
 
-test('production owner-away guard precedes helper compilation or Mail access', async t => {
+test('production owner-present guard precedes helper compilation or Mail access', async t => {
   const ctx = context(t);
-  await assert.rejects(mail.setupMailImport(ctx), e => e.noMutation === true && e.code === 'MAIL_IMPORT_OWNERSHIP_UNPROVED');
+  await assert.rejects(mail.setupMailImport(ctx), e => e.noMutation === true && e.code === 'MAIL_IMPORT_OWNER_PRESENT_UNPROVED');
   assert.equal(ctx.pendingAcquisitions, undefined);
 });
 
+test('openMailImport refuses without --owner-present before compiling or running the helper', async t => {
+  const ctx = context(t);
+  ctx.fixtureDiagnostics = [{ app: 'Mail', actionTaken: false, cleanup: 'nothing created' }];
+  await assert.rejects(mail.openMailImport(ctx.mail, ctx, {
+    helper: async () => { throw new Error('helper must not compile'); },
+    run: async () => { throw new Error('helper must not run'); },
+  }), e => e.noMutation === true && e.message.startsWith('MAIL_OWNER_PRESENT_UNPROVED'));
+});
+
 test('native pre-import stop accepts only explicit retained cleanup and helper collection receipts', async t => {
-  const ctx = context(t); ctx.ownerAway = true;
+  const ctx = context(t); ctx.ownerPresent = true;
   await assert.rejects(mail.setupMailImport(ctx, { importer: (fixture, current) => mail.openMailImport(fixture, current, {
     helper: async () => 'isolated-test-helper',
-    run: async (_, __, options) => {
+    run: async (_, args, options) => {
+      const payload = JSON.parse(args[0]);
+      assert.equal(payload.ownerPresent, true);
+      assert.equal('ownerAway' in payload, false);
       options.onStdout(JSON.stringify({ stage: 'closed', removed: true, appQuit: false }) + '\n');
       options.onStdout(JSON.stringify({ stage: 'setup-failure', cleanup: 'closed retained fixture', imported: false }) + '\n');
       return { groupClean: true, exit: { code: 1 }, stdout: '', stderr: 'MAIL_IMPORT_LOCAL_DESTINATION_UNPROVED' };
@@ -236,7 +249,7 @@ test('export Status headers cannot claim current app flags or read state without
 
 test('native dialog stop publishes category and collects exact registered helper without AX cleanup', async t => {
   const ctx = context(t), cleanup = new AbortController(), dialogs = [];
-  ctx.ownerAway = true; ctx.cleanupSignal = cleanup.signal;
+  ctx.ownerPresent = true; ctx.cleanupSignal = cleanup.signal;
   ctx.onAppDialog = dialog => { dialogs.push(dialog); cleanup.abort(); };
   await assert.rejects(mail.setupMailImport(ctx, { importer: (fixture, current) => mail.openMailImport(fixture, current, {
     helper: async () => 'isolated-test-helper',
@@ -265,4 +278,13 @@ test('native Mail ownership self-test rejects focus-only and ambiguous creation,
   assert.equal(evidence.localDestinationRequired, true);
   assert.equal(evidence.unsettledCreationRefused, true);
   assert.equal(evidence.dialogStops, true);
+});
+
+test('native Mail helper refuses a request without the owner-present boundary before any AX use', async () => {
+  const helper = await mail.mailHelper();
+  const payload = { name: 'Sleight-Mail-nonce', root: '/private/tmp/Sleight-Mail-nonce',
+    folders: ['Archive'], control: '/private/tmp/mail-control.json', nonce: 'nonce' };
+  const result = await runOwned(helper, [JSON.stringify(payload)], { timeoutMs: 15000 });
+  assert.equal(result.exit.code, 1, result.stdout);
+  assert.match(result.stderr, /MAIL_OWNER_PRESENT/);
 });

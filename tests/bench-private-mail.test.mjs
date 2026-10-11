@@ -50,7 +50,7 @@ test('private pass save keeps setup-stop rows as a bare failed phase and still r
     { passed: false, seconds: 0, reason: 'CHAT_NOT_RUNNING' }, { arm: 'sleight', run: 1 });
   assert.deepEqual(publicPrivateMailRows([
     { phase: 'preflight', passed: false, reason: 'sleight arm also loads lcu' },
-    { arm: 'sleight', phase: 'configuration', passed: false, reason: 'CHAT_OWNER_AWAY_UNPROVED' },
+    { arm: 'sleight', phase: 'configuration', passed: false, reason: 'CHAT_OWNER_PRESENT_UNPROVED' },
     hashed,
   ]), [{ phase: 'preflight', passed: false }, { arm: 'sleight', phase: 'configuration', passed: false }, hashed]);
   assert.deepEqual(publicPrivateMailRows([{ arm: 'Invented Author', phase: 'Invented Author', passed: true }]), [{ phase: 'stop', passed: false }]);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { runInNewContext } from 'node:vm';
-import { BENCH_APPS, REAL_APPS } from '../bench/tasks.mjs';
+import { BENCH_APPS, REAL_APPS, getTasks } from '../bench/tasks.mjs';
 import { selectSuiteTasks, assertShopSmokeRuns } from '../bench/shop.mjs';
 import { privateMailResult, publicPrivateMailRow, publicPrivateMailRows } from '../bench/private-mail.mjs';
 import { privateDriverEnvironment } from '../bench/driver.mjs';
@@ -612,6 +612,10 @@ test('default real selection skips shop smoke tasks, and selecting them requires
   assert.match(refused.error?.message ?? '', /runs 1/);
 });
 
+const OWNER_PRESENT_IDS = ['mail-folder', 'mail-message', 'mail-thread', 'mail-attachment', 'mail-search',
+  'mimestream-label', 'mimestream-message', 'mimestream-thread', 'mimestream-scroll', 'mimestream-search',
+  'slack-read', 'discord-read', 'whatsapp-read', 'iphone-mirroring-settings'];
+
 test('default real selection skips iPhone Mirroring, and selecting it requires --owner-present', async () => {
   const stub = id => ({ id, app: 'Safari', setup() {}, prompt: () => 'task', check: () => true, cleanup() {} });
   const shop = stub('safari-shop');
@@ -624,6 +628,30 @@ test('default real selection skips iPhone Mirroring, and selecting it requires -
   assert.match(refused.error?.message ?? '', /owner-present/);
   const both = await runner({ extraArgs: ['--owner-away', '--owner-present'] });
   assert.match(both.error?.message ?? '', /owner-present/);
+});
+
+test('the owner-account Mail, Mimestream, chat and iPhone Mirroring tasks run only with --owner-present', () => {
+  const all = getTasks('real');
+  for (const task of all) {
+    assert.equal(task.ownerPresent === true, OWNER_PRESENT_IDS.includes(task.id),
+      `${task.id} ownerPresent flag`);
+  }
+  const selected = selectSuiteTasks(all);
+  assert.ok(selected.every(task => !task.ownerPresent));
+  assert.deepEqual(selectSuiteTasks(all, OWNER_PRESENT_IDS).map(task => task.ownerPresent),
+    OWNER_PRESENT_IDS.map(() => true));
+});
+
+test('an --owner-away pass refuses owner-present tasks before the live lock or any app operation', async () => {
+  const stub = id => ({ id, app: 'Safari', setup() {}, prompt: () => 'task', check: () => true, cleanup() {} });
+  const iphone = { ...stub('iphone-mirroring-settings'), ownerPresent: true };
+  const refused = await runner({ suite: 'real', tasks: [iphone], extraArgs: ['--tasks', 'iphone-mirroring-settings', '--owner-away'] });
+  assert.match(refused.error?.message ?? '', /owner-present tasks \(iPhone Mirroring, Mail, Mimestream and chat reads\)/);
+  assert.ok(!refused.calls.includes('real run') && !refused.calls.includes('lock'), JSON.stringify(refused.calls));
+  // Without selecting them, an --owner-away pass skips owner-present tasks instead of refusing.
+  const skipped = await runner({ suite: 'real', tasks: [iphone, stub('safari-shop')], extraArgs: ['--owner-away'] });
+  assert.equal(skipped.error, undefined);
+  assert.ok(skipped.saved.at(-1).results.every(row => row.task === 'safari-shop'));
 });
 
 test('iPhone Mirroring published rows keep the answer and timings and omit screenshots', async () => {
