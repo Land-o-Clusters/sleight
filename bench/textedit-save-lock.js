@@ -1,32 +1,37 @@
 // Background-only operations on one owned temporary TextEdit document per run.
-// No activation, pointer, clipboard, permission request or dialog response.
+// Accessibility writes and PID-local settle events only. Cmd+S is the engine's
+// pressKey("super+s"), never a posted key. Cleanup looks up TextEdit's PID and
+// closes only the owned document. No activation, pointer, clipboard, permission
+// request, dialog response or screenshot.
 ObjC.import('AppKit');
 ObjC.import('ApplicationServices');
 ObjC.import('CoreGraphics');
 
 const OWNED_PATH = /^\/private\/tmp\/sleight-save-lock-[A-Za-z0-9]+\/trial\.txt$/;
 
-// Decides whether the windows of the instance this run launched can be driven. Every row comes from
-// that PID, which was absent at preflight and launched after this run's `open`. Rows hold the
-// window's AXDocument (null when it has none), modal and sheet state, and its text area's value
-// (null when the window has no text area). The owned document must be the only document. One
-// extra window is tolerated when it can't hold anyone's data: no document, empty or no text area,
-// not modal and no sheet, which is what a launch's untitled window or panel looks like.
+// The owned URL must be exactly one window. Extra owner documents and empty
+// untitled windows are tolerated because this probe uses the already-running
+// TextEdit (Open panel, not an isolated launch). Any dialog or sheet refuses.
 function acceptOwnedWindows(rows, expectedURL) {
   if (!Array.isArray(rows) || rows.length === 0) return { accept: false, retry: true, reason: 'No window yet' };
   const owned = rows.filter(r => r.document === expectedURL);
   if (owned.length === 0) return { accept: false, retry: true, reason: 'Owned document window not open yet' };
   if (owned.length > 1) return { accept: false, reason: 'Ambiguous owned windows' };
   if (owned[0].modal || owned[0].sheet) return { accept: false, reason: 'Owned window has a dialog or sheet' };
-  const extras = rows.filter(r => r !== owned[0]);
-  if (extras.length > 1) return { accept: false, reason: 'More than one extra window' };
-  for (const r of extras) {
-    if (r.document !== null && r.document !== undefined) return { accept: false, reason: 'Extra window has a document' };
-    if (r.modal || r.sheet) return { accept: false, reason: 'Extra window is modal or has a sheet' };
-    if (typeof r.text === 'string' && r.text !== '') return { accept: false, reason: 'Extra untitled window has text' };
-    if (r.text !== null && typeof r.text !== 'string') return { accept: false, reason: 'Extra window content unreadable' };
+  for (const r of rows) {
+    if (r.modal || r.sheet) return { accept: false, reason: 'TextEdit has a dialog or sheet' };
   }
-  return { accept: true, owned: rows.indexOf(owned[0]), artifacts: extras.map(r => (r.text === null ? 'panel' : 'empty-untitled')) };
+  const extras = rows.filter(r => r !== owned[0]);
+  return {
+    accept: true,
+    owned: rows.indexOf(owned[0]),
+    artifacts: extras.map(r => {
+      if (r.document) return 'other-document';
+      if (r.text === null) return 'panel';
+      if (r.text === '') return 'empty-untitled';
+      return 'untitled';
+    }),
+  };
 }
 
 function run() {
@@ -34,7 +39,7 @@ function run() {
   free();
   const stdin = $.NSFileHandle.fileHandleWithStandardInput;
   const stdout = $.NSFileHandle.fileHandleWithStandardOutput;
-  let path, expectedURL, win, ax, area, pid, front, ownedApp, attachedCount, priorPids = [], buffer = '';
+  let path, expectedURL, win, ax, area, pid, front, attachedCount, buffer = '';
   const attr = (el, name) => {
     free();
     const out = Ref(), status = Number($.AXUIElementCopyAttributeValue(el, $(name), out));
@@ -42,9 +47,13 @@ function run() {
     return ObjC.castRefToObject(out[0]);
   };
   const value = (el, name) => ObjC.unwrap(attr(el, name));
-  // Unsupported (-25205) and no value (-25212) read as null; anything else, such as -25204, throws.
   const optional = (el, name) => { try { return value(el, name); } catch (e) { if (/ failed: -252(05|12)$/.test(e.message)) return null; throw e; } };
   const frontPid = () => Number($.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier);
+  function textEditPid() {
+    const running = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.TextEdit');
+    if (Number(running.count) !== 1) throw new Error('Ambiguous or missing TextEdit process');
+    return Number(running.objectAtIndex(0).processIdentifier);
+  }
   const textArea = el => {
     let found, count = 0;
     const walk = (node, depth) => {
@@ -69,15 +78,17 @@ function run() {
     }
     return rows;
   }
-  function verify() {
-    if (frontPid() !== front || frontPid() === pid) throw new Error('Foreground changed; no input sent');
-    const rows = windowRows(), choice = acceptOwnedWindows(rows, expectedURL);
-    // A launch's untitled window may close itself later; a new window stops input.
-    if (!choice.accept || rows.length > attachedCount) throw new Error('Owned window set changed: ' + (choice.reason || rows.length + ' windows'));
+  function bindOwned(rows, choice) {
     attachedCount = rows.length;
     win = rows[choice.owned].el; area = rows[choice.owned].area;
     if (!area) throw new Error('Text area unavailable');
     for (const name of ['AXMainWindow', 'AXFocusedWindow']) if (value(attr(ax, name), 'AXDocument') !== expectedURL) throw new Error('Input window differs from owned document');
+  }
+  function verify() {
+    if (frontPid() !== front || frontPid() === pid) throw new Error('Foreground changed; no input sent');
+    const rows = windowRows(), choice = acceptOwnedWindows(rows, expectedURL);
+    if (!choice.accept || rows.length > attachedCount) throw new Error('Owned window set changed: ' + (choice.reason || rows.length + ' windows'));
+    bindOwned(rows, choice);
   }
   function key(code, flags, type) {
     free();
@@ -86,8 +97,6 @@ function run() {
     if (type === 'flags-set' || type === 'flags-clear') $.CGEventSetType(event, $.kCGEventFlagsChanged);
     $.CGEventPostToPid(pid, event);
   }
-  // `text of document "trial.txt"` as a raw Apple Event to the owned PID, so it can't reach
-  // another TextEdit instance. It never asks for Automation consent (kAEDoNotPromptForUserConsent).
   function appleEventRead() {
     const D = $.NSAppleEventDescriptor, code = s => [...s].reduce((n, c) => n * 256 + c.charCodeAt(0), 0);
     const spec = (want, form, seld, from) => {
@@ -107,8 +116,22 @@ function run() {
     let status = 0;
     if (!reply || reply.isNil()) { try { status = Number(error.code) || -1; } catch { status = -1; } }
     else { const errn = reply.paramDescriptorForKeyword(code('errn')); if (errn && !errn.isNil()) status = Number(errn.int32Value); }
-    // Consent missing or refused, or no such process: TextEdit never saw the event.
     return { appleEventStatus: status, appleEventMs: ms, delivered: ![-1743, -1744, -600, -609].includes(status) };
+  }
+  function closeOwnedWindow() {
+    const children = attr(win, 'AXChildren');
+    let button;
+    for (let i = 0; i < children.count; i++) {
+      const child = children.objectAtIndex(i);
+      if (optional(child, 'AXSubrole') === 'AXCloseButton' || optional(child, 'AXRole') === 'AXCloseButton') {
+        if (button) throw new Error('Ambiguous close button');
+        button = child;
+      }
+    }
+    if (!button) throw new Error('Owned window has no close button');
+    free();
+    const status = Number($.AXUIElementPerformAction(button, $('AXPress')));
+    if (status) throw new Error('AX close failed: ' + status);
   }
   function act(r) {
     free();
@@ -116,85 +139,55 @@ function run() {
     if (r.op === 'preflight') {
       if (!OWNED_PATH.test(r.path || '')) throw new Error('Expected owned temporary file');
       path = r.path; expectedURL = ObjC.unwrap($.NSURL.fileURLWithPath(path).absoluteString);
-      pid = win = area = ax = ownedApp = attachedCount = undefined;
-      const running = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.TextEdit');
+      win = area = ax = attachedCount = undefined;
+      pid = textEditPid();
       front = frontPid();
-      priorPids = [];
-      for (let i = 0; i < running.count; i++) priorPids.push(Number(running.objectAtIndex(i).processIdentifier));
-      if (priorPids.includes(front)) throw new Error('TextEdit is foreground; probe refused');
-      return { background: true, existingProcessCount: priorPids.length, isolatedInstance: true };
+      if (front === pid) throw new Error('TextEdit is foreground; probe refused');
+      // The engine types the path into the Open panel. If the panel didn't open, the text would go into
+      // the focused document, so any document this probe didn't open stops the run.
+      const foreign = Application('TextEdit').documents().filter(d => { try { return !OWNED_PATH.test(String(d.path())); } catch { return true; } });
+      if (foreign.length) throw new Error(`TextEdit has ${foreign.length} document(s) this probe did not open; probe refused`);
+      ax = $.AXUIElementCreateApplication(pid); $.AXUIElementSetMessagingTimeout(ax, 1);
+      return { background: true, existingProcessCount: 1, pid, isolatedInstance: false };
     }
+    if (r.op === 'lookup-pid') return { pid: textEditPid() };
     if (!path) throw new Error('No preflight for this run');
-    const launchedAfter = app => Number(app.launchDate.timeIntervalSince1970) * 1000 >= Number(r.earliest);
     if (r.op === 'attach') {
       win = area = undefined;
       if (frontPid() !== front) throw new Error('Foreground changed during open');
-      if (!pid) {
-        const running = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.TextEdit'), candidates = [];
-        for (let i = 0; i < running.count; i++) { const a = running.objectAtIndex(i); if (!priorPids.includes(Number(a.processIdentifier))) candidates.push(a); }
-        if (candidates.length === 0) throw new Error('Retry: New TextEdit process not registered yet');
-        if (candidates.length !== 1 || !launchedAfter(candidates[0])) throw new Error('Ambiguous newly launched TextEdit process');
-        ownedApp = candidates[0]; pid = Number(ownedApp.processIdentifier);
-        ax = $.AXUIElementCreateApplication(pid); $.AXUIElementSetMessagingTimeout(ax, 1);
-      }
+      if (textEditPid() !== pid) throw new Error('TextEdit process identity changed');
       let rows;
       try { rows = windowRows(); } catch (e) { throw new Error(/-25204$/.test(e.message) ? 'Retry: ' + e.message : e.message); }
       const choice = acceptOwnedWindows(rows, expectedURL);
       if (!choice.accept) throw new Error((choice.retry ? 'Retry: ' : 'Window refused: ') + choice.reason);
-      attachedCount = rows.length;
-      // A window can show before it is key, so a mismatched input window gets the retries too.
-      try { verify(); } catch (e) { throw new Error(/Input window differs|-25204$/.test(e.message) ? 'Retry: ' + e.message : e.message); }
+      if (Number($.AXUIElementSetAttributeValue(rows[choice.owned].el, $('AXMain'), $(true))) !== 0
+        || Number($.AXUIElementPerformAction(rows[choice.owned].el, $('AXRaise'))) !== 0) {
+        throw new Error('Could not select owned window in background');
+      }
+      try { bindOwned(rows, choice); verify(); } catch (e) { throw new Error(/Input window differs|-25204$/.test(e.message) ? 'Retry: ' + e.message : e.message); }
       return { attached: true, pid, windows: rows.length, artifacts: choice.artifacts };
     }
-    if (r.op === 'end-owned') {
-      // Quit only the launch this run made: absent at preflight, TextEdit, launched after `open`.
-      if (!ownedApp) {
-        // A slow launch may register late, so look for 3 s before calling it absent.
-        let candidates = [];
-        for (const deadline = Date.now() + 3000; ;) {
-          const running = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.TextEdit');
-          candidates = [];
-          for (let i = 0; i < running.count; i++) { const a = running.objectAtIndex(i); if (!priorPids.includes(Number(a.processIdentifier)) && launchedAfter(a)) candidates.push(a); }
-          if (candidates.length || Date.now() > deadline) break;
-          delay(0.2);
-        }
-        if (candidates.length === 0) return { gone: true, method: 'never-registered' };
-        if (candidates.length !== 1) throw new Error('Ambiguous owned launch; quit refused');
-        ownedApp = candidates[0]; pid = Number(ownedApp.processIdentifier);
-        ax = $.AXUIElementCreateApplication(pid); $.AXUIElementSetMessagingTimeout(ax, 1);
-      }
-      if (ObjC.unwrap(ownedApp.bundleIdentifier) !== 'com.apple.TextEdit' || priorPids.includes(pid) || !launchedAfter(ownedApp)) throw new Error('Owned launch identity unproven; quit refused');
+    if (r.op === 'close-owned') {
+      if (!pid) throw new Error('No owned document attached');
       const result = { pid, foregroundSame: frontPid() === front, ownedFront: frontPid() === pid };
-      if (ownedApp.isTerminated) return { ...result, gone: true, method: 'already-exited' };
-      let clean = false;
-      try {
-        const rows = windowRows();
-        if (rows.some(w => (w.document !== null && w.document !== expectedURL) || (w.document === null && typeof w.text === 'string' && w.text !== ''))) {
-          throw new Error('Owned launch shows a window this run did not open; quit refused');
+      if (frontPid() === pid) throw new Error('TextEdit is foreground; close refused');
+      verify();
+      const edited = optional(win, 'AXEdited') === true;
+      if (edited) throw new Error('Owned document is still edited; close refused so no Save panel is answered');
+      closeOwnedWindow();
+      const deadline = Date.now() + 3000;
+      while (Date.now() < deadline) {
+        delay(0.1);
+        if (frontPid() !== front) throw new Error('Foreground changed during close');
+        let rows;
+        try { rows = windowRows(); } catch (e) { throw new Error('Owned window unreadable after close: ' + e.message); }
+        if (rows.some(w => w.modal || w.sheet)) throw new Error('A dialog or sheet appeared on close; no prompt answered');
+        if (!rows.some(w => w.document === expectedURL)) {
+          win = area = attachedCount = undefined;
+          return { ...result, gone: true, method: 'ax-close', cleanup: 'pid-lookup' };
         }
-        const owned = rows.find(w => w.document === expectedURL), bytes = $.NSData.dataWithContentsOfFile(path);
-        const disk = bytes ? ObjC.unwrap($.NSString.alloc.initWithDataEncoding(bytes, $.NSUTF8StringEncoding)) : undefined;
-        clean = rows.every(w => !w.modal && !w.sheet) && (!owned || (owned.text === disk && optional(owned.el, 'AXEdited') === false));
-        result.windows = rows.length;
-      } catch (e) { if (/quit refused/.test(e.message)) throw e; result.windowsUnreadable = e.message; }
-      free();
-      // A saved document quits normally. A hung or unsaved one is killed, which discards only
-      // this run's temporary buffer.
-      // isTerminated only updates when the run loop turns, which delay() doesn't do, so a TextEdit
-      // that had exited still read as running (2026-10-10). A fresh lookup by PID is current.
-      const ownedPid = Number(ownedApp.processIdentifier);
-      const gone = () => { const now = $.NSRunningApplication.runningApplicationWithProcessIdentifier(ownedPid); return now.isNil() || now.isTerminated; };
-      if (clean) {
-        ownedApp.terminate; result.method = 'terminate';
-        const deadline = Date.now() + 3000; while (!gone() && Date.now() < deadline) delay(0.1);
       }
-      if (!gone()) {
-        ownedApp.forceTerminate; result.method = clean ? 'terminate-then-force' : 'force';
-        const deadline = Date.now() + 5000; while (!gone() && Date.now() < deadline) delay(0.1);
-      }
-      if (!gone()) throw new Error('Owned TextEdit quit unconfirmed');
-      pid = ownedApp = ax = win = area = undefined;
-      return { ...result, gone: true };
+      throw new Error('Owned document still open after close');
     }
     if (!pid) throw new Error('No owned launch attached');
     verify();
@@ -207,32 +200,15 @@ function run() {
     if (r.op === 'event') {
       let out = { delivered: true };
       if (r.variant === 'none') {}
-      // Same events and spacing as settleAfterTextWrite in plugins/sleight/lib/drag.js, which runs
-      // as its own osascript and can't be imported here.
       else if (r.variant === 'shift-pair') { key(56, $.kCGEventFlagMaskShift, 'flags-set'); delay(0.05); key(56, 0, 'flags-clear'); delay(0.05); }
       else if (r.variant === 'escape') { key(53, 0, 'down'); delay(0.05); key(53, 0, 'up'); }
-      else if (r.variant === 'keyup-only') key(53, 0, 'up'); // keyUp (11) is outside NSDocument's monitor mask 0x0BC014CA
+      else if (r.variant === 'keyup-only') key(53, 0, 'up');
       else if (r.variant === 'applescript-read') out = appleEventRead();
       else throw new Error('Unknown event variant');
       delay(0.1); return { posted: r.variant, ...out };
     }
-    if (r.op === 'dirty') {
-      // kVK_ANSI_X. Posted keys, not an Accessibility text write.
-      key(7, 0, 'down'); delay(0.05); key(7, 0, 'up'); delay(0.1);
-      return { axWrite: false, edited: optional(win, 'AXEdited') === true, text: value(area, 'AXValue') };
-    }
     if (r.op === 'state') {
       return { edited: optional(win, 'AXEdited') === true, text: value(area, 'AXValue') };
-    }
-    if (r.op === 'save') {
-      // Command down/up (kVK_Command = 55) around S, with Command held on both S events.
-      // S-down with only the Command flag, then S-up with none, never started a save
-      // (2026-10-11 evidence: idle main thread 14 s later, autosave at ~30 s).
-      key(55, $.kCGEventFlagMaskCommand, 'down'); delay(0.05);
-      key(1, $.kCGEventFlagMaskCommand, 'down'); const postedAt = Date.now(); delay(0.05);
-      key(1, $.kCGEventFlagMaskCommand, 'up'); delay(0.05);
-      key(55, 0, 'up');
-      return { saveRequested: true, postedAt };
     }
     throw new Error('Unknown operation');
   }

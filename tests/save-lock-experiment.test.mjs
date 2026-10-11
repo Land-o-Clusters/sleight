@@ -1,8 +1,29 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
-import { buildPlan, countByVariant, gateDecision, runExperiment, VARIANTS } from '../bench/textedit-save-lock.mjs';
+import {
+  VARIANTS, GATE_RUNS, GATE_MIN_HANGS, DELIVERY_WAIT_MS,
+  buildPlan, buildDeliveryCheckPlan, countByVariant, gateDecision, runExperiment,
+  ownedTrialPath, probeClientOptions, trialSteps, dryRunPlan,
+  mayCapture, scrubEvidence, parseArgs,
+} from '../bench/textedit-save-lock.mjs';
+
+const runner = fileURLToPath(new URL('../bench/textedit-save-lock.mjs', import.meta.url));
+const helper = readFileSync(new URL('../bench/textedit-save-lock.js', import.meta.url), 'utf8');
+const runnerSource = readFileSync(new URL('../bench/textedit-save-lock.mjs', import.meta.url), 'utf8');
+const path = '/private/tmp/sleight-save-lock-Zk4nfu/trial.txt';
+
+test('cleanup accepts only an owned temporary trial document', () => {
+  assert.equal(ownedTrialPath(path), path);
+  for (const wrong of ['/private/tmp/other/trial.txt', path + '/../other.txt',
+    '/private/tmp/sleight-save-lock-Zk4nfu/other.txt', '~/Documents/notes.txt',
+    '/tmp/sleight-save-lock-Zk4nfu/trial.txt']) {
+    assert.throws(() => ownedTrialPath(wrong), /owned temporary/);
+  }
+});
 
 test('the plan runs five no-event gate runs, then five interleaved cycles of the variants', () => {
   const plan = buildPlan();
@@ -15,6 +36,8 @@ test('the plan runs five no-event gate runs, then five interleaved cycles of the
     assert.ok(rest.slice(cycle * 5, cycle * 5 + 5).every(s => s.phase === 'variants' && s.cycle === cycle + 1));
   }
   assert.deepEqual(plan.map(s => s.index), plan.map((_, i) => i + 1));
+  assert.equal(GATE_RUNS, 5);
+  assert.equal(GATE_MIN_HANGS, 3);
 });
 
 test('hangs are counted per variant, apart from skipped and undelivered runs', () => {
@@ -42,11 +65,11 @@ async function experiment(gateHangs, { skipGate = 0 } = {}) {
   return { seen, report };
 }
 
-test('fewer than three gate hangs records that open -g does not reproduce and runs no variant', async () => {
+test('fewer than three gate hangs records that Open panel does not reproduce and runs no variant', async () => {
   const { seen, report } = await experiment(2);
   assert.deepEqual(seen, Array(5).fill('gate'));
   assert.equal(report.gate.proceed, false);
-  assert.equal(report.gate.conclusion, 'open -g does not reproduce the hang');
+  assert.equal(report.gate.conclusion, 'Open panel does not reproduce the hang');
   assert.equal(report.runs.length, 5); assert.deepEqual(report.counts.variants, {});
 });
 
@@ -62,7 +85,7 @@ test('skipped gate runs make a short gate inconclusive rather than a negative re
   const { report } = await experiment(2, { skipGate: 2 });
   assert.equal(report.gate.proceed, false);
   assert.match(report.gate.conclusion, /^inconclusive: 3 of 5/);
-  assert.equal(gateDecision([{ hang: true }, { hang: true }, { hang: false }, { hang: false }, { hang: false }]).conclusion, 'open -g does not reproduce the hang');
+  assert.equal(gateDecision([{ hang: true }, { hang: true }, { hang: false }, { hang: false }, { hang: false }]).conclusion, 'Open panel does not reproduce the hang');
 });
 
 test('a stop from a run ends the experiment there', async () => {
@@ -71,11 +94,9 @@ test('a stop from a run ends the experiment there', async () => {
   assert.deepEqual(seen, [1, 2]); assert.equal(report.stopped, 'Live hold exists');
 });
 
-const helper = readFileSync(new URL('../bench/textedit-save-lock.js', import.meta.url), 'utf8');
 function acceptOwnedWindows(rows) {
   const context = { ObjC: { import() {} } };
   runInNewContext(helper, context);
-  // The result comes from another realm, so compare it as plain data.
   return JSON.parse(JSON.stringify(context.acceptOwnedWindows(rows, 'file:///private/tmp/sleight-save-lock-abc123/trial.txt')));
 }
 const owned = { document: 'file:///private/tmp/sleight-save-lock-abc123/trial.txt', modal: false, sheet: false, text: 'seed\n' };
@@ -83,47 +104,137 @@ const owned = { document: 'file:///private/tmp/sleight-save-lock-abc123/trial.tx
 test('the owned document window alone is accepted', () => {
   assert.deepEqual(acceptOwnedWindows([owned]), { accept: true, owned: 0, artifacts: [] });
 });
-test('an extra empty untitled window or panel from the same launch is tolerated', () => {
+test('an extra empty untitled window or panel from the same app is tolerated', () => {
   assert.equal(acceptOwnedWindows([{ document: null, modal: false, sheet: false, text: '' }, owned]).accept, true);
   assert.equal(acceptOwnedWindows([{ document: null, modal: false, sheet: false, text: '' }, owned]).owned, 1);
   assert.deepEqual(acceptOwnedWindows([owned, { document: null, modal: false, sheet: false, text: null }]).artifacts, ['panel']);
 });
-test('a window that could hold someone else\'s data, or a second extra, is refused', () => {
-  for (const extra of [
-    { document: 'file:///Users/x/notes.txt', modal: false, sheet: false, text: '' },
-    { document: null, modal: false, sheet: false, text: 'restored words' },
-    { document: null, modal: true, sheet: false, text: null },
-    { document: null, modal: false, sheet: true, text: '' },
-  ]) { const r = acceptOwnedWindows([owned, extra]); assert.equal(r.accept, false); assert.ok(!r.retry, r.reason); }
-  const empty = { document: null, modal: false, sheet: false, text: '' };
-  assert.equal(acceptOwnedWindows([owned, empty, { ...empty }]).accept, false);
+test('an already-open owner document is tolerated; a second owned URL or a dialog is not', () => {
+  assert.equal(acceptOwnedWindows([owned, { document: 'file:///Users/x/notes.txt', modal: false, sheet: false, text: '' }]).accept, true);
+  assert.equal(acceptOwnedWindows([owned, { document: null, modal: false, sheet: false, text: 'restored words' }]).accept, true);
   assert.equal(acceptOwnedWindows([owned, { ...owned }]).reason, 'Ambiguous owned windows');
   assert.equal(acceptOwnedWindows([{ ...owned, sheet: true }]).accept, false);
+  assert.equal(acceptOwnedWindows([owned, { document: null, modal: true, sheet: false, text: null }]).accept, false);
 });
 test('no window, or no owned window yet, asks for a retry', () => {
   assert.equal(acceptOwnedWindows([]).retry, true);
   assert.equal(acceptOwnedWindows([{ document: null, modal: false, sheet: false, text: '' }]).retry, true);
 });
 
-function block(source, op) {
-  const start = source.indexOf(`if (r.op === '${op}')`);
-  assert.ok(start >= 0, `helper has op ${op}`);
-  const next = source.indexOf('if (r.op ===', start + 1);
-  return source.slice(start, next === -1 ? undefined : next);
-}
-
-test('Cmd+S posts Command down and up around S, and keeps Command held on S-up', () => {
-  const save = block(helper, 'save');
-  assert.match(save, /key\(55,/);
-  assert.match(save, /key\(1, \$\.kCGEventFlagMaskCommand, 'down'\)/);
-  assert.match(save, /key\(1, \$\.kCGEventFlagMaskCommand, 'up'\)/);
-  assert.doesNotMatch(save, /key\(1, 0, 'up'\)/);
+test('hang trials open through the engine Open panel, write through Accessibility, and save with pressKey super+s', () => {
+  const steps = trialSteps({ path, variant: 'none' });
+  assert.deepEqual(steps.open.map(s => s.code), [
+    'await app.pressKey("super+o")',
+    'await app.pressKey("super+shift+g")',
+    `await app.typeText(${JSON.stringify(path)})`,
+    'await app.pressKey("Return")',
+  ]);
+  assert.equal(steps.open.every(s => s.source === 'engine'), true);
+  assert.deepEqual(steps.edit, [{ source: 'fixture', op: 'edit', text: 'probe-1\n' }]);
+  assert.deepEqual(steps.settle, []);
+  assert.deepEqual(steps.save, { source: 'engine', code: 'await app.pressKey("super+s")' });
+  assert.equal(steps.capture, false);
+  assert.equal(JSON.stringify(steps).includes('open -g'), false);
+  assert.equal(JSON.stringify(steps).includes('CGEventPostToPid'), false);
 });
 
-test('dirty types a character and never writes text through Accessibility', () => {
-  const dirty = block(helper, 'dirty');
-  assert.doesNotMatch(dirty, /AXUIElementSetAttributeValue/);
-  assert.match(dirty, /key\(/);
+test('the shift variant still saves through the engine and only posts Shift after the Accessibility write', () => {
+  const steps = trialSteps({ path, variant: 'shift-pair', marker: 'probe-1\n' });
+  assert.deepEqual(steps.edit, [{ source: 'fixture', op: 'edit', text: 'probe-1\n' }]);
+  assert.deepEqual(steps.settle, [{ source: 'fixture', op: 'event', variant: 'shift-pair' }]);
+  assert.deepEqual(steps.save, { source: 'engine', code: 'await app.pressKey("super+s")' });
+});
+
+test('delivery-check types through the engine and requires Cmd+S to save within 2 s', () => {
+  const steps = trialSteps({ path, deliveryCheck: true, marker: 'typed' });
+  assert.equal(steps.edit.every(s => s.source === 'engine' && s.code.startsWith('await app.pressKey(')), true);
+  assert.deepEqual(steps.edit.map(s => s.code), [...'typed'].map(ch => `await app.pressKey(${JSON.stringify(ch)})`));
+  assert.deepEqual(steps.save, { source: 'engine', code: 'await app.pressKey("super+s")' });
+  assert.equal(steps.saveWithinMs, DELIVERY_WAIT_MS);
+  assert.equal(steps.saveWithinMs, 2000);
+  assert.equal(steps.edit.some(s => s.op === 'edit'), false);
+});
+
+test('the probe talks to TextEdit through the relay with change review off and a space probe', () => {
+  const probe = async () => ({ status: 'responding' });
+  assert.deepEqual(probeClientOptions(probe), {
+    relay: true,
+    relayOptions: { changeReview: false, spaceProbe: probe },
+  });
+  assert.match(runnerSource, /probeClient/);
+  assert.match(runnerSource, /changeReview:\s*false/);
+  assert.match(runnerSource, /spaceProbe/);
+});
+
+test('Open panel stages are never captured and evidence drops panel frames', () => {
+  assert.equal(mayCapture('open'), false);
+  assert.equal(mayCapture('go-to-folder'), false);
+  assert.equal(mayCapture('open-panel'), false);
+  assert.equal(mayCapture('document'), true);
+  const raw = {
+    path: '/Users/exampleuser/Projects/sleight',
+    frames: [
+      { stage: 'open-panel', title: 'Open', image: { type: 'image', data: 'pixels' } },
+      { stage: 'document', title: 'trial.txt', text: 'probe-1' },
+    ],
+    content: [{ type: 'image', data: 'panel' }, { type: 'text', text: 'ok' }],
+  };
+  const clean = scrubEvidence(raw, { home: '/Users/exampleuser', names: ['exampleuser'] });
+  assert.equal(clean.path, '~/Projects/sleight');
+  assert.equal(JSON.stringify(clean).includes('pixels'), false);
+  assert.equal(JSON.stringify(clean).includes('panel'), false);
+  assert.equal(JSON.stringify(clean).includes('/Users/exampleuser'), false);
+  assert.equal(clean.frames.length, 1);
+  assert.equal(clean.frames[0].title, 'trial.txt');
+  assert.deepEqual(clean.content, [{ type: 'text', text: 'ok' }]);
+});
+
+test('dry-run prints the Open-panel plus engine-save plan and does not take the live lock', () => {
+  const lock = '/tmp/sleight-live.lock';
+  const before = existsSync(lock);
+  const result = spawnSync(process.execPath, [runner, '--dry-run'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.dryRun, true);
+  assert.equal(plan.lock, false);
+  assert.equal(plan.captureOpenPanel, false);
+  assert.equal(plan.cleanup, 'pid-lookup');
+  assert.deepEqual(plan.probeClient, { relay: true, relayOptions: { changeReview: false, spaceProbe: true } });
+  assert.equal(plan.gate.runs, 5);
+  assert.equal(plan.gate.variantsIfHangs, 3);
+  assert.equal(plan.gate.interleaved, true);
+  assert.equal(plan.steps.save.code, 'await app.pressKey("super+s")');
+  assert.equal(plan.steps.save.source, 'engine');
+  assert.deepEqual(plan.steps.open.map(s => s.code), [
+    'await app.pressKey("super+o")',
+    'await app.pressKey("super+shift+g")',
+    `await app.typeText(${JSON.stringify('/private/tmp/sleight-save-lock-dry/trial.txt')})`,
+    'await app.pressKey("Return")',
+  ]);
+  assert.equal(JSON.stringify(plan).includes('open -g'), false);
+  assert.equal(JSON.stringify(plan).includes('CGEventPostToPid'), false);
+  assert.equal(existsSync(lock), before);
+  assert.deepEqual(plan, dryRunPlan());
+});
+
+test('delivery-check dry-run names typed keys, engine Cmd+S, and a 2 s save bound', () => {
+  const result = spawnSync(process.execPath, [runner, '--dry-run', '--delivery-check'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.deliveryCheck, true);
+  assert.equal(plan.steps.saveWithinMs, 2000);
+  assert.equal(plan.steps.edit[0].source, 'engine');
+  assert.match(plan.steps.save.code, /pressKey\("super\+s"\)/);
+});
+
+test('--delivery-check is accepted and names a 2 s confirmation', () => {
+  assert.deepEqual(parseArgs(['--delivery-check']), { dryRun: false, deliveryCheck: true });
+  assert.deepEqual(parseArgs(['--dry-run', '--delivery-check']), { dryRun: true, deliveryCheck: true });
+  assert.throws(() => parseArgs(['--live']), /supported/);
+  assert.equal(DELIVERY_WAIT_MS, 2000);
+  const plan = buildDeliveryCheckPlan();
+  assert.equal(plan.length, 1);
+  assert.equal(plan[0].phase, 'delivery-check');
 });
 
 test('a delivery-check plan runs its one step without a hang gate', async () => {
@@ -136,18 +247,6 @@ test('a delivery-check plan runs its one step without a hang gate', async () => 
   assert.deepEqual(seen, ['delivery-check']);
   assert.equal(report.runs.length, 1);
   assert.equal(report.gate.proceed, true);
-});
-
-test('--delivery-check is accepted and names a 2 s confirmation', async () => {
-  const { parseArgs, DELIVERY_WAIT_MS, buildDeliveryCheckPlan } = await import('../bench/textedit-save-lock.mjs');
-  assert.equal(typeof parseArgs, 'function');
-  assert.deepEqual(parseArgs(['--delivery-check']), { dryRun: false, deliveryCheck: true });
-  assert.deepEqual(parseArgs(['--dry-run', '--delivery-check']), { dryRun: true, deliveryCheck: true });
-  assert.throws(() => parseArgs(['--live']), /supported/);
-  assert.equal(DELIVERY_WAIT_MS, 2000);
-  const plan = buildDeliveryCheckPlan();
-  assert.equal(plan.length, 1);
-  assert.equal(plan[0].phase, 'delivery-check');
 });
 
 test('save confirmation returns when the file changes or edited clears within 2 s', async () => {
@@ -175,7 +274,6 @@ test('save confirmation returns when the file changes or edited clears within 2 
   });
   assert.equal(miss, null);
   t = 0;
-  // AXEdited stayed false after a typed character on 2026-10-11, so false alone isn't a save.
   const neverEdited = await watchSaveStart({
     seed: 'seed\n', until: 2000, now: () => t, sleep: async ms => { t += ms; }, editedBefore: false,
     readBytes: async () => 'seed\n',
@@ -184,18 +282,47 @@ test('save confirmation returns when the file changes or edited clears within 2 
   assert.equal(neverEdited, null);
 });
 
-test('the delivery check judges the typed character by the text, not AXEdited', () => {
-  const src = readFileSync(new URL('../bench/textedit-save-lock.mjs', import.meta.url), 'utf8');
-  const chunk = src.slice(src.indexOf("run.phase === 'delivery-check'"), src.indexOf("run.phase === 'delivery-check'") + 1200);
-  assert.match(chunk, /run\.dirty\.text === seed/);
-  assert.match(chunk, /editedBefore: run\.dirty\.edited === true/);
+function block(source, op) {
+  const start = source.indexOf(`if (r.op === '${op}')`);
+  assert.ok(start >= 0, `helper has op ${op}`);
+  const next = source.indexOf('if (r.op ===', start + 1);
+  return source.slice(start, next === -1 ? undefined : next);
+}
+
+test('the fixture writes through Accessibility, looks up the TextEdit PID at cleanup, and does not post Cmd+S', () => {
+  assert.match(helper, /AXUIElementSetAttributeValue/);
+  assert.match(helper, /AXValue/);
+  assert.match(helper, /lookup-pid|textEditPid/);
+  assert.match(helper, /runningApplicationsWithBundleIdentifier/);
+  assert.match(block(helper, 'edit'), /AXUIElementSetAttributeValue/);
+  assert.match(block(helper, 'event'), /shift-pair/);
+  assert.doesNotMatch(helper, /\bop === 'save'/);
+  assert.equal(/kVK_ANSI_S|keycode 1|keyCode:\s*1/.test(helper), false);
+  assert.equal(helper.includes('screencapture'), false);
+  assert.equal(helper.includes('open -g'), false);
+  assert.doesNotMatch(helper, /CGEventCreateKeyboardEvent\([^)]*1\s*,/);
+  assert.doesNotMatch(helper, /key\(1,/);
 });
 
-test('the runner skips the Accessibility edit on a delivery-check step', () => {
-  const src = readFileSync(new URL('../bench/textedit-save-lock.mjs', import.meta.url), 'utf8');
-  const start = src.indexOf("run.phase === 'delivery-check'");
+test('the runner skips the Accessibility edit on a delivery-check step and never posts Cmd+S', () => {
+  const start = runnerSource.indexOf("if (run.phase === 'delivery-check')");
   assert.ok(start >= 0, 'runOne branches on delivery-check');
-  const chunk = src.slice(start, start + 900);
-  assert.match(chunk, /op: 'dirty'/);
+  const end = runnerSource.indexOf('const expected', start);
+  const chunk = runnerSource.slice(start, end);
+  assert.match(chunk, /callEngine/);
+  assert.match(chunk, /engineSave/);
   assert.doesNotMatch(chunk, /op: 'edit'/);
+  assert.doesNotMatch(chunk, /op: 'save'/);
+  assert.doesNotMatch(runnerSource, /open', \['-n', '-g'/);
+  assert.match(runnerSource, /pressKey\("super\+s"\)/);
+});
+
+test('preflight refuses a TextEdit with documents the probe did not open', () => {
+  // The probe types a path into TextEdit's Open panel. If the panel failed to open, that text would go
+  // into whatever document has focus, so the user's own documents must not be open (review, 2026-10-11).
+  const helper = readFileSync(new URL('../bench/textedit-save-lock.js', import.meta.url), 'utf8');
+  const preflight = helper.slice(helper.indexOf("r.op === 'preflight'"), helper.indexOf("r.op === 'lookup-pid'"));
+  assert.match(preflight, /documents\(\)/);
+  assert.match(preflight, /OWNED_PATH\.test/);
+  assert.match(preflight, /did not open; probe refused/);
 });
