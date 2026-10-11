@@ -119,13 +119,17 @@ test('unavailable commands are recorded as failures and do not execute', async (
   assert.equal(h.rows[0].exitCode, 126);
 });
 
-test('watcher parsers reject malformed reports, retain baseline and stop on any enabled tap', async () => {
-  const { frontReport, tapReport } = await load();
+test('watcher parsers reject malformed reports, retain baseline and stop on a tap added after the start', async () => {
+  const { frontReport, tapReport, tapBaseline } = await load();
   assert.deepEqual(frontReport('12:00:00.123 Editor', undefined), { baseline: 'Editor' });
   assert.deepEqual(frontReport('12:00:01.123 Editor', 'Editor'), { baseline: 'Editor' });
   assert.match(frontReport('12:00:01.123 Chess', 'Editor').stop, /foreground/);
   assert.match(frontReport('', 'Editor').stop, /watcher/);
   assert.equal(tapReport('[]'), undefined);
-  assert.match(tapReport('[{"pid":42,"app":"Device Hub"}]'), /keyboard tap/);
+  assert.match(tapReport('[{"pid":42,"app":"Device Hub"}]'), /keyboard tap reported \(Device Hub\)/);
+  const standing = '[{"pid":7,"app":"Window Manager"},{"pid":7,"app":"Window Manager"},{"pid":9,"app":"Siri"}]';
+  const before = tapBaseline(standing);
+  assert.equal(tapReport(standing, before), undefined);
+  assert.match(tapReport('[{"pid":7,"app":"Window Manager"},{"pid":42,"app":"Device Hub"}]', before), /\(Device Hub\)/);
   for (const value of ['broken', '{}', '[null]']) assert.match(tapReport(value), /watcher/);
 });

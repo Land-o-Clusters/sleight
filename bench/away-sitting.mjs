@@ -111,12 +111,19 @@ export function frontReport(line, baseline) {
   return { baseline: match[1] };
 }
 
-export function tapReport(text) {
+// Taps held before the sitting starts (a window manager, Siri) are the owner's and stay; a process
+// that installs one during the sitting stops it. The first live start stopped on Magnet's and Siri's
+// standing taps (2026-10-11).
+export function tapReport(text, baseline) {
   try {
     const taps = JSON.parse(text);
     if (!Array.isArray(taps) || taps.some(tap => !tap || !Number.isInteger(tap.pid) || typeof tap.app !== 'string')) throw new Error();
-    return taps.length ? 'keyboard tap reported' : undefined;
+    const added = taps.filter(tap => !baseline?.has(tap.pid));
+    return added.length ? `keyboard tap reported (${[...new Set(added.map(tap => tap.app))].join(', ')})` : undefined;
   } catch { return 'keyboard watcher report malformed'; }
+}
+export function tapBaseline(text) {
+  try { return new Set(JSON.parse(text).map(tap => tap.pid)); } catch { return undefined; }
 }
 
 // Injected dependencies let tests exercise scheduling without a subprocess or app.
@@ -191,7 +198,7 @@ async function watch(controller) {
   const script = join(root, '.dev/passes/front-watch.sh');
   const taps = join(homedir(), 'Library/Caches/sleight-bench/keyboard-taps');
   if (!existsSync(script) || !existsSync(taps)) throw new Error('Existing front watcher and precompiled keyboard-taps binary are required; no step started');
-  let baseline, stopping = false, buffer = '', timer;
+  let baseline, tapsBefore, stopping = false, buffer = '', timer;
   const stop = reason => { if (!controller.signal.aborted) controller.abort(reason); };
   const child = spawn('/bin/zsh', [script], { cwd: root, detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
   const closed = new Promise(resolve => child.once('close', resolve));
@@ -212,7 +219,8 @@ async function watch(controller) {
       if (existsSync(hold)) stop('hold exists');
       try {
         const { stdout } = await execute(taps, [], { timeout: 3000, maxBuffer: 1024 * 1024 });
-        const reason = tapReport(stdout); if (reason) stop(reason);
+        tapsBefore ??= tapBaseline(stdout);
+        const reason = tapReport(stdout, tapsBefore); if (reason) stop(reason);
       } catch { stop('keyboard watcher failed'); }
       if (!stopping) timer = setTimeout(poll, 500);
     })();
