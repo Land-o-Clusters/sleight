@@ -41,7 +41,12 @@ iPhone Mirroring with iphone-settle, owner present (03:25 UTC, `bench/results/20
 2/3, 27.0.1 in 35.4 s and 8 turns, and 17.6 s and 5 turns, against 66.9 s and 16 before, with no tap
 outside Settings. The third run started on the About page the previous run left. The failed run
 stopped at the lock screen iPhone Mirroring shows while it unlocks itself; the prompt now says to wait
-up to 30 s and never enter a password. An earlier set of 3 at 03:24 failed the same way. lease-select moved to Grok (owner, 03:30 UTC), the last lane before the away sitting.
+up to 30 s and never enter a password. An earlier set of 3 at 03:24 failed the same way.
+With the prompt also pressing Command-1 and returning Settings to its top level (03:36 UTC,
+`bench/results/2026-10-11T03-35-55-975Z.json`): 3/3. Runs 2 and 3 went Home, Settings, General,
+About in 40.1 s and 9 turns and 41.7 s and 10, with no stray tap. Run 1 waited out the lock screen
+and read the version without going through Settings. A set at 03:34 passed 3/3 too, but each read the
+About page an earlier run had left open. lease-select moved to Grok (owner, 03:30 UTC), the last lane before the away sitting.
 Codex gets the lease broker and the unsaved-changes review (ROADMAP 6) when its quota resets. saveclose-research found the next speed lever for speed-research.
 Claude spends two or three calls inside the Save sheet, 6 to 9 s a run
 (`docs/design/save-then-close-2026-10-11.md`).

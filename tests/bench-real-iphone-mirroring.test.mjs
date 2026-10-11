@@ -59,6 +59,9 @@ test('task is read-only Settings > General > About, with the system bundle ID, a
   // On 2026-10-11 runs stopped at the lock screen iPhone Mirroring shows while it unlocks itself.
   assert.match(prompt, /locked or connecting[\s\S]*up to 30 seconds/);
   assert.match(prompt, /never enter or ask for a password/);
+  // Three runs on 2026-10-11 read the About page a previous run left open and never navigated.
+  assert.match(prompt, /first press Command-1 to go to the Home Screen/);
+  assert.match(prompt, /go back to the top level first/);
   assert.match(prompt, /Read only/);
   assert.doesNotMatch(prompt, /sleight|mcp__|getApp/);
   assert.equal(task.check, checkIosVersion);
