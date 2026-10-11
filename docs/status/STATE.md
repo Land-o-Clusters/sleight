@@ -3,33 +3,31 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-11 04:20 UTC)
+## Banner (2026-10-11 04:50 UTC)
 
-`pane/auto-mode` is pushed to private (`Land-o-Clusters/sleight-dev`) with this banner, nothing
-uncommitted. `npm run check` 1,754 tests plus 30 mod tests, `lint:prose` clean. Merged since the
-clear, each reviewed and squashed: lease-select (Grok, `9c8d9c1`) and owner-present-mail (GLM,
-`872afe3`). Not merged, on purpose: `codex/richmove-placement`.
+`pane/auto-mode` is at `7f49b40` plus docs, pushed to private, nothing uncommitted. `npm run check`
+1,787 tests plus 31 mod tests, `lint:prose` clean. Merged since the clear, each reviewed and squashed:
+lease-select (Grok), owner-present-mail (GLM), lease-broker and unsaved-review (Codex). Not merged, on
+purpose: `codex/richmove-placement`.
 
 Done since the clear:
-- The first-call A/B (`docs/benchmarks/2026-10-11-firstcall-ab.json`): the wording naming
-  `cua.getApp` passed 12/12 against 11/11 (one default run skipped at setup), first calls on
-  `getState` 0/12 against 8/11, 7.17 turns against 7.91, 27.0 s against 30.6 s a run. It's the
-  default since `a43945d`, and the `app` variant is gone. All 8 textedit-save runs sent Go to Folder
-  through the final Return in one call (0 of 3 before the save-sheet note).
-- calculator-click's "no change" re-read is fixed (`fef67fe`): 8/8 runs made one acting call and
-  no read after it, 3 turns and 10.3 to 11.6 s with the new wording, against Codex's 4 turns.
-- `SLEIGHT_GUARD=batch` is dropped, because Calculator renumbers every button on the first click that closes
-  the history, so a skipped read could press the wrong button. Save-then-close stays split (0 of 24
-  and 0 of 9 merged).
-- TextEdit's orphan Save panel reproduced live through the engine, and the read after it worked
-  (known-problems). The 2026-10-06 timeouts' cause stays unknown.
-- OpenUsage has had every real read rate-limited since 2026-10-10 07:07 UTC (its own backoff is
-  about 65 min). Episodes go back to 2026-10-04, before the bench used the API key. The A/B ran in a
-  cooldown, so it neither clears nor convicts the bench. Next real read about 04:47 UTC.
+- The first-call wording naming `cua.getApp` is the default (`a43945d`): 12/12, first calls on
+  `getState` 0/12 against 8/11, 27.0 s against 30.6 s a run.
+- calculator-click's re-read is gone since `fef67fe` (8/8). `SLEIGHT_GUARD=batch` is dropped
+  (Calculator renumbers on its first click). The orphan Save panel reproduced, with a working read.
+- `SLEIGHT_RESULT_TRIM=1` lost its A/B (11/12, 30.8 s against 26.8 s): the Save-panel list trim hid
+  the folder a save needs and is gone (`0d3068a`).
 
-**Lanes out** (each pushes `codex/<name>` to private and doesn't merge; prompts in `.dev/prompts/`,
-given to the owner as paste-ready blocks). Codex (gpt-6.1-sol) has lease-broker and unsaved-review,
-both from `37aeddc`.
+**Running:** `nohup .dev/passes/ab-three.sh` (started 04:47 UTC, about 20 min), three arms one
+change each, 2 rounds of calculator-click, textedit-edit and textedit-save x2: default,
+`SLEIGHT_RESULT_TRIM=1` (now only the acquisition-tree drop) and `SLEIGHT_FIRST_CALL_BATCH=sheet` (no
+Cmd+S stop, `open_file` names its `getApp` call, a save observed from its file on disk). Log
+`.dev/passes/ab-three.log`; compare with the scratch `ab-compare.mjs` pattern (per arm: passes, turns,
+model time per turn, total, spills, `waitFor` after Cmd+S, `cua.getAXState` calls, Bash or Read
+after a save). A winner with every run passing becomes the default with no opt-out.
+
+**Lanes out** (prompts in `.dev/prompts/`, each pushes `codex/<name>` to private, all from
+`d21965c`). Codex has turn-study and away-runner. Grok has temp-hygiene, and GLM has release-audit.
 
 Results that matter for the release gate (ROADMAP 3.5, 5b.1): speed-research found the clean-arms CPU
 gap to Codex (51.8 s against 42.8 s) was 8.6 s from two failed textedit-save runs, and the seven runs

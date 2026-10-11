@@ -408,6 +408,16 @@ called `cua.getAXState()`, which `cua` doesn't have. One textedit-save took 19 t
 textedit-save runs sent Go to Folder through the final Return in one call, against 0 of 3 before the
 save-sheet note (`49356a7`). The new wording is the default since this A/B.
 
+Trimming results lost (`e212204`, 04:26 to 04:39 UTC, same tasks and setup,
+[raw](benchmarks/2026-10-11-result-trim-ab.json)). `SLEIGHT_RESULT_TRIM=1` cut file lists in Save and
+Open panels to 10 rows plus a count, and left out a split acquisition's tree when its call returned a
+newer full one. It passed 11/12 against 12/12, at 7.92 turns and 30.8 s a run against 7.25 and
+26.8 s, though its results were 47,701 characters a run against 64,264. Two of its textedit-save
+runs saved into the previous run's folder: the folder each needed sorts last, the trim hid it, and
+Claude clicked the nearest one it could see. One of them failed. No result in either arm was large
+enough for Claude Code to write it to a file, so the case the trim was for didn't come up. The list
+trim is gone. The acquisition-tree drop runs again alone.
+
 The head-to-head at the owner's normal load (2026-10-09, the owner away, load 6 to 24, Sonnet 5.5 at
 medium against gpt-6.1-sol at medium) alternated sleight and Codex task by task. The default tasks
 ran 3 times per arm ([`h2h-normal-default`](benchmarks/2026-10-09-h2h-normal-default.json)) and six
