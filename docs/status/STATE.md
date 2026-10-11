@@ -3,29 +3,47 @@
 What is true now. One banner, replaced in place as work happens. Always-true rules live in
 [LAWS.md](LAWS.md). Cap 32 KB.
 
-## Banner (2026-10-11 00:35 UTC)
+## Banner (2026-10-11 01:20 UTC, flushed before the owner's clear)
 
-`pane/auto-mode` is pushed to private, and the live lock is free. Tonight's away runs are in
-`docs/benchmarks/2026-10-10-away.md` and `-away-2.md`. Against Codex with clean arms, sleight passed
-7/9 in 263.7 s and Codex 9/9 in 265.8 s. With the owner's setup it was 8/9 in 262.4 s against 9/9
-in 229.6 s. Against LCU 0.11.2, sleight passed 8/8 in 210.6 s and LCU 7/8 in 299.2 s. Every sleight
-failure was textedit-save. Leftover iCloud "Untitled" documents caused two, and the benchmark now
-clears TextEdit's saved windows before each pass (two files went to the Trash). The third stalled
-in the Save sheet, in a run that didn't record Claude's code. VS Code, Cursor and Firefox passed
-5/5. Merged: spawns, the results page fix, the rich-text clipboard fix, the save-lock experiment
-script. Codex is out of quota until later tonight (owner).
+`pane/auto-mode` is at `8b1fae0`, pushed to private, with nothing uncommitted. Nothing of
+sleight-arch's is running, and the live lock and hold are free. Calculator (pid 90338) was left
+open from earlier runs.
 
-Lanes out (2026-10-11 01:10 UTC, briefs in `.dev/prompts/lane-*.md` after
-`lane-rules-2026-10-11.md`). Grok has icloud-textedit, savelock-delivery, chess-points, chat-crash
-and panel-busy. GLM has selectall-check, richmove-placement, livechecks, shop-check,
-saveclose-research and release-docs. Codex, once its quota resets, takes lease-select,
-sim-readiness and speed-research. Evidence for all of them is in
+Lanes out, started 2026-10-11 01:10 UTC in the owner's Grok and GLM sessions. Each pushes a
+`codex/<name>` branch to private and doesn't merge. Briefs are in `.dev/prompts/lane-<name>.md`,
+after `lane-rules-2026-10-11.md`. Evidence for all of them is in
 `docs/benchmarks/2026-10-11-evidence.md`.
+- Grok: icloud-textedit, savelock-delivery, chess-points, chat-crash, panel-busy.
+- GLM: selectall-check, richmove-placement, livechecks, shop-check, saveclose-research,
+  release-docs (README, CHANGELOG, known-problems and ROADMAP).
+- Codex hasn't started lease-select (Best Buy's lease refusals), sim-readiness or speed-research.
+  They wait for its quota to reset.
+
+Results on 2026-10-10 and 11 (`docs/benchmarks/2026-10-10-away.md`, `-away-2.md`,
+`2026-10-11-evidence.md`). Against Codex with clean arms, sleight passed 7/9 in 263.7 s and Codex
+9/9 in 265.8 s, own CPU 51.8 s against 42.8 s. With the owner's setup it was 8/9 in 262.4 s
+against 9/9 in 229.6 s. Against LCU 0.11.2, sleight passed 8/8 in 210.6 s and LCU 7/8 in 299.2 s.
+VS Code, Cursor and Firefox passed 5/5. textedit-save with code traces passed 3/3. The release gate
+(ROADMAP 3.5) isn't met on time with the owner's setup or on own CPU.
 
 Next, in order:
-1. Review and merge each lane as it reports, then one away window verifies them live.
-2. The release gate (ROADMAP 3.5 and 5b.1) and the release pass. The owner takes Windows and the
-   directory listing tomorrow.
+1. Review each lane's diff as it reports and fix what review finds. Squash it in a scratch worktree,
+   run the full check there, and cherry-pick it onto `pane/auto-mode`.
+2. One owner-away window verifies the merged lanes live: textedit-save with traces, Best Buy, the
+   rich-text move (`SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background`),
+   the save-lock experiment, select-all, `stale-number`, Chess, simulator-form, the chat tasks.
+3. Act on speed-research to close the gate, then the full release pass and the release (ROADMAP 5b).
+
+**Waiting on the owner:**
+- `Untitled 10.txt` in the iCloud TextEdit folder, a benchmark leftover: move it to the Trash or keep.
+- Windows (ROADMAP track 6): on the 2020 Intel MacBook Pro, register for the Windows 11 Enterprise
+  evaluation, download it and VMware Fusion, install ChatGPT, turn on OpenSSH. Then sleight-arch
+  runs the spike over SSH.
+- The directory listing (ROADMAP 5b.6).
+- With the owner at the Mac, Esc and `/sleight stop` in a real session, Mail and Mimestream,
+  iPhone Mirroring (`--owner-present`), trying "Always allow" once, a live `sleight-mcp setup` in a
+  fresh macOS user, and Accessibility for the process that runs `menu_bar`'s osascript.
+- Whether to release if the gate (ROADMAP 3.5) isn't met.
 
 **Where work goes.** Work in progress is private between releases (LAWS): `remote.pushDefault
 private` sends pushes to `Land-o-Clusters/sleight-dev`, and a pre-push hook refuses the public repo
@@ -33,64 +51,20 @@ without `SLEIGHT_RELEASE_PUSH=1`. Public `origin/pane/auto-mode` stays at `332e3
 branches already public stay there (owner).
 
 **Benchmark.** Claude arms run on the owner's API key, Haiku 5.5 at high, capped at $200 a month
-(LAWS), priced from token counts. $4.41 is spent in October (00:30 UTC). Old runs move to
+(LAWS), priced from token counts. $4.41 is spent in October (2026-10-11 00:30 UTC). Old runs move to
 `~/Library/Caches/sleight-bench/runs-archive` before each pass. `--surfaces browser,computer` runs
-the real suite with the extension browser API.
+the real suite with the extension browser API. Chains of live runs live in `.dev/passes/`
+(`away-2026-10-10*.sh`, `evidence-2026-10-11.sh`).
 
-Released: `v1.1.0` (`0b6a1c0`) on `main`. Unreleased on `pane/auto-mode`, all in `CHANGELOG.md`.
-Landed 2026-10-10: "Always allow" on app prompts (owner), `open_file` (owner), turn receipts
-(opt-in), the rich TextEdit move (opt-in, not yet working live), footprint parity, the guard's
-first-action reuse and echo-read, replay from the desktop pane, the JXA count fix.
-
-**Release gate (ROADMAP 3.5) not met.** Latest head-to-head with Codex (2026-10-10 11:28 UTC,
-`docs/benchmarks/2026-10-10-h2h-footprint-haiku-3.json`): 6/6 each, 190 s against 176 s, 44 turns
-against 45, own CPU 58.4 s against 47.2 s. Guard reads were 23.3 s: 15.0 s on TextEdit's Save sheet
-and 7.5 s before clicks in a Calculator batch. Pass `release-haiku-3`: 18/18 on the six
-non-simulator tasks. simulator-form fails setup (below).
-
-**Waiting on the owner:**
-- Guard reads that could be skipped for speed, the owner's call: the read before Return after
-  `setValue({ id })` (1.85 s a save), the read before a first action by ID or label (1.4 s), and
-  reads before clicks by ID or label in a batch (about 3.5 s each Calculator run).
-- Which browser has the ChatGPT extension, and allowing `127.0.0.1` there once. Then the
-  browser-extension comparison can run (accessibility side 21/21 so far,
-  `docs/benchmarks/2026-10-10-surface-ab.md`). Extension access to local pages is approved in LAWS.
-- Trying "Always allow" in sleight's panel once (unit-tested only).
-- Being away for the live runs in Next, step 2, and being at the Mac for Esc and `/sleight stop`.
-- Deleting the benchmark's leftover "Untitled 6.txt" and "Untitled 9.txt" in the owner's iCloud
-  TextEdit folder, from runs whose save failed (2026-10-10).
-
-**Sol, Grok and GLM branches** (private remote): none open. Merged on 2026-10-10: sim-savelock
-rounds 1 and 2 (`71f7e95`), routines-demo (`da78144`), real-use-tasks round 13 (`4aeec4e`),
-electron-tasks, results-page, waits-targeting, plugin-arm, verified-results, footprint-parity,
-real-use-tasks round 12, review-receipts, textedit-fixes, replay-desktop, lease-close-tests,
-windows-research.
-
-Next, in order:
-1. With the owner away, rerun the waits live checks with `--inspect-chess`, which screenshots the
-   board as it opened and waits for move points measured from that picture.
-2. With the owner away, Chess and Safari-form with verified results, the waits live checks
-   (`node bench/waits-targeting-live.mjs live --owner-away`), the paired plugin-arm Calculator run
-   (`--arm mcp:sleight-plain,sleight --calculator-gate`, Calculator's window on the current Space),
-   and sim-savelock's owner-away commands. With the owner at the Mac, Esc and `/sleight stop` in a
-   real session.
-3. The owner's read decisions, then the head-to-head again
-   (`--arm sleight,codex --tasks calculator-click,textedit-edit,textedit-save --runs 2`).
-4. A crowded Save or Open sheet: leave its browser rows out of reads (known problems).
-5. simulator-form must pass before a release. Then a full release pass with the owner away once
-   the gate is met. Recheck the README lines tied to a release: the pass result and the 13/21 and
-   Chess 0/3 mentions. Add replay, `open_file` and other hosts to its roadmap checklist, and confirm
-   the Claude Code minimums.
+Released: `v1.1.0` (`0b6a1c0`) on `main`. Everything since is on `pane/auto-mode`, in `CHANGELOG.md`.
 
 Read first: `docs/known-problems.md`, `docs/benchmark.md`, `docs/design/guard-reads.md`.
 
 Branches and worktrees (`~/Projects/sleight-wt/<name>`):
 - `pane/auto-mode` in `~/Projects/sleight`: the working branch. A release fast-forwards `main` to it
   and pushes `origin`.
-- Merged, worktrees safe to remove: `replay-next`, `doctor-flow`, `doctor-preapproved`,
-  `footprint-spawns`, `small-fixes`, `other-hosts`, `scoped-approvals`, `codex-real`, `guard-speed`,
-  `replay-desktop`, `windows-research`, `textedit-fixes`, `review-receipts`, `footprint-parity`, `verified-results`, `waits-targeting`, `plugin-arm` (its stash is applied and committed).
-- Merged too, worktrees safe to remove: `sim-savelock`, `routines-demo`, `real-use-tasks`.
+- Every lane worktree from before 2026-10-11 is merged and safe to remove. Tonight's lanes create
+  their own worktrees under the names above.
 - `perf/screenshot-scale` (`1aa574b`, `shots`): parked.
 
 ## Machine state outside the repo
@@ -109,9 +83,9 @@ Branches and worktrees (`~/Projects/sleight-wt/<name>`):
   for every engine client, Codex included. Off: `defaults delete -g ComputerUseAllowForbiddenTargets`.
 - `.dev/tools/`: probe and timing clients for sleight's launcher, the CNN trial, transcript
   dumpers, and `dialogs.swift` (lists permission dialogs on screen).
-- LCU 0.8.8 runtime-only at `~/.local/share/lcu`, registered only in `.dev/lcu-arm` (untracked),
-  which the benchmark now refuses because it's inside the repo.
-  `.dev/py/python3` links Homebrew Python 3.14 for it.
+- LCU 0.11.2 runtime-only at `~/.local/share/lcu` (installed 2026-10-10 on the owner's OK, with 0.8.8 kept
+  in `releases/`). The benchmark's arm is `~/Library/Caches/sleight-bench/lcu-arm`, made by
+  `node bench/lcu-arm-setup.mjs`.
 - Homebrew: `vale`, `ffmpeg`, and the `codex` cask 0.160 (0.153 rejected gpt-6.1-sol).
   `~/.local/bin/claude` 2.1.289. The desktop app's Code tab offers Claude Code 2.1.288 (checked
   2026-10-06).
@@ -155,7 +129,6 @@ Branches and worktrees (`~/Projects/sleight-wt/<name>`):
   `/v1/models` answered 200, and a stopped `claude -p` reported `apiKeySource: ANTHROPIC_API_KEY`.
   OpenUsage's hourly retry passing after the next pass would confirm the cause.
 
-- Watching the Mail and Mimestream tasks (about 10 minutes).
 - Safari fixture windows, Preview `Pages-*.pdf`, Word and Excel fixture documents were left on
   their screen on 2026-10-09. Check the iCloud TextEdit files only by exact content, never by browsing.
 - The OpenAI key note is theirs to handle. Don't raise it again (owner, 2026-10-09).

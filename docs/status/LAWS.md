@@ -50,6 +50,8 @@ belong in [STATE.md](STATE.md).
   their read: the engine takes only element numbers or points, so sleight finds the current number in a
   fresh read. The owner also chose to skip those reads, on sleight-arch's wrong claim that the engine
   resolves IDs itself. Those reads are unchanged. The bar is Codex's speed and footprint under any load.
+- Build work goes to Codex, Grok and GLM lanes, not Claude subagents, which the owner saves for
+  other work (owner, 2026-10-11). sleight-arch reviews, merges and runs the live checks.
 - Codex time goes to known problems and enhancements, not benchmark runs (owner, 2026-10-04).
   SUPERSEDED (2026-10-09): "one benchmark pass per merge that changes default behavior". The owner
   now wants several fixes and features batched into each release, with one full pass per release. In
@@ -76,7 +78,7 @@ belong in [STATE.md](STATE.md).
 - Apps get approved without a person at the moment of use only two ways: the benchmark's allowlist
   (Calculator, TextEdit, Chess, and Simulator or DeviceHub since 2026-10-07, by name or bundle ID) in benchmark runs,
   plus Safari, Preview, Finder and Helium for the real-use tasks (owner, 2026-10-08) and Word,
-  Excel, PowerPoint, Mail and Mimestream for them too (owner, 2026-10-09), VS Code, Cursor, Firefox,
+  Excel, PowerPoint, Mail and Mimestream for them too (owner, 2026-10-09), VS Code (also by its app name, Code), Cursor, Firefox,
   Slack, Discord and WhatsApp for them too (owner, 2026-10-10, chat apps open and read only), and the repo's own
   hang fixture (`org.sleight.reliability-fixture`, owner, 2026-10-08) in its probe, browser-extension access to
   the benchmark's own local pages on `127.0.0.1` (owner, 2026-10-10), and a list the user writes in
@@ -141,6 +143,13 @@ belong in [STATE.md](STATE.md).
   pairs on 2026-10-10 until the check itself waited.
 - Live checks that drive apps hold `/tmp/sleight-live.lock`, taken with `mkdir`, released on exit. A
   command that can't take it stops there (`mkdir … || exit 1`), so nothing after it runs.
+  A process removes the lock only if it created it in that run. On 2026-10-10 another process
+  removed a held lock, and two live runs overlapped. A lock left by an exited script is released by sleight-arch
+  after checking what that script left open.
+- The benchmark changes an app's settings only for one launch, with launch arguments, never with
+  `defaults write`. It never deletes or moves the owner's files: leftovers in the owner's folders are
+  named to the owner, who decides (two iCloud TextEdit leftovers went to the Trash on the owner's OK,
+  2026-10-10).
 - A run that can take the owner's pointer or keyboard happens only while the owner is away from the
   Mac (owner, 2026-10-09). Chess drags and the simulator can, and so can any foreground fallback.
 - A benchmark run quits every app it launched, so no keyboard event tap is still installed after it. When the owner
