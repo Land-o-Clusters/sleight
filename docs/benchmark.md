@@ -600,6 +600,7 @@ else drives apps during a pass. `--dry-run` doesn't take it.
 
 `node bench/live-checks-1-1.mjs stale-number|keyboard-tap|helper-resend|menu-bar --owner-away` writes `docs/benchmarks/2026-10-10-live-checks-<name>-<stamp>.json`. `--dry-run` prints the plan. It does not take the lock, and it does not launch an app.
 `keyboard-tap` skips, because `bench/keyboard-taps.swift` lists taps and does not install one. `helper-resend` skips, because forcing that race means killing OpenAI's helper. `menu-bar` opens Clock or Control Center from the status-item list. It closes that item before it exits.
+`menu-bar` needs Accessibility for the app that runs the session (Terminal, iTerm or Claude). A denial is reported as `needs the owner to grant Accessibility to <process path>` instead of a failure; grant that app access under System Settings → Privacy & Security → Accessibility, then run the check again.
 
 > [!WARNING]
 > Headless runs can't show approval prompts, so a benchmark run auto-approves Calculator, TextEdit,

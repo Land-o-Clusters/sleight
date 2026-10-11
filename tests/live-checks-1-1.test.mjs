@@ -4,7 +4,8 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   parseLiveChecksArgs, dryRunReport, planStaleBatch, judgeStaleNumber, judgeKeyboardTap,
-  judgeHelperResend, judgeMenuBar, classifyTapSources,
+  judgeHelperResend, judgeMenuBar, classifyTapSources, runMenuBar, accessibilityGrant,
+  appAncestorFromRows,
 } from '../bench/live-checks-1-1.mjs';
 
 const script = fileURLToPath(new URL('../bench/live-checks-1-1.mjs', import.meta.url));
@@ -85,8 +86,40 @@ test('the Calculator batch uses numbers from the history-open tree and refuses a
   const closed = historyTree.replace('\t1 list HistoryView\n', '');
   assert.equal(planStaleBatch(closed).error !== undefined, true);
   assert.equal(planStaleBatch(closed).code, undefined);
-  const ambiguous = historyTree + '\n\t8 button Multiply';
+  // Two different lines for one label stay ambiguous, unlike byte-identical duplicates.
+  const ambiguous = historyTree + '\n\t8 button Description: Multiply, ID: MultiplyTwo';
   assert.equal(planStaleBatch(ambiguous).code, undefined);
+});
+
+test('the plan takes the first of byte-identical duplicates and fails on lines that differ', () => {
+  // Calculator's history-open tree listed every keypad line twice, byte-identical apart from the
+  // element number (2026-10-10-live-checks-stale-number-1791679612845.json).
+  const duplicated = [
+    'Window: "Calculator", App: Calculator.',
+    '0 standard window Calculator',
+    '\t1 list HistoryView',
+    '\t2 button Description: All Clear, ID: AllClear',
+    '\t3 button Description: 7, ID: Seven',
+    '\t4 button Multiply',
+    '\t5 button Description: 8, ID: Eight',
+    '\t6 button Description: Equals, ID: Equals',
+    '\t7 button Description: All Clear, ID: AllClear',
+    '\t8 button Description: 7, ID: Seven',
+    '\t9 button Multiply',
+    '\t10 button Description: 8, ID: Eight',
+    '\t11 button Description: Equals, ID: Equals',
+  ].join('\n');
+  assert.deepEqual(planStaleBatch(duplicated), {
+    numbers: [2, 3, 4, 5, 6],
+    expected: '56',
+    code: 'await app.click(2); await app.click(3); await app.click(4); await app.click(5); await app.click(6)',
+  });
+  const differing = historyTree + '\n\t8 button Description: 7';
+  const plan = planStaleBatch(differing);
+  assert.equal(plan.code, undefined);
+  assert.match(plan.error, /not unique/);
+  assert.match(plan.error, /button Description: 7, ID: Seven/);
+  assert.match(plan.error, /"button Description: 7"/);
 });
 
 test('stale-number passes only when the result names the remap and the display is 56', () => {
@@ -140,6 +173,47 @@ test('helper-resend passes only a single resend of a startup failure', () => {
   assert.equal(judgeHelperResend({ sawStartupFailure: true, resends: 2 }).passed, false);
   assert.equal(judgeHelperResend({ sawStartupFailure: false, resends: 1 }).passed, false);
   assert.equal(judgeHelperResend({ sawStartupFailure: true, resends: 1, killedHelper: true }).passed, false);
+});
+
+const denial = "osascript is not allowed assistive access. macOS hasn't given the app running Claude Code Accessibility permission. Turn it on under System Settings → Privacy & Security → Accessibility (for Terminal, iTerm or Claude, whichever runs this session).";
+const iterm = '/Applications/iTerm.app/Contents/MacOS/iTerm2';
+
+test('the app ancestor is the nearest .app-bundle process walking up from this one', () => {
+  const rows = new Map([
+    [1, { ppid: 0, path: '/sbin/launchd' }],
+    [210, { ppid: 1, path: iterm }],
+    [310, { ppid: 210, path: '/opt/homebrew/bin/node' }],
+    [410, { ppid: 310, path: '/opt/homebrew/bin/node' }],
+  ]);
+  assert.equal(appAncestorFromRows(410, rows), iterm);
+  assert.equal(appAncestorFromRows(410, new Map([
+    [310, { ppid: 1, path: '/opt/homebrew/bin/node' }], [1, { ppid: 0, path: '/sbin/launchd' }],
+  ])), undefined);
+});
+
+test('an assistive-access denial names the found process; other errors and no process stay failures', async () => {
+  assert.deepEqual(await accessibilityGrant(denial, async () => iterm),
+    { processPath: iterm, reason: `needs the owner to grant Accessibility to ${iterm}` });
+  assert.equal(await accessibilityGrant(denial, async () => undefined), undefined);
+  assert.equal(await accessibilityGrant('Neither Clock nor Control Center has a status item', async () => iterm), undefined);
+});
+
+test('menu-bar reports an accessibility denial as an owner action instead of a failure', async () => {
+  const client = { call: async () => ({ isError: true, content: [{ type: 'text', text: denial }] }) };
+  const report = {};
+  await runMenuBar(client, report, { cleanup: true, statusApp: undefined }, async () => ({
+    processPath: '/Applications/Claude.app/Contents/MacOS/Claude',
+    reason: 'needs the owner to grant Accessibility to /Applications/Claude.app/Contents/MacOS/Claude',
+  }));
+  assert.equal(report.skipped, true);
+  assert.equal(report.passed, false);
+  assert.equal(report.reason, 'needs the owner to grant Accessibility to /Applications/Claude.app/Contents/MacOS/Claude');
+  assert.equal(report.needsAccessibility, '/Applications/Claude.app/Contents/MacOS/Claude');
+  assert.equal(report.error, undefined);
+  await assert.rejects(() => runMenuBar(
+    { call: async () => ({ isError: true, content: [{ type: 'text', text: 'Neither Clock nor Control Center has a status item' }] }) },
+    {}, { cleanup: true, statusApp: undefined }, async () => undefined,
+  ));
 });
 
 test('menu-bar passes a listed Clock or Control Center item that was opened and closed, and nothing else', () => {

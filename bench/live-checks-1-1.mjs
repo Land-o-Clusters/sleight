@@ -60,7 +60,14 @@ function buttons(tree) {
 
 function oneButton(tree, id, label) {
   const hits = buttons(tree).filter(button => (id && (hasIdentifier(button.line, id) || hasLabel(button.line, id))) || (label && hasLabel(button.line, label)));
-  return hits.length === 1 ? hits[0].n : undefined;
+  if (hits.length === 0) return undefined;
+  // On 2026-10-11, Calculator's history-open tree listed every keypad line twice, byte-identical
+  // apart from the element number (2026-10-10-live-checks-stale-number-1791679612845.json). Why the
+  // engine doubles them is unverified: its 2026-10-04 history-open read listed each button once
+  // (helper-smoke f3NkSB). Identical copies are the same button, so the first one is safe to click;
+  // lines that differ stay a failure with the candidates, since a wrong pick could click another
+  // control before the first click closes the history.
+  return hits.every(hit => hit.line === hits[0].line) ? hits[0].n : undefined;
 }
 
 // Numbers from a history-open Calculator tree: clear, 7, multiply, 8, equals.
@@ -273,27 +280,73 @@ async function runStaleNumber(client, report, traces) {
   if (!judgment.passed) throw new Error(judgment.reason);
 }
 
-async function runMenuBar(client, report, state) {
-  const listed = toolJson(await client.call('menu_bar', { op: 'apps' }));
-  const names = listed.apps ?? [];
-  const app = STATUS_APPS.find(name => names.includes(name));
-  report.statusItemCount = names.length;
-  if (!app) throw new Error('Neither Clock nor Control Center has a status item');
-  state.statusApp = app;
-  report.app = app;
-  const opened = toolJson(await client.call('menu_bar', { op: 'open', app }));
-  report.opened = opened.opened;
-  report.menuItems = opened.menu?.length;
-  report.elements = opened.elements?.length;
-  const closed = toolJson(await client.call('menu_bar', { op: 'close', app }));
-  report.closed = closed.closed === true;
-  report.windowStillOpen = closed.windowStillOpen === true;
-  const judgment = judgeMenuBar({
-    apps: names, app, opened: opened.opened, closed: report.closed, windowStillOpen: report.windowStillOpen,
-  });
-  report.passed = judgment.passed;
-  if (!judgment.passed) throw new Error('menu bar item was not opened and closed read-only');
-  if (report.windowStillOpen) throw new Error('status item stayed open');
+// macOS charges osascript's assistive-access request to the owning app (Terminal, iTerm or Claude,
+// whichever runs the session, per the tool's hint). The nearest app-bundle ancestor of this check is
+// that app in the runs we know; with none found the denial stays a failure.
+export function appAncestorFromRows(pid, rows) {
+  for (let at = pid, hops = 0; hops < 25; hops++) {
+    const row = rows.get(at);
+    if (!row) return undefined;
+    if (/\.app\//.test(row.path)) return row.path;
+    at = row.ppid;
+    if (!at) return undefined;
+  }
+  return undefined;
+}
+
+async function nearestAppPath() {
+  let stdout;
+  try { ({ stdout } = await execute('/bin/ps', ['-axo', 'pid=,ppid=,comm='], { timeout: 10000 })); }
+  catch { return undefined; }
+  const rows = new Map();
+  for (const line of stdout.split('\n')) {
+    const match = /^\s*(\d+)\s+(\d+)\s+(.+?)\s*$/.exec(line);
+    if (match) rows.set(Number(match[1]), { ppid: Number(match[2]), path: match[3] });
+  }
+  return appAncestorFromRows(process.pid, rows);
+}
+
+// The launcher's menu_bar tool answers a denial with the raw osascript message plus its
+// "hasn't given ... Accessibility permission" hint (launch.mjs), so the text is all the check sees.
+export async function accessibilityGrant(message, findApp = nearestAppPath) {
+  if (!/assistive access|Accessibility permission/.test(message ?? '')) return undefined;
+  const processPath = await findApp();
+  return processPath
+    ? { processPath, reason: `needs the owner to grant Accessibility to ${processPath}` }
+    : undefined;
+}
+
+export async function runMenuBar(client, report, state, grant = accessibilityGrant) {
+  try {
+    const listed = toolJson(await client.call('menu_bar', { op: 'apps' }));
+    const names = listed.apps ?? [];
+    const app = STATUS_APPS.find(name => names.includes(name));
+    report.statusItemCount = names.length;
+    if (!app) throw new Error('Neither Clock nor Control Center has a status item');
+    state.statusApp = app;
+    report.app = app;
+    const opened = toolJson(await client.call('menu_bar', { op: 'open', app }));
+    report.opened = opened.opened;
+    report.menuItems = opened.menu?.length;
+    report.elements = opened.elements?.length;
+    const closed = toolJson(await client.call('menu_bar', { op: 'close', app }));
+    report.closed = closed.closed === true;
+    report.windowStillOpen = closed.windowStillOpen === true;
+    const judgment = judgeMenuBar({
+      apps: names, app, opened: opened.opened, closed: report.closed, windowStillOpen: report.windowStillOpen,
+    });
+    report.passed = judgment.passed;
+    if (!judgment.passed) throw new Error('menu bar item was not opened and closed read-only');
+    if (report.windowStillOpen) throw new Error('status item stayed open');
+  } catch (error) {
+    const needs = await grant(error.message);
+    if (!needs) throw error;
+    report.rawError = error.message;
+    report.skipped = true;
+    report.passed = false;
+    report.needsAccessibility = needs.processPath;
+    report.reason = needs.reason;
+  }
 }
 
 async function runDriving(check) {
