@@ -889,6 +889,22 @@ and missing timestamps remain null. The sample resolved 13 of 13 spill files and
   Excel correctly stopped on “Start Using Excel”. PowerPoint did not run. The
   [brief-10 report](benchmarks/2026-10-09-real-use-tasks-10.md) traces Word's retained process and
   records the fix: both running cases receive bounded initial-read retries. Live proof is pending.
+- The owner-away native web pass at 14:19 UTC on 2026-10-11 passed `safari-validation`
+  on sleight in 18.4 s, then stopped after Codex failed it and cleanup reported an owned
+  Helium window still open (`bench/results/2026-10-11T14-19-10-653Z.json`). The shared helper
+  named the wrong app. Cleanup now uses the request's app name. Each observed new window
+  has an indexed record. Cleanup confirms removal by reference from the app's window list. It uses
+  File > Close Window so an extra tab does not turn cleanup into a tab close. Attached app
+  dialogs receive only AXCancel; unsupported cancellation, system dialogs, access prompts,
+  disabled or ambiguous Close Window commands and unconfirmed reads stop cleanup. A second
+  created window is recorded and left open because its creation alone does not prove ownership.
+  An unconfirmed close or a remaining second window keeps the pass stopped and the live lock held.
+  App quit is refused until created-window cleanup is confirmed, including final pass cleanup.
+  The focused offline suite passed 98/98 tests. No live run has checked this change.
+  English File and Close Window menu titles are required.
+  sleight-arch must run `safari-validation` and `helium-validation` once on both arms, then all
+  40 native web IDs once on both arms. Traces and rows must confirm owned-window removal,
+  preserved pre-existing windows, app-correct errors and per-window reasons on any refusal.
 - The browser-depth pass at 13:46 UTC on 2026-10-11 stopped after 5 result rows
   (`bench/results/2026-10-11T13-46-12-844Z.json`). Safari's validation fixture failed on both arms
   before a model call because the JXA New Window menu item was unavailable or ambiguous.

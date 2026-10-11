@@ -13,6 +13,73 @@ function nativeSource() {
   return sandbox;
 }
 
+for (const evidence of ['app name', 'window reasons']) test(`created-window cleanup failures retain ${evidence}`, async t => {
+  const { openFixture } = await import('../bench/real-fixture.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'web-cleanup-row-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ctx = { dir, ownerAway: true }, done = Promise.withResolvers();
+  const windows = [
+    { index: 0, owned: true, stillListed: true, closeRefused: true, sheets: 1, dialogs: 1, reason: 'close-refused' },
+    { index: 1, owned: false, stillListed: true, reason: 'additional-created-window' },
+  ];
+  const lease = await openFixture(ctx, { app: 'Example Browser', bundle: 'test.browser', mode: 'window' }, {
+    helper: async () => ({ command: 'fake', args: [] }), open: async () => {},
+    run: (_command, _args, options) => {
+      options.onStdout('{"stage":"armed","running":true}\n{"stage":"ready"}\n');
+      done.publish = options.onStdout;
+      return done.promise;
+    },
+  });
+  const verdict = assert.rejects(lease.close(), evidence === 'app name'
+    ? /Owned Example Browser fixture window cleanup unconfirmed/ : /cleanup unconfirmed/);
+  done.publish(JSON.stringify({ stage: 'window-cleanup', windows }) + '\n');
+  done.resolve({ groupClean: true, exit: { code: 1 }, stdout: '', stderr: 'close refused' });
+  await verdict;
+  if (evidence === 'window reasons') {
+    assert.deepEqual(ctx.fixtureDiagnostics[0].windows, windows);
+    assert.equal(ctx.fixtureDiagnostics[0].cleanup, 'unconfirmed');
+  }
+});
+
+test('an unconfirmed created-window close never quits its app and other windows', async t => {
+  const { openFixture, closeFixtures } = await import('../bench/real-fixture.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'web-cleanup-no-quit-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ctx = { dir, ownerAway: true }, done = Promise.withResolvers();
+  let runs = 0;
+  await openFixture(ctx, { app: 'Safari', bundle: 'com.apple.Safari', mode: 'window' }, {
+    helper: async () => ({ command: 'fake', args: [] }), open: async () => {},
+    run: (_command, _args, options) => {
+      if (++runs > 1) return { groupClean: true, exit: { code: 0 }, stdout: '' };
+      options.onStdout('{"stage":"launch","running":false,"pid":42}\n{"stage":"armed"}\n{"stage":"ready"}\n');
+      return done.promise;
+    },
+  });
+  const verdict = assert.rejects(closeFixtures(ctx), /cleanup unconfirmed/);
+  done.resolve({ groupClean: true, exit: { code: 1 }, stdout: '', stderr: 'window still listed' });
+  await verdict;
+  await assert.rejects(ctx.windowLeases[0].quit({ final: true }), /cleanup unconfirmed/);
+  assert.equal(runs, 1, 'app termination would close windows the helper did not create');
+});
+
+test('an unconfirmed created-window setup receipt cannot authorize app quit', async t => {
+  const { openFixture } = await import('../bench/real-fixture.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'web-cleanup-setup-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ctx = { dir, ownerAway: true };
+  await assert.rejects(openFixture(ctx, { app: 'Safari', bundle: 'com.apple.Safari', mode: 'window' }, {
+    helper: async () => ({ command: 'fake', args: [] }), open: async () => {},
+    run: async (_command, _args, options) => {
+      options.onStdout('{"stage":"launch","running":false,"pid":42}\n{"stage":"armed"}\n');
+      return { groupClean: true, exit: { code: 1 }, stderr: 'setup refused',
+        stdout: '{"stage":"setup-failure","cleanup":"unconfirmed"}\n' };
+    },
+  }), /setup failed/);
+  await assert.rejects(ctx.windowLeases[0].close(), /cleanup unconfirmed/);
+  await assert.rejects(ctx.windowLeases[0].quit(), /cleanup unconfirmed/);
+  await assert.rejects(ctx.windowLeases[0].quit({ final: true }), /cleanup unconfirmed/);
+});
+
 test('the generic Chess fixture reaches the accessibility gate without acting', () => {
   const sandbox = nativeSource();
   sandbox.$ = { AXIsProcessTrusted: () => false };

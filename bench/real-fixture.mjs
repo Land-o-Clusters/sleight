@@ -30,11 +30,12 @@ async function fixtureHelper(request, signal) {
 // a window; a missing reference leaves cleanup unconfirmed.
 export async function openFixture(ctx, request, { run = runOwned, open = execute, launch, helper = fixtureHelper } = {}) {
   const fixtureLaunch = webBrowsers.find(browser => browser.bundle === request.bundle)?.fixtureLaunch;
+  const createdWindow = ['retained-url', 'new-instance'].includes(fixtureLaunch);
   const blankWindow = fixtureLaunch === 'retained-url' || (request.fixtureKind === 'web-page' && fixtureLaunch !== 'new-instance');
   if ((request.fixtureKind === 'web-page' || fixtureLaunch === 'retained-url') && ctx.ownerAway !== true) {
     throw Object.assign(new Error('Browser blank-window setup requires an explicit owner-away boundary'), { noMutation: true });
   }
-  request = { ...request, stopOnAppDialog: ctx.stopOnAppDialog || request.stopOnAppDialog, ownerAway: ctx.ownerAway === true };
+  request = { ...request, fixtureLaunch, stopOnAppDialog: ctx.stopOnAppDialog || request.stopOnAppDialog, ownerAway: ctx.ownerAway === true };
   ctx.signal?.throwIfAborted();
   ctx.cleanupSignal?.throwIfAborted();
   const startedAtMs = Date.now();
@@ -57,7 +58,8 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
     try {
       const event = JSON.parse(line);
       return event.stage === 'untouched' || (event.stage === 'setup-failure' &&
-        ['nothing created', 'closed retained fixture', 'unconfirmed'].includes(event.cleanup) && !event.cleanupError);
+        ['nothing created', 'closed retained fixture', 'unconfirmed'].includes(event.cleanup) &&
+        (!createdWindow || event.cleanup !== 'unconfirmed') && !event.cleanupError);
     } catch { return false; }
   });
   const lease = {
@@ -65,6 +67,9 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
     launched: false,
     async quit({ final = false } = {}) {
       if (lease.running !== false || !lease.launched || request.app === 'Finder' || diagnostics.appQuit) return;
+      if (createdWindow && diagnostics.windowCleanupConfirmed !== true) {
+        throw new Error(`Owned ${request.app} window cleanup unconfirmed; app quit refused`);
+      }
       const collected = await lease.dispose();
       diagnostics.helperCollectionConfirmed = collected;
       if (!collected && !final) throw new Error('Fixture helper collection unconfirmed; app quit refused');
@@ -84,19 +89,21 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
       diagnostics.appQuit = true;
     },
     async close() {
-      if (completed && untouched(completed)) return;
+      if (completed && untouched(completed)) { diagnostics.windowCleanupConfirmed = true; return; }
       if (ctx.cleanupSignal?.aborted) { await lease.dispose(); throw new Error('Fixture cleanup stopped by a permission window'); }
       writeControl('close');
       let timer;
       const result = await Promise.race([response, new Promise(resolve => { timer = setTimeout(() => {
         controller.abort(); resolve({ error: 'Fixture cleanup timed out', groupClean: false });
       }, 30000); })]).finally(() => clearTimeout(timer));
-      if (untouched(result)) return;
+      if (untouched(result)) { diagnostics.windowCleanupConfirmed = true; return; }
       if (!result.groupClean || result.error || result.exit.code !== 0 ||
         !result.stdout.split('\n').some(line => { try { return JSON.parse(line).stage === 'closed'; } catch { return false; } })) {
         diagnostics.closeFailure = result.stderr?.trim() || result.error;
-        throw new Error(`Owned fixture window cleanup unconfirmed${diagnostics.closeFailure ? ': ' + diagnostics.closeFailure : ''}`);
+        diagnostics.cleanup = 'unconfirmed';
+        throw new Error(`Owned ${request.app} fixture window cleanup unconfirmed${diagnostics.closeFailure ? ': ' + diagnostics.closeFailure : ''}`);
       }
+      diagnostics.windowCleanupConfirmed = true;
     },
     async dispose() { controller.abort(); return (await response).groupClean === true; },
   };
@@ -142,7 +149,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
             diagnostics[event.phase + 'TotalWaitMs'] = event.totalWaitMs;
           } else diagnostics.retries.push(retry);
         }
-        for (const key of ['fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback', 'launchWait', 'readWait', 'cleanupReadWait', 'observationReadWait', 'setupCase', 'inheritReady']) {
+        for (const key of ['windows', 'fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback', 'launchWait', 'readWait', 'cleanupReadWait', 'observationReadWait', 'setupCase', 'inheritReady']) {
           if (event[key] !== undefined) diagnostics[key] = event[key];
         }
         if (event.stage) stage(event.stage).resolve(event);
