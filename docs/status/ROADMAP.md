@@ -102,6 +102,19 @@ only with a measured reason. In order:
    clicks (`SLEIGHT_GUARD=batch`). It would resolve those clicks against the call's first tree, and
    Calculator renumbers every button when its first click closes the history, so a click by ID could
    press the wrong button.
+   Found 2026-10-11 in the A/B's transcripts, in order:
+   - Results too big for Claude Code. In 4 of 8 textedit-save runs the Save sheet's file browser made
+     results of 55,720 to 87,740 characters, which Claude Code wrote to a file. Claude then spent 2 to
+     5 calls filtering them. In 74 of 150 results a split acquisition's tree came before the call's
+     newer one, making up 23% of the characters in results, and `SLEIGHT_RESULT_TRIM=1` (`e212204`) cuts both, and the
+     spilled results go from about 56k to 16k characters. A/B running.
+   - The Cmd+S stop in the batching wording. It predates the guard's fix that lets a call continue
+     into the window its own shortcut opens. The merge wording, which dropped it, cut total time 20%
+     on 24/24 runs. 5 of 8 textedit-save runs waited for the sheet with `waitFor`, 3.8 to 5.9 s, which
+     the guard's own read after the shortcut already does. Next A/B: the wording without that clause,
+     saying sleight waits for the sheet.
+   - Menus clicked open. 3 of 8 textedit-save runs clicked Format, then Make Plain Text, in two calls,
+     though the skill gives the shortcut (`super+shift+t`).
 5. A release only when the head-to-head shows sleight at Codex's speed and footprint, with the numbers
    published. On 2026-10-10 (Haiku, engine 26.1007.21159) time and turns were at
    parity (263 s against 257 s, 61 turns each) and CPU wasn't (76.5 s against 60.2 s over six runs),
