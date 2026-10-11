@@ -52,6 +52,11 @@ belong in [STATE.md](STATE.md).
   their read: the engine takes only element numbers or points, so sleight finds the current number in a
   fresh read. The owner also chose to skip those reads, on sleight-arch's wrong claim that the engine
   resolves IDs itself. Those reads are unchanged. The bar is Codex's speed and footprint under any load.
+- sleight is app-agnostic, like Codex (owner, 2026-10-11): what users run (the skill, the relay, the
+  guard and the tools) adds generic mechanisms that help in any app, never rules or code paths for
+  one app. App knowledge belongs to the engine or to the model. A workaround for one app
+  needs the owner's OK and says so. Benchmark tasks name apps, but their checks are generic: they judge
+  the answer and the app's state, with no per-app harness.
 - Owner-away live runs happen in one sitting, asked for only once every open lane is merged, never in
   partial windows: each sitting means pausing the owner's other projects (owner, 2026-10-11).
 - Build work goes to Codex, Grok and GLM lanes, not Claude subagents, which the owner saves for
