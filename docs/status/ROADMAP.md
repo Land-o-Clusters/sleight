@@ -222,9 +222,9 @@ build what nobody has. Sources are `.dev/research/2026-10-04-competitors.md` and
   required confirm for anything irreversible). The design (`docs/design/scoped-approvals.md`)
   found a guard in Claude's JavaScript can't guarantee the confirm, and a TextEdit save would need 3
   prompts instead of 1.
-- Scheduled routines built on replay.
-- Done 2026-10-10: a published table of what works in the background (`docs/background.md`).
-  Receipts of each run's actions with redaction: `codex/review-receipts`.
+- Done: scheduled routines built on replay (`da78144`, first live run 10/10 in `35bb762`).
+- Done 2026-10-10: a published table of what works in the background (`docs/background.md`), and
+  redacted receipts of each turn's actions, opt-in with `SLEIGHT_RECEIPTS=1` (`6be06b8`, `bba8cb5`).
 - Stop that confirms the Mac stopped, element waits and exact window targeting for untitled windows
   merged 2026-10-10 (`6291251`), with their live checks before release. Recording a task from the
   user's demonstration merged with routines (`da78144`). Its live check is open.
