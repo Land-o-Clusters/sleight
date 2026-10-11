@@ -1,0 +1,92 @@
+{
+  "started": "2026-10-10T23:57:20.439Z",
+  "opening": "open -n -g (owned isolated instance per run)",
+  "launchArgs": [
+    "-NSDocumentDebugSerialization",
+    "YES",
+    "-NSDocumentSerializationLoggingDelay",
+    "3",
+    "-ApplePersistenceIgnoreState",
+    "YES"
+  ],
+  "saveWaitMs": 10000,
+  "hangKeepMs": 20000,
+  "engineUsed": false,
+  "pointerUsed": false,
+  "lockTaken": true,
+  "runs": [
+    {
+      "index": 1,
+      "phase": "gate",
+      "variant": "none",
+      "cycle": 1,
+      "bank": "/private/tmp/sleight-save-lock-8XezxK",
+      "preflight": {
+        "background": true,
+        "existingProcessCount": 0,
+        "isolatedInstance": true
+      },
+      "launchRequestedAt": 1791676640501,
+      "attachAttempts": [
+        "Retry: AXWindows failed: -25204"
+      ],
+      "failedOperation": {
+        "id": 6,
+        "ok": false,
+        "error": "Owned TextEdit quit unconfirmed",
+        "pid": 68783,
+        "background": true
+      },
+      "attach": {
+        "attached": true,
+        "pid": 68783,
+        "windows": 1,
+        "artifacts": []
+      },
+      "edit": {
+        "edited": true
+      },
+      "event": {
+        "posted": "none",
+        "delivered": true
+      },
+      "delivered": true,
+      "savePostedAt": 1791676641070,
+      "hang": true,
+      "msToSave": null,
+      "lateSaveMs": 30047,
+      "logLines": 52,
+      "log": "Timestamp                       Thread     Type        Activity             PID    TTL  \n2026-10-10 19:57:21.722612-0400 0x20ee0cb  Default     0x0                  68783  0    TextEdit: (Foundation) [com.apple.foundation.filecoordination:presenter] Making presenter A81B27C5-9627-4ADB-87F2-C03FA7E079B7 observe change\n2026-10-10 19:57:21.867564-0400 0x20ee0cd  Default     0x0                  68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14140] activating connection: mach=true listener=false peer=false name=mul-xpc (Apple)_OpenStep\n2026-10-10 19:57:21.869610-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14000] activating connection: mach=true listener=false peer=false name=com.apple.naturallanguaged\n2026-10-10 19:57:22.075405-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (AppKit) [com.apple.AppKit:CampoLightweightUI] Dwelling completed, show affordance\n2026-10-10 19:57:22.075425-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (AppKit) [com.apple.AppKit:CampoLightweightUI] Tearing down remote view connection if it existed.\n2026-10-10 19:57:22.076158-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (AppKit) [com.apple.AppKit:CampoLightweightUI] Selection Tracking Area set up YES; rect is <private>, positioningView is <private>\n2026-10-10 19:57:22.076171-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (AppKit) [com.apple.AppKit:CampoLightweightUI] Mouse exited.\n2026-10-10 19:57:22.076307-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (AppKit) [com.apple.AppKit:CampoLightweightUI] Tracking areas setup complete.\n2026-10-10 19:57:22.399177-0400 0x20ee0cd  Default     0x0                  68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14500] activating connection: mach=false listener=false peer=false name=com.apple.appkit.xpc.openAndSavePanelService\n2026-10-10 19:57:22.467694-0400 0x20ee0cd  Default     0x0                  68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14640] activating connection: mach=false listener=false peer=false name=(anonymous)\n2026-10-10 19:57:22.467727-0400 0x20ee0cd  Default     0x0                  68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14500] invalidated after the last release of the connection object\n2026-10-10 19:57:22.467821-0400 0x20ee0cd  Default     0x0                  68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14640] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()\n2026-10-10 19:57:31.664190-0400 0x20ee0cb  Default     0x0                  68783  2    TextEdit: (LaunchServices) [com.apple.launchservices:default] LSExceptions idle-timer fired, invalidating shared instance.\n2026-10-10 19:57:36.296912-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb79a1400] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()\n2026-10-10 19:57:36.296921-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb79a12c0] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()\n2026-10-10 19:57:36.299985-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (AppKit) [com.apple.AppKit:StateRestoration] -[NSPersistentUIManager flushAllChanges]\n2026-10-10 19:57:36.299986-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (AppKit) [com.apple.AppKit:StateRestoration] -[NSPersistentUIManager flushAllChanges] Emptying for initial flush.\n2026-10-10 19:57:36.315765-0400 0x20ee0cb  Activity    0x5ce359c            68783  0    TextEdit: (CoreServicesInternal) CFURLCreateBookmarkData\n2026-10-10 19:57:36.315884-0400 0x20ee0ae  Activity    0x5ce359d            68783  0    TextEdit: (CoreServicesInternal) CFURLCreateBookmarkData\n2026-10-10 19:57:36.317149-0400 0x20ee0ae  Default     0x5ce359d            68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14780] activating connection: mach=true listener=false peer=false name=com.apple.scopedbookmarksagent.xpc\n2026-10-10 19:57:36.317161-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (AppKit) [com.apple.AppKit:StateRestoration] -[NSPersistentUIManager flushAllChanges] finishing enqueued operations\n2026-10-10 19:57:36.317186-0400 0x20ee0cb  Default     0x0                  68783  0    TextEdit: (AppKit) [com.apple.AppKit:StateRestoration] -[NSPersistentUIManager flushAllChanges]_block_invoke asyncing to main queue\n2026-10-10 19:57:36.319347-0400 0x20ee0ae  Default     0x5ce359d            68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14780] invalidated after the last release of the connection object\n2026-10-10 19:57:36.319658-0400 0x20ee0ae  Default     0x0                  68783  0    TextEdit: (AppKit) [com.apple.AppKit:StateRestoration] -[NSPersistentUIManager flushAllChanges]_block_invoke writing records\n2026-10-10 19:57:51.079337-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (Foundation) [com.apple.foundation.filecoordination:claims] Read (Async) options: 1 -- URL: <private> -- purposeID: A81B27C5-9627-4ADB-87F2-C03FA7E079B7 -- claimID: B0A91942-4329-445E-9CC1-892CD8779C5F\n2026-10-10 19:57:51.079340-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (Foundation) [com.apple.foundation.filecoordination:claims] Write (Async) options: 0 -- URL: <private> -- purposeID: A81B27C5-9627-4ADB-87F2-C03FA7E079B7 -- claimID: B0A91942-4329-445E-9CC1-892CD8779C5F\n2026-10-10 19:57:51.082708-0400 0x20ee65c  Default     0x0                  68783  0    TextEdit: (Foundation) [com.apple.foundation.filecoordination:claims] Claim B0A91942-4329-445E-9CC1-892CD8779C5F granted in client\n2026-10-10 19:57:51.082712-0400 0x20ee65c  Default     0x0                  68783  0    TextEdit: (Foundation) [com.apple.foundation.filecoordination:claims] Claim B0A91942-4329-445E-9CC1-892CD8779C5F invoked in client\n2026-10-10 19:57:51.083484-0400 0x20ee0cb  Default     0x0                  68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d148c0] activating connection: mach=true listener=false peer=false name=com.apple.printtool.agent\n2026-10-10 19:57:51.091009-0400 0x20ee09e  Default     0x0                  68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14a00] activating connection: mach=true listener=false peer=false name=com.apple.metadata.mds\n2026-10-10 19:57:51.092374-0400 0x20ee09e  Error       0x0                  68783  0    TextEdit: (Metadata) [com.apple.metadata:Metadata] unable to get a dev_t for store 1795162160.\n2026-10-10 19:57:51.094834-0400 0x20ee0cb  Activity    0x5ce359e            68783  0    TextEdit: (CoreServicesInternal) CFURLCreateBookmarkData\n2026-10-10 19:57:51.095322-0400 0x20ee0cb  Activity    0x5ce359f            68783  0    TextEdit: (SharedFileList) #SFLAPI LSSharedFileListCopySnapshot\n2026-10-10 19:57:51.095409-0400 0x20ee0cb  Activity    0x5ce41f0            68783  0    TextEdit: (SharedFileList) GenericList.removeItemWithIdentifier\n2026-10-10 19:57:51.095453-0400 0x20ee0cb  Default     0x5ce41f0            68783  0    TextEdit: (SharedFileList) [com.apple.sharedfilelist:XPC] -[SFLGenericList _removeItemWithIdentifier:error:] item: 33CEC61C-35D9-4C34-AE9A-DA09E5B0FE15 list: com.apple.LSSharedFileList.ApplicationRecentDocuments\n2026-10-10 19:57:51.099536-0400 0x20ee0cb  Default     0x5ce41f0            68783  0    TextEdit: (SharedFileList) [com.apple.sharedfilelist:XPC] received: com.apple.LSSharedFileList.ApplicationRecentDocuments\n2026-10-10 19:57:51.100206-0400 0x20ee0cb  Activity    0x5ce41f1            68783  0    TextEdit: (CoreServicesInternal) CFURLCreateBookmarkData\n2026-10-10 19:57:51.100921-0400 0x20ee0cb  Default     0x5ce41f1            68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14b40] activating connection: mach=true listener=false peer=false name=com.apple.scopedbookmarksagent.xpc\n2026-10-10 19:57:51.101961-0400 0x20ee0cb  Default     0x5ce41f1            68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14b40] invalidated after the last release of the connection object\n2026-10-10 19:57:51.101977-0400 0x20ee0cb  Activity    0x5ce41f2            68783  0    TextEdit: (SharedFileList) GenericList.insertItemAfterItem\n2026-10-10 19:57:51.102023-0400 0x20ee0cb  Default     0x5ce41f2            68783  0    TextEdit: (SharedFileList) [com.apple.sharedfilelist:XPC] -[SFLGenericList _insertItem:atIndex:error:] item: 99EE75D2-CFD1-49DF-87BD-6BF562DFC063 at index: 0 list: com.apple.LSSharedFileList.ApplicationRecentDocuments\n2026-10-10 19:57:51.104696-0400 0x20ee0cb  Default     0x5ce41f2            68783  0    TextEdit: (SharedFileList) [com.apple.sharedfilelist:XPC] received: com.apple.LSSharedFileList.ApplicationRecentDocuments\n2026-10-10 19:57:51.109159-0400 0x20ee663  Activity    0x5ce41f3            68783  0    TextEdit: (SharedFileList) #SFLAPI LSSharedFileListCopySnapshot\n2026-10-10 19:57:51.109825-0400 0x20ee65c  Activity    0x5ce41f4            68783  0    TextEdit: (SharedFileList) #SFLAPI LSSharedFileListCopySnapshot\n2026-10-10 19:57:51.109834-0400 0x20ee663  Activity    0x5ce41f5            68783  0    TextEdit: (CoreServicesInternal) CFURLResolveBookmarkData\n2026-10-10 19:57:51.110273-0400 0x20ee65c  Activity    0x5ce41f6            68783  0    TextEdit: (CoreServicesInternal) CFURLResolveBookmarkData\n2026-10-10 19:57:51.110552-0400 0x20ee663  Default     0x5ce41f5            68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14f00] activating connection: mach=true listener=false peer=false name=com.apple.scopedbookmarksagent.xpc\n2026-10-10 19:57:51.110799-0400 0x20ee65c  Default     0x5ce41f6            68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14b40] activating connection: mach=true listener=false peer=false name=com.apple.scopedbookmarksagent.xpc\n2026-10-10 19:57:51.110955-0400 0x20ee663  Default     0x5ce41f5            68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14f00] invalidated after the last release of the connection object\n2026-10-10 19:57:51.111059-0400 0x20ee65c  Default     0x5ce41f6            68783  0    TextEdit: (libxpc.dylib) [com.apple.xpc:connection] [0x7bb7d14b40] invalidated after the last release of the connection object\n",
+      "cleanupError": "Owned TextEdit quit unconfirmed"
+    }
+  ],
+  "stopped": "Owned instance not confirmed gone: Owned TextEdit quit unconfirmed",
+  "gate": {
+    "proceed": false,
+    "hangs": 1,
+    "completed": 1,
+    "planned": 5,
+    "conclusion": "inconclusive: 1 of 5 gate runs completed"
+  },
+  "counts": {
+    "gate": {
+      "none": {
+        "runs": 1,
+        "completed": 1,
+        "hangs": 1,
+        "saved": 0,
+        "skipped": 0,
+        "notDelivered": 0,
+        "msToSave": []
+      }
+    },
+    "variants": {}
+  },
+  "helperExit": {
+    "code": 0,
+    "signal": null
+  },
+  "lockRetained": "Run 1: owned TextEdit instance not confirmed gone; operator inspection required",
+  "instanceMayRemain": true,
+  "finished": "2026-10-10T23:57:57.617Z"
+}
