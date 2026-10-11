@@ -794,9 +794,19 @@ our own runs. Dates and engine versions are given where they matter.
   `SLEIGHT_RICH_TEXT_MOVE=1 node bench/textedit-fixes.mjs --move --open-background` must report
   exactText and formatPreserved true and exit 0. The live runs after the fix, at 02:38 and 02:41 UTC on
   2026-10-11, both stopped earlier, with "No enabled TextEdit Paste menu item": the text unchanged and the
-  clipboard restored. sleight requires the Paste item's AXEnabled, and in a background TextEdit that
-  may read false (inferred: no key window, or validation from an earlier moment). The 00:45 run got
-  past it.
+  clipboard restored (the 00:45 run got past it). Probes of a throwaway Cocoa app that day, never
+  TextEdit, measured why: a menu item's flag starts enabled, and the first Accessibility read of the
+  menu runs AppKit's validation pass, which without a key or main window cannot resolve a
+  first-responder `paste:` through the responder chain and sets the flag false; later reads answer
+  false again. AXPress on the disabled item returns status 0 and performs nothing, and nothing
+  reachable re-enables it: not AXFocused on the text area or the window, AXMain, AXFocusedWindow or
+  AXRaise, not a write of AXEnabled, and not Shift or Command-V events posted to the process, which
+  matches the posted-Cmd+S save finding above. So `textEditPasteItem` refuses to press a disabled
+  Cmd+V item. Its error states this cause and tells Claude to ask the user how to go on. Bringing
+  TextEdit to the front would take the user's focus, so only the user does it. Whether a background TextEdit
+  pastes only after it has been frontmost once since launch is unverified; it rests on the 00:45
+  run's instance, because an offline probe could not activate an app without taking the owner's
+  focus.
 - Driving Helium's Claude Console tab from a session that had used the engine (2026-10-11), the input
   lease refused `browser.nameSession(...)` and later `tab.goto(...)` on a tab from `cua.getTab` with
   "a bundle ID and full window header are required", the native-app refusal, after `cua.getState()`.

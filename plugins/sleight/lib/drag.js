@@ -238,13 +238,22 @@ function textEditPasteItem(app, get) {
   const menus = children(edit);
   if (Number(menus.count) !== 1) throw new Error('TextEdit Edit menu is ambiguous; nothing was changed');
   const items = children(menus.objectAtIndex(0));
+  let disabled;
   for (let i = 0; i < Math.min(Number(items.count), 200); i++) {
     const item = items.objectAtIndex(i);
     // AXMenuItemCmdModifiers omits Command unless NoCommand (8) is present. Zero is Cmd alone.
     if (value(item, 'AXRole') === 'AXMenuItem' && String(value(item, 'AXMenuItemCmdChar')).toLowerCase() === 'v' &&
-        value(item, 'AXMenuItemCmdModifiers') === 0 && value(item, 'AXEnabled') === true) return item;
+        value(item, 'AXMenuItemCmdModifiers') === 0) {
+      if (value(item, 'AXEnabled') === true) return item;
+      disabled = disabled || item;
+    }
   }
-  throw new Error('No enabled TextEdit Paste menu item; nothing was changed');
+  // AXEnabled false here is AppKit's answer for a background menu, not a stale attribute: the read
+  // above runs the validation pass, which without a key window cannot resolve a first-responder
+  // paste: and sets the flag false. A disabled item returns status 0 from AXPress and performs
+  // nothing, and no AX write re-enables it, so pressing would only stage a false consumption.
+  if (disabled) throw new Error("TextEdit's Paste menu item reads disabled: the menu was validated in the background without a key window, and AXPress on a disabled menu item returns status 0 and performs nothing (offline probe, 2026-10-11); nothing was pressed, the source is in place, and the staged clipboard is restored. Ask the user whether to move the word without its formatting, or to bring TextEdit to the front themselves and then retry");
+  throw new Error('No TextEdit Paste menu item; nothing was changed');
 }
 
 // Font names include bold/italic faces. Spelling, selection and paragraph annotations are not

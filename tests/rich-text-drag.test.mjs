@@ -225,10 +225,31 @@ test('background rich paste searches only Edit and stops at its first enabled Co
   const paste = item();
   assert.equal(context.textEditPasteItem(menu([item(3), item(0, false), paste]), get), paste);
   assert.equal(accesses.some(([el, name]) => el === file && name === 'AXChildren' || el === after), false);
-  assert.throws(() => context.textEditPasteItem(menu([item(3)]), get), /enabled.*Paste/);
+  assert.throws(() => context.textEditPasteItem(menu([item(3)]), get), /No TextEdit Paste/);
   const later = item(); accesses.length = 0;
   assert.equal(context.textEditPasteItem(menu([paste, later]), get), paste);
   assert.equal(accesses.some(([el]) => el === later), false);
+});
+test('a disabled Paste signature is refused before the press, and the user decides how to go on', () => {
+  const context = vm.createContext({ ObjC: { import() {},
+    castRefToObject: ref => ref.native,
+    unwrap: value => { if (value && 'native' in Object(value)) throw new Error('Raw CF reference'); return value; } } });
+  vm.runInContext(readFileSync(new URL('../plugins/sleight/lib/drag.js', import.meta.url), 'utf8'), context);
+  const item = (modifiers = 0, enabled = true) => ({ AXRole: 'AXMenuItem', AXMenuItemCmdChar: 'v', AXMenuItemCmdModifiers: modifiers, AXEnabled: enabled });
+  const children = items => ({ count: items.length, objectAtIndex: i => items[i] });
+  const menu = items => ({ AXMenuBar: { AXChildren: children([
+    { AXTitle: 'Edit', AXChildren: children([{ AXChildren: children(items) }]) },
+  ]) } });
+  const get = (el, name) => { if (!(name in el)) throw new Error('Unsupported attribute'); return { native: el[name] }; };
+  let message;
+  try { context.textEditPasteItem(menu([item(0, false), item(3)]), get); } catch (error) { message = String(error.message || error); }
+  assert.match(message, /disabled.*key window|key window.*disabled/s);
+  assert.match(message, /status 0/);
+  assert.match(message, /nothing was pressed/);
+  // Bringing TextEdit forward takes the user's focus, so the message hands that choice to the user.
+  assert.match(message, /[Aa]sk the user/);
+  assert.doesNotMatch(message, /^Bring TextEdit|\. Bring TextEdit/m);
+  assert.doesNotMatch(message, /Cmd\+Z/);
 });
 
 test('missing foreground color equals opaque black in RGB or grayscale, but not red or transparency', () => {
