@@ -86,21 +86,22 @@ Also runs as a plain MCP server: see [other hosts](docs/other-hosts.md).
   lists each kind of action with the runs that measured it.
 - Several agents can share one Mac. Input leases give one session a window at a time and tell the
   others who holds it. With two sessions typing into one document, text doubled in 5/5 trials
-  without leases and appeared once, with one refusal, in 5/5 with them.
+  without leases and appeared once, with one refusal, in 5/5 with them (0.6.0).
 - It never clicks a stale element. When a window's element numbers shift, sleight stops actions on
   numbers Claude hasn't seen since. A later click in a batch that an earlier click renumbered goes
-  to the same element at its new number, and stops when sleight can't tell which one it is. In the
-  benchmark this caught two clicks that would have hit the menu item next to the intended one.
+  to the same element at its new number, and stops when sleight can't tell which one it is. In a
+  0.10.0 pass this caught two clicks that would have hit the menu item next to the intended one.
 - It's light on context. After each action Claude gets only what changed. On the CNN front page,
-  scrolling down five times sent 39,655 characters instead of 203,160.
+  scrolling down five times sent 39,655 characters instead of 203,160 (0.10.0).
 - It asks once per app per session, unless you chose "Always allow" in its prompt or in Codex or
   ChatGPT. Terminals and
   OpenAI's apps stay off until you opt in, and sleight shows you each terminal command first unless
   you turn that off too.
 - The benchmark results are published with their failures. Its tasks in Calculator, TextEdit, Chess
-  and an iPhone simulator run three times each, and the 1.1.0 release pass passed 20/21. Every
-  pass on the way is published too, including one at 13/21 run while the apps were on another Space,
-  and head-to-heads with native Codex computer use, including the Chess one sleight lost 0/3 to 2/3.
+  and an iPhone simulator run three times each, and the release pass passed [PASS] (1.1.0: 20/21).
+  Every pass on the way is published too, including one at 13/21 run while the apps were on another
+  Space (the 2026-10-08 Split View pass), and head-to-heads with native Codex computer use,
+  including Chess in the 1.0.0 head-to-head, which sleight lost 0/3 to 2/3.
 
 sleight also does what the engine can't. It drags text, which the engine's own drag fails to move,
 and reaches menu bar icons and notification banners. Each of these needs its own approval.

@@ -40,6 +40,13 @@ otherwise it leaves the current contents alone. The relay reports restoration or
 then discards its private snapshot. A queued Paste can still run after restoration, so read the
 document before continuing. See the [third review](benchmarks/2026-10-10-textedit-fixes-3.md).
 
+## Clipboard
+
+Set `SLEIGHT_CLIPBOARD=preserve` to keep Copy and Cut in a session-private clipboard that sleight
+puts back after the action, so sleight never leaves your clipboard replaced. Off by default: a copy
+meant for you can't reach menu Paste, `pbpaste` or a browser paste from sleight's private copy, and
+each preserved call takes about 230 ms longer. [The design](design/clipboard.md).
+
 ## Approval scope
 
 Saying yes to an app approval allows that app for the rest of the Claude Code session. Claude Code's
@@ -58,7 +65,6 @@ You can also pick "Always allow", with the third button in sleight's panel or th
 of *Remember this choice* in Claude Code's form. It adds the app, at that risk level and with the date, to your
 pre-approved list, so later sessions don't ask. Terminals and OpenAI's apps never offer it.
 `sleight-mcp allow list` shows the list and `sleight-mcp allow remove <app>` takes an app off.
-- Approval memory stays in the relay and ends with the session.
 
 Apps you marked "Always allow" in Codex or ChatGPT are the exception. The engine keeps that list in
 `~/Library/Group Containers/2DC432GLL2.com.openai.sky.CUAService/Library/Application Support/Software/ComputerUseAppApprovals.json`
@@ -128,6 +134,22 @@ Claude to check visible focus before typing and leave Capture Keyboard unchanged
 default. Set `SLEIGHT_SIM_FOCUS_NOTE=0` to turn it off. Coordinates are unchanged. The affected
 `simulator-form` task must pass with it while the owner is away before release.
 
+## Local tools
+
+The `menu_bar` and `notifications` tools, the `drag` and `hover` fallbacks, `select_window` and
+`open_file` are sleight's own, outside the engine. All are on by default. `SLEIGHT_MENU_BAR=0`
+leaves the menu bar and notification tools out, `SLEIGHT_DRAG=0` the drag tool, and
+`SLEIGHT_HOVER=0` the hover tool. `SLEIGHT_SELECT_WINDOW=0` and `SLEIGHT_OPEN_FILE=0` are under
+[Approval scope](#approval-scope).
+
+## Browser surface
+
+`SLEIGHT_SURFACES` picks what the engine gets. Unset, the default, it is automatic: `computer` plus
+`browser` when a cached discovery less than six hours old reports a connected ChatGPT browser
+extension, otherwise `computer` only. Set it to `computer` or `browser,computer` to fix the choice.
+An engine started from ChatGPT.app, when there's no Codex plugin, is computer-only unless you set
+it. [How it works](how-it-works.md#browser-surface).
+
 ## Preapproved apps
 
 Write `~/Library/Application Support/sleight/preapproved.json` yourself to allow selected apps without
@@ -160,9 +182,11 @@ and it cannot override the engine's app blocks.
 The list also applies with `SLEIGHT_APPROVAL_SCOPE=once`. Each grant goes to stderr and a grant audit,
 and the tool result tells Claude that the app was pre-approved by the user's list, even if the action
 fails. Each relay's audit at `~/Library/Logs/sleight/preapproved-<pid>.jsonl` contains grant fields only.
-It rotates at 64 KiB and keeps one prior file per process. Full relay tracing requires explicit `SLEIGHT_TRACE`,
-which cuts long strings to 300 characters. `SLEIGHT_TRACE_CUT` changes that length, and
-`SLEIGHT_TRACE_CODE=1` adds Claude's code, up to 4,000 characters.
+It rotates at 64 KiB and keeps one prior file per process.
+Full relay tracing is separate and off by default: set `SLEIGHT_TRACE` to `1` (which writes
+`trace-<pid>.jsonl` under `~/Library/Logs/sleight/`) or to a directory path. It cuts long strings to
+300 characters; `SLEIGHT_TRACE_CUT` changes that length, and `SLEIGHT_TRACE_CODE=1` adds Claude's
+code, up to 4,000 characters.
 An audit write failure falls back to asking. List grants never send an engine persistence setting.
 
 ## Review changes
@@ -182,13 +206,15 @@ must reopen it in the app. Snapshots last until the session ends.
 
 Before an action, sleight reads the app's window to check it's the one Claude saw. A read right
 after an action waits for the app to settle, about 400 ms and much longer on a busy Mac, and Codex
-doesn't make that read. So by default, keys, typing, paste and clicks or drags at coordinates that come
-after typing, pasting or a plain key in the same call go straight to the engine. After a click, a
+doesn't make that read. So by default, keys, typing, paste and clicks or drags at coordinates that
+come after typing, pasting or a plain key in the same call go straight to the engine, and so does a
+Return that follows `setValue` (in a Save sheet that read took 1.85 s a save). After a click, a
 shortcut, Return, Escape, Tab or Space, the next action still reads, since that read also waits for
 a panel or sheet the action opened. The first action of each call is checked, and so is every action on an element number, ID or label, which is what catches a window
-that renumbered mid-call. When Claude's read in the call just before took over 2 s, as on a
-loaded Mac, and is less than 10 s old, the first action uses it. Under load a new one took 17 to 57 s.
-Otherwise the guard reads again and stops if an element Claude is about to act on changed since
+that renumbered mid-call. A first action that sends keys, text or coordinates uses Claude's full
+read from the call just before when that read is less than 10 s old, however slow it was (owner,
+2026-10-10, about 0.35 s a run). Under load a new read took 17 to 57 s. Otherwise the guard reads
+again, about 50 ms on a settled app, and stops if an element Claude is about to act on changed since
 Claude read the window.
 Set `SLEIGHT_GUARD=careful` to read before every action. Document scope
 (`SLEIGHT_APPROVAL_SCOPE=document`) always reads.
@@ -199,7 +225,16 @@ The engine's tool description tells Claude to send only the app's acquisition in
 sleight rewrites that sentence so Claude can put the first actions after the acquisition in the
 same call, since the guard checks the window before they run. It also names `cua.getApp` for an app
 Claude can name, which took the first-call `getState` from 8 of 11 runs to 0 of 12 (2026-10-11). Set
-`SLEIGHT_FIRST_CALL_BATCH=0` to keep the engine's wording.
+`SLEIGHT_FIRST_CALL_BATCH=0` to keep the engine's wording. `SLEIGHT_FIRST_CALL_BATCH=merge` also
+asks Claude to chain later calls such as save and close into one; it is under A/B, and got save and
+close into one call in 0 of 24 runs, so the default wording doesn't ask for it.
+
+## Result size
+
+`SLEIGHT_RESULT_TRIM=1` (under A/B) sends a Save or Open panel's file list past 10 rows as a count,
+and leaves a split acquisition's tree out of a result when the same call returned a newer full one.
+Off by default: in the A/B's textedit-save runs it took spilled results from about 56k to 16k
+characters.
 
 ## Doctor app reads
 
@@ -305,3 +340,12 @@ We tested it live on 2026-10-05 with engine 26.930.31730. Terminal ran an `echo`
 settings window was refused 1/1. OpenAI's apps reached the engine's approval prompt instead of its
 refusal, but driving them this way is untested. The setting is undocumented, so an engine update
 can remove it.
+
+## Benchmark and development settings
+
+`SLEIGHT_BENCH_API_CAP_USD` caps a benchmark pass's model spend for the month in dollars; the pass
+refuses to start at the cap (default 200). `SLEIGHT_ARM_DIR` moves the benchmark's sleight arm
+folder (default `~/Library/Caches/sleight-bench/sleight-arm`). `SLEIGHT_STUB_OSASCRIPT=1` stubs
+`osascript` and `open` in the startup-cost measurement scripts. A measurement then doesn't run a
+real app. `SLEIGHT_CHATGPT_APP` points `bin/sleight-mcp` and `sleight-mcp setup` at another ChatGPT copy
+(default `/Applications/ChatGPT.app`).

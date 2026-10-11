@@ -18,12 +18,14 @@ Claude Code ──MCP──▶ bin/sleight-mcp ──▶ ChatGPT.app's cua-repl 
    The desktop app's Code tab gets sleight's own panel instead (`lib/ask.js`, see
    [Approval scope](settings.md#approval-scope)).
 5. `lib/relay.mjs` sits between Claude Code and the server and fills in what Codex would have sent: a
-   session and turn id on each call, session memory for approvals you accepted, and a `turn_ended` call
-   after 30 idle seconds and when the session closes. It hides `js_add_node_module_dir` from Claude and
-   marks `turn_ended` as internal. It also answers a protocol probe from newer Claude Code versions that
-   would otherwise crash the server.
+   session and turn id on each call, session memory for approvals you accepted, the rewritten
+   first-call description ([first-call batching](settings.md#first-call-batching)), and a `turn_ended`
+   call after 30 idle seconds and when the session closes. It hides `js_add_node_module_dir` from
+   Claude and marks `turn_ended` as internal. It also answers a protocol probe from newer Claude Code
+   versions that would otherwise crash the server.
 6. On Claude Code v2.1.287 or later, the mod (`hooks/register.tsx`) ends the engine's turn after each
-   Claude turn that used it, the way Codex does, and refuses Claude's own calls to `turn_ended`.
+   Claude turn that used it, the way Codex does, even when Claude Code's pane list fails, and refuses
+   Claude's own calls to `turn_ended`.
 7. The `menu_bar` and `notifications` tools handle the menu bar icons and banners the engine leaves
    out. `menu_bar` opens an app's icon, reads its menu or window and clicks menu items, and
    `notifications` reads the banners on screen and presses their buttons. Both go through System Events
@@ -43,18 +45,19 @@ Claude Code ──MCP──▶ bin/sleight-mcp ──▶ ChatGPT.app's cua-repl 
 
 ### Browser surface
 
-Startup uses `computer` unless a discovery result less than six hours old reports a connected
-extension. After the engine initializes, background discovery refreshes the cache for the next
-session, including fresh entries. Negative results last 24 hours. `SLEIGHT_SURFACES` overrides this
-choice: use `computer` or `browser,computer`. Automatic mode excludes the in-app browser, which needs
+Startup uses `computer` unless a cached discovery result less than six hours old reports a connected
+extension. A negative result lasts 24 hours. An engine started from ChatGPT.app, when there's no
+Codex plugin, stays `computer`-only: the browser API needs a Codex sign-in. After the engine's
+first call answers (or 60 s without one), background discovery refreshes the cache for the next
+session. `SLEIGHT_SURFACES` overrides this choice: use `computer` or `browser,computer`
+([settings](settings.md#browser-surface)). Automatic mode excludes the in-app browser, which needs
 ChatGPT host context. Doctor still probes extension availability separately.
 
 Use `cua.listBrowsers()`, select by `metadata.extensionInstanceId`, then open the URL with
 `cua.createBrowserTab(browser.browserId, url)`. Helium and Chrome can both report as Chrome.
 Browser requests go through sleight's approval prompts. The relay never preapproves them.
 
-In the final run on 2026-10-04, engine 26.930.31730 opened Example Domain, read it and clicked Learn more
-in 2/2 trials, one in Chrome and one in Helium, both identified by the owner. `turn_ended` removed both
-tabs. Both tab lists were empty, and later closes returned "No tab with id". Earlier retries found zero
-engine instances despite the installed extension. The final run detected both after a connection refresh.
-[Every attempt](benchmarks/2026-10-04-browser-surface.json) includes detection and routing failures.
+In the final live run on 2026-10-04, engine 26.930.31730 opened Example Domain and clicked Learn more
+in 2/2 trials, one in Chrome and one in Helium, and `turn_ended` removed both tabs.
+[The attempts file](benchmarks/2026-10-04-browser-surface.json) records the detection and routing
+failures before that run.
