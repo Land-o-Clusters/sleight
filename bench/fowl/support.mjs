@@ -1,7 +1,7 @@
 // Shared by the patched runner and admission. Unsupported tasks remain in the
 // runner's input so it can write their not-supported rows without agent setup.
 const BROWSER_ARMS = ['playwright-mcp', 'chrome-devtools-mcp', 'claude-in-chrome', 'claude-cu', 'browser-use'];
-export const REAL_BROWSER_ARMS = ['sleight-turbo', 'sleight', 'lcu', 'cua', 'peekaboo', 'codex', 'codex-sol', 'codex-sleight', 'codex-sleight-sol', 'fowlbrowser', 'claude-in-chrome'];
+export const REAL_BROWSER_ARMS = ['sleight-turbo', 'sleight', 'lcu', 'cua', 'peekaboo', 'codex', 'codex-sol', 'codex-sleight', 'codex-sleight-sol', 'fowlbrowser', 'claude-in-chrome', 'cursor-cu'];
 // The Codex arms are one arm on two models (LAWS, 2026-10-18): codex = gpt-6-luna, codex-sol = gpt-6.1-sol, both at effort high
 // with the same CODEX_HOME and approvals. The surface name is the row's arm label, so the scorer keeps the two apart.
 export const CODEX_ARM_MODELS = { codex: 'gpt-6-luna', 'codex-sol': 'gpt-6.1-sol' };
@@ -30,6 +30,7 @@ export function taskSupport(task, surface, { world = false, remote = null, realB
     surface = sleightKind(surface, realBrowser);
     if (remote) return 'Real browser gate is local only';
     if (!REAL_BROWSER_ARMS.includes(surface)) return `Real browser gate uses ${REAL_BROWSER_ARMS.join(', ')}`;
+    if (surface === 'cursor-cu' && realBrowser !== 'chrome') return 'Cursor desktop qualification is Chrome only';
     if (!['chrome', 'helium', 'firefox', 'safari'].includes(task.browser)) return 'Real browser gate supports browser tasks only';
     if (surface === 'claude-in-chrome' && realBrowser !== 'chrome') return 'Claude in Chrome runs in Chrome only';
     if (surface === 'fowlbrowser' && !['chrome', 'helium'].includes(realBrowser)) return 'FowlBrowser runs in Chrome or Helium only';

@@ -68,6 +68,14 @@ import { analyticsArm, writeAnalyticsMcp } from './analytics-validation.mjs';
 import { actionLogPath } from '../plugins/sleight/lib/action-outcomes.mjs';
 import { refreshHub } from './hub-refresh.mjs';
 
+// The desktop arm owns no Claude CLI, MCP config or engine approval list.
+// Dispatch before the ordinary runner prepares any of those resources.
+if (process.argv[process.argv.indexOf('--arm') + 1]?.split(',').includes('cursor-cu')) {
+  try { await (await import('./world/arms/cursor-cu/suite.mjs')).nativeMain(process.argv.slice(2)); }
+  catch (error) { console.error(error.message); process.exitCode = 1; }
+  process.exit(process.exitCode ?? 0);
+}
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TIMEOUT_MS = 5 * 60 * 1000;
 

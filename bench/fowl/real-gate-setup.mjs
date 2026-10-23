@@ -66,6 +66,7 @@ export async function withClaudeManifest(plan, run, { backup = withManifestBacku
 }
 
 import { REAL_BROWSER_ARMS, CODEX_ARM_MODELS, isCodexSurface, isCodexSleightSurface, sleightKind, codexModelFor } from './support.mjs';
+import { composerPlan as cursorComposerPlan } from '../world/arms/cursor-cu/contract.mjs';
 import { CODEX_SLEIGHT_HOME, codexSleightServers, codexSleightToml } from '../codex-sleight.mjs';
 import { CODEX_HOME } from '../codex-arm.mjs';
 export const REAL_SURFACES = REAL_BROWSER_ARMS;
@@ -106,12 +107,20 @@ export function gateWindowApps(realBrowser) {
   const app = /^(\/.+?\.app)\//.exec(realBrowser.executable ?? '')?.[1];
   return { apps: [...names, ...(app ? [app] : [])], title: realBrowser.marker };
 }
-export function realAgentSetup({ task, surface, dir, realBrowser, armHome, dryRun = false, repo = repoRoot,
+export function realAgentSetup({ task, surface, dir, realBrowser, armHome, dryRun = false, allowBenchmarkAppPrompts = false, repo = repoRoot,
   model = 'haiku', effort = 'high', settings = join(dir, 'settings.json'), mcpRoot, armRoot, chromeFiles }) {
   if (!REAL_SURFACES.includes(surface)) throw Error(`Unknown real-browser arm: ${surface}`);
   const browserName = { chrome: 'Chrome', helium: 'Helium', firefox: 'Firefox', safari: 'Safari' }[realBrowser.browser];
   const prompt = task.prompt.replaceAll('{browser}', browserName).replaceAll('{repo}', repo).replaceAll('{out}', dir) +
     `\n\nEnd your answer with one line starting with RESULT: that states ${task.result}.`;
+  if (surface === 'cursor-cu') {
+    if (realBrowser.browser !== 'chrome') throw Error('Cursor desktop qualification is Chrome only');
+    const cursorPlan = cursorComposerPlan({ prompt, allowedApps: ['com.google.Chrome', 'com.apple.TextEdit', 'com.apple.Preview'],
+      timeoutMs: (task.budgetSeconds || 600) * 1000, allowBenchmarkAppPrompts });
+    return { command: null, args: [], env: {}, prompt, mcpConfig: null, cursorPlan,
+      metadata: { arm: 'cursor-cu', route: 'desktop', cursorVersion: '3.27.12', model: 'Grok 4.7 High', effort: 'high', speed: 'normal',
+        configDir: cursorPlan.paths.userData, browser: 'chrome', headless: false, qualificationOnly: true } };
+  }
   if (isCodexSurface(surface)) return codexBrowserSetup({ dir, prompt, realBrowser, surface });
   // The sleight-in-Codex arms build the sleight / sleight-turbo arm for this browser, then run it under Codex.
   const kind = sleightKind(surface, realBrowser.browser);

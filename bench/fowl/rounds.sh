@@ -44,6 +44,9 @@ MODEL=opus; SURFACE=""; TASKS=""; OUT=""; ONLY=""; GUI=""; REMOTE=""; prev=""; f
   [ "$a" = --gui ] && GUI=1
   prev="$a"
 done
+if [ "$SURFACE" = cursor-cu ]; then
+  exec node "$REPO/bench/world/arms/cursor-cu/suite.mjs" --chrome "$@"
+fi
 MODEL=$(node "$REPO/bench/fowl/accounting.mjs" --model-id "$MODEL")
 [ -z "$REAL" ] || [ -z "$DRY" ] || exec node "$REPO/bench/fowl/real-gate.mjs" "$@"
 [ -n "$REAL" ] || node "$REPO/bench/fowl/preflight.mjs" "$@"

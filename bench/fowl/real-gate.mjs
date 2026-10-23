@@ -23,8 +23,13 @@ import { gradeGateTask, browserEvidence, runErrorClass, harnessFailure, coverEvi
 import { taskSupport, raceBundles, isCodexSurface, isCodexSleightSurface, runsCodexExec, sleightKind, codexModelFor } from './support.mjs';
 import { CODEX_SLEIGHT_HOME, ensureCodexSleightHome, writeCodexSleightConfig, approvalSummary, PROXY, SLEIGHT_MCP } from '../codex-sleight.mjs';
 import { engineSpan, readEngine } from '../engine-version.mjs';
+import { runDesktop as runCursorDesktop } from '../world/arms/cursor-cu/run.mjs';
+import { DesktopDriver as CursorDesktopDriver } from '../world/arms/cursor-cu/desktop.mjs';
+import { armPaths, assertDesktopReady as assertCursorDesktopReady } from '../world/arms/cursor-cu/contract.mjs';
+import { inspectBundle as inspectCursorBundle, readLoginReadiness as cursorReadiness } from '../world/arms/cursor-cu/setup.mjs';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
+const runCursorPlan = (plan, options) => runCursorDesktop(plan, { driver: new CursorDesktopDriver(), ...options });
 const codexHome = () => join(homedir(), '.codex-bench');
 const defaultArmHome = () => join(homedir(), 'Library/Caches/sleight-bench');
 
@@ -112,7 +117,7 @@ export function realGatePlan({ args, tasks, repo = repoRoot, mcpRoot, armHome, r
     const chromeFiles = { ...(deviceFile ? { deviceFile } : {}),
       ...(args['chrome-local-state'] ? { localState: args['chrome-local-state'] } : {}) };
     const setup = realAgentSetup({ task, surface, dir, realBrowser: browser, repo, armHome, dryRun, mcpRoot, chromeFiles,
-      model: args.model || 'haiku', effort: args.effort || 'high' });
+      model: args.model || 'haiku', effort: args.effort || 'high', allowBenchmarkAppPrompts: args['allow-benchmark-app-prompts'] === true });
     return { ...setup, args: runsCodexExec(surface) ? setup.args : [...setup.args, setup.prompt],
       task, surface, dir };
   });
@@ -139,7 +144,7 @@ const getJson = async url => {
   catch (error) { return { error: error.message }; }
 };
 
-export async function runGateAgent(plan, { signal, runClaude = runOwned, runNativeCodex = runCodex, guardChrome = withClaudeManifest } = {}) {
+export async function runGateAgent(plan, { signal, runClaude = runOwned, runNativeCodex = runCodex, runCursor = runCursorPlan, guardChrome = withClaudeManifest } = {}) {
   mkdirSync(plan.dir, { mode: 0o700 });
   let result;
   const collect = async operation => {
@@ -153,7 +158,15 @@ export async function runGateAgent(plan, { signal, runClaude = runOwned, runNati
   writeFileSync(events, '');
   let groupClean;
   try {
-    if (runsCodexExec(plan.surface)) {
+    if (plan.surface === 'cursor-cu') {
+      const out = await collect(() => runCursor(plan.cursorPlan, { signal,
+        onEvent: event => appendFileSync(events, JSON.stringify(event) + '\n') }));
+      groupClean = out.groupClean;
+      result = { exitCode: out.is_error ? 1 : 0, result: out, groupClean, toolCalls: out.calls, toolErrors: null,
+        qualificationOnly: true, timingBoundary: 'harness-submit to persisted clientSettleTime',
+        ...(Number.isFinite(out.duration_ms) ? { started: out.submittedAt, finished: out.recordedEndAt } : {}) };
+      writeFileSync(join(plan.dir, 'stderr.txt'), out.reason ?? '');
+    } else if (runsCodexExec(plan.surface)) {
       // sleight's arms: this run's servers go into the arm's own Codex home first (a copy sits in the run's folder as evidence).
       if (plan.codexConfig) {
         writeCodexSleightConfig(plan.codexConfig.toml, plan.codexConfig.home, join(plan.dir, 'codex-config.toml'));
@@ -190,7 +203,8 @@ export async function runGateAgent(plan, { signal, runClaude = runOwned, runNati
     }
     // Graders require a successful browser call (and for lookups a visit), so an answer from memory fails.
     const evidence = browserEvidence(readFileSync(events, 'utf8'));
-    const receipt = { ...result, evidence, name: plan.task.name, started, finished: Date.now(), agentConfig: plan.metadata };
+    const receipt = { started, finished: Date.now(), ...result, evidence, name: plan.task.name,
+      ...(plan.surface === 'cursor-cu' && { outerStarted: started, outerFinished: Date.now() }), agentConfig: plan.metadata };
     writeFileSync(join(plan.dir, 'run.json'), JSON.stringify(receipt, null, 2));
     if (!groupClean) throw Object.assign(Error('BENCH_AGENT_CLEANUP_UNPROVED'), { groupClean: false });
     return receipt;
@@ -258,7 +272,11 @@ export async function admitRealGate(plan, { terminal = terminalAncestor } = {}) 
   const setups = plan.arms;
   if (plan.surface === 'peekaboo' && !terminal()) throw Error('Peekaboo\'s grants are on Terminal.app, so its rounds run from a Terminal window: ' +
     'put the rounds.sh command in a .command file and run: open -a Terminal <file>.command');
-  if (isCodexSurface(plan.surface)) {
+  if (plan.surface === 'cursor-cu') {
+    assertCursorDesktopReady();
+    inspectCursorBundle(armPaths().app);
+    if (!(await cursorReadiness()).authStored) throw Error('Cursor desktop needs login in its isolated profile; run node bench/world/arms/cursor-cu/setup.mjs');
+  } else if (isCodexSurface(plan.surface)) {
     if (codexConfigServers(codexHome()).length !== 1 || !existsSync(join(codexHome(), 'auth.json'))) throw Error('Codex benchmark home needs its isolated engine server and login');
   } else if (isCodexSleightSurface(plan.surface)) {
     // The arm's Codex home holds sleight's servers alone (never the engine's own computer-use server), and its login is the

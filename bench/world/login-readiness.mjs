@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { assertLogin, loginFix, quote } from '../preflight.mjs';
 import { nativeArmPlan, isNativeArm } from './native-arms.mjs';
 import { worldCLI } from './native-world.mjs';
+import { loginReadiness as cursorLoginReadiness } from './arms/cursor-cu/setup.mjs';
 
 export const LOGIN_ARMS = ['sleight', 'lcu', 'cua', 'peekaboo', 'claude-cu'];
 export const defaultArmHome = (env = process.env, home = homedir()) => env.BENCH_ARM_HOME || join(home, 'Library', 'Caches', 'sleight-bench');
@@ -37,11 +38,12 @@ export function loginTarget(name, { armHome, env = process.env }) {
 
 // Rows for the given arms. Codex is native Codex on its own login, so it has no row here.
 export function worldLoginReadiness(arms = LOGIN_ARMS, { armHome = defaultArmHome(), env = process.env, home = homedir(),
-  login = assertLogin, exists = existsSync } = {}) {
+  login = assertLogin, exists = existsSync, cursorReadiness = cursorLoginReadiness } = {}) {
   // USER and LOGNAME as the runs have them (armEnv keeps the host's): the keychain login is found by user.
   const base = { HOME: home, PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
     ...Object.fromEntries(['USER', 'LOGNAME'].filter(key => typeof env[key] === 'string').map(key => [key, env[key]])) };
   return arms.filter(name => name !== 'codex').map(name => {
+    if (name === 'cursor-cu') return cursorReadiness();
     const target = loginTarget(name, { armHome, env });
     const loginEnv = { ...base, CLAUDE_CONFIG_DIR: target.config };
     if (!exists(target.command)) return { ...target, loggedIn: false, reason: 'Claude CLI is not installed', fix: target.setup };
@@ -54,7 +56,7 @@ export function worldLoginReadiness(arms = LOGIN_ARMS, { armHome = defaultArmHom
 }
 
 export function formatReadiness(rows) {
-  return rows.map(row => `${row.arm.padEnd(10)} ${row.loggedIn ? 'logged in' : 'NOT LOGGED IN'}\n  config: ${row.config}` +
+  return rows.map(row => row.arm === 'cursor-cu' ? `cursor-cu  desktop login unverified\n  config: ${row.config}\n  Run: ${row.fix}` : `${row.arm.padEnd(10)} ${row.loggedIn ? 'logged in' : 'NOT LOGGED IN'}\n  config: ${row.config}` +
     (row.loggedIn ? '' : `\n  ${row.reason}. Run:\n  ${row.fix}`)).join('\n');
 }
 
@@ -63,5 +65,5 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const arms = i >= 0 ? process.argv[i + 1].split(',') : LOGIN_ARMS;
   const rows = worldLoginReadiness(arms);
   console.log(process.argv.includes('--json') ? JSON.stringify(rows, null, 2) : formatReadiness(rows));
-  process.exitCode = rows.every(row => row.loggedIn) ? 0 : 1;
+  process.exitCode = rows.every(row => row.loggedIn === true) ? 0 : 1;
 }
