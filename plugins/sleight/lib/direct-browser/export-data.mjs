@@ -21,14 +21,27 @@ export function readExportCollection(el, limits, read) {
     if (!node || read(node, 'nodeType') !== 1) return true;
     if (hidden.has(node)) return hidden.get(node);
     const style = getComputedStyle(node);
-    const yes = !read(node, 'hasAttribute')?.('hidden') && attribute(node, 'aria-hidden') !== 'true' &&
+    let yes = !read(node, 'hasAttribute')?.('hidden') && attribute(node, 'aria-hidden') !== 'true' &&
       style.display !== 'none' && !['hidden', 'collapse'].includes(style.visibility) && style.contentVisibility !== 'hidden' && visible(parent(node));
+    if (yes) {
+      const boxes = Array.from(read(node, 'getClientRects')?.() ?? []);
+      const positioned = /^(absolute|fixed)$/.test(style.position);
+      const geometry = tag(node) === 'br' || style.display === 'contents' || boxes.some(box => box.width > 0 && box.height > 0 && box.right + scrollX > 0 && box.bottom + scrollY > 0 &&
+        (!positioned || box.left < innerWidth && box.top < innerHeight));
+      if (!geometry || Number(style.opacity) === 0 || parseFloat(style.fontSize) === 0 || style.clip !== 'auto' && style.clip !== '' ||
+          style.clipPath !== 'none' && style.clipPath !== '') {
+        yes = false; reasons.add('visually hidden text omitted');
+      }
+    }
     hidden.set(node, yes); return yes;
   };
   if (!visible(el)) throw Error('Export collection is hidden');
   const integer = value => /^\d+$/.test(value ?? '') && Number(value) <= 1000000000 ? Number(value) : undefined;
   const inspect = node => {
     if (attribute(node, 'aria-busy') === 'true' || role(node) === 'progressbar') reasons.add('collection contains a loading indicator');
+    if (role(node) === 'navigation' || tag(node) === 'nav' || /\bnext\b/i.test(attribute(node, 'rel') ?? '')) reasons.add('nearby pagination control');
+    const countText = children(node).length <= 8 && /^(span|p|div|nav|a|button)$/.test(tag(node)) ? (read(node, 'textContent') ?? '').slice(0, 160) : '';
+    if (/\bpage\s+\d+\s+(?:of|\/)\s*\d+\b/i.test((attribute(node, 'aria-label') ?? '') + ' ' + countText)) reasons.add('nearby pagination page count');
     if (/^(button|a)$/.test(tag(node)) || role(node) === 'button') {
       const label = (attribute(node, 'aria-label') ?? read(node, 'textContent') ?? '').slice(0, 120).trim();
       if (/^(?:(?:load|show|view|see|read)\s+(?:\d+\s+)?(?:more|older|newer)\b|next(?:\s+page)?$|older\b|newer\b)/i.test(label)) reasons.add('unopened pagination or expansion control');
@@ -40,6 +53,7 @@ export function readExportCollection(el, limits, read) {
   if (attribute(el, 'aria-busy') === 'true') reasons.add('collection is busy');
   const visit = (node, callback, depth = 0) => {
     if (++nodes > 50000 || depth > 96) { capped = true; reasons.add('DOM budget reached'); return; }
+    if (attribute(node, 'aria-busy') === 'true' || role(node) === 'progressbar') reasons.add('collection contains a loading indicator');
     if (!visible(node)) return;
     inspect(node);
     if (node !== el && collection(node)) { reasons.add('nested collection omitted'); return; }
@@ -61,8 +75,14 @@ export function readExportCollection(el, limits, read) {
       if (type === 1) inspect(current);
       if (/^(script|style|template|noscript)$/.test(tag(current))) return;
       if (/^(canvas|svg|iframe|object|embed|img)$/.test(tag(current))) { reasons.add('non-text content omitted'); return; }
-      if (/^(input|textarea|select)$/.test(tag(current)) || read(current, 'isContentEditable') || sensitive.test([
-        attribute(current, 'type'), attribute(current, 'name'), attribute(current, 'id'), attribute(current, 'autocomplete'), attribute(current, 'aria-label')].join(' '))) {
+      const mask = getComputedStyle(current).webkitTextSecurity;
+      if (mask && mask !== 'none') {
+        parts.push('[redacted]'); redacted = true; reasons.add('masked content redacted'); return;
+      }
+      const control = /^(input|textarea|select|button|output)$/.test(tag(current)) || /^(textbox|searchbox|combobox|spinbutton)$/.test(role(current)) || read(current, 'isContentEditable');
+      if (/^(input|textarea|select)$/.test(tag(current)) || read(current, 'isContentEditable') ||
+        /(?:^|\s)cc-/i.test(attribute(current, 'autocomplete') ?? '') || control && sensitive.test([
+          attribute(current, 'type'), attribute(current, 'name'), attribute(current, 'id'), attribute(current, 'autocomplete'), attribute(current, 'aria-label')].join(' '))) {
         parts.push('[redacted]'); redacted = true; return;
       }
       if (current !== node && collection(current)) { reasons.add('nested collection omitted'); return; }
@@ -121,8 +141,28 @@ export function readExportCollection(el, limits, read) {
   if (indices.some((value, i) => value < 1 || i > 0 && value !== indices[i - 1] + 1) || indices.length && indices[0] > 1 + headers) reasons.add('row index gaps or missing beginning');
   if (indices.length && indices.length !== rows.length) reasons.add('some row indices are missing');
   if (indices.length && expected === undefined) reasons.add('indexed collection has no declared total');
+  if (rows.some(row => row.length !== (columns.length || rows[0]?.length))) reasons.add('ragged rows have different cell counts');
   // Scroll, pagination and content behind controls need a separate whole read; a DOM read cannot prove them complete.
-  if ((read(el, 'scrollHeight') ?? 0) > (read(el, 'clientHeight') ?? 0) + 1 && expected === undefined) reasons.add('scrolling collection has no declared total');
+  if (expected === undefined) {
+    const nearby = (node, depth = 0) => {
+      if (++nodes > 50000 || depth > 96) { reasons.add('DOM budget reached'); return; }
+      if (node === el || collection(node) || !visible(node)) return;
+      inspect(node);
+      for (const child of branches(node)) nearby(child, depth + 1);
+    };
+    for (let node = el, depth = 0; node && depth < 96; node = parent(node), depth++) {
+      // A document's ordinary viewport is not evidence that the collection itself is virtualized.
+      if (/^(body|html)$/.test(tag(node))) break;
+      if ((read(node, 'scrollHeight') ?? 0) > (read(node, 'clientHeight') ?? 0) + 1 ||
+          (read(node, 'scrollWidth') ?? 0) > (read(node, 'clientWidth') ?? 0) + 1) reasons.add('scrolling collection has no declared total');
+      const style = getComputedStyle(node);
+      const overflow = /^(auto|scroll|hidden|clip)$/.test(style.overflowX) || /^(auto|scroll|hidden|clip)$/.test(style.overflowY);
+      // Siblings at each wrapper, including the scroller's children, can hold pagination outside the collection.
+      if (node === el) for (const sibling of branches(parent(node))) nearby(sibling);
+      else for (const child of branches(node)) nearby(child);
+      if (overflow) break;
+    }
+  }
   if (!rows.length) reasons.add('no readable data rows');
   return { kind: table ? 'table' : 'list', columns, rows, complete: reasons.size === 0, reasons: [...reasons], redacted };
 }

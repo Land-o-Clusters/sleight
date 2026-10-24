@@ -44,6 +44,7 @@ async function refFor(page, role, name) {
   return /\[ref=([^\]]+)\]/.exec(line)[1];
 }
 function parseCSV(text) {
+  text = text.replace(/^\uFEFF/, '');
   const rows = []; let row = [], field = '', quote = false;
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
@@ -165,7 +166,7 @@ test('dispatcher end-to-end exports a user-named file and refuses pending dialog
     ctx: ctx(`Export the Prices table to "${output}"`) });
   const request = { name: 'browser_read', arguments: { tab: 't1', export: ref, format: 'json', path: output } };
   const result = await dispatcher.call(request);
-  assert.equal(result.isError, false, result.text); assert.match(result.text, /Rows: 200\.\nComplete: yes\./);
+  assert.equal(result.isError, false, result.text); assert.match(result.text, /Rows: 200\.\nComplete: yes \(rendered collection\)\./);
   assert.deepEqual(gradeTableExport(fs.readFileSync(output, 'utf8'), exportTableFixture(9), result.text), { pass: true, code: 'EXPORT_EXACT' });
   entry.state.dialog = {};
   await assert.rejects(exportPageData(entry, { export: ref }, ctx('Export table')), /dialog pending/);
@@ -176,4 +177,85 @@ test('the benchmark grader rejects missing, reordered, altered or falsely comple
   assert.equal(gradeTableExport(JSON.stringify(actual), source, 'Rows: 200. Complete: yes.').pass, true);
   for (const changed of [{ ...actual, rows: source.rows.slice(1) }, { ...actual, rows: [...source.rows].reverse() }, { ...actual, complete: false },
     { ...actual, rowCount: 199 }, { ...actual, reasons: ['partial'] }]) assert.equal(gradeTableExport(JSON.stringify(changed), source, '200 complete: yes').pass, false);
+});
+
+test('pagination beside a collection and within its nearest scroller blocks completeness without input', options, async t => {
+  const f = await fixture(t, '<section><ul aria-label="Sibling"><li>first</li></ul><button>Next</button></section>' +
+    '<section><table aria-label="Nav"><tr><td>first</td></tr></table><div role="navigation" aria-label="Pages"><a href="#2">2</a></div></section>' +
+    '<section><ul aria-label="Count"><li>first</li></ul><span>Page 1 of 3</span></section>' +
+    '<section style="height:100px;overflow:auto"><div><ul aria-label="Ancestor"><li>first</li></ul></div><footer><a rel="next" href="#more">→</a></footer></section>' +
+    '<script>window.effects=[];document.addEventListener("click",()=>effects.push("click"))</script>');
+  for (const [role, name] of [['list', 'Sibling'], ['table', 'Nav'], ['list', 'Count'], ['list', 'Ancestor']]) {
+    const data = await readDataExport(f.page, await refFor(f.page, role, name));
+    assert.equal(data.complete, false, name); assert.match(data.reasons.join(), /pagination/);
+  }
+  assert.deepEqual(await f.page.evaluate(() => window.effects), []);
+  assert.deepEqual(f.requests, [['GET', '/']]);
+});
+test('scroll extent follows wrappers to the first overflow ancestor and does not use an unrelated outer scroller', options, async t => {
+  const f = await fixture(t, '<div style="height:30px;overflow:auto"><div><ul aria-label="Wrapped">' +
+    Array.from({ length: 12 }, () => '<li>row</li>').join('') + '</ul></div></div>' +
+    '<div style="height:20px;overflow:auto"><div style="height:100px"><div style="overflow:auto"><ul aria-label="Contained"><li>one</li></ul></div></div></div>');
+  const wrapped = await readDataExport(f.page, await refFor(f.page, 'list', 'Wrapped'));
+  assert.equal(wrapped.complete, false); assert.match(wrapped.reasons.join(), /scrolling.*no declared total/);
+  const contained = await readDataExport(f.page, await refFor(f.page, 'list', 'Contained'));
+  assert.equal(contained.complete, true, JSON.stringify(contained.reasons));
+});
+test('zero geometry, off-canvas, opacity, clipping and zero font text are omitted with a reason', options, async t => {
+  const styles = ['display:inline-block;width:0;height:0;overflow:hidden', 'position:absolute;left:-10000px',
+    'opacity:0', 'position:absolute;clip:rect(0,0,0,0)', 'clip-path:inset(50%)', 'font-size:0'];
+  const f = await fixture(t, '<ul aria-label="Visual"><li>visible' + styles.map((style, i) => `<span style="${style}">hidden-${i}</span>`).join('') +
+    '</li></ul><ul aria-label="Below" style="margin-top:2000px"><li>below viewport</li></ul>');
+  const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Visual'));
+  assert.deepEqual(data.rows, [['visible']]); assert.equal(data.complete, false);
+  assert.match(data.reasons.join(), /visually hidden text omitted/);
+  const below = await readDataExport(f.page, await refFor(f.page, 'list', 'Below'));
+  assert.deepEqual(below.rows, [['below viewport']], 'ordinary content below the viewport remains exportable');
+});
+test('CSS text masks redact content while product-card and secret-named row labels stay readable', options, async t => {
+  const f = await fixture(t, '<ul aria-label="Products"><li id="product-card-3">plain product</li><li id="secret-notes">plain note</li>' +
+    '<li><span style="-webkit-text-security:disc">masked-plaintext-987</span></li>' +
+    '<li><span autocomplete="cc-number">protected-card-text</span></li><li><span role="textbox" aria-label="password">form-control-secret</span></li></ul>');
+  const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Products'));
+  assert.deepEqual(data.rows, [['plain product'], ['plain note'], ['[redacted]'], ['[redacted]'], ['[redacted]']]);
+  assert.equal(data.complete, false); assert.match(data.reasons.join(), /masked content redacted/);
+  assert.doesNotMatch(JSON.stringify(data), /masked-plaintext|protected-card-text|form-control-secret/);
+});
+test('ragged table rows retain their widths and return a completeness reason', options, async t => {
+  const f = await fixture(t, '<table aria-label="Ragged"><tr><th>A</th><th>B</th></tr><tr><td>one</td></tr><tr><td>two</td><td>three</td></tr></table>');
+  const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Ragged'));
+  assert.deepEqual(data.rows, [['one'], ['two', 'three']]); assert.equal(data.complete, false);
+  assert.match(data.reasons.join(), /ragged/);
+});
+test('pagination also sits beside an overflow collection and can split its page count across tags', options, async t => {
+  const f = await fixture(t, '<section><ul aria-label="Own scroller" style="overflow:auto"><li>one</li></ul><button>Next</button></section>' +
+    '<section><ul aria-label="Split count"><li>one</li></ul><span>Page <b>1</b> of <b>4</b></span></section>');
+  for (const name of ['Own scroller', 'Split count']) {
+    const data = await readDataExport(f.page, await refFor(f.page, 'list', name));
+    assert.equal(data.complete, false, name); assert.match(data.reasons.join(), /pagination/);
+  }
+});
+test('ordinary rows above the current viewport stay in the export without moving the scroll position', options, async t => {
+  const f = await fixture(t, '<ul aria-label="Scrolled">' + Array.from({ length: 100 }, (_, i) => `<li>row ${i}</li>`).join('') +
+    '</ul><script>window.scrollTo(0,1000)</script>');
+  const before = await f.page.evaluate(() => scrollY);
+  assert.ok(before > 500);
+  const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Scrolled'));
+  assert.deepEqual(data.rows, Array.from({ length: 100 }, (_, i) => [`row ${i}`]));
+  assert.equal(data.complete, true, JSON.stringify(data.reasons));
+  assert.equal(await f.page.evaluate(() => scrollY), before);
+});
+test('the dispatcher shares one export budget between tabs for the current turn', options, async t => {
+  const f = await fixture(t, '<ul aria-label="Budget"><li>one</li></ul>'), ref = await refFor(f.page, 'list', 'Budget');
+  const output = join(f.root, 'exports'); fs.mkdirSync(output);
+  const entry = { page: f.page, state: {} }, dispatcher = createToolDispatcher({
+    pages: { enqueue: async (_tab, run) => run(entry) }, snapshot, runSteps: () => assert.fail('input'), fillFields: () => assert.fail('input'),
+    ctx: ctx(`Export table to "${output}"`) });
+  for (let i = 0; i < EXPORT_LIMITS.turnFiles; i++) {
+    const result = await dispatcher.call({ name: 'browser_read', arguments: { tab: i % 2 ? 't1' : 't2', export: ref, path: output } });
+    assert.equal(result.isError, false, result.text);
+  }
+  const capped = await dispatcher.call({ name: 'browser_read', arguments: { tab: 't2', export: ref, path: output } });
+  assert.equal(capped.isError, true); assert.match(capped.text, /turn.*count/);
+  assert.equal(fs.readdirSync(output).length, EXPORT_LIMITS.turnFiles);
 });

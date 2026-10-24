@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { serializeDataExport, writeDataExport, exportSummary, EXPORT_LIMITS } from '../plugins/sleight/lib/direct-browser/export-file.mjs';
 import { browserTools, validateToolCall, createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 import { readDataExport } from '../plugins/sleight/lib/direct-browser/export-data.mjs';
@@ -15,12 +16,12 @@ function folder(t) {
   return root;
 }
 test('CSV quotes cells and newlines, neutralizes formula cells, and JSON retains exact text and structure', () => {
-  assert.equal(serializeDataExport(data()), '"Name","Price","Note"\r\n"pear","1.20","a,""quote""\nand a line"\r\n"桃","2","\'=1+1"\r\n');
+  assert.equal(serializeDataExport(data(), 'csv', { bom: false }), '"Name","Price","Note"\r\n"pear","1.20","a,""quote""\nand a line"\r\n"桃","2","\'=1+1"\r\n');
   const value = JSON.parse(serializeDataExport(data(), 'json'));
   assert.deepEqual(value.rows, data().rows); assert.deepEqual(value.columns, data().columns);
   assert.equal(value.rowCount, 2); assert.equal(value.complete, true);
   for (const value of ['=A1', '+SUM(A1)', '-1+2', '@SUM(A1)', '\t=1', '\r=1', '\uFEFF=1', '\x00=1'])
-    assert.ok(serializeDataExport({ ...data(), columns: [], rows: [[value]] }).startsWith('"\''));
+    assert.ok(serializeDataExport({ ...data(), columns: [], rows: [[value]] }, 'csv', { bom: false }).startsWith('"\''));
 });
 test('structured export enforces shape, completeness and bounded rows, columns and bytes', () => {
   for (const invalid of [{}, { ...data(), kind: 'code' }, { ...data(), rows: [[{}]] }, { ...data(), rows: Array(EXPORT_LIMITS.rows + 1).fill([]) },
@@ -38,7 +39,7 @@ test('default export writes a private new file under the OS-user sleight directo
   assert.equal(fs.statSync(path.dirname(receipt.path)).mode & 0o777, 0o700);
   assert.equal(receipt.rowCount, 2);
   assert.doesNotMatch(exportSummary(receipt), /pear|桃|1\+1/);
-  assert.match(exportSummary(receipt), /Rows: 2\.\nComplete: yes\./);
+  assert.match(exportSummary(receipt), /Rows: 2\.\nComplete: yes \(rendered collection\)\./);
   assert.throws(() => writeDataExport(data(), {}, context('Export table'), { userHome: root, id: () => 'test' }), /never overwritten/);
 });
 test('only a current authenticated user turn can export', t => {
@@ -122,4 +123,108 @@ test('native document pages and non-data refs are refused before any read', asyn
   for (const url of ['vscode-file://workbench/index.html', 'file:///private/document.html', 'chrome://settings', 'about:blank'])
     await assert.rejects(readDataExport({ url: () => url }, 'e1'), /browser-only/);
   for (const ref of ['s1', 'x1', 'more1_1', '#table']) await assert.rejects(readDataExport({}, ref), /observed table/);
+});
+
+test('export authorization is scoped to its sentence, including a user-named dotted path', t => {
+  const root = folder(t), target = path.join(root, 'prices.v2.csv');
+  const receipt = writeDataExport(data(), { path: target }, context(`Export the table to "${target}". Don't include the footer.`));
+  assert.equal(receipt.path, target);
+  assert.doesNotThrow(() => writeDataExport(data(), {}, context("Export the table. Don't include the footer"), { userHome: root }));
+  for (const text of ["Don't export the table. Export the footer", 'Export the table if public. Read the footer', 'If approved. Export the table'])
+    assert.throws(() => writeDataExport(data(), {}, context(text), { userHome: root }), /affirmative/);
+});
+test('user-named hidden and Library destinations refuse before any folder or file is created', t => {
+  const root = folder(t);
+  for (const suffix of ['.ssh/keys.csv', '.aws/config.csv', '.gnupg/keys.csv', 'Documents/.private/data.csv', '.hidden.csv',
+    'Library/LaunchAgents/export.csv', 'Library/LaunchDaemons/export.csv', 'library/Preferences/data.csv',
+    'Library/Application Support/sleight/exports/named.csv', 'Library/Mobile Documents/com~apple~CloudDocs/data.csv']) {
+    const target = path.join(root, suffix);
+    assert.throws(() => writeDataExport(data(), { path: target }, context(`Export table to "${target}"`), { userHome: root }), /hidden|Library|sensitive/);
+  }
+  assert.deepEqual(fs.readdirSync(root), []);
+  assert.doesNotThrow(() => writeDataExport(data(), {}, context('Export table'), { userHome: root }));
+});
+test('existing sensitive folders, tilde paths and Finder-hidden folders refuse', t => {
+  const root = folder(t);
+  for (const name of ['.ssh', '.aws', '.gnupg', 'Library', 'Library/LaunchAgents', 'Library/LaunchDaemons']) {
+    const directory = path.join(root, name); fs.mkdirSync(directory, { recursive: true });
+    for (const target of [directory, directory + '/', '~/' + name + '/'])
+      assert.throws(() => writeDataExport(data(), { path: target }, context(`Export table to "${target}"`), { userHome: root }), /hidden|Library/);
+    assert.deepEqual(fs.readdirSync(directory).filter(name => name.startsWith('export-')), []);
+  }
+  if (process.platform === 'darwin') {
+    const directory = path.join(root, 'FinderHidden'); fs.mkdirSync(directory);
+    execFileSync('/usr/bin/chflags', ['hidden', directory]);
+    for (const target of [directory, path.join(directory, 'table.csv')])
+      assert.throws(() => writeDataExport(data(), { path: target }, context(`Export table to "${target}"`)), /hidden/);
+    assert.deepEqual(fs.readdirSync(directory), []);
+  }
+});
+test('CSV BOM defaults on, can be disabled, and adds exactly three bytes to a Unicode fixture', t => {
+  const root = folder(t), plain = serializeDataExport(data(), 'csv', { bom: false });
+  const receipt = writeDataExport(data(), {}, context('Export table'), { userHome: root });
+  const bytes = fs.readFileSync(receipt.path);
+  assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
+  assert.equal(bytes.length, Buffer.byteLength(plain) + 3);
+  assert.equal(new TextDecoder('utf-8').decode(bytes), plain);
+  assert.ok(plain.includes('桃')); assert.ok(!plain.startsWith('\uFEFF'));
+  const without = writeDataExport(data(), { bom: false }, context('Export table'), { userHome: root });
+  assert.equal(fs.readFileSync(without.path, 'utf8'), plain);
+  assert.ok(!serializeDataExport(data(), 'json').startsWith('\uFEFF'));
+  assert.throws(() => serializeDataExport(data(), 'csv', { bom: 'yes' }), /bom/);
+  assert.throws(() => validateToolCall({ name: 'browser_read', arguments: { tab: 't1', bom: false } }));
+  assert.doesNotThrow(() => validateToolCall({ name: 'browser_read', arguments: { tab: 't1', export: 'e1', bom: false } }));
+});
+test('all successful receipts qualify completeness as rendered collection', t => {
+  const receipt = writeDataExport(data(), {}, context('Export table'), { userHome: folder(t) });
+  assert.match(exportSummary(receipt), /Complete: yes \(rendered collection\)\./);
+});
+test('ragged rows preserve cells and explain incomplete output through the public writer', t => {
+  const value = { ...data(), rows: [['a'], ['b', 'c']] };
+  const receipt = writeDataExport(value, { format: 'json' }, context('Export table'), { userHome: folder(t) });
+  const output = JSON.parse(fs.readFileSync(receipt.path, 'utf8'));
+  assert.deepEqual(output.rows, value.rows); assert.equal(output.complete, false);
+  assert.match(output.reasons.join(), /ragged/); assert.match(exportSummary(receipt), /ragged/);
+  assert.equal(value.complete, true, 'caller data stays unchanged');
+});
+test('one turn caps export count across destinations and resets for a new authenticated request', t => {
+  assert.ok(Number.isInteger(EXPORT_LIMITS.turnFiles));
+  const root = folder(t), ctx = context('Export table');
+  for (let i = 0; i < EXPORT_LIMITS.turnFiles; i++) writeDataExport(data(), {}, ctx, { userHome: root });
+  assert.throws(() => writeDataExport(data(), {}, ctx, { userHome: root }), /turn.*count/);
+  const directory = path.join(root, 'Library/Application Support/sleight/exports');
+  assert.equal(fs.readdirSync(directory).length, EXPORT_LIMITS.turnFiles);
+  assert.doesNotThrow(() => writeDataExport(data(), {}, context('Export table'), { userHome: root }));
+});
+test('one turn caps actual UTF-8 bytes and failed destinations do not spend a file slot', t => {
+  assert.ok(Number.isInteger(EXPORT_LIMITS.turnBytes));
+  const root = folder(t), ctx = context('Export table');
+  const large = { ...data(), columns: [], rows: [['桃'.repeat(3900000)]] };
+  const size = Buffer.byteLength(serializeDataExport(large));
+  let count = 0;
+  while ((count + 1) * size <= EXPORT_LIMITS.turnBytes && count < EXPORT_LIMITS.turnFiles) {
+    writeDataExport(large, {}, ctx, { userHome: root }); count++;
+  }
+  assert.ok(count > 0 && count < EXPORT_LIMITS.turnFiles);
+  assert.throws(() => writeDataExport(large, {}, ctx, { userHome: root }), /turn.*byte/);
+  const fresh = context('Export table');
+  writeDataExport(data(), {}, context('Export table'), { userHome: root, id: () => 'occupied' });
+  for (let i = 0; i < EXPORT_LIMITS.turnFiles + 1; i++)
+    assert.throws(() => writeDataExport(data(), {}, fresh, { userHome: root, id: () => 'occupied' }));
+  assert.doesNotThrow(() => writeDataExport(data(), {}, fresh, { userHome: root }));
+});
+test('budget reservations survive a post-open turn expiry, and a new turn resets the same provider', t => {
+  const root = folder(t); let reads = 0, expire = false, turn = 'one';
+  const message = () => ({ source: 'user', session: 'fixture', turn, id: 'request', text: 'Export table' });
+  const ctx = { userMessage: () => expire && ++reads === 3 ? undefined : message() };
+  for (let i = 0; i < EXPORT_LIMITS.turnFiles; i++) {
+    reads = 0; expire = true;
+    assert.throws(() => writeDataExport(data(), {}, ctx, { userHome: root }), /new file retained/);
+  }
+  expire = false;
+  assert.throws(() => writeDataExport(data(), {}, ctx, { userHome: root }), /turn.*count/);
+  const directory = path.join(root, 'Library/Application Support/sleight/exports');
+  assert.ok(fs.readdirSync(directory).every(file => fs.statSync(path.join(directory, file)).size === 0));
+  turn = 'two';
+  assert.doesNotThrow(() => writeDataExport(data(), {}, ctx, { userHome: root }));
 });
