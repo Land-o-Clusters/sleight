@@ -1410,6 +1410,10 @@ if (isMainModule(import.meta.url)) {
     try { process.exitCode = await (await import('./routines.mjs')).routineCommand(process.argv.slice(3)); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   }
+  else if (process.argv[2] === 'watch') {
+    try { process.exitCode = await (await import('./watches.mjs')).watchCommand(process.argv.slice(3)); }
+    catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
+  }
   else if (['record', 'replay'].includes(process.argv[2])) {
     try { process.exitCode = await replayCommand(process.argv.slice(2)); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }

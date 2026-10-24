@@ -173,20 +173,27 @@ export function routineGuard(apps, state) {
 const xml = text => String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
 export function routinePlan(script, every, { home = userInfo().homedir, node = process.execPath } = {}) {
   routineApps(script);
+  return schedulePlan(script, every, { home, node });
+}
+
+// Watches share the reviewed launcher, private storage and launchd interval contract.
+export function schedulePlan(script, every, { home = userInfo().homedir, node = process.execPath, kind = 'routine' } = {}) {
+  if (!['routine', 'watch'].includes(kind)) throw new Error('invalid scheduled task kind');
   const seconds = intervalSeconds(every);
   const id = createHash('sha256').update(JSON.stringify({ script, seconds })).digest('hex').slice(0, 20);
-  const directory = join(resolve(home), 'Library/Application Support/sleight/routines', id);
-  const label = `com.landoclusters.sleight-routine-${id}`;
+  const folder = kind === 'watch' ? 'watches' : 'routines';
+  const directory = join(resolve(home), `Library/Application Support/sleight/${folder}`, id);
+  const label = `com.landoclusters.sleight-${kind}-${id}`;
   const plistPath = join(resolve(home), 'Library/LaunchAgents', `${label}.plist`);
-  const logPath = join(resolve(home), 'Library/Logs/sleight/routines', `${id}.jsonl`);
+  const logPath = join(resolve(home), `Library/Logs/sleight/${folder}`, `${id}.jsonl`);
   const launcherPath = join(resolve(home), 'Library/Application Support/sleight/routine-launcher.mjs');
-  const args = [resolve(node), launcherPath, id];
+  const args = [resolve(node), launcherPath, id, ...(kind === 'watch' ? ['watch'] : [])];
   const plist = `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>\n<key>Label</key><string>${label}</string>\n<key>ProgramArguments</key><array>${args.map(a => `<string>${xml(a)}</string>`).join('')}</array>\n<key>StartInterval</key><integer>${seconds}</integer>\n<key>LimitLoadToSessionType</key><string>Aqua</string>\n<key>StandardErrorPath</key><string>${xml(logPath + '.stderr')}</string>\n</dict></plist>\n`;
   return { id, seconds, directory, label, plistPath, logPath, launcherPath, plist };
 }
 
 // Existing symlinks in private storage are refused before any reads or writes.
-function ordinary(path) {
+export function ordinary(path) {
   let at = resolve(path);
   while (dirname(at) !== at) {
     try { if (lstatSync(at).isSymbolicLink()) throw new Error('routine storage refuses symlinks'); }
@@ -209,22 +216,24 @@ export class RoutineStore {
     started = processStartTime, alive = aliveProcess } = {}) {
     Object.assign(this, { home: resolve(home), node, launchctl, preapproved, runReplay, notify, server, confirm, host, idle, started, alive });
     this.root = join(this.home, 'Library/Application Support/sleight/routines');
+    this.kind = 'routine';
   }
+  plan(script, every) { return routinePlan(script, every, this); }
   load(id) {
     if (!ID.test(id)) throw new Error('invalid routine ID');
     const directory = ordinary(join(this.root, id));
     const saved = JSON.parse(readFileSync(ordinary(join(directory, 'routine.json')), 'utf8'));
     const script = JSON.parse(readFileSync(ordinary(join(directory, 'script.json')), 'utf8'));
-    const plan = routinePlan(script, `${saved.seconds}s`, this);
+    const plan = this.plan(script, `${saved.seconds}s`);
     if (plan.id !== id) throw new Error('saved routine changed; remove it and add the reviewed script again');
-    return { ...plan, script, paused: existsSync(join(directory, 'paused.json')) };
+    return { ...saved, ...plan, script, paused: existsSync(join(directory, 'paused.json')) };
   }
   paths(id) {
     if (!ID.test(id)) throw new Error('invalid routine ID');
-    const label = `com.landoclusters.sleight-routine-${id}`;
+    const label = `com.landoclusters.sleight-${this.kind}-${id}`;
     return { id, label, directory: ordinary(join(this.root, id)),
       plistPath: ordinary(join(this.home, 'Library/LaunchAgents', `${label}.plist`)),
-      logPath: join(this.home, 'Library/Logs/sleight/routines', `${id}.jsonl`) };
+      logPath: join(this.home, `Library/Logs/sleight/${this.kind === 'watch' ? 'watches' : 'routines'}`, `${id}.jsonl`) };
   }
   list(id) {
     if (id !== undefined) return [this.load(id)];
@@ -235,11 +244,15 @@ export class RoutineStore {
     const grants = this.preapproved();
     for (const app of routineApps(script)) if (!grants.allows(app, 'medium')) throw new Error(`routine app ${JSON.stringify(app)} must be preapproved at medium risk in the user's fixed list`);
   }
-  async add(script, every, { print = () => {} } = {}) {
-    const plan = routinePlan(script, every, this);
+  metadata(_script, plan) { return { seconds: plan.seconds }; }
+  async add(script, every, { print = () => {}, ...options } = {}) {
+    const plan = this.plan(script, every);
     this.approve(script);
     print(`Install ${plan.label}\nScript: ${join(plan.directory, 'script.json')}\nLog: ${plan.logPath}\nLauncher: ${plan.launcherPath}\nPlist: ${plan.plistPath}\n${plan.plist}`);
     if (!await this.confirm('install')) return plan;
+    return this.install(plan, script, options);
+  }
+  async install(plan, script, options) {
     ordinary(plan.directory); ordinary(plan.plistPath); ordinary(plan.logPath);
     if (existsSync(plan.directory) || existsSync(plan.plistPath)) throw new Error('routine already exists; remove it explicitly before reinstalling');
     privateDir(dirname(plan.directory)); privateDir(dirname(plan.plistPath)); privateDir(dirname(plan.logPath));
@@ -252,7 +265,7 @@ export class RoutineStore {
         renameSync(temporary, plan.launcherPath);
       } finally { rmSync(temporary, { force: true }); }
       writeFileSync(join(plan.directory, 'script.json'), json(script), { flag: 'wx', mode: 0o600 });
-      writeFileSync(join(plan.directory, 'routine.json'), json({ seconds: plan.seconds }), { flag: 'wx', mode: 0o600 });
+      writeFileSync(join(plan.directory, 'routine.json'), json(this.metadata(script, plan, options)), { flag: 'wx', mode: 0o600 });
       writeFileSync(plan.plistPath, plan.plist, { flag: 'wx', mode: 0o600 });
       await this.launchctl(['bootstrap', `gui/${process.getuid()}`, plan.plistPath]);
     } catch (error) {
