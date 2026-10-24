@@ -50,13 +50,20 @@ export function readExportCollection(el, limits, read) {
   const farPositioned = (node, style, box) => {
     const clip = clippingAncestor(node), outOfFlow = /^(absolute|fixed)$/.test(style.position);
     if (clip) {
+      // Collection rows may be positioned anywhere in a virtualized scroller. Only the row is exempt;
+      // positioned text inside it still goes through the clipper's client-box check.
+      const up = parent(node);
+      if (/^(tr|li)$/.test(tag(node)) || /^(row|listitem|gridcell|option)$/.test(role(node)) || up === el) return false;
+      if (/^(thead|tbody|tfoot)$/.test(tag(up)) || role(up) === 'rowgroup') {
+        let owner = parent(up);
+        while (owner && owner !== el && !collection(owner)) owner = parent(owner);
+        if (owner === el) return false;
+      }
       const offset = key => parseFloat(style[key]) || 0;
       const matrix = style.transform !== 'none' ? new DOMMatrixReadOnly(style.transform) : null;
       const x = (style.position === 'relative' ? offset('left') || -offset('right') : 0) + (matrix?.m41 ?? 0);
       const y = (style.position === 'relative' ? offset('top') || -offset('bottom') : 0) + (matrix?.m42 ?? 0);
-      // Flow rows can start far down a scroller. Small offsets and identity transforms do not hide them.
-      const flowRow = /^(tr|li)$/.test(tag(node)) || /^(row|listitem|option|article)$/.test(role(node));
-      if (!outOfFlow && (x === 0 && y === 0 || flowRow && Math.abs(x) < 5000 && Math.abs(y) < 5000)) return false;
+      if (!outOfFlow && x === 0 && y === 0) return false;
     } else {
       // ScrollWidth can be enlarged by the very text being checked. Use the containing block's
       // layout size for extreme positioned offsets, without changing styles or reading page code.

@@ -668,11 +668,11 @@ test('G3G positioned text within a large containing block remains readable', opt
   assert.deepEqual(data.rows, [['legitimate content']]); assert.doesNotMatch(data.reasons.join(), /visually hidden/);
 });
 
-test('G3H positioned text cannot enlarge a clipping ancestor to escape hidden-text detection', options, async t => {
+test('G3I a far absolute collection row remains exportable inside a clipper', options, async t => {
   const f = await fixture(t, '<div style="position:relative;width:300px;height:300px;overflow:auto"><ul><li>first</li>' +
     '<li style="position:absolute;top:9999px">last</li></ul></div>');
   const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
-  assert.deepEqual(data.rows, [['first']]); assert.match(data.reasons.join(), /visually hidden/);
+  assert.deepEqual(data.rows, [['first'], ['last']]); assert.doesNotMatch(data.reasons.join(), /visually hidden/);
 });
 
 for (const attribute of ['placeholder', 'data-placeholder', 'aria-describedby'])
@@ -760,4 +760,83 @@ test('G3H scrolling to displaced text does not change its classification', optio
   const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
   assert.deepEqual(data.rows, [['safe']]);
   assert.equal(await f.page.evaluate(() => document.querySelector('#clip').scrollTop), before);
+});
+
+async function assertExportRows(f, selector, rows) {
+  const data = await trustedLocatorRead(f.page.locator(selector), readExportCollection, EXPORT_LIMITS);
+  assert.equal(data.rows.length, rows.length);
+  assert.deepEqual(data.rows, rows);
+  assert.doesNotMatch(data.reasons.join(), /visually hidden/);
+  for (const format of ['csv', 'json']) {
+    const receipt = writeDataExport(data, { format }, ctx('Export collection'), { userHome: f.root });
+    const content = fs.readFileSync(receipt.path, 'utf8');
+    assert.deepEqual(format === 'csv' ? parseCSV(content) : JSON.parse(content).rows, rows);
+    assert.doesNotMatch(exportSummary(receipt), /item-/);
+  }
+  return data;
+}
+
+for (const kind of ['absolute list', 'translated grid', 'horizontal list'])
+  test('G3I all 300 positioned items export: ' + kind, options, async t => {
+    const rows = Array.from({ length: 300 }, (_, i) => [`item-${i}`]);
+    const body = rows.map(([value], i) => kind === 'translated grid'
+      ? `<div role="row" aria-rowindex="${i + 1}" style="position:absolute;top:0;transform:translateY(${28 * i}px);height:28px"><div role="gridcell">${value}</div></div>`
+      : `<li aria-posinset="${i + 1}" style="position:absolute;${kind === 'horizontal list' ? 'left' : 'top'}:${40 * i}px;width:80px;height:40px">${value}</li>`).join('');
+    const collection = kind === 'translated grid' ? `<div id="data" role="grid" aria-rowcount="300">${body}</div>`
+      : `<ul id="data" aria-setsize="300" style="margin:0;padding:0">${body}</ul>`;
+    const f = await fixture(t, '<!doctype html><style>#data{min-height:40px}</style><div id="clip" style="position:relative;width:300px;height:300px;overflow:auto">' + collection + '</div>');
+    const before = await f.page.evaluate(() => ({ x: document.querySelector('#clip').scrollLeft, y: document.querySelector('#clip').scrollTop }));
+    const data = await assertExportRows(f, '#data', rows);
+    assert.equal(data.declaredTotal, 300); assert.equal(data.complete, true);
+    assert.deepEqual(await f.page.evaluate(() => ({ x: document.querySelector('#clip').scrollLeft, y: document.querySelector('#clip').scrollTop })), before);
+    assert.deepEqual(f.requests, [['GET', '/']]);
+  });
+
+const rowShapes = [
+  ['tr', style => `<table id="data" style="width:300px"><tbody><tr style="${style}"><td>item-row</td></tr></tbody></table>`],
+  ['li', style => `<ul id="data"><li style="${style}">item-row</li></ul>`],
+  ['row', style => `<div id="data" role="grid"><section><div role="row" style="${style}"><div role="gridcell">item-row</div></div></section></div>`],
+  ['listitem', style => `<div id="data" role="list"><section><div role="listitem" style="${style}">item-row</div></section></div>`],
+  ['gridcell', style => `<div id="data" role="grid"><div role="row"><div role="gridcell" style="${style}">item-row</div></div></div>`],
+  ['option', style => `<div id="data" role="listbox"><section><div role="option" style="${style}">item-row</div></section></div>`],
+  ['direct child', style => `<div id="data" role="log"><div style="${style}">item-row</div></div>`],
+  ['row group child', style => `<div id="data" role="grid"><section><div role="rowgroup"><div style="${style}"><div role="row"><div role="gridcell">item-row</div></div></div></div></section></div>`],
+];
+for (const [kind, html] of rowShapes) for (const style of [
+  'position:absolute;top:9000px;left:9000px', 'position:fixed;top:9000px;left:9000px',
+  'position:relative;top:9000px;left:9000px', 'transform:translate(9000px,9000px)',
+]) test(`G3I ${kind} is exempt from clipper far-position checks: ${style}`, options, async t => {
+  const f = await fixture(t, '<!doctype html><style>#data,tbody,section,[role=rowgroup],[role=row]{height:40px}</style><div style="position:relative;width:300px;height:300px;overflow:auto">' +
+    '<div style="width:20000px;height:20000px">' + html(style) + '</div></div>');
+  await assertExportRows(f, '#data', [['item-row']]);
+});
+
+for (const [kind, wrapper] of [
+  ['static clipper', html => `<div style="width:300px;height:300px;overflow:auto">${html}</div>`],
+  ['positioned clipper', html => `<div style="position:relative;width:300px;height:300px;overflow:auto">${html}</div>`],
+  ['positioned list', html => `<div style="position:relative;width:300px;height:300px;overflow:hidden"><div style="position:relative">${html}</div></div>`],
+  ['transformed clipper', html => `<div style="transform:translateZ(0);width:300px;height:300px;overflow:scroll">${html}</div>`],
+  ['clip overflow', html => `<div style="position:relative;width:300px;height:300px;overflow:clip">${html}</div>`],
+]) test('G3I hidden descendants stay omitted: ' + kind, options, async t => {
+  const styles = [
+    'position:absolute;left:9999px', 'position:absolute;top:9999px',
+    'position:fixed;left:9999px', 'position:fixed;top:9999px',
+    'position:relative;left:9999px', 'position:relative;top:9999px',
+    'display:inline-block;transform:translateX(9999px)', 'display:inline-block;transform:translateY(9999px)',
+  ];
+  const html = '<ul aria-setsize="1"><li>safe' + styles.map((style, i) => `<span style="${style}">LEAK-${i}</span>`).join('') + '</li></ul>';
+  const f = await fixture(t, '<!doctype html>' + wrapper(html));
+  const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
+  assert.deepEqual(data.rows, [['safe']]); assert.match(data.reasons.join(), /visually hidden/);
+  for (const format of ['csv', 'json']) {
+    const receipt = writeDataExport(data, { format }, ctx('Export collection'), { userHome: f.root });
+    assert.doesNotMatch(fs.readFileSync(receipt.path, 'utf8'), /LEAK/);
+  }
+});
+
+test('G3I a far row exemption does not exempt its positioned text descendants', options, async t => {
+  const f = await fixture(t, '<!doctype html><div style="position:relative;width:300px;height:300px;overflow:auto">' +
+    '<ul style="min-height:40px"><li style="position:absolute;top:9000px">safe<span style="position:absolute;left:9000px">LEAK</span></li></ul></div>');
+  const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
+  assert.deepEqual(data.rows, [['safe']]); assert.match(data.reasons.join(), /visually hidden/);
 });
