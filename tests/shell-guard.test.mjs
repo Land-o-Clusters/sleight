@@ -25,7 +25,6 @@ const interpreterPayloads = [
   ['python3 -c', 'import os; os.system("open ./page.html")'],
   ['python -Ic', 'import subprocess; subprocess.run(["open", "./page.html"])'],
   ['python3 -c', 'from os import popen; popen("open ./page.html")'],
-  ['python3 -c', 'open("fixture.txt", "w").write("hello")'],
   ['node -e', 'require("child_process").execSync("open ./page.html")'],
   ['node --eval', 'require("child_process").spawn("open", ["./page.html"])'],
   ['node -e', 'import("child_process").then(cp => cp.exec("xdg-open ./page.html"))'],
@@ -78,8 +77,93 @@ for (const command of [
   'python3 -c \'os.system("/usr/bin/open ./page.html")\'',
   'node -e "require(\'child_process\').execSync(\'open ./page.html\')"',
   'ruby -e \'puts "hello"\' -e \'system("open ./page.html")\'',
-  'node -e \'open(url)\'', 'ruby -e \'NSWorkspace.sharedWorkspace\'',
+  'ruby -e \'NSWorkspace.sharedWorkspace\'',
 ]) test(`fd4d literal spelling refuses: ${JSON.stringify(command)}`, () => assert.equal(denied(command), true));
+
+// Catch file API names or data strings being mistaken for process launchers.
+const quotePayload = payload => "'" + payload.replaceAll("'", "'\\''") + "'";
+for (const [interpreter, flag, payload] of [
+  ['python3', '-c', "open('f')"],
+  ['python3', '-c', 'open("fixture.txt", "w").write("hello")'],
+  ['python3', '-c', "with open('f') as f:\n    print(f.read())"],
+  ['python3', '-c', "import json; json.load(open('f'))"],
+  ['python3', '-c', "import io; io.open('f')"],
+  ['python3', '-c', "import codecs; codecs.open('f')"],
+  ['python3', '-c', "import os; os.open('f', os.O_RDONLY)"],
+  ['python3', '-c', "import gzip; gzip.open('f')"],
+  ['python3', '-c', "import tarfile; tarfile.open('f')"],
+  ['python3', '-c', "from pathlib import Path; Path('f').open()"],
+  ['python3', '-c', 'Path.open()'],
+  ['python3', '-c', "print('open the file')"],
+  ['python3', '-c', 'print("open")'],
+  ['python3', '-c', 'print("xdg-open")'],
+  ['python3', '-c', 'print("x-www-browser")'],
+  ['python3', '-c', 'print("/usr/bin/open")'],
+  ['python3', '-c', 'import os; os.system("echo open")'],
+  ['python3', '-c', 'import subprocess; subprocess.run(["cat", "open"])'],
+  ['python3', '-c', 'import subprocess; subprocess.run(["opener", "f"])'],
+  ['ruby', '-e', 'File.open("f", "w") { |f| f.write("hello") }'],
+  ['ruby', '-e', 'puts "open"'],
+  ['ruby', '-e', 'system("echo open")'],
+  ['perl', '-e', 'open(my $fh, "<", "f") or die $!;'],
+  ['perl', '-e', 'print "open the file";'],
+  ['node', '-e', 'const fs = require("fs"); fs.open("f", "r", () => {})'],
+  ['node', '-e', 'const fs = require("fs"); fs.promises.open("f", "r")'],
+  ['node', '-e', "ws.on('open', () => {})"],
+  ['node', '-e', 'open(url)'],
+  ['node', '-e', 'console.log("open the file")'],
+  ['node', '-e', 'require("child_process").spawn("node", ["open"])'],
+  ['node', '-e', 'require("child_process").execSync("echo /usr/bin/open")'],
+]) {
+  for (const command of [
+    `${interpreter} ${flag} ${quotePayload(payload)}`,
+    `${interpreter} <<'EOF'\n${payload}\nEOF`,
+    `${interpreter} <<EOF\n${payload}\nEOF`,
+    `printf '%s' ${quotePayload(payload)} | ${interpreter}`,
+    `cat <<'EOF' | ${interpreter}\n${payload}\nEOF`,
+  ]) test(`fd4e file IO and data pass: ${JSON.stringify(command)}`, () => assert.equal(denied(command), false));
+}
+
+test('fd4e interpreter file IO survives wrappers and stream redirects', () => {
+  for (const consumer of ['python3', 'env python3', 'env -S "python3"',
+    'env --split-string=python3', 'timeout 5 python3', '/usr/bin/python3 -']) {
+    for (const command of [
+      `${consumer} <<'EOF'\nopen("f")\nEOF`,
+      `${consumer} <<< 'open("f")'`,
+      `${consumer} < <(printf '%s' 'open("f")')`,
+    ]) assert.equal(denied(command), false, command);
+  }
+});
+
+test('fd4e interpreter heredoc exemptions preserve expansions and later shell launches', () => {
+  const body = 'print("$(open x)")';
+  assert.equal(denied(`python3 <<EOF\n${body}\nEOF`), true, 'unquoted heredoc expands shell input');
+  assert.equal(denied(`python3 <<'EOF'\n${body}\nEOF`), false, 'quoted heredoc keeps dollar substitution literal');
+  assert.equal(denied('python3 <<EOF\nprint("`open x`")\nEOF'), true, 'unquoted backticks expand too');
+  for (const command of [
+    'python3 <<\'EOF\'\nopen("f")\nEOF\nopen x',
+    'python3 <<\'EOF\'\nopen("f")\nEOF\nsh <<\'SH\'\nopen x\nSH',
+    'python3 <<< \'print("hello")\'; open x',
+    'python3 < <(open x)',
+  ]) assert.equal(denied(command), true, command);
+});
+
+for (const payload of [
+  'os.system("open ./page.html")', 'os.system("/usr/bin/open ./page.html")',
+  'subprocess.run(["open", "./page.html"])', 'subprocess.call("xdg-open ./page.html", shell=True)',
+  'subprocess.Popen(["/usr/bin/x-www-browser", "https://example.invalid"])',
+  'popen("osascript script.scpt")', 'exec("/usr/bin/xdg-open", "./page.html")',
+  'spawn("x-www-browser", ["https://example.invalid"])', 'execSync("/usr/bin/osascript -e script")',
+  'system "open ./page.html"', 'exec "osascript", "script.scpt"',
+  '`open ./page.html`', '`/usr/bin/xdg-open ./page.html`', '`x-www-browser https://example.invalid`',
+  'NSAppleScript.alloc.initWithSource(script)', 'print("osascript -e script")',
+]) {
+  for (const command of [
+    `ruby -e ${quotePayload(payload)}`,
+    `ruby <<'EOF'\n${payload}\nEOF`,
+    `printf '%s' ${quotePayload(payload)} | ruby`,
+  ]) test(`fd4e launcher payload refuses: ${JSON.stringify(command)}`, () => assert.equal(denied(command), true));
+}
 
 for (const sink of ['cat', 'cat 2>log', 'tee', 'pbcopy', 'grep open', 'wc -l', 'cat | grep open | wc -l']) {
   const command = `${sink} <<'EOF'\nopen the door\nSafari\nIt's (an example).\nEOF`;
@@ -352,7 +436,7 @@ test('availability checks do not launch an app, while execution forms still refu
     assert.equal(denied(command), true, command);
 });
 
-test('only matched data sinks may exempt heredoc bodies, across every pipeline consumer', () => {
+test('uncertain heredocs and shell consumers keep command scans, while interpreter launchers refuse', () => {
   for (const command of [
     "unknown <<'EOF'\nopen x\nEOF",
     "cat >message <<'EOF'\nopen x", // No exact terminator.
@@ -362,8 +446,8 @@ test('only matched data sinks may exempt heredoc bodies, across every pipeline c
     'git commit -F - <<EOF\nEO\\\nF\nopen x\nEOF', // Expanded delimiter continuation.
     "cat >message <<$'EOF'\nEOF\nopen x", // Unsupported delimiter quoting.
     "cat >message <<'EOF'\nplain\nEOF\n(( x = 1 << 2 ))\nopen x",
-    "python3 - <<'EOF'\nopen x\nEOF",
-    "node - <<'EOF'\nopen x\nEOF",
+    'python3 - <<\'EOF\'\nos.system("open x")\nEOF',
+    'node - <<\'EOF\'\nrequire("child_process").execSync("open x")\nEOF',
     ...['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'csh', 'tcsh', 'busybox sh', 'env sh',
       'xargs', 'xargs sh -c', 'doas sh', 'ionice -c 3 sh'].map(consumer =>
       `cat <<'EOF' | cat | ${consumer}\nopen x\nEOF`),

@@ -11,12 +11,13 @@ const interpreter = /^(?:python(?:\d+(?:\.\d+)*)?|node(?:js)?|perl|ruby|osascrip
 const base = word => word.split('/').at(-1);
 
 // Inspect literal source only. No escape decoding, imports, files or execution.
-// This deliberately also refuses harmless references to launcher names in code.
+// File APIs named open and quoted launcher words alone are ordinary data.
 function launcherPayloadDenied(payload) {
-  const launcherWord = /(?:^|[^\w])(?:open|osascript|xdg-open|webbrowser|NSWorkspace|LSOpen\w*)(?=$|[^\w])/i;
-  if (/\b(?:webbrowser|NSWorkspace|LSOpen\w*)\b|\b(?:open|osascript)\s*\(/i.test(payload)) return true;
-  return [...payload.matchAll(/(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1/g)]
-    .some(match => launcherWord.test(match[2]));
+  if (/\b(?:webbrowser|NSWorkspace|LSOpen\w*|NSAppleScript)\b|\bosascript\s+-e\b/i.test(payload)) return true;
+  const launcher = command => /^(?:\/[^\s]*\/)?(?:open|osascript|xdg-open|x-www-browser)(?=$|[\s;&|<>])/i.test(command.trimStart());
+  const calls = /\b(?:os\s*\.\s*system|subprocess\s*\.\s*\w+|popen|exec|spawn|execSync|system)\s*(?:\(\s*)?(?:\[\s*)?(["'])((?:\\[\s\S]|(?!\1)[^\\])*)\1/g;
+  return [...payload.matchAll(calls)].some(match => launcher(match[2])) ||
+    [...payload.matchAll(/`([^`]*)`/g)].some(match => launcher(match[1]));
 }
 
 function lookupLauncher(body, depth) {
@@ -138,7 +139,7 @@ function lex(source, expansionOnly = false, extractHeredocs = true, stopAtParen 
 function deniedCommand(words, depth, stdinSource, heredocs = [], consumerOnly = false) {
   if (depth > 12) return true;
   const command = (words, depth, stdinSource, heredocs) => deniedCommand(words, depth, stdinSource, heredocs, consumerOnly);
-  const source = (text, depth, heredocs) => consumerOnly ? hasCodeConsumer(lex(text), depth) : deniedSource(text, depth, heredocs);
+  const source = (text, depth, heredocs) => consumerOnly ? hasCodeConsumer(lex(text), depth, consumerOnly) : deniedSource(text, depth, heredocs);
   while (words.length && (/^[A-Za-z_][\w]*=/.test(words[0]) || ['!', 'then', 'do', 'else', 'elif', 'if', 'while', 'until'].includes(words[0]))) words = words.slice(1);
   if (!words.length) return false;
   const name = base(words[0]), args = words.slice(1);
@@ -204,7 +205,7 @@ function deniedCommand(words, depth, stdinSource, heredocs = [], consumerOnly = 
     const attached = option.startsWith('--command=') ? option.slice(10) : /^-[^-]*?c(.*)$/s.exec(option)?.[1];
     return source(attached || args[at + 1] || '', depth + 1, heredocs);
   }
-  if (consumerOnly) return interpreter.test(name);
+  if (consumerOnly) return consumerOnly !== 'shell' && interpreter.test(name);
   if (guiLauncher.test(name) || name === 'gio' && args[0] === 'open') return true;
   const browser = headlessBrowser.test(name);
   if (browser || /\.app\/Contents\/MacOS\//i.test(words[0])) {
@@ -267,10 +268,10 @@ function dataSink({ words }) {
 
 // Conservative across the whole source, including nested substitutions. A
 // consumer hidden behind a wrapper or a quoted env split string still counts.
-function hasCodeConsumer(parsed, depth) {
+function hasCodeConsumer(parsed, depth, kind = true) {
   if (depth > 12) return true;
-  return segments(parsed.tokens).some(({ words }) => deniedCommand(words, depth, false, [], true)) ||
-    parsed.substitutions.some(sub => hasCodeConsumer(lex(sub.body), depth + 1));
+  return segments(parsed.tokens).some(({ words }) => deniedCommand(words, depth, false, [], kind)) ||
+    parsed.substitutions.some(sub => hasCodeConsumer(lex(sub.body), depth + 1, kind));
 }
 
 function scanParsed(parsed, depth, inheritedHeredocs, allowData) {
@@ -282,13 +283,14 @@ function scanParsed(parsed, depth, inheritedHeredocs, allowData) {
     if (deniedCommand(words, depth, stdinSource,
       [...inheritedHeredocs, ...redirects.filter(redirect => redirect.body !== undefined)])) return true;
     if (!deniedCommand(words, depth, false, [], true)) return false;
+    const shellInput = deniedCommand(words, depth, false, [], 'shell');
     // Retain the actual pipe boundaries. Lists and separate commands do not
     // feed a later shell, while every earlier stage of one pipeline can.
     for (let j = i - 1; j >= 0 && ['|', '|&'].includes(commands[j].after); j--) {
       const producer = commands[j];
-      if (streamInputDenied({ tokens: producer.words.map(text => ({ text })), substitutions: [] }, depth) ||
+      if (streamInputDenied({ tokens: producer.words.map(text => ({ text })), substitutions: [] }, depth, shellInput) ||
         producer.redirects.some(redir => redir.body !== undefined &&
-          (deniedSource(redir.body, depth + 1, [], false) || launcherPayloadDenied(redir.body)))) return true;
+          (shellInput && deniedSource(redir.body, depth + 1, [], false) || launcherPayloadDenied(redir.body)))) return true;
     }
     return false;
   });
@@ -296,26 +298,31 @@ function scanParsed(parsed, depth, inheritedHeredocs, allowData) {
 
 // Here-strings and process substitutions may produce code for another command
 // in the pipeline. Inspect their literal words too, including echo/printf data.
-function streamInputDenied(parsed, depth) {
+function streamInputDenied(parsed, depth, shellInput = true) {
   if (depth > 12) return true;
   const words = parsed.tokens.filter(token => token.text !== undefined).map(token => token.text);
-  return words.some((word, i) => launcherPayloadDenied(word) || deniedCommand(words.slice(i), depth + 1, false) ||
-    /\s/.test(word) && deniedSource(word, depth + 1, [], false)) ||
-    parsed.substitutions.some(sub => streamInputDenied(lex(sub.body, false, false), depth + 1));
+  return words.some((word, i) => launcherPayloadDenied(word) || shellInput &&
+    (deniedCommand(words.slice(i), depth + 1, false) || /\s/.test(word) && deniedSource(word, depth + 1, [], false))) ||
+    parsed.substitutions.some(sub => streamInputDenied(lex(sub.body, false, false), depth + 1, shellInput));
 }
 
 function deniedSource(source, depth = 0, inheritedHeredocs = [], allowData = true) {
   if (depth > 12) return true;
   const parsed = lex(source, false, allowData);
   const consumer = hasCodeConsumer(parsed, depth);
+  const shellConsumer = hasCodeConsumer(parsed, depth, 'shell');
   const commands = segments(parsed.tokens);
   const docs = parsed.heredocs;
-  const provenData = allowData && !parsed.uncertain && !consumer && !inheritedHeredocs.length &&
+  // Known interpreter input gets launcher checks, never shell command parsing.
+  // Unknown consumers and uncertain heredocs retain the whole-source fallback.
+  const bodySink = command => dataSink(command) ||
+    deniedCommand(command.words, depth, false, [], true) && !deniedCommand(command.words, depth, false, [], 'shell');
+  const provenData = allowData && !parsed.uncertain && !shellConsumer && !inheritedHeredocs.length &&
     commands.every((command, i) => !['|', '|&'].includes(command.after) ||
-      dataSink(command) && dataSink(commands[i + 1])) &&
+      bodySink(command) && bodySink(commands[i + 1])) &&
     docs.every(doc => doc.matched && !/[$`]/.test(doc.delimiter)) && commands.every(command =>
       !command.redirects.some(redir => redir.body !== undefined) ||
-      dataSink(command));
+      bodySink(command));
 
   // Keep raw heredoc source available to interpreter and shell consumers before
   // the fallback lexer treats its quotes as shell syntax.
@@ -333,7 +340,7 @@ function deniedSource(source, depth = 0, inheritedHeredocs = [], allowData = tru
       if (!doc.quoted && lex(doc.body, true, false).substitutions.some(sub => deniedSource(sub.body, depth + 1))) return true;
     }
   }
-  if (consumer && /<<<|[<>]\(/.test(source) && streamInputDenied(lex(source, false, false), depth)) return true;
+  if (consumer && /<<<|[<>]\(/.test(source) && streamInputDenied(lex(source, false, false), depth, shellConsumer)) return true;
   return false;
 }
 
