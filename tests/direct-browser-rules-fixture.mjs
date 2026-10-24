@@ -19,12 +19,12 @@ export function fixture(payment) {
 }
 
 // A small DOM fake for the pure, closure-free locator inspector. No engine APIs.
-export function classify(build) {
+export function classify(build, inspector = rules.inspectElement) {
   assert.equal(typeof rules.inspectElement, 'function');
   const ctx = {};
   runInNewContext(`
     class Element {
-      constructor(tag, attrs = {}, text = '', parent = null) { this.localName = tag; this.attrs = attrs; this.text = text; this.parent = parent; this.children = []; parent?.children.push(this); this.isConnected = true; }
+      constructor(tag, attrs = {}, text = '', parent = null) { this.localName = tag; this.attrs = attrs; this.text = text; this.parent = parent; this.children = []; parent?.children.push(this); this.isConnected = true; this.ownerDocument = { baseURI: 'https://fixture.invalid/' }; }
       getAttributeNames() { return Object.keys(this.attrs); }
       getAttribute(n) { return Object.hasOwn(this.attrs, n) ? this.attrs[n] : null; }
       getBoundingClientRect() { return { x: 0, y: 0, width: 10, height: 10 }; }
@@ -40,6 +40,6 @@ export function classify(build) {
     var document = { elementFromPoint: () => globalThis.target };
     globalThis.mk = { Element, HTMLInputElement, HTMLButtonElement };
   `, ctx);
-  ctx.target = build(ctx.mk);
-  return runInNewContext(`(${rules.inspectElement.toString()})(target)`, ctx);
+  ctx.target = build(ctx.mk); ctx.URL = URL;
+  return runInNewContext(`(${inspector.toString()})(target)`, ctx);
 }

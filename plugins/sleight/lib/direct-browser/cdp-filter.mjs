@@ -80,6 +80,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
   const endpointTargets = new Set();
   const inputObservers = new Map();
   const attachments = new Map(), outstanding = new Set(), collectedSessions = new Set();
+  const navigationWatches = new Map();
   let closed = false, autoAttach = false, disposal, listening = true;
   const root = upstream.sessionId;
   const live = () => { if (closed) throw Error('CDP_FILTER_CLOSED'); };
@@ -129,6 +130,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
   function revoke(target) {
     owned.delete(target);
     inputObservers.delete(target);
+    navigationWatches.delete(target);
     for (const [name, route] of routes) if (route.target === target || route.owner === target) removeRoute(name);
   }
   function event(frame) {
@@ -149,6 +151,12 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
     if (closed && frame.method !== 'Target.attachedToTarget') return;
     const parent = frame.sessionId === undefined ? undefined : (closed ? attachments : routes).get(frame.sessionId);
     if (frame.sessionId !== undefined && !parent) return;
+    if (!closed && parent?.type === 'iframe' && !parent.private && frame.method === 'Page.frameRequestedNavigation') {
+      for (const listener of navigationWatches.get(parent.owner) ?? []) try {
+        listener(params, () => routes.get(frame.sessionId) === parent && owned.has(parent.owner)
+          ? upstream.send('Page.stopLoading', {}, frame.sessionId) : Promise.resolve());
+      } catch { /* Observers cannot change event routing. */ }
+    }
     if (parent && protectedPort !== undefined && frame.method === 'Fetch.requestPaused') {
       const protectedRequest = protectedUrl(params.request?.url);
       if (protectedRequest && params.resourceType === 'Document') endpointTargets.add(parent.owner);
@@ -204,6 +212,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
           // sending (see Target.setAutoAttach below). A frame or worker session gets it here, so its children are caught at once.
           route.autoAttached = !(route.type === 'page' && [...routes.values()].some(other => other !== route && other.target === route.target && other.autoAttached));
           const sends = [upstream.send('Fetch.enable', { patterns: guardPatterns }, params.sessionId),
+            ...(route.type === 'iframe' && navigationWatches.get(route.owner)?.size ? [upstream.send('Page.enable', {}, params.sessionId)] : []),
             ...(route.autoAttached ? [upstream.send('Target.setAutoAttach', autoAttachParams, params.sessionId)] : []),
             ...(route.type === 'iframe' ? installScripts(params.sessionId, route) : [])];
           const resume = params.waitingForDebugger ? upstream.send('Runtime.runIfWaitingForDebugger', {}, params.sessionId) : undefined;
@@ -253,6 +262,16 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
       if (typeof listener !== 'function') throw Error('INVALID_CDP_EVENT');
       const bank = inputObservers.get(owner) ?? new Set(); bank.add(listener); inputObservers.set(owner, bank);
       return () => { bank.delete(listener); if (!bank.size) inputObservers.delete(owner); };
+    },
+    async watchNavigations(owner, listener) {
+      live(); checkTarget(owner);
+      if (typeof listener !== 'function') throw Error('CDP_FRAME_WATCH_REQUIRED');
+      const bank = navigationWatches.get(owner) ?? new Set();
+      bank.add(listener); navigationWatches.set(owner, bank);
+      const remove = () => { bank.delete(listener); if (!bank.size && navigationWatches.get(owner) === bank) navigationWatches.delete(owner); };
+      try { await Promise.all(frameRoutes(owner).map(([name]) => upstream.send('Page.enable', {}, name))); }
+      catch (error) { remove(); throw error; }
+      return Object.freeze({ remove });
     },
     // The running iframe sessions of an owned page, at any depth: the frames in other processes.
     sessions(owner) { live(); checkTarget(owner); return frameRoutes(owner).filter(([, route]) => route.live).map(([name]) => name); },
@@ -464,6 +483,9 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
         }
         if (['Fetch.continueRequest','Fetch.continueResponse'].includes(method) && params.url && protectedUrl(params.url)) refuse();
       }
+      // Playwright normally evaluates with userGesture:true. Reads and guard
+      // evaluations must never lend that activation to timers or chooser APIs.
+      if (method === 'Runtime.evaluate' || method === 'Runtime.callFunctionOn') params = { ...params, userGesture: false };
       if (inputObservers.size && ['Input.dispatchMouseEvent', 'Input.dispatchKeyEvent'].includes(method)) {
         const owner = routes.get(route)?.owner, bank = inputObservers.get(owner), observers = [...bank ?? []];
         const type = ['mousePressed', 'mouseReleased', 'mouseMoved', 'mouseWheel', 'keyDown', 'rawKeyDown', 'keyUp'].includes(params.type) ? params.type : undefined;
@@ -536,7 +558,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
   function dispose() {
     if (disposal) return disposal;
     if (!closed) {
-      closed = true; listeners.clear(); inputObservers.clear();
+      closed = true; listeners.clear(); inputObservers.clear(); navigationWatches.clear();
       routes.clear(); owned.clear(); browserRoutes.clear();
       finishEvents();
     }

@@ -3,6 +3,10 @@ import { originOf, chooserNote } from './output-hygiene.mjs'; // a page picks it
 import { screenshot } from './screenshot.mjs';
 import { startMotion, userRequestedMotion, motionOps } from './motion.mjs';
 import { createHash } from 'node:crypto';
+import { ensurePageResponsive, guardPageTask, recoverPage, probePage } from './page-health.mjs';
+import { check } from './rules.mjs';
+import { waitForThinPage } from './waits.mjs';
+import { isV3Context } from './v3-context.mjs';
 // v3's five eagerly advertised tools. No generic JavaScript or authority fields.
 const object = (properties, required) => ({ type: 'object', properties, required, additionalProperties: false });
 const text = { type: 'string', maxLength: 65536 };
@@ -11,7 +15,7 @@ const tab = { type: 'string', pattern: '^t[A-Za-z0-9_-]{1,64}$' };
 const strings = { type: 'array', maxItems: 100, items: text };
 const ops = 'click type press select check uncheck hover scroll drag upload dialog wait back forward reload viewport navigate'.split(' ');
 const step = object({ do: { type: 'string', enum: ops }, ref, text, key: text, modifier: { type: 'string', enum: ['cmd', 'ctrl'] },
-  values: { type: ['string', 'array'], items: text, maxItems: 100 }, to: ref, until: text,
+  values: { type: ['string', 'array'], items: text, maxItems: 100 }, to: ref, until: text, gone: text, url: text,
   ms: { type: 'number', minimum: 0 }, dx: { type: 'number' }, dy: { type: 'number' }, accept: { type: 'boolean' }, paths: strings,
   width: { type: 'integer', minimum: 1, maximum: 10000 }, height: { type: 'integer', minimum: 1, maximum: 10000 } }, ['do']);
 
@@ -23,7 +27,7 @@ export function browserTools(browser) {
       inputSchema: object({ tab, ref: text, find: text, max_chars: { type: 'integer', minimum: 1000, maximum: 40000 }, text: { type: 'boolean' }, screenshot: { type: 'boolean' } }, ['tab']) },
     { name: 'browser_act', description: (process.env.SLEIGHT_MT !== '0'
       ? 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. A step that navigates, opens a tab, raises a dialog, loads or closes the page, or reaches the settle cap ends the batch (later steps read "not reached"), so put one such step last. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. viewport with width and height resizes and reports the old size; with neither it restores that size. scroll with until:text finds a row in a long list. navigate with a link ref follows it.'
-      : 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. Stops at boundaries or failure. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. viewport with width and height resizes and reports the old size; with neither it restores that size. scroll with until:text finds a row in a long list. navigate with a link ref follows it.') + ' observe:screenshot adds the protected viewport image. frames (2-4, max 480 px) requires a user motion request and one click/hover/scroll. frame_ms defaults to 100.',
+      : 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. Stops at boundaries or failure. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. viewport with width and height resizes and reports the old size; with neither it restores that size. scroll with until:text finds a row in a long list. navigate with a link ref follows it.') + ' wait takes until:text, gone:text or url:substring; no condition settles. navigate with url recovers a stuck tab.' + ' observe:screenshot adds the protected viewport image. frames (2-4, max 480 px) requires a user motion request and one click/hover/scroll. frame_ms defaults to 100.',
       inputSchema: object({ tab, steps: { type: 'array', minItems: 1, maxItems: 12, items: step }, observe: { type: 'string', enum: ['diff', 'full', 'none', 'screenshot'] },
         frames: { type: 'integer', minimum: 2, maximum: 4 }, frame_ms: { type: 'integer', minimum: 50, maximum: 1000 } }, ['tab', 'steps']) },
     { name: 'browser_fill', description: (process.env.SLEIGHT_MT !== '0'
@@ -82,7 +86,17 @@ export function validateToolCall(input, browser) {
   }
   for (const item of request.arguments.steps ?? []) {
     if (item.modifier !== undefined && item.do !== 'click') throw Error('modifier is only supported for click');
-    if (item.do === 'navigate' && item.ref === undefined) throw Error('navigate needs the ref of an http(s) link (browser_open takes a url); to press other elements use click');
+    if (item.do === 'navigate' && item.url !== undefined) {
+      const url = new URL(item.url);
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || item.ref !== undefined || request.arguments.steps.length !== 1)
+        throw Error('Stuck-tab navigate needs one HTTP(S) url step without ref');
+    } else if (item.do === 'navigate' && item.ref === undefined) throw Error('navigate needs the ref of an http(s) link (browser_open takes a url); to press other elements use click');
+    if (item.do !== 'wait' && (item.gone !== undefined || item.url !== undefined && item.do !== 'navigate')) throw Error('gone and url are wait conditions; navigate url recovers a stuck tab');
+    if (item.do === 'wait') {
+      const conditions = [item.until, item.gone, item.url].filter(value => value !== undefined);
+      if (conditions.length > 1 || conditions.some(value => !value.trim() || value.length > 500) || conditions.length && item.ref !== undefined)
+        throw Error('wait takes one nonempty until, gone or url condition, without ref');
+    }
     const needs = ['click', 'type', 'select', 'check', 'uncheck', 'hover', 'drag', 'upload'].includes(item.do) ? ['ref'] : [];
     const fields = { type: ['text'], press: ['key'], select: ['values'], drag: ['to'], upload: ['paths'], dialog: ['accept'] };
     for (const key of [...needs, ...(fields[item.do] ?? [])]) if (item[key] === undefined) throw Error(`${item.do} needs ${key}`);
@@ -122,10 +136,12 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     try { const origin = new URL(url).origin; if (/^https?:/.test(origin)) onSite?.(origin); } catch {}
   };
   const capture = async (entry, options) => {
+    await entry.checkAttachment?.();
+    await ensurePageResponsive(entry);
     if (entry.state.actionPending || entry.state.dialog) throw Error('input or dialog pending; wait or explicitly answer the dialog');
     siteStop(pageURL(entry));
     await assertEndpointRead(entry.page, endpoint);
-    const capturedAt = now(), value = await snapshot(entry.page, options);
+    const capturedAt = now(), value = await guardPageTask(entry, () => snapshot(entry.page, options), { afterMs: 3000 });
     await assertEndpointRead(entry.page, endpoint);
     return { ...value, capturedAt };
   };
@@ -135,10 +151,13 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     if (imageRequested === true) try { picture = await captureImage(entry, { current: () => !ended, allowed: () => !siteLine(pageURL(entry)) }); }
     catch { picture = { note: 'Screenshot skipped: safe capture unavailable.' }; }
     const chooser = ended ? null : await chooserNote(entry.state);
-    const text = [...lines, ...(chooser ? [chooser.note.replace(/^a/, 'A') + '.'] : []), ...(body === undefined ? [] : [body]), ...(picture ? [picture.note] : [])].join('\n');
+    const nativeNavigationNo = entry.state.nativeNavigationNo ?? 0;
+    const nativeNotice = nativeNavigationNo > (entry.state.nativeNavigationReported ?? 0)
+      ? 'Native app navigation or debugger detach attempted; cancellation requested. Native UI outcome unconfirmed; tell the user. Attachment checked on the same target.' : undefined;
+    const text = [...lines, ...(chooser ? [chooser.note.replace(/^a/, 'A') + '.'] : []), ...(nativeNotice ? [nativeNotice] : []), ...(body === undefined ? [] : [body]), ...(picture ? [picture.note] : [])].join('\n');
     const result = textResult(text);
     if (!ended && picture?.images) result.images = picture.images;
-    if (!ended && (chooser || observed && Number.isSafeInteger(observed.number))) deliveries.set(result, { state: entry.state, chooser,
+    if (!ended && (chooser || nativeNotice || observed && Number.isSafeInteger(observed.number))) deliveries.set(result, { state: entry.state, chooser, nativeNavigationNo,
       capture: observed && Number.isSafeInteger(observed.number) ? { page: entry.page, state: entry.state, number: observed.number, capturedAt: observed.capturedAt } : null, text, images: imageDigest(result.images) });
     return result;
   };
@@ -182,6 +201,45 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
         if (opener) { closedNote = `${a.tab} closed itself; reading its opener ${opener}.`; const { ref: _stale, ...rest } = a; a = { ...rest, tab: opener }; }
         return await pages.enqueue(a.tab, async entry => {
           if (ended) throw Error('turn ended');
+          await entry.checkAttachment?.();
+          const recovery = request.name === 'browser_act' && a.steps.length === 1 && a.steps[0].do === 'navigate' && a.steps[0].url !== undefined;
+          if (recovery) {
+            if (!entry.state.stuck) throw Object.assign(Error('navigate with url is only for a stuck tab; use a link ref or browser_open'), { notRun: true });
+            const destination = a.steps[0].url;
+            if (endpointURL(destination, endpoint)) throw Error(endpointBlock);
+            siteStop(destination);
+            const context = typeof ctx === 'function' ? ctx(entry) : ctx;
+            const previousOrigin = entry.state.stuckOrigin ?? originOf(pageURL(entry));
+            const message = typeof context?.userMessage === 'function' ? context.userMessage() : context?.userMessage;
+            const user = message?.source === 'user' && message.id && message.session === context?.session && message.turn === context?.turn ? message : undefined;
+            const namedURL = user && (user.text.match(/https?:\/\/[^\s<>"']+/gi) ?? []).some(value => {
+              try { return new URL(value.replace(/[.,!?;)]*$/, '')).href === new URL(destination).href; } catch { return false; }
+            });
+            if (originOf(destination) !== previousOrigin && !namedURL)
+              throw Object.assign(Error('Recovery stays on the stuck page origin unless the user message named the destination URL'), { notRun: true });
+            {
+              const verdict = isV3Context(context) ? await context.check('reload', { page: entry.page, state: entry.state })
+                : await check(context ?? {}, 'reload', { page: entry.page, state: entry.state, session: context?.session, turn: context?.turn });
+              if (verdict?.verdict !== 'allow') throw Object.assign(Error(verdict?.message ?? 'Recovery navigation requires the user request; tab retained'), { notRun: true });
+            }
+            started = true;
+            try { await recoverPage(entry, destination, { siteCheck: siteLine, allowCrossOrigin: !!namedURL }); }
+            catch { throw Object.assign(Error('Recovery did not finish; tab retained and still marked stuck. ' +
+              (entry.state.recoveryScriptsTerminated ? 'scripts terminated; navigation and unsaved page state unconfirmed. ' : 'Script termination unconfirmed. ') +
+              'Close, keep or handoff.'), { stuckPage: true }); }
+            const discarded = 'left ' + previousOrigin + '; unsaved page state discarded';
+            try {
+              siteStop(pageURL(entry));
+              await guardPageTask(entry, () => waitForThinPage(entry.page));
+              const observed = await capture(entry, { maxChars: 8000 });
+              return finish(['1 navigate: terminated stuck script; navigated in the same tab; ' + discarded], observed.text, entry, observed);
+            } catch (error) {
+              throw Object.assign(Error('Recovery navigation completed; scripts terminated; ' + discarded + '. Recovery observation unavailable. ' +
+                (error.siteBlocked || error.message === endpointBlock ? error.message : entry.state.stuck ? 'Script seems stuck; tab retained. Use navigate with url to recover, or close, keep or handoff.' : 'Read before input, or close, keep or handoff.')),
+              { recoveryOutcome: true });
+            }
+          }
+          await ensurePageResponsive(entry);
           await assertEndpointRead(entry.page, endpoint);
           const popupStart = entry.popups?.length ?? 0;
           const blocked = () => entry.popups?.slice(popupStart).filter(row => row.blocked).map(() => endpointBlock) ?? [];
@@ -200,10 +258,11 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             let picture, result;
             // The site is checked again before each step's input, so a step that lands on a blocked site stops the rest there.
             try {
-              result = await runSteps(entry, a.steps, privateContext, { observe: a.observe, siteCheck: () => siteLine(pageURL(entry)),
-                ...(motion ? { beforeObserve: async () => { picture = await motion.finish(); } } : {}) });
+              result = await guardPageTask(entry, () => runSteps(entry, a.steps, privateContext, { observe: a.observe, siteCheck: () => siteLine(pageURL(entry)),
+                ...(motion ? { beforeObserve: async () => { picture = await motion.finish(); } } : {}) }));
               if (motion && !picture) picture = await motion.finish();
             } finally { await motion?.cancel(); }
+            if (entry.state.actionPending && !entry.state.dialog) await probePage(entry);
             // The page, not sleight, closed this owned popup during the step. The registry
             // proves its opener is still owned. Queue and capture there, with the same guards as a read.
             const opener = lossFixes && result.closed ? pages.closedOpener?.(a.tab) : undefined;
@@ -235,7 +294,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             if (a.observe === 'none' && (!lossFixes || result.stoppedAt == null) && !lines.some(line => /\[ref=/.test(line))) observed = undefined;
             return await finish(lines, observed?.text, entry, observed, picture ?? a.observe === 'screenshot');
           }
-          const result = await fillFields(entry, a.fields, { submit: a.submit }, privateContext);
+          const result = await guardPageTask(entry, () => fillFields(entry, a.fields, { submit: a.submit }, privateContext));
           await assertEndpointRead(entry.page, endpoint);
           const lines = result.rows.map(row => `${clean(row.ref)}: ${clean(row.status)}${row.reason ? ': ' + clean(row.reason) : row.note ? ' (' + clean(row.note) + ')' : ''}`);
           lines.push(...blocked());
@@ -247,8 +306,11 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
           return await finish(lines, observed?.text, entry, observed);
         });
       } catch (error) {
+        if (error.recoveryOutcome) return textResult(error.message, true);
+        if (error.stuckPage) return textResult((error.ownedTab ? error.ownedTab + ': ' : '') + error.message, true);
         if (error.message === endpointBlock) return textResult(endpointBlock, true);
         if (error.siteBlocked) return textResult(error.message, true);
+        if (error.ownedTab) return textResult(error.ownedTab + ': tab retained; opening did not finish. Read before input, or close the tab.', true);
         const detail = clean(error.message).replace(/\.+$/, '');
         const hint = process.env.SLEIGHT_MT === '0' || error.capability === true ? ' Use the engine browser path if needed.' : '';
         return textResult(started && !error.notRun ? 'Operation outcome is unconfirmed. Read current state before deciding what remains; do not replay input blindly.' + hint
@@ -259,6 +321,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
       const record = deliveries.get(result); deliveries.delete(result);
       if (!record || ended || result.isError || result.text !== record.text || imageDigest(result.images) !== record.images) return false;
       if (record.chooser) { record.state.chooserReported = record.chooser.chooser; record.state.hiddenReported = record.chooser.hidden; }
+      if (record.nativeNavigationNo) record.state.nativeNavigationReported = Math.max(record.state.nativeNavigationReported ?? 0, record.nativeNavigationNo);
       return !!record.capture && deliverSnapshot(record.state, record.capture) === true;
     },
     end() {

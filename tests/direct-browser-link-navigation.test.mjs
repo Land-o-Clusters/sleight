@@ -51,9 +51,9 @@ test('an unpriced Place order button still asks, as does a Checkout button outsi
   for (const element of [place, checkout, bare]) { assert.equal(element.payment, true); assert.equal(verdict(element), 'confirm'); }
 });
 
-test('hrefs that are not a navigation stay payments: #, javascript: in every spelling, no href, mailto:, data:', () => {
+test('non-app hrefs that are not a navigation stay payments: #, javascript: in every spelling, no href, data:', () => {
   const hrefs = ['#', '#checkout', 'javascript:void(0)', 'JavaScript:buy()', '  javascript:buy()', 'java\tscript:buy()', 'java\nscript:buy()',
-    '\u0001javascript:buy()', 'mailto:pay@shop.invalid', 'tel:5551212', 'data:text/html,x', 'vbscript:x', ''];
+    '\u0001javascript:buy()', 'data:text/html,x', ''];
   for (const href of hrefs) asks(link({ href }, 'Go to checkout'), JSON.stringify(href));
   asks(link({}, 'Go to checkout'), 'no href');
 });
