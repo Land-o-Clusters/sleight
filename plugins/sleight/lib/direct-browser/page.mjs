@@ -10,6 +10,7 @@ import { invalidateRefs } from './snapshot.mjs';
 import { restoreViewport } from './viewport.mjs';
 import { receiveDownload } from './download-response.mjs';
 import { createDownloadStore } from './downloads.mjs';
+import { handoffReadReady, handoffMessages } from './handoff.mjs';
 
 // Preserve recovery advice when the dispatcher hides an uncertain operation's details.
 const capabilityError = message => Object.assign(Error(message), { capability: true });
@@ -2419,19 +2420,19 @@ function keyFrames(tab, owner, { hook, token, capMs, timeoutMs = 1000, settleMs 
 // browser is the Playwright connection through V1's CDP filter; session is the
 // approved root CDP {send,on,off,sessionId}. Existing pages are never acquired.
 export function createPageRegistry({ browser, session, context = browser?.contexts()[0], upstream, ownTarget, releaseTarget, frames,
-  endpoint, endpointBlocked, timeoutMs = 5000, popupWaitMs = 2000, downloadStore = createDownloadStore() } = {}) {
+  endpoint, endpointBlocked, timeoutMs = 5000, popupWaitMs = 2000, downloadStore = createDownloadStore(), canResumeHandoff = handoffReadReady } = {}) {
   if (!context || typeof session?.send !== 'function' || !Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000)
     throw Error('approved browser connection required');
   if (ownTarget !== undefined && (typeof ownTarget !== 'function' || typeof upstream?.send !== 'function'))
     throw capabilityError('trusted popup admission needs the upstream CDP connection; use the engine browser path');
   if (frames !== undefined && !['sessions', 'addScript', 'evaluate'].every(name => typeof frames?.[name] === 'function'))
     throw Error('approved frame sessions required');
-  const hook = newHook();
+  let hook = newHook();
   const records = new Map(), targets = new Map(), metadata = new WeakMap(), seen = new Map(), allocations = new Map(), tasks = new Set(), blockedTargets = new Set();
   const namedChildren = new Map();
   const queued = new WeakMap();
   let namedQueue = Promise.resolve();
-  let ended = false, cleanup;
+  let ended = false, cleanup, handoffActive;
   const track = promise => {
     tasks.add(promise); promise.then(() => tasks.delete(promise), () => tasks.delete(promise)); return promise;
   };
@@ -2489,13 +2490,15 @@ export function createPageRegistry({ browser, session, context = browser?.contex
           .finally(() => { entry.reattaching = null; }));
       });
     }
-    entry.cdp.on('Page.windowOpen', event => {
+    if (!entry.windowOpenHandler) entry.windowOpenHandler = () => {
       entry.windowOpenNo++;
-      if (ownTarget) {
+      if (ownTarget && !handoffActive) {
         const discovery = track(discoverPopups(entry)).catch(() => { entry.popupPending = true; });
         entry.openings.add(discovery); discovery.then(() => entry.openings.delete(discovery));
       }
-    });
+    };
+    entry.cdp.off('Page.windowOpen', entry.windowOpenHandler);
+    entry.cdp.on('Page.windowOpen', entry.windowOpenHandler);
     await entry.cdp.send('Page.enable');
     await entry.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true });
     const source = hookSource(entry.hook);
@@ -2567,7 +2570,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     entry.windowOpenNo = 0;
     entry.openings = new Set(); // Popup discoveries still running: a tab the page opened late is counted once they settle.
     // The hook's key and secret stay off enumeration, so a tab object that is logged or copied never carries them.
-    Object.defineProperty(entry, 'hook', { value: hook, enumerable: false });
+    Object.defineProperty(entry, 'hook', { value: hook, enumerable: false, writable: true });
     entry.checkAttachment = async () => {
       if (entry.reattaching) await deadline(() => entry.reattaching, timeoutMs, 'Native debugger reattachment still pending; tab retained. Wait, close, keep or handoff.');
       if (entry.state.nativeAttachmentLost) throw capabilityError('Native app navigation or debugger detach attempted; native UI outcome unconfirmed. Same-target reattachment failed; tab retained. Tell the user; close, keep or handoff.');
@@ -2735,7 +2738,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     const parent = targets.get(targetInfo?.openerId);
     // A closed opener adopts only a late popup that discovery never reserved (CR4);
     // otherwise discovery and this event would hand Playwright the same target twice.
-    if (parent && !parent.released && (!parent.closed || !allocations.has(targetInfo.targetId)))
+    if (parent && !handoffActive && !parent.released && (!parent.closed || !allocations.has(targetInfo.targetId)))
       await adopt(page, await identify(page), parent);
   })()).catch(() => {});
   context.on('page', heard);
@@ -2758,13 +2761,13 @@ export function createPageRegistry({ browser, session, context = browser?.contex
   // registry explicitly admits that child through V1's private own() capability.
   async function discoverPopups(parent) {
     const until = Date.now() + popupWaitMs;
-    while (!ended && !parent.released) {
+    while (!ended && !handoffActive && !parent.released) {
       const { targetInfos } = await deadline(() => upstream.send('Target.getTargets'), timeoutMs);
       const reparented = parent.closed && parent.parent && !parent.parent.closed && !parent.parent.released ? parent.parent.targetId : undefined;
       const children = targetInfos.filter(info => info.type === 'page' && (info.openerId === parent.targetId || reparented && info.openerId === reparented) &&
         !targets.has(info.targetId) && !allocations.has(info.targetId) && !blockedTargets.has(info.targetId));
       for (const child of children) {
-        if (ended || parent.released) return;
+        if (ended || handoffActive || parent.released) return;
         // The exact trusted opener proves ownership before any admission/read.
         // Close endpoint targets upstream without exposing their title or URL.
         if (endpointTarget(child, endpoint) || endpointBlocked?.(child.targetId)) {
@@ -2784,6 +2787,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     }
   }
   const tab = id => {
+    if (handoffActive) throw Error(handoffMessages.pending);
     const entry = records.get(id);
     if (!entry || entry.released || entry.releasing) throw Error('unknown or releasing owned tab');
     if (entry.blocked) throw Error(endpointBlock);
@@ -2885,8 +2889,102 @@ export function createPageRegistry({ browser, session, context = browser?.contex
           return { targetId, cdp };
         } catch (error) { await closeAllocation(targetId); throw error; }
       }, closeTarget: closeAllocation }) })),
+    async beginHandoff(id) {
+      const requested = tab(id);
+      let finishing, result = null, keeping = false, preserved;
+      const resumeTarget = () => !requested.closed && !requested.page.isClosed() ? requested : requested.parent;
+      const entries = [...records.values()].filter(entry => !entry.released && !entry.closed && !entry.page.isClosed());
+      const preserve = () => preserved ??= (async () => {
+        // Mark every tab before awaiting anything: one failed detach must never
+        // make turn cleanup close another tab the person is using.
+        for (const entry of entries) { entry.released = true; entry.release = 'handoff'; }
+        const results = await Promise.allSettled(entries.map(async entry => {
+          let unproved = false;
+          if (!entry.page.isClosed()) {
+            if (!entry.handoffHooksOff) try { await deadline(() => removeHook(entry), timeoutMs); entry.handoffHooksOff = true; }
+            catch { unproved = true; }
+            try { await deadline(() => entry.cdp.detach(), timeoutMs); }
+            catch { unproved = true; }
+          }
+          try { await deadline(() => releaseTarget?.(entry.targetId), timeoutMs); }
+          catch { unproved = true; }
+          entry.handoffCleanupRequired = unproved;
+          if (entry.handoffCleanupRequired) throw Error(handoffMessages.cleanup);
+        }));
+        if (results.some(row => row.status === 'rejected')) throw Error(handoffMessages.cleanup);
+      })();
+      const suspension = Object.freeze({
+        ownedTabs: entries.length,
+        async cancel() {
+          keeping = true;
+          await finishing?.catch(() => {});
+          await preserve();
+          if (handoffActive === suspension) handoffActive = undefined;
+        },
+        finish(keep) {
+          keeping ||= keep;
+          if (!finishing) finishing = (async () => {
+            result = null;
+            const target = resumeTarget();
+            if (keeping || ended || !target || target.released || target.closed || target.page.isClosed()) {
+              await preserve();
+            } else {
+              try {
+                // All owned pages are suspended, so check all of them before
+                // restoring access, including a login in a still-open popup.
+                for (const entry of entries) if (!entry.closed && !entry.page.isClosed()) {
+                  try {
+                    if (!await deadline(() => canResumeHandoff(entry.page), timeoutMs)) {
+                      if (keeping || ended) { await preserve(); return null; }
+                      result = false; return false;
+                    }
+                  } catch {
+                    if (!entry.closed && !entry.page.isClosed()) {
+                      if (keeping || ended) { await preserve(); return null; }
+                      result = false; return false;
+                    }
+                  }
+                }
+                if (keeping || ended) { await preserve(); return null; }
+                hook = newHook();
+                for (const entry of entries) if (!entry.closed && !entry.page.isClosed()) {
+                  entry.hook = hook;
+                  entry.handoffHooksOff = false;
+                  await deadline(() => install(entry), timeoutMs);
+                  invalidateRefs(entry.page); entry.state.snapshotNo = 0;
+                }
+                if (keeping || ended) { await preserve(); return null; }
+              } catch (error) { await preserve().catch(() => {}); throw error; }
+              const fresh = resumeTarget();
+              if (!fresh || fresh.released || fresh.closed || fresh.page.isClosed()) await preserve();
+              else result = fresh.tab;
+            }
+            return result;
+          })().finally(() => {
+            if (result === false) finishing = undefined;
+            else if (handoffActive === suspension) handoffActive = undefined;
+          });
+          return finishing;
+        },
+      });
+      handoffActive = suspension;
+      try {
+        // Drain earlier captures/actions before showing the card. New calls
+        // fail above; no page values are read while the card is waiting.
+        await deadline(idle, timeoutMs);
+        for (const entry of entries) {
+          await deadline(() => entry.queue, timeoutMs);
+          await deadline(() => entry.ready, timeoutMs);
+          await deadline(() => removeHook(entry), timeoutMs);
+          entry.handoffHooksOff = true;
+          invalidateRefs(entry.page);
+        }
+        return suspension;
+      } catch (error) { await suspension.finish(true); throw error; }
+    },
     openTab: ({ url, tracePhase }) => openOwned(url, undefined, '', tracePhase),
     async list() {
+      if (handoffActive) throw Error(handoffMessages.pending);
       await deadline(idle, timeoutMs);
       for (const entry of records.values()) if (!entry.closed && !entry.released && !entry.blocked) {
         try { await assertEndpointRead(entry.page); } catch (error) { if (error.message !== endpointBlock) throw error; }
@@ -2916,6 +3014,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
       ended = true;
       if (!cleanup) cleanup = (async () => {
         let settled = true;
+        if (handoffActive) try { await handoffActive.finish(true); } catch { settled = false; }
         try { await deadline(idle, timeoutMs); } catch { settled = false; }
         const rows = [];
         for (const targetId of allocations.keys()) {
@@ -2926,13 +3025,14 @@ export function createPageRegistry({ browser, session, context = browser?.contex
           if (entry.releasing) {
             rows.push({ tab: entry.tab, closed: entry.page.isClosed(), cleanupRequired: true }); continue;
           }
-          if (entry.released || entry.page.isClosed()) { rows.push({ tab: entry.tab, kept: entry.released, closed: entry.page.isClosed() }); continue; }
+          if (entry.released || entry.page.isClosed()) { rows.push({ tab: entry.tab, kept: entry.released, closed: entry.page.isClosed(),
+            ...(entry.handoffCleanupRequired ? { cleanupRequired: true } : {}) }); continue; }
           try {
             await deadline(() => entry.page.close({ runBeforeUnload: false }), timeoutMs);
             rows.push({ tab: entry.tab, closed: entry.page.isClosed() });
           } catch { rows.push({ tab: entry.tab, closed: entry.page.isClosed(), cleanupRequired: true }); }
         }
-        const cleanedUp = settled && rows.every(row => row.kept || row.closed);
+        const cleanedUp = settled && rows.every(row => (row.kept || row.closed) && !row.cleanupRequired);
         if (cleanedUp) context.off('page', heard);
         return { cleanedUp, rows };
       })().finally(() => { cleanup = null; });

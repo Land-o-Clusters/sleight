@@ -371,8 +371,9 @@ for (const mode of [undefined, '0']) test(`MT descriptions and scroll guidance, 
     assert.match(descriptions.browser_tabs, /payment the user did not ask for/);
     assert.match(descriptions.browser_fill, /true or false for a checkbox, switch or the radio option to choose/);
     assert.match(descriptions.browser_fill, /submit is an observed ref, only when the user asked for that submit/);
-    assert.match(descriptions.browser_tabs, /keep one open for the user to look at after the turn/);
-    assert.match(descriptions.browser_tabs, /hand one off when the user must act in it/);
+    assert.match(descriptions.browser_tabs, /keep or hand off owned tabs/);
+    assert.match(descriptions.browser_tabs, /handoff wait:true waits for the user's Continue click and reads fresh/);
+    assert.match(descriptions.browser_tabs, /Never request secrets/);
   }
   assert.match(descriptions.browser_act, /Never blindly resend an uncertain submit\. click accepts modifier:cmd\/ctrl\./);
   assert.doesNotMatch(descriptions.browser_act, /modifier:[^.]*shift|modifier:[^.]*alt/);

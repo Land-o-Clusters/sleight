@@ -270,7 +270,8 @@ export function createNativeProcessProvider(receipt) {
 // child, never a local socket, page bridge or model endpoint. Tests inject streams
 // solely to test framing/replay logic, not to claim native-user authentication.
 export function createUiChannel({ read, write, onLoss = () => {}, discardOldNonce = false }) {
-  const nonce = randomBytes(32).toString('hex'), pending = new Map(), events = new WeakSet();
+  const nonce = randomBytes(32).toString('hex'), pending = new Map(), retired = new Map(), events = new WeakSet();
+  const retire = (id, record) => { retired.set(id, record); if (retired.size > 256) retired.delete(retired.keys().next().value); };
   let buffer = '', closed = false;
   const lose = () => { if (closed) return; closed = true; pending.clear(); onLoss(); };
   read.on('data', chunk => {
@@ -282,10 +283,12 @@ export function createUiChannel({ read, write, onLoss = () => {}, discardOldNonc
         const raw = immutableJSON(JSON.parse(buffer.slice(0, end))); buffer = buffer.slice(end + 1);
         // A successor worker inherits the same session pipe. Only a reply to its fresh nonce can authenticate.
         if (discardOldNonce && raw?.nonce !== nonce && /^[0-9a-f]{64}$/.test(raw?.nonce ?? '')) continue;
+        const old = retired.get(raw.id);
+        if (old?.dismissed && raw.nonce === nonce && Object.keys(raw).length === 3 && old.choices.includes(raw.choice)) continue;
         const record = pending.get(raw.id);
         if (!record || raw.nonce !== nonce || Object.keys(raw).length !== 3 ||
             !record.choices.includes(raw.choice) || Date.now() >= record.deadline) throw Error();
-        pending.delete(raw.id);
+        pending.delete(raw.id); retire(raw.id, record);
         const event = Object.freeze({ id: raw.id, choice: raw.choice, action: raw.choice,
           selection: record.selection });
         events.add(event); Promise.resolve(record.deliver(event)).catch(lose);
@@ -306,6 +309,13 @@ export function createUiChannel({ read, write, onLoss = () => {}, discardOldNonc
       write.write(JSON.stringify(frame) + '\n');
     },
     authenticate(event) { if (!event || !events.has(event)) return false; events.delete(event); return !closed; },
+    dismiss(id) {
+      if (closed) return;
+      const record = pending.get(id) ?? retired.get(id);
+      if (!record || record.dismissed) return;
+      pending.delete(id); retire(id, { ...record, dismissed: true });
+      write.write(JSON.stringify({ id, nonce, dismiss: true }) + '\n');
+    },
     revoke() { pending.clear(); },
     close() { lose(); write.end(); },
   });
@@ -364,4 +374,10 @@ export function createNativeUi(receipt, onLoss) {
   const channel = createUiChannel({ read: child.stdout, write: child.stdin, onLoss });
   child.on('error', () => channel.close()); child.on('close', () => channel.close());
   return channel;
+}
+
+export async function prepareHandoffUi() {
+  const built = await prepareNativeHelpers({ inventory: handInventory(sources) });
+  if (built.status !== 'ready') throw Error('TRUSTED_UI_UNAVAILABLE');
+  return createNativeUi(built.receipt);
 }

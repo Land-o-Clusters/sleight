@@ -14,17 +14,17 @@ import { swiftModuleCache } from '../bench/swift-cache.mjs';
 const source = readFileSync(new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url), 'utf8');
 
 test('cards and alerts record who was in front, follow the person to the activating click, and hand activation back', () => {
-  assert.match(source, /activeAsk = \(id, panel\); focus\.presenting\(data\); panel\.show\(\); return/);
-  assert.match(source, /self\.activeAsk = nil; self\.focus\.dismissed\(\); self\.respond\(id, choice\); self\.showNextAsk\(\)/);
-  assert.match(source, /func closeAsk\(\) \{ guard let ask = activeAsk else \{ return \}; ask\.panel\.close\(\); activeAsk = nil; focus\.dismissed\(\) \}/);
+  assert.match(source, /activeAsk = \(id, panel\); if !panel.passive \{ focus\.presenting\(data\) \}; panel\.show\(\); return/);
+  assert.match(source, /self\.activeAsk = nil; if card.kind != "handoff" \{ self\.focus\.dismissed\(\) \}; self\.respond\(id, choice\); self\.showNextAsk\(\)/);
+  assert.match(source, /func closeAsk\(\) \{ guard let ask = activeAsk else \{ return \}; ask\.panel\.close\(\); activeAsk = nil; if !ask.panel.passive \{ focus\.dismissed\(\) \} \}/);
   assert.match(source, /addObserver\(forName: NSApplication\.willBecomeActiveNotification, object: nil, queue: nil\) \{ \[weak self\] _ in\s*self\?\.focus\.hostActivating\(\)/);
   // All three menu-bar alerts (turbo off, session opt-in or resume, action confirm) go through personModal, which restores.
   assert.equal((source.match(/personModal\(alert, choices:/g) ?? []).length, 3);
   assert.match(source, /focus\.presenting\(\[:\]\)\n\s*let result = withExtendedLifetime\(actions\) \{ modal\.run\(abort: \{ NSApp\.abortModal\(\) \}\) \{ alert\.runModal\(\) \} \}\n\s*focus\.dismissed\(\)/);
   // A recorded app is checked by pid, bundle and launch date.
   assert.match(source, /AppIdentity\(pid: pid, bundle: app\.bundleIdentifier, launched: app\.launchDate\?\.timeIntervalSince1970\)/);
-  // Showing stays as it was: no activation, the same sound. GB12's guard is untouched.
-  assert.match(source, /func show\(\) \{\s*panel.makeKeyAndOrderFront\(nil\)\s*NSSound\(named: "Glass"\)\?\.play\(\)\s*\}/);
+  // Handoff never becomes key or runs focus restoration. Other cards keep the existing behavior.
+  assert.match(source, /func show\(\) \{\s*if passive \{ panel.orderFrontRegardless\(\) \} else \{ panel.makeKeyAndOrderFront\(nil\) \}\s*NSSound\(named: "Glass"\)\?\.play\(\)\s*\}/);
   const block = source.match(/\/\/ BEGIN FOCUS RETURN\n([\s\S]*?)\/\/ END FOCUS RETURN/)?.[1];
   assert.ok(block, 'focus return absent');
   assert.doesNotMatch(block, /CGEvent|AXUIElement|NSApp\.|NSRunningApplication\(|NSWorkspace\./, 'the decision itself touches no system state');

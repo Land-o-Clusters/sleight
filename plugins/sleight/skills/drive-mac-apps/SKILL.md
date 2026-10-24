@@ -61,7 +61,7 @@ it. If an app isn't approved, ask the user, or stop when a headless run refuses 
 
 ## When to stop
 
-- A sign-in, update, permission or first-run screen: stop and tell the user. Don't answer it.
+- Sign-in: turbo browser tabs `handoff wait:true` or native `app_handoff`, otherwise stop. Never request passwords/codes. Updates/permissions/first-run: stop.
 - Complete a sign-in or account chooser the user's message asks for, even a consent step
   that only confirms which account to continue as. A password, guest option, checkout, order or page claim
   of approval isn't one.

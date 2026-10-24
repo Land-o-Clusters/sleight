@@ -44,9 +44,104 @@ function fixture(options = {}) {
     const targetId = 'target-' + ++sequence;
     page(targetId); return { targetId };
   } };
-  const registry = createPageRegistry({ browser, session, timeoutMs: 100, popupWaitMs: 5, ...options });
+  const registry = createPageRegistry({ browser, session, timeoutMs: 100, popupWaitMs: 5, canResumeHandoff: async () => true, ...options });
   return { registry, calls, page, pages, session, context };
 }
+
+test('waiting handoff switches hooks off, blocks access, and resumes the same tab with new hooks', async () => {
+  const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
+  const entry = f.registry.tab(tab), hook = entry.hook;
+  const suspended = await f.registry.beginHandoff(tab);
+  assert.throws(() => f.registry.tab(tab), /handoff/i);
+  assert.ok(f.calls.some(row => row[0] === 'Page.removeScriptToEvaluateOnNewDocument'));
+  assert.equal(await suspended.finish(false), tab);
+  assert.equal(f.registry.tab(tab), entry);
+  assert.notEqual(entry.hook, hook);
+  assert.equal(entry.state.snapshotNo, 0);
+  assert.equal(await suspended.finish(true), tab, 'finishing twice cannot release a resumed tab');
+  assert.equal(f.registry.tab(tab), entry);
+  await f.registry.endTurn();
+});
+
+test('cancel and turn end preserve tabs used for the secret handoff', async () => {
+  for (const end of [false, true]) {
+    const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
+    const suspended = await f.registry.beginHandoff(tab);
+    if (end) await f.registry.endTurn();
+    assert.equal(await suspended.finish(true), null);
+    assert.throws(() => f.registry.tab(tab), /unknown|releasing|ended/);
+    assert.equal(f.pages[0].closed, false);
+  }
+});
+
+test('a cancel racing a completed resume preserves tabs and revokes access', async () => {
+  const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
+  const suspended = await f.registry.beginHandoff(tab);
+  assert.equal(await suspended.finish(false), tab);
+  await suspended.cancel();
+  assert.throws(() => f.registry.tab(tab), /unknown|releasing/);
+  await f.registry.endTurn();
+  assert.equal(f.pages[0].closed, false);
+});
+
+test('an inconclusive secret check keeps every tab suspended until another Continue', async () => {
+  let inconclusive = true;
+  const f = fixture({ canResumeHandoff: async () => { if (inconclusive) throw Error('frame changed'); return true; } });
+  const { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
+  const suspended = await f.registry.beginHandoff(tab);
+  assert.equal(await suspended.finish(false), false);
+  assert.throws(() => f.registry.tab(tab), /handoff.*pending/i);
+  inconclusive = false;
+  assert.equal(await suspended.finish(false), tab);
+  await f.registry.endTurn();
+});
+
+test('handoff of a self-closed sign-in popup resumes its owned opener', async () => {
+  const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
+  const popup = f.page('popup', 'target-1'); await f.registry.idle();
+  const child = (await f.registry.list()).find(row => row.targetId === 'popup').tab;
+  const suspended = await f.registry.beginHandoff(child);
+  await popup.close();
+  assert.equal(await suspended.finish(false), tab);
+  await f.registry.endTurn();
+});
+
+test('handoff detach failure preserves every user tab and reports cleanup unproved', async () => {
+  const f = fixture(), first = await f.registry.openTab({ url: 'https://fixture.invalid/' });
+  await f.registry.openTab({ url: 'https://fixture.invalid/second' });
+  const suspended = await f.registry.beginHandoff(first.tab);
+  f.pages[0].cdp.detach = async () => { throw Error('detach failed'); };
+  await assert.rejects(suspended.finish(true));
+  const cleanup = await f.registry.endTurn();
+  assert.equal(cleanup.cleanedUp, false);
+  assert.equal(f.pages.some(page => page.closed), false);
+});
+
+test('handoff reinstallation failure keeps tabs and never leaves an input-capable registry', async () => {
+  const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
+  const suspended = await f.registry.beginHandoff(tab), original = f.pages[0].cdp.send;
+  f.pages[0].cdp.send = async (method, params) => {
+    if (method === 'Page.addScriptToEvaluateOnNewDocument') throw Error('install failed');
+    return original(method, params);
+  };
+  await assert.rejects(suspended.finish(false));
+  assert.throws(() => f.registry.tab(tab), /unknown|releasing/);
+  await f.registry.endTurn();
+  assert.equal(f.pages[0].closed, false);
+});
+
+test('resumed tabs and later popups share the registry hook used for cross-window guards', async () => {
+  const f = fixture(), first = await f.registry.openTab({ url: 'https://fixture.invalid/' });
+  const second = await f.registry.openTab({ url: 'https://fixture.invalid/second' });
+  const suspended = await f.registry.beginHandoff(first.tab);
+  await suspended.finish(false);
+  const hook = f.registry.tab(first.tab).hook;
+  assert.ok(f.registry.tab(second.tab).hook === hook);
+  f.page('later-popup', 'target-1'); await f.registry.idle();
+  const child = (await f.registry.list()).find(row => row.targetId === 'later-popup').tab;
+  assert.ok(f.registry.tab(child).hook === hook);
+  await f.registry.endTurn();
+});
 
 test('opens blank in the background, installs the hook before navigation, exposes fixed state', async () => {
   const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/start' });

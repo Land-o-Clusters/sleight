@@ -40,3 +40,14 @@ test('UI expiry and malformed frames fail closed without reflecting private erro
   f.present('op'); f.read.write('{invalid private fixture\n');
   assert.equal(f.delivered.length, 0); assert.equal(f.losses(), 1); f.ui.close();
 });
+
+test('dismiss sends a nonce-bound host frame and a racing answer cannot authorize', () => {
+  const f = channel(); f.present('op1');
+  const nonce = f.outbound[0].nonce;
+  f.ui.dismiss('op1');
+  assert.deepEqual(f.outbound.at(-1), { id: 'op1', nonce, dismiss: true });
+  f.respond('op1');
+  assert.equal(f.delivered.length, 0);
+  assert.equal(f.losses(), 0, 'an in-flight answer to a dismissed card is ignored');
+  f.ui.close();
+});

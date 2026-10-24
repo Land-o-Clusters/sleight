@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { createHandoffWaiter } from './handoff.mjs';
 import { trustedRead, trustedReadNode, trustedHandle } from './trusted-dom.mjs';
 import { closedDetails, hostsRootEvidence, clickListeners, nativeEditContextDetails } from './closed-handle.mjs';
 import { readNativeEditContext, retainNativeEditContext, sameNativeEditContext, nativeEditContextSelection } from './edit-context.mjs';
@@ -577,6 +578,7 @@ export function createV3Context({ binding, browser, app, ui, confirmPayments, no
   const uploads = new WeakMap(), offered = new Map(), tickets = new Map(), pending = new Map();
   let closed = false, live, sequence = 0, dialogOwner;
   const current = () => { try { return !closed && bound.current() === true && (!app || app.current()); } catch { return false; } };
+  const handoff = createHandoffWaiter({ ui, current, session: bound.message.session, turn: bound.message.turn });
   // One place derives the document identity, so every later check agrees with the first.
   const documentOf = (frame, observed) => {
     if (app) return app.classify(frame, observed);
@@ -877,7 +879,9 @@ export function createV3Context({ binding, browser, app, ui, confirmPayments, no
       const handle = targets.get(target)?.handle;
       if (handle && held.delete(handle)) await handle.dispose().catch(() => {});
     },
+    handoff: (tab, ready, onDeadline) => handoff.wait(tab, ready, onDeadline),
     async dispose() {
+      handoff.dispose();
       closed = true; native?.revoke(); endDeferredRefund(ruleContext);
       for (const [page, handlers] of watched) for (const [event, handler] of Object.entries(handlers)) page.off(event, handler);
       watched.clear(); tickets.clear(); pending.clear(); offered.clear();

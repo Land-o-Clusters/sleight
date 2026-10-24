@@ -20,7 +20,7 @@ function nativeReader() {
   const windowProperties = Object.getOwnPropertyDescriptors(window);
   const prototypes = [HTMLInputElement, HTMLButtonElement, HTMLSelectElement, HTMLTextAreaElement,
     HTMLFormElement, HTMLFieldSetElement, HTMLOutputElement, HTMLOptionElement, HTMLOptGroupElement,
-    HTMLLabelElement, HTMLIFrameElement, HTMLImageElement, HTMLElement, Element, Document, ShadowRoot, Node];
+    HTMLLabelElement, HTMLIFrameElement, HTMLImageElement, HTMLElement, Element, Document, ShadowRoot, DocumentFragment, Node];
   const tables = prototypes.map(type => [type, Object.getOwnPropertyDescriptors(type.prototype)]);
   return (node, key) => {
     if (node === null || node === undefined) return undefined;
@@ -35,7 +35,7 @@ function nativeReader() {
       const names = {input: HTMLInputElement, button: HTMLButtonElement, select: HTMLSelectElement, textarea: HTMLTextAreaElement,
         form: HTMLFormElement, fieldset: HTMLFieldSetElement, output: HTMLOutputElement, option: HTMLOptionElement,
         optgroup: HTMLOptGroupElement, label: HTMLLabelElement, iframe: HTMLIFrameElement, img: HTMLImageElement};
-      const types = nodeType === 9 ? [Document, Node] : nodeType === 11 ? [ShadowRoot, Node] :
+      const types = nodeType === 9 ? [Document, Node] : nodeType === 11 ? [ShadowRoot, DocumentFragment, Node] :
         nodeType === 1 ? [names[tag], HTMLElement, Element, Node] : [Node];
       for (const type of types) {
         descriptor = tables.find(([candidate]) => candidate === type)?.[1][key];

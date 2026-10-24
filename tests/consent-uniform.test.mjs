@@ -37,7 +37,7 @@ test('validated Electron cards use the common automatic presenter and guarded ch
 test('common card policy dispatches exact choices, queues once, expires and resets without UI', { skip: macCommandSkip('xcrun') }, t => {
   assert.match(source, /func automaticCard\(/, 'adapter is missing');
   const app = source.match(/\/\/ BEGIN APP FRAME\n([\s\S]*?)\/\/ END APP FRAME/)?.[1];
-  const model = source.slice(source.indexOf('struct AskCard {'), source.indexOf('final class AskCardPanel'));
+  const model = source.slice(source.indexOf('struct AskCard {'), source.indexOf('final class HandoffPanel'));
   const hostMethods = source.slice(source.indexOf('    func closeAsk()'), source.indexOf('    let modal = ModalGuard()'));
   const iconExpression = source.match(/icon\.image = ([^\n]+)/)?.[1];
   assert.ok(app && model && hostMethods);
@@ -48,7 +48,8 @@ test('common card policy dispatches exact choices, queues once, expires and rese
 final class AskCardPanel {
     static var shows = 0, reviews = 0, closes = 0
     let answer: (String) -> Void
-    init(_ card: AskCard, deadline: Double, answer: @escaping (String) -> Void) { self.answer = answer }
+    let passive: Bool
+    init(_ card: AskCard, deadline: Double, answer: @escaping (String) -> Void) { self.answer = answer; passive = card.kind == "handoff" }
     func show() { Self.shows += 1 }
     func review() { Self.reviews += 1 }
     func close() { Self.closes += 1 }
@@ -130,6 +131,23 @@ host.modal.active = false; host.showNextAsk(); precondition(AskCardPanel.shows =
 host.closeAsk(); host.pending.removeAll(); host.showNextAsk()
 precondition(host.activeAsk == nil && AskCardPanel.closes == 1 && AskCardPanel.shows == 3)
 // Each shown card records the app in front first; each answer and the abort hand activation back.
+precondition(host.focus.presented == ["debugger", "relaunch", "debugger"] && host.focus.dismissals == 3)
+// The handoff adapter validates exact targets and keeps focus bookkeeping out of the passive card.
+let native: [String: Any] = ["kind": "handoff", "session": "client", "turn": "turn", "app": "com.example.Reader"]
+let tab: [String: Any] = ["kind": "handoff", "session": "client", "turn": "turn", "tab": "tfixture"]
+let handoffChoices = ["continue", "cancel"]
+let nativeCard = automaticCard(native, handoffChoices)!, tabCard = automaticCard(tab, handoffChoices)!
+precondition(nativeCard.choices == ["cancel", "continue"] && nativeCard.labels == ["Cancel", "Continue"])
+precondition(nativeCard.detail.contains("same app fresh, including its new window"))
+precondition(tabCard.detail.contains("this tab or its owned opener") && !tabCard.detail.contains("its new window"))
+precondition(nativeCard.detail.contains("expires in at most four minutes"))
+precondition(automaticCard(native.merging(["tab": "tfixture"]) { $1 }, handoffChoices) == nil)
+precondition(automaticCard(native.merging(["signedIn": true]) { $1 }, handoffChoices) == nil)
+precondition(automaticCard(native.merging(["app": "bad app"]) { $1 }, handoffChoices) == nil)
+precondition(automaticCard(native, ["always", "cancel"]) == nil)
+host.pending["native"] = ["data": native, "choices": handoffChoices, "deadline": Date().timeIntervalSince1970 * 1000 + 60000]
+host.showNextAsk(); precondition(host.activeAsk?.panel.passive == true)
+host.activeAsk!.panel.answer("continue")
 precondition(host.focus.presented == ["debugger", "relaunch", "debugger"] && host.focus.dismissals == 3)
 print("pass")
 `);

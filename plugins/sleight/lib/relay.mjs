@@ -67,6 +67,8 @@ import { pageSite } from './permissions.mjs';
 import { DOCUMENT_TOOL, WINDOW_HEADER, documentKey, documentLabel, windowFromText, lastWindowFromText, isDocumentRead, withoutEcho, readCode, guardedCode, WINDOWS_MARK, GUARD_READY, GUARD_MARK, GUARD_END, GUARD_OMIT_MARK, menuRoot, selectedMenuEntry } from './document-scope.mjs';
 import { ChangeReview, REVIEW_TOOL, isChangeCancel } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
+import { NATIVE_HANDOFF_TOOL, openNativeHandoffUi } from './native-handoff.mjs';
+import { createHandoffWaiter, HANDOFF_WAIT_MS } from './direct-browser/handoff.mjs';
 import { browserCall, browserReply, nativeBindings, browserLeaseNote } from './browser-call.mjs';
 import { nativeArgumentsProblem } from './native-arguments.mjs';
 import { BrowserRecovery } from './browser-recovery.mjs';
@@ -486,6 +488,7 @@ export function batchingDescription(description, variant = true, prompt, windows
 const NATIVE_DENIED = /* lean notice */ 'Native access stopped: use the handle returned by cua.getApp directly, after a standalone native app read. No native lease for this browser call.';
 // SLEIGHT_PROMPT=lean descriptions of the tools sleight adds. Each tool keeps its default text.
 const LEAN_TOOL_DESCRIPTIONS = {
+  app_handoff: 'Pause native sign-in. Person-only Continue reads same app fresh, including new windows. Never request passwords/codes. Cancel keeps it open.',
   document_scope: 'Ask the user to approve the last observed document or window for this session, after a js call with only let app = await cua.getApp("App") (or { windowId: 123 }). Actions need an approved matching Window and URL; window changes stop them. A mistake guard, not isolation from arbitrary JavaScript.',
   review_changes: 'Shows this session\'s saved-file changes. Before editing, read the window with a standalone cua.getApp call. op "list": each touched document\'s diff or size/date summary; op "review": the user picks Keep, Undo or Later per document. Only the user can decide. Undo restores the session backup, refusing if the file changed after the last agent action; unsaved buffers aren\'t restored. Backups end with the session.',
   flow_exception: 'Ask the user to allow, once, the exact call a flow rule last stopped. No decision arguments. Retry the identical call after approval; never work around a refusal.',
@@ -755,6 +758,8 @@ export function createRelay({
   ask,
   // The launcher supplies its native dialog for clients without form elicitation.
   fallbackAsk,
+  handoffUi = openNativeHandoffUi,
+  handoffTimeoutMs = HANDOFF_WAIT_MS,
   onInitialize = () => {},
   startupCache,
   preapproved,
@@ -995,7 +1000,7 @@ export function createRelay({
     .concat(documentMode ? [DOCUMENT_TOOL, ...(localTools?.tools ?? []).filter(t => t.name === 'select_window')] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : [],
       (modHost() || codexTurbo()) && directBrowser ? directBrowser.tools().map(t => engineBrowserOpen ? widenTurboOpen(t, directBrowser.browser) : t)
         : engineBrowserOpen && !documentMode ? [engineOpenTool(prompt)] : [],
-      codexTurbo() ? [structuredClone(TURN_START)] : [])
+      codexTurbo() ? [structuredClone(TURN_START)] : [], [structuredClone(NATIVE_HANDOFF_TOOL)])
     // Claude Code defers MCP tools behind a search, which cost a turn before the first call, and
     // again before the first drag (3/3 textedit-drag runs, 2026-10-08). sleight's descriptions
     // are short, so all but the internal turn_ended load up front, local tools included.
@@ -1702,6 +1707,76 @@ export function createRelay({
     }
   }
   let leaseWindow;
+  let nativeHandoff;
+  async function handoffNativeApp(msg) {
+    const args = msg.params.arguments ?? {};
+    if (msg.id === undefined || !args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).length) {
+      leaseStop(msg, promptNotice('app_handoff takes no arguments.', prompt)); return;
+    }
+    const target = leaseWindow, generation = stopGeneration, kernel = kernelEpoch, engine = engineEpoch;
+    if (!inputLease || !target?.appId || !/^[A-Za-z0-9][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)+$/.test(target.appId) ||
+        webBrowser(target.appId) === true || ownWindow(target) || documentMode) {
+      leaseStop(msg, promptNotice('app_handoff needs a confirmed native app read with an input lease. Browser and document-scoped surfaces must stop for the user.', prompt)); return;
+    }
+    if (closing || disposed || stopCollected || leaseFault || running.size || localRunning.size || internalRequests.size || approvalRequests.size) {
+      leaseStop(msg, promptNotice('another call is pending or this session is stopped.', prompt)); return;
+    }
+    const blocked = appLine(target.appId, target.app);
+    if (blocked) { blockStop(msg, blocked); return; }
+    let key;
+    try { key = inputLease.acquire(target, 'app'); }
+    catch (error) { leaseStop(msg, error.message); return; }
+    const state = { id: msg.id }, current = () => nativeHandoff === state && generation === stopGeneration &&
+      kernel === kernelEpoch && engine === engineEpoch && !state.cancelled && !closing && !disposed && !stopCollected && !leaseFault &&
+      !appLine(target.appId, target.app);
+    state.cancel = () => { state.cancelled = true; };
+    nativeHandoff = state;
+    running.add(msg.id); localRunning.add(msg.id); leaseCalls.set(msg.id, { key });
+    callDetails.set(msg.id, 'native sign-in handoff'); clearTimeout(idleTimer); refreshHeartbeat();
+    let ui, waiter;
+    try {
+      ui = await handoffUi();
+      if (!current()) throw Error('Handoff not resumed; app kept for the user.');
+      waiter = createHandoffWaiter({ ui, current, session: sessionId, turn: turnId, timeoutMs: handoffTimeoutMs });
+      state.cancel = () => waiter.dispose();
+      const resumed = await waiter.wait({ app: target.appId });
+      if (!resumed || !current()) throw Error('Handoff not resumed; app kept for the user.');
+      inputLease.renew([key]);
+      // The person's Continue permits replacing the previous window identity,
+      // not the app identity. Forget stale refs/selection before the usual
+      // acquisition path, which still asks engine approvals and binds a lease.
+      forgetHandles(); compactor.reset();
+      const id = `sleight-signin-${nextInternalId++}`, handle = `__sleightSigninApp${nextInternalId++}`;
+      state.readId = id;
+      const reply = await new Promise(resolve => {
+        state.cancel = () => { lateHelperReplies.add(id); splitCalls.delete(id); resolve(undefined); };
+        callGenerations.set(id, generation);
+        splitCalls.set(id, resolve);
+        handleClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js',
+          arguments: { code: `var ${handle} = await cua.getApp(${JSON.stringify(target.appId)})` } } });
+      });
+      if (!current() || !reply) throw Error('Handoff not resumed; app kept for the user.');
+      const bundle = reply.result?._meta?.['codex/toolSurface']?.app?.appId;
+      if (reply.error || reply.result?.isError) {
+        toClient({ ...reply, id: msg.id }); return;
+      }
+      if (bundle !== target.appId || leaseWindow?.appId !== target.appId) {
+        forgetHandles();
+        throw Error('Handoff acquisition has no matching app identity. Read the intended app again.');
+      }
+      toClient({ ...reply, id: msg.id, result: { ...reply.result, isError: false, content: [
+        { type: 'text', text: promptNotice(`Continue received; fresh engine read. Sign-in is unverified. Use ${handle} for this app. Payments and submits keep their usual checks.`, prompt) },
+        ...(reply.result.content ?? []),
+      ] } });
+    } catch (error) {
+      if (!disposed && generation === stopGeneration) leaseStop(msg, promptNotice(/^Handoff /.test(error.message) ? error.message : 'Handoff not resumed; app kept for the user.', prompt));
+    } finally {
+      waiter?.dispose(); try { ui?.close?.(); } catch {}
+      if (nativeHandoff === state) nativeHandoff = undefined;
+      localRunning.delete(msg.id); finishedCall(msg.id);
+      try { inputLease.release([key]); } catch (error) { trace('input-lease-release-error', { error: error.message }); }
+    }
+  }
   // The window IDs results showed, and which window each pop-up came up from. Each decision is traced (popup-window).
   const popups = popupWindows(event => trace('popup-window', event));
   let recoveryTarget, recoveryKnown = false; // recoveryKnown: the target is a bundle ID the engine confirmed
@@ -1959,6 +2034,7 @@ export function createRelay({
     (appNamesOwnHost(msg.params?._meta?.tool_params?.app, ownHostPid) || mentionsOwnHost(msg.params?.message));
 
   function failLease(error) {
+    nativeHandoff?.cancel?.();
     directBrowser?.end();
     leaseFault = error.message;
     trace('input-lease-error', { error: leaseFault });
@@ -3779,6 +3855,22 @@ export function createRelay({
     return true;
   }
   function handleClient(msg) {
+    if (nativeHandoff && msg.method === 'notifications/cancelled' && msg.params?.requestId === nativeHandoff.id) {
+      nativeHandoff.cancel?.(); return;
+    }
+    if (nativeHandoff && msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL) {
+      const state = nativeHandoff;
+      state.cancel?.();
+      Promise.resolve(state.done).then(() => handleClient(msg)); return;
+    }
+    if (nativeHandoff && msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL && msg.id !== nativeHandoff.readId) {
+      leaseStop(msg, promptNotice('handoff pending; the user must finish in the app.', prompt)); return;
+    }
+    if (msg.method === 'tools/call' && msg.params?.name === NATIVE_HANDOFF_TOOL.name) {
+      const pending = handoffNativeApp(msg);
+      if (nativeHandoff?.id === msg.id) nativeHandoff.done = pending;
+      return;
+    }
     if (msg.method === undefined && grokElicitations.delete(msg.id) && msg.result?.action === 'accept') {
       msg.result = { ...msg.result, _meta: { ...msg.result._meta, persist: 'session' } };
     }
@@ -5698,6 +5790,7 @@ export function createRelay({
     if (disposed) return;
     finishReceipt();
     disposed = true;
+    nativeHandoff?.cancel?.();
     replWarmup.cancel();
     startup?.close();
     cancelFrontCalls();
@@ -5736,6 +5829,7 @@ export function createRelay({
     }
   }
   function clearPendingCalls(message) {
+    nativeHandoff?.cancel?.();
     // Split reads have no pendingClients entry. Invalidate their continuations before settling either parent or child.
     stopGeneration++;
     clearTimeout(idleTimer);
