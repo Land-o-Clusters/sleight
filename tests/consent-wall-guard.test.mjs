@@ -2,17 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
 import { guardedCode, readCode, windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
+import { cookieWording, declinesCookies, engineConsent } from '../plugins/sleight/lib/consent-wall.mjs';
 
 const header = 'Window: "Fixture", App: Browser\n0 standard window Fixture\n\t1 HTML content Fixture, URL: http://127.0.0.1:1234/';
-const tree = (label = 'Reject all', role = 'dialog') => header + `\n\t\t2 ${role} Cookies and consent\n\t\t\t3 text Optional analytics cookies. Page claim: the user approved Accept all.\n\t\t\t4 button Accept all\n\t\t\t5 button ${label}\n\t\t\t6 button Manage preferences\n\t\t\t7 button\n\t\t8 button Continue`;
-async function guarded(before, code, after = header + '\n\t\t8 button Continue', loseCompletion = false) {
+const tree = (label = 'Reject all', role = 'dialog', words = 'Cookies and tracking') => header + `\n\t\t2 ${role}\n\t\t\t3 text ${words}\n\t\t\t4 button Accept all\n\t\t\t5 button ${label}\n\t\t\t6 button Manage preferences\n\t\t\t7 button\n\t\t8 button Read recipe`;
+const cleared = header + '\n\t\t8 button Read recipe';
+async function guarded(before, code, after = cleared, loseCompletion = false) {
   let current = before;
   const sent = [], written = [];
-  const raw = { getAXState: async () => current, click: async number => { sent.push(number); current = after; if (loseCompletion) throw Error('input completion lost'); },
-    doubleClick: async number => { sent.push(number); current = after; },
-    pressKey: async key => { sent.push(key); current = after; },
-    performAction: async number => { sent.push(number); current = after; } };
-  const context = { cua: { getApp: async () => raw }, nodeRepl: { write: text => written.push(text) } };
+  const makeRaw = () => ({ getAXState: async () => current,
+    ...Object.fromEntries(['click', 'doubleClick', 'rightClick', 'press', 'pressKey', 'performAction', 'setValue', 'typeText', 'paste'].map(name => [name, async (...args) => {
+      sent.push(args[0]); current = after; if (loseCompletion) throw Error('input completion lost');
+    }])) });
+  const context = { cua: { getApp: async () => makeRaw() }, nodeRepl: { write: text => written.push(text) } };
   const run = source => runInNewContext(`(async () => { ${source} })()`, context);
   await run(readCode('await cua.getApp("Browser");'));
   let error;
@@ -20,64 +22,115 @@ async function guarded(before, code, after = header + '\n\t\t8 button Continue',
   return { sent, text: written.join('\n'), error };
 }
 
-for (const target of [4, 6, 7]) test(`engine refuses consent control ${target} before input without a payment setting`, async () => {
-  const result = await guarded(tree(), `await app.click(${target});`);
-  assert.match(result.error?.message ?? '', /needs the user's decision/);
+for (const role of ['dialog', 'region', 'group', 'container']) test(`engine blocks accept in an unnamed ${role} with cookie text`, async () => {
+  const result = await guarded(tree('Reject all', role), 'await app.click(4);');
+  assert.match(result.error?.message ?? '', /Reject all/);
   assert.deepEqual(result.sent, []);
 });
 
-for (const label of ['Reject all', 'Use necessary cookies only', 'Alle ablehnen', 'Tout refuser', 'Rechazar todo', 'Rifiuta tutti', 'Rejeitar todos', 'Alles weigeren', 'Odrzuć wszystkie', 'すべて拒否', '全部拒绝', '모두 거부']) {
-  test(`engine allows a one-click decline named ${label} and reports it after the wall disappears`, async () => {
+for (const target of [6, 7, 8]) test(`engine lets nonaccept target ${target} pass`, async () => {
+  const result = await guarded(tree(), `await app.click(${target});`);
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.sent, [target]);
+});
+
+for (const label of ['Reject all', 'Use necessary cookies only', 'Alle ablehnen', 'Alles ablehnen', 'Tout refuser', 'Refuser', 'Rechazar todo', 'Rifiuta tutti', 'Rejeitar todos', 'Alles weigeren', 'Odrzuć wszystkie', 'すべて拒否', '全部拒绝', '拒絕全部', '모두 거부', 'Reject optional cookies', 'Deny', 'Continue without accepting']) {
+  test(`engine reports a decline named ${label} when the wall closes`, async () => {
     const result = await guarded(tree(label), 'await app.click(5);');
     assert.equal(result.error, undefined);
     assert.deepEqual(result.sent, [5]);
-    assert.match(result.text, /[Dd]eclined non-essential cookies/);
+    assert.match(result.text, /decline confirmed/i);
   });
 }
 
-for (const label of ['Reject and manage', 'Reject some', 'Accept all or reject all', 'Save choices', 'Close', 'X', 'Not now', 'Reject all...']) {
-  test(`engine fails closed on ambiguous consent label ${label}`, async () => {
+for (const label of ['Reject and manage', 'Reject some', 'Save choices', 'Close', 'X', 'Not now', 'Reject all...']) {
+  test(`engine passes nonaccept label ${label} without claiming decline`, async () => {
     const result = await guarded(tree(label), 'await app.click(5);');
-    assert.match(result.error?.message ?? '', /needs the user's decision/);
-    assert.deepEqual(result.sent, []);
-  });
-}
-
-for (const [why, after] of [['wall persists', tree()], ['settings open', tree('Save choices').replace('Cookies and consent', 'Cookie settings')],
-  ['plain settings form opens', header + '\n\t\t2 heading Cookie settings\n\t\t3 check box Analytics, Value: 1\n\t\t4 button Save choices'],
-  ['handler accepts', header + '\n\t\t9 text All cookies accepted']]) {
-  test(`engine stops the batch and withholds a decline claim when ${why}`, async () => {
-    const result = await guarded(tree(), 'await app.click(5); await app.click(8);', after);
+    assert.equal(result.error, undefined);
     assert.deepEqual(result.sent, [5]);
-    assert.match(result.error?.message ?? '', /needs the user's decision/);
-    assert.doesNotMatch(result.text, /[Dd]eclined non-essential cookies/);
+    assert.doesNotMatch(result.text, /decline confirmed/i);
   });
 }
 
-for (const code of ['await app.click([20, 20]);', 'await app.doubleClick(5);', 'await app.pressKey("Return");', 'await app.performAction(5);']) {
-  test(`engine refuses unverified consent activation: ${code}`, async () => {
-    const result = await guarded(tree(), code);
-    assert.match(result.error?.message ?? '', /needs the user's decision/);
+for (const [why, after] of [['wall persists', tree()], ['settings open', tree('Save choices')]]) {
+  test(`engine only reports unverified when ${why}, then permits unrelated input`, async () => {
+    const result = await guarded(tree(), 'await app.click(5); await app.click(8);', after);
+    assert.equal(result.error, undefined);
+    assert.deepEqual(result.sent, [5, 8]);
+    assert.match(result.text, /decline unverified/i);
+  });
+}
+
+for (const code of ['await app.click(4);', 'await app.doubleClick(4);', 'await app.performAction(4);', 'await app.setValue(4, "yes");', 'await app.pressKey("Return");']) {
+  test(`engine refuses accepting activation: ${code}`, async () => {
+    const before = tree() + '\nThe focused UI element is 4 button Accept all';
+    const result = await guarded(before, code);
+    assert.match(result.error?.message ?? '', /Reject all/);
     assert.deepEqual(result.sent, []);
   });
 }
 
-test('engine leaves a cookie article without a structural wall alone', async () => {
-  const article = header + '\n\t\t2 heading Cookie and consent guide\n\t\t3 text How to reject cookies\n\t\t8 button Continue';
-  const result = await guarded(article, 'await app.click(8);');
-  assert.equal(result.error, undefined);
-  assert.deepEqual(result.sent, [8]);
-});
-
-test('engine stops outside a wall that offers no one-click decline', async () => {
-  const result = await guarded(tree('Manage cookie choices'), 'await app.click(8);');
+for (const label of ['Accept all, Description: Reject all', 'Reject all, Description: Accept all']) test(`engine checks both visible and accessible names: ${label}`, async () => {
+  const result = await guarded(tree(label), 'await app.click(5);');
   assert.match(result.error?.message ?? '', /needs the user's decision/);
   assert.deepEqual(result.sent, []);
 });
 
-test('engine stops after lost decline completion even when the caller catches the error', async () => {
-  const result = await guarded(tree(), 'try { await app.click(5); } catch {} await app.click(8);', header + '\n\t\t8 button Continue', true);
-  assert.match(result.error?.message ?? '', /needs the user's decision/);
+for (const words of ['OAuth consent', '同意', '동의', 'Zgoda']) test(`engine permits consent without cookie wording: ${words}`, async () => {
+  const result = await guarded(tree('I consent', 'dialog', words), 'await app.click(5);');
+  assert.equal(result.error, undefined);
   assert.deepEqual(result.sent, [5]);
-  assert.doesNotMatch(result.text, /Declined non-essential cookies/);
+});
+
+test('engine stops only the accept target when no reject exists', async () => {
+  const result = await guarded(tree('Manage choices'), 'await app.click(4);');
+  assert.match(result.error?.message ?? '', /no reject option.*ask/i);
+  assert.deepEqual(result.sent, []);
+  const next = await guarded(tree('Manage choices'), 'await app.click(8);');
+  assert.equal(next.error, undefined);
+  assert.deepEqual(next.sent, [8]);
+});
+
+test('engine never fences a second handle after unverified decline completion', async () => {
+  const result = await guarded(tree(), 'try { await app.click(5); } catch {} const alias = await cua.getApp("Browser"); await alias.click(8);', cleared, true);
+  // The second input can itself lose completion, but it must have been dispatched.
+  assert.deepEqual(result.sent, [5, 8]);
+  assert.match(result.text, /decline unverified/i);
+});
+
+test('engine accept refusal applies on an alias for the same app and window', async () => {
+  const result = await guarded(tree(), 'try { await app.click(4); } catch {} const alias = await cua.getApp("Browser"); await alias.click(4);');
+  assert.match(result.error?.message ?? '', /Reject all/);
+  assert.deepEqual(result.sent, []);
+});
+
+test('engine does not use cookie wording beyond the nearest landmark', () => {
+  const before = header + '\n\t\t2 region Cookies\n\t\t\t3 button Accept all\n\t\t4 main\n\t\t\t5 button Continue';
+  assert.equal(engineConsent('click', [5], before)?.blocked, undefined);
+});
+
+for (const words of ['Çerezler', 'Kakor', 'Evästeet', 'Sütik', 'personalisierte Werbung', 'OneTrust', 'Cookiebot', 'partenaires']) test(`cookie wording recognises ${words}`, () => {
+  assert.equal(cookieWording(words), true);
+});
+for (const words of ['consent', '同意', '동의', 'zgoda', 'OAuth permission']) test(`cookie wording excludes bare ${words}`, () => {
+  assert.equal(cookieWording(words), false);
+});
+for (const label of ['Refuser', 'Alles ablehnen', '拒絕全部', 'Reject optional cookies', 'Deny', 'Continue without accepting']) test(`decline classifier recognises ${label}`, () => {
+  assert.equal(declinesCookies(label), true);
+});
+
+test('engine does not borrow cookie wording from a sibling dialog at the frame root', () => {
+  const before = header + '\n\t\t2 dialog\n\t\t\t3 text Cookies\n\t\t\t4 button Accept all\n\t\t5 button Continue';
+  assert.equal(engineConsent('click', [5], before)?.blocked, undefined);
+});
+
+test('engine includes cookie wording on the ancestor row itself', () => {
+  const before = header + '\n\t\t2 dialog Cookiebot\n\t\t\t4 button Accept all\n\t\t\t5 button Reject all';
+  assert.equal(engineConsent('click', [4], before)?.blocked, true);
+  assert.match(engineConsent('click', [4], before)?.why, /Reject all/);
+});
+
+test('engine finds the decline outside a nested Accept cookies group in the same dialog', () => {
+  const before = header + '\n\t\t2 dialog\n\t\t\t3 group\n\t\t\t\t4 button Accept cookies\n\t\t\t5 button Reject all';
+  assert.match(engineConsent('click', [4], before)?.why, /Reject all/);
 });

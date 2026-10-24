@@ -1,36 +1,52 @@
-import { cookieWording, declinesCookies, acceptedCookies, consentRecord } from '../consent-wall.mjs';
-import { trustedLocatorRead } from './trusted-dom.mjs';
+import { cookieWording, declinesCookies, acceptsCookies } from '../consent-wall.mjs';
+import { trustedLocatorRead, trustedReadNode, trustedHandle } from './trusted-dom.mjs';
 
 export const consentDecision = "Cookie wall needs the user's decision";
 
-// Runs only in the pristine utility realm. All DOM reads use native getters,
-// including when following an open shadow root or a same-origin frame.
+// Inspect only the held target and its ancestors in its own frame. Native
+// getters in the isolated utility realm ignore page-overridden DOM APIs.
 export function inspectConsent(el, options = {}, read) {
   const attr = (node, key) => read(node, 'getAttribute')?.(key) ?? '';
-  const parent = node => {
-    const element = read(node, 'parentElement');
-    if (element) return element;
-    const root = read(node, 'getRootNode')?.(), host = read(root, 'host');
-    if (host) return host;
-    try { return read(read(root, 'defaultView'), 'frameElement'); } catch { return undefined; }
-  };
-  const under = (node, root) => {
-    for (let at = node; at; at = parent(at)) if (at === root) return true;
-    return false;
-  };
+  const parent = node => read(node, 'parentElement') || read(read(node, 'getRootNode')?.(), 'host');
   const visible = node => {
-    const rect = read(node, 'getBoundingClientRect')(), doc = read(node, 'ownerDocument');
-    const style = read(read(doc, 'defaultView'), 'getComputedStyle')(node);
-    return !!rect.width && !!rect.height && style.display !== 'none' && style.visibility !== 'hidden';
+    if (!read(node, 'isConnected')) return false;
+    const rect = read(node, 'getBoundingClientRect')?.();
+    const style = read(read(read(node, 'ownerDocument'), 'defaultView'), 'getComputedStyle')?.(node);
+    return !!rect?.width && !!rect?.height && style?.display !== 'none' && !/^(?:hidden|collapse)$/.test(style?.visibility);
+  };
+  const descendants = node => {
+    const found = [], visit = root => {
+      for (const child of read(root, 'querySelectorAll')?.('*') ?? []) {
+        if (found.length >= 20000) return;
+        found.push(child);
+        const shadow = read(child, 'shadowRoot');
+        if (shadow) visit(shadow);
+      }
+    };
+    visit(node);
+    const shadow = read(node, 'shadowRoot');
+    if (shadow) visit(shadow);
+    return found;
+  };
+  const visibleText = node => {
+    const tag = read(node, 'localName');
+    return tag === 'input' ? read(node, 'value') || attr(node, 'alt') : read(node, 'innerText') ?? '';
   };
   const words = node => {
-    let text = attr(node, 'aria-label') + ' ' + (read(node, 'innerText') ?? read(node, 'textContent') ?? '');
-    for (const child of read(node, 'querySelectorAll')?.('*') ?? []) {
-      const shadow = read(child, 'shadowRoot');
-      if (shadow) text += ' ' + read(shadow, 'textContent');
-    }
-    const shadow = read(node, 'shadowRoot');
-    if (shadow) text += ' ' + read(shadow, 'textContent');
+    let text = '', visited = 0;
+    const visit = current => {
+      if (++visited > 20000) return;
+      if (read(current, 'nodeType') === 3) { text += ' ' + read(current, 'textContent'); return; }
+      if (read(current, 'nodeType') === 1) {
+        if (current !== node && boundary(current) || !visible(current)) return;
+        text += ' ' + attr(current, 'aria-label');
+        if (read(current, 'localName') === 'input') text += ' ' + visibleText(current);
+      }
+      for (const child of read(current, 'childNodes') ?? []) visit(child);
+      const shadow = read(current, 'shadowRoot');
+      if (shadow) visit(shadow);
+    };
+    visit(node);
     return text;
   };
   const name = node => {
@@ -39,114 +55,84 @@ export function inspectConsent(el, options = {}, read) {
       const root = read(node, 'getRootNode')();
       return refs.map(id => read(read(root, 'getElementById')?.(id), 'textContent') ?? '').join(' ');
     }
-    return attr(node, 'aria-label') || (read(node, 'localName') === 'input' ? attr(node, 'value') || attr(node, 'alt') : read(node, 'innerText')) || attr(node, 'title') || '';
+    return attr(node, 'aria-label') || visibleText(node) || attr(node, 'title');
   };
-  const declineControl = node => {
-    const tag = read(node, 'localName'), role = attr(node, 'role');
-    return (tag === 'button' || tag === 'a' || /^(?:button|link)$/.test(role) ||
-      tag === 'input' && /^(?:button|submit|image)$/.test(read(node, 'type'))) && declinesCookies(name(node));
-  };
-  let doc = read(el, 'ownerDocument'), crossOrigin = false;
-  // A cross-origin target cannot prove its relation to the top document.
-  try { doc = read(read(read(doc, 'defaultView'), 'top'), 'document') ?? doc; } catch { crossOrigin = true; }
-  const walls = [], opaque = [], docs = [], controls = [], seen = new Set();
-  let visited = 0, incomplete = false, settingsHeading = false, settingsControl = false;
-  const scan = (root, frames = []) => {
-    if (seen.has(root)) return;
-    seen.add(root);
-    if (read(root, 'nodeType') === 9) docs.push(root);
-    for (const node of read(root, 'querySelectorAll')('*')) {
-      if (++visited > 20000) { incomplete = true; return; }
-      const shadow = read(node, 'shadowRoot');
-      if (shadow) scan(shadow, frames);
-      if (!visible(node)) continue;
-      const tag = read(node, 'localName'), role = attr(node, 'role');
-      if (/^(?:button|a|input)$/.test(tag) || /^(?:button|link)$/.test(role)) controls.push(node);
-      if (options.after && (/^h[1-6]$/.test(tag) || role === 'heading') && cookieWording(words(node))) settingsHeading = true;
-      if (options.after && (/^(?:button|input|select)$/.test(tag) || /^(?:button|checkbox|switch|radio)$/.test(role))) settingsControl = true;
-      const look = read(read(read(node, 'ownerDocument'), 'defaultView'), 'getComputedStyle')(node);
-      const structural = tag === 'dialog' || /^(?:dialog|alertdialog)$/.test(role) || attr(node, 'aria-modal') === 'true' ||
-        /^(?:fixed|sticky)$/.test(look.position) && !/^(?:button|a|input|svg|span)$/.test(tag);
-      if (structural && cookieWording(words(node))) walls.push({ node, frames });
-      if (tag === 'iframe' || tag === 'frame') {
-        let inner;
-        try { inner = read(node, 'contentDocument'); } catch {}
-        if (inner) scan(inner, [...frames, node]);
-        else if (cookieWording(attr(node, 'title') + ' ' + attr(node, 'aria-label')) || walls.some(wall => under(node, wall.node))) opaque.push(node);
-      }
-    }
-  };
-  scan(doc);
-  let closedTarget = false;
-  // A held accessibility ref can expose a node in a closed root even though
-  // document traversal cannot. Inspect that root to stop unsafe input, but
-  // hand its wall to the user: replacement settings cannot be reread from the
-  // document after the original control is detached.
-  for (let at = el; at;) {
-    const root = read(at, 'getRootNode')?.();
-    if (read(root, 'nodeType') !== 11) break;
-    closedTarget ||= read(root, 'mode') === 'closed';
-    scan(root);
-    at = read(root, 'host');
+  const control = node => /^(?:button|a|input|select|textarea)$/.test(read(node, 'localName')) ||
+    /^(?:button|link|checkbox|radio|switch|menuitem)$/.test(attr(node, 'role'));
+  const boundary = node => /^(?:dialog|main|nav|aside|body|html)$/.test(read(node, 'localName')) ||
+    /^(?:dialog|alertdialog|region|main|navigation|banner|complementary|contentinfo|form|search)$/.test(attr(node, 'role')) ||
+    /^(?:header|footer)$/.test(read(node, 'localName')) || attr(node, 'aria-modal') === 'true' ||
+    /^(?:section|form)$/.test(read(node, 'localName')) && !!(attr(node, 'aria-label') || attr(node, 'aria-labelledby'));
+  const accepting = node => acceptsCookies(name(node)) || acceptsCookies(visibleText(node));
+  const declining = node => !accepting(node) && (declinesCookies(name(node)) || declinesCookies(visibleText(node)));
+  if (options.after) return { closed: !visible(el) };
+  let target = el;
+  while (target && !control(target)) {
+    if (boundary(target)) return { blocked: false };
+    target = parent(target);
   }
-  if (options.after) {
-    // Return only a classification. Cookie and storage values never leave this
-    // reader or enter an outcome, trace or model-visible snapshot.
-    let accepted = false;
-    for (const current of docs) {
-      const body = read(current, 'body');
-      if (body && acceptedCookies(words(body))) accepted = true;
-      const cookies = String(read(current, 'cookie') ?? '');
-      for (const pair of cookies.split(';')) {
-        const at = pair.indexOf('='), result = consentRecord(pair.slice(0, at), pair.slice(at + 1));
-        if (result === 'accepted') accepted = true;
-        if (result === 'unknown') incomplete = true;
-      }
-      const view = read(current, 'defaultView');
-      for (const key of ['localStorage', 'sessionStorage']) try {
-        const storage = read(view, key);
-        const length = Object.getOwnPropertyDescriptor(Storage.prototype, 'length').get.call(storage);
-        for (let i = 0; i < Math.min(length, 256); i++) {
-          const item = Storage.prototype.key.call(storage, i);
-          const result = consentRecord(item, Storage.prototype.getItem.call(storage, item));
-          if (result === 'accepted') accepted = true;
-          if (result === 'unknown') incomplete = true;
-        }
-        if (length > 256) incomplete = true;
-      } catch { incomplete = true; }
+  if (!target) return { blocked: false };
+  const accept = accepting(target), decline = declining(target);
+  if (!accept && !decline) return { blocked: false };
+  let context;
+  for (let at = parent(target); at; at = parent(at)) {
+    if (cookieWording(words(at))) context ??= at;
+    if (boundary(at)) {
+      if (context && cookieWording(words(at)) && !/^(?:body|html)$/.test(read(at, 'localName'))) context = at;
+      break;
     }
-    return { blocked: incomplete || crossOrigin || !!walls.length || !!opaque.length || settingsHeading && settingsControl || accepted, accepted };
   }
-  const inside = walls.some(wall => under(el, wall.node) || wall.frames.some(frame => under(el, frame)) ||
-    (() => { let view = read(read(el, 'ownerDocument'), 'defaultView');
-      for (;;) { let frame; try { frame = read(view, 'frameElement'); } catch { return false; }
-        if (!frame) return false; if (under(frame, wall.node)) return true; view = read(read(frame, 'ownerDocument'), 'defaultView'); }
-    })());
-  if (incomplete || crossOrigin || opaque.length || closedTarget && inside || walls.some(wall => !controls.some(node => under(node, wall.node) && declineControl(node)))) return { blocked: true };
-  if (!inside) return { blocked: false };
-  let control = el;
-  while (control && !/^(?:button|a|input)$/.test(read(control, 'localName')) && !/^(?:button|link)$/.test(attr(control, 'role'))) control = parent(control);
-  return { wall: true, decline: !!control && declineControl(control) };
+  if (!context) return { blocked: false };
+  if (options.container) return context;
+  const reject = [context, ...descendants(context)].find(node => control(node) && visible(node) &&
+    !read(node, 'disabled') && attr(node, 'aria-disabled') !== 'true' && declining(node));
+  return { blocked: accept, wall: true, decline, reject: reject ? name(reject) : undefined };
 }
-inspectConsent.helpers = [cookieWording, declinesCookies, acceptedCookies, consentRecord];
+inspectConsent.helpers = [cookieWording, declinesCookies, acceptsCookies];
+
+function consentContainer(el, options, read) { return inspectConsent(el, { container: true }, read); }
+consentContainer.helpers = [inspectConsent, ...inspectConsent.helpers];
+
+export async function releaseConsent(state) {
+  const held = state.consentObservation;
+  delete state.consentObservation;
+  try { await held?.dispose(); } catch {}
+}
 
 export async function checkConsent(locator, operation, state) {
-  if (state.consentStopped) throw Error(consentDecision + ': the previous decline was unverified. Hand off to the user.');
-  let found;
-  try { found = await trustedLocatorRead(locator, inspectConsent); }
-  catch { throw Error(consentDecision + ': cookie-wall state could not be checked. Stop and ask.'); }
-  if (!found || found.blocked !== false && found.wall !== true || found.blocked || found.wall && (operation !== 'click' || !found.decline))
-    throw Error(consentDecision + ': only a one-click Reject or necessary-only control may decline all non-essential cookies. Stop and ask.');
-  return found.wall === true;
+  // Only activation can accept. Typing and selecting ordinary preferences do
+  // not become cookie acceptance merely because a wall is elsewhere on a page.
+  if (!/^(?:click|modified click|press|fill)$/.test(operation)) return false;
+  const found = await trustedLocatorRead(locator, inspectConsent);
+  if (found?.blocked) throw Error(consentDecision + (found.reject
+    ? ': accepting cookies is blocked. Use the page control ' + JSON.stringify(found.reject) + ' (untrusted page label) to decline non-essential cookies.'
+    : ': this wall has no reject option. Stop and ask the user.'));
+  if (!found?.decline || !/^(?:click|press)$/.test(operation)) return false;
+  await releaseConsent(state);
+  const handle = typeof locator.elementHandle === 'function' ? await locator.elementHandle({ timeout: 1000 }) : locator;
+  try { state.consentObservation = await trustedHandle(handle, consentContainer); }
+  finally { if (handle !== locator) await handle?.dispose(); }
+  return true;
 }
 
 export async function verifyConsent(page, state) {
-  let result;
-  try { result = await trustedLocatorRead(page.locator(':root'), inspectConsent, { after: true }); } catch {}
-  if (!result || result.blocked) {
-    state.consentStopped = true;
-    throw Error(consentDecision + (result?.accepted ? ': the page reports accepting cookies after Reject. Stop and ask.'
-      : ': decline unverified, wall remains, or settings opened. Stop and ask.'));
+  const held = state.consentObservation;
+  // Briefly allow the original wall to finish fading out. Nothing here can
+  // authorise input, parse consent storage, or fence future actions.
+  const until = Date.now() + 1500;
+  const confirmed = 'Decline confirmed: declined non-essential cookies; cookie wall closed';
+  try {
+    if (held) do {
+      const result = await trustedReadNode(held, inspectConsent, { after: true });
+      if (result?.closed) return confirmed;
+      if (Date.now() >= until) break;
+      await new Promise(resolve => setTimeout(resolve, 75));
+    } while (true);
+  } catch {
+    // A removed frame closes its original container, even though its utility
+    // context has already gone. Navigation alone does not detach the frame.
+    if (held?._frame?._isDetached?.()) return confirmed;
   }
-  return 'Declined non-essential cookies; cookie wall disappeared';
+  finally { await releaseConsent(state); }
+  return 'Decline unverified: cookie wall closure was not observed';
 }

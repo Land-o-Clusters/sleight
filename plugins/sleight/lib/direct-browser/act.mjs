@@ -16,7 +16,7 @@ import { downloadLink } from './download-link.mjs';
 import { prepareControlRecipe } from './control-recipes.mjs';
 const OPS = new Set('click type paste press select check uncheck hover scroll drag upload download dialog wait back forward reload viewport navigate'.split(' '));
 const REF_OPS = new Set('click type paste select check uncheck hover drag upload download'.split(' '));
-import { checkConsent, verifyConsent, consentDecision } from './consent-wall.mjs';
+import { checkConsent, verifyConsent, releaseConsent } from './consent-wall.mjs';
 const WAIT_CAP = 5000, SCROLL_CAP = 10000, navigateNeeds = 'the ref of an http(s) link (browser_open takes a url); to press other elements use click';
 const TIMEOUT = 1000;
 const clickModifiers = Object.freeze({ cmd: 'Meta', ctrl: 'Control' });
@@ -296,7 +296,6 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
       let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false, controlRecipe, controlObserved = false, consentDecline = false, consentNote;
       try {
         await ensurePageResponsive(tab);
-        if (state.consentStopped && !['wait', 'scroll'].includes(step.do)) throw Error(consentDecision + ': the previous decline was unverified. Hand off to the user.');
         if (state.dialog && step.do !== 'dialog') throw Error('a page dialog is waiting; answer it with the dialog operation');
         if (step.do === 'dialog' && !state.dialog) throw Error('no waiting dialog; read the page');
         pendingGate(state, step);
@@ -332,7 +331,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           const message = ruleMessage(verdict);
           if (message) throw Error(message);
           if (trusted && target.locator) locator = target.locator;
-          if (locator && !['wait', 'scroll'].includes(step.do)) consentDecline = await checkConsent(locator, step.modifier ? 'modified click' : step.do, state);
+          if (locator && !['wait', 'scroll'].includes(step.do) && (step.do !== 'press' || activation)) consentDecline = await checkConsent(locator, step.modifier ? 'modified click' : step.do, state);
           if (consentDecline) recoverClick = false;
           if (trusted) submits = intent(step.do, target).submit && step.do !== 'dialog';
           if (submits) {
@@ -526,11 +525,9 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         if (batched && steps[index + 1] && !armed.boundary) carry = armed;
         const boundary = armed.boundary;
         if (boundary?.kind === 'navigation' && typeof page._connection?.toImpl === 'function') await waitForThinPage(page, { now, sleep });
-        if (consentDecline && ['popup', 'dialog', 'close'].includes(boundary?.kind)) {
-          state.consentStopped = true;
-          throw Error(consentDecision + ': the decline opened another surface or closed the tab. Stop and ask.');
-        }
-        if (consentDecline) consentNote = await verifyConsent(page, state);
+        if (consentDecline) consentNote = ['popup', 'dialog', 'close'].includes(boundary?.kind)
+          ? 'Decline unverified: the action opened another surface or closed the tab'
+          : await verifyConsent(page, state);
         closed = lossFixes && boundary?.kind === 'close';
         if (boundary?.kind === 'dialog') state.dialog = boundary.dialog;
         if (submit && state.submitUnconfirmed === submit) {
@@ -589,12 +586,8 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         if (started && submit && state.submitUnconfirmed === submit) submit.settledAt = now();
         let detail = step.do === 'upload' && started ? 'upload did not finish; inspect the control before retrying' : String(error.message);
         if (consentDecline && started) {
-          state.consentStopped = true;
           if (armed?.boundary?.kind === 'close') closed = true;
-          // Observe after a lost completion too, but never turn that uncertain
-          // input into a successful decline or let a later input follow it.
-          try { await verifyConsent(page, state); } catch (verification) { detail = verification.message; }
-          if (!detail.includes(consentDecision)) detail = consentDecision + ': the decline action did not finish. Stop and ask.';
+          detail += '; Decline unverified: the decline action did not finish';
         }
         for (const value of [step.text, ...step.values ?? [], ...step.paths ?? []]) if (typeof value === 'string' && value) detail = detail.replaceAll(value, '[redacted]');
         detail = clean(detail);
@@ -620,6 +613,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         stepFinished = true;
         try { onStep?.({ control: controlObserved, boundary: armed?.boundary?.kind }); } catch {}
         try { await controlRecipe?.dispose(); } catch {}
+        if (consentDecline) await releaseConsent(state);
         if (activity && !deferred) activity.stop();
         if (isV3Context(ctx) && target) ctx.finishInput(target);
         if (carry && carry !== armed) { carry.stop(); carry = null; }

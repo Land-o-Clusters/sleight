@@ -6,7 +6,7 @@ import { literalElements } from './literal-elements.mjs';
 import { actionOutcome, outcomeRecord } from './action-outcomes.mjs';
 import { moneyFigures, moneyConflicts } from './payment-figures.mjs';
 import { enginePayment, paymentAction } from './payment-gate.mjs';
-import { cookieWording, declinesCookies, acceptedCookies, engineConsent } from './consent-wall.mjs';
+import { cookieWording, declinesCookies, acceptsCookies, engineConsent } from './consent-wall.mjs';
 import { paymentWords, refundableName } from './direct-browser/rules.mjs';
 import { tabChromeRefusal, tabProbeRefusal } from './tab-probe.mjs';
 import { verifyWindowIdentity } from './window-identity.mjs';
@@ -826,7 +826,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
     const paymentAction = ${paymentAction.toString()};
     const cookieWording = ${cookieWording.toString()};
     const declinesCookies = ${declinesCookies.toString()};
-    const acceptedCookies = ${acceptedCookies.toString()};
+    const acceptsCookies = ${acceptsCookies.toString()};
     const engineConsent = ${engineConsent.toString()};
     const enginePayment = ${enginePayment.toString()};
     const checkNative = () => { if (state.nativeDenied) throw new Error(state.nativeDenied); };
@@ -1607,11 +1607,18 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           let consent;
           const consentInput = /^(?:click|doubleClick|rightClick|press|pressKey|typeText|paste|performAction|performSecondaryAction|setValue|check|uncheck)$/.test(name);
           if (consentInput && !nativeTab) {
-            if (state.consentStops?.has(raw)) throw stop("Cookie wall needs the user's decision: the previous decline was unverified. Hand off to the user.");
             const newest = text ?? priorText ?? state.callTrees.get(proxy) ?? lastTree;
             if (text === undefined && typeof newest === 'string' && /^\\t*\\d+ (?:HTML content|dialog|sheet|alert|region)\\b/im.test(newest)) text = await timedRead(raw, 'consent');
             if (typeof (text ?? newest) === 'string') consent = engineConsent(name, args, text ?? newest);
-            if (consent?.blocked) throw stop("Cookie wall needs the user's decision: " + consent.why + '. Stop and ask.');
+            // Refusals belong to the observed app and window, never an alias
+            // handle. Reclassify each target; this record is not an input fence.
+            const consentKey = JSON.stringify([observed?.app, observed?.title]);
+            state.consentStops ??= new Map();
+            if (consent?.blocked) {
+              state.consentStops.set(consentKey, consent.why);
+              throw stop("Cookie wall needs the user's decision: " + state.consentStops.get(consentKey));
+            }
+            state.consentStops.delete(consentKey);
           }
           await checkLease();
           if (nativeTab && (state.touches !== tabTouches || Date.now() < nativeTab.sampledEnd ||
@@ -1667,11 +1674,9 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           let result;
           try { result = await ${O ? 'state.runOutcome(attempt, () => value.apply(raw, args))' : 'value.apply(raw, args)'}; } catch (error) {
             if (consent?.decline) {
-              (state.consentStops ??= new WeakSet()).add(raw);
               state.unknown.push(shown);
-              let after;
-              try { after = await timedRead(raw, 'after-consent'); } catch {}
-              throw stop("Cookie wall needs the user's decision: the decline action did not finish. Stop and ask.", after);
+              nodeRepl.write('sleight: Decline unverified: the decline action did not finish.\\n');
+              throw error;
             }
             let fresh, resent = false;
             const keep = () => {
@@ -1763,12 +1768,10 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           if (consent?.decline) {
             let after;
             try { after = await timedRead(raw, 'after-consent'); } catch {}
-            if (engineConsent(name, args, after, true)?.blocked) {
-              (state.consentStops ??= new WeakSet()).add(raw);
-              throw stop("Cookie wall needs the user's decision: decline unverified, wall remains, settings opened, or page reports acceptance. Stop and ask.", after);
-            }
-            state.reads.set(proxy, { text: after, emitted: false, version: state.actionVersion });
-            nodeRepl.write('sleight: Declined non-essential cookies; cookie wall disappeared.\\n');
+            const unverified = engineConsent(name, args, after, consent)?.blocked;
+            if (typeof after === 'string') state.reads.set(proxy, { text: after, emitted: false, version: state.actionVersion });
+            nodeRepl.write(unverified ? 'sleight: Decline unverified: cookie wall closure was not observed.\\n'
+              : 'sleight: Decline confirmed: declined non-essential cookies; cookie wall closed.\\n');
           }
           if (literal !== undefined) {
             const at = state.pendingLiterals.indexOf(literal);
