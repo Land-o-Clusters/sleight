@@ -109,15 +109,20 @@ test('FD5 real media works with and without a size, stays per tab and resets in 
   assert.equal(await page.frames()[1].evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches), before.reduce);
 });
 
-for (const release of ['keep', 'handoff']) for (const reset of [false, true]) test(`FD5B real ${release} clears emulation after reset=${reset}`, { skip }, async t => {
+for (const release of ['keep', 'handoff']) for (const reset of [false, true]) test(`G10B real ${release} clears size, media and touch after reset=${reset}`, { skip }, async t => {
   const { browser, page, origin } = await fixture(t, '<p>Fixture</p>');
   const session = await browser.newBrowserCDPSession(), registry = createPageRegistry({ browser, session, timeoutMs: 5000 });
   t.after(() => registry.endTurn());
   const { tab } = await registry.openTab({ url: origin + '/owned' }), owned = registry.tab(tab).page;
   const before = await mediaState(owned), sentinel = await mediaState(page);
-  await registry.enqueue(tab, entry => setViewport(entry.page, { width: 390, height: 844, color_scheme: 'dark', reduced_motion: true }));
+  const touch = page => page.evaluate(() => ({ points: navigator.maxTouchPoints, coarse: matchMedia('(pointer: coarse)').matches }));
+  const beforeTouch = await touch(owned), sentinelTouch = await touch(page);
+  await registry.enqueue(tab, entry => setViewport(entry.page, { width: 390, height: 844, color_scheme: 'dark', reduced_motion: true, touch: true }));
+  assert.deepEqual(await touch(owned), { points: 1, coarse: true });
   if (reset) await registry.enqueue(tab, entry => restoreViewport(entry.page));
   await registry[release](tab);
+  assert.deepEqual(await touch(owned), beforeTouch);
+  assert.deepEqual(await touch(page), sentinelTouch);
   const impl = owned._connection.toImpl(owned);
   assert.equal(owned.viewportSize(), null);
   assert.equal(impl.emulatedSize(), undefined);
