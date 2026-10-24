@@ -1,4 +1,4 @@
-import { screenshot } from './screenshot.mjs';
+import { screenshot, CAPTURE_MS } from './screenshot.mjs';
 import { isV3Context } from './v3-context.mjs';
 
 export const MOTION_SIDE = 480, MOTION_FRAMES = 4;
@@ -25,11 +25,13 @@ export function startMotion(entry, { op, frames, frameMs = 100, current = () => 
   const live = () => !stopped && !changed && current() && allowed();
   const collect = async startedAt => {
     const images = [], sizes = [], times = [];
+    const deadline = startedAt + CAPTURE_MS;
     for (let index = 0; index < frames; index++) {
       const remaining = startedAt + index * frameMs - now();
-      if (remaining > 0) await sleep(remaining);
+      if (remaining > 0) await sleep(Math.min(remaining, Math.max(0, deadline - now())));
       if (!live()) return { note: 'Motion frames skipped: page changed or turn ended.' };
-      const result = await capture(entry, { maxSide: MOTION_SIDE, duringInput: true, current: live, allowed, now });
+      if (now() >= deadline) return { note: 'Motion frames skipped: safe capture unavailable.' };
+      const result = await capture(entry, { maxSide: MOTION_SIDE, duringInput: true, current: live, allowed, now, deadline });
       if (!result.images?.length || !result.size || !Number.isFinite(result.capturedAt)) return { note: result.note.replace(/^Screenshot/, 'Motion frames') };
       images.push(...result.images); sizes.push(`${result.size.width}x${result.size.height}`);
       times.push(Math.max(0, Math.round(result.capturedAt - startedAt)));

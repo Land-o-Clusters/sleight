@@ -20,7 +20,7 @@ function fixture() {
     captures.push(opts); const capturedAt = clock += 25;
     return { images: [{ type: 'image', mimeType: 'image/jpeg', data: 'fixture' }], size: { width: 480, height: 300 }, capturedAt };
   } };
-  return { entry, options, captures, input: type => listener?.(type), removals: () => removals };
+  return { entry, options, captures, advance: ms => { clock += ms; }, input: (type, at) => listener?.(type, at), removals: () => removals };
 }
 
 test('FD1 motion authority comes from the current bound user message', async () => {
@@ -62,6 +62,31 @@ test('FD1B direct motion collection refuses multi-event drag and press before in
     assert.equal(f.entry.page.eventNames().length, 0);
     assert.equal(f.captures.length, 0);
   }
+});
+
+test('FD1C slow motion frames share the first input deadline and discard the partial sequence', async () => {
+  const f = fixture(), deadlines = [];
+  f.advance(1000);
+  const capture = async (...args) => {
+    deadlines.push(args[1].deadline);
+    f.advance(1600);
+    return f.options.capture(...args);
+  };
+  const motion = startMotion(f.entry, { ...f.options, capture, op: 'click', frames: 4 });
+  f.input('mousePressed', 1000);
+  const result = await motion.finish();
+  assert.equal(result.images, undefined);
+  assert.match(result.note, /Motion frames skipped: safe capture unavailable/);
+  assert.deepEqual(deadlines, [4000, 4000]);
+});
+
+test('FD1C a frame scheduled at the shared deadline starts no capture', async () => {
+  const f = fixture();
+  const motion = startMotion(f.entry, { ...f.options, op: 'hover', frames: 4, frameMs: 1000 });
+  f.input('mouseMoved');
+  const result = await motion.finish();
+  assert.equal(result.images, undefined);
+  assert.equal(f.captures.length, 3);
 });
 
 test('FD1 protected fields in a later frame discard all earlier images', async () => {

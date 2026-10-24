@@ -12,6 +12,61 @@ const html = `<style>body{margin:0}#box{position:fixed;top:100px;pointer-events:
   <div id="box"></div><main>Scroll area</main><script>for(const event of ['keydown','scroll']) window.addEventListener(event,()=>document.querySelector('#box').style.transform='translateX(700px)')</script>`;
 const ref = (text, name) => /\[ref=(\w+)\]/.exec(text.split('\n').find(line => line.includes(JSON.stringify(name)) && line.includes('[ref=')) ?? '')?.[1];
 
+test('FD1C heavy-page click completes with four motion frames under one deadline', { skip, timeout: 45000 }, async t => {
+  const f = await fixture(t, `<button onpointerdown="const end=performance.now()+120;while(performance.now()<end){}"
+    onclick="document.querySelector('output').textContent='Click completed'">Animate</button><output>Ready</output>
+    <div aria-hidden="true">${'<span>layout fixture</span>'.repeat(12000)}</div>`);
+  const read = await f.call('browser_read', {}), before = f.wire.length;
+  const started = performance.now();
+  const result = await f.call('browser_act', { steps: [{ do: 'click', ref: ref(read.text, 'Animate') }], frames: 4, frame_ms: 50 });
+  const elapsed = performance.now() - started;
+  t.diagnostic(`Heavy-page click with four motion frames total latency: ${elapsed.toFixed(1)} ms`);
+  assert.equal(result.isError, false, result.text);
+  assert.equal(result.images?.length, 4, result.text);
+  assert.equal(await f.entry.page.locator('output').textContent(), 'Click completed');
+  assert.equal(f.wire.slice(before).filter(c => c.method === 'Page.captureScreenshot').length, 4);
+  assert.ok(elapsed < 4000, `heavy-page total latency ${elapsed} ms`);
+  for (const image of result.images) assert.ok(Math.max(...Object.values(jpegSize(image.data))) <= 480);
+  t.diagnostic(result.text.split('\n').find(line => line.startsWith('Motion frames')));
+});
+
+test('FD1C slow real-page audits exhaust one motion deadline and release the renderer', { skip, timeout: 15000 }, async t => {
+  const f = await fixture(t, '<button>Animate</button>');
+  const read = await f.call('browser_read', {}), before = f.wire.length;
+  let dispatchedAt, detachedAt;
+  const observe = f.entry.observeInput.bind(f.entry);
+  f.entry.observeInput = listener => observe((type, at) => {
+    if (type === 'mouseMoved') dispatchedAt ??= at;
+    listener(type, at);
+  });
+  const context = f.entry.page.context(), attach = context.newCDPSession.bind(context);
+  context.newCDPSession = async frame => {
+    const cdp = await attach(frame), send = cdp.send.bind(cdp), detach = cdp.detach.bind(cdp);
+    let captureSession = false;
+    cdp.send = async (method, params) => {
+      const result = await send(method, params);
+      if (method === 'Debugger.enable') captureSession = true;
+      if (captureSession && method === 'DOMSnapshot.captureSnapshot') await new Promise(resolve => setTimeout(resolve, 1100));
+      return result;
+    };
+    cdp.detach = async () => { await detach(); if (captureSession) detachedAt = performance.now(); };
+    return cdp;
+  };
+  const started = performance.now();
+  const result = await f.call('browser_act', { steps: [{ do: 'hover', ref: ref(read.text, 'Animate') }], frames: 4, frame_ms: 50 });
+  const elapsed = performance.now() - started;
+  t.diagnostic(`Slow-audit four-frame motion total latency: ${elapsed.toFixed(1)} ms`);
+  const collectionMs = detachedAt - dispatchedAt;
+  t.diagnostic(`Slow-audit motion dispatch through final detach: ${collectionMs.toFixed(1)} ms`);
+  assert.equal(result.isError, false, result.text);
+  assert.equal(result.images?.length ?? 0, 0, result.text);
+  assert.match(result.text, /Motion frames skipped: safe capture unavailable/);
+  assert.ok(collectionMs >= 2800 && collectionMs < 3500, `collection latency ${collectionMs} ms`);
+  assert.ok(elapsed < 5000, `total action and observation latency ${elapsed} ms`);
+  assert.equal(f.wire.slice(before).filter(c => c.method === 'Page.captureScreenshot').length, 2);
+  assert.equal(await f.entry.page.evaluate(() => 42), 42);
+});
+
 for (const op of ['drag', 'press']) test('FD1B heavy-page ' + op + ' reports the actual completed action', { skip, timeout: 45000 }, async t => {
   const heavy = `<style>button{padding:30px}#source,#destination{display:inline-block;padding:40px;border:1px solid}</style>
     <button id="key" onkeydown="busy();window.down=true" onkeyup="if(window.down)document.querySelector('output').textContent='Press released'">Key target</button>
