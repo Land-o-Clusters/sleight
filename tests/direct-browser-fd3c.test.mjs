@@ -33,8 +33,8 @@ test('FD3C user-named recovery still intercepts its initial URL and every redire
   assert.ok(f.calls.some(([method]) => method === 'Fetch.enable'));
   assert.equal(f.tab.state.stuck, false);
 });
-test('FD3C the named URL waives only its first cross-origin check; redirects obey site and scheme rules', async () => {
-  for (const hop of ['https://named.invalid/redirect', 'https://other.invalid/', 'https://start.invalid/blocked', 'mailto:fixture@example.invalid', 'custom:fixture', 'data:text/plain,x']) {
+test('FD3C named recovery redirects obey site, origin and scheme rules', async () => {
+  for (const hop of ['https://other.invalid/', 'https://start.invalid/blocked', 'mailto:fixture@example.invalid', 'custom:fixture', 'data:text/plain,x']) {
     const f = recovery({ hops: [hop] });
     await assert.rejects(recoverPage(f.tab, 'https://named.invalid/start', { allowCrossOrigin: true,
       siteCheck: url => url.endsWith('/blocked') ? 'Blocked by user' : undefined }));
@@ -50,6 +50,8 @@ test('FD3C Fetch cleanup rejection or timeout never masks success or the origina
     assert.ok(Date.now() - start < 1500, 'cleanup gets a short independent deadline');
     assert.equal(f.tab.state.recoveryFetchDisablePending, true);
     assert.equal(f.tab.state.stuck, fail);
+    assert.equal(f.tab.cdp.listenerCount('Fetch.requestPaused'), 1, 'guard stays while Fetch cleanup is pending');
+    f.tab.cdp.emit('close');
     assert.equal(f.tab.cdp.listenerCount('Fetch.requestPaused'), 0);
   }
 });
@@ -73,17 +75,17 @@ test('FD3C detached child frames do not prevent a healthy main frame from cleari
   assert.equal(await probePage({ state: {}, page: { frames: () => [attached] } }, 10), false);
 });
 test('FD3C unrelated controls in native forms remain usable; only submitters and implicit Enter refuse', () => {
-  for (const inspector of [inspectElement, inspectTarget]) for (const tag of ['checkbox', 'radio', 'textarea', 'a', 'div', 'button', 'text', 'submit', 'image']) {
+  for (const inspector of [inspectElement, inspectTarget]) for (const tag of ['checkbox', 'radio', 'range', 'textarea', 'a', 'div', 'button', 'text', 'submit', 'image']) {
     const element = classify(({ Element, HTMLButtonElement, HTMLInputElement }) => {
       const form = new Element('form', { action: 'mailto:fixture@example.invalid' });
       new HTMLButtonElement('button', {}, 'Open', form);
-      return ['text', 'checkbox', 'radio', 'submit', 'image'].includes(tag) ? new HTMLInputElement('input', { type: tag }, '', form)
+      return ['text', 'checkbox', 'radio', 'range', 'submit', 'image'].includes(tag) ? new HTMLInputElement('input', { type: tag }, '', form)
         : tag === 'button' ? new HTMLButtonElement('button', { type: 'button' }, 'Other', form)
           : new Element(tag, tag === 'a' ? { href: '/safe' } : {}, 'Other', form);
     }, inspector);
     assert.equal(element.appLink, ['submit', 'image'].includes(tag), inspector.name + ':' + tag);
     const f = fixture(), verdict = rules.check(f.ctx, 'press', f.target({ element, key: 'Enter' }));
-    assert.equal(/native app/.test(verdict.message ?? ''), ['text', 'submit', 'image'].includes(tag), inspector.name + ':' + tag);
+    assert.equal(/native app/.test(verdict.message ?? ''), ['text', 'checkbox', 'radio', 'range', 'submit', 'image'].includes(tag), inspector.name + ':' + tag);
   }
 });
 test('FD3C native navigation and detach notices describe only events that happened', async () => {

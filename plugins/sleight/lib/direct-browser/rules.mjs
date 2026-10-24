@@ -45,8 +45,17 @@ export function inspectElement(el, unused, read = (node, key) => { const value =
     }
     return null;
   };
+  const labelControl = (() => {
+    if (typeof HTMLLabelElement === 'undefined') return null;
+    const label = read(el, 'closest')('label');
+    if (!label) return null;
+    const interactive = 'a[*|href],audio[controls],button,details,embed,iframe,img[usemap],input:not([type="hidden"]),label,select,textarea,video[controls]';
+    for (let at = el; at && at !== label; at = read(at, 'parentElement')) if (read(at, 'matches')(interactive)) return null;
+    return read(label, 'control');
+  })();
+  const activation = labelControl || el;
   const formOf = () => {
-    const owner = read(el, 'form');
+    const owner = read(activation, 'form');
     if (owner) return owner;
     if (owner === undefined) return enclosing(el, 'form');
     const root = read(el, 'getRootNode')?.();
@@ -75,9 +84,9 @@ export function inspectElement(el, unused, read = (node, key) => { const value =
     if (!form) return false;
     const isSubmitter = node => read(node, 'localName') === 'button' && !/^(button|reset)$/.test(read(node, 'type') ?? '') ||
       read(node, 'localName') === 'input' && /^(submit|image)$/.test(read(node, 'type') ?? '');
-    const control = isSubmitter(el) ? el : read(el, 'closest')('button,input');
+    const control = isSubmitter(activation) ? activation : read(activation, 'closest')('button,input');
     const explicit = control && isSubmitter(control);
-    if (!explicit && !(implicit && tag === 'input' && /^(text|search|tel|url|email|password|date|month|week|time|datetime-local|number)$/.test(read(el, 'type') ?? 'text'))) return false;
+    if (!explicit && !(implicit && tag === 'input' && /^(text|search|tel|url|email|password|date|month|week|time|datetime-local|number|checkbox|radio|range)$/.test(read(el, 'type') ?? 'text'))) return false;
     const root = read(form, 'getRootNode')?.() ?? read(form, 'ownerDocument'), query = read(root, 'querySelectorAll');
     const candidates = query ? [...query('button,input')].filter(node => read(node, 'form') === form) : [...read(form, 'querySelectorAll')('button,input')];
     const submitter = control && isSubmitter(control) ? control : candidates.find(isSubmitter);
