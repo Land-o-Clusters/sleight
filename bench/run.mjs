@@ -102,7 +102,6 @@ if (ghostHand === '1') console.error('Ghost hand on in the sleight arms (SLEIGHT
 const cleanArms = process.argv.includes('--clean-arms');
 const suite = option('suite', 'default');
 const world = suite === 'world';
-if (suite === 'world' && !isDryRun && !ownerAway) throw new Error('world live fixtures require --owner-away');
 if (suite === 'battery') {
   try { process.exitCode = await (await import('./battery/run.mjs')).main(); }
   catch (error) { console.error(`Battery stopped: ${/^[A-Z][A-Z0-9_]+\b/.exec(error.message)?.[0] ?? 'BATTERY_STOP'}. Check options, fixture seeds and private prerequisites.`); process.exitCode = 1; }
@@ -110,6 +109,13 @@ if (suite === 'battery') {
 }
 if (isSetupOnly && (suite !== 'real' || isDryRun)) throw new Error('--setup-only requires --suite real without --dry-run');
 const suiteTasks = getTasks(suite);
+if (world && !isDryRun && !ownerAway) {
+  const ids = option('tasks', undefined)?.split(',');
+  const supervised = ids && selectSuiteTasks(suiteTasks, ids);
+  if (!ownerPresent || !supervised?.length || supervised.some(task => !task.ownerPresent)) {
+    throw new Error('world live fixtures require --owner-away except a separate owner-present task pass');
+  }
+}
 const controller = new AbortController();
 process.on('SIGINT', () => controller.abort(new Error('run interrupted')));
 process.on('SIGTERM', () => controller.abort(new Error('run interrupted')));
@@ -724,8 +730,15 @@ pass: for (let run = 1; run <= runs; run++) {
           permissionCheck: guardedPass ? guardedPermissionCheck : observePermission,
           drive: async (prompt, _ctx, callbacks) => {
             if (calculatorGate) await calculatorReady(armName);
-            const cpu = footprint(task.privateMail ? [] : [ctx.sim?.app ?? task.app], ARMS[armName].codex ? 'codex' : 'claude');
-            const stopWatching = guardedPass ? watchAppWindows(ctx.sim?.app ?? task.app) : undefined;
+            const observedApps = task.observedApps ?? [ctx.sim?.app ?? task.app];
+            const cpu = footprint(task.privateMail ? [] : observedApps, ARMS[armName].codex ? 'codex' : 'claude');
+            const watchers = guardedPass ? observedApps.map(app => [app, watchAppWindows(app)]) : [];
+            const finishWatching = async response => {
+              if (!watchers.length) return;
+              const samples = Object.fromEntries(await Promise.all(watchers.map(async ([app, stop]) => [app, await stop()])));
+              response.appWindows = samples[observedApps[0]];
+              if (watchers.length > 1) response.appWindowsByApp = samples;
+            };
             if (ARMS[armName].codex) {
               const response = await runCodex(prompt, { cwd: ARMS[armName].cwd, model: ARMS[armName].codexModel, effort: codexEffort, timeoutMs: task.timeoutMs ?? TIMEOUT_MS, signal: controller.signal, onSpawn: cpu.onSpawn, auditDrag: suite === 'world' && task.id === 'textedit-window-drag',
                 ...(codexHome.home && { home: codexHome.home }) });
@@ -737,7 +750,7 @@ pass: for (let run = 1; run <= runs; run++) {
                 if (response.approvals.declined.length) response.approvalStop = 'unsupported approval: elicitation is outside the benchmark app allowlist or uses an unsupported form';
               }
               response.footprint = await cpu.finish();
-              if (stopWatching) response.appWindows = await stopWatching();
+              await finishWatching(response);
               return response;
             }
             const response = await runClaude(prompt, ARMS[armName], !task.privateMail && !task.noScreenshot && armName === 'sleight' ? { SLEIGHT_TRACE: evidenceDir } : {},
@@ -745,7 +758,7 @@ pass: for (let run = 1; run <= runs; run++) {
                 fixtureLifecycle: true, onSpawn: task.privateMail ? pid => { armPids.push(pid); windowHygiene?.recordArm?.(pid); } : cpu.onSpawn, timeoutMs: task.timeoutMs ?? TIMEOUT_MS,
                 allowedApps: task.allowedApps, allowedGrants: task.allowedGrants, auditDrag: suite === 'world' && task.id === 'textedit-window-drag' });
             if (!task.privateMail) response.footprint = await cpu.finish();
-            if (stopWatching) response.appWindows = await stopWatching();
+            await finishWatching(response);
             if (!task.privateMail) response.timing = runTiming(response.out, armName === 'sleight' ? traceTiming(evidenceDir) : undefined);
             return response;
           },

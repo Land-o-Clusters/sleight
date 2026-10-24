@@ -73,6 +73,11 @@ export async function openMailImport(fixture, ctx, { helper = mailHelper, run = 
       removed = event.removed === true;
     },
     async removeMailbox() { return removed || completed && diagnostic.cleanup === 'closed retained fixture'; },
+    async recover() {
+      // Mail owns an imported mailbox, never a recoverable document fixture.
+      if (lease.cleaned === true && diagnostic.windowCleanupConfirmed === true && diagnostic.helperCollectionConfirmed === true) return;
+      throw new Error('Mail import recovery unavailable; retained mailbox cleanup required');
+    },
     async dispose() { controller.abort(); return (await response).groupClean === true; },
     async quit() {
       // Current production acquisition preserves an already-running Mail app.
@@ -335,6 +340,7 @@ export async function cleanupMailImport(ctx) {
   } catch (error) { failure = error; }
   try { collected = await lease.dispose(); if (collected !== true) throw new Error('Mail helper collection unconfirmed'); }
   catch (error) { failure ??= error; }
+  if (lease.diagnostics) lease.diagnostics.helperCollectionConfirmed = collected === true;
   if (!failure && lease.launched === true && collected === true) {
     try { await lease.quit(); } catch (error) { failure = error; }
   }

@@ -21,6 +21,14 @@ export function prepareMailToSheet(ctx) {
   ctx.mailToSheet = { source, output, values, sentinel, sourceHash: hash(source) };
 }
 
+// Read only the retained window's pre-close receipt. Never search for a saved file.
+export function findNumbersLeftovers(ctx) {
+  const document = ctx.numbers?.diagnostics?.numbersDocument;
+  if (document?.status !== 'available') throw new Error('leftover check unavailable');
+  if (document.path && document.path === ctx.mailToSheet?.source) return [];
+  return document.path ? [document.path] : document.name ? [document.name] : [];
+}
+
 // Numbers can export a UTF-8 BOM, quoted fields and CRLF. Other delimiters and
 // malformed quotes fail instead of silently accepting a flattened answer.
 export function transferCSV(text) {
@@ -71,13 +79,14 @@ async function cleanup(ctx) {
   try { await closeFixtures({ ...ctx, windowLeases: (ctx.windowLeases ?? []).filter(lease => lease !== ctx.mailImport) }); }
   catch (error) { errors.push(error.message); }
   try { await cleanupMailImport(ctx); } catch (error) { errors.push(error.message); }
-  if (errors.length) throw new Error(`MAIL_TO_SHEET_CLEANUP_UNCONFIRMED: ${errors.join('; ')}`);
+  if (errors.length) throw new Error(errors.join('; '));
 }
 
-export function mailToSheetTask(open = openFixture, { importMail = setupMailImport } = {}) {
+export function mailToSheetTask(open = openFixture, { importMail = setupMailImport, findLeftovers = findNumbersLeftovers } = {}) {
   return {
     id: 'mail-to-sheet', app: 'Numbers', bundle: 'com.apple.iWork.Numbers', half: 'cross-app', heldOut: true,
     ownerPresent: true, stopOnAppDialog: true,
+    observedApps: ['Numbers', 'Mail'],
     allowedApps: ['Mail', 'com.apple.mail', 'Numbers', 'com.apple.iWork.Numbers'],
     allowedGrants: ['clipboardRead', 'clipboardWrite'],
     prepare: prepareMailToSheet,
@@ -87,7 +96,7 @@ export function mailToSheetTask(open = openFixture, { importMail = setupMailImpo
       prepareMailToSheet(ctx);
       await importMail(ctx);
       await acquireFixture(ctx, 'numbers', () => open(ctx, { app: 'Numbers', bundle: 'com.apple.iWork.Numbers',
-        target: ctx.mailToSheet.source, token: basename(ctx.mailToSheet.source, '.csv'), mode: 'document', stopOnAppDialog: true }));
+        target: ctx.mailToSheet.source, token: basename(ctx.mailToSheet.source, '.csv'), mode: 'document', stopOnAppDialog: true, reportDocument: true }));
     },
     prompt: ctx => `In the run-owned Mail viewer, use only the local On My Mac imported mailbox "${ctx.mail.name}". ` +
       'Read the message from mira.cole@example.test with subject "Orchard transfer note". ' +
@@ -98,5 +107,6 @@ export function mailToSheetTask(open = openFixture, { importMail = setupMailImpo
       'mark mail read or unread, or change mail or settings. Never search All Mailboxes or access accounts, other mailboxes, documents or windows. ' +
       'Do not save over the source CSV. Stop at any permission, sign-in, activation or first-run dialog and report it without dismissing it.',
     check: checkMailToSheet, cleanup,
+    leftovers: ctx => ctx.mailToSheet ? findLeftovers(ctx) : [],
   };
 }

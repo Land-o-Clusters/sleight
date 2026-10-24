@@ -29,6 +29,34 @@ import { benchHand } from '../bench/hand/bench-hand.mjs';
 const parserSkip = packageSkip('typescript');
 const { dragMethodAudit } = parserSkip ? {} : await import('../bench/world/method-check.mjs');
 
+test('Mail-to-sheet footprint and window watching cover both apps for Claude and Codex', async () => {
+  const task = getTasks('world').find(task => task.id === 'mail-to-sheet');
+  for (const arm of ['sleight', 'codex']) {
+    const result = await runner({ suite: 'world', arm, tasks: [task], drive: true, extraArgs: ['--owner-present', '--tasks', 'mail-to-sheet'] });
+    assert.equal(result.error, undefined);
+    const footprints = result.calls.filter(call => call[0] === 'footprint apps');
+    assert.equal(footprints.length, 3);
+    for (const call of footprints) assert.deepEqual(Array.from(call[1]), ['Numbers', 'Mail']);
+    assert.equal(result.calls.filter(call => call[0] === 'watch app' && call[1] === 'Mail').length, 3);
+    const row = result.saved.at(-1).results[0];
+    assert.equal(row.appWindowsByApp.Mail.offScreenOnly, 1);
+    assert.equal(row.appWindowsByApp.Numbers.onScreen, 1);
+    assert.deepEqual(row.appWindows, row.appWindowsByApp.Numbers);
+  }
+});
+
+test('owner presence cannot admit ordinary world tasks or a mixed world pass', async () => {
+  for (const tasks of [[{ id: 'ordinary', app: 'Preview' }],
+    [getTasks('world').find(task => task.id === 'mail-to-sheet'), { id: 'ordinary', app: 'Preview' }]]) {
+    const result = await runner({ suite: 'world', tasks, extraArgs: ['--owner-present', '--tasks', tasks.map(task => task.id).join(',')] });
+    assert.match(result.error?.message ?? '', /world live fixtures require --owner-away/);
+    assert.equal(result.calls.includes('lock'), false);
+    assert.equal(result.commands.length, 0);
+    assert.equal(result.directories.length, 0);
+    assert.equal(result.saved.length, 0);
+  }
+});
+
 test('the full world dry run prints one complete JSON document for every arm', async () => {
   const arms = ['sleight', 'lcu', 'cua', 'peekaboo', 'claude-cu', 'codex'];
   const result = await runner({ suite: 'world', arm: arms.join(','), dryRun: true,
@@ -177,8 +205,9 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
     codexSleightRunConfig, approvalSummary: () => ({ accepted: 1, declined: declinedPrompts, toolsRefused: [], log: [{ kind: 'elicitation', message: 'Allow Computer Use to use "TextEdit"?', action: 'accept' }] }),
     codexConfigServers: home => home === '/owner/.codex-bench-sleight' ? sleightHomeServers : codexServers ?? [],
     cpuSplit, benchHand,
-    startFootprint: () => async () => footprint,
-    runCodex: async (prompt, options) => { codexRuns.push({ prompt, options }); options.onSpawn?.(4321); return { code: 0, out: {}, forbidden: [], ...codexResult }; }, watchAppWindows: () => async () => [],
+    startFootprint: options => { calls.push(['footprint apps', options.apps]); return async () => footprint; },
+    runCodex: async (prompt, options) => { codexRuns.push({ prompt, options }); options.onSpawn?.(4321); return { code: 0, out: {}, forbidden: [], ...codexResult }; },
+    watchAppWindows: app => { calls.push(['watch app', app]); return async () => ({ samples: 1, onScreen: app === 'Mail' ? 0 : 1, offScreenOnly: app === 'Mail' ? 1 : 0, none: 0 }); },
     acquireLiveLock: async () => { calls.push('lock'); return async () => { calls.push('unlock'); if (unlockError) throw new Error(unlockError); }; },
     runTiming: () => ({}), traceTiming: () => ({}), withStamps: timing => timing, observePermission: () => { if (dryRun) assert.fail('no host permission observation in initialization-only discovery'); return false; },
     assertCalculatorReady: async () => {

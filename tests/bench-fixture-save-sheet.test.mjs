@@ -66,6 +66,49 @@ function wordFixture({ where = 'focused sheet', preexisting = true, label = 'Don
     close() { return sandbox.closeOwnedWindow(window, request, app, api); } };
 }
 
+test('Numbers reports the saved document before a changed document identity refuses cleanup', () => {
+  const f = wordFixture();
+  Object.assign(f.request, { bundle: 'com.apple.iWork.Numbers', reportDocument: true });
+  f.window.AXDocument = 'file:///custom/Renamed.numbers';
+  assert.throws(f.close, /identity changed/);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.events.find(e => e.stage === 'numbers-document')?.numbersDocument)),
+    { status: 'available', path: '/custom/Renamed.numbers' });
+  assert.deepEqual(f.presses, []);
+});
+
+for (const label of ['Delete', "Don't Save", 'Don’t Save']) for (const preexisting of [true, false]) {
+  test(`Numbers discards its nonce-titled imported CSV without AXDocument using ${label} (${preexisting ? 'existing sheet' : 'on close'})`, () => {
+    const f = wordFixture({ label, preexisting, where: 'children' });
+    Object.assign(f.request, { bundle: 'com.apple.iWork.Numbers', target: '/run/Transfer-nonce.csv', token: 'Transfer-nonce', reportDocument: true });
+    f.window.AXTitle = 'Transfer-nonce'; delete f.window.AXDocument;
+    f.prompt.AXChildren[0].AXValue = 'Do you want to save this document?';
+    f.close();
+    assert.equal(f.window.AXRole, '');
+    assert.equal(f.presses.at(-1), f.button);
+    assert.equal(f.events.find(e => e.stage === 'fixture-sheet')?.fixtureSheet.pressed, label);
+    assert.equal(f.events[0].stage, 'numbers-document');
+    assert.equal(f.events[0].numbersDocument.status, 'available');
+  });
+}
+
+for (const kind of ['foreign title', 'foreign document', 'non-file document', 'another app', 'two discard buttons', 'permission', 'foreign parent', 'unattached alert']) {
+  test(`Numbers import discard refuses ${kind}`, () => {
+    const f = wordFixture({ label: 'Delete' });
+    Object.assign(f.request, { bundle: 'com.apple.iWork.Numbers', target: '/run/Transfer-nonce.csv', token: 'Transfer-nonce' });
+    f.window.AXTitle = 'Transfer-nonce'; delete f.window.AXDocument;
+    if (kind === 'foreign title') f.window.AXTitle = 'Owner document';
+    if (kind === 'foreign document') f.window.AXDocument = 'file:///owner/Transfer-nonce.csv';
+    if (kind === 'non-file document') f.window.AXDocument = 'https://example.test/Transfer-nonce.csv';
+    if (kind === 'another app') f.request.bundle = 'com.microsoft.Word';
+    if (kind === 'two discard buttons') f.prompt.AXChildren.push({ AXRole: 'AXButton', AXTitle: "Don't Save" });
+    if (kind === 'permission') f.prompt.AXChildren.push({ AXRole: 'AXStaticText', AXValue: 'Numbers needs access to Documents' });
+    if (kind === 'foreign parent') f.prompt.AXParent = { AXRole: 'AXWindow' };
+    if (kind === 'unattached alert') { f.prompt.AXRole = 'AXWindow'; f.prompt.AXSubrole = 'AXDialog'; delete f.prompt.AXParent; }
+    assert.throws(f.close, /cleanup refused|identity changed|focus/);
+    assert.deepEqual(f.presses, []);
+  });
+}
+
 for (const where of ['focused sheet', 'children', 'alert']) for (const preexisting of [true, false]) {
   test(`cleanup answers the fixture's own Don't Save ${where} ${preexisting ? 'left open by the task' : 'shown on close'}`, () => {
     const f = wordFixture({ where, preexisting });

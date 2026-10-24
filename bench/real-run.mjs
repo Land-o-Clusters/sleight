@@ -143,6 +143,14 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, setupO
         if (collected !== true) throw new Error('Fixture helper process group cleanup unconfirmed');
       } catch (error) { result.passed = false; result.cleanupError = error.message; cleanupConfirmed = false; }
     }
+    // Publish the pre-close window metadata after cleanup and helper collection.
+    // An unavailable report does not make confirmed fixture cleanup uncertain.
+    if (!dryRun && task.leftovers) {
+      try { result.leftovers = await task.leftovers(ctx); }
+      catch {
+        result.leftoverCheck = 'leftover check unavailable';
+      }
+    }
     clearInterval(monitor);
     await observation;
     if (ctx.fixtureDiagnostics) result.fixtureDiagnostics = ctx.fixtureDiagnostics;
