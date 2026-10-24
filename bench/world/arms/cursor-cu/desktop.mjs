@@ -20,7 +20,8 @@ export class DesktopDriver {
   }
   read(operation, label) { return bounded(operation, label, this.operationTimeoutMs); }
   async preflight(plan, { calibration = false } = {}) {
-    const rows = await this.read(() => this.processes(plan.paths), 'process read');
+    // The first host call may compile the native helper (up to 60 s), so it gets a longer deadline.
+    const rows = await bounded(() => this.processes(plan.paths), 'process read', Math.max(this.operationTimeoutMs, 70000));
     try { assertNoForeignCursor(rows, plan.paths); }
     catch (error) { if (!this.app && !this.partialLaunch) error.cleanupConfirmed = true; throw error; }
     if (rows.some(p => p.bundleId === HELPER_BUNDLE)) throw Object.assign(Error('Cursor benchmark refused: quit your own Cursor first; a pre-existing shared helper cannot be owned by this run'), { cleanupConfirmed: true });

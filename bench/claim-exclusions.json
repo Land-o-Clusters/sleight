@@ -3,6 +3,7 @@
   "sinceReason": "overnight claim run on the release build (ef833641 plus the Chess drag fix 1933db78); earlier runs measured older builds",
   "arms": [
     "sleight",
+    "cursor-cu",
     "lcu",
     "codex",
     "codex-sol",

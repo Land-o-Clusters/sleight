@@ -117,3 +117,15 @@ test('native and race scorer CLIs expose --agent-seconds and preserve default sc
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('a brace inside a log line is not an event, and the last result ends the clock', async () => {
+  const { AgentClock } = await import('../bench/agent-time.mjs');
+  let t = 0;
+  const clock = new AgentClock(0, () => ++t);
+  clock.append('starting {\n');
+  clock.append(JSON.stringify({ type: 'system', subtype: 'init' }) + '\n');
+  clock.append(JSON.stringify({ type: 'result' }) + '\n');
+  clock.append(JSON.stringify({ type: 'result' }) + '\n');
+  assert.equal(clock.timing().start, 'system/init');
+  assert.equal(clock.seconds(), 0.002);
+});

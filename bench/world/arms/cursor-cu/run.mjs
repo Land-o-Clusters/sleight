@@ -46,7 +46,7 @@ export async function runDesktop(plan, { driver, signal, now = Date.now, pause =
     }
   }
   reason = scrubCursor(reason);
-  return { type: 'result', is_error: !!reason || !completed, result: scrubCursor(found?.answer ?? ''), reason, groupClean: clean,
+  return { type: 'result', is_error: !!reason || !completed, result: found?.answer ?? '', reason, groupClean: clean,
     ...(reason && !/Cursor run timeout/.test(reason) && { safetyStop: reason }),
     route: 'desktop', cursorVersion: CURSOR_PIN.version, cursorCommit: CURSOR_PIN.commit, cursorCdhash: CURSOR_PIN.cdhash,
     model: found?.model?.model ?? null, effort: found?.model?.effort ?? plan.effort, speed: found?.model?.speed ?? plan.speed,

@@ -5,23 +5,28 @@ export class AgentClock {
   constructor(startedAt, now = Date.now) {
     this.startedAt = startedAt; this.now = now; this.pending = ''; this.depth = 0;
     this.quoted = false; this.escaped = false; this.dropping = false; this.endedAt = null;
-    this.start = 'spawn'; this.startupIncluded = true; this.decoder = new StringDecoder('utf8');
+    this.start = 'spawn'; this.startupIncluded = true; this.decoder = new StringDecoder('utf8'); this.lineStart = true;
   }
   event(event) {
-    if (this.endedAt !== null) return;
     if (this.startupIncluded && event?.type === 'system' && event.subtype === 'init') {
       this.startedAt = this.now(); this.start = 'system/init'; this.startupIncluded = false;
     }
+    // The last result wins: a stream can report a second result after a background task wakes the turn.
     if (['result', 'turn.completed', 'turn.failed'].includes(event?.type)) this.endedAt = this.now();
   }
   append(data) {
-    if (this.endedAt !== null) return;
     const text = typeof data === 'string' ? data : this.decoder.write(data), cap = 1024 * 1024;
     let start = this.depth ? 0 : -1;
     for (let i = 0; i < text.length; i++) {
       const c = text[i];
-      if (this.dropping) { if (c === '\n') this.dropping = false; continue; }
-      if (!this.depth) { if (c !== '{') continue; this.depth = 1; start = i; }
+      if (this.dropping) { if (c === '\n') { this.dropping = false; this.lineStart = true; } continue; }
+      if (!this.depth) {
+        // An event starts a line. A brace inside other text (a log line such as "starting {") is not an event.
+        if (c === '\n') { this.lineStart = true; continue; }
+        if (c === ' ' || c === '\t' || c === '\r' || c === '\uFEFF') continue;
+        if (c !== '{' || !this.lineStart) { this.lineStart = false; continue; }
+        this.lineStart = false; this.depth = 1; start = i;
+      }
       else if (this.quoted) {
         if (this.escaped) this.escaped = false;
         else if (c === '\\') this.escaped = true;
@@ -31,7 +36,7 @@ export class AgentClock {
       else if (c === '}' || c === ']') this.depth--;
       if (this.pending.length + i - start + 1 > cap) {
         this.pending = ''; this.depth = 0; this.quoted = false; this.escaped = false;
-        this.dropping = c !== '\n'; start = -1;
+        this.dropping = c !== '\n'; this.lineStart = c === '\n'; start = -1;
       } else if (!this.depth) {
         try { this.event(JSON.parse(this.pending + text.slice(start, i + 1))); } catch {}
         this.pending = ''; start = -1;
