@@ -6,6 +6,7 @@ import { FRAME_MARKER, snapshotCode } from './snapshot'
 import { fileArgument, outcomeOf, resultEntries } from './replay'
 import type { ReplayScript } from './replay'
 import { preapprovedWriteDenied, loggingSwitchWriteDenied } from './preapproved-write-guard.mjs'
+import { shellLaunchDenied, shellGuardReason } from './shell-guard.mjs'
 
 // The server's own name in plugin.json; the session lists it as
 // plugin:sleight:computer, and its tools as mcp__plugin_sleight_computer__*.
@@ -296,6 +297,7 @@ function ownCallVerdict(e: { tool: string; input: unknown }, origin: { plugin: s
 export const register: Register = on => {
   on('classic.PreToolUse', async ($, e, next) => {
     if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'].includes(e.tool)) return next(e)
+    if (shellLaunchDenied(e)) return { deny: shellGuardReason }
     if (loggingSwitchWriteDenied(e)) return { deny: "Only the user turns on sleight's action log and outcome lines. Ask them to make this change." }
     const denied = await preapprovedWriteDenied(e, {
       stat: (path: string) => $.fs.stat(path, { resolve: true }),
