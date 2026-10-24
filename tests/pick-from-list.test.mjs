@@ -21,6 +21,7 @@ function fixture(labels, { top = 0, height = 100, rowHeight = 20, disabled = [],
     getBoundingClientRect: () => ({ x: 100, y: 100 + i * rowHeight - offset, width: 200, height: rowHeight }),
     scrollIntoView: opts => { optionScrolls.push({ text, ...opts }); } }));
   const list = { get scrollTop() { return offset; }, scrollHeight: labels.length * rowHeight, clientHeight: height,
+    getAttribute: () => null, querySelector: () => null,
     getBoundingClientRect: () => ({ x: 100, y: 100, width: 200, height }),
     querySelectorAll: () => options.filter((el, i) => i * rowHeight >= offset - rowHeight && i * rowHeight < offset + height + rowHeight) };
   const locator = { count: async () => attached ? 1 : 0,
@@ -174,6 +175,7 @@ function travelList({ belowFold = false, delayed = false, missingOption = false 
   const ROW = 36, rows = [], selected = [], scrolls = [], clickNames = [];
   let y = belowFold ? 947 : 100, scrollTop = 0, pending = 0, reads = 0, reveals = 0;
   const list = { clientHeight: 216, scrollHeight: airports.length * ROW,
+    getAttribute: () => null, querySelector: () => null,
     get scrollTop() { return scrollTop; },
     getBoundingClientRect: () => ({ x: 100, y, width: 300, height: 216 }),
     scrollIntoView: (opts = {}) => { reveals++; y = 292; list.lastScroll = opts; },

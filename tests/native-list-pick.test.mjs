@@ -56,6 +56,7 @@ test('finds a target ahead with coarse page steps and clicks exactly that row', 
   const names = sortedNames(1000), model = fakeList(names, { page: 9 });
   const { run, clicks } = picker(model);
   const result = await run(names[612]);
+  assert.match(result.completeness, /row total unknown/);
   assert.equal(result.found, true); assert.equal(result.clicked, true);
   assert.deepEqual(clicks.map(line => labelOfClick(model, line)), [names[612]]);
   assert.ok(result.reads <= 24, `reads ${result.reads}`);

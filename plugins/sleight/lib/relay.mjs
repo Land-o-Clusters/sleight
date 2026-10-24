@@ -84,6 +84,8 @@ import { guardStopMark, splitMenuActions, takeGuardStop, withoutStopTree, hasWho
   unchangedMenuWindow, menuWindowRefusal, idleSample, tabRefusal, tabRemainder, tabFocusRefusal, shownStandardWindows, parentLeaseRefusal, parentLeaseGate,
   failedActionText, paletteRefusal, oneTabAdded, landingRefusal, replaceLastTree, lastHeader } from './menu-continuation.mjs';
 import { checkedStop, stopText } from './checked-stop.mjs';
+import { TurnOutcomes } from './turn-outcomes.mjs';
+import { resultCompleteness } from './read-completeness.mjs';
 import { stripHandBindings } from './hand/bindings.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
 import { stripDP1Trace } from './dp1-trace.mjs';
@@ -772,8 +774,8 @@ export function createRelay({
   stateReview = false,
   redactReceiptTitles = true,
   receiptWriter = writeReceipt,
-  // SLEIGHT_OUTCOMES=1 (A/B, off by default): one verified line per native action in the result.
-  outcomes = false,
+  // One evidence line per native action; SLEIGHT_OUTCOMES=0 opts out.
+  outcomes = true,
   // SLEIGHT_ACTION_LOG=<path> (opt-in): an ActionLog (action-outcomes.mjs) gets one JSON line per action.
   actionLog,
   idleTurnEndMs,
@@ -963,6 +965,9 @@ export function createRelay({
   const readHints = {};
   // The guard carries its outcome code only in sessions that record outcomes; every install says which.
   const outcomeSetup = outcomes || actionLog ? { outcomes: true } : {};
+  let turnOutcomes = new TurnOutcomes();
+  const outcomeCalls = new Map(), outcomeEnds = new Map();
+  const completenessCalls = new Map();
   let compactor = createReadCompactor({ leanCalls, prompt, compactAcquisition, compactReacquire, screenshotReads: textlessHint, readHints, routeSteering, undoReceipts, outcomes, actionNumbers: workflowDocs });
   const browserStale = createBrowserStaleGuard();
   let resultBudget = createResultBudget();
@@ -2546,6 +2551,23 @@ export function createRelay({
       });
     }
     if (grokClient && msg.method === 'elicitation/create' && msg.id !== undefined) grokElicitations.add(msg.id);
+    if (msg.method === undefined && msg.id !== undefined && outcomes) {
+      const call = outcomeCalls.get(msg.id);
+      outcomeCalls.delete(msg.id);
+      if (call && !call.recorded) call.turn.unknown(call.name);
+      const summary = outcomeEnds.get(msg.id) ?? (call ? call.turn.text() : undefined);
+      outcomeEnds.delete(msg.id);
+      if (summary && msg.result) msg.result = { ...msg.result, content: [...(msg.result.content ?? []), { type: 'text', text: summary }] };
+      else if (summary && msg.error) msg.error = { ...msg.error, message: msg.error.message + '\n' + summary };
+    }
+    if (msg.method === undefined && msg.id !== undefined) {
+      const read = completenessCalls.get(msg.id);
+      completenessCalls.delete(msg.id);
+      if (Array.isArray(msg.result?.content)) {
+        const footer = resultCompleteness(msg.result.content, { ...read, failed: !!msg.result.isError });
+        if (footer && !msg.result.content.at(-1)?.text?.trimEnd().endsWith(footer)) msg.result.content.push({ type: 'text', text: footer });
+      } else if (read && msg.error) msg.error.message += '\n' + resultCompleteness([], { requested: true, failed: true });
+    }
     journal?.reply(msg);
     // The log is a side record: its failure never costs Claude a reply.
     try { actionLog?.reply(msg); } catch {}
@@ -3059,6 +3081,7 @@ export function createRelay({
 
   function rotateTurn() {
     releaseLeases();
+    turnOutcomes = new TurnOutcomes();
     turnId = randomUUID();
     turnUsed = false;
     spaceNoted.clear();
@@ -3163,6 +3186,19 @@ export function createRelay({
     if (echo && echo[2] === echo[3]) msg.params.arguments.code = echo[1];
     journal?.request(msg);
     try { actionLog?.request(msg); } catch {}
+    if (msg.method === 'tools/call' && msg.id !== undefined) {
+      const name = msg.params?.name, code = msg.params?.arguments?.code ?? '';
+      if (name === 'browser_read' || name === 'js' && /\.\s*(?:getAXState(?:AndScreenshot)?|getApp|getTab|getState)\s*\(/.test(code))
+        completenessCalls.set(msg.id, { requested: true, filtered: /\.\s*(?:slice|filter|substring)\s*\(/.test(code) });
+    }
+    if (outcomes && msg.method === 'tools/call' && msg.id !== undefined) {
+      const name = msg.params?.name, args = msg.params?.arguments;
+      if (/^browser_(?:act|fill|open)$/.test(name) || name === 'browser_tabs' && args?.do !== 'list' ||
+          /^(?:drag|hover|open_file|replay)$/.test(name) || name === 'menu_bar' && args?.op !== 'apps' ||
+          name === 'notifications' && args?.op === 'press' ||
+          name === 'js' && /\.\s*(?:click|doubleClick|rightClick|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|pickFromList)\s*\(/.test(args?.code ?? ''))
+        outcomeCalls.set(msg.id, { name, turn: turnOutcomes });
+    }
     if (engineBrowserOpen && msg.method === 'tools/call' && msg.params?.name === 'browser_open' && msg.id !== undefined) {
       const routed = turboRoute(msg.params.arguments, directBrowser && { browser: directBrowser.browser, application: directBrowser.application });
       if (!routed) { engineOpen(msg); return; }
@@ -4204,6 +4240,11 @@ export function createRelay({
           if (msg.id !== undefined) trackTurnEnd(msg.id, msg.params.arguments);
           if (note && msg.id !== undefined) tabCleanupNotes.set(msg.id, note);
           if (keyboardTaps && msg.id !== undefined && drivenApps.size) turnEnds.add(msg.id);
+          if (outcomes && msg.id !== undefined) {
+            const pending = [...outcomeCalls.values()].filter(call => call.turn === turnOutcomes && !call.recorded).length;
+            const summary = turnOutcomes.text(pending);
+            if (summary) outcomeEnds.set(msg.id, summary);
+          }
           toServer(msg);
           const receipt = finishReceipt();
           if (journal) receiptEnds.set(msg.id, receipt);
@@ -5481,6 +5522,10 @@ export function createRelay({
       // Claude's code can reach the guard's state, so the record's shape is checked, not trusted.
       const record = automatic ? undefined : compactor.takeOutcomes();
       const kept = !Array.isArray(record?.outcomes) ? undefined : continued?.head ? { ...record, outcomes: record.outcomes.filter(rec => rec?.x !== 'refused') } : record;
+      if (outcomes && kept && outcomeCalls.has(msg.id)) {
+        outcomeCalls.get(msg.id).turn.native(kept);
+        outcomeCalls.get(msg.id).recorded = true;
+      }
       if (continued?.head) continuedOutcomes.set(msg.id, { start: (continued.start ?? 0) + (kept?.outcomes?.length ?? 0) });
       const savedReads = automatic ? 0 : compactor.takeSaved();
       if (actionLog) try { actionLog.outcomes(msg.id, kept); actionLog.saved(msg.id, savedReads); } catch {}
@@ -5686,6 +5731,13 @@ export function createRelay({
         !['closed', 'released'].includes(row.status))) report.resources = 'unconfirmed';
     }
     trace('stop-receipt', report);
+    if (outcomes) {
+      const pending = [...outcomeCalls.values()].filter(call => call.turn === turnOutcomes && !call.recorded).length;
+      const summary = turnOutcomes.text(pending);
+      if (summary) outcomeEnds.set(msg.id, summary);
+    }
+    turnOutcomes = new TurnOutcomes();
+    outcomeCalls.clear();
     toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: report.resources !== 'clear' || report.leases !== 'released and checked',
       content: [{ type: 'text', text: promptNotice(stopText(report), prompt) }, ...(report.directBrowser ? [{ type: 'text',
         text: JSON.stringify({ directBrowser: report.directBrowser }) }] : []), ...(tabNote ? [{ type: 'text', text: tabNote }] : [])], _meta: { 'sleight/stop': report } } });

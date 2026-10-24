@@ -8,6 +8,7 @@ description: Use when a web page or macOS app must be operated via its UI (click
 
 `mcp__plugin_sleight_computer__js` runs persistent JavaScript with `cua`. `js_reset` restarts it.
 Follow engine docs and app instructions.
+Report read completeness and the final sleight turn's unverified list. UI changes alone do not prove task success.
 Top-level `await`, no `return`. Write text with `nodeRepl.write(...)`.
 
 Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes

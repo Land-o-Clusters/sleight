@@ -256,13 +256,74 @@ function relayHarness(t, options = {}) {
   };
 }
 
-test('SLEIGHT_OUTCOMES=1 and SLEIGHT_ACTION_LOG reach the relay; both are off by default', () => {
-  assert.deepEqual(outcomeOptions({}), { outcomes: false, actionLog: undefined });
+test('outcomes default on; the action log stays opt-in', () => {
+  assert.deepEqual(outcomeOptions({}), { outcomes: true, actionLog: undefined });
   const options = outcomeOptions({ SLEIGHT_OUTCOMES: '1', SLEIGHT_ACTION_LOG: 'env.jsonl' });
   assert.equal(options.outcomes, true);
   assert.ok(options.actionLog instanceof ActionLog);
   assert.equal(options.actionLog.path, join(homedir(), 'Library/Logs/sleight/env.jsonl'));
   assert.equal(outcomeOptions({ SLEIGHT_ACTION_LOG: '/tmp/elsewhere.jsonl' }).actionLog, undefined);
+});
+
+test('default outcomes reach action replies and turn end, then reset on the next turn', async t => {
+  const h = relayHarness(t);
+  await h.call(1, 'let app = await cua.getApp("TextEdit")');
+  await h.reply(1, form());
+  await h.call(2, 'await app.pressKey("Return");');
+  const mark = /"outcomeMark":"(\[sleight:filtered-read:[0-9a-f]{16}\])"/.exec(h.sentCode(2))[1];
+  const secure = { outcomes: [{ a: 'pressKey', k: 'Return', t: { r: 'secure text field', s: true } }] };
+  const result = await h.reply(2, mark + JSON.stringify(secure) + '\n' + form());
+  assert.match(result.content.map(c => c.text).join('\n'), /sleight turn: 1 actions, 1 unverified: pressKey Return \(secure field\)/);
+  await h.call(3, '', 'turn_ended', { hook_event_name: 'Stop' });
+  const ended = await h.reply(3, 'ended');
+  assert.match(ended.content.map(c => c.text).join('\n'), /1 actions, 1 unverified/);
+  await h.call(4, 'await app.click(2);');
+  const nextMark = /"outcomeMark":"(\[sleight:filtered-read:[0-9a-f]{16}\])"/.exec(h.sentCode(4))[1];
+  const next = await h.reply(4, nextMark + JSON.stringify({ outcomes: [{ a: 'click', n: 2, f: [{ o: 'state', d: 'checked' }] }] }) + '\n' + form('', '1'));
+  assert.match(next.content.map(c => c.text).join('\n'), /sleight turn: 1 actions, 0 unverified/);
+  assert.doesNotMatch(next.content.map(c => c.text).join('\n'), /secure field/);
+});
+
+test('read results end in completeness even after result budgeting or a failed read', async t => {
+  const h = relayHarness(t);
+  await h.call(1, 'let app = await cua.getApp("TextEdit")');
+  const acquired = await h.reply(1, form());
+  assert.match(acquired.content.at(-1).text, /^# complete \(returned engine view/);
+  await h.call(2, 'nodeRepl.write((await app.getAXState()).slice(0, 100));');
+  assert.match((await h.reply(2, form().slice(0, 100))).content.at(-1).text, /^# incomplete read/);
+  await h.call(3, 'await app.getAXState()');
+  assert.match((await h.reply(3, 'read failed', true)).content.at(-1).text, /^# incomplete read/);
+});
+
+test('turn end waits for pending input and resets its outcomes only after that input finishes', async t => {
+  const h = relayHarness(t);
+  await h.call(1, 'let app = await cua.getApp("TextEdit")');
+  await h.reply(1, form());
+  await h.call(2, 'await app.pressKey("Return");');
+  await h.call(3, '', 'turn_ended', { hook_event_name: 'Stop' });
+  assert.match(h.received.find(row => row.id === 3).result.content.map(c => c.text).join('\n'), /still running/);
+  const oldMark = /"outcomeMark":"(\[sleight:filtered-read:[0-9a-f]{16}\])"/.exec(h.sentCode(2))[1];
+  await h.reply(2, oldMark + JSON.stringify({ outcomes: [{ a: 'pressKey', k: 'Return' }] }) + '\n' + form());
+  await h.call(4, '', 'turn_ended', { hook_event_name: 'Stop' });
+  assert.match((await h.reply(4, 'ended')).content.map(c => c.text).join('\n'), /1 actions, 1 unverified/);
+  await h.call(5, 'await app.click(2);');
+  const mark = /"outcomeMark":"(\[sleight:filtered-read:[0-9a-f]{16}\])"/.exec(h.sentCode(5))[1];
+  const next = await h.reply(5, mark + JSON.stringify({ outcomes: [{ a: 'click', n: 2, f: [{ o: 'state', d: 'checked' }] }] }) + '\n' + form('', '1'));
+  assert.match(next.content.map(c => c.text).join('\n'), /1 actions, 0 unverified/);
+});
+
+test('a checked interrupt includes the turn uncertainty without invoking a real engine', async t => {
+  const h = relayHarness(t, { stopGraceMs: 1, stopEngine: async () => ({ collected: true }), inspectInput: async () => ({ ok: true }) });
+  await h.call(1, 'let app = await cua.getApp("TextEdit")');
+  await h.reply(1, form());
+  await h.call(2, 'await app.pressKey("Return");');
+  const mark = /"outcomeMark":"(\[sleight:filtered-read:[0-9a-f]{16}\])"/.exec(h.sentCode(2))[1];
+  await h.reply(2, mark + JSON.stringify({ outcomes: [{ a: 'pressKey', k: 'Return', t: { s: true } }] }) + '\n' + form());
+  await h.call(3, '', 'turn_ended', { sleight_stop: true });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  const stopped = h.received.find(row => row.id === 3);
+  assert.ok(stopped);
+  assert.match(stopped.result.content.map(c => c.text).join('\n'), /sleight turn: 1 actions, 1 unverified/);
 });
 
 test('the relay asks the guard for outcomes and shows them under SLEIGHT_OUTCOMES=1, and logs each action without typed text', async t => {
@@ -324,9 +385,9 @@ test('the relay logs each call\'s time and Claude\'s reads it sent as changed li
   assert.equal(readFileSync(path, 'utf8').trim().split('\n').map(line => JSON.parse(line))[1].saved, undefined);
 });
 
-test('outcomes stay out of results by default while the log still gets them', async t => {
+test('outcomes can be disabled while the log still gets them', async t => {
   const path = join(dir, 'quiet.jsonl');
-  const h = relayHarness(t, { actionLog: new ActionLog({ path, root: dir }) });
+  const h = relayHarness(t, { outcomes: false, actionLog: new ActionLog({ path, root: dir }) });
   await h.call(1, 'let app = await cua.getApp("TextEdit")');
   await h.reply(1, form());
   await h.call(2, 'await app.click(2);');
@@ -339,8 +400,8 @@ test('outcomes stay out of results by default while the log still gets them', as
   assert.equal(JSON.parse(readFileSync(path, 'utf8').trim()).outcome, 'now checked');
 });
 
-test('without either switch the relay sends no outcome mark', async t => {
-  const h = relayHarness(t);
+test('with outcomes disabled and no log the relay sends no outcome mark', async t => {
+  const h = relayHarness(t, { outcomes: false });
   await h.call(1, 'let app = await cua.getApp("TextEdit")');
   await h.reply(1, form());
   await h.call(2, 'await app.click(2);');
@@ -469,6 +530,7 @@ test('a call sleight continues after its stop shows each action once, numbered a
   const text = result.content.map(item => item.text).join('\n');
   assert.match(text, /sleight outcomes:\n1 pressKey "Return": window now \[redacted 5 chars\]/);
   assert.match(text, /sleight outcomes:\n2 pressKey "Tab": no visible change/);
+  assert.match(text, /sleight turn: 2 actions, 2 unverified/);
   assert.doesNotMatch(text, /not run|filtered-read/);
   const rows = readFileSync(path, 'utf8').trim().split('\n').map(line => JSON.parse(line));
   assert.deepEqual(rows.map(row => [row.kind, row.key, row.result, row.outcome]), [['pressKey', 'Return', 'ok', 'window changed'], ['pressKey', 'Tab', 'ok', 'no visible change']]);
@@ -590,13 +652,14 @@ test('with both switches off the guard code is the base build\'s, byte for byte'
   // PL1 changes the serialized list picker and its guard callbacks; the compact reuse payload stays the same.
   // PL1b restricts nested keyboard focus and click provenance. Substituting the original picker reproduces the PL1 pins.
   // PL1c checks direct rows and stops when focus disappears after keys. Restoring the PL1b picker reproduces its pins.
+  // G9 adds completeness fields to the serialized picker. It changes setup bytes even with outcomes disabled.
   assert.deepEqual({
     guarded: hash(guardedCode('await app.click(1);', window)),
     guardedLean: hash(guardedCode('await app.click(1);', window, undefined, undefined, { prompt: 'lean' })),
     reuse: hash(guardedCode('await app.click(1);', window, undefined, undefined, { reuseSetup: true, acknowledge: true })),
     read: hash(readCode('void 0;', { acknowledge: true })),
     repl: hash(replSetupCode()),
-  }, { guarded: '4eb66fd1db72a4ad', guardedLean: 'b5dbbfb32963d94c', reuse: 'b824edb3aa6dc2c4', read: 'd795b7dc97416130', repl: 'd795b7dc97416130' });
+  }, { guarded: '047f36a48d4b8409', guardedLean: '9c9ac3a3e0de9e90', reuse: 'b824edb3aa6dc2c4', read: '099ed16715a4dfc3', repl: '099ed16715a4dfc3' });
 });
 
 test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
@@ -612,8 +675,8 @@ test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
       repl: replSetupCode(),
     };
     assert.deepEqual(Object.fromEntries(Object.entries(codes).map(([key, code]) => [key, hash(code)])), {
-      guarded: '4eb66fd1db72a4ad', guardedLean: 'b5dbbfb32963d94c', reuse: 'b824edb3aa6dc2c4',
-      read: '6eb12798b3f11f15', repl: '6eb12798b3f11f15',
+      guarded: '047f36a48d4b8409', guardedLean: '9c9ac3a3e0de9e90', reuse: 'b824edb3aa6dc2c4',
+      read: '30dfbb814e536fb2', repl: '30dfbb814e536fb2',
     });
     for (const code of Object.values(codes)) assert.doesNotMatch(code, /closedLast|beforeRead|state\.dp1|state\.closeRead|\[sleight:dp1\]/);
   } finally {
@@ -634,7 +697,7 @@ test('the REPL warmup installs the outcome code when a switch is on, so later ca
     const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
     const sent = [];
     serverIn.on('data', data => data.toString().trim().split('\n').forEach(line => sent.push(JSON.parse(line))));
-    const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, warmRepl: true,
+    const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, warmRepl: true, outcomes: false,
       ...(on ? { actionLog: new ActionLog({ path: join(dir, 'warm.jsonl'), root: dir }) } : {}) });
     t.after(() => relay.dispose());
     clientIn.write(JSON.stringify({ jsonrpc: '2.0', id: 0, method: 'initialize', params: { capabilities: {} } }) + '\n');

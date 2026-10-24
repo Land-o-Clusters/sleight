@@ -72,6 +72,30 @@ test('snapshot exports the fixed V3 interface', () => {
   assert.equal(typeof module.snapshot, 'function');
 });
 
+test('every read ends in completeness, including filtered, empty and shortened final rows', async () => {
+  const { page, set } = fixture([{ role: 'button', name: 'Next', ref: 'e1' }]);
+  assert.match((await module.snapshot(page)).text, /# complete \(returned view\)$/);
+  assert.match((await module.snapshot(page, { find: 'absent' })).text, /# complete \(filtered view\)$/);
+  set([{ role: 'text', text: 'x'.repeat(60000) }]);
+  const shortened = await module.snapshot(page, { maxChars: 1000 });
+  assert.match(shortened.text, /# cut at 1000 chars/);
+  assert.doesNotMatch(shortened.text, /# complete/);
+});
+
+test('a shortened row stays incomplete across continuations and can be recovered with a larger cap', async () => {
+  const long = 'recoverable '.repeat(700);
+  const { page } = fixture([{ role: 'text', text: long }, { role: 'button', name: 'End', ref: 'e1' }]);
+  const first = await module.snapshot(page, { maxChars: 1000 });
+  const ref = /Continue with ref="([^"]+)"/.exec(first.text)[1];
+  const end = await module.snapshot(page, { ref, maxChars: 1000 });
+  assert.match(end.text, /"End"/);
+  assert.doesNotMatch(end.text, /# complete/);
+  const retry = /Continue with ref="([^"]+)"/.exec(end.text)[1];
+  const recovered = await module.snapshot(page, { ref: retry, maxChars: 40000 });
+  assert.ok(recovered.text.includes(long));
+  assert.match(recovered.text, /# complete \(returned view\)$/);
+});
+
 test('snapshot renders compact untrusted YAML with usable iframe refs', async () => {
   const { page } = fixture([{ role: 'main', ref: 'e1', children: [
     { role: 'button', name: 'Next', ref: 'e2', disabled: true },

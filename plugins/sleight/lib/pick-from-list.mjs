@@ -20,8 +20,12 @@ export async function pickFromList(tab, list, text, opts = {}) {
           selected: option.selected === true || option.getAttribute('aria-selected') === 'true',
           visible: rect.width > 0 && rect.height > 0 && rect.y < bottom && rect.y + rect.height > top && rect.x < right && rect.x + rect.width > left };
       });
+      const declared = el.getAttribute('aria-setsize') ?? el.getAttribute('aria-rowcount') ??
+        el.querySelector('[aria-setsize]')?.getAttribute('aria-setsize');
+      const total = declared !== null && /^\d+$/.test(declared) ? Number(declared) : null;
       return { position: el.scrollTop, max: Math.max(0, el.scrollHeight - el.clientHeight), height: el.clientHeight,
         viewport: root.clientHeight, point: [(left + right) / 2, (top + bottom) / 2], inView: right > left && bottom > top,
+        total: Number.isSafeInteger(total) ? total : null, rendered: rows.length,
         rows: rows.filter(row => row.visible).slice(0, 200), selected: rows.filter(row => row.selected).map(row => row.text) };
     }, undefined, options);
   };
@@ -31,8 +35,11 @@ export async function pickFromList(tab, list, text, opts = {}) {
     state = await read();
   }
   const remember = () => { for (const row of state.rows) if (seen.size < 50) seen.add(row.text.slice(0, 200)); };
+  const completeness = () => Number.isSafeInteger(state.total) && Number.isSafeInteger(state.rendered) && state.total >= state.rendered
+    ? Math.max(0, state.total - state.rendered) + ' rows not rendered (page-declared total)'
+    : 'row total unknown';
   const fail = note => ({ found: false, verified: false, matched: null, selected: state.selected, position: state.position,
-    scrolls, seen: [...seen], note: 'No option clicked. ' + note });
+    scrolls, seen: [...seen], note: 'No option clicked. ' + note, completeness: completeness() + '; search incomplete' });
   const compare = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
   const order = rows => {
     if (rows.length < 2) return 0;
@@ -59,16 +66,19 @@ export async function pickFromList(tab, list, text, opts = {}) {
     catch (error) {
       return { found: true, verified: null, matched: name, selected: null, position: state.position, scrolls,
         seen: [...seen],
-        note: 'Option click failed. Input may have been sent. Read the page before retrying. ' + String(error.message) };
+        note: 'Option click failed. Input may have been sent. Read the page before retrying. ' + String(error.message),
+        completeness: completeness() + '; selection unverified' };
     }
     try {
       state = await read();
       const verified = state.selected.includes(name);
       return { found: true, verified, matched: name, selected: state.selected,
-        position: state.position, scrolls, ...(verified ? {} : { seen: [...seen], note: 'The option was clicked, but selection was not verified. Read the page before retrying.' }) };
+        position: state.position, scrolls, ...(verified ? {} : { seen: [...seen], note: 'The option was clicked, but selection was not verified. Read the page before retrying.' }),
+        completeness: (verified ? 'complete (selection readback); ' : 'selection unverified; ') + completeness() };
     } catch {
       return { found: true, verified: null, matched: name, selected: null, position: state.position, scrolls,
-        seen: [...seen], note: 'Selection readback failed after the click. Read the page before retrying.' };
+        seen: [...seen], note: 'Selection readback failed after the click. Read the page before retrying.',
+        completeness: completeness() + '; selection unverified' };
     }
   };
   const rel = text => (text === wanted || text.startsWith(wanted + ' ') ? 0 : compare(wanted, text));

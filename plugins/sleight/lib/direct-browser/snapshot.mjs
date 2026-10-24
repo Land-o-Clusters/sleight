@@ -2,6 +2,7 @@ import { assertEndpointRead } from './endpoint-guard.mjs';
 import { closedLocator, keyboardFocusChain } from './closed-handle.mjs';
 import { trustedReadNode } from './trusted-dom.mjs';
 import { readNativeEditContext, retainNativeEditContext, sameNativeEditContext } from './edit-context.mjs';
+import { declaredRows, readCompleteness } from '../read-completeness.mjs';
 // Compact page snapshots for turbo v3, with an independent CR1 closed-root reader.
 const pages = new WeakMap();
 const REF = /^(?:(?:f\d+)?e\d+|[sx]\d+)$/;
@@ -328,7 +329,7 @@ async function closedRoots(page, state) {
         if (v?.clientWidth > 0 && v?.clientHeight > 0) viewport = { width: v.clientWidth, height: v.clientHeight };
       } catch { /* no markers without a size */ }
     }
-    return { frame, secrets, refs, children, viewport };
+    return { frame, secrets, refs, children, viewport, completeness: declaredRows(capture), limited: controls.size > 512 };
   });
   const sections = [], secrets = [], next = new Map();
   secrets.names = new Set(); secrets.unnamed = false;
@@ -342,7 +343,9 @@ async function closedRoots(page, state) {
   const current = new Set([...next.values()].flatMap(refs => [...refs.values()]));
   for (const ref of state.deliveredClosed) if (!current.has(ref)) state.deliveredClosed.delete(ref);
   state.closed = next;
-  return { sections, secrets, viewport: results.find(result => result.viewport)?.viewport ?? null };
+  return { sections, secrets, viewport: results.find(result => result.viewport)?.viewport ?? null,
+    completeness: { omitted: results.reduce((n, r) => n + r.completeness.omitted, 0),
+      unknown: results.some(r => r.completeness.unknown || r.limited) } };
 }
 
 // V4/V5 can resolve an s ref into an owned frame's CDP backend node. Only refs
@@ -506,10 +509,10 @@ function changes(rows, baseline) {
       line: `# Removed from this view: ${row.ref ? '[ref=' + row.ref + ']' : 'text row'}`, marker: '- ', removed: row.key }))];
 }
 
-function cap(rows, offset, header, maxChars, continuation) {
-  const footer = `# Cut: more rows omitted. Continue with ref="${continuation}".`;
+function cap(rows, offset, header, maxChars, continuation, completeness) {
+  const footer = '# ' + readCompleteness({ cut: maxChars, ref: continuation, ...completeness });
   const lines = [header], delivered = [];
-  let size = header.length, next = offset;
+  let size = header.length, next = offset, shortenedRows = 0, shortenedAt;
   const context = offset ? ancestors(rows.filter(row => !row.removed), new Set([rows[offset]?.key])).filter(row => row.key !== rows[offset]?.key) : [];
   const keptContext = [];
   let contextSize = 0;
@@ -530,6 +533,8 @@ function cap(rows, offset, header, maxChars, continuation) {
       line = prefix + `- ${role}${/^x\d+$/.test(row.ref) ? ' [keyboard-only]' : ''}${row.ref ? ' [ref=' + row.ref + ']' : ''}: `
         + JSON.stringify('[line shortened; read with max_chars: 40000 or the engine browser path]');
       shortened = true;
+      shortenedRows++;
+      shortenedAt ??= next;
     }
     lines.push(line); size += line.length + 1;
     delivered.push(shortened ? { ...row, line: line.slice(prefix.length) } : row);
@@ -537,7 +542,9 @@ function cap(rows, offset, header, maxChars, continuation) {
     if (shortened) break;
   }
   if (next < rows.length) lines.push(footer);
-  return { text: lines.join('\n'), delivered, next };
+  else if (shortenedRows) lines.push(`# cut at ${maxChars} chars; ${shortenedRows} row shortened (max_chars: 40000 maximum).`);
+  else lines.push('# ' + readCompleteness(completeness));
+  return { text: lines.join('\n'), delivered, next, shortenedAt };
 }
 
 export async function snapshot(page, { ref, find, maxChars = 8000, since } = {}) {
@@ -583,8 +590,18 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since } = {})
     const number = ++state.number;
     const token = `more${number}_${continuation?.offset ?? 0}`;
     const header = `# ${delta ? 'Changes since snapshot ' + (continuation?.since ?? since) + '; snapshot' : 'Snapshot'} ${number} (untrusted page content)`;
-    const result = cap(candidates, continuation?.offset ?? 0, header, maxChars, token);
-    if (!candidates.length) result.text += delta ? '\n# No visible changes.' : '\n# No matching content.';
+    const result = cap(candidates, continuation?.offset ?? 0,
+      header + (!candidates.length ? delta ? '\n# No visible changes.' : '\n# No matching content.' : ''),
+      maxChars, token, { ...closed.completeness, filtered: Boolean(ref && !MORE.test(ref) || find !== undefined) });
+    const shortenedAt = continuation?.shortenedAt ?? result.shortenedAt;
+    const retry = result.next === candidates.length && shortenedAt !== undefined && maxChars < 40000;
+    const nextOffset = retry ? shortenedAt : result.next;
+    const nextToken = retry ? `more${number}_${shortenedAt}` : token;
+    if (retry || shortenedAt !== undefined && result.next === candidates.length) {
+      const footer = retry ? '# ' + readCompleteness({ cut: maxChars, ref: nextToken, ...closed.completeness }) + ' Retry shortened text with max_chars: 40000.'
+        : '# cut at 40000 chars; shortened text exceeds the cap. Use the engine browser path for that text.';
+      result.text = result.text.slice(0, result.text.lastIndexOf('\n')) + '\n' + footer;
+    }
     const delivered = new Map(delta || continuation ? baseline?.rows?.map(row => [row.key, row]) : []);
     for (const row of result.delivered) {
       if (row.removed) delivered.delete(row.removed);
@@ -601,8 +618,9 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since } = {})
     const keyboardReceipt = new Map([...printedKeyboard].map(known => [known, { record: state.keyboard.get(known), epoch: state.keyboard.get(known)?.deliveryEpoch }]));
     state.pending.set(number, { generation, refs: result.delivered.filter(row => row.ref && !row.removed).map(row => row.ref), keyboard: keyboardReceipt });
     state.history.set(number, history);
-    if (result.next < candidates.length) state.continuations.set(token, { source: JSON.stringify(rows), scope, selected,
-      candidates, baseline: history, delta, since: continuation?.since ?? since, offset: result.next });
+    if (nextOffset < candidates.length) state.continuations.set(nextToken, { source: JSON.stringify(rows), scope, selected,
+      candidates, baseline: history, delta, since: continuation?.since ?? since, offset: nextOffset,
+      ...(!retry && shortenedAt !== undefined ? { shortenedAt } : {}) });
     if (continuation) state.continuations.delete(ref);
     for (const map of [state.history, state.continuations, state.pending]) while (map.size > 8) map.delete(map.keys().next().value);
     await assertEndpointRead(page);
