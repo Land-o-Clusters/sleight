@@ -7,6 +7,8 @@ import { fileArgument, outcomeOf, resultEntries } from './replay'
 import type { ReplayScript } from './replay'
 import { preapprovedWriteDenied, loggingSwitchWriteDenied } from './preapproved-write-guard.mjs'
 import { shellLaunchDenied, shellGuardReason } from './shell-guard.mjs'
+import { costSnapshot, statsFromReply, turnSummary, turnStatsText } from './turn-stats.mjs'
+import type { TurnSummary } from './turn-stats.mjs'
 
 // The server's own name in plugin.json; the session lists it as
 // plugin:sleight:computer, and its tools as mcp__plugin_sleight_computer__*.
@@ -28,6 +30,17 @@ let replayActive = false
 let replayCancelled = false
 let replaySequence = 0
 const receipt = atom({ plugin: 'sleight', key: 'receipt' } as const, null as { path?: string; review?: string; unavailable?: boolean } | null)
+const stats = atom({ plugin: 'sleight', key: 'stats' } as const, null as TurnSummary | null)
+type StatsTurn = { id: string; used: boolean; forwarded: number; baseline?: Awaited<ReturnType<typeof hostCost>>; stoppedStats: ReturnType<typeof statsFromReply>; stopping?: Promise<string | undefined> }
+let statsTurn: StatsTurn | undefined
+let latestStatsOwner: StatsTurn | undefined
+async function hostCost($: any) {
+  try { return costSnapshot(await $.session.usage()) } catch { return null }
+}
+
+async function storeStats($: any, summary: TurnSummary, owner?: StatsTurn) {
+  await update($, stats, () => { latestStatsOwner = owner; return summary })
+}
 
 // Not drawn from, so plain module variables (a reload resets them, harmlessly).
 let usedThisTurn = false
@@ -215,9 +228,11 @@ async function replayCurrent($: any, file: string) {
 
 // Tells the engine the turn is over so it releases what it holds, as Codex
 // does at the end of each turn. The relay fills in the session and turn ids.
-async function endEngineTurn($: any, event: 'Stop' | 'Interrupt', checked = false) {
+async function endEngineTurn($: any, event: 'Stop' | 'Interrupt', checked = false, completed?: TurnSummary, owner?: StatsTurn) {
   try {
-    const ended = await call($, 'turn_ended', { hook_event_name: event, ...(checked ? { sleight_stop: true } : {}) })
+    const ended = await call($, 'turn_ended', { hook_event_name: event, ...(checked ? { sleight_stop: true } : {}), ...(owner?.used && (completed || checked) ? { sleight_stats: owner.id } : {}) })
+    if (checked && owner) owner.stoppedStats = statsFromReply(ended)
+    if (completed) await storeStats($, { ...completed, stats: statsFromReply(ended) }, owner)
     let latest = (ended as { _meta?: { 'sleight/receipt'?: { path?: string; review?: string; unavailable?: boolean } } })._meta?.['sleight/receipt']
     // The installed host's $.mcp.call keeps content but drops _meta. The relay supplies JSON
     // in one fixed marker so paths with spaces and multi-line reviews don't need a prose parser.
@@ -246,9 +261,18 @@ async function endEngineTurn($: any, event: 'Stop' | 'Interrupt', checked = fals
         .find((text: string) => text.startsWith('sleight stop:')) ?? 'sleight stop unconfirmed: the engine returned no checked receipt.'
     }
   } catch (err) {
+    if (completed) await storeStats($, completed, owner)
     $.ui.log(`sleight: could not end the turn: ${(err as Error).message}`, { to: 'debug' })
     if (checked) return `sleight stop unconfirmed: ${(err as Error).message}`
   }
+}
+
+function stopEngineTurn($: any) {
+  const owner = statsTurn
+  if (owner) owner.stoppedStats = null
+  const pending = endEngineTurn($, 'Interrupt', true, undefined, owner)
+  if (owner) owner.stopping = pending
+  return pending
 }
 
 async function snapshot($: any, app: string) {
@@ -257,7 +281,7 @@ async function snapshot($: any, app: string) {
     // Leave rows for the status, controls, file input, "Actions" and three log lines.
     const code = snapshotCode(app, Math.max(8, paneColumns - 2), Math.max(4, paneRows - 9), paneSurface === 'terminal')
     snapshotInFlight = code
-    const result = await call($, 'js', { code, title: 'sleight pane snapshot' }).finally(() => { snapshotInFlight = undefined })
+    const result = await call($, 'js', { code, title: 'sleight pane snapshot', sleight_stats: { internal: true } }).finally(() => { snapshotInFlight = undefined })
     const text = result.content.map((block: { text?: string }) => block.text ?? '').join('\n')
     const line = text.split('\n').find((l: string) => l.startsWith(FRAME_MARKER))
     if (result.isError || !line) {
@@ -317,8 +341,8 @@ export const register: Register = on => {
     turboEnvelope = undefined
     await $.command.register({
       name: 'sleight',
-      description: 'Open the sleight pane; replay a JSON file, record this session, or stop computer use',
-      argumentHint: '[replay <file> | record [file] | stop | prompt]',
+      description: 'Open the sleight pane; show turn stats, replay, record, or stop computer use',
+      argumentHint: '[stats | replay <file> | record [file] | stop | prompt]',
       immediate: true,
     })
     return next(e)
@@ -347,10 +371,36 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     turnRunning = true
+    // Older host captures omit agentId from turn.start's type, as with prompt.submit above.
+    if ((e as { agentId?: string }).agentId !== undefined) return next(e)
+    const owner: StatsTurn = { id: e.turnId, used: false, forwarded: 0, stoppedStats: null }
+    statsTurn = owner
+    // Never hold up a turn for the ledger, including turns that never use sleight.
+    // Capture the owner so an older read cannot overwrite a newer turn's baseline.
+    void hostCost($).then(cost => { owner.baseline = cost })
     return next(e)
   })
 
+  // A private argument, removed by the relay before forwarding. Subagents are outside
+  // these main-loop counters, even when an old child calls during a later turn.
+  const counted = <T extends { agentId?: string }>(e: T, owner: StatsTurn | undefined) => {
+    if (e.agentId !== undefined || !owner) return { ...e, sleight_stats: { internal: true } }
+    return { ...e, sleight_stats: { turn: owner.id } }
+  }
+
+  const forward = async <T extends { agentId?: string }, R>(e: T, owner: StatsTurn | undefined, next: (event: T) => Promise<R>) => {
+    const main = e.agentId === undefined ? owner : undefined
+    // A call may be interrupted before next returns. Stop must collect it already.
+    if (main) { main.forwarded++; main.used = true }
+    const ran = await next(counted(e, owner))
+    // An explicit denial did not reach the engine. Other pending or completed calls
+    // still own stats; thrown calls may have sent input and retain their counters.
+    if (main && (ran as { deny?: unknown }).deny !== undefined) main.used = --main.forwarded > 0
+    return ran
+  }
+
   on('tool.call', { tool: JS_TOOL }, async ($, e, next) => {
+    const owner = statsTurn
     if (next.origin?.plugin === 'sleight') return next(e)
     if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     if (await read($, stopped)) {
@@ -366,7 +416,7 @@ export const register: Register = on => {
       at: now(),
     }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await next(e)
+    const ran = await forward(e, owner, next)
     const app = appFrom(code, ran.text)
     if (app) lastApp = app
     actions++
@@ -379,24 +429,26 @@ export const register: Register = on => {
   // The host's tool-name union comes from its last saved capture, which here
   // predates the replay tool, so the filter's name reads through a widening.
   on('tool.call', { tool: REPLAY_TOOL as never }, async ($, e, next) => {
+    const owner = statsTurn
     if (next.origin?.plugin === 'sleight') return next(e)
     if (await read($, stopped)) return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
     if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     usedThisTurn = true
-    return next(e)
+    return forward(e, owner, next)
   })
 
   // Compact browser verbs are session work too. The fixed completion hook must
   // fence turbo even when the turn never called native JS. Log only the verb,
   // keeping field values and page content out of the pane's action history.
   for (const name of BROWSER_TOOLS) on('tool.call', { tool: `mcp__plugin_sleight_computer__${name}` as never }, async ($, e, next) => {
+    const owner = statsTurn
     if (next.origin?.plugin === 'sleight') return next(e)
     if (await read($, stopped)) return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
     if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     usedThisTurn = true
     const entry: LogEntry = { id: e.tool_use_id, title: name, status: 'running', at: now() }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await next(e)
+    const ran = await forward(e, owner, next)
     actions++
     const status: LogEntry['status'] = ran.deny !== undefined ? 'refused' : ran.isError ? 'error' : 'done'
     await update($, log, list => list.map(one => one.id === entry.id ? { ...one, status } : one))
@@ -415,13 +467,32 @@ export const register: Register = on => {
     } finally {
       if (e.agentId === undefined) {
         turnRunning = false
+        // Stats ownership cannot gate engine cleanup, including mid-turn mod loads.
         const needsEnd = usedThisTurn || turboTurnBound
         usedThisTurn = false
         turboTurnBound = false
-        if (needsEnd) {
-          // Refresh the pane while the engine turn is still open, then end it.
-          if (lastApp && !e.isAborted && (await isPaneOpen($))) await snapshot($, lastApp)
-          await endEngineTurn($, e.isAborted ? 'Interrupt' : 'Stop')
+        const owner = statsTurn?.id === e.turnId ? statsTurn : undefined
+        if (owner) statsTurn = undefined
+        if (needsEnd || owner?.used) {
+          const baseline = owner?.baseline
+          const completed = owner?.used ? turnSummary(e, null) : undefined
+          if (!needsEnd) {
+            await owner?.stopping
+            if (completed) await storeStats($, { ...completed, stats: owner?.stoppedStats ?? null }, owner)
+          } else {
+            // Refresh the pane while the engine turn is still open, then end it.
+            if (lastApp && !e.isAborted && (await isPaneOpen($))) await snapshot($, lastApp)
+            await endEngineTurn($, e.isAborted ? 'Interrupt' : 'Stop', false, completed, owner)
+          }
+          // Usage is optional and can hang. Cleanup and the summary never wait for it.
+          if (completed && owner) {
+            void hostCost($).then(async cost => {
+              if (!cost) return
+              const final = turnSummary(e, cost, baseline)
+              await update($, stats, latest => latest && latestStatsOwner === owner
+                ? { ...latest, costUsd: final.costUsd, costDeltaUsd: final.costDeltaUsd } : latest)
+            }).catch(() => undefined)
+          }
         }
       }
     }
@@ -429,13 +500,14 @@ export const register: Register = on => {
 
   on('command.run', { command: 'sleight' }, async ($, e) => {
     const args = e.args.trim()
+    if (args === 'stats') return { text: turnStatsText(await read($, stats)) }
     if (args === 'record' || args.startsWith('record ')) return recordCurrent($, args.slice(6).trim() || undefined)
     if (e.args.trim() === 'stop') {
       if (replayActive) replayCancelled = true
       await update($, stopped, () => true)
       usedThisTurn = false
       turboTurnBound = false
-      const receipt = await endEngineTurn($, 'Interrupt', true)
+      const receipt = await stopEngineTurn($)
       $.ui.status('sleight · stopped')
       // The interrupted call usually ends Claude's turn at once (desktop app, 2026-10-11), so Esc
       // is only for a turn that goes on without sleight.
@@ -470,7 +542,7 @@ export const register: Register = on => {
     // log out of view.
     paneRows = Math.max(10, Math.min(40, e.props.scroll?.bodyRows ?? Math.floor((e.viewport?.rows ?? 30) / 2)))
 
-    const [entries, shot, status, isStopped, file, isReplaying, latest] = await Promise.all([read($, log), read($, frame), read($, view), read($, stopped), read($, replayFile), read($, replaying), read($, receipt)])
+    const [entries, shot, status, isStopped, file, isReplaying, latest, latestStats] = await Promise.all([read($, log), read($, frame), read($, view), read($, stopped), read($, replayFile), read($, replaying), read($, receipt), read($, stats)])
 
     const picture = (() => {
       if (!shot) return <Text dimColor>No picture yet. It appears after Claude uses an app, or press Refresh.</Text>
@@ -526,7 +598,7 @@ export const register: Register = on => {
               if (replayActive) replayCancelled = true
               void update($, stopped, () => true)
               usedThisTurn = false
-              void endEngineTurn($, 'Interrupt', true).then(receipt => $.ui.toast(receipt ?? 'sleight stop unconfirmed'))
+              void stopEngineTurn($).then(receipt => $.ui.toast(receipt ?? 'sleight stop unconfirmed'))
               $.ui.status('sleight · stopped')
             }}
           />
@@ -549,6 +621,7 @@ export const register: Register = on => {
         {latest?.path?.startsWith('/') && <Text>Latest receipt: {latest.path}</Text>}
         {latest?.unavailable && <Text>Receipt unavailable; the private file could not be written.</Text>}
         {latest?.review && <Text>{latest.review}</Text>}
+        {latestStats && <Text>{turnStatsText(latestStats)}</Text>}
         <Text bold>Actions</Text>
         {entries.length === 0 && <Text dimColor>None yet.</Text>}
         {/* Newest first, so the latest action stays visible however short the pane is. */}

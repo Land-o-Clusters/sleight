@@ -277,9 +277,66 @@ function codeOnly(code) {
   }
   return out;
 }
+// These names collide with ordinary collection methods. Accept only a direct acquired handle
+// or element lookup, never an arbitrary receiver. This is a code-site estimate, not JS evaluation.
+const ELEMENT_VERBS = new Set(['fill', 'type', 'check', 'press']);
+const ELEMENT_LOOKUPS = new Set(['getByRole', 'getByText', 'getByLabel', 'getByPlaceholder', 'getByTestId', 'locator', 'frameLocator', 'getElement']);
+function receiverBefore(source, end) {
+  const parts = [];
+  let i = end;
+  for (;;) {
+    while (i > 0 && /\s/.test(source[i - 1])) i--;
+    let call = false;
+    if (source[i - 1] === ')') {
+      call = true;
+      let depth = 1; i--;
+      while (i > 0 && depth) { const c = source[--i]; if (c === ')') depth++; else if (c === '(') depth--; }
+      if (depth) return;
+      while (i > 0 && /\s/.test(source[i - 1])) i--;
+    }
+    const end = i;
+    while (i > 0 && /[\w$]/.test(source[i - 1])) i--;
+    const name = source.slice(i, end);
+    if (!/^[A-Za-z_$][\w$]*$/.test(name)) return;
+    parts.unshift(name + (call ? '()' : ''));
+    while (i > 0 && /\s/.test(source[i - 1])) i--;
+    if (source[i - 1] !== '.') return { parts, start: i };
+    i--;
+  }
+}
+function engineReceiver(parts, handles) {
+  if (!parts) return false;
+  let bound = handles.has(parts[0]);
+  for (let i = 1; i < parts.length; i++) {
+    const part = parts[i], method = part.endsWith('()') ? part.slice(0, -2) : '';
+    if (i === 1 && parts[0] === 'cua' && ['getApp', 'getTab', 'createBrowserTab'].includes(method)) bound = true;
+    else if (ELEMENT_LOOKUPS.has(method)) bound = true;
+    else if (!(bound && (part === 'playwright' || ['first', 'last', 'nth', 'filter', 'frameLocator'].includes(method)))) return false;
+  }
+  return bound;
+}
 export function browserActionCount(code) {
   if (typeof code !== 'string' || code.length > 200000) return 0;
-  return Math.min(100, [...codeOnly(code).matchAll(BROWSER_ACTIONS)].length);
+  const source = codeOnly(code), handles = new Set();
+  // Walk assignments and calls in source order so replacing a handle with an array revokes the hint.
+  const events = [...source.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)\s*=(?!=|>)\s*/g)].map(m => ({ at: m.index, binding: m }));
+  for (const m of source.matchAll(BROWSER_ACTIONS)) events.push({ at: m.index, action: m });
+  let actions = 0;
+  for (const event of events.sort((a, b) => a.at - b.at)) {
+    if (event.binding) {
+      const m = event.binding, start = m.index + m[0].length;
+      const stop = source.indexOf(';', start), rhs = source.slice(start, stop < 0 ? source.length : stop).trim().replace(/^await\s+/, '');
+      const receiver = receiverBefore(rhs, rhs.length);
+      // A bare alias is deliberately left unknown, as are array and object expressions.
+      if (receiver && receiver.start === 0 && receiver.parts.length > 1 && engineReceiver(receiver.parts, handles)) handles.add(m[1]);
+      else handles.delete(m[1]);
+    } else {
+      const m = event.action, method = m[0].match(/[A-Za-z]+/)[0];
+      if (!ELEMENT_VERBS.has(method) || engineReceiver(receiverBefore(source, m.index)?.parts, handles)) actions++;
+      if (actions >= 100) return 100;
+    }
+  }
+  return Math.min(100, actions);
 }
 
 // A turbo step's outcome as a category: the outcome text quotes addresses and dialogs from the page.
@@ -420,6 +477,7 @@ export class ActionLog {
     if (rows.length && call.saved) rows[0] = { ...rows[0], saved: call.saved };
     const pid = Number.isSafeInteger(this.pid) ? { pid: this.pid } : {};
     this.write(rows.map(row => ({ ...row, ...(ms === undefined ? {} : { ms }), ...pid })));
+    return { ms, rows };
   }
   turbo(call, text, error, base, refused) {
     const { args } = call;

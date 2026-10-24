@@ -117,3 +117,18 @@ test('drag endpoint schemas survive clients that drop schema alternatives', t =>
     assert.match(drag.description, /focused text area/);
   }
 });
+
+test('the mod catalog accepts its private stats tags without relaxing ordinary argument schemas', t => {
+  const tools = listed(t);
+  for (const name of ['browser_open', 'browser_read', 'browser_act', 'browser_fill']) {
+    const schema = tools.find(tool => tool.name === name).inputSchema;
+    const args = { sleight_stats: { turn: 'host-turn' } };
+    const unknown = Object.keys(args).filter(key => !Object.hasOwn(schema.properties, key));
+    assert.deepEqual(unknown, [], `${name} rejects the mod's rewritten call`);
+    assert.equal(schema.properties.sleight_stats.type, 'object');
+    assert.equal(schema.additionalProperties, false);
+    assert.ok(!schema.required.includes('sleight_stats'));
+  }
+  const nonMod = listed(t, { modHost: () => false });
+  assert.equal(nonMod.find(tool => tool.name === 'browser_read').inputSchema.properties.sleight_stats, undefined);
+});
