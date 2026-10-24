@@ -28,7 +28,6 @@ function watchReader(f, commands = []) {
     return readWatch(spec, previous, {
       ...policy, readConfig: () => config, acceptPackage: () => ({ current: () => true }), prepareHelpers: async () => ({ status: 'ready', receipt: {} }),
       permissions: { app: () => false, site: () => false },
-      createUi: () => { throw Error('watch must not create UI'); },
       selectConnection: async () => ({ selectedBrowser: 'fixturebrowser', browserIncarnation: 'fixtureincarnation',
         endpoint: 'ws://127.0.0.1:1/devtools/browser/fixture', connect: async () => session, verifyConnection: async () => true,
         disconnect: async () => { for (const child of routed.values()) await child.detach(); await root.detach(); return true; } }),
@@ -140,4 +139,49 @@ test('an embedded origin that was not marked public refuses before matching', { 
   const commands = [];
   await assert.rejects(watchReader(f, commands)(query, undefined, { publicOrigin: new URL(query.url).origin }), /WATCH_PUBLIC_HOST_REQUIRED/);
   assert.ok(!commands.includes('Accessibility.getFullAXTree'));
+});
+
+test('a watch rebinds an existing replacement page, with ambiguity and protection checks intact', { skip, timeout: 60000 }, async t => {
+  const f = await fixture(t, '<h1>Waiting</h1>');
+  const query = { sleightWatch: 1, url: f.entry.page.url(), find: 'shipped' };
+  const home = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-watch-rebind-'))));
+  const store = new WatchStore({ home, read: watchReader(f), boot: () => 'boot1', confirm: async () => true,
+    launchctl: async () => {}, notify: async () => {} });
+  const plan = await store.add(query, '1m');
+  const binding = () => JSON.parse(readFileSync(join(plan.directory, 'state.json'))).binding;
+  const original = binding();
+  await f.entry.page.close();
+  f.entry.page = await f.context.newPage(); await f.entry.page.goto(query.url);
+  assert.equal((await store.run(plan.id, { scheduled: true })).ok, true);
+  assert.notEqual(binding().target, original.target);
+  const replacement = binding();
+  const duplicate = await f.context.newPage(); await duplicate.goto(query.url);
+  assert.equal((await store.run(plan.id, { scheduled: true })).missingTabs, 1);
+  assert.deepEqual(binding(), replacement);
+  await duplicate.close();
+  assert.equal((await store.run(plan.id, { scheduled: true })).ok, true);
+  await f.entry.page.close();
+  f.entry.page = await f.context.newPage(); await f.entry.page.goto(query.url);
+  await f.entry.page.evaluate(() => { document.body.innerHTML = '<h1>Shipped</h1><input type="password">'; });
+  assert.equal((await store.run(plan.id, { scheduled: true })).error, 'WATCH_PROTECTED_FIELDS');
+  assert.deepEqual(binding(), replacement);
+  t.diagnostic('Replacement tab rebinds only at the exact public URL; duplicates count as missing, protected replacements refuse and preserve the baseline.');
+});
+
+test('real-page flaps return to the announced condition without another hourly notice', { skip, timeout: 60000 }, async t => {
+  const f = await fixture(t, '<h1>Waiting</h1>');
+  const query = { sleightWatch: 1, url: f.entry.page.url(), find: 'shipped' };
+  const home = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-watch-flap-'))));
+  const notices = []; let at = Date.now();
+  const store = new WatchStore({ home, read: watchReader(f), now: () => at, boot: () => 'boot1', confirm: async () => true,
+    launchctl: async () => {}, notify: async value => notices.push(value) });
+  const plan = await store.add(query, '1m');
+  for (const text of ['Shipped', 'Waiting', 'Shipped']) {
+    await f.entry.page.evaluate(text => { document.querySelector('h1').textContent = text; }, text);
+    assert.equal((await store.run(plan.id, { scheduled: true })).ok, true);
+  }
+  at += 3600000;
+  await store.run(plan.id, { scheduled: true });
+  assert.equal(notices.length, 1);
+  assert.equal(JSON.parse(readFileSync(join(plan.directory, 'state.json'))).pending, null);
 });

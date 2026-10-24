@@ -8,7 +8,7 @@ import { transcriptPath } from './replay.mjs';
 import { terminalConfirm } from './terminal-confirm.mjs';
 import { randomUUID } from 'node:crypto';
 import { processStartTime } from './routine-lock.mjs';
-import { claimWatchNotice, queueWatchNotice } from './routine-launcher.mjs';
+import { claimWatchNotice, queueWatchNotice, retireWatch, sweepRetiredWatches, withWatchLifecycle } from './routine-launcher.mjs';
 
 export function watchPlan(query, every, options = {}) {
   return schedulePlan(watchQuery(query), every, { ...options, kind: 'watch' });
@@ -60,14 +60,23 @@ export class WatchStore extends RoutineStore {
     const lock = this.lock(this.root, 'install');
     if (!lock) throw Error('watch install busy; try again after the other installer finishes');
     try {
-      if (existsSync(this.retirementPath(plan.id))) throw Error('watch removal is unconfirmed; use run-now to retry bootout before reinstalling');
-      const retiring = readdirSync(this.root).filter(file => /^\.retiring-[a-f0-9]{20}\.json$/.test(file)).length;
-      if (this.list().length + retiring >= 5) throw Error('watch limit is 5; remove an installed watch first');
-      return await super.install(plan, query, options);
+      await this.sweep();
+      return await withWatchLifecycle(this.home, plan.id, async () => {
+        if (existsSync(this.retirementPath(plan.id))) throw Error('watch removal is unconfirmed; use run-now to retry bootout before reinstalling');
+        this.checkCapacity();
+        return super.install(plan, query, options);
+      });
     } finally { lock.release(); }
   }
+  checkCapacity() {
+    if (this.list().filter(row => !row.corrupt && !row.retired).length >= 5)
+      throw Error('watch limit is 5; remove an installed watch first');
+  }
+  sweep() { return sweepRetiredWatches(this); }
   async add(query, every, { print = () => {}, expires = '7d' } = {}) {
     intervalSeconds(expires);
+    await this.sweep();
+    this.checkCapacity();
     const existed = existsSync(ordinary(this.plan(query, every).directory));
     const plan = await super.add(query, every, { expires, print: text => print(
       `Read-only watch of ${JSON.stringify(query.url)}; find ${JSON.stringify(query.find)}.\n` +
@@ -82,11 +91,32 @@ export class WatchStore extends RoutineStore {
     }
     return plan;
   }
-  listings() {
-    return this.list().map(({ id, seconds, paused, script, created, expires }) => ({ id, seconds, paused,
+  list(id) {
+    if (id !== undefined) return [this.load(id)];
+    ordinary(this.root);
+    if (!existsSync(this.root)) return [];
+    return readdirSync(this.root).flatMap(file => {
+      const retired = /^\.retiring-([a-f0-9]{20})\.json$/.exec(file)?.[1];
+      if (retired) {
+        let error;
+        try { error = readJSON(this.retirementPath(retired))?.error; } catch { /* Still show and sweep damaged records. */ }
+        error = /^WATCH_[A-Z_]+$/.test(error) ? error : 'WATCH_REMOVED';
+        return [{ id: retired, retired: true, status: `retired (${error})` }];
+      }
+      if (!/^[a-f0-9]{20}$/.test(file) || existsSync(this.retirementPath(file))) return [];
+      try { return [this.load(file)]; }
+      catch { return [{ id: file, corrupt: true, status: 'corrupt' }]; }
+    });
+  }
+  async listings() {
+    const rows = this.list().map(({ id, seconds, paused, script, created, expires, corrupt, retired, status }) =>
+      corrupt || retired ? { id, status } : ({ id, seconds, paused,
       origin: new URL(script.url).origin, find: script.find,
       ageSeconds: isoTime(created) ? Math.max(0, Math.floor((this.now() - Date.parse(created)) / 1000)) : null,
       expires: isoTime(expires) ? expires : null }));
+    // Report the retirement reason once even when this list request completes the sweep.
+    await this.sweep();
+    return rows;
   }
   async notice(id, error) {
     const directory = this.paths(id).directory, pending = ordinary(join(directory, 'notice-pending.json'));
@@ -103,30 +133,11 @@ export class WatchStore extends RoutineStore {
   }
   retirementPath(id) { return ordinary(join(this.root, `.retiring-${this.paths(id).id}.json`)); }
   async retire(id, result) {
-    const paths = this.paths(id);
-    // bootout can terminate its own scheduled process. Persist the receipt and remove disk
-    // installation first. The tombstone blocks reinstallation until bootout is confirmed.
-    const pending = { ok: false, error: /^WATCH_[A-Z_]+$/.test(result.error) ? result.error : 'WATCH_REMOVED',
-      ...(Number.isSafeInteger(result.missingTabs) && result.missingTabs > 0 ? { missingTabs: result.missingTabs } : {}) };
-    save(this.retirementPath(id), pending);
-    await this.receipt(id, { ...pending, installationRemoved: false, bootout: 'pending' });
-    rmSync(ordinary(paths.plistPath), { force: true });
-    rmSync(ordinary(paths.directory), { recursive: true, force: true });
-    try { await this.launchctl(['bootout', `gui/${process.getuid()}/${paths.label}`]); }
-    catch (error) {
-      if (error.code !== 3) {
-        const unconfirmed = { ok: false, error: 'WATCH_REMOVAL_UNCONFIRMED', installationRemoved: true, removed: false };
-        await this.receipt(id, unconfirmed);
-        return unconfirmed;
-      }
-    }
-    rmSync(this.retirementPath(id), { force: true });
-    const removed = { ...pending, removed: true };
-    await this.receipt(id, removed);
-    return removed;
+    return retireWatch(id, { home: this.home, result, launchctl: this.launchctl, now: this.now,
+      notify: status => this.notify({ id, status }) });
   }
   notes() {
-    return this.list().flatMap(({ id, directory, paused }) => {
+    return this.list().filter(row => !row.corrupt && !row.retired).flatMap(({ id, directory, paused }) => {
       const file = ordinary(join(directory, 'state.json'));
       if (!existsSync(file)) return [];
       const state = readJSON(file);
@@ -137,7 +148,10 @@ export class WatchStore extends RoutineStore {
   async run(id, { scheduled = false } = {}) {
     const paths = this.paths(id), paused = ordinary(join(paths.directory, 'paused.json'));
     const retiring = this.retirementPath(id);
-    if (existsSync(retiring)) return this.retire(id, readJSON(retiring));
+    const wasRetiring = existsSync(retiring);
+    await this.sweep();
+    if (existsSync(retiring)) return { ok: false, error: 'WATCH_REMOVAL_UNCONFIRMED', installationRemoved: true, removed: false };
+    if (wasRetiring) return { ok: false, removed: true };
     if (!existsSync(paths.directory)) return { ok: false, error: 'WATCH_NOT_FOUND' };
     const lock = this.lock(paths.directory, id);
     if (!lock) return { ok: false, busy: true };
@@ -161,24 +175,32 @@ export class WatchStore extends RoutineStore {
         if (before && (typeof before.matched !== 'boolean' || !validBinding(before.binding) ||
             before.pending && (typeof before.pending.matched !== 'boolean' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(before.pending.at))))
           throw Error('WATCH_STATE_INVALID');
-        const observed = await this.read(plan.script, before?.binding, { publicOrigin: plan.publicOrigin });
+        let observed;
+        try { observed = await this.read(plan.script, before?.binding, { publicOrigin: plan.publicOrigin }); }
+        catch (error) {
+          if (error.message !== 'WATCH_TARGET_CHANGED' || error.cleanupUnconfirmed) throw error;
+          // Re-run the complete install-time identity, unique URL, origin and permission checks.
+          observed = await this.read(plan.script, undefined, { publicOrigin: plan.publicOrigin });
+        }
         if (typeof observed?.matched !== 'boolean' || !validBinding(observed.binding)) throw Error('WATCH_READ_INCOMPLETE');
         const changed = before !== undefined && before.matched !== observed.matched;
         const at = new Date(this.now()).toISOString();
-        // Retain a pending change until delivery succeeds. No page text enters notes, logs or notifications.
+        // Coalesce against the last delivered state, so A -> B -> A has no net notice.
+        const announced = typeof before?.announced === 'boolean' ? before.announced : before?.matched ?? observed.matched;
         const state = { matched: observed.matched, binding: observed.binding, at,
-          pending: changed ? { matched: observed.matched, at } : before?.pending ?? null };
+          announced, pending: observed.matched !== announced
+            ? before?.pending?.matched === observed.matched ? before.pending : { matched: observed.matched, at } : null };
         save(statePath, state);
         save(join(plan.directory, 'health.json'), { missingTabs: 0 });
         rmSync(ordinary(join(plan.directory, 'notice-pending.json')), { force: true });
         let notificationError = false;
         if (state.pending) {
-          if (claimWatchNotice(plan.directory, this.now())) {
-            try {
+          try {
+            if (claimWatchNotice(plan.directory, this.now())) {
               await this.notify({ id, status: `Condition changed: ${state.pending.matched ? 'matching' : 'not matching'} main-document accessibility names (${state.pending.at}).` });
-              save(statePath, { ...state, pending: null });
-            } catch { notificationError = true; }
-          }
+              save(statePath, { ...state, announced: observed.matched, pending: null });
+            }
+          } catch { notificationError = true; }
         }
         result = { ok: true, matched: observed.matched, baseline: !before, changed, notificationError };
         rmSync(paused, { force: true });
@@ -187,7 +209,7 @@ export class WatchStore extends RoutineStore {
         result = { ok: false, error: safeError(error), ...(collected ? {} : { cleanupUnconfirmed: true }) };
         const healthPath = ordinary(join(paths.directory, 'health.json'));
         const health = existsSync(healthPath) ? readJSON(healthPath) : {};
-        const missingTabs = result.error === 'WATCH_NEEDS_ONE_EXISTING_TAB' && collected
+        const missingTabs = ['WATCH_NEEDS_ONE_EXISTING_TAB', 'WATCH_TARGET_CHANGED'].includes(result.error) && collected
           ? (Number.isSafeInteger(health.missingTabs) && health.missingTabs >= 0 ? health.missingTabs : 0) + 1 : 0;
         save(healthPath, { missingTabs });
         if (missingTabs) result.missingTabs = missingTabs;
@@ -231,7 +253,7 @@ export function recordWatchRead(entries) {
 export async function watchCommand(args, { store = new WatchStore(), print = console.log } = {}) {
   const [operation, value, ...options] = args;
   if (operation === 'list' && !value) {
-    print(JSON.stringify(store.listings(), null, 2)); return 0;
+    print(JSON.stringify(await store.listings(), null, 2)); return 0;
   }
   if (operation === 'notes' && !value) { print(JSON.stringify(store.notes())); return 0; }
   if (['remove', 'unlock'].includes(operation) && value && !options.length) { await store[operation](value, { print }); return 0; }

@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { watchQuery, watchMatch, readWatch } from '../plugins/sleight/lib/watch-read.mjs';
+import { createSelectedConnection } from '../plugins/sleight/lib/direct-browser/selected-connection.mjs';
+import { mkdtempSync, realpathSync, writeFileSync, symlinkSync } from 'node:fs';
+import { hostname, tmpdir } from 'node:os';
+import { join } from 'node:path';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+import { registerTemp } from '../scripts/temp-leftovers.mjs';
 
 const query = { sleightWatch: 1, url: 'https://example.test/ticket', find: 'shipped' };
 const node = (role, name, extra = {}) => ({ nodeId: 'n' + name, role: { value: role }, name: { value: name }, ...extra });
@@ -31,9 +38,8 @@ function fixture(options = {}) {
     async disconnect() { closed = true; calls.push({ method: 'disconnect' }); return options.collected !== false; } };
   const dependencies = { publicOrigin: new URL(query.url).origin, readConfig: () => config, acceptPackage: () => ({ current: () => true }),
     prepareHelpers: async () => ({ status: 'ready', receipt: {} }), selectConnection: async () => selected,
-    createUi: () => ({ present() {}, close() {} }),
     permissions: { app: () => false, site: () => false }, timeoutMs: 20, ...options.dependencies };
-  return { calls, dependencies, target };
+  return { calls, dependencies, target, session };
 }
 
 test('a watch query is a closed HTTP(S) read grammar', () => {
@@ -141,11 +147,53 @@ test('a hung read is bounded and the selected connection is closed', async () =>
   assert.equal(f.calls.at(-1).method, 'disconnect');
 });
 
-test('watch reads have no UI, window, focus, Space or pointer command path', async () => {
-  const f = fixture({ dependencies: { createUi: () => { throw Error('a watch must never create native UI'); } } });
+test('production connection with a fake native helper never presents, activates or spawns UI', async t => {
+  const f = fixture(), forbidden = [], helperCalls = [], sockets = [];
+  const root = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-watch-connection-'))));
+  const executable = join(root, 'browser'); writeFileSync(executable, 'fixture browser', { mode: 0o700 });
+  symlinkSync(hostname() + '-4312', join(root, 'SingletonLock'));
+  writeFileSync(join(root, 'DevToolsActivePort'), '9222\n/devtools/browser/fixture\n', { mode: 0o600 });
+  const config = { profileRoot: root, executable, receipt: {} }, start = Date.now() - 10000;
+  const deny = name => () => { forbidden.push(name); throw Error(`unexpected ${name}`); };
+  for (const method of ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork'])
+    t.mock.method(childProcess, method, deny(method));
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  const helper = {
+    process: async (pid, expected) => {
+      helperCalls.push('process'); assert.equal(pid, 4312); assert.equal(expected, executable);
+      return { pid, uid: process.getuid(), start, incarnation: 'p4312-s123-u456' };
+    }, present: deny('present'), activate: deny('activate'), spawn: deny('helper.spawn'),
+  };
+  class Socket extends EventTarget {
+    readyState = 0;
+    constructor(endpoint) {
+      super(); sockets.push(this); assert.equal(endpoint, 'ws://127.0.0.1:9222/devtools/browser/fixture');
+      queueMicrotask(() => { this.readyState = 1; this.dispatchEvent(new Event('open')); });
+    }
+    async send(text) {
+      const { id, method, params, sessionId } = JSON.parse(text);
+      assert.doesNotMatch(method, /activate|createTarget|bringToFront|Input\./i);
+      const result = await f.session.send(method, params, sessionId);
+      this.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ id, result, ...(sessionId ? { sessionId } : {}) }) }));
+    }
+    close() { this.readyState = 3; this.dispatchEvent(new Event('close')); }
+  }
+  f.dependencies.readConfig = () => config;
+  f.dependencies.timeoutMs = 1000;
+  f.dependencies.prepareHelpers = async () => ({ status: 'ready', receipt: helper });
+  f.dependencies.selectConnection = options => createSelectedConnection({ ...options, testDependencies: {
+    processMetadata: options.nativeReceipt.process, WebSocket: Socket,
+    execFile: async (file, args) => {
+      assert.equal(file, '/usr/sbin/lsof'); assert.deepEqual(args, ['-nP', '-a', '-iTCP:9222', '-sTCP:LISTEN', '-Fpun']);
+      return { stdout: `p4312\nu${process.getuid()}\nf12\nn127.0.0.1:9222\n` };
+    },
+  } });
   assert.equal((await readWatch(query, undefined, f.dependencies)).matched, true);
-  const source = (await import('node:fs')).readFileSync(new URL('../plugins/sleight/lib/watch-read.mjs', import.meta.url), 'utf8');
-  assert.doesNotMatch(source, /createNativeUi|createUi|\.present\(|activate|bringToFront|mouse|pointer|osascript|NSPanel/);
+  assert.ok(helperCalls.length > 2, 'production connect and verify must consult the fake helper');
+  assert.equal(sockets.length, 1); assert.equal(sockets[0].readyState, 3);
+  assert.deepEqual(forbidden, []);
+  assert.deepEqual(f.calls.slice(-1).map(call => call.method), ['Target.detachFromTarget']);
 });
 
 test('only the origin attested public at creation may be read', async () => {
