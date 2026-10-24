@@ -97,6 +97,16 @@ export function createTurnRecording({ current, capture, createFile = recordingFi
   const costs = [], reasons = new Set();
   const valid = () => { try { return !ended && current() === true; } catch { return false; } };
   const close = () => { if (file?.fd !== undefined) { closeSync(file.fd); file.fd = undefined; } };
+  const discard = (emptyOnly = false) => {
+    if (frames || !fileIdentity?.isFile()) return;
+    try {
+      const now = lstatSync(file.path);
+      if (!now.isFile() || now.ino !== fileIdentity.ino || now.dev !== fileIdentity.dev || now.nlink !== 1 || emptyOnly && now.size !== 0) return;
+      unlinkSync(file.path);
+      const dir = join(file.path, '..'), parent = lstatSync(dir);
+      if (parent.isDirectory() && !parent.isSymbolicLink() && parent.ino === dirIdentity?.ino && parent.dev === dirIdentity?.dev) rmdirSync(dir);
+    } catch {}
+  };
   const displayPath = path => path.startsWith(userInfo().homedir + '/') ? '~/' + path.slice(userInfo().homedir.length + 1) : path;
   const warning = () => resumeUnconfirmed ? 'Page script resumption is unconfirmed; further recording frames are blocked for this turn. Browser actions remain available.' : '';
   const note = () => `Recording: ${frames ? `${displayPath(file.path)} (${frames} frames${skipped ? ', ' + skipped + ' skipped' : ''}${limited ? ', cap reached' : ''}${failed ? ', stopped' : ''}).`
@@ -105,7 +115,8 @@ export function createTurnRecording({ current, capture, createFile = recordingFi
       (costs.length ? ' Pixel processing per frame (decode/mask + quantise ms): ' + costs.map(([decode, quantise]) => `${decode.toFixed(1)}+${quantise.toFixed(1)}`).join(', ') + '.' : '');
   const skip = error => {
     skipped++;
-    const reason = { RECORDING_MOTION_UNAVAILABLE: 'animation', RECORDING_SCROLL_UNSETTLED: 'scroll settling', RECORDING_TREE_LIMIT: 'tree size',
+    const reason = { RECORDING_MOTION_UNAVAILABLE: 'animation', RECORDING_SCROLL_UNSETTLED: 'scroll settling', RECORDING_TREE_LIMIT: '50 ms DOM read budget',
+      RECORDING_FIELD_LIMIT: '5,000-element field cap',
       RECORDING_IMAGE_LIMIT: 'image size', RECORDING_VIEWPORT_LIMIT: 'viewport size', RECORDING_OPAQUE_TREE: 'shadow tree',
       RECORDING_TARGET_UNAVAILABLE: 'target unavailable', RECORDING_TIMEOUT: 'timeout' }[String(error?.message).match(/\bRECORDING_[A-Z_]+\b/)?.[0]];
     reasons.add(reason ?? 'capture unavailable');
@@ -132,7 +143,7 @@ export function createTurnRecording({ current, capture, createFile = recordingFi
           file ??= createFile();
           fileIdentity ??= lstatSync(file.path);
           dirIdentity ??= lstatSync(join(file.path, '..'));
-          if (!valid()) { close(); return; }
+          if (!valid()) { close(); discard(true); return; }
           if (fstatSync(file.fd).size !== bytes) throw Error('RECORDING_FILE_CHANGED');
           const block = Buffer.concat([header, frame, Buffer.from([0x3b])]);
           let at = 0, position = frames ? bytes - 1 : 0;
@@ -147,14 +158,7 @@ export function createTurnRecording({ current, capture, createFile = recordingFi
           if (frames >= limits.frames) { limited = true; close(); }
         } catch (error) {
           failed = true; resumeUnconfirmed = error?.message === 'RECORDING_RESUME_UNCONFIRMED'; try { close(); } catch {}
-          if (!frames && fileIdentity?.isFile()) try {
-            const now = lstatSync(file.path);
-            if (now.isFile() && now.ino === fileIdentity.ino && now.dev === fileIdentity.dev && now.nlink === 1) {
-              unlinkSync(file.path);
-              const dir = join(file.path, '..'), parent = lstatSync(dir);
-              if (parent.isDirectory() && !parent.isSymbolicLink() && parent.ino === dirIdentity?.ino && parent.dev === dirIdentity?.dev) rmdirSync(dir);
-            }
-          } catch {}
+          discard();
         }
       });
       queue = task.catch(() => { failed = true; });
@@ -163,6 +167,6 @@ export function createTurnRecording({ current, capture, createFile = recordingFi
     note,
     warning,
     blocked: () => resumeUnconfirmed,
-    end() { ended = true; return queue.finally(async () => { try { close(); } catch {} await pruning; }); },
+    end() { ended = true; return queue.finally(async () => { try { close(); } catch {} discard(true); await pruning; }); },
   });
 }

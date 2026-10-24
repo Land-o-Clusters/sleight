@@ -103,7 +103,8 @@ test('owned viewport capture blacks fields, pixelates other content and restores
   assert.ok(frame.height < 3000, 'viewport only');
   assert.deepEqual(pixel(frame, 1000, 40), [0, 255, 0]);
   for (const i of [0, 1, 2, 3, 4, 7]) assert.deepEqual(pixel(frame, 10, 90 + i * 40), [0, 0, 0], 'masked field ' + i);
-  assert.deepEqual(pixel(frame, 200, 300), [255, 0, 0], 'untargeted opaque content uses coarse pixelation');
+  const opaque = pixel(frame, 200, 300);
+  assert.ok(opaque[0] > 200 && opaque[1] > 0 && opaque[1] < 128 && opaque[2] === opaque[1], 'untargeted opaque content uses coarse pixelation');
   await f.entry.page.evaluate(() => { window.afterRecording = 7; });
   assert.equal(await f.entry.page.evaluate(() => window.afterRecording), 7);
   assert.equal(await f.sentinel.evaluate(() => document.visibilityState), f.before);
@@ -143,7 +144,8 @@ test('production turn grades field pixels in every saved GIF frame, including la
     dependencies: { acknowledgeSnapshot, recording: { createFile: () => ({ path, fd: openSync(path, 'wx', 0o600) }) } } });
   t.after(() => runtime.end());
   const opened = await runtime.call({ name: 'browser_open', arguments: { url: f.entry.page.url() + '?recorded' } });
-  assert.equal(opened.isError, false, opened.text); assert.match(opened.text, /frames are pixelated except the acted-on control/); assert.doesNotMatch(opened.text, /actions.gif/);
+  assert.equal(opened.isError, false, opened.text); assert.match(opened.text, /frames are pixelated/); assert.match(opened.text, /control-sized box/);
+  assert.match(opened.text, /25%/); assert.match(opened.text, /5,000-element field cap and 50 ms/); assert.doesNotMatch(opened.text, /actions.gif/);
   assert.equal(runtime.delivered(opened), true);
   const tab = /^(t[A-Za-z0-9_-]+)/.exec(opened.text)?.[1]; assert.ok(tab, opened.text);
   const read = await runtime.call({ name: 'browser_read', arguments: { tab } });
@@ -192,7 +194,7 @@ test('animation, never-act site, screenshot timeout and tree or viewport caps sk
   t.after(() => { f.context.newCDPSession = attach; });
   await recording.capture(f.entry); captureMode = 'oversized';
   await recording.capture(f.entry); captureMode = 'normal';
-  await f.entry.page.evaluate(() => document.body.insertAdjacentHTML('beforeend', '<span></span>'.repeat(21000)));
+  await f.entry.page.evaluate(() => document.body.insertAdjacentHTML('beforeend', '<input style="display:none">'.repeat(5001)));
   await recording.capture(f.entry);
   await f.entry.page.goto(f.entry.page.url() + '&small-tree');
   await f.entry.page.setViewportSize({ width: 10000, height: 2000 }); await recording.capture(f.entry);

@@ -175,6 +175,21 @@ test('a failed first write removes the empty recording', async t => {
   assert.equal(existsSync(join(files.path, '..')), false);
 });
 
+for (const stop of ['end', 'revoke']) test(`${stop} between create and first write removes the owned empty bank`, async t => {
+  const files = bank(t); let current = true, ending, recorder;
+  recorder = createTurnRecording({ current: () => current, capture: async () => image(), limits,
+    createFile() {
+      const file = files.createFile();
+      if (stop === 'end') ending = recorder.end();
+      else current = false;
+      return file;
+    } });
+  await recorder.capture(entry()); await ending; await recorder.end();
+  assert.equal(files.allocations, 1);
+  assert.equal(existsSync(files.path), false, 'no empty actions.gif survives');
+  assert.equal(existsSync(join(files.path, '..')), false, 'no empty recording directory survives');
+});
+
 test('a recording inside the system home reports a tilde path and per-frame processing times', async t => {
   const home = userInfo().homedir;
   if (!process.cwd().startsWith(home + '/')) return t.skip('checkout is outside the system home');
@@ -329,9 +344,9 @@ test('a utility root acquired after its deadline is disposed after scripts resum
   assert.equal(disposed, 1);
 });
 
-test('two thousand overlapping field masks use bounded pixel painting', { timeout: 6000 }, () => {
+test('five thousand overlapping field masks use bounded pixel painting', { timeout: 6000 }, () => {
   const width = 400, height = 300, frame = { width, height, data: Buffer.alloc(width * height * 4, 255) };
-  const fields = Array.from({ length: 2000 }, () => [0, 0, width, height]);
+  const fields = Array.from({ length: 5000 }, () => [0, 0, width, height]);
   const start = performance.now();
   maskRecordingPixels(frame, { fields, opaque: [] });
   assert.ok(performance.now() - start < 2000, 'overlap does not multiply pixel painting by field count');
@@ -339,4 +354,11 @@ test('two thousand overlapping field masks use bounded pixel painting', { timeou
     assert.equal(frame.data[at] + frame.data[at + 1] + frame.data[at + 2], 0);
     assert.equal(frame.data[at + 3], 255);
   }
+});
+
+test('a disallowed text container with opaque descendants stays pixelated', () => {
+  const width = 64, height = 32, frame = { width, height, data: Buffer.alloc(width * height * 4, 255) };
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) frame.data.set(x % 32 < 16 ? [255, 0, 0, 255] : [0, 0, 255, 255], (y * width + x) * 4);
+  maskRecordingPixels(frame, { fields: [], opaque: [], opaqueControl: true, clear: [] }, { rect: [0, 0, width, height], clear: false, black: false });
+  assert.deepEqual([...frame.data.subarray((16 * width + 16) * 4, (16 * width + 16) * 4 + 4)], [128, 0, 128, 255]);
 });

@@ -11,11 +11,11 @@ import { captureRecordingFrame } from '../plugins/sleight/lib/direct-browser/rec
 
 const require = createRequire(import.meta.url);
 const { PNG } = require('../plugins/sleight/vendor/playwright-core/lib/utilsBundle.js');
-// Independent reference: average each 16 CSS pixel tile, then repeat its colour.
-function reference(raw) {
+// Independent reference: average each fixture's CSS tile, then repeat its colour.
+function reference(raw, size = 40) {
   const out = Buffer.from(raw.data);
-  for (let y = 0; y < raw.height; y += 16) for (let x = 0; x < raw.width; x += 16) {
-    const bottom = Math.min(y + 16, raw.height), right = Math.min(x + 16, raw.width), sum = [0, 0, 0];
+  for (let y = 0; y < raw.height; y += size) for (let x = 0; x < raw.width; x += size) {
+    const bottom = Math.min(y + size, raw.height), right = Math.min(x + size, raw.width), sum = [0, 0, 0];
     for (let j = y; j < bottom; j++) for (let i = x; i < right; i++) for (let c = 0; c < 3; c++) sum[c] += raw.data[(j * raw.width + i) * 4 + c];
     const rgb = sum.map(v => Math.round(v / ((bottom - y) * (right - x))));
     for (let j = y; j < bottom; j++) for (let i = x; i < right; i++) out.set([...rgb, 255], (j * raw.width + i) * 4);
@@ -68,7 +68,7 @@ for (const [name, body, designMode] of cases) test(`mask by default: ${name} has
   await f.entry.page.locator('img').evaluateAll(images => Promise.all(images.map(img => img.decode())));
   const box = await f.entry.page.locator('#leak').boundingBox();
   const raw = PNG.sync.read(await f.entry.page.screenshot({ type: 'png', scale: 'css', caret: 'hide' }));
-  const expected = designMode ? Buffer.alloc(raw.data.length) : reference(raw);
+  const expected = designMode ? Buffer.alloc(raw.data.length) : reference(raw, name.includes('header') || name === 'sibling QR' ? 60 : 40);
   if (designMode) for (let at = 3; at < expected.length; at += 4) expected[at] = 255;
   const target = await f.entry.page.locator('button').elementHandle();
   t.after(() => target.dispose());
@@ -114,7 +114,7 @@ test('one isolated box query per frame; main-world tampering cannot hide fields'
   const f = await fixture(t, '<input value=4242 style="position:absolute;left:160px;top:160px;width:200px;height:50px;background:red">');
   await f.entry.page.evaluate(() => { Document.prototype.querySelectorAll = () => []; Element.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, width: 0, height: 0 }); });
   const utility = await f.entry.page._connection.toImpl(f.entry.page).mainFrame().utilityContext();
-  await utility.evaluateExpression(`() => { const query = Document.prototype.querySelectorAll; globalThis.recordingQueries = 0; Document.prototype.querySelectorAll = function(s) { if (s === '*') globalThis.recordingQueries++; return query.call(this, s); }; }`, { isFunction: true });
+  await utility.evaluateExpression(`() => { const query = Document.prototype.querySelectorAll; globalThis.recordingQueries = []; Document.prototype.querySelectorAll = function(s) { globalThis.recordingQueries.push(s); return query.call(this, s); }; }`, { isFunction: true });
   // Recorder alone must never invoke DOMSnapshot, even on a page full of text.
   const attach = f.context.newCDPSession.bind(f.context), methods = [];
   f.context.newCDPSession = async (...args) => {
@@ -124,7 +124,8 @@ test('one isolated box query per frame; main-world tampering cannot hide fields'
   };
   t.after(() => { f.context.newCDPSession = attach; });
   const frame = await captureRecordingFrame(f.entry, { pages: f.registry, current: () => true });
-  assert.equal(await utility.evaluateExpression('globalThis.recordingQueries', { isFunction: false }), 1);
+  const queries = await utility.evaluateExpression('globalThis.recordingQueries', { isFunction: false });
+  assert.equal(queries.length, 1); assert.notEqual(queries[0], '*'); assert.ok(queries[0].includes('input'));
   const black = Buffer.alloc(frame.data.length); for (let at = 3; at < black.length; at += 4) black[at] = 255;
   assert.equal(different(frame, black, { x: 170, y: 170, width: 180, height: 30 }), 0);
   assert.ok(methods.includes('Runtime.evaluate'), 'resume was confirmed with a renderer probe');
@@ -138,7 +139,7 @@ test('the 50 ms isolated read budget skips a slow geometry read and resumes scri
   assert.equal(await f.entry.page.evaluate(() => 1 + 1), 2);
 });
 
-test('native viewport capture keeps sixteen CSS pixel blocks at device scale two', { skip, timeout: 30000 }, async t => {
+test('native viewport capture keeps content-scaled CSS blocks at device scale two', { skip, timeout: 30000 }, async t => {
   const f = await fixture(t, '<style>body{margin:0;font:20px monospace}</style><p id=leak>Visa ending 4242, address 7 Test Street</p>', {}, { deviceScaleFactor: 2 });
   const cdp = await f.context.newCDPSession(f.entry.page);
   try {
