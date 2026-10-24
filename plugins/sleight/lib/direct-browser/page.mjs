@@ -4,6 +4,8 @@ import { trackPage } from './activity.mjs';
 import { endpointURL, endpointTarget, endpointBlock, bindEndpointPage, assertEndpointRead } from './endpoint-guard.mjs';
 import { trustedRead } from './trusted-dom.mjs';
 import { tabHandle } from './tab-handle.mjs';
+import { terminatePageScripts, guardPageTask } from './page-health.mjs';
+import { trackPageWaits, waitForThinPage, stopPageWaits } from './waits.mjs';
 
 // Preserve recovery advice when the dispatcher hides an uncertain operation's details.
 const capabilityError = message => Object.assign(Error(message), { capability: true });
@@ -235,6 +237,60 @@ export function popupHook(options) {
       else delete object[name];
     });
   };
+  // Install before page script in every hooked document, including child realms.
+  // off() restores only wrappers still owned by this hook, for keep and handoff.
+  const NativeDOMException = globalThis.DOMException;
+  const refuseNativeUI = () => { throw NativeDOMException ? new NativeDOMException('Native UI is blocked while sleight owns this tab; tell the user.', 'NotAllowedError') : Error('Native UI is blocked'); };
+  const blockNative = (object, name) => {
+    if (!object) return;
+    let owner = object;
+    while (owner && !getOwn(owner, name)) owner = Object.getPrototypeOf(owner);
+    const descriptor = owner && getOwn(owner, name);
+    if (typeof descriptor?.value === 'function') replace(owner, name, { ...descriptor,
+      value: function (...args) { if (dead) return reflectApply(descriptor.value, this, args); return refuseNativeUI(); } });
+  };
+  for (const name of ['print', 'showOpenFilePicker', 'showSaveFilePicker', 'showDirectoryPicker']) blockNative(window, name);
+  for (const [type, methods] of [
+    ['EyeDropper', ['open']], ['Element', ['requestFullscreen', 'webkitRequestFullscreen', 'requestPointerLock']],
+    ['HTMLInputElement', ['showPicker']], ['HTMLSelectElement', ['showPicker']],
+    ['HTMLVideoElement', ['requestPictureInPicture', 'webkitEnterFullscreen', 'webkitSetPresentationMode']],
+    ['DocumentPictureInPicture', ['requestWindow']],
+  ]) for (const name of methods) blockNative(globalThis[type]?.prototype, name);
+  for (const [object, methods] of [[navigator, ['share']], [navigator?.credentials, ['get', 'create']],
+    [navigator?.mediaDevices, ['getUserMedia', 'getDisplayMedia']], [window.documentPictureInPicture, ['requestWindow']]])
+    for (const name of methods) blockNative(object, name);
+  const nativeBase = getOwn(globalThis.Node?.prototype ?? {}, 'baseURI')?.get;
+  const nativeStop = Event.prototype.stopImmediatePropagation;
+  const nativeKey = getOwn(KeyboardEvent?.prototype ?? {}, 'key')?.get;
+  const nativeProtocol = getOwn(URL?.prototype ?? {}, 'protocol')?.get;
+  const nativeTest = uncurry(RegExp.prototype.test), nativeLower = uncurry(String.prototype.toLowerCase);
+  const nativeClosest = Element.prototype.closest;
+  const opensNativeControl = node => {
+    const target = labelTarget(node), link = nativeMatches.call(target, linkSelector) ? target : nativeClosest?.call(target, linkSelector);
+    if (link) try {
+      const base = nativeBase ? nativeBase.call(link) : window.location?.href ?? 'https://fixture.invalid/';
+      const url = new URL(hrefOf(link), base);
+      if (!nativeTest(/^(https?|javascript|blob|data|about):$/, nativeProtocol ? nativeProtocol.call(url) : url.protocol)) return true;
+    } catch { return true; }
+    const label = nativeClosest?.call(node, 'label'), control = label ? labelTarget(label) : target;
+    const tag = localNameOf ? localNameOf.call(control) : control.localName;
+    const kind = controlOf(control)?.type ?? (tag === 'input' ? nativeLower(attribute(control, 'type') ?? '') : tag);
+    return kind === 'file' || kind === 'color' || tag === 'select' && !isMultiSelect(control);
+  };
+  const nativeUIEvent = event => {
+    const type = eventType(event);
+    const key = type === 'keydown' ? nativeKey ? nativeKey.call(event) : event.key : '';
+    if (type === 'keydown' && key !== 'Enter' && key !== ' ' && key !== 'ArrowDown' && key !== 'F4') return;
+    const path = composedPath.call(event);
+    for (let i = 0; i < path.length; i++) {
+      const node = path[i];
+      if (!isElement(node)) continue;
+      // Native picker defaults can also be invoked by a page's own .click().
+      if (opensNativeControl(node)) { nativePrevent.call(event); nativeStop.call(event); return; }
+    }
+  };
+  for (const type of ['click', 'auxclick', 'keydown']) add.call(window, type, nativeUIEvent, true);
+  replacements.push(() => { for (const type of ['click', 'auxclick', 'keydown']) remove.call(window, type, nativeUIEvent, true); });
   const live = () => arm && now() < arm.until;
   const active = () => live() && arm.masking;
   // composedPath() from window leaves out nodes inside a closed shadow root, so the arm also matches the outermost closed host (anchorOf, below).
@@ -556,6 +612,7 @@ export function popupHook(options) {
   const hold = (constructor, name, holds, track) => {
     const native = constructor?.prototype?.[name];
     if (typeof native === 'function') replace(constructor.prototype, name, { configurable: true, writable: true, value() {
+      if (!dead && name === 'click' && opensNativeControl(this)) return refuseNativeUI();
       if (active() || !holds.apply(this, arguments)) return scriptStarted(track?.apply(this, arguments), [], () => native.apply(this, arguments));
       held++;
     } });
@@ -569,6 +626,7 @@ export function popupHook(options) {
   // guard's preventDefault would do nothing to it. A modified or auxiliary click on a link or submit control is held
   // wherever it is, even inside an agent click's own handler. Realm-independent: brand checks, no instanceof.
   if (typeof dispatch === 'function') replace(EventTarget.prototype, 'dispatchEvent', { configurable: true, writable: true, value(event) {
+    if (!dead && event && isElement(this) && (eventType(event) === 'click' || eventType(event) === 'auxclick') && opensNativeControl(this)) return refuseNativeUI();
     let tracked;
     try {
       if (event && !event.isTrusted && isElement(this)) {
@@ -1218,6 +1276,7 @@ export function popupHook(options) {
     if (dead) return false;
     const stale = attachedTo !== undefined && attachedTo !== document;
     const set = (type, listener) => { if (stale) removeOn(window, type, listener, true); addOn(window, type, listener, true); };
+    for (const type of ['click', 'auxclick', 'keydown']) set(type, nativeUIEvent);
     for (let i = 0; i < guarded.length; i++) set(guarded[i], guardEvent);
     set('keydown', keyEvent);
     set('keyup', keyEvent);
@@ -2670,6 +2729,8 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     entry.releasing = true;
     const releasing = track((async () => {
       try {
+        if (entry.state.stuck) await terminatePageScripts(entry);
+        await deadline(() => stopPageWaits(entry.page), timeoutMs);
         await deadline(() => entry.queue, timeoutMs);
         await deadline(() => entry.ready, timeoutMs);
         await deadline(() => removeHook(entry), timeoutMs);
@@ -2693,6 +2754,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
         if (opener) { opener.popups.push({ opener: opener.tab, closed: true, blocked: true }); return { blocked: true }; }
         throw Error(endpointBlock);
       }
+      let openedEntry;
       const opening = track((async () => {
         phase('browser-open-create-start');
         const { targetId } = await session.send('Target.createTarget', { url: 'about:blank', background: true });
@@ -2714,6 +2776,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
         const entry = await adopt(page, info, opener);
         phase('browser-open-adopt-end');
         if (!entry) throw Error(endpointBlock);
+        openedEntry = entry;
         entry.openedBySleight = true;
         await entry.ready;
         phase('browser-open-ready-end');
@@ -2721,13 +2784,18 @@ export function createPageRegistry({ browser, session, context = browser?.contex
         if (name && await deadline(() => page.evaluate(name => { window.name = name; return window.name; }, name), timeoutMs) !== name)
           throw capabilityError('background target name unavailable; use the engine browser path');
         phase('browser-open-goto-start');
-        try { await page.goto(parsed.href, { waitUntil: 'domcontentloaded', timeout: timeoutMs }); }
+        try {
+          if (typeof page._connection?.toImpl === 'function') await trackPageWaits(page);
+          await guardPageTask(entry, () => page.goto(parsed.href, { waitUntil: 'domcontentloaded', timeout: timeoutMs }), { afterMs: 3000 });
+          if (typeof page._connection?.toImpl === 'function') await guardPageTask(entry, () => waitForThinPage(page));
+        }
         catch (error) { await assertEndpointRead(page); throw error; }
         phase('browser-open-goto-end');
         await assertEndpointRead(page);
         return { tab: entry.tab };
       })());
-      return deadline(() => opening, timeoutMs, 'background open pending; do not retry before cleanup');
+      try { return await deadline(() => opening, timeoutMs + 6000, 'background open pending; do not retry before cleanup'); }
+      catch (error) { if (openedEntry) error.ownedTab = openedEntry.tab; throw error; }
   }
   const api = {
     tab, idle,

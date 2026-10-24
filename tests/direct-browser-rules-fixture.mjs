@@ -24,7 +24,7 @@ export function classify(build) {
   const ctx = {};
   runInNewContext(`
     class Element {
-      constructor(tag, attrs = {}, text = '', parent = null) { this.localName = tag; this.attrs = attrs; this.text = text; this.parent = parent; this.children = []; parent?.children.push(this); this.isConnected = true; }
+      constructor(tag, attrs = {}, text = '', parent = null) { this.localName = tag; this.attrs = attrs; this.text = text; this.parent = parent; this.children = []; parent?.children.push(this); this.isConnected = true; this.ownerDocument = { baseURI: 'https://fixture.invalid/' }; }
       getAttributeNames() { return Object.keys(this.attrs); }
       getAttribute(n) { return Object.hasOwn(this.attrs, n) ? this.attrs[n] : null; }
       getBoundingClientRect() { return { x: 0, y: 0, width: 10, height: 10 }; }
@@ -40,6 +40,6 @@ export function classify(build) {
     var document = { elementFromPoint: () => globalThis.target };
     globalThis.mk = { Element, HTMLInputElement, HTMLButtonElement };
   `, ctx);
-  ctx.target = build(ctx.mk);
+  ctx.target = build(ctx.mk); ctx.URL = URL;
   return runInNewContext(`(${rules.inspectElement.toString()})(target)`, ctx);
 }

@@ -10,6 +10,8 @@ import { endpointURL, endpointBlock } from './endpoint-guard.mjs';
 import { setViewport } from './viewport.mjs';
 import { snapshotAcquisitionPending } from './snapshot.mjs';
 import { originOf, pathOf, guardChooser } from './output-hygiene.mjs';
+import { assertPageResponsive, probePage } from './page-health.mjs';
+import { waitForPage, waitForThinPage } from './waits.mjs';
 const OPS = new Set('click type press select check uncheck hover scroll drag upload dialog wait back forward reload viewport navigate'.split(' '));
 const REF_OPS = new Set('click type select check uncheck hover drag upload'.split(' '));
 const WAIT_CAP = 5000, SCROLL_CAP = 10000, navigateNeeds = 'the ref of an http(s) link (browser_open takes a url); to press other elements use click';
@@ -61,6 +63,11 @@ function validate(steps) {
     if (s.do === 'viewport' && ([s.width, s.height].filter(n => n === undefined).length === 1 ||
       [s.width, s.height].some(n => n !== undefined && !(Number.isInteger(n) && n >= 100 && n <= 10000)))) needs('width and height between 100 and 10000, or neither to restore');
     if (s.do === 'wait' && s.ms !== undefined && !(Number.isFinite(s.ms) && s.ms >= 0)) needs('ms of 0 or more');
+    if (s.do === 'wait') {
+      const conditions = [s.until, s.gone, s.url].filter(value => value !== undefined);
+      if (conditions.length > 1 || conditions.some(value => typeof value !== 'string' || !value.trim() || value.length > 500) || conditions.length && s.ref !== undefined)
+        needs('one nonempty until, gone or url condition, without ref');
+    }
     if (s.do === 'scroll') {
       if (s.until !== undefined && (typeof s.until !== 'string' || !s.until.trim() || s.until.length > 500)) needs('until text');
       if ([s.dx, s.dy].some(n => n !== undefined && !Number.isFinite(n))) needs('finite dx and dy (beyond 10000 is clamped to it); give until the row text to find a row in a long list');
@@ -109,7 +116,15 @@ export function inspectTarget(el, unused, read = (node, key) => { const value = 
     const content = read(form, 'textContent') + [...read(form, 'querySelectorAll')('input,select,textarea')].map(n => [read(n, 'value'), read(n, 'checked'), read(n, 'selectedIndex')].join(':')).join('|');
     for (let i = 0; i < content.length; i++) hash = Math.imul(hash ^ content.charCodeAt(i), 16777619);
   }
-  return { name, accName, tag, role, kind: ['file', 'color'].includes(forwarded) ? forwarded : button ? 'button' : ['file', 'color'].includes(read(el, 'type')) ? read(el, 'type') : tag === 'select' ? 'select' : 'text', button, form: !!form, link, submit: submit || scriptButton, scriptButton, payment: payment(name) || submit && formPayment,
+  const appLink = (() => {
+    const anchor = ['a', 'area'].includes(tag) ? el : read(el, 'closest')('a,area[href]');
+    if (!anchor) return false;
+    const href = read(anchor, 'getAttribute')('href') || read(anchor, 'getAttributeNS')?.('http://www.w3.org/1999/xlink', 'href');
+    if (!href) return false;
+    try { return !/^(https?|javascript|blob|data|about):$/.test(new URL(href, read(read(anchor, 'ownerDocument'), 'baseURI')).protocol); }
+    catch { return true; }
+  })();
+  return { name, accName, tag, role, appLink, kind: ['file', 'color'].includes(forwarded) ? forwarded : button ? 'button' : ['file', 'color'].includes(read(el, 'type')) ? read(el, 'type') : tag === 'select' ? 'select' : 'text', button, form: !!form, link, submit: submit || scriptButton, scriptButton, payment: payment(name) || submit && formPayment,
     // An anchor whose only payment word is "checkout": the trusted context may drop this as the prior of a released navigation link (v3-context).
     checkoutLink: tag === 'a' && payment(name) && (name.match(/\b(?:pay|payment|purchase|buy|checkout|donate|subscribe|place order|complete order|order now|book now|upgrade|send money|charge)\b/gi) ?? []).every(word => word.toLowerCase() === 'checkout'),
     formPayment, formSignature: form ? hash : null };
@@ -251,6 +266,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
       const named = steps[index], step = named.do === 'navigate' ? { ...named, do: 'click' } : named, label = `${index + 1} ${named.do}${step.ref ? ' ' + step.ref : ''}`;
       let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false;
       try {
+        assertPageResponsive(tab);
         if (state.dialog && step.do !== 'dialog') throw Error('a page dialog is waiting; answer it with the dialog operation');
         if (step.do === 'dialog' && !state.dialog) throw Error('no waiting dialog; read the page');
         pendingGate(state, step);
@@ -270,6 +286,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           ...(step.do === 'dialog' ? { type: state.dialog.type(), message: state.dialog.message(), accept: step.accept } : {}) };
         const trusted = isV3Context(ctx);
         const gate = async () => {
+          assertPageResponsive(tab);
           const refused = siteCheck?.();
           if (refused) throw Error(refused);
           const verdict = trusted ? await ctx.check(step.do, target) : await check(ctx, step.do, target);
@@ -306,6 +323,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         const options = { timeout: TIMEOUT };
         // The input starts now: the ghost hand may show it. Never awaited.
         const begin = () => {
+          assertPageResponsive(tab);
           started = true;
           if (hand) try { hand.step({ op: named.do, page, locator, ref: step.ref, text: step.text, to: step.do === 'drag' ? page.getByRef(step.to) : undefined }); } catch {}
         };
@@ -354,6 +372,8 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           }
           if (step.do === 'wait') {
             if (locator) return typeof locator.waitFor === 'function' ? locator.waitFor({ ...options, state: 'visible' }) : locator.waitForElementState('visible', options);
+            if (step.until !== undefined || step.gone !== undefined || step.url !== undefined || step.ms === undefined)
+              return waitForPage(page, step, { snapshot, active: batchWatch.active, now, sleep });
             if (!lossFixes) {
               await sleep(Math.min(step.ms ?? 100, WAIT_CAP));
               return step.ms > WAIT_CAP ? `waited ${WAIT_CAP} ms (cap, not ${step.ms}); page below` : undefined;
@@ -397,7 +417,9 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         // or type settles briefly and the last of the run settles fully. Enter, Return and Space can activate
         // a control, so they always settle in full, and so does any step that starts a submit.
         const quiet = (step.do === 'type' || step.do === 'press' && !enter) && !submits;
-        const short = lossFixes && (['viewport', 'back', 'forward', 'wait'].includes(step.do) || step.do === 'scroll' && !step.until);
+        const conditionWait = step.do === 'wait' && !locator && (step.until !== undefined || step.gone !== undefined || step.url !== undefined || step.ms === undefined);
+        const short = lossFixes && !conditionWait && (['viewport', 'back', 'forward', 'wait'].includes(step.do) || step.do === 'scroll' && !step.until);
+        if (conditionWait) { settleNote = result; settleCapped = /\(cap\)/.test(result); }
         if (short) {
           const until = start + actionTimeoutMs, waiting = step.do === 'wait' && !locator;
           const requestedEnd = start + Math.min(step.ms ?? 150, WAIT_CAP);
@@ -433,7 +455,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         // delivered read clears the fence only if taken a full second after that moment (rules.mjs deliverSnapshot), so both wait on it.
         const origin = submits && submit ? Math.max(start, submit.startedAt) : start;
         const settleUntil = batched ? now() + 40 : origin + (submits ? 5000 : 600);
-        while (!short && !armed.boundary && now() < settleUntil) {
+        while (!short && !conditionWait && !armed.boundary && now() < settleUntil) {
           if (submits && locator) {
             // A key can return before the navigation it started has committed, and the node is gone mid-read. Give the
             // navigation boundary a moment to register; destroyed evidence without one still stops the batch.
@@ -453,6 +475,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         // Carry watchers only across steps this invocation will run. The Electron caller guards its next invocation.
         if (batched && steps[index + 1] && !armed.boundary) carry = armed;
         const boundary = armed.boundary;
+        if (boundary?.kind === 'navigation' && typeof page._connection?.toImpl === 'function') await waitForThinPage(page, { now, sleep });
         closed = lossFixes && boundary?.kind === 'close';
         if (boundary?.kind === 'dialog') state.dialog = boundary.dialog;
         if (submit && state.submitUnconfirmed === submit) {
@@ -471,7 +494,8 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           + (boundary?.kind === 'popup' && tab.background === true && tab.popupIsBackground?.(boundary.popup) === false ? 1 : 0) : 0;
         // The click carried the background modifier only if sleight sent it; a tab the page opened after the click's dispatch ended got no such help.
         const why = tab.background === false ? 'this click carried no background modifier' : 'the page opened it after a click, outside the background handling';
-        const outcome = boundary?.kind === 'navigation' ? 'navigated, address (untrusted page content): ' + originOf(page.url()) + navPath + ' (new page below)'
+        const outcome = conditionWait && typeof result === 'string' ? result + (boundary ? '; page changed (read below)' : '')
+          : boundary?.kind === 'navigation' ? 'navigated, address (untrusted page content): ' + originOf(page.url()) + navPath + ' (new page below)'
           : boundary?.kind === 'document' ? 'new document (read below)'
           : boundary?.kind === 'dialog' ? dialogOutcome(boundary.dialog)
           : boundary?.kind === 'popup' ? endpointURL(boundary.popup.url(), tab.endpoint) ? endpointBlock : boundary.popup.isClosed() ? 'opened background tab that closed itself; opener below'
@@ -496,6 +520,8 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
             : `. ${raisable.length > 1 ? 'Tabs' : 'Tab'} ${raisable.join(', ')} (opened by this page, another origin) can be raised to the foreground by the page at any time, and sleight cannot block or detect that` : '') + (heldOpenings > 0 ? '. Page script tried to open ' + (heldOpenings > 1 ? heldOpenings + ' tabs' : 'a tab') + ' after this input; held, nothing opened' : ''));
         if (boundary || settleCapped) { stoppedAt = index + 1; break; }
       } catch (error) {
+        if (error.stuckPage) throw error;
+        if (!state.dialog && /timeout|timed out|deadline/i.test(error.message)) await probePage(tab);
         if (lossFixes && started && armed?.boundary?.kind === 'close') {
           closed = true; lines.push(label + ': tab closed' + (submit && state.submitUnconfirmed === submit ? '; ' + closedSubmitWarning : '')); stoppedAt = index + 1; break;
         }
@@ -537,9 +563,12 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     // failed. The caller delivers this snapshot and records its number.
     const needsRead = !lossFixes || observe !== 'none' || stoppedAt !== null || lines.some(line => /\[ref=/.test(line));
     if (!closed && !state.dialog && state.actionPending) lines.push('Read deferred: input still pending; wait for it before browser_read.');
-    else if (!closed && !state.dialog && needsRead) try {
+    else if (!closed && !state.dialog && !state.stuck && needsRead) try {
       await Promise.race([read({ since, maxChars: 8000 }), batchWatch.dialogReady]);
-    } catch (error) { if (!state.dialog) observeError = clean(error.message); }
+    } catch (error) {
+      if (!state.dialog && /Snapshot unavailable/i.test(error.message)) await probePage(tab);
+      if (!state.dialog) observeError = clean(error.message);
+    }
     if (state.dialog) {
       observed = undefined;
       const note = dialogOutcome(state.dialog);

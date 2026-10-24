@@ -454,6 +454,9 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
         }
         if (['Fetch.continueRequest','Fetch.continueResponse'].includes(method) && params.url && protectedUrl(params.url)) refuse();
       }
+      // Playwright normally evaluates with userGesture:true. Reads and guard
+      // evaluations must never lend that activation to timers or chooser APIs.
+      if (method === 'Runtime.evaluate' || method === 'Runtime.callFunctionOn') params = { ...params, userGesture: false };
       return upstream.send(method, params, route);
     },
     on(name, listener) { live(); if (name !== 'event' || typeof listener !== 'function') throw Error('INVALID_CDP_EVENT'); listeners.add(listener); },

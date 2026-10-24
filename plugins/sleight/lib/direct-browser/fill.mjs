@@ -4,6 +4,7 @@ import { backgroundClick as guardedClick } from './page.mjs';
 import { readOptions, moveList, pickElement, findPopup, searchOptions, describeMiss, normalize, queries } from './pick-option.mjs';
 import { lineBreakRefusal } from './rules.mjs';
 import { snapshotAcquisitionPending } from './snapshot.mjs';
+import { assertPageResponsive } from './page-health.mjs';
 // Whole-form strategies are sleight's own (the v2 forms.mjs they came from is gone). Playwright's
 // aria-ref selector routes fNeM refs to their child frame, without parent fallback.
 class FieldError extends Error {}
@@ -112,6 +113,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
       for (let i = 0; i < fields.length && !stopped; i++) {
         const { ref, value } = fields[i]; sent = false;
         try {
+          assertPageResponsive(tab);
           if (tab.state.actionPending) throw new FieldError('an earlier input is still pending; wait before filling');
           if (snapshotAcquisitionPending(page)) throw new FieldError('Snapshot acquisition is still pending; wait before another action or read.');
           const nativeText = async () => {
@@ -151,6 +153,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
           const prior = await trustedLocatorRead(loc, inspectElement);
           if (stopped) throw new FieldError(stopped);
           const send = async (action, kind = 'type', locator = loc, modifier) => {
+            assertPageResponsive(tab);
             if (stopped) throw new FieldError(stopped);
             if (tab.state.actionPending) throw new FieldError('an earlier input is still pending; wait before filling');
             const element = await trustedLocatorRead(locator, inspectElement);
@@ -176,12 +179,14 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
             const pending = {};
             try {
               const perform = async (extra = {}, verifySeal) => {
+                assertPageResponsive(tab);
                 if (stopped) throw new FieldError(stopped);
                 if (tab.state.actionPending) throw new FieldError('an earlier input is still pending; wait before filling');
                 target.verifySeal = verifySeal;
                 // Private page inspection may await, so repeat both fences after
                 // it. Newly submit-capable choices refuse without consuming consent.
                 refusal(trusted ? await ctx.check(kind, target, { fieldOnly: true }) : check(ctx, kind, target));
+                assertPageResponsive(tab);
                 if (stopped) throw new FieldError(stopped);
                 if (tab.state.actionPending) throw new FieldError('an earlier input is still pending; wait before filling');
                 tab.state.actionPending = pending;

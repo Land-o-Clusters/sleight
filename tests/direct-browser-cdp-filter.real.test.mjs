@@ -82,6 +82,16 @@ test('real Chromium over filtered CDP hides foreign tabs, owns background create
   assert.equal((await rootCDP.send('Target.getTargets')).targetInfos.length, 2);
   assert.equal(context.pages().some(page => page === foreign), true);
   const pageCDP = await browser.contexts()[0].newCDPSession(pages[0]);
+  // Unfiltered fixture setContent carried Playwright's normal user gesture.
+  // A fresh document removes that earlier activation before testing this boundary.
+  await pages[0].goto('about:blank');
+  const gesture = await pageCDP.send('Runtime.evaluate', { expression: 'navigator.userActivation.isActive', returnByValue: true, userGesture: true });
+  assert.equal(gesture.result.value, false, 'FD3 evaluation cannot manufacture user activation');
+  const object = await pageCDP.send('Runtime.evaluate', { expression: 'document', userGesture: true });
+  const callGesture = await pageCDP.send('Runtime.callFunctionOn', { objectId: object.result.objectId,
+    functionDeclaration: 'function () { return navigator.userActivation.isActive; }', returnByValue: true, userGesture: true });
+  assert.equal(callGesture.result.value, false, 'FD3 function calls cannot manufacture user activation');
+  await pageCDP.send('Runtime.releaseObject', { objectId: object.result.objectId });
   await pageCDP.send('Emulation.setFocusEmulationEnabled', { enabled: true });
   await assert.rejects(pageCDP.send('Page.bringToFront'), /CDP_COMMAND_REFUSED/);
   const beforeGlobal = wire.length;

@@ -64,6 +64,14 @@ export function inspectElement(el, unused, read = (node, key) => { const value =
     enabled: !read(el, 'matches')(':disabled') && get(el, 'aria-disabled') !== 'true', payment: payment(words(el)), accName,
     submit: ['submit', 'image'].includes(type) || tag === 'button' && !!form && get(el, 'type') !== 'button' && get(el, 'type') !== 'reset' ||
       button && /\b(?:save|submit|send|confirm|book|pay|place order|finish|complete)\b/i.test(words(el)) };
+  state.appLink = (() => {
+    const link = ['a', 'area'].includes(tag) ? el : read(el, 'closest')('a,area[href]');
+    if (!link) return false;
+    const href = get(link, 'href') || Element.prototype.getAttributeNS?.call(link, 'http://www.w3.org/1999/xlink', 'href');
+    if (!href) return false;
+    try { return !/^(https?|javascript|blob|data|about):$/.test(new URL(href, read(read(link, 'ownerDocument'), 'baseURI')).protocol); }
+    catch { return true; }
+  })();
   state.formPayment = !!form && Array.from(read(form, 'querySelectorAll')('input,button,iframe')).some(node => {
     const attrs = ['name', 'id', 'autocomplete', 'title', 'aria-label'].map(key => get(node, key)).join(' ');
     if (/\bcc-|card|cvv|cvc/i.test(attrs)) return true;
@@ -208,6 +216,8 @@ export function check(ctx, kind, target = {}) {
       return refuse('Read final submit and payment classification before activation.');
     const pickerOpening = kind === 'click' || kind === 'press' &&
       (!!keyClass(target.key).name || el?.kind === 'select' && ['Alt+ArrowDown', 'F4'].includes(target.key));
+    if ((kind === 'click' || kind === 'press' && keyClass(target.key).name === 'Enter') && el?.appLink)
+      return refuse('This link opens a native app. Tell the user; no browser input was sent.');
     if (pickerOpening && ['file', 'color', 'select'].includes(el?.kind)) return refuse('Use browser_fill or upload instead of opening a native picker.');
     const risk = intent(kind, target);
     if (risk.submit && (!target.state || !Number.isSafeInteger(target.state.snapshotNo))) return refuse('Submit needs its document state.');

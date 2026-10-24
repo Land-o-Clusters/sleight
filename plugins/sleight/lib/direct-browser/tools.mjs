@@ -1,5 +1,8 @@
 import { assertEndpointRead, endpointURL, endpointBlock } from './endpoint-guard.mjs';
 import { originOf, chooserNote } from './output-hygiene.mjs'; // a page picks its title and URL path, so trusted lines carry only the origin
+import { assertPageResponsive, guardPageTask, recoverPage, probePage } from './page-health.mjs';
+import { waitForThinPage } from './waits.mjs';
+import { isV3Context } from './v3-context.mjs';
 // v3's five eagerly advertised tools. No generic JavaScript or authority fields.
 const object = (properties, required) => ({ type: 'object', properties, required, additionalProperties: false });
 const text = { type: 'string', maxLength: 65536 };
@@ -8,7 +11,7 @@ const tab = { type: 'string', pattern: '^t[A-Za-z0-9_-]{1,64}$' };
 const strings = { type: 'array', maxItems: 100, items: text };
 const ops = 'click type press select check uncheck hover scroll drag upload dialog wait back forward reload viewport navigate'.split(' ');
 const step = object({ do: { type: 'string', enum: ops }, ref, text, key: text, modifier: { type: 'string', enum: ['cmd', 'ctrl'] },
-  values: { type: ['string', 'array'], items: text, maxItems: 100 }, to: ref, until: text,
+  values: { type: ['string', 'array'], items: text, maxItems: 100 }, to: ref, until: text, gone: text, url: text,
   ms: { type: 'number', minimum: 0 }, dx: { type: 'number' }, dy: { type: 'number' }, accept: { type: 'boolean' }, paths: strings,
   width: { type: 'integer', minimum: 1, maximum: 10000 }, height: { type: 'integer', minimum: 1, maximum: 10000 } }, ['do']);
 
@@ -20,7 +23,7 @@ export function browserTools(browser) {
       inputSchema: object({ tab, ref: text, find: text, max_chars: { type: 'integer', minimum: 1000, maximum: 40000 }, text: { type: 'boolean' } }, ['tab']) },
     { name: 'browser_act', description: (process.env.SLEIGHT_MT !== '0'
       ? 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. A step that navigates, opens a tab, raises a dialog, loads or closes the page, or reaches the settle cap ends the batch (later steps read "not reached"), so put one such step last. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. viewport with width and height resizes and reports the old size; with neither it restores that size. scroll with until:text finds a row in a long list. navigate with a link ref follows it.'
-      : 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. Stops at boundaries or failure. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. viewport with width and height resizes and reports the old size; with neither it restores that size. scroll with until:text finds a row in a long list. navigate with a link ref follows it.'),
+      : 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. Stops at boundaries or failure. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. viewport with width and height resizes and reports the old size; with neither it restores that size. scroll with until:text finds a row in a long list. navigate with a link ref follows it.') + ' wait takes until:text, gone:text or url:substring; no condition settles. navigate with url recovers a stuck tab.',
       inputSchema: object({ tab, steps: { type: 'array', minItems: 1, maxItems: 12, items: step }, observe: { type: 'string', enum: ['diff', 'full', 'none'] } }, ['tab', 'steps']) },
     { name: 'browser_fill', description: (process.env.SLEIGHT_MT !== '0'
       ? "Fill up to 60 observed fields in one call: text or a number for a textbox; true or false for a checkbox, switch or the radio option to choose; a number for a slider; the option text for a select or combobox, even in a long or virtual list; all row names in the wanted order for a drag-reorderable list. For a multi-select, an array sets exactly those option texts; [] clears all. submit is an observed ref, only when the user asked for that submit. Returns each field's status and the page diff."
@@ -78,7 +81,17 @@ export function validateToolCall(input, browser) {
   }
   for (const item of request.arguments.steps ?? []) {
     if (item.modifier !== undefined && item.do !== 'click') throw Error('modifier is only supported for click');
-    if (item.do === 'navigate' && item.ref === undefined) throw Error('navigate needs the ref of an http(s) link (browser_open takes a url); to press other elements use click');
+    if (item.do === 'navigate' && item.url !== undefined) {
+      const url = new URL(item.url);
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || item.ref !== undefined || request.arguments.steps.length !== 1)
+        throw Error('Stuck-tab navigate needs one HTTP(S) url step without ref');
+    } else if (item.do === 'navigate' && item.ref === undefined) throw Error('navigate needs the ref of an http(s) link (browser_open takes a url); to press other elements use click');
+    if (item.do !== 'wait' && (item.gone !== undefined || item.url !== undefined && item.do !== 'navigate')) throw Error('gone and url are wait conditions; navigate url recovers a stuck tab');
+    if (item.do === 'wait') {
+      const conditions = [item.until, item.gone, item.url].filter(value => value !== undefined);
+      if (conditions.length > 1 || conditions.some(value => !value.trim() || value.length > 500) || conditions.length && item.ref !== undefined)
+        throw Error('wait takes one nonempty until, gone or url condition, without ref');
+    }
     const needs = ['click', 'type', 'select', 'check', 'uncheck', 'hover', 'drag', 'upload'].includes(item.do) ? ['ref'] : [];
     const fields = { type: ['text'], press: ['key'], select: ['values'], drag: ['to'], upload: ['paths'], dialog: ['accept'] };
     for (const key of [...needs, ...(fields[item.do] ?? [])]) if (item[key] === undefined) throw Error(`${item.do} needs ${key}`);
@@ -111,10 +124,11 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     try { const origin = new URL(url).origin; if (/^https?:/.test(origin)) onSite?.(origin); } catch {}
   };
   const capture = async (entry, options) => {
+    assertPageResponsive(entry);
     if (entry.state.actionPending || entry.state.dialog) throw Error('input or dialog pending; wait or explicitly answer the dialog');
     siteStop(pageURL(entry));
     await assertEndpointRead(entry.page, endpoint);
-    const capturedAt = now(), value = await snapshot(entry.page, options);
+    const capturedAt = now(), value = await guardPageTask(entry, () => snapshot(entry.page, options), { afterMs: 3000 });
     await assertEndpointRead(entry.page, endpoint);
     return { ...value, capturedAt };
   };
@@ -167,6 +181,26 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
         if (opener) { closedNote = `${a.tab} closed itself; reading its opener ${opener}.`; const { ref: _stale, ...rest } = a; a = { ...rest, tab: opener }; }
         return await pages.enqueue(a.tab, async entry => {
           if (ended) throw Error('turn ended');
+          const recovery = request.name === 'browser_act' && a.steps.length === 1 && a.steps[0].do === 'navigate' && a.steps[0].url !== undefined;
+          if (recovery) {
+            if (!entry.state.stuck) throw Object.assign(Error('navigate with url is only for a stuck tab; use a link ref or browser_open'), { notRun: true });
+            const destination = a.steps[0].url;
+            if (endpointURL(destination, endpoint)) throw Error(endpointBlock);
+            siteStop(destination);
+            const context = typeof ctx === 'function' ? ctx(entry) : ctx;
+            if (isV3Context(context)) {
+              const verdict = await context.check('reload', { page: entry.page, state: entry.state });
+              if (verdict?.verdict !== 'allow') throw Object.assign(Error(verdict?.message ?? 'Recovery navigation requires the user request; tab retained'), { notRun: true });
+            }
+            started = true;
+            try { await recoverPage(entry, destination, { siteCheck: siteLine }); }
+            catch { throw Object.assign(Error('Recovery did not finish; tab retained and still marked stuck. Close, keep or handoff.'), { stuckPage: true }); }
+            siteStop(pageURL(entry));
+            await guardPageTask(entry, () => waitForThinPage(entry.page));
+            const observed = await capture(entry, { maxChars: 8000 });
+            return finish(['1 navigate: terminated stuck script; navigated in the same tab'], observed.text, entry, observed);
+          }
+          assertPageResponsive(entry);
           await assertEndpointRead(entry.page, endpoint);
           const popupStart = entry.popups?.length ?? 0;
           const blocked = () => entry.popups?.slice(popupStart).filter(row => row.blocked).map(() => endpointBlock) ?? [];
@@ -180,7 +214,8 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
           started = true;
           if (request.name === 'browser_act') {
             // The site is checked again before each step's input, so a step that lands on a blocked site stops the rest there.
-            const result = await runSteps(entry, a.steps, privateContext, { observe: a.observe, siteCheck: () => siteLine(pageURL(entry)) });
+            const result = await guardPageTask(entry, () => runSteps(entry, a.steps, privateContext, { observe: a.observe, siteCheck: () => siteLine(pageURL(entry)) }));
+            if (entry.state.actionPending && !entry.state.dialog) await probePage(entry);
             // The page, not sleight, closed this owned popup during the step. The registry
             // proves its opener is still owned. Queue and capture there, with the same guards as a read.
             const opener = lossFixes && result.closed ? pages.closedOpener?.(a.tab) : undefined;
@@ -211,7 +246,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             if (a.observe === 'none' && (!lossFixes || result.stoppedAt == null) && !lines.some(line => /\[ref=/.test(line))) observed = undefined;
             return await finish(lines, observed?.text, entry, observed);
           }
-          const result = await fillFields(entry, a.fields, { submit: a.submit }, privateContext);
+          const result = await guardPageTask(entry, () => fillFields(entry, a.fields, { submit: a.submit }, privateContext));
           await assertEndpointRead(entry.page, endpoint);
           const lines = result.rows.map(row => `${clean(row.ref)}: ${clean(row.status)}${row.reason ? ': ' + clean(row.reason) : row.note ? ' (' + clean(row.note) + ')' : ''}`);
           lines.push(...blocked());
@@ -223,8 +258,10 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
           return await finish(lines, observed?.text, entry, observed);
         });
       } catch (error) {
+        if (error.stuckPage) return textResult((error.ownedTab ? error.ownedTab + ': ' : '') + error.message, true);
         if (error.message === endpointBlock) return textResult(endpointBlock, true);
         if (error.siteBlocked) return textResult(error.message, true);
+        if (error.ownedTab) return textResult(error.ownedTab + ': tab retained; opening did not finish. Read before input, or close the tab.', true);
         const detail = clean(error.message).replace(/\.+$/, '');
         const hint = process.env.SLEIGHT_MT === '0' || error.capability === true ? ' Use the engine browser path if needed.' : '';
         return textResult(started && !error.notRun ? 'Operation outcome is unconfirmed. Read current state before deciding what remains; do not replay input blindly.' + hint

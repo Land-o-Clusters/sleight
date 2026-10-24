@@ -37,6 +37,37 @@ function fixture() {
     } };
   return { session, calls, emit, targets, listeners };
 }
+test('FD3 page and child evaluations strip synthetic user gestures at the owned CDP boundary', async t => {
+  const f = fixture(), filter = (await factory())({ session: f.session, ownedTargets: ['owned'] });
+  t.after(() => filter.dispose());
+  const { sessionId } = await filter.session.send('Target.attachToTarget', { targetId: 'owned', flatten: true });
+  for (const method of ['Runtime.evaluate', 'Runtime.callFunctionOn']) for (const userGesture of [true, false, undefined]) {
+    await filter.session.send(method, { expression: '0', userGesture }, sessionId);
+    assert.equal(f.calls.at(-1).params.userGesture, false);
+  }
+  await assert.rejects(filter.session.send('Runtime.evaluate', { expression: '0', userGesture: true }, 'foreign-session'), /NOT_OWNED/);
+});
+test('FD3 offline mailto detach repro retains ownership and can reattach the same target without allocating a tab', async t => {
+  const f = fixture(), rawSend = f.session.send;
+  f.session.send = async (method, params = {}, route = 'root') => {
+    const result = await rawSend(method, params, route);
+    // Assumed browser behavior from the clean-room spec, not a live observation.
+    if (method === 'Page.navigate' && params.url.startsWith('mailto:'))
+      f.emit({ method: 'Target.detachedFromTarget', params: { sessionId: route, targetId: 'owned' } });
+    return result;
+  };
+  const filter = (await factory())({ session: f.session, ownedTargets: ['owned'] }); t.after(() => filter.dispose());
+  const events = []; filter.session.on('event', event => events.push(event));
+  const first = await filter.session.send('Target.attachToTarget', { targetId: 'owned', flatten: true });
+  await filter.session.send('Page.navigate', { url: 'mailto:fixture@example.invalid' }, first.sessionId);
+  assert.equal(events.some(event => event.method === 'Target.detachedFromTarget' && event.params.sessionId === first.sessionId), true);
+  assert.equal(filter.owns('owned'), true);
+  await assert.rejects(filter.session.send('Runtime.evaluate', { expression: '0' }, first.sessionId), /NOT_OWNED/);
+  const second = await filter.session.send('Target.attachToTarget', { targetId: 'owned', flatten: true });
+  assert.notEqual(second.sessionId, first.sessionId);
+  await filter.session.send('Runtime.evaluate', { expression: '0' }, second.sessionId);
+  assert.equal(f.calls.some(call => call.method === 'Target.createTarget'), false);
+});
 test('only explicitly owned targets appear in enumeration, metadata and events', async t => {
   const f = fixture(), filter = (await factory())({ session: f.session, ownedTargets: ['owned'] });
   t.after(() => filter.dispose());
