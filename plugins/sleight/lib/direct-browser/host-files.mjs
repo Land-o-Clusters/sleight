@@ -1,10 +1,13 @@
-import { constants, openSync, closeSync, fstatSync, lstatSync, readFileSync, realpathSync,
+import { constants, openSync, closeSync, fstatSync, lstatSync, readSync, realpathSync,
   mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { isAbsolute, normalize, parse, join, basename } from 'node:path';
-import { tmpdir } from 'node:os';
+import { parse, join, basename } from 'node:path';
+import { tmpdir, userInfo } from 'node:os';
 import { immutableJSON } from './ipc.mjs';
 import { knownAppDocument } from './electron-identity.mjs';
+import { assertUploadLocation, assertUploadOwnership, checkUploadMetadata, uploadByteLimit, uploadRefusals } from './upload-paths.mjs';
+
+const uid = userInfo().uid;
 
 // Port of sleight's reviewed BP2-7 file authority. No third-party source copied.
 const authorities = new WeakSet();
@@ -33,25 +36,56 @@ function bindingKey(binding) {
   return JSON.stringify(keys.map(k => binding[k]));
 }
 function snapshot(path, includeData = false) {
-  if (typeof path !== 'string' || !isAbsolute(path) || normalize(path) !== path || path.includes('\0'))
-    throw new Error('File path must be absolute and normalized');
+  assertUploadLocation(path);
   let current = parse(path).root;
+  const chain = [current];
+  assertUploadOwnership(lstatSync(current), uid, true);
+  let entry;
   for (const part of path.slice(current.length).split('/')) {
     current = join(current, part);
-    if (lstatSync(current).isSymbolicLink()) throw new Error('Symbolic links are not file capabilities');
+    chain.push(current);
+    entry = lstatSync(current, { bigint: true });
+    if (entry.isSymbolicLink()) throw Error(uploadRefusals.links);
+    assertUploadOwnership(entry, uid, current !== path);
   }
+  // Check the type before opening: opening a FIFO read-only can wait forever.
+  if (!entry?.isFile()) throw Error(uploadRefusals.type);
+  if (entry.size > uploadByteLimit) throw Error(uploadRefusals.size);
+  checkUploadMetadata(chain, uid);
   if (realpathSync(path) !== path) throw new Error('File path changed');
-  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const before = fstatSync(fd, { bigint: true });
-    if (!before.isFile() || before.size > 64n * 1024n * 1024n) throw new Error('Unsupported file');
-    const data = readFileSync(fd);
+    if (!before.isFile()) throw Error(uploadRefusals.type);
+    if (before.size > uploadByteLimit) throw Error(uploadRefusals.size);
+    assertUploadOwnership(before, uid);
+    if (before.dev !== entry.dev || before.ino !== entry.ino) throw Error('File path changed');
+    // Read at most the observed size plus one, even if a writer keeps growing it.
+    const buffer = Buffer.alloc(Number(before.size) + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const count = readSync(fd, buffer, length, buffer.length - length, null);
+      if (!count) break;
+      length += count;
+    }
+    if (BigInt(length) !== before.size) throw Error('File changed while checking');
+    const data = buffer.subarray(0, length);
     const digest = createHash('sha256').update(data).digest('hex');
     const after = fstatSync(fd, { bigint: true });
     const stat = s => [s.dev, s.ino, s.size, s.mtimeNs, s.ctimeNs].map(String).join(':');
     if (stat(before) !== stat(after)) throw new Error('File changed while checking');
-    return { path, signature: `${stat(after)}:${digest}`, ...(includeData ? { data } : {}) };
+    return { path, size: Number(after.size), signature: `${stat(after)}:${digest}`, ...(includeData ? { data } : {}) };
   } finally { closeSync(fd); }
+}
+
+function snapshots(paths, includeData = false) {
+  let size = 0;
+  return paths.map(path => {
+    const file = snapshot(path, includeData);
+    size += file.size;
+    if (size > Number(uploadByteLimit)) throw Error(uploadRefusals.size);
+    return file;
+  });
 }
 
 // Trusted broker/UI adapter only. Page and model JSON cannot mint these opaque handles.
@@ -81,7 +115,7 @@ export function createFileAuthority({ approve, now = Date.now, ttlMs = 30_000 } 
       const key = bindingKey(binding);
       if (!Array.isArray(paths) || paths.length < 1 || paths.length > 16 || new Set(paths).size !== paths.length)
         throw new Error('Expected exact file list');
-      const files = paths.map(snapshot);
+      const files = snapshots(paths);
       if (typeof approve !== 'function' || await approve({ binding: structuredClone(binding), paths: [...paths] }) !== true)
         throw new Error('Exact user file approval required');
       // Approval may take time. Check again before publishing the capability.
@@ -105,8 +139,8 @@ export function createFileAuthority({ approve, now = Date.now, ttlMs = 30_000 } 
       if (!cap || cap.key !== bindingKey(binding)) throw new Error('Invalid file capability');
       capabilities.delete(token);
       fresh(cap);
-      const files = cap.files.map(f => {
-        const read = snapshot(f.path, true);
+      const files = snapshots(cap.files.map(f => f.path), true).map((read, index) => {
+        const f = cap.files[index];
         if (read.signature !== f.signature) throw new Error('Approved file changed');
         return read;
       });
@@ -141,7 +175,7 @@ export function createFileAuthority({ approve, now = Date.now, ttlMs = 30_000 } 
         return stage;
       } catch (error) { cleanup(); throw error; }
     },
-    checkPaths(paths) { return paths.map(snapshot); },
+    checkPaths(paths) { return snapshots(paths); },
     unchanged(before) { return before.every(f => snapshot(f.path).signature === f.signature); },
   });
   transfers.set(authority, (stage, binding) => {

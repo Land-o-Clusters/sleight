@@ -6,6 +6,7 @@ import { readNativeEditContext, retainNativeEditContext, sameNativeEditContext, 
 import { canonical } from './authority.mjs';
 import { check, inspectElement, releaseNavigation, intent, expirePaymentDialog, keyClass, activationKey, textChord, deferRefund, endDeferredRefund, internalNativeKeyboardTarget, lineBreakRefusal } from './rules.mjs';
 import { createUserFileProvider, stageUserUploads } from './files.mjs';
+import { uploadRefusalMessage } from './upload-paths.mjs';
 import { createConsentUi } from './consent-ui.mjs';
 import { isAppBinding } from './electron-identity.mjs';
 import { moneyFigures, moneyConflicts } from '../payment-figures.mjs';
@@ -586,7 +587,7 @@ export function createV3Context({ binding, browser, app, ui, confirmPayments, no
   const requested = requestedPayment(bound.message.text), documents = new Map(), targets = new WeakMap(), held = new Set();
   const watched = new Map();
   const uploads = new WeakMap(), offered = new Map(), tickets = new Map(), pending = new Map();
-  let closed = false, live, sequence = 0, dialogOwner;
+  let closed = false, live, sequence = 0, dialogOwner, uploadRefusal;
   const current = () => { try { return !closed && bound.current() === true && (!app || app.current()); } catch { return false; } };
   const handoff = createHandoffWaiter({ ui, current, session: bound.message.session, turn: bound.message.turn });
   // One place derives the document identity, so every later check agrees with the first.
@@ -621,7 +622,7 @@ export function createV3Context({ binding, browser, app, ui, confirmPayments, no
       live = record.identity; offered.set(target.ref, input);
       const handle = fileProvider.offer(binding, paths, target.ref);
       uploads.set(target, { handle, paths: [...paths], record }); return true;
-    } catch { return false; }
+    } catch (error) { uploadRefusal = uploadRefusalMessage(error); return false; }
   } });
   let ruleTarget;
   const consent = Object.freeze({ consume(terms, target) {
@@ -782,7 +783,9 @@ export function createV3Context({ binding, browser, app, ui, confirmPayments, no
         }
         if (fieldOnly && intent(kind, target).submit) return refused();
         ruleTarget = target;
-        const result = check(ruleContext, kind, target);
+        uploadRefusal = undefined;
+        let result = check(ruleContext, kind, target);
+        if (kind === 'upload' && result.verdict === 'refuse' && uploadRefusal) result = { ...result, message: uploadRefusal };
         const checked = targets.get(target);
         if (checked) { checked.allowedKind = result.verdict === 'allow' ? kind : undefined; checked.allowedKey = target.key; }
         if (result.verdict === 'allow' && ['click', 'press', 'submit'].includes(kind))
