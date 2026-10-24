@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { realpathSync } from 'node:fs';
+const realTmp = realpathSync(tmpdir());
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { armPaths, composerPlan, CURSOR_PIN } from '../bench/world/arms/cursor-cu/contract.mjs';
 import { nativeMain } from '../bench/world/arms/cursor-cu/suite.mjs';
 import { runDesktop } from '../bench/world/arms/cursor-cu/run.mjs';
@@ -19,7 +23,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { publicPrivateMailRow } from '../bench/private-mail.mjs';
 import { scrubCursor } from '../bench/world/arms/cursor-cu/scrub.mjs';
 
-const paths = armPaths({ home: '/private/tmp/ca4-fixture-home' });
+const paths = armPaths({ home: join(realTmp, 'ca4-fixture-home') });
 const own = { pid: 42, bundleId: CURSOR_PIN.bundleId, executable: paths.app + '/Contents/MacOS/Cursor', launchAt: 1000 };
 const config = { selectedModels: [{ modelId: 'grok-4.7-high', parameters: [{ id: 'effort', value: 'high' }, { id: 'fast', value: 'false' }] }] };
 const composer = () => ({ composerId: 'chat', status: 'completed', latestChatGenerationUUID: 'turn', generatingBubbleIds: [], modelConfig: config,
@@ -36,7 +40,7 @@ const pending = () => {
 };
 const card = { owner: own, title: 'Allow Cursor to use TextEdit?', name: request.name, bundleId: request.bundleId, source: 'Computer Use', button: 'Allow in this chat', id: 'card' };
 const plan = () => composerPlan({ prompt: 'Edit.', paths, allowedApps: [request.bundleId], timeoutMs: 5000 });
-const temp = () => mkdtempSync('/private/tmp/sleight-ca4-test-');
+const temp = () => trackTemp(mkdtempSync(join(realTmp, 'sleight-ca4-test-')));
 
 for (const passed of [false, true]) test(`nativeMain retains ${passed ? 'passing' : 'failed'} rows in cursor-cu score`, async () => {
   const dir = temp(), exit = process.exitCode;
@@ -210,7 +214,7 @@ test('calibration shapes accept known fields only and discard dynamic ids', () =
   assert.ok(text.includes('modelConfig'));
 });
 test('direct Cursor gate admission enforces owner-away before other side effects', async () => {
-  await assert.rejects(admitRealGate({ surface: 'cursor-cu', ownerAway: false, out: '/private/tmp/ca4-not-created', arms: [] }), /requires --owner-away/);
+  await assert.rejects(admitRealGate({ surface: 'cursor-cu', ownerAway: false, out: join(realTmp, 'ca4-not-created'), arms: [] }), /requires --owner-away/);
 });
 test('SQLite WAL busy retry is bounded, closes each connection and never retries unrelated errors', async () => {
   assert.equal(typeof state.retryBusy, 'function');
