@@ -65,6 +65,7 @@ test('200 generated key-shaped values do not survive in text, console arguments,
     for (let n = random(36) + 1; n > 0; n--) value += alphabet[random(alphabet.length)];
     value += '-_.'[i % 3] + alphabet[random(52)];
     assert.ok(!scrubDeveloperText('debug ' + value).includes(value), `text case ${i}`);
+    assert.ok(!scrubDeveloperText('at src/' + value + '.js:1:1').includes(value), `frame case ${i}`);
     assert.ok(!safeDeveloperURL('https://example.invalid/reset/' + value).includes('/' + value), `URL case ${i}`);
     assert.ok(!safeDeveloperURL('https://' + value + '.example.invalid/ready').toLowerCase().includes(value.toLowerCase()), `host case ${i}`);
     f.cdp.emit('Runtime.consoleAPICalled', { type: 'log', args: [{ type: 'string', value }] });
@@ -87,7 +88,7 @@ test('normalization deletes format characters and folds Cyrillic and Greek befor
 });
 const readable = ['Compiled with exit code 1', 'code splitting enabled', 'Are you sure?', 'metadata: useful',
   'Next.js docs', 'sure? still ready', 'year 2026', 'port 8080', 'HTTP 404 count 1234',
-  'ready 1.2345 1234.5678 0 9999', 'ready, (ok)!', 'true false null undefined', 'DOMContentLoaded',
+  'ready 1.2345', 'ready 1234.5678', 'ready 0 9999', 'ready, (ok)!', 'true false null undefined', 'DOMContentLoaded',
   'cOmPiLeD WITH Exit CODE 1', 'INTERNATIONALIZATION ready', 'ready - (ok) + 1 = 2'];
 for (const text of readable) test(`readable diagnostics survive: ${text}`, () => assert.equal(scrubDeveloperText(text), text));
 test('numeric boundaries and punctuation do not open holes in unknown tokens', () => {
@@ -99,7 +100,7 @@ for (const [input, expected] of [
   ['https://u:p@ab3.example.invalid/reset/Ab3dE7gH9k?key=briefvalue#tail', 'https://[sub].example.invalid/reset/[seg]'],
   ['https://482913.example.invalid/verify/482913', 'https://[sub].example.invalid/verify/[seg]'],
   ['localhost:3000/api/reset?key=briefvalue#tail', 'localhost:3000/api/reset'],
-  ['api.example.com?k=briefvalue', 'api.example.com'],
+  ['api.example.com?k=briefvalue', '[sub].example.com'],
   ['/api/reset?key=briefvalue#tail', '/api/reset'],
   ['../api/reset?key=briefvalue', '../api/reset'],
   ['https://example.invalid/app-v.js/alpha_beta/app1.js/1234', 'https://example.invalid/app-v.js/[seg]/[seg]/[seg]'],
@@ -133,12 +134,158 @@ test('credential labels and known credential prefixes in URL paths remain hidden
   }
 });
 test('stack frames preserve only the bounded file name and line:column', () => {
-  for (const text of ['at app.js:1:2', 'at app_12-v.min.js:100:20', 'at fn (app.js:1:2)', 'at bundle:1:2'])
+  for (const text of ['at app.js:1:2', 'at app.min.js:100:20', 'at fn (app.js:1:2)'])
     assert.equal(scrubDeveloperText(text), text);
   assert.equal(scrubDeveloperText('at https://user:pass@example.invalid/Ab3dE7gH9k/app_12.js:1:2?key=briefvalue'),
-    'at https://example.invalid/[seg]/app_12.js:1:2');
+    'at https://example.invalid/[seg]/[seg]');
   assert.equal(scrubDeveloperText('at app.js:1:2?query=briefvalue#tail'), 'at app.js:1:2');
   assert.equal(scrubDeveloperText('at https://example.invalid/code.js:1:2'), 'at https://example.invalid/code.js:1:2');
+});
+
+// Review regressions: frame punctuation must not exempt an opaque value from
+// the same allowlist that protects ordinary console text and URL segments.
+for (const value of ['sk_live_Ab3dE7gH9k', 'ghp_shortkey', 'AKIAIOSFODNN7EXAMPLE', 'Ab3dE7gH9k',
+  'abcdefghijklmnop', 'deadbeef', 'app_12', 'app-12', 'bundle']) {
+  test(`frame locations cannot carry an unknown filename: ${value}`, () => {
+    for (const file of [value, value + '.js']) {
+      for (const input of ['at ' + file + ':1:1', 'at fn (' + file + ':1:2)', 'at src/' + file + ':1:1',
+        'at https://example.com/' + file + ':1:1?query=briefvalue']) {
+        if (file === 'bundle.js') continue; // A permitted word with a source extension is readable.
+        const text = scrubDeveloperText(input);
+        assert.ok(!text.includes(file), input + ' -> ' + text);
+        assert.doesNotMatch(text, /briefvalue/);
+      }
+    }
+  });
+}
+for (const extension of ['js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'vue', 'svelte', 'css', 'html', 'wasm']) {
+  test(`source frames retain allowed words and relative directories: ${extension}`, () => {
+    for (const path of ['app.' + extension, 'src/app.' + extension, './src/app.' + extension, '../src/app.' + extension]) {
+      const text = 'at Object.render (' + path + ':12:3)';
+      assert.equal(scrubDeveloperText(text), text);
+    }
+  });
+}
+test('source path components cannot carry secrets even with a valid final source name', () => {
+  for (const path of ['Ab3dE7gH9k/app.js:1:1', './sk_live_shortkey/app.js:1:1',
+    'https://example.com/ghp_shortkey/app.js:1:1']) {
+    assert.doesNotMatch(scrubDeveloperText('at ' + path), /Ab3dE7gH9k|sk_live_shortkey|ghp_shortkey/);
+  }
+});
+for (const input of ['4111 1111 1111 1111', '123 45 6789', '212 555 0123', '3704 0044 0532 0130 00',
+  '1234 567', '1 2 3', '12 34 56', '12345 67', '+1 212 555 0123', '1.23 4.56 7.89']) {
+  test(`spacing does not split a sensitive digit run: ${input}`, () => {
+    for (const space of [' ', '\u00a0', '\u2009', '\u202f', '\u3000', '\t', '\n']) {
+      const value = input.replaceAll(' ', space);
+      assert.equal(scrubDeveloperText('debug ' + value + ' tail'), 'debug [value] tail');
+    }
+  });
+}
+test('fullwidth digits and split numeric console arguments are masked as a single run', async t => {
+  assert.equal(scrubDeveloperText('debug ４１１１\u00a0１１１１\u00a0１１１１\u00a0１１１１ tail'), 'debug [value] tail');
+  const f = fixture(); t.after(f.reader.stop); await f.reader.ready;
+  f.cdp.emit('Runtime.consoleAPICalled', { type: 'log', args: [4111, 1111, 1111, 1111].map(value => ({ type: 'number', value })) });
+  assert.match(await f.reader.read({ console: true }), /"text":"\[value\]"/);
+});
+test('short diagnostic numbers separated by words or punctuation stay readable', () => {
+  for (const text of ['size 12 34', 'size 123 456', 'HTTP 404 count 1234', 'year 2026 port 8080',
+    'size 1, 2, 3', 'ready 45ms 2s 20px 8kb 4mb 50%']) assert.equal(scrubDeveloperText(text), text);
+});
+const translatedLabels = ['passwort', 'kennwort', 'schlüssel', 'zugangstoken', 'clave', 'contraseña',
+  'ficha', 'mot de passe', 'jeton', 'clé', 'parola segreta', 'chiave', 'gettone', 'senha', 'palavra-passe',
+  'chave', 'wachtwoord', 'sleutel', 'toegangstoken'];
+for (const label of translatedLabels) test(`translated labels hide unpunctuated values: ${label}`, () => {
+  const text = scrubDeveloperText(label + ' sunshine meadow blossom render failed');
+  assert.doesNotMatch(text, /sunshine|meadow|blossom/);
+  assert.match(text, /render failed$/);
+});
+test('label masking consumes at most three following tokens and resumes diagnostics', () => {
+  for (const label of credentialLabels) {
+    assert.equal(scrubDeveloperText('debug ' + label + ': sunshine meadow blossom render failed'), 'debug [omitted] render failed', label);
+  }
+  assert.equal(scrubDeveloperText('token: sunshine; render failed'), '[omitted] render failed');
+  assert.equal(scrubDeveloperText('token sunshine meadow blossom key clover forest river render failed'), '[omitted] [omitted] render failed');
+  assert.equal(scrubDeveloperText('token https://alice.example.com/users/sunshine meadow blossom render failed'), '[omitted] render failed');
+});
+test('label boundaries cannot expose the tail of a digit run or a later labelled value', () => {
+  assert.equal(scrubDeveloperText('token 4111 1111 1111 1111 render failed'), '[omitted] render failed');
+  assert.equal(scrubDeveloperText('token 123 45 6789 212 555 0123 render failed'), '[omitted] render failed');
+  const text = scrubDeveloperText('token 4111 1111 password sunshine meadow blossom render failed');
+  assert.doesNotMatch(text, /4111|1111|sunshine|meadow|blossom/);
+  assert.match(text, /render failed$/);
+});
+for (const text of ['status code 404', 'Unexpected token in JSON', 'Warning: Each child needs a "key" prop',
+  'session expired, retry login', 'test pass count 4', "Cannot read properties of null, don't retry",
+  'Object.render Array.map', 'version v1.2.3', 'net::ERR_CONNECTION_REFUSED', 'net::ERR_NAME_NOT_RESOLVED',
+  'elapsed 45ms', 'delay 2s', 'width 20px', 'size 8kb', 'heap 4mb', 'progress 50%']) {
+  test(`review readability survives: ${text}`, () => assert.equal(scrubDeveloperText(text), text));
+}
+test('phrase exemptions do not hide a later credential label from checks', () => {
+  for (const prefix of ['status code 404', 'Unexpected token in JSON', '"key" prop', 'session expired', 'test pass']) {
+    const text = scrubDeveloperText(prefix + ' token sunshine meadow blossom render failed');
+    assert.equal(text, prefix + ' [omitted] render failed');
+  }
+});
+test('phrase exemptions require adjacency in the original message', () => {
+  for (const prefix of ['Unexpected app.js:1:2 token', 'Unexpected 123 45 6789 token',
+    'status https://example.com code', 'test app.js:1:2 pass']) {
+    const text = scrubDeveloperText(prefix + ' sunshine meadow blossom render failed');
+    assert.doesNotMatch(text, /sunshine|meadow|blossom/);
+    assert.match(text, /\[omitted\] render failed$/);
+  }
+});
+for (const [input, expected] of [
+  ['https://alice.smith.example.com/ready', 'https://[sub].[sub].example.com/ready'],
+  ['https://api.example.com:8443/ready', 'https://[sub].example.com:8443/ready'],
+  ['https://alice.smith.example.co.uk/ready', 'https://[sub].[sub].example.co.uk/ready'],
+  ['https://alice.example.com.au/ready', 'https://[sub].example.com.au/ready'],
+  ['https://alice.example.github.io/ready', 'https://[sub].example.github.io/ready'],
+  ['https://alice.example.foo.ck/ready', 'https://[sub].example.foo.ck/ready'],
+  ['https://alice.www.ck/ready', 'https://[sub].www.ck/ready'],
+  ['https://alice.city.kawasaki.jp/ready', 'https://[sub].city.kawasaki.jp/ready'],
+  ['https://alice.localhost:3000/ready', 'https://[sub].localhost:3000/ready'],
+  ['https://intranet/ready', 'https://[sub]/ready'],
+  ['https://127.0.0.1:8443/ready', 'https://[ip]:8443/ready'],
+  ['https://127.0.0.1:443/ready', 'https://[ip]:443/ready'],
+  ['http://localhost:80/ready', 'http://localhost:80/ready'],
+  ['127.0.0.1:8443/ready', '[ip]:8443/ready'],
+  ['http://[2001:db8::1]:8080/ready', 'http://[ip]:8080/ready'],
+  ['[2001:db8::1]:8080/ready', '[ip]:8080/ready'],
+  ['http://localhost:3000/ready', 'http://localhost:3000/ready'],
+  ['https://example.com/users/alice/orders', 'https://example.com/users/[seg]/orders'],
+  ['https://example.com/accounts/sunshine', 'https://example.com/accounts/[seg]'],
+  ['https://example.com/profile/meadow', 'https://example.com/profile/[seg]'],
+  ['https://example.com/u/blossom', 'https://example.com/u/[seg]'],
+  ['https://example.com/@/clover', 'https://example.com/@/[seg]'],
+  ['https://example.com/@clover/ready', 'https://example.com/[seg]/ready'],
+  ['https://example.com/members/forest', 'https://example.com/members/[seg]'],
+  ['https://example.com/%75sers/%61lice', 'https://example.com/users/[seg]'],
+  ['/users/alice/profile/meadow', '/users/[seg]/profile/[seg]'],
+]) test(`URL identity metadata is masked: ${input}`, () => {
+  assert.equal(safeDeveloperURL(input), expected);
+  assert.equal(scrubDeveloperText('load ' + input), 'load ' + expected);
+});
+test('unlabelled ordinary words remain readable under the requested grammar', () => {
+  assert.equal(scrubDeveloperText('alice sunshine meadow blossom'), 'alice sunshine meadow blossom');
+});
+test('all earlier opaque review values stay masked when disguised as source locations', () => {
+  for (const value of reviewValues) {
+    for (const location of [value + ':1:1', value + '.js:1:1', 'src/' + value + '.js:1:1']) {
+      assert.ok(!scrubDeveloperText('at ' + location).includes(value), location);
+    }
+  }
+});
+test('a stack frame requires a source extension and allowed directory tokens', () => {
+  for (const name of ['app.txt', 'app.map', 'app.json', 'app.png', 'bundle', 'sk_live_shortkey.js'])
+    assert.equal(scrubDeveloperText('at ' + name + ':12:3'), 'at [value]');
+  assert.equal(scrubDeveloperText('at https://example.com/secret_123/app.js:1:1'), 'at https://example.com/[seg]/[seg]');
+  assert.equal(scrubDeveloperText('at https://example.com/Ab3dE7gH9k/app.js:1:1'), 'at https://example.com/[seg]/[seg]');
+});
+test('relative source frames cannot bypass identity and credential path masking', () => {
+  for (const path of ['users/clover/app.js:1:1', '../accounts/forest/app.js:1:1', 'token/sunshine/app.js:1:1']) {
+    const text = scrubDeveloperText('at ' + path);
+    assert.doesNotMatch(text, /clover|forest|sunshine/);
+  }
 });
 test('non-web schemes, malformed inputs and oversized text fail closed', () => {
   for (const value of ['data:text/plain,briefvalue', 'file:///private/key', 'blob:https://example.invalid/private', 'bad', 'x'.repeat(9000)])

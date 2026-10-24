@@ -46,7 +46,19 @@ console.log('reviewcanary abcdefghijklmnop aaaaaaaaaaaaaaaa');
 console.log('load localhost:3000/api/reset?key=briefvalue');
 console.log('load api.example.com?k=briefvalue');
 console.log('failed:/api/reset?key=briefvalue');
-console.log('at app_12.js:1:2');
+console.log('at Object.render (../src/app.js:1:2)');
+console.log('at sk_live_Ab3dE7gH9k:1:1 ghp_shortkey:1:2 AKIAIOSFODNN7EXAMPLE:1:1');
+console.log('4111 1111 1111 1111', '123 45 6789', '212\u00a0555\u00a00123');
+console.log('４１１１\u202f１１１１\u202f１１１１\u202f１１１１');
+console.log('token 4111 1111 1111 1111 render failed');
+console.log('token 4111 1111 password sunshine meadow blossom render failed');
+console.log('passwort sunshine meadow blossom render failed');
+console.log('contraseña sunshine meadow blossom render failed');
+console.log('mot de passe sunshine meadow blossom render failed');
+console.log('status code 404; Unexpected token in JSON; "key" prop; session expired; test pass');
+console.log("Object.render Array.map v1.2.3 45ms net::ERR_CONNECTION_REFUSED don't retry");
+console.log('load https://alice.smith.example.com/users/clover/orders');
+console.log('load http://127.0.0.1:8080/profile/forest');
 console.log('keycanary https://example.invalid/sk-shortkey');
 console.log('sure? metadata:useful year 2026 port 8080 HTTP 404 count 1234');
 console.log('load /invite/abcdef123456/app12345678901234.min.js?x=briefvalue');
@@ -54,7 +66,7 @@ setTimeout(() => { throw new Error('fixture render failed'); }, 0);
 Promise.allSettled([
   fetch('/ok?token=private-query#private-fragment', {method:'POST',headers:{Authorization:'Bearer private-header'},body:'private-request-body'}),
   fetch('/broken?key=private-query'), fetch('/redirect'), fetch('http://127.0.0.1:1/unreachable'),
-  fetch('/invite/abcdef123456/app12345678901234.min.js')
+  fetch('/invite/abcdef123456/app12345678901234.min.js'), fetch('/users/clover/orders'), fetch('/profile/forest')
 ]).then(() => { window.fixtureDone = true; console.info('fixture settled'); });
 </script>`;
 
@@ -115,16 +127,22 @@ test('owned real-page console, request failures and timings are scrubbed without
   assert.doesNotMatch(logs, /shortkey|AKIA|ASIA|ghp_|gho_|github_pat_|xox[abp]|eyJhbGciOiJIUzI1NiJ9/);
   assert.match(logs, /sure\? \[value\] year 2026 port 8080 HTTP 404 count 1234/);
   assert.match(logs, /\/invite\/\[seg\]\/\[seg\]/);
-  for (const text of ['Compiled with exit code 1', 'code splitting enabled', 'Are you sure?', 'metadata: useful', 'Next.js docs', 'app_12.js:1:2'])
+  assert.doesNotMatch(logs, /\b(?:4111|1111|123 45|6789|212|555|0123)\b|sunshine|meadow|blossom|alice|smith|clover|forest|127\.0\.0\.1/);
+  for (const text of ['Compiled with exit code 1', 'code splitting enabled', 'Are you sure?', 'metadata: useful', 'Next.js docs', '../src/app.js:1:2',
+    'status code 404', 'Unexpected token in JSON', '\\"key\\" prop', 'session expired', 'test pass', 'Object.render Array.map v1.2.3 45ms net::ERR_CONNECTION_REFUSED don\'t retry',
+    '[omitted] render failed', 'https://[sub].[sub].example.com/users/[seg]/orders', 'http://[ip]:8080/profile/[seg]'])
     assert.ok(logs.includes(text), text);
   assert.match(logs, /localhost:3000\/api\/reset/);
-  assert.match(logs, /api.example.com/);
+  assert.match(logs, /\[sub\].example.com/);
   const network = await call({ network: true });
   assert.match(network, /\/broken.*"status":503/); assert.match(network, /"method":"POST".*\/ok/);
   assert.match(network, /\/redirect.*"status":302/); assert.match(network, /\/missing.*"status":404/);
   assert.match(network, /"outcome":"failed"/); assert.match(network, /"duration":/);
   assert.match(network, /\/invite\/\[seg\]\/\[seg\]/);
   assert.doesNotMatch(network, /abcdef123456/);
+  assert.doesNotMatch(network, /127\.0\.0\.1|clover|forest/);
+  assert.match(network, /\[ip\]:\d+\/users\/\[seg\]\/orders/);
+  assert.match(network, /\/profile\/\[seg\]/);
   const performance = await call({ performance: true });
   assert.match(performance, /DomContentLoaded: \d/); assert.match(performance, /TaskDuration: \d/);
   assert.match(performance, /since first developer read/); assert.match(performance, /started: \d{4}-/);

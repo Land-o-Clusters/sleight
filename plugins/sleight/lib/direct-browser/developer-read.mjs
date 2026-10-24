@@ -1,5 +1,6 @@
 // Owned-page CDP metadata only. Never inspect remote objects, read bodies or headers,
 // intercept/replay requests, evaluate page code, or retain a raw protocol event.
+import { scrubDeveloperHost } from './developer-domain.mjs';
 const LIMIT = 100, LINE = 512, OUTPUT = 8000, SEND_MS = 1500;
 const consoleTypes = new Set('log debug info error warning dir dirxml table trace clear startGroup startGroupCollapsed endGroup assert profile profileEnd count timeEnd'.split(' '));
 const resourceTypes = new Set('Document Stylesheet Image Media Font Script TextTrack XHR Fetch Prefetch EventSource WebSocket Manifest SignedExchange Ping CSPViolationReport Preflight Other'.split(' '));
@@ -19,27 +20,64 @@ for (const [latin, letters] of Object.entries({
 const normalize = text => text.normalize('NFKC').replace(/[\p{Cf}\u034f\ufe00-\ufe0f]/gu, '')
   .replace(/./gu, letter => lookalikes.get(letter) ?? letter)
   .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ');
-const labels = /(?<![a-z0-9])(?:(?:api|access|private|client|refresh|reset|proxy|auth|oauth|session|bearer)[\s_.-]*)*(?:keys?|tokens?|pass(?:words?|phrases?|wd|es)?|pwd|pw|secrets?|codes?|sig(?:nature)?s?|sess(?:ions?)?(?:[\s_.-]*ids?)?|auth(?:orization|entication)?s?|otps?|pins?|cvvs?|ssns?|credentials?|cookies?|csrf|xsrf|sid|jwt|bearer|basic)(?![a-z0-9])/gi;
+const labels = /(?<![\p{L}\p{N}])(?:(?:api|access|private|client|refresh|reset|proxy|auth|oauth|session|bearer)[\s_.-]*)*(?:keys?|tokens?|pass(?:words?|phrases?|wd|es)?|pwd|pw|secrets?|codes?|sig(?:nature)?s?|sess(?:ions?)?(?:[\s_.-]*ids?)?|auth(?:orization|entication)?s?|otps?|pins?|cvvs?|ssns?|credentials?|cookies?|csrf|xsrf|sid|jwt|bearer|basic|passwort|kennwort|schlüssel|zugangstoken|clave|contraseña|ficha|mot[\s_.-]+de[\s_.-]+passe|jetons?|clé|parola[\s_.-]+segreta|chiave|gettone|senha|palavra[\s_.-]+passe|chave|wachtwoord|sleutel|toegangstoken)(?![\p{L}\p{N}])/giu;
 // These exact diagnostics are admitted even when their spelling resembles an
 // opaque mixed-case value or exceeds the conservative plain-word limit.
 const statusWords = new Set(('true false null undefined NaN Infinity OK HTTP HTTPS GET POST PUT PATCH DELETE OPTIONS ' +
   'SUCCESS WARNING ERROR FAILED READY TypeError ReferenceError SyntaxError RangeError URIError EvalError AggregateError ' +
   'DOMContentLoaded Next.js internationalization misconfiguration unresponsiveness').toLowerCase().split(' '));
 const stack = /^[a-z0-9_.-]{1,128}:\d{1,8}:\d{1,8}$/i;
+const source = /^(.*)\.(js|mjs|cjs|ts|tsx|jsx|vue|svelte|css|html|wasm)$/i;
+const identity = /^(?:users?|accounts?|profiles?|u|@|members?|people|persons?|customers?|clients?|contacts?|authors?|usernames?|emails?|handles?|identit(?:y|ies))$/i;
+// Count complete runs after NFKC folds digits and compatibility spaces. These
+// spans must be protected before a label splits the message into smaller parts.
+const numberRuns = /(?<![\p{L}\p{N}_.+-])[+-]?\d+(?:\.\d+)?(?:\s+[+-]?\d+(?:\.\d+)?)+(?![\p{L}\p{N}_.+-])/gu;
 // Special spans are parsed as data, never caller-forgeable placeholder strings.
 // A relative URL may follow any punctuation, including the colon in "failed:/".
-const special = /(?<![\p{L}\p{N}_.%\/@-])(?:[a-z0-9_.-]+:\d{1,8}:\d{1,8}(?![\w:])(?:[?#][^\s<>"'`()\[\]{},;]*)?|(?:https?|wss?|file|data|blob):[^\s<>"'`()\[\]{}]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?|[/?#][^\s<>"'`()\[\]{},;]*)|[a-z0-9-]+:\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?)|(?<![\p{L}\p{N}])(?:\.\.?\/|\/)[^\s<>"'`()\[\]{},;]*/giu;
+const special = /(?<![^\s<>"'`()\[\]{}])(?:(?:\.\.?\/)?(?:[a-z0-9_.-]+\/)*[a-z0-9_.-]+:\d{1,8}:\d{1,8}(?![\w:])(?:[?#][^\s<>"'`()\[\]{},;]*)?|(?:https?|wss?|file|data|blob):[^\s<>"'`(){}]+|(?:(?:\d{1,3}\.){3}\d{1,3}|\[[a-f0-9:.]+\])(?::\d+)?(?:[/?#][^\s<>"'`()\[\]{},;]*)?|(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?|[/?#][^\s<>"'`()\[\]{},;]*)|[a-z0-9-]+:\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?)|(?<![\p{L}\p{N}])(?:\.\.?\/|\/)[^\s<>"'`()\[\]{},;]*/giu;
+
+const allowedWord = word => statusWords.has(word.toLowerCase()) ||
+  (/^[a-z]{1,15}$/i.test(word) && !/^[a-f]{4,}$/i.test(word));
+const allowedToken = word => allowedWord(word) || /^[+-]?\d{1,4}(?:\.\d{1,4})?$/.test(word) ||
+  /^\d{1,4}(?:\.\d{1,4})?(?:ms|s|px|kb|mb|%)$/i.test(word) || /^net::ERR_[A-Z_]{1,64}$/.test(word) ||
+  /^v\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(word) ||
+  (/^[a-z]+(?:['’][a-z]+)+$/i.test(word) && allowedWord(word.replace(/['’]/g, ''))) ||
+  (/^[a-z]+(?:\.[a-z]+)+$/i.test(word) && word.split('.').every(allowedWord));
+
+function safeFrame(value) {
+  if (/^[a-z]+:\/\//i.test(value)) return;
+  const match = value.match(/^(.*):(\d{1,8}):(\d{1,8})$/);
+  if (!match) return;
+  const parts = match[1].split('/'), file = parts.pop(), name = file.match(source);
+  // Frame punctuation cannot promote an unknown token into a filename.
+  if (!name || !allowedToken(name[1]) || !parts.every(part => part === '.' || part === '..' || allowedToken(part))) return '[value]';
+  let omit = false, hideIdentity = false;
+  const path = [...parts, file].map((part, i) => {
+    omit ||= i < parts.length && part.search(labels) >= 0;
+    const hide = omit || hideIdentity;
+    hideIdentity = identity.test(part);
+    return hide ? '[seg]' : part;
+  }).join('/');
+  return path + ':' + match[2] + ':' + match[3];
+}
 
 function plainToken(value) {
   if (/^[.,;:!?"'`()\[\]{}<>+*%&|~^=/#@-]+$/.test(value)) return value;
   // Only surrounding prose punctuation can be detached. Interior punctuation,
   // digits in words, underscores and unknown forms mask the entire token.
   const [, before, word, after] = value.match(/^(["'`([{<]*)(.*?)([.,;:!?"'`)\]}>]*)$/s);
-  const allowed = statusWords.has(word.toLowerCase()) || /^[+-]?\d{1,4}(?:\.\d{1,4})?$/.test(word) ||
-    (/^[a-z]{1,15}$/i.test(word) && !/^[a-f]{4,}$/i.test(word));
-  return before + (allowed ? word : '[value]') + after;
+  return before + (allowedToken(word) ? word : '[value]') + after;
 }
 const plainText = text => text.replace(/\S+/g, plainToken);
+
+function diagnosticLabel(text, match) {
+  const before = text.slice(0, match.index), after = text.slice(match.index + match[0].length);
+  return (/^code$/i.test(match[0]) && (/\b(?:exit|status)\s+$/i.test(before) || /^\s+splitting\s+enabled\b/i.test(after))) ||
+    (/^token$/i.test(match[0]) && /\bunexpected\s+$/i.test(before)) ||
+    (/^key$/i.test(match[0]) && /["'`]$/.test(before) && /^["'`]\s+prop\b/i.test(after)) ||
+    (/^session$/i.test(match[0]) && /^\s+expired\b/i.test(after)) ||
+    (/^pass$/i.test(match[0]) && /\btest\s+$/i.test(before));
+}
 
 export function scrubDeveloperText(value) {
   if (typeof value !== 'string') return '[value]';
@@ -51,27 +89,42 @@ export function scrubDeveloperText(value) {
     const end = match.index + match[0].length;
     if (end < text.length && /[a-z0-9_@]/i.test(text[end])) continue;
     const frame = match[0].split(/[?#]/, 1)[0];
-    spans.push({ start: match.index, end, safe: stack.test(frame) ? frame : safeDeveloperURL(match[0]) });
+    spans.push({ start: match.index, end, safe: safeFrame(frame) ?? safeDeveloperURL(match[0]) });
   }
+  for (const match of text.matchAll(numberRuns)) {
+    const start = match.index, end = start + match[0].length;
+    if ((match[0].split(/\s+/).length >= 3 || match[0].replace(/\D/g, '').length >= 7) &&
+      !spans.some(span => start < span.end && end > span.start)) spans.push({ start, end, safe: '[value]' });
+  }
+  spans.sort((a, b) => a.start - b.start);
   let labelText = '', cursor = 0;
   for (const span of spans) {
     labelText += text.slice(cursor, span.start) + ' '.repeat(span.end - span.start); cursor = span.end;
   }
   labelText += text.slice(cursor);
-  let cut = text.length;
+  const omissions = [];
   for (const match of labelText.matchAll(labels)) {
-    if (/^code$/i.test(match[0]) &&
-      ((/\bexit\s+$/i.test(labelText.slice(0, match.index)) && /^\s+\d{1,4}(?![\w.])/.test(labelText.slice(match.index + 4))) ||
-       /^\s+splitting\s+enabled\b/i.test(labelText.slice(match.index + 4)))) continue;
-    cut = match.index; break;
+    if (diagnosticLabel(text, match)) continue;
+    let end = match.index + match[0].length;
+    const rest = text.slice(end).replace(/^[\s:=\-"'`]+/, '');
+    end = text.length - rest.length;
+    let count = 0;
+    for (const token of rest.matchAll(/\S+/g)) {
+      end = text.length - rest.length + token.index + token[0].length;
+      if (++count === 3 || /[.,;!?]["'`)\]}]*$/.test(token[0])) break;
+    }
+    // An omission may reach into a protected span, but never reveal its tail.
+    for (const span of spans) if (span.start < end && span.end > match.index) end = Math.max(end, span.end);
+    const previous = omissions.at(-1);
+    if (previous && previous.end >= match.index) previous.end = Math.max(previous.end, end);
+    else omissions.push({ start: match.index, end, safe: '[omitted]' });
   }
+  const kept = spans.filter(span => !omissions.some(omit => span.start < omit.end && span.end > omit.start));
   const parts = []; cursor = 0;
-  for (const span of spans) {
-    if (span.start >= cut) break;
+  for (const span of [...kept, ...omissions].sort((a, b) => a.start - b.start)) {
     parts.push(plainText(text.slice(cursor, span.start)), span.safe); cursor = span.end;
   }
-  parts.push(plainText(text.slice(cursor, cut)));
-  if (cut < text.length) parts.push('[omitted]');
+  parts.push(plainText(text.slice(cursor)));
   return parts.join('').slice(0, LINE);
 }
 
@@ -82,29 +135,36 @@ export function safeDeveloperURL(value) {
     if (text.length > 8192 || /\s/.test(text)) return '[URL omitted]';
     const relative = /^(?:\/|\.\.?\/)/.test(text) && !text.startsWith('//');
     const absolute = /^(?:https?|wss?):\/\//i.test(text);
-    const bare = /^(?:[a-z0-9-]+\.)+[a-z]{2,}(?=[:/?#]|$)|^[a-z0-9-]+:\d+(?=[/?#]|$)/i.test(text);
+    const bare = /^(?:(?:[a-z0-9-]+\.)+[a-z]{2,}|(?:\d{1,3}\.){3}\d{1,3}|\[[a-f0-9:.]+\])(?=[:/?#]|$)|^[a-z0-9-]+:\d+(?=[/?#]|$)/i.test(text);
     if (!relative && !absolute && !bare) return '[URL omitted]';
     const url = relative ? undefined : new URL(absolute ? text : 'https://' + text);
     const rawPath = relative ? text.split(/[?#]/, 1)[0] : url.pathname;
     const segments = rawPath.split('/');
-    let omit = false;
+    let omit = false, hideIdentity = false, sourceDirectories = true;
     const path = segments.slice(0, 20).map((segment, index) => {
       if (!segment) return '';
       let decoded; try { decoded = normalize(decodeURIComponent(segment)); } catch { return '[seg]'; }
-      if (!omit && index === segments.length - 1 && stack.test(decoded)) return decoded;
+      const hide = hideIdentity;
+      hideIdentity = identity.test(decoded);
+      if (!hide && !omit && index === segments.length - 1 && stack.test(decoded))
+        return sourceDirectories && safeFrame(decoded) === decoded ? decoded : '[seg]';
+      sourceDirectories &&= decoded === '.' || decoded === '..' || allowedToken(decoded);
       // Retain the earlier credential-path protection as an additional limit on
       // the URL grammar. A label omits its suffix, including later path words.
       omit ||= decoded.search(labels) >= 0 || /^(?:sk|xox[abp])-/i.test(decoded);
-      if (omit) return '[seg]';
+      if (hide || omit) return '[seg]';
+      if (decoded === '@') return '@';
       return /^[a-z.-]{1,20}$/i.test(decoded) ? decoded : '[seg]';
     }).join('/') + (segments.length > 20 ? '/[seg]' : '');
     if (relative) return path.slice(0, LINE);
-    // IP literals are hosts, not DNS subdomain labels. Every DNS label carrying
-    // digits is masked, including short reset-code subdomains and punycode.
-    const host = /^(?:\d+\.){3}\d+$/.test(url.hostname) || url.hostname.startsWith('[') ? url.hostname :
-      url.hostname.split('.').map(label => /^[a-z-]{1,63}$/i.test(label) ? label : '[sub]').join('.');
+    const host = scrubDeveloperHost(url.hostname);
+    // URL.port erases an explicitly written default port. Keep its canonical
+    // numeric form as well, after the URL parser has validated the authority.
+    const authority = text.replace(/^[a-z]+:\/\//i, '').split(/[\\/?#]/, 1)[0].split('@').at(-1);
+    const explicitPort = authority.match(/^(?:\[[^\]]+\]|[^:]+):(\d+)$/)?.[1];
+    const port = url.port || (explicitPort ? String(Number(explicitPort)) : '');
     const keepPath = absolute || text.split(/[?#]/, 1)[0].includes('/');
-    return ((absolute ? url.protocol + '//' : '') + host + (url.port ? ':' + url.port : '') + (keepPath ? path : '')).slice(0, LINE);
+    return ((absolute ? url.protocol + '//' : '') + host + (port ? ':' + port : '') + (keepPath ? path : '')).slice(0, LINE);
   } catch { return '[URL omitted]'; }
 }
 
