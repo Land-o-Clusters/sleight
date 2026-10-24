@@ -4,7 +4,7 @@ import { trackPage } from './activity.mjs';
 import { endpointURL, endpointTarget, endpointBlock, bindEndpointPage, assertEndpointRead } from './endpoint-guard.mjs';
 import { trustedRead } from './trusted-dom.mjs';
 import { tabHandle } from './tab-handle.mjs';
-import { terminatePageScripts, guardPageTask } from './page-health.mjs';
+import { terminatePageScripts, guardPageTask, disableRecoveryFetch } from './page-health.mjs';
 import { trackPageWaits, waitForThinPage, stopPageWaits } from './waits.mjs';
 import { invalidateRefs } from './snapshot.mjs';
 import { restoreViewport } from './viewport.mjs';
@@ -189,7 +189,7 @@ export function popupHook(options) {
     const form = own.control.form.call(node);
     if (!form) return;
     if (isSubmitType(own.type)) return { form, submitter: node };
-    if (!implicit || /^(button|reset)$/.test(own.type)) return;
+    if (!implicit || !/^(text|search|tel|url|email|password|date|month|week|time|datetime-local|number)$/.test(own.type)) return;
     for (const candidate of elementsOf(form)) {
       const other = controlOf(candidate);
       if (other && isSubmitType(other.type)) return { form, submitter: candidate };
@@ -2466,10 +2466,17 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     if (entry.nativeSession !== cdp) {
       entry.nativeSession = cdp;
       cdp.on('Page.frameRequestedNavigation', nativeNavigation);
+      cdp.on('Page.frameStartedLoading', event => {
+        if (!ended && !entry.closed && !entry.released && entry.cdp === cdp && entry.state.recoveryFetchDisablePending &&
+          event.frameId === entry.state.recoveryFrameId) track(disableRecoveryFetch(entry));
+      });
       cdp.on('close', () => {
-        if (ended || entry.closed || entry.released || entry.releasing || entry.cdp !== cdp || entry.reattaching) return;
+        if (ended || entry.closed || entry.page.isClosed() || entry.released || entry.releasing || entry.cdp !== cdp || entry.reattaching) return;
         entry.state.nativeAttachmentLost = true;
         entry.state.nativeNavigationNo = (entry.state.nativeNavigationNo ?? 0) + 1;
+        entry.state.nativeDetachNo = entry.state.nativeNavigationNo;
+        entry.script = null; entry.cdp = null;
+        metadata.delete(entry.page);
         invalidateRefs(entry.page);
         // Keep the actual work tracked after a caller's wait cap, so release
         // cannot race a late hook installation or start another attachment.
@@ -2486,7 +2493,11 @@ export function createPageRegistry({ browser, session, context = browser?.contex
             metadata.set(entry.page, Promise.resolve({ cdp: next, targetInfo }));
             entry.state.nativeAttachmentLost = false;
           } catch (error) { await next.detach().catch(() => {}); throw error; }
-        })().catch(() => { entry.state.nativeAttachmentLost = true; })
+        })().catch(() => {
+          entry.state.nativeAttachmentLost = true;
+          entry.script = null; entry.cdp = null;
+          metadata.delete(entry.page);
+        })
           .finally(() => { entry.reattaching = null; }));
       });
     }
@@ -2573,7 +2584,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     Object.defineProperty(entry, 'hook', { value: hook, enumerable: false, writable: true });
     entry.checkAttachment = async () => {
       if (entry.reattaching) await deadline(() => entry.reattaching, timeoutMs, 'Native debugger reattachment still pending; tab retained. Wait, close, keep or handoff.');
-      if (entry.state.nativeAttachmentLost) throw capabilityError('Native app navigation or debugger detach attempted; native UI outcome unconfirmed. Same-target reattachment failed; tab retained. Tell the user; close, keep or handoff.');
+      if (entry.state.nativeAttachmentLost) throw capabilityError('Native debugger detach attempted; native UI outcome unconfirmed. Same-target reattachment failed; dead script and CDP handles cleared, tab retained. Tell the user; close, keep or handoff.');
     };
     entry.parent = opener;
     // A window the page itself opened by that name (window.open) is reused like one this registry named.
@@ -2807,7 +2818,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
         await deadline(() => entry.ready, timeoutMs);
         const viewport = await deadline(() => restoreViewport(entry.page, { release: true }), timeoutMs);
         await deadline(() => removeHook(entry), timeoutMs);
-        await entry.cdp.detach();
+        await entry.cdp?.detach();
         await releaseTarget?.(entry.targetId);
         if (entry.page.isClosed()) throw Error('owned tab closed during release');
         entry.released = true; entry.release = kind;
@@ -2903,7 +2914,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
           if (!entry.page.isClosed()) {
             if (!entry.handoffHooksOff) try { await deadline(() => removeHook(entry), timeoutMs); entry.handoffHooksOff = true; }
             catch { unproved = true; }
-            try { await deadline(() => entry.cdp.detach(), timeoutMs); }
+            try { await deadline(() => entry.cdp?.detach(), timeoutMs); }
             catch { unproved = true; }
           }
           try { await deadline(() => releaseTarget?.(entry.targetId), timeoutMs); }
@@ -2950,7 +2961,13 @@ export function createPageRegistry({ browser, session, context = browser?.contex
                 for (const entry of entries) if (!entry.closed && !entry.page.isClosed()) {
                   entry.hook = hook;
                   entry.handoffHooksOff = false;
+                  if (!entry.cdp) {
+                    const info = await identify(entry.page);
+                    if (info.targetInfo.targetId !== entry.targetId) throw Error('owned target unavailable');
+                    entry.cdp = info.cdp;
+                  }
                   await deadline(() => install(entry), timeoutMs);
+                  entry.state.nativeAttachmentLost = false;
                   invalidateRefs(entry.page); entry.state.snapshotNo = 0;
                 }
                 if (keeping || ended) { await preserve(); return null; }

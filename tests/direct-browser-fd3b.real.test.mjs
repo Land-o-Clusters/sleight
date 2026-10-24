@@ -18,7 +18,9 @@ test('FD3B real native form actions and overrides refuse clicks, Enter, script s
     '<form id="zoom" action="/web"><input id="image" type="image" formaction="zoommtg://fixture.invalid" alt="Open"></form>' +
     '<form id="outside" action="/web"></form><input id="externaltext" form="outside"><button id="externalbutton" form="outside" formaction="zoommtg://fixture.invalid">Open</button>');
   for (const inspector of [inspectElement, inspectTarget]) for (const selector of ['#text', '#button', '#image', '#externaltext', '#externalbutton']) {
-    assert.equal((await trustedLocatorRead(f.entry.page.locator(selector), inspector)).appLink, true, inspector.name + selector);
+    const inspected = await trustedLocatorRead(f.entry.page.locator(selector), inspector);
+    assert.equal(inspected.appLink, !['#text', '#externaltext'].includes(selector), inspector.name + selector);
+    assert.equal(inspected.nativeFormEnter, true, inspector.name + selector);
   }
   const results = await f.entry.page.evaluate(() => {
     const results = [];
