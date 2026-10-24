@@ -879,7 +879,7 @@ export function createV3Context({ binding, browser, app, ui, confirmPayments, no
       const handle = targets.get(target)?.handle;
       if (handle && held.delete(handle)) await handle.dispose().catch(() => {});
     },
-    handoff: tab => handoff.wait(tab),
+    handoff: (tab, ready, onDeadline) => handoff.wait(tab, ready, onDeadline),
     async dispose() {
       handoff.dispose();
       closed = true; native?.revoke(); endDeferredRefund(ruleContext);

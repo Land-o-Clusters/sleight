@@ -1,12 +1,12 @@
 {
-  "skill": "11427530104b856240048bcbede1826570015649db4c8903ee4b19f5a23c3234",
+  "skill": "c8f645e94efd38827423ca2819e1ba5e14e04946030ce9113eb4be2043ddf69b",
   "tools": "c1b796e8a8b2a155cadd5e5ae0463d12d5f90ad8147698050352bc95dde8b40b",
   "batch": "aab9c612b29e726dcacf915b1c565dfc65ae3c455bc7561a3f1ea2d3733d4406",
   "merge": "5bd0464e07e16924b32d03a806ec8a6f47c2ed254026b394cbaa26b5c3e8a32d",
-  "notices": "926f97547b9f565a31a5bea864cbfddd57d934a67ac72a36c25ff6d022e05ccd",
+  "notices": "f903c1c3015a67c0b54c7a1b55fe950c1003a4dadd7a470db75138507d77bacc",
   "skillSafety": [
     "Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes\nit. If an app isn't approved, ask the user, or stop when a headless run refuses it.",
-    "- At sign-in, hand off. Never request passwords or codes. Updates, permissions or first-run screens: stop.",
+    "- Sign-in: turbo browser tabs `handoff wait:true` or native `app_handoff`, otherwise stop. Never request passwords/codes. Updates/permissions/first-run: stop.",
     "- An approval the user declined, a lease another session holds (the refusal names it and the seconds\n  left), or a refused settings window: stop and tell the user. Don't retry around it.",
     "- The engine refuses terminals and OpenAI's apps (ChatGPT, Codex, Atlas) unless the user turned that\n  refusal off. When it refuses, pass on what the result says and stop. Never run that command yourself.",
     "- Open a file with `open_file`, not the app's Open panel, which can bring the app to the front.",

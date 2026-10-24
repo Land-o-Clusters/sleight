@@ -4,6 +4,12 @@
 export function promptNotice(text, prompt) {
   if (prompt !== 'lean') return text;
   return text
+    .replace('app_handoff needs a confirmed native app read with an input lease. Browser and document-scoped surfaces must stop for the user.', 'app_handoff needs a leased native app read. Browser/document-scoped: stop for user.')
+    .replace('another call is pending or this session is stopped.', 'Call pending or session stopped.')
+    .replace('handoff pending; the user must finish in the app.', 'handoff pending; wait for user.')
+    .replace('Handoff not resumed; app kept for the user.', 'Handoff not resumed; app kept.')
+    .replace('Continue received; fresh engine read. Sign-in is unverified. Use ', 'Continue; fresh read, sign-in unverified. Use ')
+    .replace(' for this app. Payments and submits keep their usual checks.', '. Payment/submit checks still apply.')
     .replace('sleight stopped the read after Close: ', 'Close read: ')
     .replace('. Native metadata could not confirm a window. No engine read was sent.', '. Window unknown; no engine read.')
     .replace(': tab read timed out (1.5 s). Read this tab again.', ': timeout (1.5 s); reread tab.')

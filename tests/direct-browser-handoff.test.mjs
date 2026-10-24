@@ -5,8 +5,8 @@ import { createHandoffWaiter } from '../plugins/sleight/lib/direct-browser/hando
 import { validateToolCall, createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 
 function uiFixture() {
-  const cards = [], events = new WeakSet();
-  return { cards, ui: { authenticate: event => events.delete(event),
+  const cards = [], dismissed = [], events = new WeakSet();
+  return { cards, dismissed, ui: { authenticate: event => events.delete(event), dismiss: id => dismissed.push(id),
     present(id, data, choices, deliver, options) { cards.push({ id, data, choices, deliver, options }); } },
   answer(choice, trusted = true) { const card = cards.at(-1), event = { id: card.id, choice }; if (trusted) events.add(event); card.deliver(event); } };
 }
@@ -16,10 +16,37 @@ test('native handoff card uses guarded Continue and fixed instructions outside p
   assert.match(source, /\["action", "debugger", "relaunch", "opt-in", "resume", "turbo-off", "handoff"\]/);
   assert.match(source, /"continue": "Continue"/);
   assert.match(source, /func handoffFrame\(/);
-  assert.match(source, /Finish signing in or entering your code in tab /);
+  assert.match(source, /Finish signing in or entering your code in /);
+  assert.match(source, /final class HandoffPanel: NSPanel \{\s*override var canBecomeKey: Bool \{ false \}\s*override var canBecomeMain: Bool \{ false \}/);
   assert.match(source, /Only click Continue after the secret fields are gone/);
   assert.match(source, /else if data\["kind"\] as\? String == "handoff"/);
   assert.match(source, /if let handoff = handoffFrame\(data, choices\)/);
+});
+
+test('premature Continue re-presents through the same deadline and dismisses ended cards', async () => {
+  const f = uiFixture(); let ready = false;
+  const waiter = createHandoffWaiter({ ui: f.ui, current: () => true, session: 's', turn: 't', timeoutMs: 1000 });
+  const pending = waiter.wait('t1', async () => ready);
+  const first = f.cards[0];
+  f.answer('continue');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.cards.length, 2);
+  assert.equal(f.cards[1].options.deadline, first.options.deadline);
+  assert.deepEqual(f.dismissed, [first.id]);
+  ready = true; f.answer('continue');
+  assert.equal(await pending, true);
+  assert.deepEqual(f.dismissed, f.cards.map(card => card.id));
+});
+
+test('expiry during a Continue check dismisses the card and cannot grant a late resume', async () => {
+  const f = uiFixture(); let complete;
+  const waiter = createHandoffWaiter({ ui: f.ui, current: () => true, session: 's', turn: 't', timeoutMs: 15 });
+  const pending = waiter.wait('t1', () => new Promise(resolve => { complete = resolve; }));
+  f.answer('continue');
+  assert.equal(await pending, false);
+  complete(true); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.cards.length, 1);
+  assert.deepEqual(f.dismissed, [f.cards[0].id]);
 });
 
 test('waiting handoff takes no authority or secret from tool arguments', () => {

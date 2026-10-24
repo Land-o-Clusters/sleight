@@ -105,5 +105,21 @@ check(feedback.stringValue == consentInputMessage, "action refusal shows the fix
 check(alert.informativeText == "Private fixture details", "refusal preserves private card body")
 check(alert.buttons[2].isEnabled && alert.buttons[2].target === actions[1], "refused card stays answerable")
 check(!alert.window.isVisible, "fixture never opens a window")
+// G1B: the same action used by the Continue card, with no window or event posting.
+check(personChoice("handoff", "continue"), "Continue is person-only")
+let continuation = button("Continue")
+var continueEvent: NSEvent?
+let continueGuard = ConsentInputAction(continuation, mouseOnly: true, currentEvent: { continueEvent })
+let beforeContinue = receipt.choices
+check(!continuation.accessibilityPerformPress(), "Continue refuses AXPress")
+continuation.accessibilityPerformAction(.press)
+for sample in [event(.combinedSessionState, Int64(getpid())), event(.hidSystemState, Int64(getpid())),
+    event(.hidSystemState, 0, key: true)] {
+    continueEvent = sample; continueGuard.press(continuation)
+}
+check(receipt.choices == beforeContinue, "Continue refuses posted events and Space")
+continueEvent = event(.hidSystemState); continueGuard.press(continuation)
+check(receipt.choices == beforeContinue + ["Continue"], "deliberate HID Continue click reaches original action")
+receipt.choices = beforeContinue
 let result: [String: Any] = ["refused": refused, "accepted": receipt.choices]
 print(String(data: try! JSONSerialization.data(withJSONObject: result), encoding: .utf8)!)

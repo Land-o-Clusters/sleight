@@ -2738,10 +2738,10 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     tab, idle,
     async beginHandoff(id) {
       const requested = tab(id);
-      let finishing, result = null;
+      let finishing, result = null, keeping = false, preserved;
       const resumeTarget = () => !requested.closed && !requested.page.isClosed() ? requested : requested.parent;
       const entries = [...records.values()].filter(entry => !entry.released && !entry.closed && !entry.page.isClosed());
-      const preserve = async () => {
+      const preserve = () => preserved ??= (async () => {
         // Mark every tab before awaiting anything: one failed detach must never
         // make turn cleanup close another tab the person is using.
         for (const entry of entries) { entry.released = true; entry.release = 'handoff'; }
@@ -2759,12 +2759,21 @@ export function createPageRegistry({ browser, session, context = browser?.contex
           if (entry.handoffCleanupRequired) throw Error(handoffMessages.cleanup);
         }));
         if (results.some(row => row.status === 'rejected')) throw Error(handoffMessages.cleanup);
-      };
+      })();
       const suspension = Object.freeze({
+        ownedTabs: entries.length,
+        async cancel() {
+          keeping = true;
+          await finishing?.catch(() => {});
+          await preserve();
+          if (handoffActive === suspension) handoffActive = undefined;
+        },
         finish(keep) {
+          keeping ||= keep;
           if (!finishing) finishing = (async () => {
+            result = null;
             const target = resumeTarget();
-            if (keep || ended || !target || target.released || target.closed || target.page.isClosed()) {
+            if (keeping || ended || !target || target.released || target.closed || target.page.isClosed()) {
               await preserve();
             } else {
               try {
@@ -2772,9 +2781,18 @@ export function createPageRegistry({ browser, session, context = browser?.contex
                 // restoring access, including a login in a still-open popup.
                 for (const entry of entries) if (!entry.closed && !entry.page.isClosed()) {
                   try {
-                    if (!await deadline(() => canResumeHandoff(entry.page), timeoutMs)) throw Error(handoffMessages.secrets);
-                  } catch (error) { if (!entry.closed && !entry.page.isClosed()) throw error; }
+                    if (!await deadline(() => canResumeHandoff(entry.page), timeoutMs)) {
+                      if (keeping || ended) { await preserve(); return null; }
+                      result = false; return false;
+                    }
+                  } catch {
+                    if (!entry.closed && !entry.page.isClosed()) {
+                      if (keeping || ended) { await preserve(); return null; }
+                      result = false; return false;
+                    }
+                  }
                 }
+                if (keeping || ended) { await preserve(); return null; }
                 hook = newHook();
                 for (const entry of entries) if (!entry.closed && !entry.page.isClosed()) {
                   entry.hook = hook;
@@ -2782,13 +2800,17 @@ export function createPageRegistry({ browser, session, context = browser?.contex
                   await deadline(() => install(entry), timeoutMs);
                   invalidateRefs(entry.page); entry.state.snapshotNo = 0;
                 }
+                if (keeping || ended) { await preserve(); return null; }
               } catch (error) { await preserve().catch(() => {}); throw error; }
               const fresh = resumeTarget();
               if (!fresh || fresh.released || fresh.closed || fresh.page.isClosed()) await preserve();
               else result = fresh.tab;
             }
             return result;
-          })().finally(() => { if (handoffActive === suspension) handoffActive = undefined; });
+          })().finally(() => {
+            if (result === false) finishing = undefined;
+            else if (handoffActive === suspension) handoffActive = undefined;
+          });
           return finishing;
         },
       });

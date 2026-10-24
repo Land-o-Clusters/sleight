@@ -147,6 +147,11 @@ const appNotice = error => APP_NOTICE.test(error?.message ?? '') && typeof error
 // at 10 minutes, so the bridge does not take the wait for a hung worker; later calls keep the default.
 const APP_PREPARE_WAIT_MS = 330000, APP_PREPARE_CAP_MS = 600000;
 const validWait = value => Number.isSafeInteger(value) && value >= 1000 && value <= APP_PREPARE_CAP_MS;
+export function handoffRpcWaitMs(waitMs, ownedTabs) {
+  if (!Number.isSafeInteger(waitMs) || waitMs <= 0 || waitMs > HANDOFF_WAIT_MS ||
+      !Number.isSafeInteger(ownedTabs) || ownedTabs < 1 || ownedTabs > 1024) throw Error('INVALID_HANDOFF_WAIT');
+  return waitMs + 5000 * ownedTabs;
+}
 
 export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31000 } = {}, dependencies = {}) {
   const config = (dependencies.readConfig ?? readInstalledConfig)();
@@ -201,6 +206,17 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
         /^[a-f0-9]{64}$/.test(frame.nonce) && /^b[A-Za-z0-9_-]{1,63}$/.test(frame.browser)) {
       hello = frame; clearTimeout(timer); trace('bridge-ready'); resolveReady(); return;
     }
+    if (hello && exact(frame, ['version', 'id', 'handoff']) && frame.version === 3) {
+      const entry = pending.get(frame.id), detail = frame.handoff;
+      try {
+        if (!entry?.handoff || entry.extended || !exact(detail, ['deadline', 'waitMs', 'ownedTabs']) ||
+            !Number.isSafeInteger(detail.deadline) || detail.deadline <= Date.now() || detail.deadline > Date.now() + detail.waitMs) throw Error();
+        const wait = handoffRpcWaitMs(detail.waitMs, detail.ownedTabs);
+        clearTimeout(entry.timer); entry.extended = true;
+        entry.timer = setTimeout(() => lose(), Math.max(1, detail.deadline - Date.now() + wait - detail.waitMs));
+      } catch { lose(undefined, 'worker-protocol'); }
+      return;
+    }
     if (!hello || !exact(frame, ['version', 'id', 'result']) || frame.version !== 3 || !pending.has(frame.id)) { lose(undefined, 'worker-protocol'); return; }
     const entry = pending.get(frame.id); pending.delete(frame.id); clearTimeout(entry.timer); entry.resolve(frame.result);
   });
@@ -216,7 +232,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
     if (Buffer.byteLength(JSON.stringify(frame)) > 131072) return Promise.reject(Error('INVALID_ARGUMENT'));
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { lose(); reject(Error('V3_WORKER_UNAVAILABLE')); }, deadlineMs);
-      pending.set(frame.id, { resolve, reject, timer });
+      pending.set(frame.id, { resolve, reject, timer, handoff: method === 'call' && params.name === 'browser_tabs' && params.arguments?.do === 'handoff' && params.arguments.wait === true });
       try { child.send(frame, error => { if (error) lose(); }); } catch { lose(); }
     });
   }
@@ -265,7 +281,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       trace('call-start', turn, call);
       try {
         const waiting = request.name === 'browser_tabs' && request.arguments.do === 'handoff' && request.arguments.wait === true;
-        const reply = await rpc('call', request, waiting ? Math.max(callTimeoutMs, HANDOFF_WAIT_MS + 10000) : callTimeoutMs);
+        const reply = await rpc('call', request, waiting ? Math.max(callTimeoutMs, handoffRpcWaitMs(HANDOFF_WAIT_MS, 1)) : callTimeoutMs);
         if (epoch === generation) callTimeoutMs = timeoutMs;
         if (!active || lost || epoch !== generation || !current()) return failure(request.name !== 'browser_read');
         if (!exact(reply, ['resultId', 'result']) || !id(reply.resultId) || !exact(reply.result, ['text', 'isError']) ||
@@ -385,7 +401,7 @@ export function serveV3Worker({ channel, browser, begin, current = () => true, c
         return !!record && record.runtime === runtime && record.hash === frame.params.hash && record.hash === hash(record.result) && runtime.delivered(record.result) === true;
       }
       const request = validateToolCall(frame.params, browser), owner = runtime;
-      const result = await owner.call(request);
+      const result = await owner.call(request, { handoffDeadline: detail => send({ version: 3, id: frame.id, handoff: detail }) });
       if (epoch !== generation || ended || runtime !== owner) return { resultId: frame.id, result: failure(request.name !== 'browser_read') };
       if (results.size >= 128) results.delete(results.keys().next().value);
       results.set(frame.id, { runtime: owner, result, hash: hash(result) });
@@ -680,12 +696,12 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
           return checks.every(Boolean);
         }
         return Object.freeze({
-          async call(request) {
+          async call(request, options) {
             if (!current() || turnEnded) return failure();
             try {
               const runtime = await (preparing ??= prepare());
               if (!current() || turnEnded || !await verified()) throw Error('STALE_INSTANCE');
-              return await runtime.call(request);
+              return await runtime.call(request, options);
             } catch (error) { return error?.message === 'ELECTRON_HOST_FOREIGN' ? foreignHost(error.appName) : appNotice(error) ?? failure(); }
           },
           ...(selections.length ? { waitMs: Math.min(APP_PREPARE_CAP_MS, selections.length * APP_PREPARE_WAIT_MS) } : {}),

@@ -73,6 +73,28 @@ test('cancel and turn end preserve tabs used for the secret handoff', async () =
   }
 });
 
+test('a cancel racing a completed resume preserves tabs and revokes access', async () => {
+  const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
+  const suspended = await f.registry.beginHandoff(tab);
+  assert.equal(await suspended.finish(false), tab);
+  await suspended.cancel();
+  assert.throws(() => f.registry.tab(tab), /unknown|releasing/);
+  await f.registry.endTurn();
+  assert.equal(f.pages[0].closed, false);
+});
+
+test('an inconclusive secret check keeps every tab suspended until another Continue', async () => {
+  let inconclusive = true;
+  const f = fixture({ canResumeHandoff: async () => { if (inconclusive) throw Error('frame changed'); return true; } });
+  const { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
+  const suspended = await f.registry.beginHandoff(tab);
+  assert.equal(await suspended.finish(false), false);
+  assert.throws(() => f.registry.tab(tab), /handoff.*pending/i);
+  inconclusive = false;
+  assert.equal(await suspended.finish(false), tab);
+  await f.registry.endTurn();
+});
+
 test('handoff of a self-closed sign-in popup resumes its owned opener', async () => {
   const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
   const popup = f.page('popup', 'target-1'); await f.registry.idle();

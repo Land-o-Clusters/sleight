@@ -22,7 +22,7 @@ async function fixture(config = {}, tracePhase, bridgeOptions = {}, call) {
   child.unref = () => {};
   const session = serveV3Worker({ channel: endpoint, browser: 'bfixture', async begin(message, _binding, extra) {
     events.push(['begin', message, extra]);
-    return { async call(request) { events.push(['call', request]); return call ? call(request) : { text: 'plain result', isError: false }; },
+    return { async call(request, options) { events.push(['call', request]); return call ? call(request, options) : { text: 'plain result', isError: false }; },
       delivered(result) { events.push(['delivered', result]); return true; },
       async end() { events.push(['end']); return { revoked: true, cleanup: [] }; } };
   } });
@@ -42,6 +42,41 @@ test('waiting handoff can exceed the normal RPC timeout without losing the worke
     assert.equal(result.isError, false, result.text);
     assert.equal((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).text, 'fresh state');
   } finally { await f.bridge.detach(); }
+});
+
+test('handoff RPC budget starts at the card deadline and adds five seconds for each owned tab', async () => {
+  const { handoffRpcWaitMs } = await import('../plugins/sleight/lib/direct-browser/worker.mjs');
+  assert.equal(handoffRpcWaitMs(240000, 1), 245000);
+  assert.equal(handoffRpcWaitMs(240000, 12), 300000);
+  for (const args of [[0, 1], [240001, 1], [240000, -1], [240000, 1.5]]) assert.throws(() => handoffRpcWaitMs(...args));
+});
+
+test('worker sends the actual handoff card deadline across IPC once for its waiting call', async () => {
+  const progress = [];
+  const f = await fixture({}, undefined, {}, async (_request, options) => {
+    options.handoffDeadline({ deadline: Date.now() + 200, waitMs: 200, ownedTabs: 12 });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    return { text: 'fresh state', isError: false };
+  });
+  f.child.on('message', frame => { if (frame.handoff) progress.push(frame); });
+  try {
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'deadline-turn', text: 'Find my receipt.' });
+    assert.equal((await f.bridge.call({ name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } })).text, 'fresh state');
+    assert.equal(progress.length, 1);
+    assert.deepEqual(Object.keys(progress[0]).sort(), ['handoff', 'id', 'version']);
+    assert.equal(progress[0].handoff.ownedTabs, 12);
+    assert.equal(progress[0].handoff.waitMs, 200);
+  } finally { await f.bridge.detach(); }
+});
+
+test('a worker cannot extend an ordinary read with handoff deadline evidence', async () => {
+  const f = await fixture({}, undefined, {}, async (_request, options) => {
+    options.handoffDeadline({ deadline: Date.now() + 200, waitMs: 200, ownedTabs: 12 });
+    return { text: 'must not be delivered', isError: false };
+  });
+  await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'ordinary-turn', text: 'Read my receipt.' });
+  assert.notEqual((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).text, 'must not be delivered');
+  assert.equal(f.child.connected, false);
 });
 test('bridge phases bracket startup, first admission and the last result to turn end without tracing content', async () => {
   const phases = [], f = await fixture({}, (...row) => phases.push(row));

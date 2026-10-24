@@ -9,6 +9,7 @@ import { createPageRegistry } from '../plugins/sleight/lib/direct-browser/page.m
 import { createV3TurnBinding } from '../plugins/sleight/lib/direct-browser/v3-context.mjs';
 import { createV3TurnRuntime } from '../plugins/sleight/lib/direct-browser/worker.mjs';
 import { snapshot, acknowledgeSnapshot, snapshotRefBinding } from '../plugins/sleight/lib/direct-browser/snapshot.mjs';
+import { handoffReadReady } from '../plugins/sleight/lib/direct-browser/handoff.mjs';
 
 const vendor = new URL('../plugins/sleight/vendor/playwright-core/', import.meta.url);
 const spec = JSON.parse(readFileSync(new URL('browsers.json', vendor))).browsers.find(row => row.name === 'chromium-headless-shell');
@@ -80,9 +81,9 @@ async function fixture(t) {
     }, submissions: () => submissions };
 }
 
-async function waitForCard(f) {
-  for (let n = 0; n < 200 && !f.cards.length; n++) await new Promise(resolve => setTimeout(resolve, 10));
-  assert.equal(f.cards.length, 1, 'one consent card must be presented');
+async function waitForCard(f, count = 1) {
+  for (let n = 0; n < 200 && f.cards.length < count; n++) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(f.cards.length, count, 'the expected consent card must be presented');
 }
 
 test('signin-resume: person enters password and 2FA; only Continue returns a fresh receipt read', { skip, timeout: 60000 }, async t => {
@@ -137,12 +138,49 @@ test('premature Continue never captures a page with password or code fields stil
     Element.prototype.getAttribute = () => null;
   });
   f.answer('continue');
-  const result = await pending;
-  assert.equal(result.isError, true, result.text);
-  assert.match(result.text, /secret fields/i);
+  await waitForCard(f, 2);
   assert.equal(f.captures.length, before);
-  await f.runtime.end();
-  assert.equal(f.ownerPage.isClosed(), false);
+  assert.throws(() => f.registry.tab(f.tab), /handoff.*pending/i);
+  await f.ownerPage.evaluate(() => { document.querySelector('main').innerHTML = '<h1>Receipt INV-42</h1>'; });
+  f.answer('continue');
+  const result = await pending;
+  assert.equal(result.isError, false, result.text);
+  assert.match(result.text, /Receipt INV-42/);
+});
+
+test('input hints reject auth secrets and populated unnamed fields without matching postal or promo codes', { skip, timeout: 60000 }, async t => {
+  const f = await fixture(t);
+  for (const [html, ready] of [
+    ['<p>Enter your authentication code or PIN</p><input placeholder="Promo code" value="SAVE10"><input name="postal-code" value="90210">', true],
+    ['<input name="verification-code">', false],
+    ['<input name="code">', false],
+    ['<input aria-label="PIN">', false],
+    ['<input placeholder="Postal PIN code" value="90210">', true],
+    ['<input autocomplete="one-time-code" hidden>', false],
+    ['<form aria-label="Sign in"><input value="opaque-secret"></form>', false],
+    ['<form><button>Sign in</button><textarea>opaque-secret</textarea></form>', false],
+    ['<form aria-label="Login"><div role="textbox" contenteditable>opaque-secret</div></form>', false],
+    ['<form aria-label="Login"><input></form>', true],
+    ['<form aria-label="Login" hidden><input></form><input placeholder="Promo code" value="SAVE10">', true],
+    ['<form aria-label="Sign in"></form><iframe srcdoc="&lt;input value=&quot;opaque-secret&quot;&gt;"></iframe>', false],
+    ['<div id="shadow"></div><script>document.getElementById("shadow").attachShadow({mode:"open"}).innerHTML = \'<input type="password">\'</script>', false],
+  ]) {
+    await f.ownerPage.setContent(html);
+    assert.equal(await handoffReadReady(f.entry.page), ready, html);
+  }
+});
+
+test('premature Continue keeps every owned tab paused until the person cancels', { skip, timeout: 60000 }, async t => {
+  const f = await fixture(t);
+  const second = await f.call('browser_open', { url: f.ownerPage.url() });
+  const tab = /^t\w+/.exec(second.text)[0], before = f.captures.length;
+  const pending = f.call('browser_tabs', { do: 'handoff', tab: f.tab, wait: true });
+  await waitForCard(f); f.answer('continue'); await waitForCard(f, 2);
+  assert.throws(() => f.registry.tab(f.tab), /handoff.*pending/i);
+  assert.throws(() => f.registry.tab(tab), /handoff.*pending/i);
+  assert.equal(f.captures.length, before);
+  f.answer('cancel'); await pending; await f.runtime.end();
+  assert.equal(f.context.pages().filter(page => page.url().endsWith('/login')).length, 2);
 });
 
 test('self-closing password popup resumes at its original owned opener', { skip, timeout: 60000 }, async t => {

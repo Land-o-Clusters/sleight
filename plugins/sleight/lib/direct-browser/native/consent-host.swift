@@ -76,8 +76,9 @@ func refuseAccessibilityPress(_ button: NSButton) -> Bool {
 final class ConsentInputAction: NSObject {
     let originalTarget: AnyObject?, originalAction: Selector?
     let currentEvent: () -> NSEvent?
-    init(_ button: NSButton, currentEvent: @escaping () -> NSEvent? = { NSApp.currentEvent }) {
-        originalTarget = button.target; originalAction = button.action; self.currentEvent = currentEvent
+    let mouseOnly: Bool
+    init(_ button: NSButton, mouseOnly: Bool = false, currentEvent: @escaping () -> NSEvent? = { NSApp.currentEvent }) {
+        originalTarget = button.target; originalAction = button.action; self.currentEvent = currentEvent; self.mouseOnly = mouseOnly
         super.init()
         // Failure leaves the protected button disabled. It must never fall back to the unguarded action.
         guard refuseAccessibilityPress(button) else { button.isEnabled = false; refuseConsentInput(button); return }
@@ -85,6 +86,7 @@ final class ConsentInputAction: NSObject {
     }
     @objc func press(_ sender: NSButton) {
         guard let event = currentEvent(), event.window === sender.window,
+            !mouseOnly || [.leftMouseDown, .leftMouseUp].contains(event.type),
             event.timestamp <= ProcessInfo.processInfo.systemUptime,
             ProcessInfo.processInfo.systemUptime - event.timestamp < 5,
             personInput(event.cgEvent) else { refuseConsentInput(sender); return }
@@ -543,23 +545,32 @@ func consentIconPath(_ icon: String = ProcessInfo.processInfo.environment["SLEIG
 }
 // No page words or credential fields enter this card. Tab/session identifiers
 // come from the worker, and Continue is protected by the same person input guard.
-func handoffFrame(_ data: [String: Any], _ choices: [String]) -> (session: String, tab: String)? {
+func handoffFrame(_ data: [String: Any], _ choices: [String]) -> (session: String, tab: String?, app: String?)? {
     func identifier(_ value: Any?) -> String? {
         guard let value = value as? String, !value.isEmpty, value.count <= 4096,
             value.unicodeScalars.allSatisfy({ $0.value >= 0x20 && $0.value != 0x7f && !(0x80...0x9f).contains($0.value) }) else { return nil }
         return value
     }
-    guard Set(data.keys) == ["kind", "session", "turn", "tab"], data["kind"] as? String == "handoff",
+    let native = data["app"] != nil
+    guard Set(data.keys) == Set(["kind", "session", "turn", native ? "app" : "tab"]), data["kind"] as? String == "handoff",
         let session = identifier(data["session"]), identifier(data["turn"]) != nil,
-        let tab = identifier(data["tab"]), tab.range(of: "^t[A-Za-z0-9_-]{1,64}$", options: .regularExpression) != nil,
         choices == ["continue", "cancel"] else { return nil }
-    return (session, tab)
+    if native {
+        guard let app = identifier(data["app"]), app.count <= 255,
+            app.range(of: "^[A-Za-z0-9][A-Za-z0-9-]*(\\.[A-Za-z0-9-]+)+$", options: .regularExpression) != nil else { return nil }
+        return (session, nil, app)
+    }
+    guard let tab = identifier(data["tab"]), tab.range(of: "^t[A-Za-z0-9_-]{1,64}$", options: .regularExpression) != nil else { return nil }
+    return (session, tab, nil)
 }
 func automaticCard(_ data: [String: Any], _ choices: [String]) -> AskCard? {
     if data["presentation"] != nil { return askCard(data, choices) }
     if let handoff = handoffFrame(data, choices) {
-        return AskCard(question: "Finish signing in or entering your code in tab " + handoff.tab,
-            detail: "Use the tab or your password manager yourself. sleight is paused. Only click Continue after the secret fields are gone. Continue reads the page again; it does not approve a payment or submit. Cancel leaves the tabs open.",
+        let target = handoff.tab.map { "tab " + $0 } ?? (handoff.app ?? "")
+        let continuation = handoff.app != nil ? "Continue acquires and reads the same app fresh, including its new window. "
+            : "Continue reads this tab or its owned opener again. "
+        return AskCard(question: "Finish signing in or entering your code in " + target,
+            detail: "Use the app or your password manager yourself. sleight is paused. Only click Continue after the secret fields are gone. " + continuation + "Payments and submits still need their usual checks. Cancel leaves your work open. This request expires in at most four minutes.",
             host: "sleight", icon: consentIconPath(), kind: "handoff", choices: ["cancel", "continue"], diagnostics: "Session: " + handoff.session)
     }
     guard let card = appFrame(data, choices) else { return nil }
@@ -568,8 +579,13 @@ func automaticCard(_ data: [String: Any], _ choices: [String]) -> AskCard? {
         choices: ["cancel"] + choices.filter { $0 != "cancel" }, diagnostics: words.identity)
 }
 
+final class HandoffPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
 final class AskCardPanel: NSObject {
     let panel: NSPanel
+    let passive: Bool
     let answer: (String) -> Void
     var actions: [ConsentInputAction] = []
     var timer: Timer?
@@ -589,6 +605,7 @@ final class AskCardPanel: NSObject {
     var area: NSRect
     init(_ card: AskCard, deadline: Double, answer: @escaping (String) -> Void) {
         self.answer = answer
+        passive = card.kind == "handoff"
         choices = card.choices
         func label(_ text: String, _ size: CGFloat, _ weight: NSFont.Weight, _ color: NSColor) -> NSTextField {
             let field = NSTextField(wrappingLabelWithString: text)
@@ -600,8 +617,9 @@ final class AskCardPanel: NSObject {
         let body = label(card.detail, 11, .regular, .secondaryLabelColor)
         let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
         area = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1024, height: 768)
-        panel = NSPanel(contentRect: .zero,
-            styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
+        panel = passive ? HandoffPanel(contentRect: .zero,
+            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
+            : NSPanel(contentRect: .zero, styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
         super.init()
         panel.title = "sleight"; panel.titlebarAppearsTransparent = true; panel.titleVisibility = .hidden
         panel.isMovableByWindowBackground = true; panel.isOpaque = false; panel.backgroundColor = .clear
@@ -649,7 +667,7 @@ final class AskCardPanel: NSObject {
             buttons.append(button)
             if personChoice(card.kind, choices[index]) {
                 objc_setAssociatedObject(button, &consentFeedbackKey, feedback, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-                actions.append(ConsentInputAction(button))
+                actions.append(ConsentInputAction(button, mouseOnly: passive))
             }
         }
         layout()
@@ -728,10 +746,10 @@ final class AskCardPanel: NSObject {
     }
     @objc func toggleDetails(_ sender: NSButton) { expanded.toggle(); layout() }
     func show() {
-        panel.makeKeyAndOrderFront(nil)
+        if passive { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) }
         NSSound(named: "Glass")?.play()
     }
-    func review() { panel.makeKeyAndOrderFront(nil) }
+    func review() { if passive { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) } }
     @objc func press(_ sender: NSButton) {
         guard choices.indices.contains(sender.tag) else { return }
         finish(choices[sender.tag])
@@ -797,7 +815,7 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var input: FileHandle? = FileHandle.standardInput, output = FileHandle.standardOutput, shared = false
     var consentOpen = true, handOpen = true
     var activeAsk: (id: String, panel: AskCardPanel)?
-    func closeAsk() { guard let ask = activeAsk else { return }; ask.panel.close(); activeAsk = nil; focus.dismissed() }
+    func closeAsk() { guard let ask = activeAsk else { return }; ask.panel.close(); activeAsk = nil; if !ask.panel.passive { focus.dismissed() } }
     func reviewAsk(_ id: String) -> Bool {
         guard let frame = pending[id], let data = frame["data"] as? [String: Any],
             let choices = frame["choices"] as? [String], automaticCard(data, choices) != nil else { return false }
@@ -813,9 +831,9 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if deadline <= Date().timeIntervalSince1970 * 1000 { pending.removeValue(forKey: id); continue }
             let panel = AskCardPanel(card, deadline: deadline) { [weak self] choice in
                 guard let self = self, self.activeAsk?.id == id else { return }
-                self.activeAsk = nil; self.focus.dismissed(); self.respond(id, choice); self.showNextAsk()
+                self.activeAsk = nil; if card.kind != "handoff" { self.focus.dismissed() }; self.respond(id, choice); self.showNextAsk()
             }
-            activeAsk = (id, panel); focus.presenting(data); panel.show(); return
+            activeAsk = (id, panel); if !panel.passive { focus.presenting(data) }; panel.show(); return
         }
         rebuildMenu()
     }
@@ -903,6 +921,14 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 FileHandle.standardOutput.write(bytes + Data([10]))
             }
             return
+        }
+        if frame["dismiss"] != nil {
+            guard Set(frame.keys) == ["id", "nonce", "dismiss"], frame["dismiss"] as? Bool == true,
+                let id = frame["id"] as? String, !id.isEmpty,
+                let incoming = frame["nonce"] as? String, incoming == nonceBook.nonce("consent") else { exit(65) }
+            pending.removeValue(forKey: id)
+            if activeAsk?.id == id { closeAsk() }
+            rebuildMenu(); showNextAsk(); return
         }
         guard let id = frame["id"] as? String, !id.isEmpty,
             let incoming = frame["nonce"] as? String, incoming.count == 64,

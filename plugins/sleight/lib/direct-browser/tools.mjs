@@ -130,7 +130,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     return result;
   };
   return Object.freeze({ tools: () => browserTools(browser),
-    async call(input) {
+    async call(input, { handoffDeadline } = {}) {
       let request, started = false;
       const ordinal = ++callNo;
       const phase = name => { try { tracePhase?.(name, ordinal); } catch {} };
@@ -146,8 +146,16 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             let suspension;
             try {
               suspension = await pages.beginHandoff(a.tab);
-              const resumed = await ctx.handoff(a.tab);
-              const target = await suspension.finish(!resumed || ended);
+              let target;
+              const resumed = await ctx.handoff(a.tab, async () => {
+                target = await suspension.finish(false);
+                return !!target;
+              }, (deadline, waitMs) => handoffDeadline?.({ deadline, waitMs, ownedTabs: suspension.ownedTabs ?? 1 }));
+              if (!resumed || ended) {
+                if (suspension.cancel) await suspension.cancel(); else await suspension.finish(true);
+                return textResult(handoffMessages.cancelled);
+              }
+              else if (target === undefined) target = await suspension.finish(false);
               if (!target || ended) return textResult(handoffMessages.cancelled);
               return await pages.enqueue(target, async entry => {
                 const observed = await capture(entry, { maxChars: 8000 });

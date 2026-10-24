@@ -18,12 +18,12 @@ test('protected consent buttons use the input guard on every native card', () =>
   assert.doesNotMatch(source, /\.post\(|CGEventPost|AXUIElementPerformAction|activate\(ignoringOtherApps/);
   const card = source.match(/\/\/ BEGIN ASK CARD\n([\s\S]*?)\/\/ END ASK CARD/)?.[1];
   assert.ok(card, 'styled shell card absent');
-  assert.match(card, /if personChoice\(card.kind, choices\[index\]\) \{[\s\S]*actions.append\(ConsentInputAction\(button\)\)/);
+  assert.match(card, /if personChoice\(card.kind, choices\[index\]\) \{[\s\S]*actions.append\(ConsentInputAction\(button, mouseOnly: passive\)\)/);
   assert.match(card, /if kind == "app" \{[\s\S]*view\["scope"\][\s\S]*operation\["scope"\]/);
   assert.match(card, /choices == \["once", "cancel"\]/);
   assert.match(card, /NSGlassEffectView/);
-  assert.match(card, /func show\(\) \{\s*panel.makeKeyAndOrderFront\(nil\)\s*NSSound\(named: "Glass"\)\?\.play\(\)/);
-  assert.match(card, /func review\(\) \{ panel.makeKeyAndOrderFront\(nil\) \}/);
+  assert.match(card, /if passive \{ panel.orderFrontRegardless\(\) \} else \{ panel.makeKeyAndOrderFront\(nil\) \}/);
+  assert.match(card, /NSSound\(named: "Glass"\)\?\.play\(\)/);
   assert.doesNotMatch(card, /keyEquivalent = "(?:\\r|\\n)"|\.runModal\(/);
   assert.match(card, /actions.removeAll\(\)/);
   assert.match(source, /closeAsk\(\); modal.close\(\); pending.removeAll\(\)/);
