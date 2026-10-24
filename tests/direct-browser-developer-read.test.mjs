@@ -249,6 +249,65 @@ test('dotted diagnostics and known source files remain readable beside bare host
   for (const text of ['version 12345.2.0', 'version 18.12345.0', 'version 18.2.12345'])
     assert.equal(scrubDeveloperText(text), 'version [value]');
 });
+for (const value of ['555.123.4567', '123.45.6789']) {
+  test(`bare versions cannot exempt phone or SSN digit shapes: ${value}`, () => {
+    for (const suffix of ['', '.', '...', '…', ' tail'])
+      assert.equal(scrubDeveloperText('debug ' + value + suffix), 'debug [value]' + suffix.normalize('NFKC'));
+  });
+}
+test('ordinary three-part versions stay readable', () => {
+  for (const text of ['Chrome 120.0.6099', 'version v3.1.0', 'React version: 18.2.0', '18.2.0.'])
+    assert.equal(scrubDeveloperText(text), text);
+});
+for (const value of ['123-45 6789', '4111 1111-1111 1111', '555 123-4567',
+  '123 - 45 / 6789', '555 . 123 - 4567', '4111/1111.1111-1111']) {
+  test(`mixed and padded separators mask the complete digit run: ${value}`, () => {
+    for (const space of [' ', '\u00a0', '\u202f', '\t', '\n']) {
+      for (const prefix of ['debug ', 'phone:', '"phone:']) {
+        assert.equal(scrubDeveloperText(prefix + value.replaceAll(' ', space) + '. render failed'),
+          prefix + '[value]. render failed');
+      }
+    }
+  });
+}
+test('short word-colon numeric diagnostics stay readable', () => {
+  for (const text of ['status:200', 'retry:3', 'line:12', 'status:200, retry:3; line:12.',
+    '(status:200)', 'status:200 phone:123-45 6789'])
+    assert.equal(scrubDeveloperText(text), text.replace('123-45 6789', '[value]'));
+  for (const text of ['status:200 token sunshine meadow blossom render failed', 'token:200 render failed'])
+    assert.doesNotMatch(scrubDeveloperText(text), /sunshine|meadow|blossom|token:200/);
+  assert.equal(scrubDeveloperText('unknown_value:200'), '[value]');
+});
+test('punctuation around mixed digit groups cannot expose a partial run', () => {
+  for (const separator of [' ', '-', '.', '/', ' - ', ' . ', ' / ']) {
+    for (const other of [' ', '-', '.', '/', ' - ', ' . ', ' / ']) {
+      for (const [before, after] of [['"', '"'], ['(', ')'], ['[', ']'], ['/', '/']]) {
+        const text = scrubDeveloperText(before + '555' + separator + '123' + other + '4567' + after);
+        assert.doesNotMatch(text, /555|123|4567/, text);
+      }
+    }
+  }
+});
+const dottedIdentifiers = ['window.performance.now', 'this.state.name', 'event.target.name',
+  'Array.prototype.map', 'e.target.id', 'React.Component.name', 'Object.render'];
+for (const value of dottedIdentifiers) {
+  test(`allowed dotted diagnostics keep spelling and case in code contexts: ${value}`, () => {
+    for (const text of ['at ' + value, 'at render (' + value + ')', value + '()',
+      value + ' is undefined', value + ' is not a function'])
+      assert.equal(scrubDeveloperText(text), text);
+  });
+}
+test('bare-host masking requires a known suffix and absence of code context', () => {
+  assert.equal(scrubDeveloperText('load alice.example.com'), 'load [sub].example.com');
+  assert.equal(scrubDeveloperText('load alice.example.unknownsuffixlongword'), 'load [value]');
+  assert.equal(scrubDeveloperText('load alice.example.mars'), 'load alice.example.mars');
+  // A parenthesized host without a stack frame remains a host.
+  assert.equal(scrubDeveloperText('load (alice.example.com)'), 'load ([sub].example.com)');
+  assert.equal(scrubDeveloperText('format alice.example.com'), 'format [sub].example.com');
+  for (const text of ['at Ab3dE7gH9k.example.com', 'at render (ghp_shortkey.example.com)',
+    'AKIAIOSFODNN7EXAMPLE.example.com()', 'Ab3dE7gH9k.example.com is undefined'])
+    assert.doesNotMatch(scrubDeveloperText(text), /Ab3dE7gH9k|ghp_shortkey|AKIAIOSFODNN7EXAMPLE/);
+});
 const translatedLabels = ['passwort', 'kennwort', 'schlüssel', 'zugangstoken', 'clave', 'contraseña',
   'ficha', 'mot de passe', 'jeton', 'clé', 'parola segreta', 'chiave', 'gettone', 'senha', 'palavra-passe',
   'chave', 'wachtwoord', 'sleutel', 'toegangstoken'];

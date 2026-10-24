@@ -62,9 +62,9 @@ console.log('load http://127.0.0.1:8080/profile/forest');
 console.log('keycanary https://example.invalid/sk-shortkey');
 console.log('sure? metadata:useful year 2026 port 8080 HTTP 404 count 1234');
 console.log('load /invite/abcdef123456/app12345678901234.min.js?x=briefvalue');
-console.log('Customer phone 555 123 4567. paid with 4111 1111 1111 1111. SSN on file 123 45 6789.');
-console.log('phone:555', 123, '4567...; phone:555 123 4567… render failed');
-console.log('load "alice.example.com", alice.smith.example.co.uk. React version: 18.2.0 Object.render Array.map app.min.js');
+console.log('Customer phone 555 123 4567. paid with 4111 1111 1111 1111. SSN on file 123 45 6789. debug 555.123.4567; debug 123.45.6789.');
+console.log('phone:555', 123, '4567...; phone:555 123 4567… render failed; phone:123-45 6789; debug 4111 1111-1111 1111; debug 555 123-4567; debug 123 - 45 / 6789.');
+console.log('load "alice.example.com", alice.smith.example.co.uk. React version: 18.2.0 Object.render Array.map app.min.js; Chrome 120.0.6099 v3.1.0 status:200 retry:3 line:12; at window.performance.now; at render (this.state.name); event.target.name is undefined; Array.prototype.map(); e.target.id is not a function; React.Component.name()');
 setTimeout(() => { throw new Error('fixture render failed'); }, 0);
 Promise.allSettled([
   fetch('/ok?token=private-query#private-fragment', {method:'POST',headers:{Authorization:'Bearer private-header'},body:'private-request-body'}),
@@ -134,6 +134,10 @@ test('owned real-page console, request failures and timings are scrubbed without
   for (const text of ['Customer phone [value].', 'paid with [value].', 'phone:[value]...',
     'phone:[value]... render failed', '\\"[sub].example.com\\", [sub].[sub].example.co.uk.',
     'React version: 18.2.0 Object.render Array.map app.min.js']) assert.ok(logs.includes(text), text);
+  assert.doesNotMatch(logs, /123\.45|6789|4567|123-45|1111-1111/);
+  for (const text of ['Chrome 120.0.6099 v3.1.0 status:200 retry:3 line:12', 'at window.performance.now',
+    'at render (this.state.name)', 'event.target.name is undefined', 'Array.prototype.map()',
+    'e.target.id is not a function', 'React.Component.name()']) assert.ok(logs.includes(text), text);
   for (const text of ['Compiled with exit code 1', 'code splitting enabled', 'Are you sure?', 'metadata: useful', 'Next.js docs', '../src/app.js:1:2',
     'status code 404', 'Unexpected token in JSON', '\\"key\\" prop', 'session expired', 'test pass', 'Object.render Array.map v1.2.3 45ms 15000ms net::ERR_CONNECTION_REFUSED don\'t retry',
     '[omitted] render failed', 'https://[sub].[sub].example.com/users/[seg]/orders', 'http://[ip]:8080/profile/[seg]'])

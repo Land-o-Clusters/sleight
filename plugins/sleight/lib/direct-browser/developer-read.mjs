@@ -31,16 +31,18 @@ const source = /^(.*)\.(js|mjs|cjs|ts|tsx|jsx|vue|svelte|css|html|wasm)$/i;
 const identity = /^(?:users?|accounts?|profiles?|u|@|members?|people|persons?|customers?|clients?|contacts?|authors?|usernames?|emails?|handles?|identit(?:y|ies))$/i;
 // Count complete runs after NFKC folds digits and compatibility spaces. These
 // spans must be protected before a label splits the message into smaller parts.
-const numberRuns = /(?<![\p{L}\p{N}_.+-])[+-]?\d+(?:\.\d+)?(?:\s+[+-]?\d+(?:\.\d+)?)+(?=$|[^\p{L}\p{N}_.+-]|\.+(?=[\s"'`)\]}>;,!?]|$))/gu;
+const numberRuns = /(?<![\p{L}\p{N}_.+-])[+-]?\d+(?:(?:\s*[-./]\s*|\s+)[+-]?\d+)+(?=$|[^\p{L}\p{N}_.+-]|\.+(?=[\s"'`)\]}>;,!?]|$))/gu;
 // Special spans are parsed as data, never caller-forgeable placeholder strings.
 // A relative URL may follow any punctuation, including the colon in "failed:/".
 const special = /(?<![^\s<>"'`()\[\]{}])(?:(?:\.\.?\/)?(?:[a-z0-9_.-]+\/)*[a-z0-9_.-]+:\d{1,8}:\d{1,8}(?![\w:])(?:[?#][^\s<>"'`()\[\]{},;]*)?|(?:https?|wss?|file|data|blob):[^\s<>"'`(){}]+|(?:(?:\d{1,3}\.){3}\d{1,3}|\[[a-f0-9:.]+\])(?::\d+)?(?:[/?#][^\s<>"'`()\[\]{},;]*)?|(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?|[/?#][^\s<>"'`()\[\]{},;]*)?|[a-z0-9-]+:\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?)|(?<![\p{L}\p{N}])(?:\.\.?\/|\/)[^\s<>"'`()\[\]{},;]*/giu;
 
 const allowedWord = word => statusWords.has(word.toLowerCase()) ||
   (/^[a-z]{1,15}$/i.test(word) && !/^[a-f]{4,}$/i.test(word));
+const wordNumber = /^([a-z]+):[+-]?\d{1,4}(?:\.\d{1,4})?$/i;
 const allowedToken = word => allowedWord(word) || /^[+-]?\d{1,4}(?:\.\d{1,4})?$/.test(word) ||
   /^\d+(?:\.\d+)?(?:ms|s|px|kb|mb|%)$/i.test(word) || /^net::ERR_[A-Z_]{1,64}$/.test(word) ||
-  /^v?\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(word) ||
+  (/^v?\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(word) && !/^\d{3}\.\d{2,3}\.\d{4}$/.test(word)) ||
+  (wordNumber.test(word) && allowedWord(word.match(wordNumber)[1])) ||
   (/^[a-z]+(?:['’][a-z]+)+$/i.test(word) && allowedWord(word.replace(/['’]/g, ''))) ||
   (/^[a-z]+(?:\.[a-z]+)+$/i.test(word) && word.split('.').every(allowedWord));
 
@@ -86,7 +88,9 @@ export function scrubDeveloperText(value) {
   // A complete digit run takes precedence over a URL-shaped prefix such as
   // "phone:555". Otherwise that prefix exempts the rest of the run.
   for (const match of text.matchAll(numberRuns)) {
-    if (match[0].split(/\s+/).length >= 3 || match[0].replace(/\D/g, '').length >= 7)
+    // Keep the existing decimal/version grammar, excluding bare phone/SSN shapes.
+    if (allowedToken(match[0]) || /^(?:\d{1,3}\.){3}\d{1,3}$/.test(match[0])) continue;
+    if (match[0].split(/[\s./-]+/).filter(Boolean).length >= 3 || match[0].replace(/\D/g, '').length >= 7)
       spans.push({ start: match.index, end: match.index + match[0].length, safe: '[value]' });
   }
   for (const match of text.matchAll(special)) {
@@ -95,9 +99,19 @@ export function scrubDeveloperText(value) {
     const end = match.index + match[0].length;
     if (end < text.length && /[a-z0-9_@]/i.test(text[end])) continue;
     if (spans.some(span => match.index < span.end && end > span.start)) continue;
+    // A whole word:number token is a short diagnostic, not an arbitrary host.
+    // Anchoring the allowlist prevents a suffix inside another token qualifying.
+    if (wordNumber.test(match[0]) && allowedToken(match[0])) continue;
     const bare = /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(match[0]);
-    // Without a URL delimiter, permitted dotted identifiers and source files
-    // stay readable. A recognized DNS suffix instead uses the URL host policy.
+    const before = text.slice(0, match.index), after = text.slice(end);
+    const code = /\bat\s+$/.test(before) || /\bat\s+[^()]*\([^()]*$/.test(before) ||
+      /^\(/.test(after) || /^ is (?:undefined\b|not a function\b)/.test(after);
+    if (bare && code) {
+      if (allowedToken(match[0])) spans.push({ start: match.index, end, safe: match[0] });
+      continue;
+    }
+    // Outside code, only a recognized DNS suffix uses the URL host policy.
+    // Permitted dotted words and source files otherwise use the token allowlist.
     if (bare && (!hasDeveloperSuffix(match[0]) || (source.test(match[0]) && allowedToken(match[0])))) continue;
     const frame = match[0].split(/[?#]/, 1)[0];
     let safe = safeFrame(frame) ?? safeDeveloperURL(match[0]);
