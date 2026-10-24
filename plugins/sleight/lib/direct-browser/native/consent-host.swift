@@ -74,24 +74,173 @@ func refuseAccessibilityPress(_ button: NSButton) -> Bool {
     return true
 }
 final class ConsentInputAction: NSObject {
+    weak var button: NSButton?
+    weak var typing: ConsentTyping?
     let originalTarget: AnyObject?, originalAction: Selector?
     let currentEvent: () -> NSEvent?
     let mouseOnly: Bool
     init(_ button: NSButton, mouseOnly: Bool = false, currentEvent: @escaping () -> NSEvent? = { NSApp.currentEvent }) {
+        self.button = button
         originalTarget = button.target; originalAction = button.action; self.currentEvent = currentEvent; self.mouseOnly = mouseOnly
         super.init()
         // Failure leaves the protected button disabled. It must never fall back to the unguarded action.
         guard refuseAccessibilityPress(button) else { button.isEnabled = false; refuseConsentInput(button); return }
         button.target = self; button.action = #selector(press(_:))
     }
-    @objc func press(_ sender: NSButton) {
+    @objc @discardableResult func press(_ sender: NSButton) -> Bool {
         guard let event = currentEvent(), event.window === sender.window,
             !mouseOnly || [.leftMouseDown, .leftMouseUp].contains(event.type),
             event.timestamp <= ProcessInfo.processInfo.systemUptime,
             ProcessInfo.processInfo.systemUptime - event.timestamp < 5,
-            personInput(event.cgEvent) else { refuseConsentInput(sender); return }
-        _ = sender.sendAction(originalAction, to: originalTarget)
+            personInput(event.cgEvent) else { refuseConsentInput(sender); return false }
+        return sender.sendAction(originalAction, to: originalTarget)
     }
+}
+
+// No field editor: only keyDown can change the private buffer. AX may read/focus this control, never fill or submit it.
+final class ConsentWordField: NSTextField {
+    private static let abcLayout: CFData? = {
+        let filter = [kTISPropertyInputSourceID as String: "com.apple.keylayout.ABC"] as CFDictionary
+        guard let sources = TISCreateInputSourceList(filter, true)?.takeRetainedValue() as? [TISInputSource],
+            let source = sources.first,
+            let pointer = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else { return nil }
+        return Unmanaged<CFData>.fromOpaque(pointer).takeUnretainedValue()
+    }()
+    private static func letter(_ event: NSEvent) -> String? {
+        guard let text = event.charactersIgnoringModifiers?.lowercased(), text.count == 1 else { return nil }
+        func latin(_ value: String) -> String? {
+            guard value.utf8.count == 1, let byte = value.utf8.first, (97...122).contains(byte) else { return nil }
+            return value
+        }
+        if let letter = latin(text) { return letter }
+        // Retain Latin layouts' own letters. For a non-Latin letter, use the same physical key in ABC.
+        guard text.unicodeScalars.allSatisfy({ CharacterSet.letters.contains($0) }),
+            let data = abcLayout, let bytes = CFDataGetBytePtr(data) else { return nil }
+        let layout = UnsafeRawPointer(bytes).assumingMemoryBound(to: UCKeyboardLayout.self)
+        var deadKey: UInt32 = 0, count = 0
+        var characters = [UniChar](repeating: 0, count: 4)
+        let status = UCKeyTranslate(layout, event.keyCode, UInt16(kUCKeyActionDown), 0,
+            UInt32(LMGetKbdType()), OptionBits(kUCKeyTranslateNoDeadKeysMask), &deadKey,
+            characters.count, &count, &characters)
+        guard status == noErr, count == 1 else { return nil }
+        return latin(String(utf16CodeUnits: characters, count: count).lowercased())
+    }
+    private var entries: [String: ConsentInputAction]
+    private var typed = ""
+    private var dispatching = false
+    private var lastTimestamp: TimeInterval = -.infinity
+    private var focusObserver: NSObjectProtocol?
+    init(_ entries: [String: ConsentInputAction], instructions: String) {
+        self.entries = entries
+        super.init(frame: .zero)
+        isEditable = false; isSelectable = false; isBezeled = true; drawsBackground = true
+        setAccessibilityElement(true)
+        placeholderString = "Type a word, then Return"
+        setAccessibilityLabel("Keyboard confirmation. " + instructions)
+        setAccessibilityHelp("Use your physical keyboard in this sleight card. Pasting and automated input cannot confirm.")
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    deinit { if let observer = focusObserver { NotificationCenter.default.removeObserver(observer) } }
+    override var acceptsFirstResponder: Bool { isEnabled }
+    override var canBecomeKeyView: Bool { isEnabled && !isHiddenOrHasHiddenAncestor }
+    override func accessibilityRole() -> NSAccessibility.Role? { .textField }
+    override func accessibilityValue() -> String? { typed }
+    override func isAccessibilitySelectorAllowed(_ selector: Selector) -> Bool {
+        if selector == #selector(setAccessibilityValue(_:)) { return false }
+        return super.isAccessibilitySelectorAllowed(selector)
+    }
+    override func setAccessibilityValue(_ value: Any?) { refuse() }
+    override func accessibilityPerformPress() -> Bool {
+        guard isEnabled else { return false }
+        return window?.makeFirstResponder(self) ?? false
+    }
+    override func mouseDown(with event: NSEvent) { _ = window?.makeFirstResponder(self) }
+    override func resignFirstResponder() -> Bool { clear(); return super.resignFirstResponder() }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow(); clear()
+        if let observer = focusObserver { NotificationCenter.default.removeObserver(observer); focusObserver = nil }
+        if let window = window {
+            focusObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: window, queue: nil) { [weak self] _ in self?.clear() }
+        }
+    }
+    private func clear() { typed = ""; stringValue = "" }
+    private func refuse() { clear(); refuseConsentInput(entries.values.first?.button) }
+    func invalidate() { clear(); entries.removeAll(); isEnabled = false }
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // Let an empty field retain the card's existing default. A pending word owns both Return keys,
+        // including a wrong word, refused event or nested dispatch, so NSAlert cannot send them to another button.
+        guard window?.firstResponder === self, !typed.isEmpty || dispatching,
+            event.type == .keyDown, event.keyCode == 36 || event.keyCode == 76 else {
+            return super.performKeyEquivalent(with: event)
+        }
+        keyDown(with: event)
+        return true
+    }
+    override func keyDown(with event: NSEvent) {
+        guard !dispatching else { return }
+        if typed.isEmpty && (event.keyCode == 36 || event.keyCode == 76) { return }
+        let letter = Self.letter(event)
+        // Navigation, digits, punctuation and dead keys do not change or refuse a pending word.
+        let multipleCharacters = (event.charactersIgnoringModifiers?.count ?? 0) > 1
+        guard [36, 76, 48, 51].contains(event.keyCode) || letter != nil || multipleCharacters else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        guard isEnabled, !entries.isEmpty, let window = window, window.isKeyWindow,
+            window.firstResponder === self, event.window === window, event.type == .keyDown,
+            event.timestamp <= now, now - event.timestamp < 5, event.timestamp > lastTimestamp,
+            !event.isARepeat, personInput(event.cgEvent),
+            event.modifierFlags.intersection([.command, .control, .option, .function]).isEmpty else { refuse(); return }
+        lastTimestamp = event.timestamp
+        // Tab changes the responder only. It never answers, including when Switch Control focuses this field through AX.
+        if event.keyCode == 48 {
+            clear()
+            if event.modifierFlags.contains(.shift) { window.selectPreviousKeyView(self) } else { window.selectNextKeyView(self) }
+            return
+        }
+        if event.keyCode == 36 || event.keyCode == 76 {
+            guard let action = entries[typed], let button = action.button, button.isEnabled,
+                button.window === window else { refuse(); return }
+            // Clear the word and block nested input before dispatch, but leave the field answerable if press refuses.
+            clear(); dispatching = true
+            let pressed = action.press(button)
+            dispatching = false
+            if pressed { invalidate() }
+            return
+        }
+        if event.keyCode == 51 { if !typed.isEmpty { typed.removeLast() } }
+        else {
+            guard let letter = letter, typed.count < 12 else { refuse(); return }
+            typed += letter
+        }
+        stringValue = typed
+    }
+}
+
+final class ConsentTyping: NSView {
+    let instructions: NSTextField
+    let field: ConsentWordField
+    init(_ actions: [ConsentInputAction]) {
+        // Words are local UI challenges, not secrets or bearer tokens. Provenance is checked on every key, including Return.
+        let words = ["birch", "cedar", "coral", "daisy", "fern", "finch", "lake", "leaf", "maple", "moss", "oak", "pearl", "pine", "plum", "reed", "rose"].shuffled()
+        let entries = zip(words, actions).map { (word: $0.0, action: $0.1) }
+        let text = entries.map { "\($0.action.button?.title ?? "Confirm"): type \($0.word), then Return." }.joined(separator: "\n")
+        instructions = NSTextField(wrappingLabelWithString: text)
+        instructions.font = .systemFont(ofSize: 11); instructions.textColor = .secondaryLabelColor
+        field = ConsentWordField(Dictionary(uniqueKeysWithValues: entries.map { ($0.word, $0.action) }), instructions: text)
+        super.init(frame: .zero)
+        addSubview(instructions); addSubview(field)
+        for action in actions { action.typing = self }
+        _ = fit(width: 360)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    @discardableResult func fit(width: CGFloat) -> CGFloat {
+        instructions.preferredMaxLayoutWidth = width
+        let height = ceil(instructions.sizeThatFits(NSSize(width: width, height: 10000)).height)
+        field.frame = NSRect(x: 0, y: 0, width: width, height: 24)
+        instructions.frame = NSRect(x: 0, y: 30, width: width, height: height)
+        frame.size = NSSize(width: width, height: height + 30)
+        return frame.height
+    }
+    func invalidate() { field.invalidate() }
 }
 func consentInputActions(_ alert: NSAlert, choices: [String], kind: String) -> [ConsentInputAction] {
     // Reserve a line before layout so a refusal does not resize or dismiss the card. Only fixed text goes here.
@@ -115,7 +264,18 @@ func consentInputActions(_ alert: NSAlert, choices: [String], kind: String) -> [
         return button
     }
     alert.layout()
-    return buttons.map { ConsentInputAction($0) }
+    let actions = buttons.map { ConsentInputAction($0) }
+    if !actions.isEmpty {
+        let typing = ConsentTyping(actions)
+        typing.widthAnchor.constraint(equalToConstant: 360).isActive = true
+        typing.heightAnchor.constraint(equalToConstant: typing.frame.height).isActive = true
+        let stack = NSStackView(views: [typing, alert.accessoryView!])
+        stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 8
+        stack.frame = NSRect(x: 0, y: 0, width: 360, height: typing.frame.height + alert.accessoryView!.frame.height + 8)
+        alert.accessoryView = stack
+        alert.layout()
+    }
+    return actions
 }
 // END PERSON INPUT
 
@@ -588,6 +748,7 @@ final class AskCardPanel: NSObject {
     let passive: Bool
     let answer: (String) -> Void
     var actions: [ConsentInputAction] = []
+    var typing: ConsentTyping?
     var timer: Timer?
     var finished = false
     let choices: [String]
@@ -670,6 +831,10 @@ final class AskCardPanel: NSObject {
                 actions.append(ConsentInputAction(button, mouseOnly: passive))
             }
         }
+        if !actions.isEmpty {
+            typing = ConsentTyping(actions)
+            content.addSubview(typing!)
+        }
         layout()
         timer = Timer.scheduledTimer(withTimeInterval: max(0.001, deadline / 1000 - Date().timeIntervalSince1970), repeats: false) { [weak self] _ in self?.finish("cancel") }
     }
@@ -700,7 +865,8 @@ final class AskCardPanel: NSObject {
         let hasDetails = !detailsText.stringValue.isEmpty
         let disclosureHeight: CGFloat = hasDetails ? 26 : 0
         let feedbackHeight: CGFloat = feedback.stringValue.isEmpty ? 0 : measure(feedback, textWidth) + gap
-        let fixedHeight = pad * 2 + 18 + buttonHeight + disclosureHeight + feedbackHeight
+        let typingHeight = typing.map { $0.fit(width: textWidth) + gap } ?? 0
+        let fixedHeight = pad * 2 + 18 + buttonHeight + disclosureHeight + feedbackHeight + typingHeight
         let detailsWanted = expanded && hasDetails ? measure(detailsText, textWidth - 18) : 0
         // Reserve a readable Details viewport before a long summary consumes the available height.
         let detailsReserved = min(detailsWanted, min(120, max(0, area.height - fixedHeight - 56 - 48)))
@@ -738,6 +904,7 @@ final class AskCardPanel: NSObject {
         detailsScroll.contentView.scroll(to: NSPoint(x: 0, y: detailsText.isFlipped ? 0 : max(0, detailsText.frame.height - detailHeight)))
         feedback.isHidden = feedbackHeight == 0
         feedback.frame = NSRect(x: textX, y: pad, width: textWidth, height: max(0, feedbackHeight - gap))
+        typing?.frame.origin = NSPoint(x: textX, y: pad + feedbackHeight + buttonHeight + gap)
         var x = buttonX
         for index in buttons.indices {
             buttons[index].frame = NSRect(x: x, y: pad + feedbackHeight, width: widths[index], height: buttonHeight)
@@ -759,7 +926,7 @@ final class AskCardPanel: NSObject {
         close(); answer(choice)
     }
     func close() {
-        finished = true; timer?.invalidate(); timer = nil; panel.orderOut(nil)
+        finished = true; timer?.invalidate(); timer = nil; typing?.invalidate(); panel.orderOut(nil)
         // The guarded action retains its original target (this card). Break that cycle after dismissal.
         actions.removeAll()
     }
@@ -858,6 +1025,7 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     func personModal(_ alert: NSAlert, choices: [String], kind: String) -> NSApplication.ModalResponse {
         let actions = consentInputActions(alert, choices: choices, kind: kind)
+        defer { for action in actions { action.typing?.invalidate() } }
         focus.presenting([:])
         let result = withExtendedLifetime(actions) { modal.run(abort: { NSApp.abortModal() }) { alert.runModal() } }
         focus.dismissed()

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { macCommandSkip } from './requirements.mjs';
+import { swiftModuleCache } from '../bench/swift-cache.mjs';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 import { createElectronConsent, createGrantStore } from '../plugins/sleight/lib/direct-browser/electron-consent.mjs';
 import { instance } from './fixtures/electron-app.mjs';
@@ -35,8 +36,8 @@ test('Swift consent input fixture refuses AX and posted input but admits a HID e
   assert.ok(block, 'person input guard absent');
   const dir = registerTemp(t, trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-input-')))));
   const binary = join(dir, 'fixture'), swift = join(dir, 'main.swift');
-  writeFileSync(swift, 'import AppKit\nimport ObjectiveC\nimport Darwin\nimport os.log\n' + block[1] + readFileSync(new URL('./fixtures/consent-person-input.swift', import.meta.url), 'utf8'));
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(dir, 'cache'), swift, '-o', binary], { encoding: 'utf8', timeout: 120000 });
+  writeFileSync(swift, 'import AppKit\nimport Carbon.HIToolbox\nimport ObjectiveC\nimport Darwin\nimport os.log\n' + block[1] + readFileSync(new URL('./fixtures/consent-person-input.swift', import.meta.url), 'utf8'));
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 600000 });
   assert.equal(built.status, 0, built.stderr);
   const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000 });
   assert.equal(run.status, 0, run.stderr + run.stdout);
@@ -68,6 +69,6 @@ test('Swift consent input fixture refuses AX and posted input but admits a HID e
 
 test('the complete Swift consent helper compiles without launching it', { skip: macCommandSkip('xcrun') }, t => {
   const dir = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-consent-build-'))));
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(dir, 'cache'), sourcePath.pathname, '-o', join(dir, 'consent-host')], { encoding: 'utf8', timeout: 120000 });
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), sourcePath.pathname, '-o', join(dir, 'consent-host')], { encoding: 'utf8', timeout: 600000 });
   assert.equal(built.status, 0, built.stderr);
 });
