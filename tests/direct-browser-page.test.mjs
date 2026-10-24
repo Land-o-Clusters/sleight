@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { hookAnswer } from './adversarial/fixtures/hook.mjs';
 import { createPageRegistry, backgroundClick, frameShield, popupHook, hookProof, hookOpen, hookSource, newHook } from '../plugins/sleight/lib/direct-browser/page.mjs';
 import { activationKey } from '../plugins/sleight/lib/direct-browser/act.mjs';
+import { setViewport } from '../plugins/sleight/lib/direct-browser/viewport.mjs';
 
 function fixture(options = {}) {
   const calls = [], pages = [], context = new EventEmitter();
@@ -56,6 +57,17 @@ test('opens blank in the background, installs the hook before navigation, expose
   assert.ok(install >= 0 && install < f.calls.findIndex(c => c[0] === 'goto'));
   assert.ok(f.calls.some(c => c[0] === 'Emulation.setFocusEmulationEnabled' && c[1].enabled));
   await f.registry.endTurn();
+});
+
+test('FD5 failed media restoration prevents a browser keep from releasing ownership', async () => {
+  const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/start' });
+  const entry = f.registry.tab(tab); let fail = false;
+  entry.page.emulateMedia = async () => { if (fail) throw Error('restore failed'); };
+  await setViewport(entry.page, { reduced_motion: true }); fail = true;
+  await assert.rejects(f.registry.keep(tab), /restore failed/);
+  assert.equal(f.registry.tab(tab), entry); assert.equal(entry.released, false);
+  fail = false; await f.registry.keep(tab); assert.equal(entry.released, true);
+  assert.equal((await f.registry.endTurn()).cleanedUp, true);
 });
 
 test('open phase events bracket allocation, attachment, adoption, readiness and navigation without page data', async () => {

@@ -4,6 +4,7 @@ import { trackPage } from './activity.mjs';
 import { endpointURL, endpointTarget, endpointBlock, bindEndpointPage, assertEndpointRead } from './endpoint-guard.mjs';
 import { trustedRead } from './trusted-dom.mjs';
 import { tabHandle } from './tab-handle.mjs';
+import { restoreViewport } from './viewport.mjs';
 
 // Preserve recovery advice when the dispatcher hides an uncertain operation's details.
 const capabilityError = message => Object.assign(Error(message), { capability: true });
@@ -2672,6 +2673,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
       try {
         await deadline(() => entry.queue, timeoutMs);
         await deadline(() => entry.ready, timeoutMs);
+        await deadline(() => restoreViewport(entry.page), timeoutMs);
         await deadline(() => removeHook(entry), timeoutMs);
         await entry.cdp.detach();
         await releaseTarget?.(entry.targetId);

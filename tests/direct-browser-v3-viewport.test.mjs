@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createActionRunner } from '../plugins/sleight/lib/direct-browser/act.mjs';
+import { setViewport, restoreViewport } from '../plugins/sleight/lib/direct-browser/viewport.mjs';
 import { browserTools, validateToolCall } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 
-// A page that tracks its size the way a browser does: Runtime.evaluate reads it, setViewportSize changes it.
+// Native CSS layout metrics report the size; setViewportSize changes it.
 function sizedPage(initial = { width: 1280, height: 720 }, { readable = true } = {}) {
   const page = new EventEmitter(), calls = []; let size = { ...initial };
   page.url = () => 'https://example.invalid/';
@@ -13,10 +14,9 @@ function sizedPage(initial = { width: 1280, height: 720 }, { readable = true } =
   page.context = () => ({ newCDPSession: async () => ({
     send: async (method, params) => {
       calls.push(method);
-      assert.equal(method, 'Runtime.evaluate');
+      assert.equal(method, 'Page.getLayoutMetrics');
       if (!readable) throw Error('no session');
-      assert.match(params.expression, /innerWidth/);
-      return { result: { value: [size.width, size.height] } };
+      return { cssLayoutViewport: { clientWidth: size.width, clientHeight: size.height } };
     },
     detach: async () => { calls.push('detach'); },
   }) });
@@ -94,8 +94,74 @@ test('the tool boundary takes both sizes or neither, and the descriptions name t
   assert.throws(() => call({ do: 'viewport', width: 390 }), /width and height, or neither/);
   assert.throws(() => call({ do: 'viewport', height: 844 }), /width and height, or neither/);
   const text = Object.fromEntries(browserTools('bbench').map(tool => [tool.name, tool.description]));
-  assert.match(text.browser_act, /viewport with width and height resizes and reports the old size; with neither it restores that size/);
+  assert.match(text.browser_act, /viewport takes width\/height, color_scheme:light\/dark and reduced_motion:boolean for user-asked tests; an empty viewport resets size and media/);
   assert.match(text.browser_read, /Refs outside the viewport carry \[offscreen\] or \[partly offscreen\]/);
+});
+
+test('FD5 media-only steps preserve size and restore both original media values', async () => {
+  const { page, size, calls } = sizedPage();
+  let media = { colorScheme: 'light', reducedMotion: 'reduce' };
+  page._connection = { toImpl: () => ({ emulatedMedia: () => ({ ...media }) }) };
+  page.emulateMedia = async next => { calls.push(['media', next]); media = { ...media, ...next }; };
+  const run = runner(page);
+  assert.match((await run([{ do: 'viewport', color_scheme: 'dark', reduced_motion: false }])).lines[0], /color_scheme dark; reduced_motion false/);
+  assert.deepEqual(size(), { width: 1280, height: 720 });
+  assert.deepEqual(media, { colorScheme: 'dark', reducedMotion: 'no-preference' });
+  await run([{ do: 'viewport', color_scheme: 'light' }]);
+  assert.match((await run([{ do: 'viewport' }])).lines[0], /media restored/);
+  assert.deepEqual(media, { colorScheme: 'light', reducedMotion: 'reduce' });
+  assert.equal(calls.filter(call => Array.isArray(call) && call[0] === 'setViewportSize').length, 0);
+});
+
+test('FD5 combined resize and media reset preserve the first size and each media baseline', async () => {
+  const { page, size } = sizedPage();
+  let media = { colorScheme: 'light', reducedMotion: 'no-preference' };
+  page._connection = { toImpl: () => ({ emulatedMedia: () => ({ ...media }) }) };
+  page.emulateMedia = async next => { media = { ...media, ...next }; };
+  await setViewport(page, { width: 390, height: 844, color_scheme: 'dark' });
+  await setViewport(page, { reduced_motion: true });
+  await setViewport(page, { width: 768, height: 1024 });
+  assert.deepEqual(media, { colorScheme: 'dark', reducedMotion: 'reduce' });
+  assert.match(await restoreViewport(page), /restored to 1280x720; media restored/);
+  assert.deepEqual(size(), { width: 1280, height: 720 });
+  assert.deepEqual(media, { colorScheme: 'light', reducedMotion: 'no-preference' });
+});
+
+test('FD5 zoom compensation measures native CSS dimensions and restores the CSS baseline', async () => {
+  const { page, calls } = sizedPage();
+  let physical = { width: 1600, height: 1000 };
+  page.context = () => ({ newCDPSession: async () => ({ send: async method => {
+    assert.equal(method, 'Page.getLayoutMetrics');
+    return { cssLayoutViewport: { clientWidth: Math.round(physical.width / 1.25), clientHeight: Math.round(physical.height / 1.25) } };
+  }, detach: async () => {} }) });
+  page.setViewportSize = async next => { physical = next; calls.push(next); };
+  await setViewport(page, { width: 390, height: 844 });
+  assert.ok(Math.abs(physical.width / 1.25 - 390) <= 1);
+  assert.equal(physical.height / 1.25, 844);
+  await restoreViewport(page);
+  assert.deepEqual(physical, { width: 1600, height: 1000 });
+});
+
+test('FD5 a failed media restore remains retryable and does not forget the original settings', async () => {
+  const { page } = sizedPage(); let fail = false;
+  page.emulateMedia = async () => { if (fail) throw Error('restore failed'); };
+  await setViewport(page, { color_scheme: 'dark' }); fail = true;
+  await assert.rejects(restoreViewport(page), /restore failed/); fail = false;
+  assert.match(await restoreViewport(page), /media restored/);
+});
+
+test('FD5 a size that cannot converge within three corrections never claims a successful restore', async () => {
+  const { page } = sizedPage();
+  await setViewport(page, { width: 390, height: 844 });
+  page.setViewportSize = async () => {};
+  await assert.rejects(restoreViewport(page), /could not reach the requested CSS size/);
+});
+
+test('FD5 malformed media is refused by the runner before any input', async () => {
+  const { page, calls } = sizedPage();
+  for (const step of [{ do: 'viewport', reduced_motion: 1 }, { do: 'viewport', color_scheme: 'auto' },
+    { do: 'wait', color_scheme: 'dark' }]) await assert.rejects(runner(page)([step]), /needs viewport/);
+  assert.deepEqual(calls, []);
 });
 
 

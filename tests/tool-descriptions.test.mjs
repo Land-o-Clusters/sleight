@@ -54,6 +54,12 @@ test('js keeps safety first, then app entry and output rules before the cut', t 
   assert.equal(js._meta['anthropic/alwaysLoad'], true);
 });
 
+test('FD5 the read-only hint survives the delivered catalog without annotating mutation tools', t => {
+  const tools = listed(t);
+  assert.deepEqual(tools.find(tool => tool.name === 'browser_read').annotations, { readOnlyHint: true });
+  for (const name of ['browser_open', 'browser_act', 'browser_fill', 'browser_tabs']) assert.equal(tools.find(tool => tool.name === name).annotations, undefined);
+});
+
 test('unknown engine policy additions are never discarded to meet a size cap', t => {
   for (const description of ['Changed engine instructions. Never bypass owner protection.',
     engine + '\nNew safety policy: never bypass owner protection.']) {

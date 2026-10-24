@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCDPFilter } from '../plugins/sleight/lib/direct-browser/cdp-filter.mjs';
+import { setViewport } from '../plugins/sleight/lib/direct-browser/viewport.mjs';
 import { app, identity, recipe, page, rect, fakeUpstream, fakeWindows, nativeWindow, fakeBrowser, tick } from './fixtures/electron-graph.mjs';
 import { withMT } from './fixtures/mt-env.mjs';
 import crypto from 'node:crypto';
@@ -53,6 +54,30 @@ async function world({ targets: initial, windows, owner = 'session-a', fence, ex
     owner, timeoutMs: 500 });
   return { m, f, w, targets, join, filter, pw, pages };
 }
+
+for (const release of ['keep', 'handoff', 'endTurn']) test(`FD5 app ${release} restores media before releasing the renderer`, async t => {
+  const s = await world({ targets: [page('a')], windows: [nativeWindow(11, rect(0, 0))] }); t.after(() => s.filter.dispose());
+  await s.pages.seed();
+  const [{ tab }] = await s.pages.list(), entry = s.pages.tab(tab), calls = [];
+  entry.page.emulateMedia = async media => { calls.push(media); assert.equal(entry.released, false); };
+  await setViewport(entry.page, { color_scheme: 'dark', reduced_motion: true });
+  if (release === 'endTurn') assert.equal((await s.pages.endTurn()).cleanedUp, true);
+  else { await s.pages[release](tab); await s.pages.endTurn(); }
+  assert.deepEqual(calls, [{ colorScheme: 'dark', reducedMotion: 'reduce' }, { colorScheme: null, reducedMotion: null }]);
+  assert.equal(entry.released, true); assert.deepEqual(s.pw.closes, []);
+});
+
+test('FD5 a failed app media restore keeps ownership and can retry release', async t => {
+  const s = await world({ targets: [page('a')], windows: [nativeWindow(11, rect(0, 0))] }); t.after(() => s.filter.dispose());
+  await s.pages.seed();
+  const [{ tab }] = await s.pages.list(), entry = s.pages.tab(tab); let fail = false;
+  entry.page.emulateMedia = async () => { if (fail) throw Error('restore failed'); };
+  await setViewport(entry.page, { color_scheme: 'dark' }); fail = true;
+  await assert.rejects(s.pages.keep(tab), /restore failed/);
+  assert.equal(s.pages.tab(tab), entry); assert.equal(entry.released, false);
+  fail = false; await s.pages.keep(tab); assert.equal(entry.released, true);
+  await s.pages.endTurn();
+});
 
 test('the app filter refuses unadmitted targets before any attach, Target.create/close and focus emulation', async t => {
   const f = fakeUpstream([page('a'), page('d', 'devtools://devtools/x.html')]);

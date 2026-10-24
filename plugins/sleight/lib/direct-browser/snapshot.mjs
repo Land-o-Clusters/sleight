@@ -328,7 +328,10 @@ async function closedRoots(page, state) {
         if (v?.clientWidth > 0 && v?.clientHeight > 0) viewport = { width: v.clientWidth, height: v.clientHeight };
       } catch { /* no markers without a size */ }
     }
-    return { frame, secrets, refs, children, viewport };
+    const documents = capture.documents.map(doc => [capture.strings[doc.frameId], {
+      base: capture.strings[doc.baseURL], url: capture.strings[doc.documentURL],
+    }]);
+    return { frame, secrets, refs, children, viewport, documents };
   });
   const sections = [], secrets = [], next = new Map();
   secrets.names = new Set(); secrets.unnamed = false;
@@ -342,7 +345,12 @@ async function closedRoots(page, state) {
   const current = new Set([...next.values()].flatMap(refs => [...refs.values()]));
   for (const ref of state.deliveredClosed) if (!current.has(ref)) state.deliveredClosed.delete(ref);
   state.closed = next;
-  return { sections, secrets, viewport: results.find(result => result.viewport)?.viewport ?? null };
+  const documents = new Map(results.flatMap(result => result.documents)), bases = new Map();
+  for (const frame of page.frames()) {
+    const impl = frame?._connection?.toImpl?.(frame), doc = documents.get(impl?._id);
+    if (impl && doc && typeof doc.base === 'string' && typeof doc.url === 'string') bases.set(frame === page.mainFrame() ? '' : 'f' + impl.seq, doc);
+  }
+  return { sections, secrets, bases, viewport: results.find(result => result.viewport)?.viewport ?? null };
 }
 
 // V4/V5 can resolve an s ref into an owned frame's CDP backend node. Only refs
@@ -454,7 +462,8 @@ function rowsOf(tree, secrets, viewport) {
       // Non-ref text rows are keyed by parent and position. Refs keep their key
       // through value changes and sibling reorders, including child-frame refs.
       const key = ref ?? `${parent ?? 'root'}/${index}`;
-      rows.push({ key, ref, parent, depth, line, previous });
+      rows.push({ key, ref, parent, depth, line, previous,
+        ...(role === 'link' && !protectedValue && node.url ? { link: { name: scrub(node.name || node.text || '', secrets), url: scrub(node.url, secrets) } } : {}) });
       previous = key;
       if (!protectedValue && node.children) visit(node.children, key, depth + 1);
       if (!protectedValue && node.url) rows.push({ key: key + '/url', parent: key, depth: depth + 1,
@@ -472,6 +481,31 @@ function ancestors(rows, wanted) {
     while (row?.parent) { wanted.add(row.parent); row = byKey.get(row.parent); }
   }
   return rows.filter(row => wanted.has(row.key));
+}
+
+// Keep the snapshot's page order and redaction. Hrefs are page data, never navigation authority.
+function linkRows(rows, pageURL, bases, state, secrets) {
+  const seen = new Set(), links = [];
+  for (const { link, ref } of rows) {
+    if (!link) continue;
+    const href = link.url.trim().replace(/[\t\r\n]/g, '');
+    if (!href || href.startsWith('#') || /^javascript:/i.test(href)) continue;
+    const raw = state.refBank.get(ref)?.raw ?? ref ?? '', prefix = /^(?:f\d+)?/.exec(raw)[0];
+    const doc = bases.get(prefix) ?? (prefix ? null : { base: pageURL, url: pageURL });
+    let identity = href;
+    try {
+      if (!doc) continue; // A child frame without native base evidence cannot supply a resolved URL.
+      const url = new URL(href, doc.base), source = new URL(doc.url);
+      if (url.hash && url.origin === source.origin && url.pathname === source.pathname && url.search === source.search) continue;
+      if (url.protocol === 'javascript:') continue;
+      identity = scrub(url.href, secrets);
+    } catch { continue; }
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    links.push({ key: 'link/' + identity, ref: null, parent: null, depth: 0,
+      line: JSON.stringify(normalized(link.name)) + ' -> ' + JSON.stringify(identity) });
+  }
+  return links;
 }
 
 // A reason the caller can act on (our own text, never page content); anything else collapses to the generic message.
@@ -540,10 +574,11 @@ function cap(rows, offset, header, maxChars, continuation) {
   return { text: lines.join('\n'), delivered, next };
 }
 
-export async function snapshot(page, { ref, find, maxChars = 8000, since } = {}) {
+export async function snapshot(page, { ref, find, maxChars = 8000, since, links } = {}) {
   if (!Number.isInteger(maxChars) || maxChars < 1000 || maxChars > 40000
     || find !== undefined && (typeof find !== 'string' || find.length > 512)
     || since !== undefined && (!Number.isSafeInteger(since) || since < 1)
+    || links !== undefined && typeof links !== 'boolean'
     || ref !== undefined && (typeof ref !== 'string' || !REF.test(ref) && !MORE.test(ref))) throw Error('Invalid snapshot request');
   await assertEndpointRead(page);
   const state = stateOf(page);
@@ -574,9 +609,11 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since } = {})
     for (const [ref, record] of previousKeyboard) if (keyboard.records.get(ref) !== record) disposeContext(record.context);
     for (const { context } of keyboard.records.values()) state.keyboardPending.delete(context);
     const continuation = MORE.test(ref) ? state.continuations.get(ref) : null;
-    if (MORE.test(ref) && (!continuation || continuation.source !== JSON.stringify(rows))) throw hinted('that continuation expired because the page changed; read again from the top');
-    const scope = continuation?.scope ?? JSON.stringify([ref ?? null, find ?? null]);
-    const selected = continuation?.selected ?? select(rows, ref, find);
+    const linksMode = continuation?.links ?? links === true;
+    const source = JSON.stringify(linksMode ? [rows, [...closed.bases]] : rows);
+    if (MORE.test(ref) && (!continuation || continuation.source !== source)) throw hinted('that continuation expired because the page changed; read again from the top');
+    const scope = continuation?.scope ?? JSON.stringify([ref ?? null, find ?? null, linksMode]);
+    const selected = continuation?.selected ?? (linksMode ? linkRows(select(rows, ref, find), url, closed.bases, state, secrets) : select(rows, ref, find));
     const baseline = continuation?.baseline ?? state.history.get(since);
     const delta = continuation?.delta ?? Boolean(baseline && baseline.scope === scope);
     const candidates = continuation?.candidates ?? (delta ? changes(selected, baseline.rows) : selected);
@@ -601,8 +638,8 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since } = {})
     const keyboardReceipt = new Map([...printedKeyboard].map(known => [known, { record: state.keyboard.get(known), epoch: state.keyboard.get(known)?.deliveryEpoch }]));
     state.pending.set(number, { generation, refs: result.delivered.filter(row => row.ref && !row.removed).map(row => row.ref), keyboard: keyboardReceipt });
     state.history.set(number, history);
-    if (result.next < candidates.length) state.continuations.set(token, { source: JSON.stringify(rows), scope, selected,
-      candidates, baseline: history, delta, since: continuation?.since ?? since, offset: result.next });
+    if (result.next < candidates.length) state.continuations.set(token, { source, scope, selected,
+      candidates, baseline: history, delta, links: linksMode, since: continuation?.since ?? since, offset: result.next });
     if (continuation) state.continuations.delete(ref);
     for (const map of [state.history, state.continuations, state.pending]) while (map.size > 8) map.delete(map.keys().next().value);
     await assertEndpointRead(page);
