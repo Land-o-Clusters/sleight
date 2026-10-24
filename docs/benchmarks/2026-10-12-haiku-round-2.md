@@ -1,5 +1,7 @@
 # sleight against FowlBrowser on Haiku, second round (2026-10-12)
 
+These results used `8b68924` (baseline). The next race targets `6a12d60` (head).
+
 Same setup as [the 16:06 baseline](2026-10-12-haiku-baseline.md): FowlBrowser's runner and grader at `8b68924` with sleight's
 patch, its 13 tasks in Chrome and Helium (normal and swapped order), Haiku 4.5 (see the correction below) at high effort on the API key. sleight ran at
 `2ad83d1a`, which adds tonight's batch H merges (API forgiveness, page-write preflight, the no-output note, `sleight.reorder`,

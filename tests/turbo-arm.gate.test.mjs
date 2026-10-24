@@ -17,7 +17,7 @@ const fixtureTask = { name: 'fixture', browser: 'chrome', prompt: 'Read http://1
 async function runner(t) {
   const dir = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-turbo-gate-')));
   mkdirSync(join(dir, 'tools'));
-  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '8b68924:tools/rounds.mjs'], { encoding: 'utf8' });
+  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8' });
   assert.equal(original.status, 0, original.stderr);
   const file = join(dir, 'tools/rounds.mjs'); writeFileSync(file, original.stdout);
   const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8' });

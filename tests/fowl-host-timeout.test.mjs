@@ -15,7 +15,7 @@ async function runner(t) {
   if (!existsSync(join(cache, '.git'))) { t.skip('pinned FowlBrowser cache is absent'); return; }
   const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-fowl-host-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '8b68924:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
   assert.equal(original.status, 0, original.stderr);
   mkdirSync(join(dir, 'tools'));
   const file = join(dir, 'tools/rounds.mjs');

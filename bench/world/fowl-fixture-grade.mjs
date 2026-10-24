@@ -2,6 +2,7 @@ import { closeSync, fstatSync, mkdtempSync, openSync, readFileSync, rmSync, writ
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { checkBrowserFixture } from './browser-fixtures.mjs';
+import { jobKinds, gradeJob } from './job-fixtures.mjs';
 
 // Only the round grader inherits this descriptor; agent children receive their own stdio.
 export function fixtureGradeDescriptor(fixture) {
@@ -35,6 +36,7 @@ export function readFixtureExpected(task) {
 }
 
 export function gradeFixture({ task, site, answer, expected }) {
+  if (jobKinds.includes(task.worldFixture)) return gradeJob({ task, site, answer, expected });
   if (!task.worldFixture) return { ok: true, cell: 'n/a', problems: [] };
   let result;
   try {

@@ -42,7 +42,7 @@ function temp(t) {
 }
 function runner(t) {
   const dir = temp(t);
-  const original = spawnSync('/usr/bin/git', ['-C', join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser'), 'show', '8b68924:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+  const original = spawnSync('/usr/bin/git', ['-C', join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser'), 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
   assert.equal(original.status, 0, original.stderr);
   mkdirSync(join(dir, 'tools'));
   writeFileSync(join(dir, 'tools/rounds.mjs'), original.stdout);
@@ -119,9 +119,11 @@ test('world dry-run gives every Claude arm the same prefix, isolation, version a
   const entry = join(dir, 'codex-entry.json');
   writeFileSync(entry, JSON.stringify({ command: process.execPath, args: ['/fixture/codex-proxy.mjs'] }));
   const names = ['sleight', 'fowlbrowser', 'fowl+sleight', 'codex', 'devtools', 'playwright-mcp', 'chrome-devtools-mcp'];
-  writeFileSync(tasks, JSON.stringify(names.map(surface => ({ ...task, name: surface, surface }))));
+  writeFileSync(tasks, JSON.stringify(names.map(surface => ({ ...task, name: surface.replaceAll('+', '-'), surface }))));
+  const config = join(dir, 'rounds.json');
+  writeFileSync(config, JSON.stringify({ devtools: { command: '/fixture/devtools', env: { chrome: {} } } }));
   const run = spawnSync(process.execPath, [file, '--tasks', tasks, '--codex-entry', entry, '--world', '--dry-run', '--model', 'claude-haiku-5-5', '--effort', 'high', '--out', join(dir, 'never')],
-    { encoding: 'utf8', env: { ...process.env, SLEIGHT_REPO: root } });
+    { encoding: 'utf8', env: { ...process.env, SLEIGHT_REPO: root, FOWLBROWSER_ROUNDS_CONFIG: config } });
   assert.equal(run.status, 0, run.stderr);
   const plans = JSON.parse(run.stdout);
   assert.equal(plans.length, names.length);

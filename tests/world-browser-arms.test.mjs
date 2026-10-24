@@ -94,7 +94,7 @@ test('the patched runner dry-runs every new surface without spawning an agent or
   if (!existsSync(join(cache, '.git'))) return t.skip('pinned FowlBrowser cache is absent');
   const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-world-runner-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '8b68924:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
   assert.equal(original.status, 0, original.stderr);
   mkdirSync(join(dir, 'tools'));
   writeFileSync(join(dir, 'tools/rounds.mjs'), original.stdout);

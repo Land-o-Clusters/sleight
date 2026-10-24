@@ -7,6 +7,13 @@ import { fileURLToPath } from 'node:url';
 import { readValidationData, validationDataDir } from './data.mjs';
 import { ROOT, EVIDENCE, git, source, harness, sha } from './audit-140.mjs';
 
+// Historical audits retain the runner recorded by their pinned B build.
+export function fowlRunnerReference(suite) {
+  const commit = suite?.provenance?.fowlbrowser?.commit;
+  if (!/^[a-f0-9]{40}$/.test(commit ?? '')) throw Error('Missing FowlBrowser commit provenance');
+  return `FowlBrowser@${commit}/tools/rounds.mjs`;
+}
+
 export async function classify({ data } = {}) {
   const auditPath = join(validationDataDir(data), 'validation-140-a.json');
   const audit = readValidationData('validation-140-a.json', data);
@@ -24,7 +31,7 @@ export async function classify({ data } = {}) {
     return cache.get(path);
   };
   const lineAt = (body, index) => body.slice(0, index).split('\n').length;
-  const external = 'FowlBrowser@8b689249ba4e33d2626487aad930605c62e2c6a7/tools/rounds.mjs';
+  const external = fowlRunnerReference(JSON.parse(text('bench/world/suite.json')));
 
   // Non-import edges were reviewed at the pinned B source. Branches name the selector that executes them.
   const extra = [

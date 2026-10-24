@@ -217,7 +217,7 @@ test('the surface patch applies on the pinned FowlBrowser commit and adds fowl+s
   if (!existsSync(join(cache, '.git'))) return t.skip('pinned FowlBrowser cache is absent');
   const dir = temp('sleight-handoff-patch-');
   t.after(async () => (await import('node:fs')).rmSync(dir, { recursive: true, force: true }));
-  const orig = spawnSync('/usr/bin/git', ['-C', cache, 'show', '8b68924:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+  const orig = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
   assert.equal(orig.status, 0, orig.stderr);
   mkdirSync(join(dir, 'tools'), { recursive: true });
   writeFileSync(join(dir, 'tools/rounds.mjs'), orig.stdout);

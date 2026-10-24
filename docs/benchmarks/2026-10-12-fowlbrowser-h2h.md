@@ -1,5 +1,7 @@
 # sleight against FowlBrowser on FowlBrowser's own tasks (2026-10-12)
 
+These results used `8b68924` (baseline). The next race targets `6a12d60` (head).
+
 FowlBrowser (github.com/argofowl/FowlBrowser, MIT) is a Chrome and Helium extension with its own MCP
 server. Its author published 26/26 on 13 tasks for Claude with FowlBrowser, against 23/26 for Claude with
 Codex's Chrome extension. We ran the same 13 tasks on its own runner and grader, with sleight added as a

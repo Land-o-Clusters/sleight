@@ -163,7 +163,7 @@ test('patched rounds grade turbo host events even though extension tab checks re
   const root = fileURLToPath(new URL('..', import.meta.url));
   const dir = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-host-monitor-')));
   mkdirSync(join(dir, 'tools'));
-  const source = spawnSync('/usr/bin/git', ['-C', cache, 'show', '8b68924:tools/rounds.mjs'], { encoding: 'utf8' });
+  const source = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8' });
   assert.equal(source.status, 0, source.stderr);
   writeFileSync(join(dir, 'tools/rounds.mjs'), source.stdout);
   const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8' });

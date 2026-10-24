@@ -133,7 +133,7 @@ function patchedSource(t) {
   const cache = path.join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser');
   if (!fs.existsSync(path.join(cache, '.git'))) { t.skip('pinned FowlBrowser cache is absent'); return; }
   const dir = temp(t); fs.mkdirSync(path.join(dir, 'tools'));
-  fs.writeFileSync(path.join(dir, 'tools/rounds.mjs'), execFileSync('/usr/bin/git', ['-C', cache, 'show', '8b68924:tools/rounds.mjs']));
+  fs.writeFileSync(path.join(dir, 'tools/rounds.mjs'), execFileSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs']));
   execFileSync('/usr/bin/git', ['init', '-q'], { cwd: dir });
   execFileSync('/usr/bin/git', ['apply', new URL('../bench/fowl/sleight-surface.patch', import.meta.url).pathname], { cwd: dir });
   return fs.readFileSync(path.join(dir, 'tools/rounds.mjs'), 'utf8');
