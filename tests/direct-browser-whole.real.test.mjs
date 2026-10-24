@@ -80,7 +80,7 @@ for(const effect of ['post','navigation','popup','dialog','submit','history','ha
   };
  },{effect,url});
  const result=await readWhole({page,hook,state:{},popups:[]},{max_seconds:5});
- assert.match(result.text,/Complete: NO\./);assert.match(result.text,/blocked:/);
+ assert.match(result.text,/Complete: NO\./);assert.match(result.text,effect==='post'?/held after expander click: POST /:/blocked:/);
  assert.equal(page.url(),url);assert.equal(context.pages().length,1);assert.deepEqual(await page.evaluate(()=>danger),[]);
  assert.equal(h.requests.filter(r=>r.method==='POST'||r.path.endsWith('/danger')).length,0);
 });

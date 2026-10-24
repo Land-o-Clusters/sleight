@@ -2663,6 +2663,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     if (frames) entry.frames = { sessions: () => frames.sessions(entry.targetId), addScript: source => frames.addScript(entry.targetId, source),
       evaluate: (name, expression) => frames.evaluate(entry.targetId, name, expression) };
     if (typeof frames?.observeInput === 'function') entry.observeInput = listener => frames.observeInput(entry.targetId, listener);
+    if (typeof frames?.guardWholeRequests === 'function') entry.guardWholeRequests = callbacks => frames.guardWholeRequests(entry.targetId, callbacks);
     entry.openChild = (url, { target = '', rel = '' } = {}) => {
       // Never resolve a page-supplied name against arbitrary browser targets.
       // Only this registry's allocations can acquire or reuse a link name.

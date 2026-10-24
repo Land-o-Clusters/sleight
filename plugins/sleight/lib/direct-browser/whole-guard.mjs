@@ -4,8 +4,8 @@ import { hookProof, hookOpen } from './page.mjs';
 export async function guardWholeRead(entry, deadline, bank) {
   const {page,hook}=entry,token=randomUUID();
   if(!hook)throw Error('whole guard unavailable');
-  const pending=new Set(),tasks=new Set(),requests=new Map(),clickWindows=[];
-  let session,armed=false,closed=false,bypassed=false;
+  const pending=new Set(),tasks=new Set(),requests=new Map();
+  let session,children,armed=false,closed=false,bypassed=false,firstClick,protectUntil=0;
   const call=async(method,...args)=>{
     const expression=`window[${JSON.stringify(hook.key)}]?.[${JSON.stringify(method)}]?.(${[hookProof(hook,method),...args].map(value=>JSON.stringify(value)).join(',')})`;
     const reply=await session.send('Runtime.evaluate',{expression,returnByValue:true,timeout:1000});
@@ -15,28 +15,31 @@ export async function guardWholeRead(entry, deadline, bank) {
   const blocked=kind=>{if(bank.blocked.length<100&&!bank.blocked.includes(kind))bank.blocked.push(kind);};
   const requested=request=>{if(request.method()==='GET'&&['xhr','fetch'].includes(request.resourceType()))pending.add(request);};
   const finished=request=>pending.delete(request);
+  const originOf=url=>{try{return new URL(url).origin;}catch{return 'unknown origin';}};
+  const held=(method,url)=>{
+    const origin=originOf(url),rows=bank.held??= [],row=rows.find(row=>row.method===method&&row.origin===origin);
+    if(row)row.count++;
+    else if(rows.length<100)rows.push({method,origin,count:1});
+    else bank.heldOverflow=(bank.heldOverflow??0)+1;
+  };
   // Network's wall time identifies initiation, even if Fetch delivery is delayed.
-  // Retain the native initiator stack for attribution without exposing page URLs.
   const initiated=event=>{
     if(requests.size>=2048)requests.delete(requests.keys().next().value);
-    requests.set(event.requestId,{at:event.wallTime*1000,initiator:event.initiator});
+    requests.set(event.requestId,event.wallTime*1000);
   };
   const done=event=>requests.delete(event.requestId);
-  const originOf=url=>{try{return new URL(url).origin;}catch{return 'unknown origin';}};
   const paused=event=>{
-    const observed=Date.now(),native=requests.get(event.networkId);
-    const at=Number.isFinite(native?.at)?native.at:observed;
-    const afterClick=clickWindows.some(({start,end})=>at>=start&&at<=end);
+    const native=requests.get(event.networkId),at=Number.isFinite(native)?native:Date.now();
     const method=event.request.method;
     const preflight=method==='OPTIONS'&&Object.entries(event.request.headers??{}).some(([name,value])=>name.toLowerCase()==='access-control-request-method'&&String(value).toUpperCase()==='GET');
     const task=(async()=>{
-      if(event.resourceType==='Document') {
+      if(method!=='GET'&&!preflight&&firstClick!==undefined&&at>=firstClick) {
+        await session.send('Fetch.failRequest',{requestId:event.requestId,errorReason:'BlockedByClient'});
+        held(method,event.request.url);
+        if(event.resourceType==='Document')blocked('navigation');
+      } else if(event.resourceType==='Document') {
         blocked('navigation');
         await session.send('Fetch.fulfillRequest',{requestId:event.requestId,responseCode:204});
-      } else if(method!=='GET'&&!preflight&&afterClick) {
-        const attribution=native?.initiator?.stack?.callFrames?.length?' (expander window; script initiator)':' (expander window)';
-        blocked(method+' '+originOf(event.request.url)+attribution);
-        await session.send('Fetch.failRequest',{requestId:event.requestId,errorReason:'BlockedByClient'});
       } else await session.send('Fetch.continueRequest',{requestId:event.requestId});
     })().catch(()=>{blocked('request guard unavailable');});
     tasks.add(task);task.finally(()=>tasks.delete(task));
@@ -46,13 +49,15 @@ export async function guardWholeRead(entry, deadline, bank) {
   async function close(){
     if(closed)return;closed=true;
     let failure;
-    // A time/item cap cannot shorten a click's two-second protection window.
-    // Input completion may extend the window while this drain is waiting.
-    for(;;){const remaining=Math.max(0,...clickWindows.map(window=>window.end-Date.now()));if(!remaining)break;await new Promise(resolve=>setTimeout(resolve,remaining));}
+    // Hold non-GETs until Fetch is released, including hook and input cleanup.
+    // Keep the existing minimum drain after a click even for a capped read.
+    for(;;){const remaining=protectUntil-Date.now();if(remaining<=0)break;await new Promise(resolve=>setTimeout(resolve,remaining));}
     if(armed){try{const report=await call('wholeTake');if(report)blocked(report);if(await call('whole',token,0)!==true)throw Error('whole guard release');}catch(e){failure=e;}}
     if(session){
       await Promise.allSettled([...tasks]);
+      if(children)try{await children.remove();}catch(e){failure??=e;}
       try{await session.send('Fetch.disable');}catch(e){failure??=e;}
+      await Promise.allSettled([...tasks]);
       if(bypassed)try{await session.send('Network.setBypassServiceWorker',{bypass:false});}catch(e){failure??=e;}
       session.off('Fetch.requestPaused',paused);session.off('Network.requestWillBeSent',initiated);
       session.off('Network.loadingFinished',done);session.off('Network.loadingFailed',done);
@@ -75,9 +80,10 @@ export async function guardWholeRead(entry, deadline, bank) {
     await session.send('Network.enable');
     session.on('Fetch.requestPaused',paused);
     await session.send('Fetch.enable',{patterns:[{urlPattern:'*',requestStage:'Request'}]});
+    if(entry.guardWholeRequests)children=await entry.guardWholeRequests({after:()=>firstClick,held,failed:blocked});
     page.on('framenavigated',navigated);page.on('dialog',dialog);
     return {pending:()=>pending.size>0,
-      expanderClick(){const start=Date.now(),window={start,end:start+2000};clickWindows.push(window);if(clickWindows.length>100)clickWindows.shift();return ()=>{window.end=Math.max(window.end,Date.now()+2000);};},
+      expanderClick(){firstClick??=Date.now();protectUntil=Date.now()+2000;return ()=>{protectUntil=Math.max(protectUntil,Date.now()+2000);};},
       async poll(){const report=await call('wholeTake');if(report)blocked(report);},close};
   }catch(error){await close().catch(()=>{});throw Error(error.message.startsWith('whole guard')?error.message:'whole guard unavailable');}
 }

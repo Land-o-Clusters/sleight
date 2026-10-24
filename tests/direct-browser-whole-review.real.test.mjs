@@ -10,6 +10,7 @@ import {readWhole} from '../plugins/sleight/lib/direct-browser/whole.mjs';
 import {createWholeDOM} from '../plugins/sleight/lib/direct-browser/whole-dom.mjs';
 import {guardWholeRead} from '../plugins/sleight/lib/direct-browser/whole-guard.mjs';
 import {protectWholeRows} from '../plugins/sleight/lib/direct-browser/snapshot.mjs';
+import {fixture as filteredFixture} from './fixtures/fd1-filtered-real.mjs';
 const pin=JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json',import.meta.url))).browsers.find(b=>b.name==='chromium-headless-shell');
 const executablePath=join(homedir(),'Library/Caches/ms-playwright','chromium_headless_shell-'+pin.revision,'chrome-headless-shell-mac-'+process.arch,'chrome-headless-shell');
 const skip=process.env.SLEIGHT_LIVE_DOM_TEST!=='1'?'requires headless fixture opt-in':!existsSync(executablePath)?'pinned headless shell unavailable':false;
@@ -19,7 +20,7 @@ async function harness(t,html,{worker}={}){
  const server=createServer((req,res)=>{
   requests.push({method:req.method,path:req.url});
   res.setHeader('access-control-allow-origin','*');res.setHeader('access-control-allow-methods','GET, POST, OPTIONS');res.setHeader('access-control-allow-headers','x-fixture');
-  if(req.url==='/sw.js'){res.setHeader('content-type','text/javascript');res.end(worker??'');}
+  if(req.url==='/sw.js'||req.url==='/worker.js'){res.setHeader('content-type','text/javascript');res.end(worker??'');}
   else if(req.url==='/'){res.setHeader('content-type','text/html');res.end(html);}
   else res.end('ok');
  });
@@ -88,18 +89,87 @@ test('review: GET CORS preflights pass and blocked expander POST reports method 
  const h=await harness(t,shell('<article data-key="a">one</article><article data-key="z">last</article>','<button type="button" id="more">Load more</button>'));
  // Another loopback origin forces a real preflight. The server remains a fixture we own.
  await h.page.evaluate(base=>{window.other=base.replace('127.0.0.1','localhost');more.onclick=async()=>{try{await fetch(other+'/history',{headers:{'x-fixture':'read'}});rows.insertAdjacentHTML('beforeend','<article data-key="b">two</article>');more.remove();}catch{}};},h.base);
- const read=await readWhole(h.entry,{direction:'up',max_seconds:8});assert.ok(h.requests.some(r=>r.method==='OPTIONS'&&r.path==='/history'),read.text);assert.ok(h.requests.some(r=>r.method==='GET'&&r.path==='/history'),read.text);assert.match(read.text,/two/);assert.doesNotMatch(read.text,/blocked expander effect/);
+ const read=await readWhole(h.entry,{direction:'up',max_seconds:8});assert.ok(h.requests.some(r=>r.method==='OPTIONS'&&r.path==='/history'),read.text);assert.ok(h.requests.some(r=>r.method==='GET'&&r.path==='/history'),read.text);assert.match(read.text,/two/);assert.doesNotMatch(read.text,/held after expander click: OPTIONS|blocked expander effect/);
  await h.page.evaluate(()=>{const b=document.createElement('button');b.type='button';b.textContent='Load more';b.onclick=()=>fetch('/danger',{method:'POST'}).catch(()=>{});box.append(b);});
  const blocked=await readWhole(h.entry,{max_seconds:3});assert.match(blocked.text,new RegExp('POST '+h.base.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')),blocked.text);assert.equal(h.requests.filter(r=>r.method==='POST').length,0);
 });
 
-test('review: background POST outside the click window passes without failing the read',{skip,timeout:15000},async t=>{
+test('review: background POST before any expander passes without failing the read',{skip,timeout:15000},async t=>{
  const h=await harness(t,shell('<article data-key="a">one</article><article data-key="z">last</article>'));
  const read=readWhole(h.entry,{direction:'up',max_seconds:9});await new Promise(r=>setTimeout(r,1000));
  assert.equal(await h.page.evaluate(()=>fetch('/telemetry',{method:'POST'}).then(r=>r.text()).catch(()=> 'blocked')),'ok');
  const result=await read;assert.match(result.text,/Start: reached\./,result.text);assert.doesNotMatch(result.text,/blocked:/);
- const bank={blocked:[]},guard=await guardWholeRead(h.entry,Date.now()+5000,bank);h.cleanup(()=>guard.close());guard.expanderClick();await new Promise(r=>setTimeout(r,2100));
- assert.equal(await h.page.evaluate(()=>fetch('/after-window',{method:'POST'}).then(r=>r.text()).catch(()=> 'blocked')),'ok');assert.deepEqual(bank.blocked,[]);
+});
+
+test('LR1C: delayed POSTs and beacon stay held after the first expander without making telemetry partial',{skip,timeout:20000},async t=>{
+ const script=`more.onclick=()=>{clicked.push('more');more.remove();for(const ms of [0,2100,4000])setTimeout(()=>fetch('/delayed-'+ms,{method:'POST'}).catch(()=>{}),ms);setTimeout(()=>navigator.sendBeacon('/beacon','telemetry'),2200);};`;
+ const h=await harness(t,shell('<article data-key="a">first message</article><article data-key="b">last message</article>','<button type="button" id="more">Show more</button>',script));
+ const result=await readWhole(h.entry,{});
+ assert.equal(h.requests.filter(r=>r.method==='POST').length,0,result.text);
+ assert.match(result.text,/Complete: yes\./,result.text);
+ assert.ok(result.text.includes('held after expander click: POST '+h.base+' x4'),result.text);
+ assert.doesNotMatch(result.text,/blocked effects|blocked expander effect/);
+});
+
+test('LR1C: existing and newly spawned dedicated workers stay held after an expander',{skip,timeout:15000},async t=>{
+ const worker=`onmessage=e=>{fetch(e.data,{method:'POST'}).then(()=>postMessage('sent')).catch(()=>postMessage('held'));};postMessage('ready');`;
+ const h=await harness(t,shell('<article>first message</article><article>last message</article>','','window.oldWorker=new Worker("/worker.js");window.oldReady=new Promise(r=>oldWorker.onmessage=r);'),{worker});
+ await h.page.evaluate(()=>oldReady);
+ const bank={blocked:[]},guard=await guardWholeRead(h.entry,Date.now()+10000,bank);h.cleanup(()=>guard.close());guard.expanderClick();
+ await new Promise(r=>setTimeout(r,2200));
+ const outcomes=await h.page.evaluate(async()=>{
+  const old=new Promise(r=>{oldWorker.onmessage=e=>r(e.data);oldWorker.postMessage('/old-worker');});
+  const fresh=new Promise(r=>{const w=new Worker('/worker.js');w.onmessage=e=>{if(e.data==='ready')w.postMessage('/new-worker');else{r(e.data);w.terminate();}};});
+  return Promise.all([old,fresh]);
+ });
+ assert.deepEqual(outcomes,['held','held']);assert.equal(h.requests.filter(r=>r.method==='POST').length,0);
+ await guard.close();
+ assert.deepEqual(bank.held,[{method:'POST',origin:h.base,count:2}]);assert.deepEqual(bank.blocked,[]);
+});
+
+test('LR1C: non-GET protection remains active while close releases the hook',{skip,timeout:10000},async t=>{
+ const h=await harness(t,shell('<article>first message</article><article>last message</article>'));
+ const original=h.context.newCDPSession.bind(h.context);let release,entered;
+ const closingHook=new Promise(r=>entered=r),gate=new Promise(r=>release=r);
+ h.context.newCDPSession=async target=>{const s=await original(target),send=s.send.bind(s);s.send=async(method,args)=>{if(method==='Runtime.evaluate'&&args.expression.includes('"whole"')&&args.expression.endsWith(',0)')){entered();await gate;}return send(method,args);};return s;};
+ const bank={blocked:[]},guard=await guardWholeRead(h.entry,Date.now()+5000,bank);h.cleanup(()=>guard.close());guard.expanderClick();
+ const closing=guard.close();await closingHook;
+ try{assert.equal(await h.page.evaluate(()=>fetch('/during-close',{method:'DELETE'}).then(()=> 'sent').catch(()=> 'held')),'held');}
+ finally{release();await closing;}
+ assert.equal(h.requests.filter(r=>r.method==='DELETE').length,0);assert.deepEqual(bank.held,[{method:'DELETE',origin:h.base,count:1}]);
+ assert.equal(await h.page.evaluate(()=>fetch('/after-close',{method:'POST'}).then(r=>r.text())),'ok');
+});
+
+test('LR1C: production filtered runtime holds delayed worker telemetry only on the owned tab',{skip,timeout:25000},async t=>{
+ const received=[],server=createServer((req,res)=>{received.push({method:req.method,path:req.url});res.setHeader('access-control-allow-origin','*');res.end('ok');});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>{server.closeAllConnections();return new Promise(r=>server.close(r));});
+ const base='http://127.0.0.1:'+server.address().port;
+ const script=`window.workerURL=URL.createObjectURL(new Blob(["onmessage=e=>fetch(e.data,{method:'POST'}).then(()=>postMessage('sent')).catch(()=>postMessage('held'));postMessage('ready');"],{type:'text/javascript'}));window.w=new Worker(workerURL);window.ready=new Promise(r=>w.onmessage=r);more.onclick=()=>{more.remove();setTimeout(()=>fetch('${base}/delayed',{method:'POST'}).catch(()=>{}),2100);setTimeout(()=>navigator.sendBeacon('${base}/beacon','x'),2200);setTimeout(()=>{w.postMessage('${base}/old-worker');const next=new Worker(workerURL);next.onmessage=e=>{if(e.data==='ready')next.postMessage('${base}/new-worker');};},4000);};`;
+ const f=await filteredFixture(t,shell('<article data-key="a">first message</article><article data-key="b">last message</article>','<button type="button" id="more">Show more</button>',script));
+ t.after(()=>f.context.close());
+ await f.entry.page.evaluate(()=>ready);
+ await f.sentinel.goto(base+'/sentinel');
+ const reading=f.call('browser_read',{whole:{}});
+ await f.entry.page.waitForFunction(()=>!document.querySelector('#more'));
+ let unrelated;
+ try{unrelated=await f.sentinel.evaluate(()=>fetch('/unowned',{method:'POST'}).then(r=>r.text()));}finally{await reading;}
+ assert.equal(unrelated,'ok');
+ const result=await reading;assert.equal(result.isError,false,result.text);assert.match(result.text,/Complete: yes\./,result.text);
+ assert.deepEqual(received.filter(r=>r.method==='POST'),[{method:'POST',path:'/unowned'}],result.text);
+ assert.ok(result.text.includes('held after expander click: POST '+base+' x4'),result.text);
+ t.diagnostic(result.text.split('# Whole-thread data')[0]);
+});
+
+test('LR1C: a cross-process iframe and its worker cannot send POSTs after the tab expander',{skip,timeout:25000},async t=>{
+ const posts=[],server=createServer((req,res)=>{if(req.method==='POST')posts.push(req.url);res.setHeader('content-type','text/html');res.end(`<script>onmessage=()=>{fetch('/frame-post',{method:'POST'}).catch(()=>{});new Worker(URL.createObjectURL(new Blob(["fetch("+JSON.stringify(location.origin+'/frame-worker-post')+",{method:'POST'}).catch(()=>{});"],{type:'text/javascript'})));};parent.postMessage('frame-ready','*');</script>`);});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>{server.closeAllConnections();return new Promise(r=>server.close(r));});
+ const base='http://localhost:'+server.address().port;
+ const script=`window.frameReady=new Promise(r=>addEventListener('message',e=>{if(e.data==='frame-ready')r();}));more.onclick=()=>{more.remove();document.querySelector('iframe').contentWindow.postMessage('go','*');};`;
+ const f=await filteredFixture(t,shell('<article data-key="a">first message</article><article data-key="b">last message</article>',`<button type="button" id="more">Show more</button><iframe style="display:none" src="${base}/frame"></iframe>`,script));t.after(()=>f.context.close());
+ await f.entry.page.evaluate(()=>frameReady);assert.ok(f.entry.frames.sessions().length>0,'fixture must have an out-of-process frame');
+ const result=await f.call('browser_read',{whole:{}});
+ assert.deepEqual(posts,[],result.text);assert.match(result.text,/Complete: yes\./,result.text);
+ assert.ok(result.text.includes('held after expander click: POST '+base+' x2'),result.text);
 });
 
 test('review: DOM redaction captures each renderer once per merge batch',{skip,timeout:10000},async t=>{
@@ -137,7 +207,7 @@ test('review: delayed network events keep the initiation window of an earlier ex
  const bank={blocked:[]},guard=await guardWholeRead(h.entry,Date.now()+8000,bank);h.cleanup(()=>guard.close());guard.expanderClick();
  const posted=h.page.evaluate(()=>fetch('/earlier-click',{method:'POST'}).then(()=> 'sent').catch(()=> 'blocked'));
  await new Promise(r=>setTimeout(r,2150));guard.expanderClick();
- assert.equal(await posted,'blocked');assert.equal(h.requests.filter(r=>r.method==='POST').length,0);assert.match(bank.blocked.join(' '),/POST http:\/\/127\.0\.0\.1:/);
+ assert.equal(await posted,'blocked');assert.equal(h.requests.filter(r=>r.method==='POST').length,0);assert.deepEqual(bank.held,[{method:'POST',origin:h.base,count:1}]);assert.deepEqual(bank.blocked,[]);
 });
 
 test('review: a time cap keeps the two-second expander request guard until it expires',{skip,timeout:10000},async t=>{

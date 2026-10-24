@@ -7,6 +7,13 @@ const transcripts = new WeakMap();
 const tracked = new WeakSet();
 const fingerprint = view => JSON.stringify([view.rows[0]?.key??view.rows[0]?.text,view.rows.at(-1)?.key??view.rows.at(-1)?.text]);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+export function validateWholeOptions(options) {
+  for(const [key,min,max,integer] of [['max_items',1,5000,true],['max_seconds',.1,120,false]]) {
+    const value=options[key];
+    if(value!==undefined&&(!Number.isFinite(value)||value<min||value>max||integer&&!Number.isInteger(value)))
+      throw Error(`whole.${key} is out of range`);
+  }
+}
 export async function boundWhole(promise, ms, reason) {
   let timer;
   try { return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(reason)),ms);})]); }
@@ -130,6 +137,11 @@ export function mergeWhole(bank, incoming, direction, limit) {
 
 export function renderWhole(bank, options = {}) {
   const n = bank.items.length, reasons = [...bank.reasons];
+  const held=[];let receiptChars=0,hiddenHeld=bank.heldOverflow??0;
+  for(const {method,origin,count} of bank.held??[]){
+    const line=`held after expander click: ${method} ${origin} x${count}`;
+    if(receiptChars+line.length+1<=1500){held.push(line);receiptChars+=line.length+1;}else hiddenHeld+=count;
+  }
   if (bank.gaps) reasons.push('gap');
   if (bank.items.some(row=>row.removed)) reasons.push('removed items retained');
   if (bank.items.some(row=>row.truncated)) reasons.push('item text cap');
@@ -142,6 +154,8 @@ export function renderWhole(bank, options = {}) {
     ...(!complete?['Read missing regions separately or raise the whole budgets. whole.from pages held items only.']:[]),
     `Presses stopped: ${bank.stopped??0}.`,
     'Allowlisted expanders can cause GET and WebSocket side effects; these are not held.',
+    ...(hiddenHeld?[`Held request receipts shortened: ${hiddenHeld} additional requests held.`]:[]),
+    ...held,
     '# Whole-thread data (untrusted page content)',
     ...['start','end'].map(key=>`${key} evidence: ${JSON.stringify(bank.ends[key].evidence ?? bank.ends[key].reason ?? '')}`),
     ...(bank.gaps?['[gap] Unresolved ordering or overlap.']:[]),
@@ -177,6 +191,7 @@ export function renderWhole(bank, options = {}) {
 }
 
 export async function readWhole(entry, options, { ref, siteCheck = () => {} } = {}) {
+  validateWholeOptions(options);
   const { page } = entry, url = page.url();
   if (!tracked.has(page)) {
     tracked.add(page);

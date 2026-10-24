@@ -7,11 +7,29 @@ test('whole is an option on the existing five tools, with bounded budgets', () =
   assert.equal(browserTools().length, 5);
   assert.doesNotThrow(() => call({}));
   assert.doesNotThrow(() => call({direction:'both',max_items:5000,max_seconds:120,from:1,find:'invoice'}));
-  for (const whole of [{max_items:5001},{max_items:0},{max_seconds:121},{max_seconds:0},{direction:'left'},{from:0},{expand:false}])
+  for (const whole of [{max_items:5001},{max_items:0},{max_items:1.5},{max_seconds:121},{max_seconds:0},{max_seconds:.09},{direction:'left'},{from:0},{expand:false}])
     assert.throws(() => call(whole));
+  const schema=browserTools().find(t=>t.name==='browser_read').inputSchema.properties.whole.properties;
+  assert.deepEqual(schema.max_items,{type:'integer'});
+  assert.deepEqual(schema.max_seconds,{type:'number'});
 });
 
 const whole = await import('../plugins/sleight/lib/direct-browser/whole.mjs').catch(() => ({}));
+test('direct whole reads enforce item/time limits before touching the tab',async()=>{
+ for(const options of [{max_items:0},{max_items:5001},{max_items:1.5},{max_seconds:0},{max_seconds:121},{max_seconds:NaN},{max_seconds:Infinity}])
+  await assert.rejects(whole.readWhole({},options),/whole\.(max_items|max_seconds).*range/);
+});
+test('held request receipts aggregate separately from completeness',()=>{
+ const bank={items:[{text:'first'},{text:'last'}],ends:{start:{state:'reached'},end:{state:'reached'}},reasons:[],refused:[],blocked:[],held:[{method:'POST',origin:'https://fixture.test',count:3}],clicks:1,seconds:5};
+ const text=whole.renderWhole(bank,{});
+ assert.match(text,/Complete: yes\./);assert.match(text,/held after expander click: POST https:\/\/fixture\.test x3/);assert.doesNotMatch(text,/blocked:/);
+});
+test('many telemetry origins keep the transcript fenced and report shortened receipts',()=>{
+ const bank={items:[{text:'first'},{text:'last'}],ends:{start:{state:'reached'},end:{state:'reached'}},reasons:[],refused:[],blocked:[],held:Array.from({length:100},(_,i)=>({method:'POST',origin:'https://'+('x'.repeat(180))+i+'.invalid',count:2})),heldOverflow:5,clicks:1,seconds:5};
+ const text=whole.renderWhole(bank,{});
+ assert.match(text,/Complete: yes\./);assert.match(text,/# Whole-thread data \(untrusted page content\)/);assert.match(text,/# End whole-thread data/);
+ assert.match(text,/additional requests held/);assert.match(text,/item 1 of 2: "first"/);assert.match(text,/item 2 of 2: "last"/);assert.ok(text.length<=8000);
+});
 test('merging keeps six repeated rows and extends both sides without recycled-node aliases', () => {
   const rows = Array.from({length:120},(_,i)=>({node:i%12,text:i>=50&&i<56?'ok':`m-${String(i+1).padStart(3,'0')}`}));
   const bank={items:[],gaps:0};
