@@ -3,18 +3,25 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { existsSync, readFileSync } from 'node:fs';
+import { chromium } from '../plugins/sleight/vendor/playwright-core/index.mjs';
 import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 
-const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' && 'needs SLEIGHT_LIVE_DOM_TEST=1 through the host runner';
+const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
+  .browsers.find(browser => browser.name === 'chromium');
+const executablePath = process.platform === 'darwin'
+  ? join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision, 'chrome-mac-' + process.arch,
+    'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')
+  : join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision, 'chrome-linux64/chrome');
+const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'needs SLEIGHT_LIVE_DOM_TEST=1 through the host runner'
+  : !existsSync(executablePath) ? 'pinned Chromium headless shell is unavailable' : false;
 test('five-tool dispatcher routes an owned local form and collects page resources', { skip, timeout: 30000 }, async () => {
-  const { chromium } = await import(pathToFileURL(join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser/mcp/node_modules/playwright-core/index.mjs')));
   const server = createServer((req, res) => { res.end('<!doctype html><title>Local form</title><form><label>Name<input name="name"></label><button>Save</button></form><p id="state">Ready</p><script>document.querySelector("form").onsubmit=e=>{e.preventDefault();document.querySelector("#state").textContent="Saved "+document.querySelector("input").value}</script>'); });
   let browser, context, dispatcher;
   const records = new Map();
   try {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-    browser = await chromium.launch({ headless: true }); context = await browser.newContext();
+    browser = await chromium.launch({ headless: true, executablePath }); context = await browser.newContext();
     const pages = { async openTab({ url }) {
       const page = await context.newPage(); await page.goto(url);
       records.set('t1', { page, state: { snapshotNo: 0, submitUnconfirmed: false } }); return { tab: 't1' };

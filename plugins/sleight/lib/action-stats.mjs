@@ -62,7 +62,7 @@ const count = (value, cap = 1000) => Number.isSafeInteger(value) && value >= 0 ?
 // How many actions a row stands for: a row that ran is one, an engine browser call the actions its code named, and a record-cap
 // line the actions that ran past the cap.
 function weight(row) {
-  if (row.kind === 'read') return 0;
+  if (row.kind === 'read' || row.kind === 'recipe') return 0;
   if (row.result === 'ok' || row.result === 'failed') return row.kind === 'call' && count(row.actions) > 0 ? count(row.actions, 100) : 1;
   if (row.result === 'not logged') return count(row.count);
   return 0;

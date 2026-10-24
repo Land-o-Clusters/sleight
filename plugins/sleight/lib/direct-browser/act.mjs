@@ -13,6 +13,7 @@ import { originOf, pathOf, guardChooser } from './output-hygiene.mjs';
 import { assertPageResponsive, ensurePageResponsive, probePage } from './page-health.mjs';
 import { waitForPage, waitForThinPage } from './waits.mjs';
 import { downloadLink } from './download-link.mjs';
+import { prepareControlRecipe } from './control-recipes.mjs';
 const OPS = new Set('click type press select check uncheck hover scroll drag upload download dialog wait back forward reload viewport navigate'.split(' '));
 const REF_OPS = new Set('click type select check uncheck hover drag upload download'.split(' '));
 const WAIT_CAP = 5000, SCROLL_CAP = 10000, navigateNeeds = 'the ref of an http(s) link (browser_open takes a url); to press other elements use click';
@@ -269,7 +270,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
   const lossFixes = process.env.SLEIGHT_LB12 !== '0';
   // siteCheck() gives the user's line when the page now shows a site sleight may not act on (permissions.mjs). It runs in the
   // gate, right before each step's input, so a step that moved the page to such a site stops every step after it.
-  return async function runSteps(tab, steps, ctx = {}, { nextStep, siteCheck, observe, beforeObserve, download, downloadAllowed } = {}) {
+  return async function runSteps(tab, steps, ctx = {}, { nextStep, siteCheck, observe, beforeObserve, download, downloadAllowed, onControl, onStep, controlObservation = {} } = {}) {
     // A bad step list is refused before any input, so the caller must not report it as an unconfirmed outcome.
     try { validate(steps); } catch (error) { error.notRun = true; throw error; }
     const { page, state } = tab, since = state.snapshotNo > 0 ? state.snapshotNo : undefined, lines = []; let stoppedAt = null;
@@ -281,7 +282,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     for (let index = 0; index < steps.length; index++) {
       // navigate on a link is that link's click, so every click rule, guard and popup rule applies unchanged.
       const named = steps[index], step = named.do === 'navigate' ? { ...named, do: 'click' } : named, label = `${index + 1} ${named.do}${step.ref ? ' ' + step.ref : ''}`;
-      let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false;
+      let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false, controlRecipe, controlObserved = false;
       try {
         await ensurePageResponsive(tab);
         if (state.dialog && step.do !== 'dialog') throw Error('a page dialog is waiting; answer it with the dialog operation');
@@ -349,7 +350,10 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           if (hand) try { hand.step({ op: named.do, page, locator, ref: step.ref, text: step.text, to: step.do === 'drag' ? page.getByRef(step.to) : undefined }); } catch {}
         };
         const perform = async () => {
-          if (step.do === 'click') return backgroundClick(tab, locator, async (extra, verifySeal) => {
+          if (step.do === 'click') {
+            // Observe before the click shield's timed preparation; the final gate still runs immediately before input.
+            if (onControl && !step.modifier && !submits && !target.payment && !info.form) controlRecipe = await prepareControlRecipe(locator, page.url(), controlObservation);
+            return backgroundClick(tab, locator, async (extra, verifySeal) => {
             // A control under its own label (a visually hidden radio) is clicked at the point placeClear proved is that label, as
             // check does: in the 2026-10-16 gate rounds a click on one came back "covered" 5 to 6 times per form-checkout run.
             const aim = await aimedAt(locator);
@@ -362,6 +366,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
             begin(); return locator.click({ ...options, ...extra, ...aim, ...modifiers });
           }, { recover: () => recoverClick, onRetry: () => { clickRetry = '; waited for the page to settle and retried the click once'; },
             ...(step.modifier === undefined ? {} : { modifier: clickModifiers[step.modifier] }) });
+          }
           const pressKey = keys => trusted ? ctx.pressTarget(target, step.key, options, keys) : step.ref ? locator.press(step.key, options) : page.keyboard.press(step.key);
           // Enter and Space can follow a link or submit a form into a new tab: arm the popup hook, as a click does. In a trusted turn
           // the key also goes through the key shield (armed before the key, every other frame locked), so the gate's verdict and the
@@ -539,6 +544,11 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
               ? '; the page can bring it forward on its own'
               : `; the page can bring ${raisable.join(', ')} forward on its own`
             : `. ${raisable.length > 1 ? 'Tabs' : 'Tab'} ${raisable.join(', ')} (opened by this page, another origin) can be raised to the foreground by the page at any time, and sleight cannot block or detect that` : '') + (heldOpenings > 0 ? '. Page script tried to open ' + (heldOpenings > 1 ? heldOpenings + ' tabs' : 'a tab') + ' after this input; held, nothing opened' : ''));
+        // A click with work still pending at its settle deadline has no confirmed control outcome either.
+        const controlSettleCapped = settleCapped || armed.pending.size > 0;
+        if (controlRecipe && !inputPending && !submits && !target.payment && !target.element?.payment && !target.element?.form && !boundary && !controlSettleCapped) {
+          try { const event = await controlRecipe.finish(); if (event) { onControl(event); controlObserved = true; } } catch {}
+        }
         if (boundary || settleCapped) { stoppedAt = index + 1; break; }
       } catch (error) {
         if (error.stuckPage) throw error;
@@ -570,6 +580,8 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         stoppedAt = index + 1; break;
       } finally {
         stepFinished = true;
+        try { onStep?.({ control: controlObserved, boundary: armed?.boundary?.kind }); } catch {}
+        try { await controlRecipe?.dispose(); } catch {}
         if (activity && !deferred) activity.stop();
         if (isV3Context(ctx) && target) ctx.finishInput(target);
         if (carry && carry !== armed) { carry.stop(); carry = null; }

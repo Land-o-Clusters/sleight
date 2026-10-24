@@ -1394,7 +1394,7 @@ if (isMainModule(import.meta.url)) {
     const { readInstalledConfig } = await import('./direct-browser/installed-config.mjs');
     process.stdout.write(JSON.stringify(turboState(readInstalledConfig)) + '\n');
   } else if (process.argv[2] === 'permissions') {
-    try { process.exitCode = (await import('./permissions-command.mjs')).permissionsCommand(process.argv.slice(3)); }
+    try { process.exitCode = (await import('./permissions-command.mjs')).permissionsCommand(process.argv.slice(3), { out: text => process.stdout.write(text) }); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   } else if (process.argv[2] === 'stats') {
     try { process.exitCode = await (await import('./action-stats.mjs')).statsCommand(process.argv.slice(3)); }

@@ -452,7 +452,7 @@ export class ActionLog {
   }
   where(call) { return call.origin ? { origin: call.origin } : {}; }
   write(rows) {
-    if (!rows.length || !this.path) return;
+    if (!rows.length || !this.path) return false;
     const time = this.now().toISOString();
     const text = rows.map(row => JSON.stringify({ time, ...row })).join('\n') + '\n';
     try {
@@ -488,8 +488,10 @@ export class ActionLog {
         else if ((stat.mode & 0o777) !== 0o600) throw new Error('action log is not 0600');
         writeSync(fd, text);
       } finally { closeSync(fd); }
+      return true;
     } catch {
       if (++this.failures === 1) try { process.stderr.write('sleight: could not write the action log; check its folder, file permissions and rotation lock.\n'); } catch {}
+      return false;
     }
   }
   // Sessions can share one log, so rotation runs only under a lock file and checks the size again there: a session
