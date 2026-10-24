@@ -71,7 +71,7 @@ export function outcomeOptions(env = process.env, warn = message => process.stde
   const path = actionLogPath(env.SLEIGHT_ACTION_LOG);
   // A user who set a path outside the folder would otherwise believe the log is on.
   if (env.SLEIGHT_ACTION_LOG && !path) warn('sleight: SLEIGHT_ACTION_LOG takes a file name or a path under ~/Library/Logs/sleight/; this one is ignored and the action log is off.');
-  return { outcomes: env.SLEIGHT_OUTCOMES !== '0', actionLog: path ? new ActionLog({ path }) : undefined };
+  return { outcomes: env.SLEIGHT_OUTCOMES === '1', actionLog: path ? new ActionLog({ path }) : undefined };
 }
 
 function fail(message) {

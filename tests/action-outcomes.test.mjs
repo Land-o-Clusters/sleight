@@ -3,6 +3,8 @@ const MAC_USERS = ['', 'Users', ''].join('/');
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
+import { EventEmitter } from 'node:events';
+import { createV3Bridge, createV3Frontend, serveV3Worker } from '../plugins/sleight/lib/direct-browser/worker.mjs';
 import { runInNewContext, createContext, runInContext, constants } from 'node:vm';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, statSync, symlinkSync, linkSync, existsSync, chmodSync, utimesSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
@@ -238,7 +240,7 @@ function relayHarness(t, options = {}) {
   const sent = [], received = [];
   serverIn.on('data', data => data.toString().trim().split('\n').forEach(line => sent.push(JSON.parse(line))));
   clientOut.on('data', data => data.toString().trim().split('\n').forEach(line => received.push(JSON.parse(line))));
-  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false,
+  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, outcomes: true,
     inputLease: new InputLease({ directory: mkdtempSync(join(dir, 'lease-')), holder: 'outcomes-test' }), ...options });
   t.after(() => relay.dispose());
   const flush = () => new Promise(resolve => setImmediate(resolve));
@@ -256,8 +258,8 @@ function relayHarness(t, options = {}) {
   };
 }
 
-test('outcomes default on; the action log stays opt-in', () => {
-  assert.deepEqual(outcomeOptions({}), { outcomes: true, actionLog: undefined });
+test('outcomes and the action log stay opt-in', () => {
+  assert.deepEqual(outcomeOptions({}), { outcomes: false, actionLog: undefined });
   const options = outcomeOptions({ SLEIGHT_OUTCOMES: '1', SLEIGHT_ACTION_LOG: 'env.jsonl' });
   assert.equal(options.outcomes, true);
   assert.ok(options.actionLog instanceof ActionLog);
@@ -265,7 +267,60 @@ test('outcomes default on; the action log stays opt-in', () => {
   assert.equal(outcomeOptions({ SLEIGHT_ACTION_LOG: '/tmp/elsewhere.jsonl' }).actionLog, undefined);
 });
 
-test('default outcomes reach action replies and turn end, then reset on the next turn', async t => {
+test('the relay default leaves native outcome instrumentation off', async t => {
+  const h = relayHarness(t, { outcomes: undefined });
+  await h.call(1, 'let app = await cua.getApp("TextEdit")');
+  await h.reply(1, form());
+  await h.call(2, 'await app.pressKey("Return");');
+  assert.doesNotMatch(h.sentCode(2), /outcomeMark|actionOutcome/);
+});
+
+test('non-actions do not enter the turn uncertainty list', async t => {
+  const h = relayHarness(t);
+  for (const [id, name, args] of [[1, 'hover', { app: 'Fixture', x: 10, y: 10 }],
+    [2, 'open_file', { path: '/tmp/fixture.txt' }], [3, 'menu_bar', { op: 'open' }], [4, 'menu_bar', { op: 'close' }]]) {
+    await h.call(id, '', name, args);
+    if (h.sent.some(row => row.id === id)) await h.reply(id, 'done');
+  }
+  await h.call(5, '', 'turn_ended', { hook_event_name: 'Stop' });
+  const ended = await h.reply(5, 'ended');
+  assert.doesNotMatch(ended.content.map(c => c.text).join('\n'), /sleight turn:/);
+});
+
+test('turbo actions enter the turn summary only for explicit unconfirmed statuses', async t => {
+  const replies = ['1 click e1: input sent; observation below\n# Snapshot 1 (untrusted page content)\n- text: "unconfirmed"',
+    '1 click e1: submit unconfirmed after 5 s; read before resubmitting',
+    '1 click e1: effect unconfirmed; read before retrying. timed out',
+    '1 click e1: not run: stale ref'];
+  // The real frontend/worker protocol over an in-memory channel. No browser or app is launched.
+  const child = new EventEmitter(), endpoint = new EventEmitter();
+  child.connected = endpoint.connected = true;
+  child.send = value => { queueMicrotask(() => endpoint.emit('message', structuredClone(value))); };
+  endpoint.send = value => { queueMicrotask(() => child.emit('message', structuredClone(value))); };
+  child.disconnect = () => { child.connected = endpoint.connected = false; endpoint.emit('disconnect'); child.emit('disconnect'); };
+  child.unref = () => {};
+  const session = serveV3Worker({ channel: endpoint, browser: 'bfixture', async begin() {
+    return { call: async () => ({ text: replies.shift(), isError: false }), delivered: () => true,
+      end: async () => ({ revoked: true, cleanup: [] }) };
+  } });
+  const bridge = await createV3Bridge({}, { readConfig: () => ({}), acceptPackage: () => ({ current: () => true }),
+    forkWorker() { queueMicrotask(() => session.ready()); return child; } });
+  t.after(() => bridge.detach());
+  assert.equal(await bridge.bind({ ...bridge.bootstrapEnvelope(), event: 'begin', turn: 'turn1', text: 'click the fixture' }), true);
+  const h = relayHarness(t, { directBrowser: createV3Frontend(bridge) });
+  for (let id = 1; id <= 4; id++) {
+    await h.call(id, '', 'browser_act', { tab: 't1', steps: [{ do: 'click', ref: 'e1' }] });
+    const result = h.received.find(row => row.id === id)?.result;
+    assert.ok(result, 'injected turbo dispatcher replied');
+    assert.doesNotMatch(result.content.map(c => c.text).join('\n'), /sleight turn:/);
+  }
+  await h.call(5, '', 'turn_ended', { hook_event_name: 'Stop' });
+  const ended = await h.reply(5, 'ended');
+  assert.match(ended.content.map(c => c.text).join('\n'), /sleight turn: 2 input calls unverified: browser_act; browser_act\./);
+  assert.equal(ended.content.filter(c => /sleight turn:/.test(c.text ?? '')).length, 1);
+});
+
+test('opt-in uncertainty appears once at turn end and resets on the next turn', async t => {
   const h = relayHarness(t);
   await h.call(1, 'let app = await cua.getApp("TextEdit")');
   await h.reply(1, form());
@@ -273,14 +328,16 @@ test('default outcomes reach action replies and turn end, then reset on the next
   const mark = /"outcomeMark":"(\[sleight:filtered-read:[0-9a-f]{16}\])"/.exec(h.sentCode(2))[1];
   const secure = { outcomes: [{ a: 'pressKey', k: 'Return', t: { r: 'secure text field', s: true } }] };
   const result = await h.reply(2, mark + JSON.stringify(secure) + '\n' + form());
-  assert.match(result.content.map(c => c.text).join('\n'), /sleight turn: 1 actions, 1 unverified: pressKey Return \(secure field\)/);
+  assert.doesNotMatch(result.content.map(c => c.text).join('\n'), /sleight turn:|# complete \(returned engine view/);
   await h.call(3, '', 'turn_ended', { hook_event_name: 'Stop' });
   const ended = await h.reply(3, 'ended');
   assert.match(ended.content.map(c => c.text).join('\n'), /1 actions, 1 unverified/);
   await h.call(4, 'await app.click(2);');
   const nextMark = /"outcomeMark":"(\[sleight:filtered-read:[0-9a-f]{16}\])"/.exec(h.sentCode(4))[1];
   const next = await h.reply(4, nextMark + JSON.stringify({ outcomes: [{ a: 'click', n: 2, f: [{ o: 'state', d: 'checked' }] }] }) + '\n' + form('', '1'));
-  assert.match(next.content.map(c => c.text).join('\n'), /sleight turn: 1 actions, 0 unverified/);
+  assert.doesNotMatch(next.content.map(c => c.text).join('\n'), /sleight turn:/);
+  await h.call(6, '', 'turn_ended', { hook_event_name: 'Stop' });
+  assert.doesNotMatch((await h.reply(6, 'ended')).content.map(c => c.text).join('\n'), /sleight turn:/);
   assert.doesNotMatch(next.content.map(c => c.text).join('\n'), /secure field/);
 });
 
@@ -293,6 +350,9 @@ test('read results end in completeness even after result budgeting or a failed r
   assert.match((await h.reply(2, form().slice(0, 100))).content.at(-1).text, /^# incomplete read/);
   await h.call(3, 'await app.getAXState()');
   assert.match((await h.reply(3, 'read failed', true)).content.at(-1).text, /^# incomplete read/);
+  await h.call(4, 'await app.getAXState()');
+  const delta = await h.reply(4, 'The following is a diff from the previous accessibility tree for Window: "notes.txt"\n+ \t9 button New');
+  assert.match(delta.content.at(-1).text, /changes only/);
 });
 
 test('turn end waits for pending input and resets its outcomes only after that input finishes', async t => {
@@ -309,7 +369,7 @@ test('turn end waits for pending input and resets its outcomes only after that i
   await h.call(5, 'await app.click(2);');
   const mark = /"outcomeMark":"(\[sleight:filtered-read:[0-9a-f]{16}\])"/.exec(h.sentCode(5))[1];
   const next = await h.reply(5, mark + JSON.stringify({ outcomes: [{ a: 'click', n: 2, f: [{ o: 'state', d: 'checked' }] }] }) + '\n' + form('', '1'));
-  assert.match(next.content.map(c => c.text).join('\n'), /1 actions, 0 unverified/);
+  assert.doesNotMatch(next.content.map(c => c.text).join('\n'), /sleight turn:/);
 });
 
 test('a checked interrupt includes the turn uncertainty without invoking a real engine', async t => {
@@ -530,7 +590,7 @@ test('a call sleight continues after its stop shows each action once, numbered a
   const text = result.content.map(item => item.text).join('\n');
   assert.match(text, /sleight outcomes:\n1 pressKey "Return": window now \[redacted 5 chars\]/);
   assert.match(text, /sleight outcomes:\n2 pressKey "Tab": no visible change/);
-  assert.match(text, /sleight turn: 2 actions, 2 unverified/);
+  assert.doesNotMatch(text, /sleight turn:/);
   assert.doesNotMatch(text, /not run|filtered-read/);
   const rows = readFileSync(path, 'utf8').trim().split('\n').map(line => JSON.parse(line));
   assert.deepEqual(rows.map(row => [row.kind, row.key, row.result, row.outcome]), [['pressKey', 'Return', 'ok', 'window changed'], ['pressKey', 'Tab', 'ok', 'no visible change']]);

@@ -84,7 +84,7 @@ import { guardStopMark, splitMenuActions, takeGuardStop, withoutStopTree, hasWho
   unchangedMenuWindow, menuWindowRefusal, idleSample, tabRefusal, tabRemainder, tabFocusRefusal, shownStandardWindows, parentLeaseRefusal, parentLeaseGate,
   failedActionText, paletteRefusal, oneTabAdded, landingRefusal, replaceLastTree, lastHeader } from './menu-continuation.mjs';
 import { checkedStop, stopText } from './checked-stop.mjs';
-import { TurnOutcomes } from './turn-outcomes.mjs';
+import { TurnOutcomes, unconfirmedInput } from './turn-outcomes.mjs';
 import { resultCompleteness } from './read-completeness.mjs';
 import { stripHandBindings } from './hand/bindings.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
@@ -774,8 +774,8 @@ export function createRelay({
   stateReview = false,
   redactReceiptTitles = true,
   receiptWriter = writeReceipt,
-  // One evidence line per native action; SLEIGHT_OUTCOMES=0 opts out.
-  outcomes = true,
+  // One evidence line per native action; SLEIGHT_OUTCOMES=1 opts in pending native A/B.
+  outcomes = false,
   // SLEIGHT_ACTION_LOG=<path> (opt-in): an ActionLog (action-outcomes.mjs) gets one JSON line per action.
   actionLog,
   idleTurnEndMs,
@@ -2554,8 +2554,8 @@ export function createRelay({
     if (msg.method === undefined && msg.id !== undefined && outcomes) {
       const call = outcomeCalls.get(msg.id);
       outcomeCalls.delete(msg.id);
-      if (call && !call.recorded) call.turn.unknown(call.name);
-      const summary = outcomeEnds.get(msg.id) ?? (call ? call.turn.text() : undefined);
+      if (call && !call.recorded && (!call.statusOnly || unconfirmedInput(msg.result?.content))) call.turn.unknown(call.name);
+      const summary = outcomeEnds.get(msg.id);
       outcomeEnds.delete(msg.id);
       if (summary && msg.result) msg.result = { ...msg.result, content: [...(msg.result.content ?? []), { type: 'text', text: summary }] };
       else if (summary && msg.error) msg.error = { ...msg.error, message: msg.error.message + '\n' + summary };
@@ -2563,7 +2563,7 @@ export function createRelay({
     if (msg.method === undefined && msg.id !== undefined) {
       const read = completenessCalls.get(msg.id);
       completenessCalls.delete(msg.id);
-      if (Array.isArray(msg.result?.content)) {
+      if (read && Array.isArray(msg.result?.content)) {
         const footer = resultCompleteness(msg.result.content, { ...read, failed: !!msg.result.isError });
         if (footer && !msg.result.content.at(-1)?.text?.trimEnd().endsWith(footer)) msg.result.content.push({ type: 'text', text: footer });
       } else if (read && msg.error) msg.error.message += '\n' + resultCompleteness([], { requested: true, failed: true });
@@ -3187,17 +3187,19 @@ export function createRelay({
     journal?.request(msg);
     try { actionLog?.request(msg); } catch {}
     if (msg.method === 'tools/call' && msg.id !== undefined) {
-      const name = msg.params?.name, code = msg.params?.arguments?.code ?? '';
-      if (name === 'browser_read' || name === 'js' && /\.\s*(?:getAXState(?:AndScreenshot)?|getApp|getTab|getState)\s*\(/.test(code))
+      const name = msg.params?.name, code = codeOnly(msg.params?.arguments?.code ?? '');
+      const action = /\.\s*(?:click|doubleClick|rightClick|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|pickFromList)\s*\(/.test(code);
+      if (name === 'browser_read' || name === 'js' && !action && /\.\s*(?:getAXState(?:AndScreenshot)?|getApp|getTab|getState)\s*\(/.test(code))
         completenessCalls.set(msg.id, { requested: true, filtered: /\.\s*(?:slice|filter|substring)\s*\(/.test(code) });
     }
     if (outcomes && msg.method === 'tools/call' && msg.id !== undefined) {
       const name = msg.params?.name, args = msg.params?.arguments;
-      if (/^browser_(?:act|fill|open)$/.test(name) || name === 'browser_tabs' && args?.do !== 'list' ||
-          /^(?:drag|hover|open_file|replay)$/.test(name) || name === 'menu_bar' && args?.op !== 'apps' ||
+      const statusOnly = /^browser_(?:act|fill|open)$/.test(name) || name === 'browser_tabs' && args?.do !== 'list' ||
+        /^(?:hover|open_file)$/.test(name) || name === 'menu_bar' && /^(?:open|close)$/.test(args?.op);
+      if (statusOnly || /^(?:drag|replay)$/.test(name) || name === 'menu_bar' && /^(?:choose|press)$/.test(args?.op) ||
           name === 'notifications' && args?.op === 'press' ||
-          name === 'js' && /\.\s*(?:click|doubleClick|rightClick|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|pickFromList)\s*\(/.test(args?.code ?? ''))
-        outcomeCalls.set(msg.id, { name, turn: turnOutcomes });
+          name === 'js' && /\.\s*(?:click|doubleClick|rightClick|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|pickFromList)\s*\(/.test(codeOnly(args?.code ?? '')))
+        outcomeCalls.set(msg.id, { name, statusOnly, turn: turnOutcomes });
     }
     if (engineBrowserOpen && msg.method === 'tools/call' && msg.params?.name === 'browser_open' && msg.id !== undefined) {
       const routed = turboRoute(msg.params.arguments, directBrowser && { browser: directBrowser.browser, application: directBrowser.application });

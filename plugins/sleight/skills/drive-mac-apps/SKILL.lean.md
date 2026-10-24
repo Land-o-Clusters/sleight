@@ -1,6 +1,6 @@
 # sleight
 
-Report read completeness and the turn's unverified list.
+Report read completeness and unverified actions.
 
 Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes
 it. If an app isn't approved, ask the user, or stop when a headless run refuses it.

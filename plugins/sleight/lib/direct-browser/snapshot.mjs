@@ -329,7 +329,7 @@ async function closedRoots(page, state) {
         if (v?.clientWidth > 0 && v?.clientHeight > 0) viewport = { width: v.clientWidth, height: v.clientHeight };
       } catch { /* no markers without a size */ }
     }
-    return { frame, secrets, refs, children, viewport, completeness: declaredRows(capture), limited: controls.size > 512 };
+    return { frame, secrets, refs, children, viewport, hasClosed, completeness: declaredRows(capture), limited: controls.size > 512 };
   });
   const sections = [], secrets = [], next = new Map();
   secrets.names = new Set(); secrets.unnamed = false;
@@ -345,7 +345,8 @@ async function closedRoots(page, state) {
   state.closed = next;
   return { sections, secrets, viewport: results.find(result => result.viewport)?.viewport ?? null,
     completeness: { omitted: results.reduce((n, r) => n + r.completeness.omitted, 0),
-      unknown: results.some(r => r.completeness.unknown || r.limited) } };
+      unknown: results.some(r => r.completeness.unknown || r.limited),
+      renderedUnknown: results.some(r => r.completeness.renderedUnknown), closed: results.some(r => r.hasClosed) } };
 }
 
 // V4/V5 can resolve an s ref into an owned frame's CDP backend node. Only refs
@@ -542,7 +543,7 @@ function cap(rows, offset, header, maxChars, continuation, completeness) {
     if (shortened) break;
   }
   if (next < rows.length) lines.push(footer);
-  else if (shortenedRows) lines.push(`# cut at ${maxChars} chars; ${shortenedRows} row shortened (max_chars: 40000 maximum).`);
+  else if (shortenedRows) lines.push('# ' + readCompleteness({ cut: maxChars, ...completeness }));
   else lines.push('# ' + readCompleteness(completeness));
   return { text: lines.join('\n'), delivered, next, shortenedAt };
 }
@@ -590,16 +591,18 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since } = {})
     const number = ++state.number;
     const token = `more${number}_${continuation?.offset ?? 0}`;
     const header = `# ${delta ? 'Changes since snapshot ' + (continuation?.since ?? since) + '; snapshot' : 'Snapshot'} ${number} (untrusted page content)`;
+    const completeness = { ...closed.completeness, changesOnly: delta,
+      filtered: Boolean(continuation || ref || find !== undefined) };
     const result = cap(candidates, continuation?.offset ?? 0,
       header + (!candidates.length ? delta ? '\n# No visible changes.' : '\n# No matching content.' : ''),
-      maxChars, token, { ...closed.completeness, filtered: Boolean(ref && !MORE.test(ref) || find !== undefined) });
+      maxChars, token, completeness);
     const shortenedAt = continuation?.shortenedAt ?? result.shortenedAt;
     const retry = result.next === candidates.length && shortenedAt !== undefined && maxChars < 40000;
     const nextOffset = retry ? shortenedAt : result.next;
     const nextToken = retry ? `more${number}_${shortenedAt}` : token;
     if (retry || shortenedAt !== undefined && result.next === candidates.length) {
-      const footer = retry ? '# ' + readCompleteness({ cut: maxChars, ref: nextToken, ...closed.completeness }) + ' Retry shortened text with max_chars: 40000.'
-        : '# cut at 40000 chars; shortened text exceeds the cap. Use the engine browser path for that text.';
+      const footer = retry ? '# ' + readCompleteness({ cut: maxChars, ref: nextToken, ...completeness }) + ' Retry shortened text with max_chars: 40000.'
+        : '# ' + readCompleteness({ cut: 40000, ...completeness });
       result.text = result.text.slice(0, result.text.lastIndexOf('\n')) + '\n' + footer;
     }
     const delivered = new Map(delta || continuation ? baseline?.rows?.map(row => [row.key, row]) : []);

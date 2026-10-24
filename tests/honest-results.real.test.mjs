@@ -51,16 +51,50 @@ test('honest reads and selection on a loopback page in headless Chromium', { ski
     await page.setContent('<div role="listbox"><div role="option" aria-setsize="10" aria-posinset="4">Fourth</div></div>');
     assert.match((await snapshot(page)).text, /# 9 rows not rendered/);
   });
-  await t.test('a cut continuation ends in a complete rendered view', async () => {
+  await t.test('a cut continuation ends in a filtered view', async () => {
     await page.setContent('<main>' + Array.from({ length: 90 }, (_, i) => `<button>Choice ${i}</button>`).join('') + '</main>');
     let result = await snapshot(page, { maxChars: 1000 }), reads = 1;
     assert.match(result.text, /# cut at 1000 chars; Continue with ref=/);
-    while (!result.text.endsWith('# complete (returned view)')) {
+    while (!result.text.endsWith('# complete (filtered view)')) {
       assert.ok(reads++ < 20);
       assert.ok(result.text.length <= 1000);
       const ref = /Continue with ref="([^"]+)"/.exec(result.text)?.[1];
       assert.ok(ref);
       result = await snapshot(page, { ref, maxChars: 1000 });
     }
+  });
+  await t.test('closed shadow roots expose controls and state the missing content scope', async () => {
+    await page.setContent('<custom-control></custom-control>');
+    await page.evaluate(() => {
+      document.querySelector('custom-control').attachShadow({ mode: 'closed' }).innerHTML =
+        '<p>Unreturned closed-root prose</p><button>Closed button</button>';
+    });
+    const result = await snapshot(page);
+    assert.match(result.text, /Closed button/);
+    assert.doesNotMatch(result.text, /Unreturned closed-root prose/);
+    assert.match(result.text, /closed shadow roots: controls only/);
+  });
+  await t.test('iframe collections without totals leave lazy rows unknown', async () => {
+    await page.setContent('<main><iframe srcdoc="<ul><li>Rendered item</li></ul>"></iframe></main>');
+    await page.frameLocator('iframe').getByText('Rendered item').waitFor();
+    const result = await snapshot(page);
+    assert.match(result.text, /Rendered item/);
+    assert.match(result.text, /complete \(rendered view; lazy\/virtual rows unknown\)/);
+  });
+  await t.test('delta reads and find continuation chunks keep their scope on a real page', async () => {
+    await page.setContent('<main><button>Before</button></main>');
+    const first = await snapshot(page);
+    await page.getByRole('button').evaluate(node => { node.textContent = 'After'; });
+    assert.match((await snapshot(page, { since: first.number })).text, /# complete \(changes only\)$/);
+    await page.setContent('<main>' + Array.from({ length: 80 }, (_, i) => `<button>Choice ${i}</button>`).join('') + '</main>');
+    let result = await snapshot(page, { find: 'Choice', maxChars: 1000 }), chunks = 0;
+    for (;;) {
+      const ref = /Continue with ref="([^"]+)"/.exec(result.text)?.[1];
+      if (!ref) break;
+      assert.ok(chunks++ < 20);
+      result = await snapshot(page, { ref, maxChars: 1000 });
+    }
+    assert.ok(chunks > 0);
+    assert.match(result.text, /# complete \(filtered view\)$/);
   });
 });

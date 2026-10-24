@@ -25,7 +25,8 @@ const hash = text => createHash('sha256').update(text).digest('hex');
 const baseline = JSON.parse(readFileSync(new URL('fixtures/prompt-default.json', import.meta.url)));
 const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', import.meta.url);
 // Measured 15-word sentence: docs/benchmarks/2026-10-19-flag-ab.md, -34.2 s, SE 22.7 s.
-// G9 measured maxima with the honesty guidance: default 1067 words, lean-calls 1069, lean 512.
+// G9 source: ~/Projects/sleight-wt/ledger/p142/lanes/g9-REPORT.md, "Prompt cost" (2026-10-24).
+// Its measured ceilings with honesty guidance: default 1067 words, lean-calls 1069, lean 512.
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
 test('opened-handle and engine-exit notices retain recovery details in lean wording', () => {

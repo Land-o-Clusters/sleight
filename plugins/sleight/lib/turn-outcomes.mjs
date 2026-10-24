@@ -1,6 +1,14 @@
 // A bounded turn ledger. It never keeps page text, target labels, typed values or printable keys.
 const ACTION = /^(?:click|doubleClick|rightClick|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction)$/;
 const KEY = /^(?:Return|Enter|Escape|Tab|Space|Backspace|Delete|Page_Up|Page_Down|Up|Down|Left|Right)$/i;
+// Match the tool's status lines, before its untrusted snapshot. Page prose is not an input status.
+export function unconfirmedInput(content) {
+  const text = (content ?? []).filter(c => c?.type === 'text').map(c => c.text ?? '').join('\n')
+    .split(/^# (?:Snapshot |Changes since snapshot )/m)[0];
+  return /^(?:Operation|Input) outcome (?:is )?unconfirmed[.;]/m.test(text) ||
+    /^\d+ (?:click|type|press|select|check|uncheck|scroll|drag|upload|dialog|navigate|back|forward|reload)(?: (?:f\d+)?e\d+| [sx]\d+)?: (?:effect unconfirmed;|submit unconfirmed after \d+ s;|tab closed; its submit is unconfirmed;)/m.test(text) ||
+    /^(?:submit: |(?:f\d+)?e\d+: (?:failed: selection )?)unconfirmed\b/m.test(text);
+}
 export class TurnOutcomes {
   constructor() { this.reset(); }
   reset() { this.count = 0; this.unverified = 0; this.calls = 0; this.shown = 0; this.labels = []; }
@@ -30,7 +38,7 @@ export class TurnOutcomes {
     if (Number.isSafeInteger(record?.dropped) && record.dropped > 0) this.add('unrecorded actions', false, record.dropped);
   }
   text(pending = 0) {
-    if (!this.count && !this.calls && !pending) return;
+    if (!this.unverified && !this.calls && !pending) return;
     const remaining = this.unverified + this.calls - this.shown;
     return 'sleight turn: ' + (this.count ? `${this.count} actions, ${this.unverified} unverified` : '') +
       (this.calls ? (this.count ? '; ' : '') + `${this.calls} input calls unverified` : '') +
