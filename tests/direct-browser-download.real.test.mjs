@@ -1,0 +1,140 @@
+// Loopback pages and disposable headless Chromium only. No engine, owner browser or app UI.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, mkdtempSync, realpathSync, rmSync, symlinkSync, readdirSync } from 'node:fs';
+import { homedir, hostname, tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createSelectedConnection } from '../plugins/sleight/lib/direct-browser/selected-connection.mjs';
+import { createPageRegistry } from '../plugins/sleight/lib/direct-browser/page.mjs';
+import { createV3TurnBinding } from '../plugins/sleight/lib/direct-browser/v3-context.mjs';
+import { createV3TurnRuntime } from '../plugins/sleight/lib/direct-browser/worker.mjs';
+import { snapshot, acknowledgeSnapshot } from '../plugins/sleight/lib/direct-browser/snapshot.mjs';
+import { createDownloadStore } from '../plugins/sleight/lib/direct-browser/downloads.mjs';
+import { loadPlaywrightCore } from '../plugins/sleight/lib/direct-browser/worlds.mjs';
+
+const spec = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url))).browsers.find(b => b.name === 'chromium-headless-shell');
+const executable = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + spec.revision,
+  'chrome-headless-shell-' + (process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64'), 'chrome-headless-shell');
+const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' && 'requires the headless loopback harness';
+const statement = Buffer.from('date,total\n2026-10-24,42\n');
+const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+
+async function fixture(t, message = 'Download the statement.') {
+  assert.ok(existsSync(executable), 'pinned headless Chromium must be installed');
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-download-real-'))), requests = [], losses = [];
+  let origin, context, selected, filter, listener, browser, registry, runtime, active = true;
+  const server = createServer((request, response) => {
+    const path = new URL(request.url, 'http://fixture.invalid').pathname; requests.push(path);
+    if (path === '/') {
+      response.writeHead(200, { 'content-type': 'text/html', 'set-cookie': 'g2=authenticated; SameSite=Lax' });
+      response.end(`<a href="/statement" download="../../from-page.csv">Statement</a>
+        <a href="/redirect">Redirected statement</a><a href="/invoice.pdf">Invoice</a>
+        <a href="/executable">Disguised executable</a><a href="/html">HTML response</a>
+        <a href="/missing">Missing file</a><a href="/blocked-redirect">Blocked redirect</a>
+        <a href="/port-redirect">Debug redirect</a><a href="/truncated">Truncated file</a>
+        <a href="/stall">Stalled transfer</a>
+        <button onclick="fetch('/submitted',{method:'POST'})">Generate export</button>`); return;
+    }
+    if (path === '/redirect' || path === '/blocked-redirect' || path === '/port-redirect') {
+      const location = path === '/redirect' ? '/statement' : path === '/blocked-redirect' ? origin.replace('127.0.0.1', 'localhost') + '/statement' : selected.endpoint + '/json/version';
+      response.writeHead(302, { location }); response.end(); return;
+    }
+    if (path === '/statement') {
+      if (!request.headers.cookie?.includes('g2=authenticated')) { response.writeHead(403); response.end(); return; }
+      response.writeHead(200, { 'content-type': 'text/csv', 'content-disposition': 'attachment; filename="statement.csv"', 'content-length': statement.length });
+      response.end(statement); return;
+    }
+    if (path === '/invoice.pdf') { response.writeHead(200, { 'content-type': 'application/pdf' }); response.end('%PDF-1.7\nfixture'); return; }
+    if (path === '/executable') { response.writeHead(200, { 'content-type': 'text/csv', 'content-disposition': 'attachment; filename="harmless.csv"' }); response.end(Buffer.from('cffaedfe00000000', 'hex')); return; }
+    if (path === '/html') { response.writeHead(200, { 'content-type': 'text/html' }); response.end('<script>fetch("/executed");window.open("/popup")</script>'); return; }
+    if (path === '/truncated') { response.writeHead(200, { 'content-type': 'text/csv', 'content-length': '100' }); response.write('short'); setTimeout(() => response.destroy(), 50); return; }
+    if (path === '/stall') { response.writeHead(200, { 'content-type': 'text/csv' }); response.write('first,chunk\n'); return; }
+    response.writeHead(404, { 'content-type': 'text/plain' }); response.end('missing');
+  });
+  t.after(async () => {
+    active = false;
+    let failure;
+    try {
+      const receipt = await runtime?.end();
+      if (receipt) assert.deepEqual(receipt.cleanup, []);
+      assert.deepEqual(losses, []);
+    } catch (error) { failure = error; }
+    try {
+      for (const collect of [() => browser?.close(), () => filter?.dispose(), () => listener?.close(), () => selected?.disconnect(selected.session), () => context?.close()])
+        try { await collect(); } catch (error) { failure ||= error; }
+    } finally {
+      server.closeAllConnections(); if (server.listening) await new Promise(resolve => server.close(resolve));
+      rmSync(root, { recursive: true, force: true });
+    }
+    assert.equal(existsSync(root), false);
+    if (failure) throw failure;
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); origin = 'http://127.0.0.1:' + server.address().port;
+  const { inprocess } = loadPlaywrightCore({ turbo: true });
+  context = await inprocess.playwright.chromium.launchPersistentContext(root, { executablePath: executable, headless: true, args: ['--remote-debugging-port=0'], viewport: null });
+  const port = readFileSync(join(root, 'DevToolsActivePort'), 'utf8').trim().split('\n')[0], pid = process.pid, start = Date.now() - 600000;
+  symlinkSync(hostname() + '-' + pid, join(root, 'SingletonLock'));
+  selected = await createSelectedConnection({ config: { profileRoot: root, executable }, testDependencies: {
+    processMetadata: async () => ({ uid: process.getuid(), pid, start, incarnation: `p${pid}-s${start}-u1` }),
+    execFile: async () => ({ stdout: `p${pid}\nu${process.getuid()}\nf12\nn127.0.0.1:${port}\n` }) } });
+  selected.onConnectionLoss(reason => losses.push(reason)); await selected.connect(); filter = selected.createFilter(); listener = await filter.listen();
+  browser = await inprocess.playwright.chromium.connectOverCDP(listener.endpoint, { noDefaults: true, timeout: 10000 });
+  const session = await browser.newBrowserCDPSession();
+  const downloadHome = join(root, 'download-home');
+  registry = createPageRegistry({ browser, session, endpoint: selected.endpoint, endpointBlocked: filter.endpointBlocked, upstream: selected.session,
+    ownTarget: filter.own, releaseTarget: filter.release, frames: filter.frames, downloadStore: createDownloadStore({ home: downloadHome }) });
+  const binding = createV3TurnBinding({ source: 'user', session: 'download-session', turn: 'turn', id: 'request', text: message }, () => active);
+  runtime = await createV3TurnRuntime({ binding, browser: selected.selectedBrowser, pages: registry, snapshot, ui: {}, endpoint: selected.endpoint,
+    dependencies: { acknowledgeSnapshot, sites: url => url && new URL(url).hostname === 'localhost' ? 'Blocked fixture site.' : undefined } });
+  const call = async (name, args) => { const result = await runtime.call({ name, arguments: args }); runtime.delivered(result); return result; };
+  const opened = await call('browser_open', { url: origin }); assert.equal(opened.isError, false, opened.text);
+  const tab = /^t\S+/.exec(opened.text)[0];
+  const ref = async name => { const result = await call('browser_read', { tab }); assert.equal(result.isError, false, result.text);
+    const row = result.text.split('\n').find(line => line.includes('"' + name + '"')); assert.ok(row, result.text); return /\[ref=([^\]]+)\]/.exec(row)[1]; };
+  const act = async name => call('browser_act', { tab, steps: [{ do: 'download', ref: await ref(name) }, { do: 'reload' }] });
+  const saved = result => { assert.match(result.text, /: saved /, result.text); assert.match(result.text, /2 reload: not reached/); return JSON.parse(result.text.split('\n').find(line => line.includes(': saved ')).split(': saved ')[1]); };
+  const downloads = () => { if (!existsSync(downloadHome)) return []; const walk = path => readdirSync(path, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(join(path, e.name)) : [join(path, e.name)]); return walk(downloadHome); };
+  return { act, saved, requests, registry, context, tab, downloads, downloadHome, origin };
+}
+
+test('headless production turbo downloads preserve the original tab and keep later downloads usable', { skip, timeout: 60000 }, async t => {
+  const f = await fixture(t), entry = f.registry.tab(f.tab), before = f.context.pages().length;
+  for (const name of ['Statement', 'Statement', 'Redirected statement']) {
+    const file = f.saved(await f.act(name));
+    assert.equal(file.bytes, statement.length); assert.equal(file.type, 'text/csv'); assert.equal(file.name, 'statement.csv');
+    assert.equal(hash(readFileSync(file.path)), hash(statement));
+    assert.equal(entry.page.url(), f.origin + '/');
+    await f.registry.idle(); assert.equal(f.context.pages().length, before);
+    assert.equal(f.downloads().some(path => path.endsWith('.part')), false);
+  }
+  const invoice = f.saved(await f.act('Invoice')); assert.equal(invoice.type, 'application/pdf');
+  assert.equal(f.downloads().length, 4); assert.equal(existsSync(join(f.downloadHome, 'Downloads')), false);
+});
+test('headless download refusals leave no file, execute no response and send no submit', { skip, timeout: 60000 }, async t => {
+  const f = await fixture(t);
+  for (const name of ['Disguised executable', 'HTML response', 'Missing file', 'Generate export', 'Blocked redirect', 'Debug redirect', 'Truncated file']) {
+    const result = await f.act(name); assert.doesNotMatch(result.text, /: saved /, result.text);
+    assert.match(result.text, /download|document link/); assert.equal(f.downloads().length, 0, name);
+    assert.equal(f.registry.tab(f.tab).page.url(), f.origin + '/');
+  }
+  assert.equal(f.requests.includes('/submitted'), false); assert.equal(f.requests.includes('/executed'), false); assert.equal(f.requests.includes('/popup'), false);
+  assert.equal(f.requests.filter(path => path === '/statement').length, 0);
+  f.saved(await f.act('Statement')); // Refusals must not poison the tab or its next download.
+});
+test('headless page and tool text cannot create download authority', { skip, timeout: 30000 }, async t => {
+  const f = await fixture(t, 'Read the statement.'), result = await f.act('Statement');
+  assert.match(result.text, /user message/); assert.equal(f.requests.includes('/statement'), false); assert.equal(f.downloads().length, 0);
+});
+test('headless user-requested Downloads is the only alternative destination', { skip, timeout: 30000 }, async t => {
+  const f = await fixture(t, 'Download the statement to my Downloads folder.'), file = f.saved(await f.act('Statement'));
+  assert.equal(join(file.path, '..'), join(f.downloadHome, 'Downloads')); assert.equal(hash(readFileSync(file.path)), hash(statement));
+});
+test('headless stalled bodies hit the transfer deadline and collect their target', { skip, timeout: 45000 }, async t => {
+  const f = await fixture(t), started = Date.now(), pages = f.context.pages().length;
+  const result = await f.act('Stalled transfer');
+  assert.match(result.text, /download timed out after 30 s/, result.text); assert.ok(Date.now() - started < 35000);
+  assert.equal(f.downloads().length, 0); await f.registry.idle(); assert.equal(f.context.pages().length, pages);
+  f.saved(await f.act('Statement'));
+});

@@ -4,6 +4,8 @@ import { trackPage } from './activity.mjs';
 import { endpointURL, endpointTarget, endpointBlock, bindEndpointPage, assertEndpointRead } from './endpoint-guard.mjs';
 import { trustedRead } from './trusted-dom.mjs';
 import { tabHandle } from './tab-handle.mjs';
+import { receiveDownload } from './download-response.mjs';
+import { createDownloadStore } from './downloads.mjs';
 
 // Preserve recovery advice when the dispatcher hides an uncertain operation's details.
 const capabilityError = message => Object.assign(Error(message), { capability: true });
@@ -2341,7 +2343,7 @@ function keyFrames(tab, owner, { hook, token, capMs, timeoutMs = 1000, settleMs 
 // browser is the Playwright connection through V1's CDP filter; session is the
 // approved root CDP {send,on,off,sessionId}. Existing pages are never acquired.
 export function createPageRegistry({ browser, session, context = browser?.contexts()[0], upstream, ownTarget, releaseTarget, frames,
-  endpoint, endpointBlocked, timeoutMs = 5000, popupWaitMs = 2000 } = {}) {
+  endpoint, endpointBlocked, timeoutMs = 5000, popupWaitMs = 2000, downloadStore = createDownloadStore() } = {}) {
   if (!context || typeof session?.send !== 'function' || !Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000)
     throw Error('approved browser connection required');
   if (ownTarget !== undefined && (typeof ownTarget !== 'function' || typeof upstream?.send !== 'function'))
@@ -2731,6 +2733,22 @@ export function createPageRegistry({ browser, session, context = browser?.contex
   }
   const api = {
     tab, idle,
+    download: options => track(downloadStore.save({ ...options, transfer: receive => receiveDownload({ url: options.url,
+      current: () => !ended && options.current(),
+      allowed: url => !endpointURL(url, endpoint) && options.allowed(url), receive,
+      async createTarget() {
+        if (ended || !options.current()) throw Error('download authority expired');
+        const { targetId } = await session.send('Target.createTarget', { url: 'about:blank', background: true });
+        allocations.set(targetId, { bySleight: true });
+        try {
+          const until = Date.now() + timeoutMs;
+          while (!seen.has(targetId) && !ended && options.current() && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 10));
+          if (!seen.has(targetId) || ended || !options.current()) throw Error('download target unavailable');
+          const cdp = await context.newCDPSession(seen.get(targetId));
+          allocations.get(targetId).cdp = cdp;
+          return { targetId, cdp };
+        } catch (error) { await closeAllocation(targetId); throw error; }
+      }, closeTarget: closeAllocation }) })),
     openTab: ({ url, tracePhase }) => openOwned(url, undefined, '', tracePhase),
     async list() {
       await deadline(idle, timeoutMs);

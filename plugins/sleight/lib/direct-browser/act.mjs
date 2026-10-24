@@ -10,8 +10,9 @@ import { endpointURL, endpointBlock } from './endpoint-guard.mjs';
 import { setViewport } from './viewport.mjs';
 import { snapshotAcquisitionPending } from './snapshot.mjs';
 import { originOf, pathOf, guardChooser } from './output-hygiene.mjs';
-const OPS = new Set('click type press select check uncheck hover scroll drag upload dialog wait back forward reload viewport navigate'.split(' '));
-const REF_OPS = new Set('click type select check uncheck hover drag upload'.split(' '));
+import { downloadLink } from './download-link.mjs';
+const OPS = new Set('click type press select check uncheck hover scroll drag upload download dialog wait back forward reload viewport navigate'.split(' '));
+const REF_OPS = new Set('click type select check uncheck hover drag upload download'.split(' '));
 const WAIT_CAP = 5000, SCROLL_CAP = 10000, navigateNeeds = 'the ref of an http(s) link (browser_open takes a url); to press other elements use click';
 const TIMEOUT = 1000;
 const clickModifiers = Object.freeze({ cmd: 'Meta', ctrl: 'Control' });
@@ -237,7 +238,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
   const lossFixes = process.env.SLEIGHT_LB12 !== '0';
   // siteCheck() gives the user's line when the page now shows a site sleight may not act on (permissions.mjs). It runs in the
   // gate, right before each step's input, so a step that moved the page to such a site stops every step after it.
-  return async function runSteps(tab, steps, ctx = {}, { nextStep, siteCheck, observe } = {}) {
+  return async function runSteps(tab, steps, ctx = {}, { nextStep, siteCheck, observe, download, downloadAllowed } = {}) {
     // A bad step list is refused before any input, so the caller must not report it as an unconfirmed outcome.
     try { validate(steps); } catch (error) { error.notRun = true; throw error; }
     const { page, state } = tab, since = state.snapshotNo > 0 ? state.snapshotNo : undefined, lines = []; let stoppedAt = null;
@@ -255,6 +256,10 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         if (step.do === 'dialog' && !state.dialog) throw Error('no waiting dialog; read the page');
         pendingGate(state, step);
         if (snapshotAcquisitionPending(page)) throw Error('Snapshot acquisition is still pending; wait before another action or read.');
+        if (step.do === 'download') {
+          const file = await downloadLink(tab, step, ctx, { download, siteCheck, allowed: downloadAllowed });
+          lines.push(label + ': saved ' + JSON.stringify(file)); stoppedAt = index + 1; break;
+        }
         if (/^x\d+$/.test(step.ref) && !isV3Context(ctx)) throw Error('keyboard-only refs require a trusted context');
         locator = step.ref ? page.getByRef(step.ref) : step.do === 'press' ? page.locator(':focus') : null;
         if (step.do === 'press' && !step.ref && !await locator.count()) locator = page.locator('body');
@@ -518,7 +523,8 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         // The shield cancelled the input before the page saw the click (backgroundClick says so); nothing was sent.
         // Playwright's hit-target check also blocks the page's pointer events when a cover appears mid-action, so a covered target got no input.
         const unsent = step.do === 'click' && /^page changed during the click; read again/.test(error.message) || /intercepts pointer events/i.test(error.message);
-        lines.push(label + ': ' + (started && !unsent ? 'effect unconfirmed; read before retrying. ' : 'not run: ') + detail + clickRetry);
+        lines.push(label + ': ' + (step.do === 'download' ? 'download failed; no completed path returned: '
+          : started && !unsent ? 'effect unconfirmed; read before retrying. ' : 'not run: ') + detail + clickRetry);
         stoppedAt = index + 1; break;
       } finally {
         stepFinished = true;
