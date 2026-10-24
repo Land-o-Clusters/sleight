@@ -44,7 +44,7 @@ function createPrivateCache(path) {
 }
 function sourceBytes(sourceRoot, hashes) {
   const bytes = {};
-  for (const name of Object.values(helperSources)) {
+  for (const name of Object.keys(hashes)) {
     bytes[name] = ordinary(join(sourceRoot, name));
     if (digest(bytes[name]) !== hashes[name]) throw Error('HOST_SOURCE_MISMATCH');
   }
@@ -54,12 +54,12 @@ function validateBuild(build) {
   privateDirectory(build.cacheRoot); privateDirectory(build.directory);
   sourceBytes(build.sourceRoot, build.sources);
   if (digest(ordinary(build.record, 0o600)) !== build.recordHash) throw Error('HOST_PACKAGE_MISMATCH');
-  for (const name of Object.keys(helperSources))
+  for (const name of Object.keys(build.binaries))
     if (digest(ordinary(join(build.directory, name), 0o700)) !== build.binaries[name]) throw Error('HOST_PACKAGE_MISMATCH');
 }
 function executable(name, receipt) {
   const build = nativeBuilds.get(receipt);
-  if (process.platform !== 'darwin' || !build || build.node !== process.version) throw Error('DISTRIBUTION_ACCEPTANCE_REQUIRED');
+  if (process.platform !== 'darwin' || !build || build.node !== process.version || !Object.hasOwn(build.binaries, name)) throw Error('DISTRIBUTION_ACCEPTANCE_REQUIRED');
   try { validateBuild(build); return join(build.directory, name); }
   catch { throw Error('HOST_PACKAGE_MISMATCH'); }
 }
@@ -80,9 +80,9 @@ async function compileNative({ name, source, binary, moduleCache, signal }) {
   });
 }
 
-function helperSourceHashes(inventory) {
+function helperSourceHashes(inventory, selectedSources = helperSources) {
   const hashes = {};
-  for (const name of Object.values(helperSources)) {
+  for (const name of Object.values(selectedSources)) {
     const entries = inventory.files.filter(file => file.path === 'native/' + name || file.path?.endsWith('/native/' + name));
     if (entries.length !== 1 || !/^[a-f0-9]{64}$/.test(entries[0].sha256 ?? '')) throw Error('DISTRIBUTION_ACCEPTANCE_REQUIRED');
     hashes[name] = entries[0].sha256;
@@ -157,11 +157,14 @@ function releaseLock(lock) {
 
 // Internal loader options, never exposed as tool arguments. Compile staged exact
 // source bytes and publish the bank only after both artifacts pass validation.
-export async function prepareNativeHelpers({ inventory, cacheRoot = defaultHelperCache(),
-  sourceRoot = sources, compile = compileNative, onProgress = () => {}, signal } = {}) {
+export function prepareNativeHelpers(options = {}) { return prepareHelpers(options, helperSources); }
+// PDF parsing is compiled only on its first read, with the same accepted-source and private-bank checks.
+export function preparePdfHelper(options = {}) { return prepareHelpers(options, { 'pdf-host': 'pdf-host.swift' }); }
+async function prepareHelpers({ inventory, cacheRoot = defaultHelperCache(),
+  sourceRoot = sources, compile = compileNative, onProgress = () => {}, signal } = {}, selectedSources) {
   if (inventory?.accepted !== true || inventory.protocol !== 1 || inventory.helperMode !== 'source' ||
       inventory.node !== process.version || !Array.isArray(inventory.files)) throw Error('DISTRIBUTION_ACCEPTANCE_REQUIRED');
-  const hashes = helperSourceHashes(inventory);
+  const hashes = helperSourceHashes(inventory, selectedSources);
   const started = Date.now(), key = helperBuildKey(hashes);
   let stage = 'sources', helper;
   const scrub = value => String(value).split(cacheRoot).join('<helper-cache>').split(sourceRoot).join('<helper-sources>')
@@ -188,6 +191,7 @@ export async function prepareNativeHelpers({ inventory, cacheRoot = defaultHelpe
     const cached = () => {
       const contents = ordinary(record, 0o600), data = JSON.parse(contents);
       if (data.protocol !== 1 || data.arch !== process.arch || JSON.stringify(data.sources) !== JSON.stringify(hashes)) throw Error();
+      if (!data.binaries || Object.keys(data.binaries).sort().join(',') !== Object.keys(selectedSources).sort().join(',')) throw Error();
       const build = { cacheRoot, directory, record, sourceRoot, sources: hashes, binaries: data.binaries, recordHash: digest(contents), node: process.version };
       validateBuild(build);
       const receipt = Object.freeze({}); nativeBuilds.set(receipt, build);
@@ -200,7 +204,7 @@ export async function prepareNativeHelpers({ inventory, cacheRoot = defaultHelpe
     bank = mkdtempSync(join(cacheRoot, 'build-')); chmodSync(bank, 0o700);
     const moduleCache = join(bank, 'module-cache'); mkdirSync(moduleCache, { mode: 0o700 });
     const binaries = {};
-    for (const [name, filename] of Object.entries(helperSources)) {
+    for (const [name, filename] of Object.entries(selectedSources)) {
       signal?.throwIfAborted();
       stage = 'compile'; helper = name; progress();
       const source = join(bank, filename), binary = join(bank, name);
@@ -230,6 +234,23 @@ export async function prepareNativeHelpers({ inventory, cacheRoot = defaultHelpe
     if (bank) rmSync(bank, { recursive: true, force: true });
     if (locked) releaseLock(lock);
   }
+}
+
+// Data only on stdin. PDFKit never creates a view, runs actions, or opens another application.
+export async function extractPdf(receipt, path, { page = 0, offset = 0 } = {}) {
+  const binary = executable('pdf-host', receipt);
+  return new Promise((resolve, reject) => {
+    let failure, output;
+    const child = execFile(binary, [], { env: environment(), timeout: 10000, maxBuffer: 300000 }, (error, stdout) => {
+      failure = error; output = stdout;
+    });
+    child.once('close', () => {
+      if (failure) return reject(Error('PDF text extraction failed or timed out.'));
+      try { resolve(JSON.parse(output)); } catch { reject(Error('PDF helper returned invalid data.')); }
+    });
+    child.stdin.on('error', () => {});
+    child.stdin.end(JSON.stringify({ path, page, offset }));
+  });
 }
 
 /** Parses peer-host output for pid: --process-pid (code false) or --code-status (code true, which adds the kernel's

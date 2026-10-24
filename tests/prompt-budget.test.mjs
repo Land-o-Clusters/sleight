@@ -390,6 +390,8 @@ import { withMT } from './fixtures/mt-env.mjs';
 for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned inside existing budgets, switch=${mode}`, async () => withMT(mode, async () => {
   const tools = browserTools('bfixture');
   assert.equal(hash(JSON.stringify(tools)), mode === '0' ? baseline.browserToolsLegacy : baseline.browserToolsMT);
+  // G4 PDF path: +124 catalog characters and +33 o200k_base tokens, measured in g4-REPORT.md.
+  assert.equal(JSON.stringify(tools).length, mode === '0' ? 4095 : 4434);
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);
 }));
