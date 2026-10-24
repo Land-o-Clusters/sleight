@@ -7,10 +7,8 @@ const pages = new WeakMap();
 const REF = /^(?:(?:f\d+)?e\d+|[sx]\d+)$/;
 const MORE = /^more\d+_\d+$/;
 export const SENSITIVE = /password|passcode|secret|one.?time|(?:^|[\W_])otp(?=$|[\W_])|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|security.?code/i;
-// Redact code/PIN controls before a handoff too, including values echoed elsewhere.
-// Benign shopping and address codes remain readable, as in the handoff gate.
-const sensitiveHint = hint => SENSITIVE.test(hint) || /(?:^|[\W_])(?:code|pin)(?=$|[\W_])/i.test(hint)
-  && !/promo|coupon|postal|zip|discount|voucher|referral|product|area.?code|country.?code/i.test(hint);
+// Extra plain code/PIN hints belong to the handoff readiness check. Pending
+// handoff refuses reads entirely, including any echoed code values.
 const TIMEOUT = 3000;
 const scalarRole = role => /^(textbox|searchbox|combobox)$/.test(role);
 const normalized = value => String(value ?? '').replace(/[\u200b\u00ad]/g, '').trim().replace(/\s+/g, ' ');
@@ -204,7 +202,7 @@ function sensitiveValues({ strings, documents }) {
         if (labels.has(parent)) { hints.push(labels.get(parent)); ownLabels.push(labels.get(parent)); }
         parent = nodes.parentIndex[parent];
       }
-      if (closed || sensitiveHint(hints.join(' '))) protectedNodes.add(index);
+      if (closed || SENSITIVE.test(hints.join(' '))) protectedNodes.add(index);
       if (protectedNodes.has(index) && (/^(INPUT|TEXTAREA|SELECT)$/.test(strings[nodes.nodeName[index]])
         || /^(textbox|searchbox|combobox|spinbutton)$/.test(attributes.role ?? '')
         || Object.hasOwn(attributes, 'contenteditable') && /^(|true|plaintext-only)$/i.test(attributes.contenteditable))) values.protectedFields = true;
@@ -457,7 +455,7 @@ function rowsOf(tree, secrets, viewport) {
       const node = typeof raw === 'string' ? { role: 'text', text: raw } : raw;
       const ref = REF.test(node.ref) ? node.ref : null;
       const role = /^[a-zA-Z][\w-]*$/.test(node.role) ? node.role : 'group';
-      const namedSensitive = node.protected === true || secrets.names?.has(normalized(node.name)) || sensitiveHint([node.name, node.placeholder].join(' '));
+      const namedSensitive = node.protected === true || secrets.names?.has(normalized(node.name)) || SENSITIVE.test([node.name, node.placeholder].join(' '));
       // A number field (a CVV, a PIN) shows its value in its own row, which scrub no longer removes for a short secret.
       const protectedValue = scalarRole(role) && (namedSensitive || secrets.unnamed) || role === 'spinbutton' && node.text !== undefined && namedSensitive;
       let line = '- ' + role;

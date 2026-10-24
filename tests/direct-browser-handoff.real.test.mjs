@@ -22,7 +22,7 @@ const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'needs the headless DOM
 // throwaway loopback browser. Its fixed dummy secrets never enter a tool call.
 async function fixture(t) {
   const { chromium } = await import(new URL('index.mjs', vendor));
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-signin-resume-'))), cards = [], authenticated = new WeakSet(), captures = [];
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-signin-resume-'))), cards = [], authenticated = new WeakSet(), captures = [], drainCounts = [];
   let context, selected, filter, listener, browser, registry, runtime, active = true, submissions = 0;
   const server = createServer((request, response) => {
     response.setHeader('content-type', 'text/html');
@@ -69,13 +69,13 @@ async function fixture(t) {
     snapshot: async (...args) => { captures.push(Date.now()); return snapshot(...args); },
     ui: { authenticate: event => authenticated.delete(event),
       present(id, data, choices, deliver) { cards.push({ id, data, choices, deliver }); } }, dependencies: { acknowledgeSnapshot } });
-  const call = async (name, args) => { const result = await runtime.call({ name, arguments: args }); runtime.delivered(result); return result; };
+  const call = async (name, args) => { const result = await runtime.call({ name, arguments: args }, { handoffDrain: detail => drainCounts.push(detail.ownedTabs) }); runtime.delivered(result); return result; };
   const opened = await call('browser_open', { url: origin + '/login' });
   assert.equal(opened.isError, false, opened.text);
   const tab = /^t\w+/.exec(opened.text)[0], entry = registry.tab(tab);
   const ownerPage = context.pages().find(page => page.url() === origin + '/login');
   ownerPage.on('request', request => { if (request.method() === 'POST') submissions++; });
-  return { call, tab, entry, ownerPage, context, runtime, registry, opened, cards, captures,
+  return { call, tab, entry, ownerPage, context, runtime, registry, opened, cards, captures, drainCounts,
     answer(choice, trusted = true) {
       const card = cards.at(-1), event = { id: card.id, choice }; if (trusted) authenticated.add(event); card.deliver(event);
     }, submissions: () => submissions };
@@ -91,6 +91,7 @@ test('signin-resume: person enters password and 2FA; only Continue returns a fre
   const stale = /\[ref=(e\d+)\]/.exec(f.opened.text)[1];
   const pending = f.call('browser_tabs', { do: 'handoff', tab: f.tab, wait: true });
   await waitForCard(f);
+  assert.deepEqual(f.drainCounts, [1], 'the real registry reports its tab count before presenting a card');
   await f.ownerPage.getByLabel('Password').fill('dummy-password-G1');
   await f.ownerPage.getByLabel('One-time code').fill('654321');
   const refused = await f.call('browser_read', { tab: f.tab });
@@ -154,7 +155,7 @@ test('input hints reject auth secrets and populated unnamed fields without match
     ['<p>Enter your authentication code or PIN</p><input placeholder="Promo code" value="SAVE10"><input name="postal-code" value="90210">', true],
     ['<input name="verification-code">', false],
     ['<input name="code">', false],
-    ...['otp_code', 'sms_code', 'user_pin', 'otp-code', 'sms-code', 'user-pin'].map(name => [`<input name="${name}">`, false]),
+    ...['otp_code', 'sms_code', 'user_pin', 'otp-code', 'sms-code', 'user-pin', 'otpCode', 'smsCode', 'userPin'].map(name => [`<input name="${name}">`, false]),
     ['<input aria-label="PIN">', false],
     ['<input placeholder="Postal PIN code" value="90210">', true],
     ['<input autocomplete="one-time-code" hidden>', false],
@@ -171,17 +172,29 @@ test('input hints reject auth secrets and populated unnamed fields without match
   }
 });
 
-test('snapshot redacts plain and separated code hints before handing control to the person', { skip, timeout: 60000 }, async t => {
+test('code and pin hints protect pending handoff without hiding ordinary editors or map pins', { skip, timeout: 60000 }, async t => {
   const f = await fixture(t);
-  for (const name of ['code', 'otp_code', 'sms_code', 'user_pin', 'otp-code', 'sms-code', 'user-pin']) {
+  await f.ownerPage.setContent('<label>Code editor<textarea>const answer = 42;</textarea></label><label>Map pin<input value="North pier"></label>');
+  const ordinary = await f.call('browser_read', { tab: f.tab });
+  assert.equal(ordinary.isError, false, ordinary.text);
+  assert.match(ordinary.text, /const answer = 42/); assert.match(ordinary.text, /North pier/);
+  const before = f.captures.length;
+  const pending = f.call('browser_tabs', { do: 'handoff', tab: f.tab, wait: true });
+  await waitForCard(f);
+  let cards = 1;
+  for (const name of ['code', 'pin', 'otp_code', 'sms_code', 'user_pin', 'otp-code', 'sms-code', 'user-pin', 'otpCode', 'smsCode', 'userPin']) {
     await f.ownerPage.setContent(`<label>Account<input name="${name}" value="482913"></label><p>Echo 482913</p>`);
-    const result = await f.call('browser_read', { tab: f.tab });
-    assert.equal(result.isError, false, result.text);
-    assert.doesNotMatch(result.text, /482913/, name);
-    assert.match(result.text, /redacted/, name);
+    const refused = await f.call('browser_read', { tab: f.tab });
+    assert.equal(refused.isError, true, name);
+    assert.doesNotMatch(refused.text, /482913/, name);
+    f.answer('continue');
+    await waitForCard(f, ++cards);
+    assert.equal(f.captures.length, before, name + ' must block the fresh snapshot');
   }
   await f.ownerPage.setContent('<label>Promo code<input value="SAVE10"></label><label>Postal code<input value="90210"></label>');
-  const benign = await f.call('browser_read', { tab: f.tab });
+  f.answer('continue');
+  const benign = await pending;
+  assert.equal(benign.isError, false, benign.text);
   assert.match(benign.text, /SAVE10/); assert.match(benign.text, /90210/);
 });
 

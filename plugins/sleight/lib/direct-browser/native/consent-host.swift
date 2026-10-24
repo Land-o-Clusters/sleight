@@ -109,7 +109,7 @@ final class ConsentInputAction: NSObject {
 protocol ConsentWordFocusing: AnyObject {
     func focusWordField(_ field: ConsentWordField) -> Bool
 }
-// No field editor: only keyDown can change the private buffer. AX may read/focus this control, never fill or submit it.
+// No field editor: only keyDown can change the private buffer. AX reads only its masked length.
 final class ConsentWordField: NSTextField {
     private static let abcLayout: CFData? = {
         let filter = [kTISPropertyInputSourceID as String: "com.apple.keylayout.ABC"] as CFDictionary
@@ -142,8 +142,13 @@ final class ConsentWordField: NSTextField {
     private var dispatching = false
     private var lastTimestamp: TimeInterval = -.infinity
     private var focusObserver: NSObjectProtocol?
-    init(_ entries: [String: ConsentInputAction], instructions: String) {
+    let accessibilityState: () -> (voiceOver: Bool, switchControl: Bool)
+    init(_ entries: [String: ConsentInputAction], instructions: String,
+        accessibilityState: @escaping () -> (voiceOver: Bool, switchControl: Bool) = {
+            (NSWorkspace.shared.isVoiceOverEnabled, NSWorkspace.shared.isSwitchControlEnabled)
+        }) {
         self.entries = entries
+        self.accessibilityState = accessibilityState
         super.init(frame: .zero)
         isEditable = false; isSelectable = false; isBezeled = true; drawsBackground = true
         setAccessibilityElement(true)
@@ -156,7 +161,7 @@ final class ConsentWordField: NSTextField {
     override var acceptsFirstResponder: Bool { isEnabled }
     override var canBecomeKeyView: Bool { isEnabled && !isHiddenOrHasHiddenAncestor }
     override func accessibilityRole() -> NSAccessibility.Role? { .textField }
-    override func accessibilityValue() -> String? { typed }
+    override func accessibilityValue() -> String? { String(repeating: "•", count: typed.count) }
     override func isAccessibilitySelectorAllowed(_ selector: Selector) -> Bool {
         if selector == #selector(setAccessibilityValue(_:)) { return false }
         return super.isAccessibilitySelectorAllowed(selector)
@@ -167,15 +172,28 @@ final class ConsentWordField: NSTextField {
         if let panel = window as? ConsentWordFocusing { return panel.focusWordField(self) }
         return window?.makeFirstResponder(self) ?? false
     }
+    private func focusFromAccessibility() -> Bool {
+        if window is ConsentWordFocusing {
+            let state = accessibilityState()
+            guard state.voiceOver || state.switchControl else { refuse(); return false }
+        }
+        return focusForTyping()
+    }
     override func setAccessibilityFocused(_ focused: Bool) {
-        if focused { _ = focusForTyping() }
+        if focused { guard focusFromAccessibility() else { return } }
         else if window?.firstResponder === self { _ = window?.makeFirstResponder(nil) }
         super.setAccessibilityFocused(focused)
     }
     override func accessibilityPerformPress() -> Bool {
-        return focusForTyping()
+        return focusFromAccessibility()
     }
-    override func mouseDown(with event: NSEvent) { _ = focusForTyping() }
+    override func mouseDown(with event: NSEvent) {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard event.type == .leftMouseDown, event.window === window,
+            event.timestamp <= now, now - event.timestamp < 5,
+            personInput(event.cgEvent) else { refuse(); return }
+        _ = focusForTyping()
+    }
     override func resignFirstResponder() -> Bool { clear(); return super.resignFirstResponder() }
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow(); clear()
@@ -771,6 +789,8 @@ final class HandoffPanel: NSPanel, ConsentWordFocusing {
         // A nonactivating panel takes keys only after the person focuses this
         // field. Showing or reviewing the card never calls this method.
         makeKey()
+        wordFocusAllowed = isKeyWindow
+        guard wordFocusAllowed else { _ = makeFirstResponder(nil); return false }
         return firstResponder === field
     }
     override func resignKey() {

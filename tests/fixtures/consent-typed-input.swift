@@ -1,12 +1,15 @@
 // Local AppKit dispatch only. No NSEvent subclass, event posting, app activation or window ordering.
 var fixtureKeyWindow: NSWindow?
 var fixtureCurrentEvent: NSEvent?
+var fixtureVoiceOver = false
+var fixtureSwitchControl = false
+var fixtureKeyAllowed = true
 var trustedEvents = Set<ObjectIdentifier>()
 var preflightKeyEquivalents = false
 func fixturePersonInput(_ event: NSEvent) -> Bool { trustedEvents.contains(ObjectIdentifier(event)) }
 func fixtureMakeKey(_ window: NSWindow) {
     check(window.canBecomeKey, "only an explicitly focused handoff may become key")
-    if window.canBecomeKey { fixtureKeyWindow = window }
+    if fixtureKeyAllowed && window.canBecomeKey { fixtureKeyWindow = window }
 }
 final class FixtureApplication: NSApplication {
     override var keyWindow: NSWindow? { fixtureKeyWindow }
@@ -75,7 +78,16 @@ func send(_ event: NSEvent, _ route: Route = .window, current: Bool = true) {
     }
 }
 func type(_ text: String, _ view: ConsentTyping, _ route: Route = .window) {
-    for char in text { send(key(String(char), in: view.window!), route) }
+    for char in text {
+        send(key(String(char), in: view.window!), route)
+        check(view.field.accessibilityValue() != view.field.stringValue || view.field.stringValue.isEmpty, "AX never returns typed letters")
+        check(view.field.accessibilityValue() == String(repeating: "•", count: view.field.stringValue.count), "AX exposes only masked length")
+    }
+}
+func mouse(_ view: ConsentTyping, trusted: Bool = true, age: Double = 0) -> NSEvent {
+    let event = NSEvent.mouseEvent(with: .leftMouseDown, location: view.field.convert(.zero, to: nil), modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime - age, windowNumber: view.window!.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+    if trusted { trustedEvents.insert(ObjectIdentifier(event)) }
+    return event
 }
 func enter(_ view: ConsentTyping, _ route: Route = .equivalent, code: UInt16 = 36, trusted: Bool = true, current: Bool = true) {
     send(key(code == 76 ? "\u{3}" : "\r", in: view.window!, code: code, trusted: trusted, flags: code == 76 ? .numericPad : []), route, current: current)
@@ -228,6 +240,8 @@ send(replay)
 trustedEvents.insert(ObjectIdentifier(replay)); send(replay)
 check(guarded.field.stringValue.isEmpty, "replayed timestamp refused")
 type(word(guarded, "Always allow"), guarded)
+let legacyValue = guarded.field.accessibilityAttributeValue(.value) as? String
+check(legacyValue == nil || legacyValue == String(repeating: "•", count: guarded.field.stringValue.count), "legacy AX value never returns the typed buffer")
 guarded.field.setAccessibilityValue("oak")
 check(guarded.field.stringValue.isEmpty && guardReceipt.choices.isEmpty, "AX write clears physical buffer")
 guarded.field.stringValue = word(guarded, "Always allow")
@@ -287,6 +301,8 @@ ordinary.close()
 // permits a key window; real page-window events keep their own window association.
 for route in Route.allCases {
     for focus in ["press", "focused", "mouse"] {
+        fixtureVoiceOver = focus == "press"
+        fixtureSwitchControl = focus == "focused"
         var answers: [String] = []
         let target: [String: Any] = ["kind": "handoff", "session": "fixture-session", "turn": "fixture-turn", "tab": "t1"]
         let card = AskCardPanel(automaticCard(target, ["continue", "cancel"])!, deadline: deadline) { answers.append($0) }
@@ -310,8 +326,9 @@ for route in Route.allCases {
         if focus == "press" { check(view.field.accessibilityPerformPress(), "AX press focuses handoff field") }
         else if focus == "focused" { view.field.setAccessibilityFocused(true) }
         else {
-            let event = NSEvent.mouseEvent(with: .leftMouseDown, location: view.field.convert(.zero, to: nil), modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+            let event = mouse(view)
             view.field.mouseDown(with: event)
+            trustedEvents.remove(ObjectIdentifier(event))
         }
         check(window.canBecomeKey && fixtureKeyWindow === window && window.firstResponder === view.field, "explicit \(focus) focus opens handoff keyboard path")
         enter(view, route)
@@ -321,6 +338,7 @@ for route in Route.allCases {
         _ = window.makeFirstResponder(card.buttons[1])
         for (text, code) in [(" ", UInt16(49)), ("\r", 36)] { send(key(text, in: window, code: code), route) }
         check(answers.isEmpty, "button focus cannot turn ordinary Space or Return into Continue")
+        fixtureVoiceOver = true
         check(view.field.accessibilityPerformPress(), "field can be refocused")
         type("wrong", view, route); enter(view, route)
         check(answers.isEmpty && view.field.isEnabled, "wrong handoff word is retryable")
@@ -334,6 +352,43 @@ for route in Route.allCases {
         check(answers == ["continue"] && card.finished && !view.field.isEnabled, "focused physical word confirms handoff exactly once: \(route), \(focus)")
         check(!window.isVisible && !page.isVisible, "handoff and page were never ordered")
         card.close()
+    }
+}
+// AX without an active assistive technology and posted/stale pointer events cannot steal page focus.
+for attempt in ["press", "focused", "posted", "stale", "future", "failed-key"] {
+    fixtureVoiceOver = false; fixtureSwitchControl = false
+    var answers: [String] = []
+    let card = AskCardPanel(AskCard(question: "Finish signing in", detail: "", host: "sleight", icon: "", kind: "handoff", choices: ["cancel", "continue"]), deadline: deadline) { answers.append($0) }
+    let view = card.typing!, window = card.panel
+    window.setFrameOrigin(NSPoint(x: -20000, y: -20000)); _ = window.windowRef
+    let page = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 400, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
+    fixtureKeyWindow = page
+    if attempt == "press" { check(!view.field.accessibilityPerformPress(), "ordinary AX press is refused") }
+    else if attempt == "focused" { view.field.setAccessibilityFocused(true) }
+    else {
+        fixtureKeyAllowed = attempt != "failed-key"
+        let event = mouse(view, trusted: attempt != "posted", age: attempt == "stale" ? 5.1 : attempt == "future" ? -1 : 0)
+        if attempt == "posted" { check(!personInput(event.cgEvent), "posted-style mouse has non-HID provenance") }
+        view.field.mouseDown(with: event)
+        trustedEvents.remove(ObjectIdentifier(event)); fixtureKeyAllowed = true
+    }
+    check(fixtureKeyWindow === page && !window.canBecomeKey, "\(attempt) leaves page key and resets handoff permission")
+    check(answers.isEmpty && view.field.stringValue.isEmpty, "\(attempt) supplies no typed authority")
+    card.close()
+}
+fixtureVoiceOver = true
+// Inject the assistive-technology state independently of the workspace defaults.
+for state in [(false, false), (true, false), (false, true), (true, true)] {
+    for focus in ["press", "focused"] {
+        let panel = HandoffPanel(contentRect: NSRect(x: -20000, y: -20000, width: 400, height: 200), styleMask: [.titled, .nonactivatingPanel], backing: .buffered, defer: false)
+        let field = ConsentWordField([:], instructions: "Fixture", accessibilityState: { (state.0, state.1) })
+        panel.contentView!.addSubview(field)
+        fixtureKeyWindow = nil
+        if focus == "press" { check(field.accessibilityPerformPress() == (state.0 || state.1), "AX press follows injected state \(state)") }
+        else { field.setAccessibilityFocused(true) }
+        check((fixtureKeyWindow === panel) == (state.0 || state.1), "AX \(focus) only makes key for active assistive technology \(state)")
+        check(panel.canBecomeKey == (state.0 || state.1), "AX \(focus) retains permission only when allowed \(state)")
+        panel.resignKey(); fixtureKeyWindow = nil
     }
 }
 for ending in ["expiry", "dismiss", "focus-loss"] {

@@ -27,6 +27,9 @@ test('real modal and handoff events route typed choices only after field focus w
     // Headless seams supply hardware provenance and key-window/current-event state only.
     // Real NSEvents, window association, key equivalents and responder dispatch stay intact.
     return block.replaceAll('window.isKeyWindow', '(window === fixtureKeyWindow)')
+      .replaceAll('NSWorkspace.shared.isVoiceOverEnabled', 'fixtureVoiceOver')
+      .replaceAll('NSWorkspace.shared.isSwitchControlEnabled', 'fixtureSwitchControl')
+      .replaceAll('wordFocusAllowed = isKeyWindow', 'wordFocusAllowed = fixtureKeyWindow === self')
       .replaceAll('makeKey()', 'fixtureMakeKey(self)')
       .replaceAll('personInput(event.cgEvent)', 'fixturePersonInput(event)');
   });

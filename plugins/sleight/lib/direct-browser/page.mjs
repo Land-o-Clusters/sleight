@@ -2889,7 +2889,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
           return { targetId, cdp };
         } catch (error) { await closeAllocation(targetId); throw error; }
       }, closeTarget: closeAllocation }) })),
-    async beginHandoff(id) {
+    async beginHandoff(id, onDrain = () => {}) {
       const requested = tab(id);
       let finishing, result = null, keeping = false, preserved;
       const resumeTarget = () => !requested.closed && !requested.page.isClosed() ? requested : requested.parent;
@@ -2969,6 +2969,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
       });
       handoffActive = suspension;
       try {
+        onDrain(entries.length);
         // Drain earlier captures/actions before showing the card. New calls
         // fail above; no page values are read while the card is waiting.
         await deadline(idle, timeoutMs);
