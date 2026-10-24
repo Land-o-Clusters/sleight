@@ -136,11 +136,12 @@ test('growing tool history persists each unchanged row once rather than every pr
 });
 test('scrubbing covers nested JSON strings, binary MIME payloads and credential text', () => {
   const out = scrubCursor({ result: JSON.stringify({ accessToken: 'private-token', accountId: 'private-account', nested: { cookie: 'private-cookie' } }),
+    metadata: { account: { id: 'private-nested-account' }, user: { id: 'private-nested-user' } },
     content: [{ mimeType: 'image/png', data: 'private-image' }, { mimeType: 'application/octet-stream', data: 'private-binary' },
       { type: 'text', text: 'Authorization: Basic private-basic\nAPI_KEY="private-key"\nCookie: private-cookie-text\nCookie: one=private-cookie-one; two=private-cookie-two\naccount_id: private-id' }],
     safe: { app: 'com.google.Chrome', url: 'https://example.com/?access_token=private-query', success: true } });
   const text = JSON.stringify(out);
-  for (const secret of ['private-token', 'private-account', 'private-cookie', 'private-image', 'private-binary', 'private-basic', 'private-key', 'private-cookie-text', 'private-cookie-one', 'private-cookie-two', 'private-id', 'private-query']) assert.ok(!text.includes(secret), secret);
+  for (const secret of ['private-token', 'private-account', 'private-nested-account', 'private-nested-user', 'private-cookie', 'private-image', 'private-binary', 'private-basic', 'private-key', 'private-cookie-text', 'private-cookie-one', 'private-cookie-two', 'private-id', 'private-query']) assert.ok(!text.includes(secret), secret);
   assert.equal(out.safe.app, 'com.google.Chrome'); assert.equal(out.safe.success, true);
 });
 

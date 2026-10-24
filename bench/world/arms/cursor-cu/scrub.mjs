@@ -1,4 +1,4 @@
-const privateKey = /auth|credential|secret|password|token|cookie|account.?id|user.?id|api.?key|access.?key|signature|session.?id|image|screenshot|base64|binary/i;
+const privateKey = /auth|credential|secret|password|token|cookie|account|email|(?:user|owner|org|tenant).?id|^(?:user|owner|org|organization|tenant)$|api.?key|access.?key|signature|session.?id|image|screenshot|base64|binary/i;
 function safeText(text) {
   return text
     .replace(/\b(?:set-cookie|cookie|authorization)\s*:\s*[^\r\n]+/gi, '[credential header removed]')
