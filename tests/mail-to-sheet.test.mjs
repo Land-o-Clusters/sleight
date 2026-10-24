@@ -162,7 +162,7 @@ test('setup retains the imported mailbox before acquiring the exact Numbers docu
   const f = fixture(t); await f.task.setup(f.ctx);
   assert.deepEqual(f.calls.map(c => c[0]), ['mail-import', 'numbers-open']);
   assert.deepEqual(f.calls[1][1], { app: 'Numbers', bundle: 'com.apple.iWork.Numbers',
-    target: f.ctx.mailToSheet.source, token: 'Transfer-bt2test', mode: 'document', stopOnAppDialog: true });
+    target: f.ctx.mailToSheet.source, token: 'Transfer-bt2test', mode: 'document', stopOnAppDialog: true, reportDocument: true });
   assert.equal(f.ctx.pendingAcquisitions.size, 0);
 });
 

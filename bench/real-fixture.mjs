@@ -353,6 +353,8 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
         if (event.processHandoff) diagnostics.processHandoff = event.processHandoff;
         // A fixture save prompt the helper answered at cleanup: which button, on which window, from where.
         if (event.fixtureSheet) (diagnostics.fixtureSheets ??= []).push(event.fixtureSheet);
+        if (request.reportDocument === true && request.bundle === 'com.apple.iWork.Numbers' && event.numbersDocument)
+          diagnostics.numbersDocument = event.numbersDocument;
         if (event.appDialog) {
           (diagnostics.appDialogs ??= []).push(event.appDialog);
           if (event.appDialog.stop !== false) diagnostics.appDialog = event.appDialog;

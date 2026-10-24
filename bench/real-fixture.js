@@ -716,7 +716,29 @@ function closedUnderUs(window, app, api, request) {
   }
 }
 
+// AX metadata on the retained reference only. Decode file URLs as strings so
+// reporting never resolves symlinks, stats a file or visits a folder.
+function numbersDocumentReport(window, api) {
+  try {
+    var document = api.text(window, 'AXDocument');
+    var value = document || api.text(window, 'AXTitle');
+    if (typeof value !== 'string' || !value) return { status: 'unavailable' };
+    if (value.indexOf('file://') === 0) {
+      var match = /^file:\/\/(?:localhost)?(\/[^?#]*)$/.exec(value);
+      if (!match) return { status: 'unavailable' };
+      value = decodeURIComponent(match[1]);
+    }
+    if (/[\x00-\x1f\x7f]/.test(value)) return { status: 'unavailable' };
+    if (value[0] === '/') return { status: 'available', path: value };
+    if (!document && /\.numbers$/i.test(value)) return { status: 'available', name: value };
+    return document ? { status: 'unavailable' } : { status: 'available' };
+  } catch (_) { return { status: 'unavailable' }; }
+}
+
 function closeOwnedWindow(window, request, app, api) {
+  if (request.reportDocument === true && request.bundle === 'com.apple.iWork.Numbers' && request.mode === 'document') {
+    api.emit({ stage: 'numbers-document', numbersDocument: numbersDocumentReport(window, api) });
+  }
   if (request.bundle === 'com.apple.finder' && request.mode === 'folder') {
     return closeFinderFixtureWindows(window, request, app, api);
   }
@@ -1397,6 +1419,7 @@ function nativeAX(state, clock) {
   }
   var promptApi = { text: text, title: identityTitle, titleFree: titleFree, children: children, path: path, read: read, equal: equal };
   var api = {
+    emit: clock && clock.emit,
     title: identityTitle, titleFree: titleFree, retain: retain, windowNumber: windowNumber,
     bindRetained: function (window, request, app, receipt) { return receipt ? retain(window, request, app, receipt) : null; },
     read: read, text: text, children: children, press: press, fileMenu: fileMenu, menu: menu, path: path,

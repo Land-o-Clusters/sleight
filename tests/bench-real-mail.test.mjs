@@ -194,6 +194,34 @@ test('openMailImport refuses without --owner-present before compiling or running
   }), e => e.noMutation === true && e.message.startsWith('MAIL_OWNER_PRESENT_UNPROVED'));
 });
 
+test('Mail lease recover refuses document recovery without sending any helper command', async t => {
+  const ctx = context(t); ctx.ownerPresent = true;
+  ctx.fixtureDiagnostics = [{ app: 'Mail' }];
+  const done = Promise.withResolvers();
+  let invocations = 0;
+  const lease = await mail.openMailImport(ctx.mail, ctx, {
+    helper: async () => 'isolated-test-helper',
+    run: (_command, _args, options) => {
+      invocations++;
+      options.onStdout(JSON.stringify({ stage: 'ready', retainedWindow: true, retainedMailbox: true }) + '\n');
+      options.signal.addEventListener('abort', () => done.resolve({ groupClean: true }), { once: true });
+      return done.promise;
+    },
+  });
+  try {
+    const control = join(ctx.dir, 'mail-control.json');
+    assert.equal(typeof lease.recover, 'function');
+    await assert.rejects(lease.recover(), /Mail import recovery unavailable/);
+    assert.equal(invocations, 1);
+    assert.equal((await import('node:fs')).existsSync(control), false);
+    lease.cleaned = true;
+    Object.assign(lease.diagnostics, { windowCleanupConfirmed: true, helperCollectionConfirmed: true });
+    await lease.recover();
+    assert.equal(invocations, 1);
+    assert.equal((await import('node:fs')).existsSync(control), false);
+  } finally { await lease.dispose(); }
+});
+
 test('native pre-import stop accepts only explicit retained cleanup and helper collection receipts', async t => {
   const ctx = context(t); ctx.ownerPresent = true;
   await assert.rejects(mail.setupMailImport(ctx, { importer: (fixture, current) => mail.openMailImport(fixture, current, {

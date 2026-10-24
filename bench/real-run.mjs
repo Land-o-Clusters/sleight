@@ -143,13 +143,12 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, setupO
         if (collected !== true) throw new Error('Fixture helper process group cleanup unconfirmed');
       } catch (error) { result.passed = false; result.cleanupError = error.message; cleanupConfirmed = false; }
     }
-    // Audit after normal cleanup, any recovery, and helper collection, before
-    // the run bank or lock can be released. This hook never removes leftovers.
+    // Publish the pre-close window metadata after cleanup and helper collection.
+    // An unavailable report does not make confirmed fixture cleanup uncertain.
     if (!dryRun && task.leftovers) {
       try { result.leftovers = await task.leftovers(ctx); }
-      catch (error) {
-        result.passed = false; cleanupConfirmed = false; result.leftoverCheckFailed = true;
-        result.cleanupError = [result.cleanupError, error.message].filter(Boolean).join('; ');
+      catch {
+        result.leftoverCheck = 'leftover check unavailable';
       }
     }
     clearInterval(monitor);
@@ -167,7 +166,6 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, setupO
       result.exitDisagreements = ctx.exitDisagreements;
     }
     ctx.fixtureLockUnconfirmed = !!(serverCleanupFailed || ctx.exitDisagreements?.length || ctx.pendingAcquisitions?.size ||
-      result.leftoverCheckFailed ||
       (!cleanupConfirmed && setupStarted && !cleanupContained(result)) || (ctx.windowLeases ?? []).some(lease => {
         const d = lease.diagnostics;
         return !d || (d.helperCollectionConfirmed !== true ||
@@ -213,7 +211,7 @@ export async function acquireFixture(ctx, key, operation) {
 // run didn't launch) still stops it.
 export function cleanupContained(result) {
   if (!/^Owned .+ fixture window cleanup unconfirmed/.test(result.cleanupError ?? '') || result.permissionPrompt || result.permissionRefusal ||
-    result.observerError || result.appDialog || result.approvalStop || result.leftoverCheckFailed || result.groupClean === false) return false;
+    result.observerError || result.appDialog || result.approvalStop || result.groupClean === false) return false;
   const leases = result.fixtureDiagnostics ?? [];
   return leases.length > 0 && leases.every(item => item.launched === true && item.appQuit === true && item.helperCollectionConfirmed === true);
 }

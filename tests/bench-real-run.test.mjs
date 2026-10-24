@@ -15,23 +15,23 @@ function fixture(t) {
   return { dir: join(bank, 'fixture'), nonce: 'abc123', lockPath: join(bank, 'lock') };
 }
 
-test('an incomplete leftover audit cannot be contained as an exited-app cleanup failure', async t => {
+test('an unavailable leftover check does not fail confirmed cleanup or retain its mock lock', async t => {
   const execute = await runner(), ctx = fixture(t);
-  const diagnostics = { launched: true, appQuit: true, cleanup: 'unconfirmed', windowCleanupConfirmed: false };
+  const diagnostics = { launched: true, appQuit: true, cleanup: 'closed retained fixture', windowCleanupConfirmed: true };
   ctx.fixtureDiagnostics = [diagnostics];
   ctx.windowLeases = [{ diagnostics, dispose: async () => true, recover: async () => { throw new Error('recovery still unconfirmed'); } }];
   let released = false;
   const result = await execute({ setup() {}, prompt: () => 'fixture', check: () => true,
-    cleanup: () => { throw new Error('Owned Numbers fixture window cleanup unconfirmed'); },
-    leftovers: () => { throw new Error('NUMBERS_LEFTOVER_SCAN_UNCONFIRMED'); } }, ctx, {
+    cleanup() {},
+    leftovers: () => { throw new Error('private AX error'); } }, ctx, {
     retainFixture: true, lock: async () => async () => { released = true; },
     drive: async () => ({ code: 0, groupClean: true }),
   });
-  assert.equal(result.passed, false);
-  assert.equal(released, false);
-  assert.match(result.cleanupError, /NUMBERS_LEFTOVER_SCAN_UNCONFIRMED/);
-  const { cleanupContained } = await import('../bench/real-run.mjs');
-  assert.equal(cleanupContained(result), false);
+  assert.equal(result.passed, true);
+  assert.equal(released, true);
+  assert.equal(result.cleanupError, undefined);
+  assert.equal(result.leftoverCheck, 'leftover check unavailable');
+  assert.equal(ctx.fixtureLockUnconfirmed, false);
 });
 
 for (const reason of ['interactive task timeout', 'session exited before confirmed RESULT and idle prompt']) {

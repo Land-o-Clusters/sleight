@@ -1,73 +1,89 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { runInNewContext } from 'node:vm';
+import { findNumbersLeftovers } from '../bench/tasks-mail-to-sheet.mjs';
+import { openFixture } from '../bench/real-fixture.mjs';
+import { executeRealTask } from '../bench/real-run.mjs';
 
-async function fixture(t) {
-  const module = await import('../bench/tasks-mail-to-sheet.mjs');
-  assert.equal(typeof module.findNumbersLeftovers, 'function');
-  const home = mkdtempSync(join(tmpdir(), 'bt2b-leftovers-'));
-  t.after(() => rmSync(home, { recursive: true, force: true }));
-  const roots = [join(home, 'Documents'), join(home, 'Desktop'), join(home, 'Library/Containers/com.apple.iWork.Numbers/Data/Documents'),
-    join(home, 'Library/Autosave Information'), join(home, 'Library/Containers/com.apple.iWork.Numbers/Data/Library/Autosave Information'),
-    join(home, 'Library/Mobile Documents/com~apple~Numbers/Documents'), join(home, 'Library/Mobile Documents/com~apple~CloudDocs')];
-  for (const root of roots) mkdirSync(root, { recursive: true });
-  const dir = join(roots[0], 'run'); mkdirSync(dir);
-  const ctx = { dir, nonce: 'bt2bnonce', mailToSheet: { startedAtMs: 1 } };
-  return { ctx, home, roots, scan: options => module.findNumbersLeftovers(ctx, { home, ...options }) };
+function reader() {
+  const sandbox = { ObjC: { import() {} } };
+  runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), sandbox);
+  return sandbox;
 }
 
-test('leftover scan reports only nonce Numbers names outside the run in default and iCloud locations', async t => {
-  const f = await fixture(t);
-  for (const [i, root] of f.roots.entries()) {
-    const nested = join(root, 'nested'); mkdirSync(nested);
-    const packagePath = join(nested, `Transfer-bt2bnonce-${i}.numbers`); mkdirSync(packagePath);
-    writeFileSync(join(packagePath, 'index.zip'), 'private content');
-    writeFileSync(join(root, 'Owner.numbers'), 'owner data');
-    writeFileSync(join(root, 'Transfer-bt2bnonce.csv'), 'source');
-  }
-  writeFileSync(join(f.ctx.dir, 'In-run-bt2bnonce.numbers'), 'owned');
-  symlinkSync(f.ctx.dir, join(f.roots[1], 'alias'));
-  symlinkSync(join(f.roots[0], 'Owner.numbers'), join(f.roots[0], 'Linked-bt2bnonce.numbers'));
-  assert.deepEqual(f.scan(), ['Transfer-bt2bnonce-0.numbers', 'Transfer-bt2bnonce-1.numbers',
-    'Transfer-bt2bnonce-2.numbers', 'Transfer-bt2bnonce-3.numbers', 'Transfer-bt2bnonce-4.numbers',
-    'Transfer-bt2bnonce-5.numbers', 'Transfer-bt2bnonce-6.numbers']);
-  assert.equal(readFileSync(join(f.roots[0], 'nested/Transfer-bt2bnonce-0.numbers/index.zip'), 'utf8'), 'private content');
-  assert.equal(readFileSync(join(f.roots[0], 'Owner.numbers'), 'utf8'), 'owner data');
-  assert.equal(existsSync(join(f.ctx.dir, 'In-run-bt2bnonce.numbers')), true);
+for (const [document, title, expected] of [
+  ['file:///custom/Transfer%20saved.numbers', 'Transfer saved', { path: '/custom/Transfer saved.numbers' }],
+  ['', '/custom/Renamed.numbers', { path: '/custom/Renamed.numbers' }],
+  ['', 'Renamed.numbers', { name: 'Renamed.numbers' }],
+  ['', 'Transfer-nonce', {}],
+]) test(`Numbers leftover metadata comes only from the retained window: ${document || title}`, () => {
+  const sandbox = reader(), window = {}, reads = [];
+  const result = sandbox.numbersDocumentReport(window, { text(element, attribute) {
+    assert.equal(element, window); reads.push(attribute);
+    return attribute === 'AXDocument' ? document : title;
+  } });
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), { status: 'available', ...expected });
+  assert.deepEqual(reads, document ? ['AXDocument'] : ['AXDocument', 'AXTitle']);
 });
 
-test('creation time, rather than modification time, bounds the run leftover check', async t => {
-  const f = await fixture(t), path = join(f.roots[0], 'Transfer-bt2bnonce.numbers');
-  writeFileSync(path, 'keep');
-  const created = lstatSync(path).birthtimeMs;
-  f.ctx.mailToSheet.startedAtMs = created;
-  assert.deepEqual(f.scan({ now: () => created }), ['Transfer-bt2bnonce.numbers']);
-  f.ctx.mailToSheet.startedAtMs = created + 1;
-  utimesSync(path, new Date(), new Date(created + 1000));
-  assert.deepEqual(f.scan({ now: () => created + 1000 }), []);
-  f.ctx.mailToSheet.startedAtMs = created - 1000;
-  assert.deepEqual(f.scan({ now: () => created - 1 }), []);
+test('a stale or unreadable Numbers window produces an unavailable receipt without throwing', () => {
+  const result = reader().numbersDocumentReport({}, { text() { throw new Error('AX unavailable'); } });
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), { status: 'unavailable' });
 });
 
-test('a default location redirected to iCloud is scanned without following interior aliases', async t => {
-  const f = await fixture(t);
-  const redirected = join(f.home, 'redirected-documents'); mkdirSync(redirected);
-  rmSync(f.roots[0], { recursive: true });
-  symlinkSync(redirected, f.roots[0]);
-  writeFileSync(join(redirected, 'Transfer-bt2bnonce.numbers'), 'preserve');
-  assert.deepEqual(f.scan(), ['Transfer-bt2bnonce.numbers']);
+test('leftover reporting consumes only the window receipt, including a custom saved path', () => {
+  const ctx = { numbers: { diagnostics: { numbersDocument: { status: 'available', path: '/nonexistent/custom/Renamed.numbers' } } } };
+  assert.deepEqual(findNumbersLeftovers(ctx), ['/nonexistent/custom/Renamed.numbers']);
+  ctx.numbers.diagnostics.numbersDocument = { status: 'available', name: 'Renamed.numbers' };
+  assert.deepEqual(findNumbersLeftovers(ctx), ['Renamed.numbers']);
+  ctx.numbers.diagnostics.numbersDocument = { status: 'available' };
+  assert.deepEqual(findNumbersLeftovers(ctx), []);
 });
 
-test('missing locations are empty but incomplete or invalid scans use a fixed name-free refusal', async t => {
-  const f = await fixture(t);
-  for (const root of f.roots) rmSync(root, { recursive: true });
-  assert.deepEqual(f.scan(), []);
-  mkdirSync(f.roots[0]);
-  let nested = f.roots[0];
-  for (let i = 0; i < 14; i++) { nested = join(nested, 'private-folder'); mkdirSync(nested); }
-  assert.throws(() => f.scan(), /^Error: NUMBERS_LEFTOVER_SCAN_UNCONFIRMED$/);
-  f.ctx.nonce = '';
-  assert.throws(() => f.scan(), /^Error: NUMBERS_LEFTOVER_SCAN_IDENTITY_UNCONFIRMED$/);
+test('missing window receipts report the unavailable check without any filesystem fallback', () => {
+  assert.throws(() => findNumbersLeftovers({}), /^Error: leftover check unavailable$/);
+});
+
+test('the original CSV is not reported as a saved leftover', () => {
+  const ctx = { mailToSheet: { source: '/run/Transfer.csv' },
+    numbers: { diagnostics: { numbersDocument: { status: 'available', path: '/run/Transfer.csv' } } } };
+  assert.deepEqual(findNumbersLeftovers(ctx), []);
+});
+
+test('the retained helper receipt reaches cleanup diagnostics and the run record before unlock', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'numbers-receipt-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ctx = { dir }, done = Promise.withResolvers();
+  let emit, released = false;
+  const result = await executeRealTask({
+    setup: async current => {
+      current.numbers = await openFixture(current, { app: 'Numbers', bundle: 'com.apple.iWork.Numbers',
+        mode: 'document', target: '/run/Transfer.csv', reportDocument: true }, {
+        helper: async () => ({ command: 'injected-helper', args: [] }), open: async () => {},
+        run: (_command, _args, options) => {
+          emit = event => options.onStdout(JSON.stringify(event) + '\n');
+          emit({ stage: 'armed', running: true }); emit({ stage: 'ready' });
+          return done.promise;
+        },
+      });
+    },
+    prompt: () => 'fixture', check: () => true,
+    cleanup: async current => {
+      const closing = current.numbers.close();
+      emit({ stage: 'numbers-document', numbersDocument: { status: 'available', path: '/custom/Renamed.numbers' } });
+      done.resolve({ groupClean: true, exit: { code: 0 }, stdout: '{"stage":"closed"}\n' });
+      await closing;
+      assert.equal(current.numbers.diagnostics.numbersDocument.path, '/custom/Renamed.numbers');
+      assert.equal(released, false);
+    },
+    leftovers: findNumbersLeftovers,
+  }, ctx, { retainFixture: true, drive: async () => ({ code: 0, groupClean: true }),
+    lock: async () => async () => { released = true; } });
+  assert.equal(result.passed, true);
+  assert.deepEqual(result.leftovers, ['/custom/Renamed.numbers']);
+  assert.equal(result.fixtureDiagnostics[0].numbersDocument.path, '/custom/Renamed.numbers');
+  assert.equal(released, true);
 });

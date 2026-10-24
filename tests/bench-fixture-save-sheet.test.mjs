@@ -66,16 +66,28 @@ function wordFixture({ where = 'focused sheet', preexisting = true, label = 'Don
     close() { return sandbox.closeOwnedWindow(window, request, app, api); } };
 }
 
+test('Numbers reports the saved document before a changed document identity refuses cleanup', () => {
+  const f = wordFixture();
+  Object.assign(f.request, { bundle: 'com.apple.iWork.Numbers', reportDocument: true });
+  f.window.AXDocument = 'file:///custom/Renamed.numbers';
+  assert.throws(f.close, /identity changed/);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.events.find(e => e.stage === 'numbers-document')?.numbersDocument)),
+    { status: 'available', path: '/custom/Renamed.numbers' });
+  assert.deepEqual(f.presses, []);
+});
+
 for (const label of ['Delete', "Don't Save", 'Don’t Save']) for (const preexisting of [true, false]) {
   test(`Numbers discards its nonce-titled imported CSV without AXDocument using ${label} (${preexisting ? 'existing sheet' : 'on close'})`, () => {
     const f = wordFixture({ label, preexisting, where: 'children' });
-    Object.assign(f.request, { bundle: 'com.apple.iWork.Numbers', target: '/run/Transfer-nonce.csv', token: 'Transfer-nonce' });
+    Object.assign(f.request, { bundle: 'com.apple.iWork.Numbers', target: '/run/Transfer-nonce.csv', token: 'Transfer-nonce', reportDocument: true });
     f.window.AXTitle = 'Transfer-nonce'; delete f.window.AXDocument;
     f.prompt.AXChildren[0].AXValue = 'Do you want to save this document?';
     f.close();
     assert.equal(f.window.AXRole, '');
     assert.equal(f.presses.at(-1), f.button);
     assert.equal(f.events.find(e => e.stage === 'fixture-sheet')?.fixtureSheet.pressed, label);
+    assert.equal(f.events[0].stage, 'numbers-document');
+    assert.equal(f.events[0].numbersDocument.status, 'available');
   });
 }
 
