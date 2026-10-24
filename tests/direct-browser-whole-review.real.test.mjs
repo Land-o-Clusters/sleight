@@ -145,3 +145,15 @@ test('review: a time cap keeps the two-second expander request guard until it ex
  const result=await readWhole(h.entry,{max_seconds:0.9});assert.match(result.text,/Clicks: 1\./,result.text);assert.match(result.text,/time cap/);
  await new Promise(r=>setTimeout(r,1500));assert.equal(h.requests.filter(r=>r.method==='POST').length,0,result.text);assert.match(result.text,/POST http:\/\/127\.0\.0\.1:/);
 });
+
+test('review: URL changes during cache validation expire the held transcript',{skip,timeout:10000},async t=>{
+ const h=await harness(t,shell('<article data-key="a">old first message</article><article data-key="b">old last message</article>'));
+ await readWhole(h.entry,{max_seconds:.7});
+ const frame=h.page.mainFrame(),utility=await frame._connection.toImpl(frame).utilityContext(),original=utility.evaluateExpression.bind(utility);let changed=false;
+ h.cleanup(()=>{utility.evaluateExpression=original;});
+ utility.evaluateExpression=async(...args)=>{const value=await original(...args);
+  if(!changed&&args[0]==='([s,m,a])=>s[m](a)'&&args[2]?.[1]==='view'){changed=true;await h.page.evaluate(()=>history.pushState({},'','/switched-thread'));}
+  return value;
+ };
+ await assert.rejects(readWhole(h.entry,{from:2,max_seconds:1}),/whole transcript expired/);
+});

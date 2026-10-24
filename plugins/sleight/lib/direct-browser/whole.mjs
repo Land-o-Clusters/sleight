@@ -191,6 +191,8 @@ export async function readWhole(entry, options, { ref, siteCheck = () => {} } = 
       try {
         probe=await boundWhole(createWholeDOM(page),2000,'whole cache probe timed out');
         const current=await boundWhole(probe.view(),2000,'whole cache probe timed out');
+        siteCheck();await assertEndpointRead(page);
+        if(page.url()!==url||transcripts.get(page)!==held)throw Error('whole transcript expired; read whole:{} again');
         if(held.fingerprint===fingerprint(current))return {text:renderWhole(held,options)};
       } finally {if(probe)await probe.dispose();}
       transcripts.delete(page);
