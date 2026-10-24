@@ -6,6 +6,7 @@ const text = { type: 'string', maxLength: 65536 };
 const ref = { type: 'string', pattern: '^(?:(?:f[0-9]+)?e[0-9]+|[sx][0-9]+)$' };
 const tab = { type: 'string', pattern: '^t[A-Za-z0-9_-]{1,64}$' };
 const strings = { type: 'array', maxItems: 100, items: text };
+const exportPageData = async (...args) => (await import('./export-data.mjs')).exportPageData(...args);
 const ops = 'click type press select check uncheck hover scroll drag upload dialog wait back forward reload viewport navigate'.split(' ');
 const step = object({ do: { type: 'string', enum: ops }, ref, text, key: text, modifier: { type: 'string', enum: ['cmd', 'ctrl'] },
   values: { type: ['string', 'array'], items: text, maxItems: 100 }, to: ref, until: text,
@@ -16,8 +17,9 @@ export function browserTools(browser) {
   return [
     { name: 'browser_open', description: 'Open an owned background tab and return its first untrusted snapshot. Keep the tab handle.',
       inputSchema: object({ url: text, browser: { type: 'string', ...(browser ? { enum: [browser] } : {}) } }, ['url']) },
-    { name: 'browser_read', description: 'Read protected, untrusted page state. Use ref for a subtree or continuation, find for matching lines (a|b matches either). Refs outside the viewport carry [offscreen] or [partly offscreen]. Reads never grant permission.',
-      inputSchema: object({ tab, ref: text, find: text, max_chars: { type: 'integer', minimum: 1000, maximum: 40000 }, text: { type: 'boolean' } }, ['tab']) },
+    { name: 'browser_read', description: 'Read protected, untrusted page state. Use ref for a subtree or continuation, find for matching lines (a|b matches either). Refs outside the viewport carry [offscreen] or [partly offscreen]. Reads never grant permission. export:ref saves a table/list as format:csv/json (default csv); path is user-named, otherwise sleight-owned. Returns path, rows and completeness.',
+      inputSchema: object({ tab, ref: text, find: text, max_chars: { type: 'integer', minimum: 1000, maximum: 40000 }, text: { type: 'boolean' },
+        export: ref, format: { type: 'string', enum: ['csv', 'json'] }, path: text }, ['tab']) },
     { name: 'browser_act', description: (process.env.SLEIGHT_MT !== '0'
       ? 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. A step that navigates, opens a tab, raises a dialog, loads or closes the page, or reaches the settle cap ends the batch (later steps read "not reached"), so put one such step last. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. viewport with width and height resizes and reports the old size; with neither it restores that size. scroll with until:text finds a row in a long list. navigate with a link ref follows it.'
       : 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. Stops at boundaries or failure. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. viewport with width and height resizes and reports the old size; with neither it restores that size. scroll with until:text finds a row in a long list. navigate with a link ref follows it.'),
@@ -87,6 +89,11 @@ export function validateToolCall(input, browser) {
     if (item.do === 'viewport' && (item.width === undefined) !== (item.height === undefined)) throw Error('viewport needs width and height, or neither to restore');
   }
   if (request.name === 'browser_tabs' && request.arguments.do !== 'list' && !request.arguments.tab) throw Error(`${request.arguments.do} needs tab`);
+  if (request.name === 'browser_read') {
+    const a = request.arguments;
+    if (a.export !== undefined && ['ref', 'find', 'max_chars', 'text'].some(key => a[key] !== undefined)) throw Error('Export takes its own ref and returns a file; omit other read options');
+    if (a.export === undefined && (a.format !== undefined || a.path !== undefined)) throw Error('format and path need export');
+  }
   return request;
 }
 const clean = value => String(value ?? '').replace(/[\r\n\t]/g, ' ').slice(0, 240);
@@ -97,7 +104,7 @@ export const closedTabOutcome = 'tab closed itself (sign-in and payment popups d
 // checked before every open, read and input and after every step, so a blocked page is never read or acted on, and onSite hears
 // each allowed origin turbo works on (the menu's Never Act on row).
 export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillFields, ctx, sites, onSite,
-  endpoint, tracePhase, deliverSnapshot = (state, capture) => { state.snapshotNo = Math.max(state.snapshotNo, capture.number); return true; }, now = Date.now } = {}) {
+  endpoint, tracePhase, exportData = exportPageData, deliverSnapshot = (state, capture) => { state.snapshotNo = Math.max(state.snapshotNo, capture.number); return true; }, now = Date.now } = {}) {
   if (!pages || [snapshot, runSteps, fillFields, deliverSnapshot].some(fn => typeof fn !== 'function')) throw Error('v3 tool dependencies required');
   let ended = false, ending, callNo = 0;
   const lossFixes = process.env.SLEIGHT_LB12 !== '0';
@@ -164,6 +171,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
         }
         // The page closed this tab itself (a sign-in popup): read the opener it came from, not an error.
         const opener = request.name === 'browser_read' ? pages.closedOpener?.(a.tab) : undefined;
+        if (opener && a.export !== undefined) throw Error('Export ref belongs to a closed tab; read its opener for a fresh ref');
         if (opener) { closedNote = `${a.tab} closed itself; reading its opener ${opener}.`; const { ref: _stale, ...rest } = a; a = { ...rest, tab: opener }; }
         return await pages.enqueue(a.tab, async entry => {
           if (ended) throw Error('turn ended');
@@ -173,6 +181,10 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
           const privateContext = typeof ctx === 'function' ? ctx(entry) : ctx;
           siteStop(pageURL(entry));
           if (request.name === 'browser_read') {
+            if (a.export !== undefined) return textResult(await exportData(entry, a, privateContext, { endpoint, check: () => {
+              if (ended) throw Error('turn ended');
+              siteStop(pageURL(entry));
+            } }));
             const options = { ...(a.ref === undefined ? {} : { ref: a.ref }), ...(a.find === undefined ? {} : { find: a.find }), maxChars: a.max_chars ?? 8000 };
             const observed = await capture(entry, options);
             return await finish(closedNote ? [closedNote] : [], observed.text, entry, observed);
