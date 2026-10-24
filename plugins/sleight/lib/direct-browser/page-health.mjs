@@ -7,6 +7,15 @@ const stuckError = () => Object.assign(Error(stuckPageMessage), { stuckPage: tru
 export function assertPageResponsive(tab) {
   if (tab.state.stuck) throw stuckError();
 }
+export async function ensurePageResponsive(tab) {
+  if (!tab.state.stuck) return;
+  // A timeout describes an observation, not a permanent state of the page.
+  if (typeof tab.page.evaluate === 'function' && await probePage(tab, 1000)) {
+    tab.state.stuck = false;
+    delete tab.state.stuckOrigin;
+  }
+  assertPageResponsive(tab);
+}
 async function deadline(task, ms) {
   let timer;
   try { return await Promise.race([Promise.resolve().then(task), new Promise((_, reject) => {
@@ -17,17 +26,18 @@ export async function probePage(tab, probeMs = 3000, current = () => true) {
   // A stuck child renderer matters too. These evaluations carry no user gesture.
   const frames = tab.page.frames?.() ?? [tab.page];
   try {
-    await deadline(() => Promise.allSettled(frames.map(frame => frame.evaluate(() => 0))), probeMs);
-    return true;
+    const results = await deadline(() => Promise.allSettled(frames.map(frame => frame.evaluate(() => 0))), probeMs);
+    return results.length > 0 && results.every(result => result.status === 'fulfilled');
   } catch (error) {
     if (!error.probeTimeout) return false; // Navigation or closure is not proof of a stuck script.
     if (!current()) return false;
     tab.state.stuck = true;
+    try { tab.state.stuckOrigin ??= new URL(tab.page.url()).origin; } catch { /* No web origin. */ }
     throw stuckError();
   }
 }
 export async function guardPageTask(tab, task, { afterMs = 7000, probeMs = 3000 } = {}) {
-  assertPageResponsive(tab);
+  await ensurePageResponsive(tab);
   // Small offline fakes without evaluation keep their original boundary.
   if (typeof tab.page.evaluate !== 'function') return task();
   let timer, watching = true;
@@ -48,7 +58,7 @@ export async function guardPageTask(tab, task, { afterMs = 7000, probeMs = 3000 
   try { return await Promise.race([work, watchdog]); }
   catch (error) {
     // The inner snapshot/action deadline may beat the watchdog by one timer turn.
-    if (!error.stuckPage && /timed out|deadline|Snapshot unavailable/i.test(error.message)) await probePage(tab, probeMs, () => watching);
+    if (!error.stuckPage && /timed out|deadline|Snapshot (unavailable|acquisition)/i.test(error.message)) await probePage(tab, probeMs, () => watching);
     throw error;
   } finally { watching = false; clearTimeout(timer); }
 }
@@ -68,6 +78,7 @@ export async function terminatePageScripts(tab, timeoutMs = 3000) {
         if (session) sessions.push(session);
       }
       await Promise.all([main, ...sessions.map(session => session.send('Runtime.terminateExecution'))]);
+      tab.state.recoveryScriptsTerminated = true;
     } finally { await Promise.all(sessions.map(session => session.detach().catch(() => {}))); }
   }, timeoutMs);
   const bank = pending.get(tab);
@@ -77,14 +88,44 @@ export async function terminatePageScripts(tab, timeoutMs = 3000) {
   while (tab.state.actionPending && Date.now() < until) await pause(10);
   if (tab.state.actionPending) throw Error('Earlier input still pending after script termination; tab retained. Close or hand off the tab.');
 }
-export async function recoverPage(tab, url, { siteCheck } = {}) {
+export async function recoverPage(tab, url, { siteCheck, allowCrossOrigin = false } = {}) {
   const parsed = new URL(url);
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) throw Error('HTTP(S) URL without credentials required');
   const refused = siteCheck?.(parsed.href);
   if (refused) throw Error(refused);
   if (!tab.state.stuck) throw Error('navigate with url is only for a stuck tab; use a link ref or browser_open');
+  let origin;
+  try { origin = tab.state.stuckOrigin ?? new URL(tab.page.url()).origin; } catch { /* Unknown origin refuses below. */ }
+  if (parsed.origin !== origin && !allowCrossOrigin) throw Error('Recovery stays on the stuck page origin unless the user message named the destination URL');
+  tab.state.recoveryScriptsTerminated = false;
   await terminatePageScripts(tab);
   // Only a successful navigation clears the mark. A failed escape keeps the handle.
-  await tab.page.goto(parsed.href, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  // Fetch sees redirect requests too. Checking only the initial URL would let
+  // a same-origin endpoint silently send recovery to an unrelated site.
+  let navigationGuard;
+  if (!allowCrossOrigin && tab.cdp?.on && tab.cdp?.off) {
+    const { frameTree } = await deadline(() => tab.cdp.send('Page.getFrameTree'), 3000);
+    if (!frameTree?.frame?.id) throw Error('Recovery navigation origin guard unavailable; tab retained');
+    const frameId = frameTree.frame.id;
+    navigationGuard = event => {
+      let blocked = false;
+      if (event.frameId === frameId) try { blocked = new URL(event.request.url).origin !== origin; } catch { blocked = true; }
+      tab.cdp.send(blocked ? 'Fetch.failRequest' : 'Fetch.continueRequest', {
+        requestId: event.requestId, ...(blocked ? { errorReason: 'BlockedByClient' } : {}),
+      }).catch(() => {});
+    };
+    tab.cdp.on('Fetch.requestPaused', navigationGuard);
+  }
+  try {
+    if (navigationGuard) await deadline(() => tab.cdp.send('Fetch.enable', { patterns: [{ resourceType: 'Document', requestStage: 'Request' }] }), 3000);
+    await tab.page.goto(parsed.href, { waitUntil: 'domcontentloaded', timeout: 5000 });
+    if (!allowCrossOrigin && new URL(tab.page.url()).origin !== origin) throw Error('Recovery left the stuck origin; tab retained');
+  } finally {
+    if (navigationGuard) {
+      tab.cdp.off('Fetch.requestPaused', navigationGuard);
+      await deadline(() => tab.cdp.send('Fetch.disable'), 3000);
+    }
+  }
   tab.state.stuck = false;
+  delete tab.state.stuckOrigin;
 }

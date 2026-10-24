@@ -10,7 +10,7 @@ import { endpointURL, endpointBlock } from './endpoint-guard.mjs';
 import { setViewport } from './viewport.mjs';
 import { snapshotAcquisitionPending } from './snapshot.mjs';
 import { originOf, pathOf, guardChooser } from './output-hygiene.mjs';
-import { assertPageResponsive, probePage } from './page-health.mjs';
+import { assertPageResponsive, ensurePageResponsive, probePage } from './page-health.mjs';
 import { waitForPage, waitForThinPage } from './waits.mjs';
 const OPS = new Set('click type press select check uncheck hover scroll drag upload dialog wait back forward reload viewport navigate'.split(' '));
 const REF_OPS = new Set('click type select check uncheck hover drag upload'.split(' '));
@@ -117,12 +117,22 @@ export function inspectTarget(el, unused, read = (node, key) => { const value = 
     for (let i = 0; i < content.length; i++) hash = Math.imul(hash ^ content.charCodeAt(i), 16777619);
   }
   const appLink = (() => {
+    const nativeURL = (node, href) => {
+      if (!href) return false;
+      try { return !/^(https?|javascript|blob|data|about):$/.test(new URL(href, read(read(node, 'ownerDocument'), 'baseURI')).protocol); }
+      catch { return true; }
+    };
     const anchor = ['a', 'area'].includes(tag) ? el : read(el, 'closest')('a,area[href]');
-    if (!anchor) return false;
-    const href = read(anchor, 'getAttribute')('href') || read(anchor, 'getAttributeNS')?.('http://www.w3.org/1999/xlink', 'href');
-    if (!href) return false;
-    try { return !/^(https?|javascript|blob|data|about):$/.test(new URL(href, read(read(anchor, 'ownerDocument'), 'baseURI')).protocol); }
-    catch { return true; }
+    if (anchor && nativeURL(anchor, read(anchor, 'getAttribute')('href') || read(anchor, 'getAttributeNS')?.('http://www.w3.org/1999/xlink', 'href'))) return true;
+    if (!form) return false;
+    const isSubmitter = node => read(node, 'localName') === 'button' && !/^(button|reset)$/.test(read(node, 'type') ?? '') ||
+      read(node, 'localName') === 'input' && /^(submit|image)$/.test(read(node, 'type') ?? '');
+    const control = isSubmitter(el) ? el : read(el, 'closest')('button,input');
+    const root = read(form, 'getRootNode')?.() ?? read(form, 'ownerDocument'), query = read(root, 'querySelectorAll');
+    const candidates = query ? [...query('button,input')].filter(node => read(node, 'form') === form) : [...read(form, 'querySelectorAll')('button,input')];
+    const submitter = control && isSubmitter(control) ? control : candidates.find(isSubmitter);
+    const override = submitter && read(submitter, 'getAttribute')('formaction');
+    return nativeURL(form, override == null ? read(form, 'getAttribute')('action') : override);
   })();
   return { name, accName, tag, role, appLink, kind: ['file', 'color'].includes(forwarded) ? forwarded : button ? 'button' : ['file', 'color'].includes(read(el, 'type')) ? read(el, 'type') : tag === 'select' ? 'select' : 'text', button, form: !!form, link, submit: submit || scriptButton, scriptButton, payment: payment(name) || submit && formPayment,
     // An anchor whose only payment word is "checkout": the trusted context may drop this as the prior of a released navigation link (v3-context).
@@ -266,7 +276,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
       const named = steps[index], step = named.do === 'navigate' ? { ...named, do: 'click' } : named, label = `${index + 1} ${named.do}${step.ref ? ' ' + step.ref : ''}`;
       let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false;
       try {
-        assertPageResponsive(tab);
+        await ensurePageResponsive(tab);
         if (state.dialog && step.do !== 'dialog') throw Error('a page dialog is waiting; answer it with the dialog operation');
         if (step.do === 'dialog' && !state.dialog) throw Error('no waiting dialog; read the page');
         pendingGate(state, step);
@@ -521,7 +531,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         if (boundary || settleCapped) { stoppedAt = index + 1; break; }
       } catch (error) {
         if (error.stuckPage) throw error;
-        if (!state.dialog && /timeout|timed out|deadline/i.test(error.message)) await probePage(tab);
+        if (!state.dialog && /timeout|timed out|deadline|Snapshot (unavailable|acquisition)/i.test(error.message)) await probePage(tab);
         if (lossFixes && started && armed?.boundary?.kind === 'close') {
           closed = true; lines.push(label + ': tab closed' + (submit && state.submitUnconfirmed === submit ? '; ' + closedSubmitWarning : '')); stoppedAt = index + 1; break;
         }
@@ -566,7 +576,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     else if (!closed && !state.dialog && !state.stuck && needsRead) try {
       await Promise.race([read({ since, maxChars: 8000 }), batchWatch.dialogReady]);
     } catch (error) {
-      if (!state.dialog && /Snapshot unavailable/i.test(error.message)) await probePage(tab);
+      if (!state.dialog && /Snapshot (unavailable|acquisition)/i.test(error.message)) await probePage(tab);
       if (!state.dialog) observeError = clean(error.message);
     }
     if (state.dialog) {

@@ -447,6 +447,23 @@ test('auto-attach selects only owned iframe and dedicated-worker descendants', a
   }
 });
 
+test('FD3B native navigation observation includes owned out-of-process frames, never foreign sessions, and releases', async t => {
+  const f = fixture(), filter = (await factory())({ session: f.session, ownedTargets: ['owned'], protectedPort: 9222 });
+  t.after(() => filter.dispose());
+  await filter.session.send('Target.attachToTarget', { targetId: 'owned', flatten: true });
+  const seen = [];
+  const watch = await filter.frames.watchNavigations('owned', (event, cancel) => { seen.push(event.url); cancel(); });
+  f.emit({ method: 'Target.attachedToTarget', sessionId: 's-owned', params: { sessionId: 'frame', targetInfo: { targetId: 'frame', type: 'iframe' }, waitingForDebugger: true } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(f.calls.some(row => row.method === 'Page.enable' && row.route === 'frame'));
+  for (const sessionId of ['foreign', 'frame']) f.emit({ method: 'Page.frameRequestedNavigation', sessionId, params: { frameId: 'child', url: 'zoommtg://fixture.invalid' } });
+  assert.deepEqual(seen, ['zoommtg://fixture.invalid']);
+  assert.ok(f.calls.some(row => row.method === 'Page.stopLoading' && row.route === 'frame'));
+  watch.remove();
+  f.emit({ method: 'Page.frameRequestedNavigation', sessionId: 'frame', params: { url: 'mailto:fixture@example.invalid' } });
+  assert.equal(seen.length, 1);
+});
+
 test('endpoint navigation evidence belongs to the exact page target', async t => {
   const f = fixture(), filter = (await factory())({ session: f.session, ownedTargets: ['owned'], protectedPort: 9222 });
   t.after(() => filter.dispose());

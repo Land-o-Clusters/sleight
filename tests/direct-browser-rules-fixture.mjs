@@ -19,7 +19,7 @@ export function fixture(payment) {
 }
 
 // A small DOM fake for the pure, closure-free locator inspector. No engine APIs.
-export function classify(build) {
+export function classify(build, inspector = rules.inspectElement) {
   assert.equal(typeof rules.inspectElement, 'function');
   const ctx = {};
   runInNewContext(`
@@ -41,5 +41,5 @@ export function classify(build) {
     globalThis.mk = { Element, HTMLInputElement, HTMLButtonElement };
   `, ctx);
   ctx.target = build(ctx.mk); ctx.URL = URL;
-  return runInNewContext(`(${rules.inspectElement.toString()})(target)`, ctx);
+  return runInNewContext(`(${inspector.toString()})(target)`, ctx);
 }

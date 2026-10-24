@@ -44,7 +44,7 @@ test('FD3 waits for protected text and text disappearance at 100 ms intervals wi
     let time = 0, reads = 0;
     const result = await waitForPage({}, step, { now: () => time, sleep: async ms => { assert.equal(ms, 100); time += ms; },
       snapshot: async (_page, options) => { assert.equal(options.maxChars, 40000); return { text: '- text: "' + (++reads < 4 ? 'Loading' : 'Ready') + '"' }; } });
-    assert.equal(result, 'wait condition met after 300 ms'); assert.equal(reads, 4);
+    assert.equal(result, 'wait condition met after 300 ms (page text, untrusted)'); assert.equal(reads, 4);
     assert.doesNotMatch(result, /READY|loading/);
   }
 });

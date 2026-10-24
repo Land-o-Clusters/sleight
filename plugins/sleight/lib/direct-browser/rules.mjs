@@ -65,12 +65,22 @@ export function inspectElement(el, unused, read = (node, key) => { const value =
     submit: ['submit', 'image'].includes(type) || tag === 'button' && !!form && get(el, 'type') !== 'button' && get(el, 'type') !== 'reset' ||
       button && /\b(?:save|submit|send|confirm|book|pay|place order|finish|complete)\b/i.test(words(el)) };
   state.appLink = (() => {
-    const link = ['a', 'area'].includes(tag) ? el : read(el, 'closest')('a,area[href]');
-    if (!link) return false;
-    const href = get(link, 'href') || Element.prototype.getAttributeNS?.call(link, 'http://www.w3.org/1999/xlink', 'href');
-    if (!href) return false;
-    try { return !/^(https?|javascript|blob|data|about):$/.test(new URL(href, read(read(link, 'ownerDocument'), 'baseURI')).protocol); }
-    catch { return true; }
+    const nativeURL = (node, href) => {
+      if (!href) return false;
+      try { return !/^(https?|javascript|blob|data|about):$/.test(new URL(href, read(read(node, 'ownerDocument'), 'baseURI')).protocol); }
+      catch { return true; }
+    };
+    const anchor = ['a', 'area'].includes(tag) ? el : read(el, 'closest')('a,area[href]');
+    if (anchor && nativeURL(anchor, read(anchor, 'getAttribute')('href') || read(anchor, 'getAttributeNS')?.('http://www.w3.org/1999/xlink', 'href'))) return true;
+    if (!form) return false;
+    const isSubmitter = node => read(node, 'localName') === 'button' && !/^(button|reset)$/.test(read(node, 'type') ?? '') ||
+      read(node, 'localName') === 'input' && /^(submit|image)$/.test(read(node, 'type') ?? '');
+    const control = isSubmitter(el) ? el : read(el, 'closest')('button,input');
+    const root = read(form, 'getRootNode')?.() ?? read(form, 'ownerDocument'), query = read(root, 'querySelectorAll');
+    const candidates = query ? [...query('button,input')].filter(node => read(node, 'form') === form) : [...read(form, 'querySelectorAll')('button,input')];
+    const submitter = control && isSubmitter(control) ? control : candidates.find(isSubmitter);
+    const override = submitter && read(submitter, 'getAttribute')('formaction');
+    return nativeURL(form, override == null ? read(form, 'getAttribute')('action') : override);
   })();
   state.formPayment = !!form && Array.from(read(form, 'querySelectorAll')('input,button,iframe')).some(node => {
     const attrs = ['name', 'id', 'autocomplete', 'title', 'aria-label'].map(key => get(node, key)).join(' ');

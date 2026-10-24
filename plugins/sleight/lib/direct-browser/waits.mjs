@@ -64,7 +64,8 @@ export async function waitForThinPage(page, { now = Date.now, sleep = pause, cap
   const start = now(); let last = initial.signature, stable = start;
   for (;;) {
     const row = await sample(page), time = now();
-    if (row.signature !== last) { last = row.signature; stable = time; }
+    if (row.signature !== last || !row.ready) { last = row.signature; stable = time; }
+    if (row.ready && time - stable >= 300) return;
     if ((row.length >= 50 || row.length > 0 && row.signature !== initial.signature) && time - stable >= 300 || time - start >= capMs) return;
     await sleep(50);
   }
@@ -91,7 +92,8 @@ export async function waitForPage(page, step, { snapshot, active = new Set(), no
       met = settled && now() - quiet >= 500;
     }
     const elapsed = now() - start;
-    if (met) return (condition ? 'wait condition met after ' : 'settled after ') + elapsed + ' ms';
+    if (met) return (condition ? 'wait condition met after ' : 'settled after ') + elapsed + ' ms' +
+      (condition && step.url === undefined ? ' (page text, untrusted)' : '');
     if (elapsed >= cap) return (condition ? 'wait condition not met' : 'page activity still pending') + ' after ' + elapsed + ' ms (cap); page below';
     await sleep(Math.min(100, cap - elapsed));
   }

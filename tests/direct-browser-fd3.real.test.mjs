@@ -101,6 +101,8 @@ test('FD3 real text, gone and URL waits observe delayed DOM in a child frame and
 test('FD3 real default wait tracks DOM mutations and rendering requests; thin navigation waits for client rendering', { skip, timeout: 60000 }, async t => {
   const html = '<div id="root"></div><script>setTimeout(()=>{document.querySelector("#root").textContent="Client ready"},650)</script>';
   const start = Date.now(), f = await fixture(t, html);
+  // A ready, quiet document returns early even if a future timer will add text.
+  await waitForPage(f.entry.page, { until: 'Client ready' }, { snapshot });
   assert.equal(await f.entry.page.locator('#root').innerText(), 'Client ready');
   const openMs = Date.now() - start;
   t.diagnostic('thin client page open including browser startup: ' + openMs + ' ms');
@@ -119,6 +121,7 @@ test('FD3 real default wait tracks DOM mutations and rendering requests; thin na
   await page.goto(page.url().replace('/start', '/empty'));
   // This route has the same delayed client rendering. The helper also works after an explicit navigation.
   await waitForThinPage(page);
+  await waitForPage(page, { until: 'Client ready' }, { snapshot });
   assert.equal(await page.locator('#root').innerText(), 'Client ready');
 });
 
@@ -132,10 +135,11 @@ test('FD3 real busy-loop read fails near six seconds, retains its handle, then t
   assert.equal(failed.isError, true); assert.match(failed.text, /Script seems stuck; tab retained/);
   assert.ok(elapsed >= 2900 && elapsed < 10000, String(elapsed));
   const retryAt = Date.now(), retry = await d.call({ name: 'browser_read', arguments: { tab } });
-  assert.equal(retry.isError, true); assert.ok(Date.now() - retryAt < 500);
+  assert.equal(retry.isError, true); assert.ok(Date.now() - retryAt < 1800);
   assert.equal((await f.registry.list()).some(row => row.tab === tab), true);
   const result = await d.call({ name: 'browser_act', arguments: { tab, steps: [{ do: 'navigate', url: page.url().replace('/start', '/landed') }] } });
   assert.equal(result.isError, false, result.text); assert.match(result.text, /terminated stuck script; navigated in the same tab/);
+  assert.match(result.text, /left http:\/\/127.0.0.1:\d+; unsaved page state discarded/);
   assert.match(result.text, /Landed/); assert.equal(f.entry.targetId, target); assert.equal(f.entry.tab, tab);
   assert.equal(f.context.pages().length, 2); assert.equal(f.entry.state.stuck, false);
   t.diagnostic('busy-loop read error: ' + elapsed + ' ms; immediate retry retained tab; same target recovered');

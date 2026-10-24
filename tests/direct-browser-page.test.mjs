@@ -58,6 +58,23 @@ test('opens blank in the background, installs the hook before navigation, expose
   await f.registry.endTurn();
 });
 
+test('FD3B native navigation reports attempts and an unexpectedly detached auxiliary session reattaches only its owned target', async () => {
+  const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/start' }), entry = f.registry.tab(tab);
+  const first = entry.cdp, next = Object.assign(new EventEmitter(), { send: first.send.bind(first), detach: first.detach });
+  f.context.newCDPSession = async page => { assert.equal(page, entry.page); return next; };
+  first.emit('Page.frameRequestedNavigation', { frameId: 'fixture', url: 'mailto:fixture@example.invalid', reason: 'scriptInitiated' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(f.calls.some(row => row[0] === 'Page.stopLoading'));
+  assert.equal(entry.state.nativeNavigationNo, 1);
+  first.emit('close'); await f.registry.idle();
+  assert.equal(entry.cdp, next); assert.equal(f.registry.tab(tab), entry);
+  assert.equal(f.calls.filter(row => row[0] === 'Target.createTarget').length, 1);
+  assert.equal(entry.state.nativeAttachmentLost, false);
+  await f.registry.keep(tab); next.emit('close'); await f.registry.idle();
+  assert.equal(entry.cdp, next, 'release must not trigger reattachment');
+  await f.registry.endTurn();
+});
+
 test('open phase events bracket allocation, attachment, adoption, readiness and navigation without page data', async () => {
   const f = fixture(), phases = [];
   await f.registry.openTab({ url: 'https://fixture.invalid/private', tracePhase: phase => phases.push([phase, f.calls.at(-1)?.[0]]) });

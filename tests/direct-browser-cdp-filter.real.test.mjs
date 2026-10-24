@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync, existsSync } from 'nod
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
+import { createServer } from 'node:http';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { createCDPFilter } from '../plugins/sleight/lib/direct-browser/cdp-filter.mjs';
 
@@ -37,7 +38,7 @@ test('real Chromium over filtered CDP hides foreign tabs, owns background create
     }
   });
   context = await chromium.launchPersistentContext(root, { executablePath: executable, headless: true,
-    args: ['--remote-debugging-port=0'], viewport: null });
+    args: ['--remote-debugging-port=0', '--site-per-process'], viewport: null });
   const first = context.pages()[0], foreign = await context.newPage();
   await first.setContent('<title>Owned local fixture</title><button>Owned</button>');
   await foreign.setContent('<title>Foreign private fixture</title><button>Private</button>');
@@ -67,7 +68,7 @@ test('real Chromium over filtered CDP hides foreign tabs, owns background create
       return new Promise((resolve, reject) => { pending.set(id, { resolve, reject });
         socket.send(JSON.stringify({ id, method, params, ...(route === 'root' ? {} : { sessionId: route }) })); });
     } };
-  filter = createCDPFilter({ session: upstream, ownedTargets: [owner.targetId] });
+  filter = createCDPFilter({ session: upstream, ownedTargets: [owner.targetId], protectedPort: Number(port[0]) });
   bridge = await filter.listen();
   browser = await chromium.connectOverCDP(bridge.endpoint, { timeout: 10000, noDefaults: true });
   const pages = browser.contexts()[0].pages(); assert.equal(pages.length, 1);
@@ -106,4 +107,31 @@ test('real Chromium over filtered CDP hides foreign tabs, owns background create
   assert.deepEqual(await context.cookies(cookieURL), cookies, 'the foreign fixture cookie remains unchanged');
   await pageCDP.detach(); await rootCDP.send('Target.closeTarget', { targetId });
   assert.equal(filter.owns(targetId), false);
+
+  // Cross-site child navigation must reach the owned parent's reporter too.
+  // Both sites are this test's loopback server, never an external page.
+  const sockets = new Set();
+  const server = createServer((request, response) => {
+    response.setHeader('Content-Type', 'text/html');
+    response.end(request.url === '/child' ? '<p>Owned child</p>' : '<iframe src="http://localhost:' + server.address().port + '/child"></iframe>');
+  });
+  server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
+  t.after(async () => { for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve)); });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const navigations = [], watcher = await filter.frames.watchNavigations(owner.targetId, (event, cancel) => {
+    if (event.url.startsWith('zoommtg:')) { navigations.push(event.url); cancel().catch(() => {}); }
+  });
+  await pages[0].goto('http://127.0.0.1:' + server.address().port + '/parent');
+  const until = Date.now() + 5000;
+  while (!filter.frames.sessions(owner.targetId).length && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 50));
+  assert.ok(filter.frames.sessions(owner.targetId).length, 'fixture must create an owned out-of-process iframe');
+  let child;
+  while (!(child = pages[0].frames().find(frame => frame.url().endsWith('/child'))) && Date.now() < until)
+    await new Promise(resolve => setTimeout(resolve, 50));
+  assert.ok(child, JSON.stringify(pages[0].frames().map(frame => frame.url())));
+  await child.evaluate(() => { location.href = 'zoommtg://fixture.invalid'; });
+  while (!navigations.length && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 50));
+  assert.deepEqual(navigations, ['zoommtg://fixture.invalid']);
+  watcher.remove();
+  t.diagnostic('owned out-of-process iframe native navigation reported and cancellation requested');
 });
