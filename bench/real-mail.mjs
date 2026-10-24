@@ -56,7 +56,7 @@ export async function openMailImport(fixture, ctx, { helper = mailHelper, run = 
   const stage = id => { if (!stages.has(id)) stages.set(id, Promise.withResolvers()); return stages.get(id); };
   let buffered = '', completed, counter = 0, ready, removed = false;
   const diagnostic = ctx.fixtureDiagnostics.find(d => d.app === 'Mail');
-  const lease = { app: 'Mail', bundle: 'com.apple.mail', nonce: ctx.nonce, localOnly: false, retainedWindow: false, retainedMailbox: false, launched: false,
+  const lease = { app: 'Mail', bundle: 'com.apple.mail', diagnostics: diagnostic, nonce: ctx.nonce, localOnly: false, retainedWindow: false, retainedMailbox: false, launched: false,
     async snapshot() {
       ctx.signal?.throwIfAborted(); ctx.cleanupSignal?.throwIfAborted();
       const id = `snapshot-${++counter}`, output = join(ctx.dir, `mail-export-${counter}`);
@@ -177,9 +177,13 @@ export function snapshotMailExports(ctx, exports, topology, flagReadProof) {
     coverage: [...coverage], folders: exports.map(e => e.folder), topology, messages, exports };
 }
 
-export function prepareMailFixture(ctx) {
+export function prepareMailFixture(ctx, { transferValues } = {}) {
   if (ctx.mail) return ctx.mail;
   if (!/^[a-zA-Z0-9-]{1,80}$/.test(ctx.nonce)) throw new Error('Mail fixture nonce is invalid');
+  if (transferValues && (!Array.isArray(transferValues) || transferValues.length !== 3 ||
+    !transferValues.every(value => typeof value === 'string' && /^[A-Za-z0-9 -]{1,80}$/.test(value)))) {
+    throw new Error('Mail transfer fixture values are invalid');
+  }
   const name = `Sleight-Mail-${ctx.nonce}`, root = join(ctx.dir, name);
   const folders = ['Archive', 'Notes', 'Projects/Orchard/Design', 'Projects/Orchard/Review', 'Projects/Transit'];
   const messages = Array.from({ length: 60 }, (_, index) => {
@@ -197,6 +201,10 @@ export function prepareMailFixture(ctx) {
     }
     if (index === 5) { message.folder = 'Projects/Orchard/Design'; message.subject = 'Design folder marker'; message.body = 'Folder code: DESIGN-CEDAR-4'; }
     if (index === 11) { message.sender = 'mira.cole@example.test'; message.subject = 'Orchard route note'; message.body = 'Route code: ROUTE-LIME-7'; }
+    if (index === 11 && transferValues) {
+      message.subject = 'Orchard transfer note';
+      message.body = ['Reference', 'Item', 'Quantity'].map((label, i) => `${label}: ${transferValues[i]}`).join('\n');
+    }
     if (index === 20) { message.folder = 'Projects/Orchard/Design'; message.subject = 'Orchard map attachment'; message.body = 'The map is attached.';
       message.attachments = [{ name: 'orchard-map.csv', type: 'text/csv', data: 'gate,time\ncedar,14:20\n' }]; }
     if (index === 37) { message.subject = 'Blue lantern invoice'; message.body = 'The exact search phrase is blue lantern. Invoice code: SEARCH-COBALT-9'; }
@@ -297,12 +305,18 @@ export async function setupMailImport(ctx, { importer } = {}) {
   ctx.pendingAcquisitions.delete('mailImport');
 }
 
-export async function checkMailAnswer(ctx, id) {
+export async function checkMailUnchanged(ctx) {
   const baseline = ctx.mailImport && baselines.get(ctx.mailImport);
   if (!baseline) return 'Mail imported-data baseline is unavailable';
   try {
     if (snapshotText(ctx, await ctx.mailImport.snapshot()) !== baseline) return 'Mail imported mailbox changed during navigation';
   } catch (error) { return error.message; }
+  return true;
+}
+
+export async function checkMailAnswer(ctx, id) {
+  const unchanged = await checkMailUnchanged(ctx);
+  if (unchanged !== true) return unchanged;
   let answer;
   try { answer = JSON.parse(ctx.answer); } catch { return 'Mail answer must be JSON with one answer field'; }
   return answer && Object.keys(answer).length === 1 && answer.answer === ctx.mail.answers[id] || 'Mail answer does not match the fixture';
@@ -329,5 +343,8 @@ export async function cleanupMailImport(ctx) {
   ctx.pendingAcquisitions?.delete('mailImport');
   baselines.delete(lease);
   const diagnostic = ctx.fixtureDiagnostics?.find(d => d.app === 'Mail');
-  if (diagnostic) diagnostic.cleanup = 'closed retained fixture and removed owned mailbox';
+  if (diagnostic) {
+    diagnostic.cleanup = 'closed retained fixture and removed owned mailbox';
+    diagnostic.windowCleanupConfirmed = true;
+  }
 }
