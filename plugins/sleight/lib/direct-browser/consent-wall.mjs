@@ -1,4 +1,4 @@
-import { cookieWording, consentManager, declinesCookies, acceptsCookies } from '../consent-wall.mjs';
+import { resetsCookies, cookieWording, consentManager, declinesCookies, acceptsCookies } from '../consent-wall.mjs';
 import { trustedLocatorRead, trustedRead, trustedReadNode, trustedHandle } from './trusted-dom.mjs';
 
 export const consentDecision = "Cookie acceptance blocked";
@@ -84,7 +84,13 @@ export function inspectConsent(el, options = {}, read) {
       options.cmpFrame && /^(?:body|html)$/.test(read(node, 'localName'));
     const dialog = read(node, 'localName') === 'dialog' || /^(?:dialog|alertdialog)$/.test(attr(node, 'role')) || attr(node, 'aria-modal') === 'true';
     // A heading or aria-label never supplies banner shape by itself.
-    if (cmp) return { node, ask: true };
+    if (cmp) {
+      if (dialog) {
+        const text = words(node);
+        if (text !== null && resetsCookies(text) && !cookieWording(text)) return;
+      }
+      return { node, ask: true };
+    }
     if (!dialog && !/^(?:fixed|sticky)$/.test(style(node)?.position)) return;
     if (visibleText(node).replace(/\s+/g, ' ').trim().length >= 1500) return;
     const text = words(node);
@@ -119,7 +125,7 @@ export function inspectConsent(el, options = {}, read) {
     !read(node, 'disabled') && attr(node, 'aria-disabled') !== 'true' && declining(node));
   return { blocked: accept, wall: true, decline, ask: context.ask, reject: reject ? labels(reject).find(declinesCookies) : undefined };
 }
-inspectConsent.helpers = [cookieWording, consentManager, declinesCookies, acceptsCookies];
+inspectConsent.helpers = [resetsCookies, cookieWording, consentManager, declinesCookies, acceptsCookies];
 
 function consentContainer(el, options, read) { return inspectConsent(el, { ...options, container: true }, read); }
 consentContainer.helpers = [inspectConsent, ...inspectConsent.helpers];

@@ -1,9 +1,14 @@
 // These closure-free classifiers also run in the engine REPL and Chromium's
 // isolated utility world. Page claims never supply authority to this policy.
+export function resetsCookies(text) {
+  return /\b(?:reset|clear|delete|remove)\b[^.!?;]*\bcookies?\b/iu.test(
+    String(text ?? '').normalize('NFKC').replace(/\s+/g, ' '));
+}
+
 export function cookieWording(text) {
   const observed = String(text ?? '').normalize('NFKC').replace(/\s+/g, ' ');
   // Reset/clear confirmations change existing settings, not consent to a wall.
-  const resetting = /\b(?:reset|clear|delete|remove)\b[^.!?;]*\bcookies?\b/iu.test(observed);
+  const resetting = resetsCookies(observed);
   // A policy in an account/checkout agreement supplies no cookie consent.
   // Keep independent consent sentences in the same container observable.
   const words = observed.split(/[.!?;]+/u).filter(sentence =>
@@ -70,11 +75,12 @@ export function engineConsent(name, args, text, after = false) {
     // AX exposes dialog roles, but no CSS fixed/sticky observation. A named
     // region or heading cannot supply that missing shape.
     if (!cmp && !dialog) return;
+    const words = rows.filter(other => scopedUnder(other, row) &&
+      ![other, ...other.ancestors.slice(0, other.ancestors.indexOf(row))].some(part => /^link\b/.test(part.body))).map(other => other.words).join(' ').replace(/\s+/g, ' ').trim();
+    if (dialog && resetsCookies(words) && !cookieWording(words)) return;
     if (cmp) return { row, ask: true };
     const fullText = rows.filter(other => under(other, row)).map(other => other.words).join(' ').replace(/\s+/g, ' ').trim();
     if (fullText.length >= 1500) return;
-    const words = rows.filter(other => scopedUnder(other, row) &&
-      ![other, ...other.ancestors.slice(0, other.ancestors.indexOf(row))].some(part => /^link\b/.test(part.body))).map(other => other.words).join(' ').replace(/\s+/g, ' ').trim();
     if (words.length >= 1500 || !cookieWording(words)) return;
     return { row, ask: cmp || dialog };
   };

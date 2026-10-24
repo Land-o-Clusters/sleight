@@ -44,3 +44,17 @@ test('reset instructions do not hide an independent cookie-use sentence', () => 
 test('a settings heading above a reset question is not a wall', () => {
   assert.equal(engineConsent('click', [4], tree('\t\t\t3 text Cookie preferences. Reset your cookies?', 'Yes')), undefined);
 });
+for (const role of ['dialog', 'alertdialog']) test(`engine permits a reset-only ${role} inside a known CMP root`, async () => {
+  const before = tree('\t\t\t3 text Reset your cookie preferences?', 'Yes', role + ', ID: onetrust-pc-sdk');
+  assert.equal(engineConsent('click', [4], before), undefined);
+  const sent = [], raw = { getAXState: async () => before, click: async n => sent.push(n) };
+  const context = { cua: { getApp: async () => raw }, nodeRepl: { write() {} } };
+  const run = code => runInNewContext(`(async()=>{${code}})()`, context);
+  await run(readCode('await cua.getApp("Browser");'));
+  await run(guardedCode('await app.click(4);', windowFromText(before), 'Stopped.'));
+  assert.deepEqual(sent, [4]);
+});
+test('CMP reset instructions cannot hide a cookie-use sentence', () => {
+  const before = tree('\t\t\t3 text We use cookies. You can remove cookies in your browser.', 'Continue', 'dialog, ID: onetrust-pc-sdk');
+  assert.equal(engineConsent('click', [4], before)?.blocked, true);
+});

@@ -6,7 +6,7 @@ import { literalElements } from './literal-elements.mjs';
 import { actionOutcome, outcomeRecord } from './action-outcomes.mjs';
 import { moneyFigures, moneyConflicts } from './payment-figures.mjs';
 import { enginePayment, paymentAction } from './payment-gate.mjs';
-import { cookieWording, consentManager, declinesCookies, acceptsCookies, engineConsent } from './consent-wall.mjs';
+import { resetsCookies, cookieWording, consentManager, declinesCookies, acceptsCookies, engineConsent } from './consent-wall.mjs';
 import { paymentWords, refundableName } from './direct-browser/rules.mjs';
 import { tabChromeRefusal, tabProbeRefusal } from './tab-probe.mjs';
 import { verifyWindowIdentity } from './window-identity.mjs';
@@ -824,6 +824,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
     const paymentWords = ${paymentWords.toString()};
     const refundableName = ${refundableName.toString()};
     const paymentAction = ${paymentAction.toString()};
+    const resetsCookies = ${resetsCookies.toString()};
     const cookieWording = ${cookieWording.toString()};
     const consentManager = ${consentManager.toString()};
     const declinesCookies = ${declinesCookies.toString()};

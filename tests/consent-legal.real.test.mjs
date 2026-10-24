@@ -53,3 +53,14 @@ test('turbo settings heading above a reset question is not a wall', { skip, time
   const f = await setup(t, html('role="dialog"', '<h2>Cookie preferences</h2>Reset your cookies?', 'Yes'));
   assert.equal(await checkConsent(f.entry.page.getByRole('button'), 'click', f.entry.state), false);
 });
+for (const role of ['dialog', 'alertdialog']) test(`turbo permits a reset-only ${role} inside a known CMP root`, { skip, timeout: 30000 }, async t => {
+  const f = await setup(t, html(`role="${role}" id="onetrust-pc-sdk"`, '<h2>Cookie preferences</h2>Reset your cookies?', 'Yes'));
+  const target = f.entry.page.getByRole('button');
+  assert.equal(await checkConsent(target, 'click', f.entry.state), false);
+  await target.click({ timeout: 10000 });
+  assert.equal(await f.entry.page.locator('body').getAttribute('data-hit'), 'yes');
+});
+test('turbo CMP reset instructions cannot hide a cookie-use sentence', { skip, timeout: 30000 }, async t => {
+  const f = await setup(t, html('role="dialog" id="onetrust-pc-sdk"', 'We use cookies. You can remove cookies in your browser.'));
+  await assert.rejects(checkConsent(f.entry.page.getByRole('button'), 'click', f.entry.state), /accepting cookies is blocked/);
+});
