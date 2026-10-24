@@ -144,8 +144,8 @@ test('production turn grades field pixels in every saved GIF frame, including la
     dependencies: { acknowledgeSnapshot, recording: { createFile: () => ({ path, fd: openSync(path, 'wx', 0o600) }) } } });
   t.after(() => runtime.end());
   const opened = await runtime.call({ name: 'browser_open', arguments: { url: f.entry.page.url() + '?recorded' } });
-  assert.equal(opened.isError, false, opened.text); assert.match(opened.text, /frames are pixelated/); assert.match(opened.text, /control-sized box/);
-  assert.match(opened.text, /25%/); assert.match(opened.text, /5,000-element field cap and 50 ms/); assert.doesNotMatch(opened.text, /actions.gif/);
+  assert.equal(opened.isError, false, opened.text); assert.match(opened.text, /frames are pixelated/); assert.match(opened.text, /the outline shows where the action landed/);
+  assert.doesNotMatch(opened.text, /clear|25%|hit.test/); assert.match(opened.text, /5,000-element field cap and 50 ms/); assert.doesNotMatch(opened.text, /actions.gif/);
   assert.equal(runtime.delivered(opened), true);
   const tab = /^(t[A-Za-z0-9_-]+)/.exec(opened.text)?.[1]; assert.ok(tab, opened.text);
   const read = await runtime.call({ name: 'browser_read', arguments: { tab } });

@@ -397,7 +397,7 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
       const notes = [];
       if (!recordingStarted) {
         recordingStarted = true;
-        notes.push(recording ? 'Recording this turn: frames are pixelated, with blocks at least 32 CSS px that scale with visible fonts and viewport size. Only a hit-tested control-sized box (button, link, checkbox, radio, switch, menuitem, tab, option or summary; at most 25% of viewport area) can be clear. Fields and editable controls are black; targeted frames, canvases, images, SVGs and videos are black. DOM reads have a 5,000-element field cap and 50 ms budget; exceeding either skips frames. GIF caps: 30 frames, 640 by 480 pixels, 12 MiB. The pointer and target outline are drawn on top. Saved path follows at turn end.'
+        notes.push(recording ? 'Recording this turn: frames are pixelated everywhere; the outline shows where the action landed. Blocks are at least 32 CSS px and scale with visible fonts and viewport size. Fields and editable controls are black; targeted frames, canvases, images, SVGs and videos are black. DOM reads have a 5,000-element field cap and 50 ms budget; exceeding either skips frames. GIF caps: 30 frames, 640 by 480 pixels, 12 MiB. The pointer and target outline are drawn on top. Saved path follows at turn end.'
           : 'Recording: unavailable for app windows; no frames saved.');
       }
       if (recording?.warning()) notes.push(recording.warning());

@@ -356,9 +356,9 @@ test('five thousand overlapping field masks use bounded pixel painting', { timeo
   }
 });
 
-test('a disallowed text container with opaque descendants stays pixelated', () => {
+test('a target interior stays pixelated beneath its outline', () => {
   const width = 64, height = 32, frame = { width, height, data: Buffer.alloc(width * height * 4, 255) };
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) frame.data.set(x % 32 < 16 ? [255, 0, 0, 255] : [0, 0, 255, 255], (y * width + x) * 4);
-  maskRecordingPixels(frame, { fields: [], opaque: [], opaqueControl: true, clear: [] }, { rect: [0, 0, width, height], clear: false, black: false });
+  maskRecordingPixels(frame, { fields: [] }, { rect: [0, 0, width, height], black: false });
   assert.deepEqual([...frame.data.subarray((16 * width + 16) * 4, (16 * width + 16) * 4 + 4)], [128, 0, 128, 255]);
 });

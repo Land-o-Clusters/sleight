@@ -26,24 +26,22 @@ async function acquireHandle(action) {
 // This object stays in Playwright's isolated utility world. Only numeric boxes leave it.
 // The field query counts only mask candidates (5,000 maximum). A separate native
 // walk measures visible fonts and retains scroll nodes, within the 50 ms budget.
-function frameState(el, { target, width, height }, read) {
+function frameState(el, { width, height }, read) {
   const start = performance.now(), doc = read(el, 'ownerDocument');
   const pixelRatio = read(read(doc, 'defaultView'), 'devicePixelRatio');
   if (!Number.isFinite(pixelRatio) || pixelRatio <= 0 || pixelRatio > 8) throw Error('RECORDING_VIEWPORT_LIMIT');
-  const base = { doc, pixelRatio, target, width, height, blockSize: Math.ceil(Math.max(32, Math.min(width, height) / 30)), nodes: [], offsets: [], shadows: [], fieldNodes: [] };
+  const base = { doc, pixelRatio, blockSize: Math.ceil(Math.max(32, Math.min(width, height) / 30)), nodes: [], offsets: [], shadows: [], fieldNodes: [] };
   if (read(doc, 'designMode') === 'on') return { ...base, allField: true };
   const fieldNodes = Document.prototype.querySelectorAll.call(doc,
     'input,textarea,select,[contenteditable],[role~="textbox"],[role~="searchbox"],[role~="combobox"],[role~="spinbutton"],[data-sleight-private],iframe,frame,object,embed,canvas,img,svg,video');
   if (fieldNodes.length > 5000) throw Error('RECORDING_FIELD_LIMIT');
   const nodes = [], shadows = [], walker = Document.prototype.createTreeWalker.call(doc, el, NodeFilter.SHOW_ELEMENT);
-  let node = el, fontSize = 0, opaqueControl = false;
+  let node = el, fontSize = 0;
   do {
     if (performance.now() - start > 50) throw Error('RECORDING_TREE_LIMIT');
     nodes.push(node);
     const tag = read(node, 'localName');
     if (read(node, 'shadowRoot') || tag.includes('-')) shadows.push(node);
-    if (target && node !== target && Node.prototype.contains.call(target, node) &&
-        /^(article|aside|blockquote|div|footer|h[1-6]|header|main|nav|p|section|span)$/.test(tag)) opaqueControl = true;
     const rect = Element.prototype.getBoundingClientRect.call(node);
     if (rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 && rect.left < width && rect.top < height) {
       const style = window.getComputedStyle(node);
@@ -54,7 +52,7 @@ function frameState(el, { target, width, height }, read) {
     }
   } while ((node = TreeWalker.prototype.nextNode.call(walker)));
   if (performance.now() - start > 50) throw Error('RECORDING_TREE_LIMIT');
-  return { ...base, allField: false, nodes, fieldNodes, shadows, opaqueControl,
+  return { ...base, allField: false, nodes, fieldNodes, shadows,
     blockSize: Math.ceil(Math.max(base.blockSize, 2 * fontSize)) };
 }
 function stableState(el, state, read) {
@@ -79,7 +77,7 @@ function stableState(el, state, read) {
 }
 // Collect boxes exactly once, after scrolling settles, using the retained list.
 function fieldGeometry(el, state, read) {
-  const start = performance.now(), doc = state.doc, fields = [], opaque = [];
+  const start = performance.now(), fields = [];
   for (const node of state.fieldNodes) {
     if (performance.now() - start > 50) throw Error('RECORDING_TREE_LIMIT');
     const r = Element.prototype.getBoundingClientRect.call(node);
@@ -88,11 +86,10 @@ function fieldGeometry(el, state, read) {
     const field = /^(input|textarea|select)$/.test(tag) || (read(node, 'namespaceURI') === 'http://www.w3.org/1999/xhtml' && read(node, 'isContentEditable')) ||
       /^(textbox|searchbox|combobox|spinbutton)$/.test(role) || Element.prototype.hasAttribute.call(node, 'contenteditable') ||
       Element.prototype.hasAttribute.call(node, 'data-sleight-private');
-    const media = /^(iframe|frame|object|embed|canvas|img|svg|video)$/.test(tag);
-    if (field || media) {
+    if (field) {
       const rect = [r.x, r.y, r.width, r.height];
       if (!rect.every(Number.isFinite)) throw Error('RECORDING_GEOMETRY_UNAVAILABLE');
-      (field ? fields : opaque).push(rect);
+      fields.push(rect);
     }
   }
   for (const node of state.shadows) {
@@ -101,31 +98,8 @@ function fieldGeometry(el, state, read) {
     if (![r.x, r.y, r.width, r.height].every(Number.isFinite)) throw Error('RECORDING_GEOMETRY_UNAVAILABLE');
     if (r.width > 0 && r.height > 0) fields.push([r.x, r.y, r.width, r.height]);
   }
-  const clear = [];
-  if (state.target && !state.allField && !state.opaqueControl) {
-    const rect = Element.prototype.getBoundingClientRect.call(state.target);
-    // Use the full box area, including any offscreen portion.
-    if (rect.width > 0 && rect.height > 0 && rect.width * rect.height <= state.width * state.height / 4) {
-      const left = Math.max(0, Math.ceil(rect.left)), top = Math.max(0, Math.ceil(rect.top));
-      const right = Math.min(state.width, Math.floor(rect.right)), bottom = Math.min(state.height, Math.floor(rect.bottom));
-      const size = state.blockSize;
-      for (let y = Math.floor(top / size) * size; y < bottom; y += size) for (let x = Math.floor(left / size) * size; x < right; x += size) {
-        if (performance.now() - start > 50) throw Error('RECORDING_TREE_LIMIT');
-        const l = Math.max(left, x), t = Math.max(top, y), r = Math.min(right, x + size), b = Math.min(bottom, y + size);
-        let owned = true;
-        // Corners, edge midpoints and centre. Any non-owned sample masks the
-        // entire block, including the portion that the target still owns.
-        for (const py of [t + 0.5, (t + b) / 2, b - 0.5]) for (const px of [l + 0.5, (l + r) / 2, r - 0.5]) {
-          const hit = Document.prototype.elementFromPoint.call(doc, px, py);
-          if (!hit || !Node.prototype.contains.call(state.target, hit)) owned = false;
-        }
-        if (owned) clear.push([l, t, r - l, b - t]);
-      }
-    }
-  }
   if (performance.now() - start > 50) throw Error('RECORDING_TREE_LIMIT');
-  return { pixelRatio: state.pixelRatio, allField: state.allField, fields, opaque, opaqueControl: state.opaqueControl,
-    blockSize: state.blockSize, clear };
+  return { pixelRatio: state.pixelRatio, allField: state.allField, fields, blockSize: state.blockSize };
 }
 function targetState(el, unused, read) {
   if (!read(el, 'isConnected')) throw Error('RECORDING_TARGET_UNAVAILABLE');
@@ -136,10 +110,7 @@ function targetState(el, unused, read) {
     black ||= /^(iframe|frame|object|embed|canvas|img|svg|video)$/.test(read(node, 'localName')) || !!(read(node, 'namespaceURI') === 'http://www.w3.org/1999/xhtml' && read(node, 'isContentEditable')) || Element.prototype.hasAttribute.call(node, 'contenteditable') ||
       /^(textbox|searchbox|combobox|spinbutton)$/.test(Element.prototype.getAttribute.call(node, 'role'));
   }
-  const role = Element.prototype.getAttribute.call(el, 'role')?.trim().split(/\s+/)[0];
-  const clear = role ? /^(button|link|checkbox|radio|switch|menuitem|tab|option|summary)$/.test(role) :
-    tag === 'button' || tag === 'summary' || tag === 'a' && Element.prototype.hasAttribute.call(el, 'href');
-  return { black, clear };
+  return { black };
 }
 function viewportOf(metrics) {
   const v = metrics.cssLayoutViewport, visual = metrics.cssVisualViewport;
@@ -155,8 +126,8 @@ const bounds = (rect, width, height, pad = 0) => {
   return [Math.max(0, Math.floor(x) - pad), Math.max(0, Math.floor(y) - pad), Math.min(width, Math.ceil(x + w) + pad), Math.min(height, Math.ceil(y + h) + pad)];
 };
 
-// Raw pixels never reach disk. Pixelate first, restore only the pinned control,
-// then black fields and opaque content that intersects that clear rectangle.
+// Raw pixels never reach disk. Pixelate the whole frame, then black fields and
+// opaque targets. The outline and pointer contain only synthetic pixels.
 export function maskRecordingPixels(image, geometry, target, pointer) {
   const { width, height, data } = image, raw = Buffer.from(data);
   const block = Math.ceil(Math.max(RECORDING_BLOCK, geometry.blockSize ?? 0, Math.min(width, height) / 30));
@@ -175,28 +146,13 @@ export function maskRecordingPixels(image, geometry, target, pointer) {
     }
   }
   const blackRects = [];
-  const black = (rect, clip) => {
-    let [left, top, right, bottom] = bounds(rect, width, height, 1);
-    if (clip) { left = Math.max(left, clip[0]); top = Math.max(top, clip[1]); right = Math.min(right, clip[2]); bottom = Math.min(bottom, clip[3]); }
+  const black = rect => {
+    const [left, top, right, bottom] = bounds(rect, width, height, 1);
     if (left < right && top < bottom) blackRects.push([left, top, right, bottom]);
   };
   if (geometry.allField) black([0, 0, width, height]);
   else {
-    if (target) {
-      if (target.black || target.clear && geometry.opaqueControl) black(target.rect);
-      else if (target.clear && target.rect[2] * target.rect[3] <= width * height / 4) {
-        // Round inward: a fractional target box must not reveal neighbouring pixels.
-        const [x, y, w, h] = target.rect;
-        const left = Math.max(0, Math.ceil(x)), top = Math.max(0, Math.ceil(y));
-        const right = Math.min(width, Math.floor(x + w)), bottom = Math.min(height, Math.floor(y + h));
-        for (const rect of geometry.clear ?? []) {
-          const [l, t, r, b] = bounds(rect, width, height);
-          for (let row = Math.max(top, t); Math.max(left, l) < Math.min(right, r) && row < Math.min(bottom, b); row++)
-            raw.copy(data, (row * width + Math.max(left, l)) * 4, (row * width + Math.max(left, l)) * 4, (row * width + Math.min(right, r)) * 4);
-        }
-        for (const rect of geometry.opaque) black(rect, [left, top, right, bottom]);
-      }
-    }
+    if (target?.black) black(target.rect);
     for (const rect of geometry.fields) black(rect);
   }
   // Union overlapping black rectangles in a row sweep, independent of overlap count.
@@ -269,7 +225,7 @@ export async function captureRecordingFrame(entry, { pages, current, endpoint, s
     if (classification === undefined) {
       const info = await bounded(() => trustedRead(handle, targetState));
       const frame = await bounded(() => handle.ownerFrame());
-      classification = { clear: info.clear, black: info.black || frame !== page.mainFrame() || await bounded(() => hostsRootEvidence(handle)) !== false };
+      classification = { black: info.black || frame !== page.mainFrame() || await bounded(() => hostsRootEvidence(handle)) !== false };
     }
     const box = await bounded(() => handle.boundingBox());
     if (!box || ![box.x, box.y, box.width, box.height].every(Number.isFinite)) throw Error('RECORDING_TARGET_UNAVAILABLE');
@@ -282,8 +238,7 @@ export async function captureRecordingFrame(entry, { pages, current, endpoint, s
     let viewport = viewportOf(await send('Page.getLayoutMetrics'));
     document = await acquireHandle(() => trustedDocumentHandle(page));
     if (!document) throw Error('RECORDING_TARGET_UNAVAILABLE');
-    const targetNode = target?.handle ? page._connection?.toImpl?.(target.handle) : undefined;
-    retained = await acquireHandle(() => trustedHandleNode(document, frameState, { target: targetNode, width: viewport.clientWidth, height: viewport.clientHeight }));
+    retained = await acquireHandle(() => trustedHandleNode(document, frameState, { width: viewport.clientWidth, height: viewport.clientHeight }));
     await bounded(() => trustedReadNode(document, stableState, retained));
     const deadline = performance.now() + 1200;
     for (;;) {

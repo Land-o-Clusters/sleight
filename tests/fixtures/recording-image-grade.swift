@@ -23,6 +23,7 @@ if arguments[1] == "qr" {
     let url = URL(fileURLWithPath: arguments[2])
     var codes: [String] = []
     var text: [String] = []
+    var regions: [[String: Any]] = []
     if arguments[1] == "ocr" {
         FileHandle.standardError.write(Data("vision-ocr-start\n".utf8))
         let request = VNRecognizeTextRequest()
@@ -33,6 +34,12 @@ if arguments[1] == "qr" {
         try VNImageRequestHandler(url: url).perform([request])
         FileHandle.standardError.write(Data("vision-ocr-done\n".utf8))
         text = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+        regions = (request.results ?? []).compactMap { observation in
+            guard let candidate = observation.topCandidates(1).first else { return nil }
+            let box = observation.boundingBox
+            return ["text": candidate.string, "confidence": candidate.confidence,
+                    "x": box.minX, "y": box.minY, "width": box.width, "height": box.height]
+        }
     } else {
         FileHandle.standardError.write(Data("vision-qr-start\n".utf8))
         let request = VNDetectBarcodesRequest()
@@ -42,6 +49,6 @@ if arguments[1] == "qr" {
         FileHandle.standardError.write(Data("vision-qr-done\n".utf8))
         codes = (request.results ?? []).compactMap { $0.payloadStringValue }
     }
-    let output = try JSONSerialization.data(withJSONObject: ["qr": codes, "text": text], options: [.sortedKeys])
+    let output = try JSONSerialization.data(withJSONObject: ["qr": codes, "text": text, "regions": regions], options: [.sortedKeys])
     print(String(data: output, encoding: .utf8)!)
 }

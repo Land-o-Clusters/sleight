@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdtempSync, openSync, rmSync } from 'node:fs';
+import { mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createTurnRecording } from '../plugins/sleight/lib/turn-recording.mjs';
 import { fixture, skip } from './fixtures/cr4-real.mjs';
+import { unreadable } from './fixtures/recording-grade.mjs';
 import { captureRecordingFrame } from '../plugins/sleight/lib/direct-browser/recording.mjs';
 
 const require = createRequire(import.meta.url);
@@ -50,6 +51,8 @@ assert recovered==0,('saved GIF differs from masked reference',recovered)
 `, path, JSON.stringify([frame.width, frame.height, box])], { input: expected, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   t.diagnostic(`saved GIF: ${result.stdout.trim()} pixels differ from the masked reference`);
+  unreadable(t, PNG.sync.write(frame), 'masked PNG', frame, box);
+  unreadable(t, readFileSync(path), 'saved GIF', frame, box);
 }
 const qr = '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="white"/>' +
   Array.from({ length: 64 * 64 }, (_, i) => (i * 17 + Math.floor(i / 64) * 7) % 11 < 5 ? `<rect x="${i % 64 * 2}" y="${Math.floor(i / 64) * 2}" width="2" height="2"/>` : '').join('') + '</svg>';
@@ -79,18 +82,18 @@ for (const [name, body, designMode] of cases) test(`mask by default: ${name} has
   await gradeSaved(t, frame, expected, box);
 });
 
-test('only the held control is clear; fields and opaque descendants stay black', { skip, timeout: 30000 }, async t => {
+test('held controls stay pixelated; fields stay black; outline and pointer are synthetic', { skip, timeout: 30000 }, async t => {
   const f = await fixture(t, '<style>body{margin:0;background:#aaa;font:20px monospace}button{position:absolute;left:160px;top:160px;width:320px;height:160px;background:white;color:black}input{position:absolute;left:600px;top:80px;width:240px;height:48px;background:red;color:red}img{width:80px;height:40px}</style><button>Continue 1234<img src="data:image/svg+xml,' + encodeURIComponent(qr) + '"></button><input value=secret>');
   await f.entry.page.locator('img').evaluate(img => img.decode());
   const handle = await f.entry.page.locator('button').elementHandle();
   t.after(() => handle.dispose());
   const raw = PNG.sync.read(await f.entry.page.screenshot({ type: 'png', scale: 'css', caret: 'hide' }));
   const frame = await captureRecordingFrame(f.entry, { pages: f.registry, current: () => true, target: { handle } });
-  const button = await handle.boundingBox(), image = await f.entry.page.locator('img').boundingBox(), input = await f.entry.page.locator('input').boundingBox();
-  const clear = { x: button.x + 8, y: button.y + 8, width: 80, height: button.height - 16 };
-  assert.equal(different(frame, raw.data, clear), 0, 'held control pixels are clear');
+  const button = await handle.boundingBox(), input = await f.entry.page.locator('input').boundingBox();
+  const interior = { x: button.x + 8, y: button.y + 8, width: 80, height: button.height - 16 };
+  assert.equal(different(frame, reference(raw, 40), interior), 0, 'held control pixels are pixelated');
   const black = Buffer.alloc(frame.data.length); for (let i = 3; i < black.length; i += 4) black[i] = 255;
-  for (const box of [image, input]) assert.equal(different(frame, black, { x: box.x + 4, y: box.y + 4, width: box.width - 8, height: box.height - 8 }), 0);
+  for (const box of [input]) assert.equal(different(frame, black, { x: box.x + 4, y: box.y + 4, width: box.width - 8, height: box.height - 8 }), 0);
   assert.deepEqual([...frame.data.subarray(((160 - 2) * frame.width + 200) * 4, ((160 - 2) * frame.width + 200) * 4 + 3)], [0, 255, 255], 'target outline');
   const point = f.entry.page._connection.toImpl(f.entry.page).mouse._currentPoint();
   assert.deepEqual([...frame.data.subarray(((Math.round(point.y) + 7) * frame.width + Math.round(point.x) + 2) * 4, ((Math.round(point.y) + 7) * frame.width + Math.round(point.x) + 2) * 4 + 3)], [255, 255, 255], 'pointer position');
@@ -159,7 +162,8 @@ test('a control containing a standard closed shadow host cannot reveal hidden fi
   await f.entry.page.evaluate(() => { document.querySelector('#host').attachShadow({ mode: 'closed' }).innerHTML = '<input value="4242424242424242" style="background:red;width:240px;height:50px">'; });
   const handle = await f.entry.page.locator('button').elementHandle();
   t.after(() => handle.dispose());
+  const raw = PNG.sync.read(await f.entry.page.screenshot({ type: 'png', scale: 'css', caret: 'hide' }));
   const frame = await captureRecordingFrame(f.entry, { pages: f.registry, current: () => true, target: { handle } });
-  const black = Buffer.alloc(frame.data.length); for (let at = 3; at < black.length; at += 4) black[at] = 255;
-  assert.equal(different(frame, black, { x: 170, y: 170, width: 300, height: 80 }), 0);
+  assert.equal(different(frame, reference(raw, 32), { x: 170, y: 170, width: 300, height: 80 }), 0);
+  await gradeSaved(t, frame, reference(raw, 32), { x: 170, y: 170, width: 300, height: 80 });
 });
