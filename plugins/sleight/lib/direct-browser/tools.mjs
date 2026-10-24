@@ -23,7 +23,7 @@ export function browserTools(browser) {
       inputSchema: object({ tab, ref: text, find: text, max_chars: { type: 'integer', minimum: 1000, maximum: 40000 }, text: { type: 'boolean' }, screenshot: { type: 'boolean' } }, ['tab']) },
     { name: 'browser_act', description: (process.env.SLEIGHT_MT !== '0'
       ? 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. A step that navigates, opens a tab, raises a dialog, loads or closes the page, or reaches the settle cap ends the batch (later steps read "not reached"), so put one such step last. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. viewport with width and height resizes and reports the old size; with neither it restores that size. scroll with until:text finds a row in a long list. navigate with a link ref follows it.'
-      : 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. Stops at boundaries or failure. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. viewport with width and height resizes and reports the old size; with neither it restores that size. scroll with until:text finds a row in a long list. navigate with a link ref follows it.') + ' observe:screenshot adds the protected viewport image. frames (2-4, max 480 px) requires a user motion request and one click/hover/press/scroll/drag. frame_ms defaults to 100.',
+      : 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. Stops at boundaries or failure. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. viewport with width and height resizes and reports the old size; with neither it restores that size. scroll with until:text finds a row in a long list. navigate with a link ref follows it.') + ' observe:screenshot adds the protected viewport image. frames (2-4, max 480 px) requires a user motion request and one click/hover/scroll. frame_ms defaults to 100.',
       inputSchema: object({ tab, steps: { type: 'array', minItems: 1, maxItems: 12, items: step }, observe: { type: 'string', enum: ['diff', 'full', 'none', 'screenshot'] },
         frames: { type: 'integer', minimum: 2, maximum: 4 }, frame_ms: { type: 'integer', minimum: 50, maximum: 1000 } }, ['tab', 'steps']) },
     { name: 'browser_fill', description: (process.env.SLEIGHT_MT !== '0'
@@ -93,7 +93,7 @@ export function validateToolCall(input, browser) {
   if (request.name === 'browser_act') {
     const a = request.arguments;
     if (a.frame_ms !== undefined && a.frames === undefined) throw Error('frame_ms needs frames');
-    if (a.frames !== undefined && (a.steps.length !== 1 || !motionOps.includes(a.steps[0].do))) throw Error('frames needs one click, hover, press, scroll or drag');
+    if (a.frames !== undefined && (a.steps.length !== 1 || !motionOps.includes(a.steps[0].do))) throw Error('frames needs one click, hover or scroll');
     if (a.frames !== undefined && a.observe === 'screenshot') throw Error('choose frames or observe:screenshot');
   }
   if (request.name === 'browser_tabs' && request.arguments.do !== 'list' && !request.arguments.tab) throw Error(`${request.arguments.do} needs tab`);

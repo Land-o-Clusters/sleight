@@ -38,10 +38,12 @@ test('FD1 motion schemas cap frames/intervals and refuse combinations before any
   for (const frames of [2, 3, 4]) for (const frame_ms of [50, 100, 1000]) assert.doesNotThrow(() => validateToolCall(call({ frames, frame_ms })));
   for (const extra of [{ frames: 1 }, { frames: 5 }, { frames: 2.5 }, { frames: 2, frame_ms: 49 }, { frames: 2, frame_ms: 1001 },
     { frame_ms: 100 }, { frames: 2, observe: 'screenshot' }, { frames: 2, steps: [{ do: 'wait' }] },
+    { frames: 2, steps: [{ do: 'press', key: 'Space' }] },
+    { frames: 2, steps: [{ do: 'drag', ref: 'e1', to: 'e2' }] },
     { frames: 2, steps: [{ do: 'hover', ref: 'e1' }, { do: 'hover', ref: 'e2' }] }]) assert.throws(() => validateToolCall(call(extra)));
 });
 
-for (const [op, first] of [['click', 'mousePressed'], ['hover', 'mouseMoved'], ['press', 'rawKeyDown'], ['scroll', 'mouseWheel'], ['drag', 'mousePressed']])
+for (const [op, first] of [['click', 'mousePressed'], ['hover', 'mouseMoved'], ['scroll', 'mouseWheel']])
   test('FD1 ' + op + ' samples from its first matching dispatch with honest times', async () => {
     const f = fixture(), motion = startMotion(f.entry, { ...f.options, op, frames: 3 });
     f.input('keyUp'); assert.equal(f.captures.length, 0);
@@ -52,6 +54,15 @@ for (const [op, first] of [['click', 'mousePressed'], ['hover', 'mouseMoved'], [
     assert.equal(f.removals(), 1);
     for (const event of ['popup', 'framenavigated', 'dialog', 'close']) assert.equal(f.entry.page.listenerCount(event), 0);
   });
+
+test('FD1B direct motion collection refuses multi-event drag and press before installing an observer', () => {
+  for (const op of ['drag', 'press']) {
+    const f = fixture();
+    assert.throws(() => startMotion(f.entry, { ...f.options, op, frames: 4 }), /invalid motion/);
+    assert.equal(f.entry.page.eventNames().length, 0);
+    assert.equal(f.captures.length, 0);
+  }
+});
 
 test('FD1 protected fields in a later frame discard all earlier images', async () => {
   const f = fixture(); let count = 0;

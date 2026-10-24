@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from '../plugins/sleight/vendor/playwright-core/index.mjs';
@@ -17,16 +17,35 @@ const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium
   'chrome-headless-shell-' + platform, 'chrome-headless-shell');
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' && 'needs SLEIGHT_LIVE_DOM_TEST=1 (headless fixtures only)';
 
-async function fixture(t, html, { routes = {}, dpr = 1, width = 1440, height = 900 } = {}) {
+async function fixture(t, html, { routes = {}, dpr = 1, width = 1440, height = 900, nativeDpr, zoom = 1 } = {}) {
   assert.ok(existsSync(executablePath), 'pinned headless Chromium must be installed');
   const server = createServer((request, response) => {
     response.setHeader('Content-Type', 'text/html'); response.end(routes[request.url] ?? html);
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => { server.closeAllConnections(); return new Promise(resolve => server.close(resolve)); });
-  const browser = await chromium.launch({ headless: true, executablePath, args: ['--site-per-process'] });
-  t.after(async () => { await browser.close(); t.diagnostic('Cleanup: owned headless Chromium and loopback fixture server closed.'); });
-  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr });
+  let browser, context, profile;
+  t.after(async () => {
+    try { await browser?.close(); }
+    finally { if (profile) { rmSync(profile, { recursive: true, force: true }); assert.equal(existsSync(profile), false); } }
+    t.diagnostic('Cleanup: owned headless Chromium and loopback fixture server closed; private zoom profile removed when used.');
+  });
+  if (nativeDpr) {
+    // Headless Chrome for Testing reads real browser zoom from its private profile.
+    // No device-metrics override, CSS zoom, page getter or keyboard shortcut stands in for it.
+    profile = mkdtempSync('/tmp/sleight-fd1b-zoom-');
+    mkdirSync(join(profile, 'Default'));
+    writeFileSync(join(profile, 'Default/Preferences'), JSON.stringify({ partition: { default_zoom_level: { x: Math.log(zoom) / Math.log(1.2) } } }));
+    const fullExecutable = join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision,
+      'chrome-' + platform, 'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
+    assert.ok(existsSync(fullExecutable), 'pinned full Chromium must be installed for browser zoom');
+    context = await chromium.launchPersistentContext(profile, { headless: true, executablePath: fullExecutable, viewport: null,
+      args: ['--site-per-process', '--force-device-scale-factor=' + nativeDpr, '--window-size=' + width + ',' + height] });
+    browser = context.browser();
+  } else {
+    browser = await chromium.launch({ headless: true, executablePath, args: ['--site-per-process'] });
+    context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr });
+  }
   const page = await context.newPage();
   await page.goto('http://127.0.0.1:' + server.address().port);
   const entry = { page, state: { snapshotNo: 0 }, openedBySleight: true };
@@ -58,11 +77,54 @@ for (const dpr of [1, 2]) test(`FD1 viewport JPEG stays within 1000 pixels at DP
   assert.equal(captures.length, 1); assert.equal(captures[0].frame, f.page.mainFrame());
   assert.equal(captures[0].params.captureBeyondViewport, false);
   assert.equal(captures[0].params.quality, 80);
+  assert.ok(f.calls.filter(c => c.method === 'Debugger.enable').every(c => c.params.maxScriptsCacheSize === 0));
   assert.ok(!f.calls.some(call => /bringToFront|activateTarget|Input\.|setDeviceMetricsOverride/.test(call.method)));
   assert.equal(f.sessions.size, 0);
   // The renderer is running again after the guarded transaction.
   assert.equal(await f.page.evaluate(() => 6 * 7), 42);
 });
+
+test('FD1B a deadline during a paused native audit still releases the real renderer', { skip, timeout: 15000 }, async t => {
+  const f = await fixture(t, '<button>Owned deadline fixture</button>');
+  const attach = f.context.newCDPSession.bind(f.context);
+  f.context.newCDPSession = async frame => {
+    const cdp = await attach(frame), send = cdp.send.bind(cdp);
+    cdp.send = (method, params) => method === 'DOMSnapshot.captureSnapshot' ? new Promise(() => {}) : send(method, params);
+    return cdp;
+  };
+  const started = performance.now(), result = await screenshot(f.entry);
+  assert.ok(performance.now() - started < 3600, result.note);
+  assert.equal(result.images, undefined);
+  assert.equal(await f.page.evaluate(() => 42), 42, 'the page must run again after timeout');
+  assert.equal(f.sessions.size, 0);
+  assert.equal(f.calls.filter(c => c.method === 'Page.captureScreenshot').length, 0);
+  f.context.newCDPSession = attach;
+  const next = await screenshot(f.entry);
+  assert.equal(next.images?.length, 1, 'a collected timeout must release the capture lock');
+});
+
+for (const [nativeDpr, zoom] of [[2, 1], [1, 1.25], [2, 1.25]])
+  test(`FD1B native DPR ${nativeDpr} and ${zoom * 100}% browser zoom downscale the owned viewport`, { skip, timeout: 30000 }, async t => {
+    const f = await fixture(t, '<style>body{margin:0;background:blue}main{height:5000px}</style><main>Owned zoom fixture</main>', { nativeDpr, zoom });
+    const probe = await f.context.newCDPSession(f.page);
+    const metrics = await probe.send('Page.getLayoutMetrics'); await probe.detach();
+    assert.ok(Math.abs(metrics.cssVisualViewport.zoom - zoom) < 0.01, JSON.stringify(metrics));
+    assert.ok(Math.abs(await f.page.evaluate(() => devicePixelRatio) - nativeDpr * zoom) < 0.02);
+    await f.page.evaluate(() => scrollTo(0, 700));
+    for (const maxSide of [1000, 480]) {
+      const result = await screenshot(f.entry, { maxSide });
+      assert.ok(result.images, result.note + JSON.stringify(f.errors));
+      const size = jpegSize(result.images[0].data);
+      assert.equal(Math.max(size.width, size.height), maxSide);
+      assert.ok(Buffer.from(result.images[0].data, 'base64').length <= 512000);
+      assert.match(result.note, /downscaled/);
+      assert.equal(await f.page.evaluate(() => scrollY), 700);
+      t.diagnostic(`Native DPR ${nativeDpr}, browser zoom ${metrics.cssVisualViewport.zoom}, encoded ${size.width}x${size.height}`);
+    }
+    assert.equal(f.sessions.size, 0);
+    assert.equal(await f.page.evaluate(() => 6 * 7), 42);
+    assert.ok(!f.calls.some(c => /bringToFront|activateTarget|Input\.|setDeviceMetricsOverride/.test(c.method)));
+  });
 
 for (const field of [
   '<input type="password" aria-label="Account" value="fixture-secret">',

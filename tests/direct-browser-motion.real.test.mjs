@@ -12,22 +12,45 @@ const html = `<style>body{margin:0}#box{position:fixed;top:100px;pointer-events:
   <div id="box"></div><main>Scroll area</main><script>for(const event of ['keydown','scroll']) window.addEventListener(event,()=>document.querySelector('#box').style.transform='translateX(700px)')</script>`;
 const ref = (text, name) => /\[ref=(\w+)\]/.exec(text.split('\n').find(line => line.includes(JSON.stringify(name)) && line.includes('[ref=')) ?? '')?.[1];
 
-for (const op of ['click', 'hover', 'press', 'scroll', 'drag']) test('FD1 filtered real ' + op + ' returns bounded motion frames from native input', { skip, timeout: 45000 }, async t => {
+for (const op of ['drag', 'press']) test('FD1B heavy-page ' + op + ' reports the actual completed action', { skip, timeout: 45000 }, async t => {
+  const heavy = `<style>button{padding:30px}#source,#destination{display:inline-block;padding:40px;border:1px solid}</style>
+    <button id="key" onkeydown="busy();window.down=true" onkeyup="if(window.down)document.querySelector('output').textContent='Press released'">Key target</button>
+    <div id="source" draggable="true" role="button" ondragstart="busy();event.dataTransfer.setData('text/plain','Moved')">Source</div>
+    <div id="destination" role="button" ondragover="event.preventDefault()" ondrop="event.preventDefault();document.querySelector('output').textContent=event.dataTransfer.getData('text/plain')">Destination</div>
+    <output>Ready</output><div aria-hidden="true">${'<span>layout fixture</span>'.repeat(12000)}</div>
+    <script>function busy(){const end=performance.now()+120;while(performance.now()<end){}}</script>`;
+  const f = await fixture(t, heavy), read = await f.call('browser_read', {});
+  const step = op === 'drag' ? { do: op, ref: ref(read.text, 'Source'), to: ref(read.text, 'Destination') }
+    : { do: op, ref: ref(read.text, 'Key target'), key: 'Space' };
+  const before = f.wire.length;
+  const refused = await f.call('browser_act', { steps: [step], frames: 4, frame_ms: 50 });
+  assert.equal(refused.isError, true, refused.text);
+  assert.match(refused.text, /frames needs one click, hover or scroll/);
+  assert.equal(f.wire.slice(before).filter(c => c.method.startsWith('Input.') || c.method === 'Debugger.pause').length, 0);
+  assert.equal(await f.entry.page.locator('output').textContent(), 'Ready');
+  const result = await f.call('browser_act', { steps: [step], observe: 'screenshot' });
+  assert.equal(result.isError, false, result.text);
+  assert.doesNotMatch(result.text, /effect unconfirmed|not run:|timed out/);
+  assert.equal(await f.entry.page.locator('output').textContent(), op === 'drag' ? 'Moved' : 'Press released', result.text);
+  assert.match(result.text, op === 'drag' ? /"Moved"/ : /"Press released"/);
+  assert.equal(result.images?.length, 1, result.text);
+  t.diagnostic(result.text.split('\n')[0]);
+});
+
+for (const op of ['click', 'hover', 'scroll']) test('FD1 filtered real ' + op + ' returns bounded motion frames from native input', { skip, timeout: 45000 }, async t => {
   const f = await fixture(t, html);
   const first = await f.call('browser_read', {});
   assert.equal(first.isError, false, first.text);
   const step = op === 'click' ? { do: op, ref: ref(first.text, 'Animate') }
     : op === 'hover' ? { do: op, ref: ref(first.text, 'Hover motion') }
-    : op === 'press' ? { do: op, key: 'ArrowDown' }
-    : op === 'scroll' ? { do: op, ref: ref(first.text, 'Animate'), dy: 250 }
-    : { do: op, ref: ref(first.text, 'Source'), to: ref(first.text, 'Destination') };
+    : { do: op, ref: ref(first.text, 'Animate'), dy: 250 };
   const before = f.wire.length;
   const result = await f.call('browser_act', { steps: [step], frames: 3, frame_ms: 150 });
   assert.equal(result.isError, false, result.text);
   assert.equal(result.images?.length, 3, result.text + '\nCDP: ' + JSON.stringify(f.wire.slice(before)));
   assert.match(result.text, /Motion frames.*max 480.*capture requests \+\d+, \+\d+, \+\d+ ms.*Untrusted page images/s);
   for (const image of result.images) assert.ok(Math.max(...Object.values(jpegSize(image.data))) <= 480);
-  if (['click', 'hover', 'press', 'scroll'].includes(op)) assert.ok(new Set(result.images.map(image => image.data)).size > 1, 'authored animation/scroll changes must reach the images');
+  assert.ok(new Set(result.images.map(image => image.data)).size > 1, 'authored animation/scroll changes must reach the images');
   const calls = f.wire.slice(before);
   assert.equal(calls.filter(c => c.method === 'Page.captureScreenshot').length, 3);
   assert.equal(calls.filter(c => /bringToFront|activateTarget/.test(c.method)).length, 0);

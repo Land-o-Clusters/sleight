@@ -2,7 +2,8 @@ import { screenshot } from './screenshot.mjs';
 import { isV3Context } from './v3-context.mjs';
 
 export const MOTION_SIDE = 480, MOTION_FRAMES = 4;
-const inputs = { click: ['mousePressed'], hover: ['mouseMoved'], press: ['keyDown', 'rawKeyDown'], scroll: ['mouseWheel'], drag: ['mousePressed'] };
+// Pausing between a drag/press's input events can stall the remaining input.
+const inputs = { click: ['mousePressed'], hover: ['mouseMoved'], scroll: ['mouseWheel'] };
 export const motionOps = Object.freeze(Object.keys(inputs));
 export function userRequestedMotion(ctx) {
   if (!isV3Context(ctx)) return false;

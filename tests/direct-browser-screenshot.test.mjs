@@ -12,7 +12,7 @@ const native = type => ({ strings: ['INPUT', 'type', type], documents: [{ nodes:
   nodeName: [0], nodeValue: [-1], parentIndex: [-1], attributes: [[1, 2]],
 } }] });
 
-function fixture({ type = 'text', fail, after, extraFrames = 0 } = {}) {
+function fixture({ type = 'text', fail, after, extraFrames = 0, send, attach } = {}) {
   const calls = [], page = new EventEmitter(), frames = Array.from({ length: extraFrames + 1 }, () => ({}));
   frames[0]._connection = { toImpl: () => ({ utilityContext: async () => ({ world: 'utility', evaluateExpression: async () => {} }) }) };
   const state = { snapshotNo: 0 }, entry = { page, state };
@@ -21,6 +21,8 @@ function fixture({ type = 'text', fail, after, extraFrames = 0 } = {}) {
       const cdp = new EventEmitter();
       cdp.send = async (method, params) => {
         calls.push({ method, params, frame });
+        const override = await send?.(method, params, cdp);
+        if (override !== undefined) return override;
         if (fail === method) throw Error('private fixture detail must not escape');
         if (method === 'Runtime.evaluate') cdp.emit('Debugger.paused');
         if (method === 'Debugger.disable') cdp.emit('Debugger.resumed');
@@ -31,6 +33,7 @@ function fixture({ type = 'text', fail, after, extraFrames = 0 } = {}) {
         return {};
       };
       cdp.detach = async () => { calls.push({ method: 'detach', frame }); };
+      await attach?.(cdp);
       return cdp;
     } }),
   });
@@ -63,7 +66,116 @@ test('FD1 capture uses only owned renderer sessions and resumes/detaches each', 
   assert.equal(f.calls.find(c => c.method === 'Page.captureScreenshot').frame, f.frames[0]);
   assert.deepEqual(f.calls.filter(c => c.method === 'Runtime.evaluate').map(c => c.params),
     Array.from({ length: 2 }, () => ({ expression: 'void 0', silent: true, returnByValue: true, userGesture: false })));
+  assert.deepEqual(f.calls.filter(c => c.method === 'Debugger.enable').map(c => c.params),
+    [{ maxScriptsCacheSize: 0 }, { maxScriptsCacheSize: 0 }]);
   for (const event of ['framenavigated', 'frameattached', 'framedetached', 'dialog', 'close']) assert.equal(f.page.listenerCount(event), 0);
+});
+
+test('FD1B cumulative capture work shares one absolute deadline and still releases every session', async () => {
+  let clock = 0;
+  const f = fixture({ extraFrames: 3, send: async method => {
+    if (method !== 'Debugger.disable') clock += 250;
+  } });
+  const result = await screenshot(f.entry, { now: () => clock });
+  assert.equal(result.images, undefined);
+  assert.match(result.note, /Screenshot skipped/);
+  assert.equal(f.calls.filter(c => c.method === 'Page.captureScreenshot').length, 0);
+  const enabled = f.calls.filter(c => c.method === 'Debugger.enable').length;
+  assert.equal(f.calls.filter(c => c.method === 'Debugger.disable').length, enabled);
+  assert.equal(f.calls.filter(c => c.method === 'detach').length, enabled);
+});
+
+test('FD1B pages beyond four frames are refused before any renderer pauses', async () => {
+  const f = fixture({ extraFrames: 4 });
+  const result = await screenshot(f.entry);
+  assert.equal(result.images, undefined);
+  assert.equal(f.calls.length, 0);
+});
+
+test('FD1B a stalled capture returns in about three seconds and resumes the renderer', { timeout: 10000 }, async () => {
+  const f = fixture({ send: async method => {
+    if (['Debugger.enable', 'Debugger.pause'].includes(method)) await new Promise(resolve => setTimeout(resolve, 1100));
+    if (method === 'DOMSnapshot.captureSnapshot') return new Promise(() => {});
+  } });
+  const started = performance.now(), result = await screenshot(f.entry);
+  const elapsed = performance.now() - started;
+  assert.ok(elapsed >= 2800 && elapsed < 3600, `elapsed ${elapsed} ms`);
+  assert.equal(result.images, undefined);
+  assert.ok(f.calls.some(c => c.method === 'Debugger.disable'));
+  assert.ok(f.calls.some(c => c.method === 'detach'));
+});
+
+test('FD1B a hung debugger cleanup cannot delay detaching other paused sessions', { timeout: 10000 }, async () => {
+  const f = fixture({ extraFrames: 3, send: method => method === 'Debugger.disable' ? new Promise(() => {}) : undefined });
+  const started = performance.now(), result = await screenshot(f.entry);
+  assert.ok(performance.now() - started < 3600);
+  assert.equal(result.images, undefined);
+  assert.match(result.note, /cleanup unconfirmed/);
+  assert.equal(f.calls.filter(c => c.method === 'detach').length, 4);
+});
+
+test('FD1B a late attachment is detached without enabling or pausing its renderer', { timeout: 10000 }, async () => {
+  let release;
+  const f = fixture({ attach: () => new Promise(resolve => { release = resolve; }) });
+  const result = await screenshot(f.entry);
+  assert.equal(result.images, undefined);
+  release(); await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(f.calls.map(c => c.method), ['detach']);
+});
+
+test('FD1B an attachment resolving at the deadline is detached even before the timeout continuation', async () => {
+  let clock = 0;
+  const f = fixture({ attach: async () => { await Promise.resolve(); clock = 3000; } });
+  const result = await screenshot(f.entry, { now: () => clock });
+  assert.equal(result.images, undefined);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(f.calls.map(c => c.method), ['detach']);
+});
+
+test('FD1B native pixel dimensions correct DPR/zoom scaling without exceeding the delivered byte cap', async () => {
+  let clock = 0;
+  const f = fixture({ send: (method, params) => {
+    if (method === 'Page.captureScreenshot') {
+      clock += 50;
+      return { data: jpeg(Math.round(1600 * params.clip.scale), Math.round(1200 * params.clip.scale)) };
+    }
+  } });
+  const result = await screenshot(f.entry, { maxSide: 480, now: () => clock });
+  assert.ok(result.images, result.note);
+  assert.deepEqual(jpegSize(result.images[0].data), { width: 480, height: 360 });
+  assert.equal(validImages(result.images, { maxSide: 480 }), true);
+  assert.equal(f.calls.filter(c => c.method === 'Page.captureScreenshot').length, 2);
+  assert.match(result.note, /downscaled/);
+  assert.equal(result.capturedAt, 50, 'the delivered image uses its own capture request time');
+});
+
+test('FD1B a large intermediate JPEG is downscaled without delivering its over-budget bytes', async () => {
+  let count = 0;
+  const large = Buffer.concat([Buffer.from(jpeg(2000, 1500), 'base64').subarray(0, -2), Buffer.alloc(IMAGE_BYTES), Buffer.from([0xff, 0xd9])]).toString('base64');
+  const f = fixture({ send: method => method === 'Page.captureScreenshot' ? { data: ++count === 1 ? large : jpeg(480, 360) } : undefined });
+  const result = await screenshot(f.entry, { maxSide: 480 });
+  assert.equal(count, 2);
+  assert.equal(validImages(result.images, { maxSide: 480 }), true);
+  assert.ok(Buffer.from(result.images[0].data, 'base64').length < IMAGE_BYTES);
+});
+
+test('FD1B a page change between native captures withholds pixels and prevents the retry', async () => {
+  const f = fixture({ send: method => {
+    if (method === 'Page.captureScreenshot') { f.page.emit('framenavigated'); return { data: jpeg(2000, 1500) }; }
+  } });
+  const result = await screenshot(f.entry);
+  assert.equal(result.images, undefined);
+  assert.equal(f.calls.filter(c => c.method === 'Page.captureScreenshot').length, 1);
+  assert.equal(f.calls.at(-1).method, 'detach');
+});
+
+test('FD1B refuses an over-budget final JPEG after native downscaling', async () => {
+  const bytes = Buffer.concat([Buffer.from(jpeg(480, 360), 'base64').subarray(0, -2), Buffer.alloc(IMAGE_BYTES), Buffer.from([0xff, 0xd9])]);
+  const f = fixture({ send: method => method === 'Page.captureScreenshot' ? { data: bytes.toString('base64') } : undefined });
+  const result = await screenshot(f.entry, { maxSide: 480 });
+  assert.equal(result.images, undefined);
+  assert.match(result.note, /Screenshot skipped/);
+  assert.equal(f.calls.at(-1).method, 'detach');
 });
 
 test('FD1 protected fields suppress capture before pixels are acquired', async () => {
