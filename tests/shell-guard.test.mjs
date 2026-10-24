@@ -107,16 +107,15 @@ test('ordinary shell work, quoted examples and Python file I/O remain allowed', 
 });
 
 test('heredoc data is skipped through its exact terminator and later commands still run', () => {
-  for (const opener of ['<<EOF', "<<'EOF'", '<<"EOF"', '<<-EOF', '<<~EOF']) {
+  for (const opener of ['<<EOF', "<<'EOF'", '<<"EOF"', '<<-EOF']) {
     const command = `git commit -F - ${opener}\nopen the door\nSafari\nEOF\nprintf ok`;
     assert.equal(denied(command), false, command);
     assert.equal(denied(command + '\nopen ./page.html'), true, command);
   }
   for (const command of [
-    "cat <<'ONE' <<\"TWO\"\nopen the door\nONE\nSafari\nTWO",
-    'cat <<-EOF\n\topen the door\n\tEOF\nprintf ok',
-    'cat <<~EOF\n  open the door\n  EOF\nprintf ok',
-    'cat <<EOF\nopen the door\nEOFsuffix\nSafari\nEOF',
+    "cat >message <<'ONE' <<\"TWO\"\nopen the door\nONE\nSafari\nTWO",
+    'cat >message <<-EOF\n\topen the door\n\tEOF\nprintf ok',
+    'cat >message <<EOF\nopen the door\nEOFsuffix\nSafari\nEOF',
     'printf "%s" "<<EOF"\nprintf ok',
   ]) assert.equal(denied(command), false, command);
   assert.equal(denied('cat <<EOF; open ./page.html\nplain data\nEOF'), true);
@@ -129,16 +128,16 @@ test('shell heredocs are scanned as commands, while ordinary shell input stays a
     assert.equal(denied(command), true, command);
     assert.equal(denied(`${launcher} <<EOF\nprintf '%s' 'open the door'\nEOF`), false, launcher);
   }
-  assert.equal(denied("sh <<'OUTER'\ncat <<'INNER'\nopen the door\nINNER\nOUTER"), false);
+  assert.equal(denied("sh <<'OUTER'\ncat <<'INNER'\nopen the door\nINNER\nOUTER"), true);
 });
 
 test('unquoted heredocs check expanding substitutions without interpreting ordinary data', () => {
   for (const body of ['$(open ./page.html)', '`open ./page.html`', "'$(open ./page.html)'", '"$(open ./page.html)"']) {
-    assert.equal(denied(`cat <<EOF\n${body}\nEOF`), true, body);
-    assert.equal(denied(`cat <<'EOF'\n${body}\nEOF`), false, body);
+    assert.equal(denied(`cat >message <<EOF\n${body}\nEOF`), true, body);
+    assert.equal(denied(`cat >message <<'EOF'\n${body}\nEOF`), false, body);
   }
-  assert.equal(denied('cat <<EOF # ordinary data follows\nopen the door\nEOF\nprintf ok'), false);
-  assert.equal(denied('cat <<EOF # ordinary data follows\nopen the door\nEOF\nopen ./page.html'), true);
+  assert.equal(denied('cat >message <<EOF # ordinary data follows\nopen the door\nEOF\nprintf ok'), false);
+  assert.equal(denied('cat >message <<EOF # ordinary data follows\nopen the door\nEOF\nopen ./page.html'), true);
 });
 
 function installedGuard({ disabled = false, refuseWrite = false } = {}) {
@@ -174,7 +173,7 @@ function installedGuard({ disabled = false, refuseWrite = false } = {}) {
   const next = event => { passed++; return event; };
   return { $, hooks, pre: event => pre($, event, next), checked: () => checked, passed: () => passed, ended: () => ended,
     use: (tool = 'js', next = event => event) => hooks.get(`tool.call:mcp__plugin_sleight_computer__${tool}`)($, { tool_use_id: 'call' }, next),
-    complete: event => hooks.get('turn.complete')($, event ?? {}, event => event),
+    complete: (event, next = event => event) => hooks.get('turn.complete')($, event ?? {}, next),
     stop: () => hooks.get('command.run:sleight')($, { args: 'stop' }) };
 }
 
@@ -225,4 +224,148 @@ test('turbo prompt setup alone leaves ordinary shell work untouched and still en
   await h.complete();
   assert.equal(h.ended(), 1);
   assert.equal((await h.pre(event)).deny, undefined);
+});
+
+// Each review reproducer is an independent assertion so a first failure cannot
+// hide the other baseline bypasses. These strings are never executed.
+for (const command of [
+  '(( x = 1 << 2 ))\nopen ./p.html',
+  'let x=1<<2\nopen ./p.html',
+  'echo $[1<<2]\nopen ./p.html',
+  'echo $((1<<2))\nopen ./p.html',
+  '[[ 1 << 2 ]]\nopen ./p.html',
+  'cat <<~EOF\n~EOF\nopen x\nEOF',
+  'cat <<EOF | sh\nopen x\nEOF',
+  'cat <<EOF | env sh\nopen x\nEOF',
+  'cat <<EOF | xargs open\nopen x\nEOF',
+  'sh <<< "open x"',
+  'bash <(echo open x)',
+  ...['fish -c', 'csh -c', 'tcsh -c', 'su -c', 'parallel', 'watch',
+    'busybox sh -c'].map(prefix => `${prefix} 'open x'`),
+  ...['doas', 'chroot /fixture', 'sandbox-exec -p "(allow default)"', 'xcrun',
+    'ionice -c 3'].map(prefix => `${prefix} open x`),
+  'shortcuts run "Open Safari"',
+]) test(`fd4b review bypass refuses: ${JSON.stringify(command)}`, () => assert.equal(denied(command), true));
+
+test('availability checks do not launch an app, while execution forms still refuse', () => {
+  for (const command of ['command -v open', 'command -V open', 'which open', 'type open', 'type -a open'])
+    assert.equal(denied(command), false, command);
+  for (const command of ['command -p open x', 'command -pv open x', 'exec open x', 'which open; open x'])
+    assert.equal(denied(command), true, command);
+});
+
+test('only matched data sinks may exempt heredoc bodies, across every pipeline consumer', () => {
+  for (const command of [
+    "unknown <<'EOF'\nopen x\nEOF",
+    "cat >message <<'EOF'\nopen x", // No exact terminator.
+    "cat >message <<'EOF'\nopen x\n EOF", // Spaces are not stripped.
+    "cat >message <<-'EOF'\nopen x\n EOF",
+    "cat <<'EOF'\nopen x\nEOF", // Bare stdout has no proven data destination.
+    "git commit -F - <<'A' <<'B'\nplain\nA\nopen x", // All docs must match.
+    'git commit -F - <<EOF\nEO\\\nF\nopen x\nEOF', // Expanded delimiter continuation.
+    "cat >message <<$'EOF'\nEOF\nopen x", // Unsupported delimiter quoting.
+    "cat >message <<'EOF'\nplain\nEOF\n(( x = 1 << 2 ))\nopen x",
+    "python3 - <<'EOF'\nopen x\nEOF",
+    "node - <<'EOF'\nopen x\nEOF",
+    ...['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'csh', 'tcsh', 'busybox sh', 'env sh',
+      'xargs', 'xargs sh -c', 'doas sh', 'ionice -c 3 sh'].map(consumer =>
+      `cat <<'EOF' | cat | ${consumer}\nopen x\nEOF`),
+    "sh | cat <<'EOF' >message\nopen x\nEOF",
+    "git commit -F - <<'EOF' | sh\nopen x\nEOF",
+    "sh <<'OUTER'\ncat >message <<'INNER'\nopen x\nINNER\nOUTER",
+    'cat <<< "open x" | env sh',
+    'cat <(echo open x) | sh',
+    'cat <<< "open x" | xargs',
+  ]) assert.equal(denied(command), true, command);
+});
+
+test('file data sinks, captured cat output and scanned interpreter input still pass', () => {
+  for (const command of [
+    "cat >message <<'EOF'\nIt's (open) `open x`\nopen the door\nEOF",
+    "tee message <<'EOF'\nopen the door\nEOF",
+    "cat <<'ONE' <<\"TWO\" >message\nopen the door\nONE\nSafari\nTWO",
+    "message=$(cat <<'EOF'\nIt's (open) `open x`\nopen the door\nEOF\n)",
+    "gh issue create --body-file - <<'EOF'\nopen the door\nEOF",
+    "gh pr comment 1 --body-file=- <<'EOF'\nopen the door\nEOF",
+    'cat >message <<EOF\nordinary data\nEOF',
+    "cat >message <<-'EOF'\n\topen the door\n\tEOF",
+    "git commit -F - <<'EOF'\nEOFsuffix\nopen the door\nEOF",
+    "cat >message <<\"E\\q\"\nopen the door\nE\\q",
+    'cat >message <<EOF\n<(open x)\nEOF',
+    "python3 - <<'PY'\nprint('hello')\nPY",
+    "node - <<'JS'\nconsole.log('hello')\nJS",
+  ]) assert.equal(denied(command), false, command);
+});
+
+test('proven commit data keeps apostrophes, parentheses, backticks and opener words literal', () => {
+  const body = "It's a fix (reviewed). Let's keep (( examples, $[1<<2] and [[ examples.\n`open x`\n$(open x)\nopen the door\nSafari";
+  for (const delimiter of ["'EOF'", '"EOF"', "E'OF'", '\\EOF']) {
+    const command = `git commit -F - <<${delimiter}\n${body}\nEOF`;
+    assert.equal(denied(command), false, command);
+    assert.equal(denied(command + '\nopen x'), true, command);
+  }
+});
+
+test('top-level completion clears the shell guard even when downstream completion throws', async () => {
+  const h = installedGuard(), event = { tool: 'Bash', command: 'open report.pdf' };
+  await h.use();
+  await assert.rejects(h.complete({}, async () => { throw Error('completion failed'); }), /completion failed/);
+  assert.equal((await h.pre(event)).deny, undefined);
+  assert.equal(h.ended(), 1);
+  await h.use();
+  await assert.rejects(h.complete({ agentId: 'child' }, async () => { throw Error('child failed'); }), /child failed/);
+  assert.equal((await h.pre(event)).deny, guard.shellGuardReason);
+});
+
+test('consumer checks follow quoted split strings, attached shell options and unknown pipes', () => {
+  for (const command of [
+    `env -S "s'h'" <<< 'open x'`,
+    `cat >message <<'EOF' | env -S "s'h'"\nopen x\nEOF`,
+    "tee message <<'EOF' | unknown\nopen x\nEOF",
+    "sh -c'open x'", "fish --command='open x'", "busybox sh -c'open x'",
+    "su fixture -lc'open x'", "su --command='open x' fixture",
+    "echo $(cat >message <<'EOF' | sh\nopen x\nEOF\n)",
+    'cat >message <<EO\\\nF\n$(open x)\nEOF',
+    'git commit -F - <<E\u00a0F\nE\u00a0F\nopen x\nE',
+    "cat 2>log <<'EOF'\nopen x\nEOF",
+    "unknown <<'EOF'\nIt's data to an unknown consumer.\nop\\\nen x\nEOF",
+  ]) assert.equal(denied(command), true, command);
+});
+
+test('added wrappers preserve ordinary and headless commands with option operands', () => {
+  for (const command of [
+    'doas -u fixture chromium --headless', 'ionice -c3 -n7 chromium --headless',
+    'chroot --userspec fixture /fixture chromium --headless',
+    'parallel -j 2 chromium --headless', 'watch -n 2 chromium --headless',
+    'busybox sh -c "chromium --headless"',
+    'sandbox-exec -p "(allow default)" chromium --headless',
+    'xcrun --sdk macosx --toolchain default chromium --headless',
+    'su -c "printf ok"', 'shortcuts list',
+  ]) assert.equal(denied(command), false, command);
+});
+
+test('every shell and xargs consumer scans each supported input form through pipelines', () => {
+  for (const consumer of ['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'csh', 'tcsh', 'busybox sh',
+    'env sh', 'env -S "s\'h\'"', 'xargs', 'xargs sh -c', 'doas sh', 'ionice -c 3 sh']) {
+    for (const command of [
+      `${consumer} <<'EOF'\nopen x\nEOF`,
+      `${consumer} <<< 'open x'`,
+      `${consumer} <(echo open x)`,
+      `cat <<'EOF' | cat | ${consumer}\nopen x\nEOF`,
+      `cat <<< 'open x' | cat | ${consumer}`,
+      `cat <(printf '%s' 'open x') | cat | ${consumer}`,
+    ]) assert.equal(denied(command), true, command);
+  }
+});
+
+test('captured heredoc data cannot swallow a command after its exact closing boundary', () => {
+  for (const body of ["It's open", 'open (', 'open )', '`open x`', '`', '$(open x)', 'Safari']) {
+    for (const command of [
+      `message=$(cat <<'EOF'\n${body}\nEOF\n)`,
+      `git commit -m "$(cat <<'EOF'\n${body}\nEOF\n)"`,
+    ]) {
+      assert.equal(denied(command), false, command);
+      assert.equal(denied(command + '\nopen x'), true, command);
+    }
+  }
 });

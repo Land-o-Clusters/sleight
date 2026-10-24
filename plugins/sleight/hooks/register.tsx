@@ -410,16 +410,21 @@ export const register: Register = on => {
   )
 
   on('turn.complete', async ($, e, next) => {
-    const result = await next(e)
-    if (e.agentId !== undefined) return result
-    turnRunning = false
-    if (!usedThisTurn && !turboTurnBound) return result
-    usedThisTurn = false
-    turboTurnBound = false
-    // Refresh the pane while the engine turn is still open, then end it.
-    if (lastApp && !e.isAborted && (await isPaneOpen($))) await snapshot($, lastApp)
-    await endEngineTurn($, e.isAborted ? 'Interrupt' : 'Stop')
-    return result
+    try {
+      return await next(e)
+    } finally {
+      if (e.agentId === undefined) {
+        turnRunning = false
+        const needsEnd = usedThisTurn || turboTurnBound
+        usedThisTurn = false
+        turboTurnBound = false
+        if (needsEnd) {
+          // Refresh the pane while the engine turn is still open, then end it.
+          if (lastApp && !e.isAborted && (await isPaneOpen($))) await snapshot($, lastApp)
+          await endEngineTurn($, e.isAborted ? 'Interrupt' : 'Stop')
+        }
+      }
+    }
   })
 
   on('command.run', { command: 'sleight' }, async ($, e) => {
