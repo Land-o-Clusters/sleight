@@ -23,15 +23,30 @@ console.error('Failed to load inventory');
 const labels = ['credential', 'credentials', 'token', 'tokens', 'password', 'passwords', 'passwd', 'pwd',
   'secret', 'secrets', 'cookie', 'cookies', 'csrf', 'xsrf', 'sid', 'session', 'sessions',
   'apikey', 'api key', 'api-key', 'api_key', 'apikeys', 'api keys', 'api-keys', 'api_keys',
-  'privatekey', 'private key', 'private-key', 'private_key', 'jwt', 'bearer', 'auth', 'authorization', 'otp', 'code'];
+  'privatekey', 'private key', 'private-key', 'private_key', 'jwt', 'bearer', 'auth', 'authorization', 'otp', 'code',
+  'pass', 'passphrase', 'pw', 'key', 'access_key', 'signature', 'api.key', 'sess', 'pin', 'cvv', 'ssn'];
 for (const label of labels) {
-  console.log('User ' + label + ': briefvalue');
   console.log('User ' + label + ':', 'briefvalue');
 }
 for (const key of ['sk-shortkey', 'AKIAIOSFODNN7EXAMPLE', 'ASIAIOSFODNN7EXAMPLE', 'ghp_shortkey', 'gho_shortkey',
   'github_pat_shortkey', 'xoxa-shortkey', 'xoxb-shortkey', 'xoxp-shortkey',
   'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature', 'eyJhbGciOiJIUzI1NiJ9', 'a123456789bcdefgh']) console.log('keycanary', key);
 console.log('code', 'briefvalue');
+console.log('api', 'key', 'briefvalue');
+console.log('to\u200bken=briefvalue');
+console.log('tоken=briefvalue');
+console.log('tοken=briefvalue');
+console.log('Compiled with exit code 1');
+console.log('code splitting enabled');
+console.log('Are you sure?');
+console.log('metadata: useful');
+console.log('Next.js docs');
+console.log('reviewcanary Ab3dE7gH9k ABCD-1234-EFGH-5678 482913 Zm9vYmFy deadbeef');
+console.log('reviewcanary abcdefghijklmnop aaaaaaaaaaaaaaaa');
+console.log('load localhost:3000/api/reset?key=briefvalue');
+console.log('load api.example.com?k=briefvalue');
+console.log('failed:/api/reset?key=briefvalue');
+console.log('at app_12.js:1:2');
 console.log('keycanary https://example.invalid/sk-shortkey');
 console.log('sure? metadata:useful year 2026 port 8080 HTTP 404 count 1234');
 console.log('load /invite/abcdef123456/app12345678901234.min.js?x=briefvalue');
@@ -49,7 +64,7 @@ test('owned real-page console, request failures and timings are scrubbed without
   const server = createServer((request, response) => {
     hits.push([request.method, request.url]);
     request.resume(); response.setHeader('Cache-Control', 'no-store');
-    if (request.url === '/' || request.url === '/next') { response.setHeader('Content-Type', 'text/html'); response.end(request.url === '/' ? HTML : '<title>Next document</title>'); }
+    if (request.url === '/' || request.url === '/next') { response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(request.url === '/' ? HTML : '<title>Next document</title>'); }
     else if (request.url === '/redirect') { response.writeHead(302, { Location: '/missing?token=private-redirect-query' }); response.end(); }
     else { response.writeHead(request.url.startsWith('/ok') ? 200 : request.url.startsWith('/broken') ? 503 : 404,
       { 'Set-Cookie': 'private-cookie=private-response-cookie; Path=/', 'Content-Type': 'text/plain' }); response.end('private-response-body'); }
@@ -95,15 +110,20 @@ test('owned real-page console, request failures and timings are scrubbed without
   };
   const logs = await call({ console: true });
   assert.match(logs, /fixture started/); assert.match(logs, /Failed to load inventory/);
-  assert.match(logs, /fixture render failed/); assert.match(logs, /sensitive text omitted/);
-  assert.doesNotMatch(logs, /briefvalue|keycanary|abcdef123456/);
-  assert.match(logs, /sure\? metadata:useful year 2026 port 8080 HTTP 404 count 1234/);
-  assert.match(logs, /\/invite\/\[omitted\]\/app12345678901234.min.js/);
+  assert.match(logs, /fixture render failed/); assert.match(logs, /\[omitted\]/);
+  assert.doesNotMatch(logs, /briefvalue|abcdef123456|Ab3dE7gH9k|ABCD-1234|482913|Zm9vYmFy|deadbeef|abcdefghijklmnop|aaaaaaaaaaaaaaaa/);
+  assert.doesNotMatch(logs, /shortkey|AKIA|ASIA|ghp_|gho_|github_pat_|xox[abp]|eyJhbGciOiJIUzI1NiJ9/);
+  assert.match(logs, /sure\? \[value\] year 2026 port 8080 HTTP 404 count 1234/);
+  assert.match(logs, /\/invite\/\[seg\]\/\[seg\]/);
+  for (const text of ['Compiled with exit code 1', 'code splitting enabled', 'Are you sure?', 'metadata: useful', 'Next.js docs', 'app_12.js:1:2'])
+    assert.ok(logs.includes(text), text);
+  assert.match(logs, /localhost:3000\/api\/reset/);
+  assert.match(logs, /api.example.com/);
   const network = await call({ network: true });
   assert.match(network, /\/broken.*"status":503/); assert.match(network, /"method":"POST".*\/ok/);
   assert.match(network, /\/redirect.*"status":302/); assert.match(network, /\/missing.*"status":404/);
   assert.match(network, /"outcome":"failed"/); assert.match(network, /"duration":/);
-  assert.match(network, /\/invite\/\[omitted\]\/app12345678901234.min.js/);
+  assert.match(network, /\/invite\/\[seg\]\/\[seg\]/);
   assert.doesNotMatch(network, /abcdef123456/);
   const performance = await call({ performance: true });
   assert.match(performance, /DomContentLoaded: \d/); assert.match(performance, /TaskDuration: \d/);

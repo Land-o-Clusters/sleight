@@ -6,58 +6,105 @@ const resourceTypes = new Set('Document Stylesheet Image Media Font Script TextT
 const methods = new Set('GET HEAD POST PUT PATCH DELETE OPTIONS CONNECT TRACE'.split(' '));
 const numeric = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 const ms = value => Math.round(Math.min(value * 1000, 1e12) * 10) / 10;
-const sensitive = /(?:auth(?:orization)?|proxy.authorization|cookies?|passwords?|passwd|pwd|secrets?|tokens?|api[ _-]?keys?|private[ _-]?key|sessions?(?:[ _-]?id)?|credentials?|csrf|xsrf|sid|jwt|bearer|basic|otp)\b/i;
-const labelledCode = /\bcode(?:\s*[:=]|\s+\S)/i;
-const keyShape = /\b(?:sk-|(?:AKIA|ASIA)[A-Z0-9]{16}\b|gh[po]_|github_pat_|xox[abp]-|eyJ[A-Za-z0-9_-]+)/;
-const mixedRun = value => /[a-z]/i.test(value) && /\d/.test(value);
+// Fold before parsing, including before URL decoding/validation. Unmapped scripts
+// never enter the ASCII token allowlist. Format controls are deleted, not spaces.
+const lookalikes = new Map();
+for (const [latin, letters] of Object.entries({
+  A: 'АΑ', a: 'аα', B: 'ВΒ', b: 'Ььβ', C: 'СϹ', c: 'сϲ', D: 'Ꭰ', d: 'ԁ',
+  E: 'ЕΕ', e: 'еεϵ', H: 'НΗ', h: 'һ', I: 'ІΙӀ', i: 'іι', J: 'Ј', j: 'ј',
+  K: 'КΚ', k: 'кκ', M: 'МΜ', m: 'м', N: 'Ν', n: 'ո', O: 'ОΟ', o: 'оο',
+  P: 'РΡ', p: 'рρ', S: 'Ѕ', s: 'ѕ', T: 'ТΤ', t: 'тτ', U: 'Ս', u: 'υս', v: 'ν',
+  X: 'ХΧ', x: 'хχ', Y: 'ΥҮ', y: 'уγ', Z: 'Ζ', z: 'ᴢ',
+})) for (const letter of letters) lookalikes.set(letter, latin);
+const normalize = text => text.normalize('NFKC').replace(/[\p{Cf}\u034f\ufe00-\ufe0f]/gu, '')
+  .replace(/./gu, letter => lookalikes.get(letter) ?? letter)
+  .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ');
+const labels = /(?<![a-z0-9])(?:(?:api|access|private|client|refresh|reset|proxy|auth|oauth|session|bearer)[\s_.-]*)*(?:keys?|tokens?|pass(?:words?|phrases?|wd|es)?|pwd|pw|secrets?|codes?|sig(?:nature)?s?|sess(?:ions?)?(?:[\s_.-]*ids?)?|auth(?:orization|entication)?s?|otps?|pins?|cvvs?|ssns?|credentials?|cookies?|csrf|xsrf|sid|jwt|bearer|basic)(?![a-z0-9])/gi;
+// These exact diagnostics are admitted even when their spelling resembles an
+// opaque mixed-case value or exceeds the conservative plain-word limit.
+const statusWords = new Set(('true false null undefined NaN Infinity OK HTTP HTTPS GET POST PUT PATCH DELETE OPTIONS ' +
+  'SUCCESS WARNING ERROR FAILED READY TypeError ReferenceError SyntaxError RangeError URIError EvalError AggregateError ' +
+  'DOMContentLoaded Next.js internationalization misconfiguration unresponsiveness').toLowerCase().split(' '));
+const stack = /^[a-z0-9_.-]{1,128}:\d{1,8}:\d{1,8}$/i;
+// Special spans are parsed as data, never caller-forgeable placeholder strings.
+// A relative URL may follow any punctuation, including the colon in "failed:/".
+const special = /(?<![\p{L}\p{N}_.%\/@-])(?:[a-z0-9_.-]+:\d{1,8}:\d{1,8}(?![\w:])(?:[?#][^\s<>"'`()\[\]{},;]*)?|(?:https?|wss?|file|data|blob):[^\s<>"'`()\[\]{}]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?|[/?#][^\s<>"'`()\[\]{},;]*)|[a-z0-9-]+:\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?)|(?<![\p{L}\p{N}])(?:\.\.?\/|\/)[^\s<>"'`()\[\]{},;]*/giu;
 
-// Any labelled credential discards the whole message, including multiline values.
-// Long opaque values, JWTs, email addresses and URL credentials/queries are also removed.
+function plainToken(value) {
+  if (/^[.,;:!?"'`()\[\]{}<>+*%&|~^=/#@-]+$/.test(value)) return value;
+  // Only surrounding prose punctuation can be detached. Interior punctuation,
+  // digits in words, underscores and unknown forms mask the entire token.
+  const [, before, word, after] = value.match(/^(["'`([{<]*)(.*?)([.,;:!?"'`)\]}>]*)$/s);
+  const allowed = statusWords.has(word.toLowerCase()) || /^[+-]?\d{1,4}(?:\.\d{1,4})?$/.test(word) ||
+    (/^[a-z]{1,15}$/i.test(word) && !/^[a-f]{4,}$/i.test(word));
+  return before + (allowed ? word : '[value]') + after;
+}
+const plainText = text => text.replace(/\S+/g, plainToken);
+
 export function scrubDeveloperText(value) {
-  if (typeof value !== 'string') return '[value omitted]';
-  if (value.length > 4096) return '[long text omitted]';
-  let text = value.normalize('NFKC').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/g, ' ');
-  if (sensitive.test(text) || labelledCode.test(text) || keyShape.test(text)) return '[sensitive text omitted]';
-  // Keep sanitized URLs separate so later text rules cannot damage their hosts,
-  // file names, short numeric route ids or the omission markers themselves.
-  const urls = [];
-  text = text.replace(/\b(?:https?|wss?|file|data|blob):[^\s<>"']+|(?:\b[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?\/[^\s<>"']*|(?:\/|\.\.?\/)[^\s<>"']+/gi,
-    (value, offset, input) => {
-      if (value.startsWith('/') && offset > 0 && !/[\s("'=]/.test(input[offset - 1])) return value;
-      const absolute = /^[a-z]+:/i.test(value);
-      const relative = /^(?:\/|\.\.?\/)/.test(value);
-      const safe = safeDeveloperURL(absolute ? value : relative ? new URL(value, 'https://relative.invalid').href : 'https://' + value);
-      urls.push(relative ? safe.replace('https://relative.invalid', '') : absolute ? safe : safe.replace('https://', ''));
-      return '\u0000' + (urls.length - 1) + '\u0000';
-    });
-  if ((text.match(/[a-z0-9]{16,}/gi) ?? []).some(mixedRun)) return '[sensitive text omitted]';
-  text = text
-    .replace(/\b[^\s@]+@[^\s@]+\.[^\s@]+\b/g, '[email omitted]')
-    .replace(/\b\d{6,}\b/g, '[number omitted]')
-    .replace(/[A-Za-z0-9_+%/=.-]{24,}/g, '[opaque value omitted]')
-    .replace(/\u0000(\d+)\u0000/g, (_all, index) => urls[Number(index)]);
-  return text.slice(0, LINE);
+  if (typeof value !== 'string') return '[value]';
+  const text = normalize(value), spans = [];
+  if (text.length > 4096) return '[long text omitted]';
+  for (const match of text.matchAll(special)) {
+    if (statusWords.has(match[0].toLowerCase())) continue;
+    // Do not recognize a URL prefix inside an unknown token or email address.
+    const end = match.index + match[0].length;
+    if (end < text.length && /[a-z0-9_@]/i.test(text[end])) continue;
+    const frame = match[0].split(/[?#]/, 1)[0];
+    spans.push({ start: match.index, end, safe: stack.test(frame) ? frame : safeDeveloperURL(match[0]) });
+  }
+  let labelText = '', cursor = 0;
+  for (const span of spans) {
+    labelText += text.slice(cursor, span.start) + ' '.repeat(span.end - span.start); cursor = span.end;
+  }
+  labelText += text.slice(cursor);
+  let cut = text.length;
+  for (const match of labelText.matchAll(labels)) {
+    if (/^code$/i.test(match[0]) &&
+      ((/\bexit\s+$/i.test(labelText.slice(0, match.index)) && /^\s+\d{1,4}(?![\w.])/.test(labelText.slice(match.index + 4))) ||
+       /^\s+splitting\s+enabled\b/i.test(labelText.slice(match.index + 4)))) continue;
+    cut = match.index; break;
+  }
+  const parts = []; cursor = 0;
+  for (const span of spans) {
+    if (span.start >= cut) break;
+    parts.push(plainText(text.slice(cursor, span.start)), span.safe); cursor = span.end;
+  }
+  parts.push(plainText(text.slice(cursor, cut)));
+  if (cut < text.length) parts.push('[omitted]');
+  return parts.join('').slice(0, LINE);
 }
 
 export function safeDeveloperURL(value) {
-  if (typeof value !== 'string' || value.length > 8192) return '[URL omitted]';
+  if (typeof value !== 'string') return '[URL omitted]';
   try {
-    const url = new URL(value);
-    if (!['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) return '[URL omitted]';
-    // Paths can themselves carry credentials. Keep words, short ids and file names.
-    let hideNext = false;
-    const path = url.pathname.split('/').slice(0, 20).map(segment => {
-      let decoded; try { decoded = decodeURIComponent(segment); } catch { return '[omitted]'; }
-      const hide = hideNext; hideNext = sensitive.test(decoded) || /^code$/i.test(decoded);
-      const file = /^[a-z0-9_-]+(?:\.[a-z0-9_-]+)*\.[a-z]{1,10}$/i.test(decoded);
-      return hide || hideNext || !/^[a-zA-Z0-9._-]*$/.test(decoded) ||
-        (!file && (decoded.length > 64 || (decoded.length >= 12 && mixedRun(decoded)) || /^\d{12,}$/.test(decoded)))
-        ? '[omitted]' : decoded;
-    }).join('/');
-    // A token-like hostname is also untrusted text. Userinfo, search and hash never survive.
-    const host = url.hostname.split('.').map(label => label.length >= 12 && mixedRun(label) ? '[omitted]' : label).join('.') +
-      (url.port ? ':' + url.port : '');
-    return (url.protocol + '//' + host + path).slice(0, LINE);
+    const text = normalize(value);
+    if (text.length > 8192 || /\s/.test(text)) return '[URL omitted]';
+    const relative = /^(?:\/|\.\.?\/)/.test(text) && !text.startsWith('//');
+    const absolute = /^(?:https?|wss?):\/\//i.test(text);
+    const bare = /^(?:[a-z0-9-]+\.)+[a-z]{2,}(?=[:/?#]|$)|^[a-z0-9-]+:\d+(?=[/?#]|$)/i.test(text);
+    if (!relative && !absolute && !bare) return '[URL omitted]';
+    const url = relative ? undefined : new URL(absolute ? text : 'https://' + text);
+    const rawPath = relative ? text.split(/[?#]/, 1)[0] : url.pathname;
+    const segments = rawPath.split('/');
+    let omit = false;
+    const path = segments.slice(0, 20).map((segment, index) => {
+      if (!segment) return '';
+      let decoded; try { decoded = normalize(decodeURIComponent(segment)); } catch { return '[seg]'; }
+      if (!omit && index === segments.length - 1 && stack.test(decoded)) return decoded;
+      // Retain the earlier credential-path protection as an additional limit on
+      // the URL grammar. A label omits its suffix, including later path words.
+      omit ||= decoded.search(labels) >= 0 || /^(?:sk|xox[abp])-/i.test(decoded);
+      if (omit) return '[seg]';
+      return /^[a-z.-]{1,20}$/i.test(decoded) ? decoded : '[seg]';
+    }).join('/') + (segments.length > 20 ? '/[seg]' : '');
+    if (relative) return path.slice(0, LINE);
+    // IP literals are hosts, not DNS subdomain labels. Every DNS label carrying
+    // digits is masked, including short reset-code subdomains and punycode.
+    const host = /^(?:\d+\.){3}\d+$/.test(url.hostname) || url.hostname.startsWith('[') ? url.hostname :
+      url.hostname.split('.').map(label => /^[a-z-]{1,63}$/i.test(label) ? label : '[sub]').join('.');
+    const keepPath = absolute || text.split(/[?#]/, 1)[0].includes('/');
+    return ((absolute ? url.protocol + '//' : '') + host + (url.port ? ':' + url.port : '') + (keepPath ? path : '')).slice(0, LINE);
   } catch { return '[URL omitted]'; }
 }
 
@@ -100,12 +147,13 @@ export function createDeveloperRead(cdp) {
   listen('Runtime.consoleAPICalled', event => {
     const type = consoleTypes.has(event.type) ? event.type : 'log';
     const values = (Array.isArray(event.args) ? event.args.slice(0, 8) : []).map(arg =>
-      arg?.type === 'string' ? scrubDeveloperText(arg.value) : arg?.type === 'number' && numeric(arg.value) ? scrubDeveloperText(String(arg.value))
-        : arg?.type === 'boolean' ? String(arg.value === true) : '[object/value omitted]');
-    // A label and its value may arrive as separate console arguments.
+      arg?.type === 'string' && typeof arg.value === 'string' ? arg.value
+        : arg?.type === 'number' && Number.isFinite(arg.value) ? String(arg.value)
+          : arg?.type === 'boolean' ? String(arg.value === true) : '[value]');
+    // Join raw primitives first. Otherwise split labels such as ("api", "key",
+    // "briefvalue") can be hidden by per-argument token masking.
     const text = event.args?.length > 8 ? '[console arguments omitted]'
-      : values.some(value => value === '[sensitive text omitted]') || labelledCode.test(values.join(' '))
-        ? '[sensitive text omitted]' : values.join(' ').slice(0, LINE);
+      : scrubDeveloperText(values.join(' '));
     push(logs, { type, text }, 'console');
   });
   listen('Runtime.exceptionThrown', event => {
