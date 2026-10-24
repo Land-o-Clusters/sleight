@@ -15,6 +15,25 @@ function fixture(t) {
   return { dir: join(bank, 'fixture'), nonce: 'abc123', lockPath: join(bank, 'lock') };
 }
 
+test('an incomplete leftover audit cannot be contained as an exited-app cleanup failure', async t => {
+  const execute = await runner(), ctx = fixture(t);
+  const diagnostics = { launched: true, appQuit: true, cleanup: 'unconfirmed', windowCleanupConfirmed: false };
+  ctx.fixtureDiagnostics = [diagnostics];
+  ctx.windowLeases = [{ diagnostics, dispose: async () => true, recover: async () => { throw new Error('recovery still unconfirmed'); } }];
+  let released = false;
+  const result = await execute({ setup() {}, prompt: () => 'fixture', check: () => true,
+    cleanup: () => { throw new Error('Owned Numbers fixture window cleanup unconfirmed'); },
+    leftovers: () => { throw new Error('NUMBERS_LEFTOVER_SCAN_UNCONFIRMED'); } }, ctx, {
+    retainFixture: true, lock: async () => async () => { released = true; },
+    drive: async () => ({ code: 0, groupClean: true }),
+  });
+  assert.equal(result.passed, false);
+  assert.equal(released, false);
+  assert.match(result.cleanupError, /NUMBERS_LEFTOVER_SCAN_UNCONFIRMED/);
+  const { cleanupContained } = await import('../bench/real-run.mjs');
+  assert.equal(cleanupContained(result), false);
+});
+
 for (const reason of ['interactive task timeout', 'session exited before confirmed RESULT and idle prompt']) {
   test(`retained fixture records the actual driver failure: ${reason}`, async t => {
     const execute = await runner(), ctx = fixture(t);

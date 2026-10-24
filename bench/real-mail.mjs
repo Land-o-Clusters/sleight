@@ -335,6 +335,7 @@ export async function cleanupMailImport(ctx) {
   } catch (error) { failure = error; }
   try { collected = await lease.dispose(); if (collected !== true) throw new Error('Mail helper collection unconfirmed'); }
   catch (error) { failure ??= error; }
+  if (lease.diagnostics) lease.diagnostics.helperCollectionConfirmed = collected === true;
   if (!failure && lease.launched === true && collected === true) {
     try { await lease.quit(); } catch (error) { failure = error; }
   }

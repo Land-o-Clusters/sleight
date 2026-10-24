@@ -452,7 +452,10 @@ export async function retryFixtureCleanup(ctx) {
   if (!leases.length || ctx.pendingAcquisitions?.size) throw new Error('Fixture recovery ownership unconfirmed');
   // A lease that attached to an app another lease launched recovers after it, once that lease has quit the app.
   const adopted = lease => typeof lease.ownerLease === 'function' && !!lease.ownerLease();
-  const ordered = [...leases].reverse();
+  // Mail's retained import has its own cleanup protocol and no document recovery.
+  // Skip only leases whose cleanup already proved both the window and helper gone.
+  const ordered = [...leases].reverse().filter(lease => !(lease.cleaned === true &&
+    lease.diagnostics?.windowCleanupConfirmed === true && lease.diagnostics?.helperCollectionConfirmed === true));
   for (const lease of ordered.filter(lease => !adopted(lease))) await lease.recover();
   for (const lease of ordered.filter(adopted)) await lease.recover();
 }

@@ -970,7 +970,8 @@ function attachedSheets(window, app, api) {
 }
 
 // Only the exact fixture file's save prompt bypasses a dialog refusal. An unsupported title needs the retained AX reference,
-// successful listing and setup's CG number instead. The prompt has exactly one Don't Save and no unknown button.
+// successful listing and setup's CG number instead. Numbers imports can lack a document URL;
+// their nonce title and attached sheet still bind the discard to the retained window.
 function fixtureDiscardSheet(window, request, api, app) {
   var located = fixtureDiscardPrompt(window, request, api, app);
   return located ? located.sheet : null;
@@ -979,26 +980,30 @@ function fixtureDiscardSheet(window, request, api, app) {
 function fixtureDiscardPrompt(window, request, api, app) {
   var token = request.runToken || request.token;
   if (!window || !token || !request.target || request.target[0] !== '/') return null;
-  var document = api.path(api.text(window, 'AXDocument')), expected = api.path(request.target), title;
+  var rawDocument = api.text(window, 'AXDocument'), document = api.path(rawDocument), expected = api.path(request.target), title;
   try { title = api.title ? api.title(window) : api.text(window, 'AXTitle'); }
   catch (error) { if (error.code !== -25205) throw error; title = null; }
-  if (!document || document !== expected || (title === null ?
+  var numbersImport = request.bundle === 'com.apple.iWork.Numbers' && request.mode === 'document' && /\.csv$/i.test(request.target);
+  var unnamedImport = numbersImport && !rawDocument && typeof title === 'string' && title.indexOf(token) !== -1;
+  if ((!unnamedImport && (!document || document !== expected)) || (title === null ?
       !(api.titleFree && api.titleFree(window, request, app)) : title.indexOf(token) === -1)) return null;
   var found = attachedSheets(window, app, api);
-  if (found.alert && (request.requireAttachedSheet || title === null)) return null;
+  if (found.alert && (numbersImport || request.requireAttachedSheet || title === null)) return null;
   if (found.sheets.length !== 1) return null;
   var sheet = found.sheets[0];
   if (!found.alert && api.text(sheet, 'AXRole') !== 'AXSheet') return null;
   var content = dialogContents(sheet, api), buttons = content.buttons;
-  if (buttons.filter(function (name) { return DISCARD_TITLES.indexOf(name) !== -1; }).length !== 1 ||
-      buttons.some(function (name) { return SAVE_PROMPT_TITLES.indexOf(name) === -1; }) ||
+  var discardTitles = numbersImport ? DISCARD_TITLES.concat(['Delete']) : DISCARD_TITLES;
+  var saveTitles = numbersImport ? SAVE_PROMPT_TITLES.concat(['Delete']) : SAVE_PROMPT_TITLES;
+  if (buttons.filter(function (name) { return discardTitles.indexOf(name) !== -1; }).length !== 1 ||
+      buttons.some(function (name) { return saveTitles.indexOf(name) === -1; }) ||
       appDialogCategory({ subrole: 'AXDialog', title: api.text(sheet, 'AXTitle'), text: content.text, buttons: buttons }) !== 'application-result') return null;
   if (found.alert) {
     var name = request.target.split('/').pop(), stem = name.lastIndexOf('.') > 0 ? name.slice(0, name.lastIndexOf('.')) : name;
     var said = content.text.join('\n');
     if (said.indexOf(stem) === -1 || said.indexOf(token) === -1) return null;
   }
-  return { sheet: sheet, source: found.source, windowTitle: title, buttons: buttons };
+  return { sheet: sheet, source: found.source, windowTitle: title, buttons: buttons, discardTitles: discardTitles };
 }
 
 // Bind the file window before requesting quit. Poll only its own save sheet,
@@ -1037,12 +1042,12 @@ function prepareOfficeQuitDiscard(request, app, api) {
   };
 }
 
-function discardButtons(sheet, api) {
+function discardButtons(sheet, api, titles) {
   var result = [], visited = 0;
   (function visit(current, depth) {
     if (depth < 0 || ++visited > 512) throw new Error('Application dialog inspection exceeded its bound');
     api.children(current).forEach(function (child) {
-      if (api.text(child, 'AXRole') === 'AXButton' && DISCARD_TITLES.indexOf(api.text(child, 'AXTitle')) !== -1) result.push(child);
+      if (api.text(child, 'AXRole') === 'AXButton' && (titles || DISCARD_TITLES).indexOf(api.text(child, 'AXTitle')) !== -1) result.push(child);
       visit(child, depth - 1);
     });
   })(sheet, 8);
@@ -1661,7 +1666,7 @@ function nativeAX(state, clock) {
           if (!attachedSheets(window, app, promptApi).sheets.length) return;
           throw new Error('Unexpected owned fixture sheet; cleanup refused');
         }
-        var discardButton = discardButtons(prompt.sheet, promptApi);
+        var discardButton = discardButtons(prompt.sheet, promptApi, prompt.discardTitles);
         if (discardButton.length !== 1) throw new Error('Unexpected owned fixture sheet; cleanup refused');
         if (validate) validate();
         var current = this.discardable(window, request, app);

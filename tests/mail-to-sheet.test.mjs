@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { mailToSheetTask, prepareMailToSheet, transferCSV } from '../bench/tasks-mail-to-sheet.mjs';
 import { setupMailImport, prepareMailFixture } from '../bench/real-mail.mjs';
-import { executeRealTask } from '../bench/real-run.mjs';
+import { executeRealTask, cleanupContained } from '../bench/real-run.mjs';
 import { getTasks } from '../bench/tasks.mjs';
 import { selectSuiteTasks } from '../bench/shop.mjs';
 import { suite, resolveTask, planSuite } from '../bench/world/suite.mjs';
@@ -34,7 +34,7 @@ function appState(ctx) {
   };
 }
 
-function fixture(t, { mail = {}, numbers = {}, openFailure, importFailure } = {}) {
+function fixture(t, { mail = {}, numbers = {}, openFailure, importFailure, findLeftovers = () => [] } = {}) {
   const ctx = context(t), calls = [];
   let state, mailLease;
   const task = mailToSheetTask(async (current, request) => {
@@ -47,7 +47,7 @@ function fixture(t, { mail = {}, numbers = {}, openFailure, importFailure } = {}
     (current.windowLeases ??= []).push(lease);
     (current.fixtureDiagnostics ??= []).push(diagnostics);
     return lease;
-  }, { importMail: async current => {
+  }, { findLeftovers, importMail: async current => {
     calls.push(['mail-import']);
     if (importFailure) throw importFailure;
     return setupMailImport(current, { importer: async () => {
@@ -274,6 +274,65 @@ test('cleanup attempts both fixture cleanups and reports failure instead of swal
   await f.task.setup(f.ctx);
   await assert.rejects(f.task.cleanup(f.ctx), /Numbers retained window lost.*mailbox removal unconfirmed/);
   assert.ok(f.calls.some(c => c[0] === 'mail-dispose'));
+});
+
+test('Numbers cleanup retains the runner recovery prefix while still closing Mail', async t => {
+  const f = fixture(t, { numbers: { close: async () => { throw new Error('Owned Numbers fixture window cleanup unconfirmed: hiccup'); } } });
+  await f.task.setup(f.ctx);
+  await assert.rejects(f.task.cleanup(f.ctx), /^Error: Owned Numbers fixture window cleanup unconfirmed: hiccup/);
+  assert.equal(f.mailLease().cleaned, true);
+  assert.equal(cleanupContained({ cleanupError: 'Owned Numbers fixture window cleanup unconfirmed: hiccup',
+    fixtureDiagnostics: [{ launched: true, appQuit: true, helperCollectionConfirmed: true }] }), true);
+});
+
+test('the runner retries Numbers after confirmed Mail cleanup and releases its mock lock', async t => {
+  let recovered = 0, released = 0;
+  const f = fixture(t, { findLeftovers: () => { assert.equal(recovered, 1); return ['Transfer-bt2test.numbers']; }, numbers: {
+    close: async () => { throw new Error('Owned Numbers fixture window cleanup unconfirmed: hiccup'); },
+    recover: async function () {
+      assert.equal(f.mailLease().cleaned, true);
+      recovered++;
+      Object.assign(this.diagnostics, { cleanup: 'closed retained fixture', windowCleanupConfirmed: true });
+    },
+  } });
+  const result = await executeRealTask(f.task, f.ctx, { retainFixture: true, lock: async () => async () => { released++; },
+    drive: async () => { exportCSV(f.ctx); return { code: 0, out: {}, groupClean: true }; } });
+  assert.equal(result.passed, true);
+  assert.equal(result.cleanupRecovered, true);
+  assert.equal(result.cleanupError, undefined);
+  assert.deepEqual(result.leftovers, ['Transfer-bt2test.numbers']);
+  assert.equal(recovered, 1);
+  assert.equal(released, 1);
+});
+
+test('the leftover audit runs after cleanup and publishes names before unlocking', async t => {
+  const ctx = context(t), calls = [];
+  const task = mailToSheetTask(undefined, { findLeftovers: current => {
+    assert.equal(current, ctx);
+    calls.push('audit');
+    return ['Transfer-bt2test.numbers'];
+  } });
+  const result = await executeRealTask({ ...task, setup: () => prepareMailToSheet(ctx),
+    cleanup: () => { calls.push('cleanup'); }, check: () => true }, ctx, {
+    retainFixture: true, lock: async () => async () => { calls.push('unlock'); },
+    drive: async () => ({ code: 0, groupClean: true }),
+  });
+  assert.equal(result.passed, true);
+  assert.deepEqual(result.leftovers, ['Transfer-bt2test.numbers']);
+  assert.deepEqual(calls, ['cleanup', 'audit', 'unlock']);
+});
+
+test('a Mail failure cannot be erased by successful Numbers recovery', async t => {
+  const f = fixture(t, { numbers: {
+    close: async () => { throw new Error('Owned Numbers fixture window cleanup unconfirmed: hiccup'); },
+    recover: async function () { Object.assign(this.diagnostics, { cleanup: 'closed retained fixture', windowCleanupConfirmed: true }); },
+  }, mail: { removeMailbox: async () => false } });
+  const result = await executeRealTask(f.task, f.ctx, { retainFixture: true,
+    lock: async () => async () => assert.fail('unresolved Mail cleanup must retain the lock'),
+    drive: async () => { exportCSV(f.ctx); return { code: 0, out: {}, groupClean: true }; } });
+  assert.equal(result.passed, false);
+  assert.match(result.cleanupError, /mailbox removal unconfirmed/);
+  assert.equal(f.ctx.fixtureLockUnconfirmed, true);
 });
 
 test('the runner releases only a mock lock after both fixtures have confirmed cleanup', async t => {
