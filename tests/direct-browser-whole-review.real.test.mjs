@@ -172,6 +172,54 @@ test('LR1C: a cross-process iframe and its worker cannot send POSTs after the ta
  assert.ok(result.text.includes('held after expander click: POST '+base+' x2'),result.text);
 });
 
+test('LR1D: SharedWorker POSTs at click plus 300 and 1500 ms are held on the owned tab',{skip,timeout:20000},async t=>{
+ const received=[],server=createServer((req,res)=>{received.push({method:req.method,path:req.url});res.setHeader('access-control-allow-origin','*');res.end('ok');});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>{server.closeAllConnections();return new Promise(r=>server.close(r));});
+ const base='http://127.0.0.1:'+server.address().port;
+ const script=`window.workerURL=URL.createObjectURL(new Blob(["onconnect=e=>{const port=e.ports[0];port.onmessage=e=>fetch(e.data,{method:'POST'}).then(()=>port.postMessage('sent')).catch(()=>port.postMessage('held'));port.postMessage('ready');};"],{type:'text/javascript'}));window.outcomes=[];more.onclick=()=>{more.remove();for(const ms of [300,1500])setTimeout(()=>{try{const w=new SharedWorker(workerURL,'shared-'+ms);w.port.onmessage=e=>{if(e.data==='ready')w.port.postMessage('${base}/shared-'+ms);else{outcomes.push(e.data);w.port.close();}};w.port.start();}catch{outcomes.push('refused');}},ms);};`;
+ const f=await filteredFixture(t,shell('<article data-key="a">first message</article><article data-key="b">last message</article>','<button type="button" id="more">Show more</button>',script));t.after(()=>f.context.close());
+ await f.sentinel.goto(f.entry.page.url());
+ const send=page=>page.evaluate(base=>new Promise(resolve=>{const url=URL.createObjectURL(new Blob(["onconnect=e=>{const p=e.ports[0];p.onmessage=e=>fetch(e.data,{method:'POST'}).then(()=>p.postMessage('sent'));};"],{type:'text/javascript'})),w=new SharedWorker(url);w.port.onmessage=e=>{w.port.close();URL.revokeObjectURL(url);resolve(e.data);};w.port.start();w.port.postMessage(base+'/outside-read');}),base);
+ assert.equal(await send(f.entry.page),'sent','construction before the read must pass');received.length=0;
+ const reading=f.call('browser_read',{whole:{}});await f.entry.page.waitForFunction(()=>!document.querySelector('#more'));
+ let unrelated;try{unrelated=await send(f.sentinel);}finally{await reading;}
+ const result=await reading;assert.equal(unrelated,'sent','another tab must keep its SharedWorker capability');
+ assert.deepEqual(received.filter(r=>r.method==='POST'),[{method:'POST',path:'/outside-read'}],result.text);
+ assert.deepEqual(await f.entry.page.evaluate(()=>outcomes),['refused','refused'],'both delayed attempts must be refused');
+ assert.match(result.text,/held during whole read: SharedWorker creation x2/,result.text);
+ assert.equal(await send(f.entry.page),'sent','construction after the read must pass');
+ t.diagnostic(result.text.split('# Whole-thread data')[0]);
+});
+
+test('LR1D: a cross-process frame refuses SharedWorkers during a whole read',{skip,timeout:25000},async t=>{
+ const received=[],server=createServer((req,res)=>{if(req.method==='POST')received.push(req.url);res.setHeader('content-type','text/html');res.end(`<script>window.attempts=0;function attempt(){const url=URL.createObjectURL(new Blob(["onconnect=e=>fetch("+JSON.stringify(location.origin+'/escaped')+",{method:'POST'});"],{type:'text/javascript'}));try{new SharedWorker(url);}catch{attempts++;}finally{URL.revokeObjectURL(url);}}onmessage=()=>{for(const ms of [300,1500])setTimeout(attempt,ms);};parent.postMessage('ready','*');</script>`);});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>{server.closeAllConnections();return new Promise(r=>server.close(r));});
+ const base='http://localhost:'+server.address().port;
+ const script=`window.frameReady=new Promise(r=>addEventListener('message',e=>{if(e.data==='ready')r();}));more.onclick=()=>{more.remove();document.querySelector('iframe').contentWindow.postMessage('go','*');};`;
+ const f=await filteredFixture(t,shell('<article data-key="a">first message</article><article data-key="b">last message</article>',`<button type="button" id="more">Show more</button><iframe style="display:none" src="${base}/old"></iframe>`,script));t.after(()=>f.context.close());
+ await f.entry.page.evaluate(()=>frameReady);
+ const result=await f.call('browser_read',{whole:{}});
+ assert.deepEqual(received,[],result.text);
+ assert.match(result.text,/held during whole read: SharedWorker creation x2/,result.text);
+ assert.equal(f.entry.frames.sessions().length,1,'fixture must exercise a cross-process frame');
+ for(const frame of f.entry.page.frames().filter(frame=>frame.url().startsWith(base))){assert.equal(await frame.evaluate(()=>attempts),2);assert.equal(await frame.evaluate(()=>new Promise(resolve=>{const url=URL.createObjectURL(new Blob(["onconnect=e=>e.ports[0].postMessage('ready');"],{type:'text/javascript'})),w=new SharedWorker(url);w.port.onmessage=e=>{w.port.close();URL.revokeObjectURL(url);resolve(e.data);};w.port.start();})), 'ready','frame construction must recover after close');}
+});
+
+test('LR1D: a new same-origin frame cannot bypass SharedWorker refusal',{skip,timeout:15000},async t=>{
+ const script=`more.onclick=()=>{more.remove();const frame=document.createElement('iframe');document.body.append(frame);try{new frame.contentWindow.SharedWorker(URL.createObjectURL(new Blob(['onconnect=()=>{}'],{type:'text/javascript'})));}catch{window.refused=true;}};`;
+ const h=await harness(t,shell('<article data-key="a">first message</article><article data-key="b">last message</article>','<button type="button" id="more">Show more</button>',script));
+ const result=await readWhole(h.entry,{});
+ assert.equal(await h.page.evaluate(()=>window.refused),true,result.text);
+ assert.match(result.text,/held during whole read: SharedWorker creation x1/,result.text);
+});
+
+test('LR1D: form.submit has a held receipt',{skip,timeout:15000},async t=>{
+ const h=await harness(t,shell('<article data-key="a">first message</article><article data-key="b">last message</article>','<button type="button" id="more">Show more</button>',`more.onclick=()=>{more.remove();const form=document.createElement('form');form.method='POST';form.action='/submit';document.body.append(form);form.submit();};`));
+ const result=await readWhole(h.entry,{max_seconds:7});
+ assert.equal(h.requests.filter(r=>r.method==='POST').length,0,result.text);
+ assert.match(result.text,/held .*form\.submit/,result.text);
+});
+
 test('review: DOM redaction captures each renderer once per merge batch',{skip,timeout:10000},async t=>{
  const h=await harness(t,shell('<article>secret-fixture-value</article>','<input type="password" value="secret-fixture-value"><iframe srcdoc="<p>child</p>"></iframe><iframe srcdoc="<p>child two</p>"></iframe>'));
  const context=h.context,original=context.newCDPSession.bind(context);let captures=0;

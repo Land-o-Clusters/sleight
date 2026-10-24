@@ -48,7 +48,7 @@ export function popupHook(options) {
   const { defineProperty, getOwnPropertyDescriptor: getOwn, freeze } = Object, isFinite = Number.isFinite, stringify = JSON.stringify;
   const uncurry = Function.prototype.bind.bind(Function.prototype.call);
   // Whole-thread expansion never authorizes a popup, dialog, submit or history change.
-  let wholeUntil = 0, wholeToken, wholeBlocked = [];
+  let wholeUntil = 0, wholeToken, wholeBlocked = [], wholeShared = 0, wholeSubmit = 0, wholeRequestSubmit = 0;
   const wholeNow = Date.now.bind(Date);
   const wholeJoin = uncurry(Array.prototype.join);
   const wholeNavigation = window.navigation;
@@ -259,6 +259,34 @@ export function popupHook(options) {
   // Install before page script in every hooked document, including child realms.
   // off() restores only wrappers still owned by this hook, for keep and handoff.
   const NativeDOMException = globalThis.DOMException;
+  const NativeSharedWorker = globalThis.SharedWorker, NativeProxy = globalThis.Proxy, nativeConstruct = globalThis.Reflect.construct;
+  // Shared workers are not tab descendants in Chromium's Target auto-attach
+  // tree. Refuse construction while this tab is being read instead of claiming
+  // their independent network target is covered by the tab's Fetch guard.
+  if (typeof NativeSharedWorker === 'function') {
+    const guarded = new NativeProxy(NativeSharedWorker, { construct(target, args, newTarget) {
+      let refused = false;
+      if (wholeActive()) { wholeShared++; refused = true; }
+      else {
+        // A newly created same-origin frame can see its ancestor's active guard
+        // before the controller sees the frame. Cross-origin frames are armed
+        // through their private CDP routes before their scripts resume.
+        let parent = window;
+        for (let depth = 0; depth < 64; depth++) {
+          try {
+            if (parent === parent.parent) break;
+            parent = parent.parent;
+            const proof = proofFor('wholeWorker');
+            if (openAnswer('wholeWorker', proof, parent[key]?.wholeWorker(proof)) === 't') { refused = true; break; }
+          } catch { break; }
+        }
+      }
+      if (refused) throw NativeDOMException ? new NativeDOMException('SharedWorker creation is held during a whole read.', 'NotAllowedError') : Error('SharedWorker creation held');
+      return nativeConstruct(target, args, newTarget);
+    } });
+    replace(globalThis, 'SharedWorker', { configurable: true, writable: true, value: guarded });
+    replace(NativeSharedWorker.prototype, 'constructor', { configurable: true, writable: true, value: guarded });
+  }
   const refuseNativeUI = () => { throw NativeDOMException ? new NativeDOMException('Native UI is blocked while sleight owns this tab; tell the user.', 'NotAllowedError') : Error('Native UI is blocked'); };
   const blockNative = (object, name) => {
     if (!object) return;
@@ -659,7 +687,7 @@ export function popupHook(options) {
   const hold = (constructor, name, holds, track) => {
     const native = constructor?.prototype?.[name];
     if (typeof native === 'function') replace(constructor.prototype, name, { configurable: true, writable: true, value() {
-      if ((name === 'submit' || name === 'requestSubmit') && wholeBlock('submit')) return;
+      if ((name === 'submit' || name === 'requestSubmit') && wholeBlock('submit')) { if (name === 'submit') wholeSubmit++; else wholeRequestSubmit++; return; }
       if (!dead && name === 'click' && opensNativeControl(this)) return refuseNativeUI();
       if (!dead && (name === 'submit' || name === 'requestSubmit') && nativeFormAction(this, arguments[0])) return refuseNativeUI();
       if (active() || !holds.apply(this, arguments)) return scriptStarted(track?.apply(this, arguments), [], () => native.apply(this, arguments));
@@ -1832,10 +1860,15 @@ export function popupHook(options) {
   const api = {
     whole: (proof, token, capMs) => seal('whole', proof, () => {
       if (capMs === 0) { if (token !== wholeToken) return false; wholeUntil = 0; wholeToken = undefined; return true; }
+      if (wholeActive() && token === wholeToken) return true;
       if (!wholeNavigation || wholeActive() || typeof token !== 'string' || !isFinite(capMs) || capMs <= 0 || capMs > 125000) return false;
-      wholeUntil = wholeNow() + capMs; wholeToken = token; wholeBlocked = []; return true;
+      wholeUntil = wholeNow() + capMs; wholeToken = token; wholeBlocked = []; wholeShared = wholeSubmit = wholeRequestSubmit = 0; return true;
     }, booleanText),
-    wholeTake: proof => seal('wholeTake', proof, () => { const value = wholeJoin(wholeBlocked, ', '); wholeBlocked = []; return value; }, stringText),
+    wholeWorker: proof => seal('wholeWorker', proof, () => { if (!wholeActive()) return false; wholeShared++; return true; }, booleanText),
+    wholeTake: proof => seal('wholeTake', proof, () => {
+      const value = wholeJoin(wholeBlocked, ', ') + '\n' + wholeShared + '\n' + wholeSubmit + '\n' + wholeRequestSubmit;
+      wholeBlocked = []; wholeShared = wholeSubmit = wholeRequestSubmit = 0; return value;
+    }, stringText),
     guard: (proof, element, token, capMs, options) => seal('guard', proof, () => impl.guard(element, token, capMs, options), booleanText),
     reveal: (proof, element) => seal('reveal', proof, () => impl.reveal(element), nothing),
     settle: proof => { const nonce = verify('settle', proof); return new Promise(resolve => impl.settle(() => resolve(sign('settle', nonce, 'u')))); },

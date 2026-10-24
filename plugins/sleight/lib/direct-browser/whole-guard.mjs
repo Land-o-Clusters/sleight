@@ -5,14 +5,29 @@ export async function guardWholeRead(entry, deadline, bank) {
   const {page,hook}=entry,token=randomUUID();
   if(!hook)throw Error('whole guard unavailable');
   const pending=new Set(),tasks=new Set(),requests=new Map();
-  let session,children,armed=false,closed=false,bypassed=false,firstClick,protectUntil=0;
+  let session,children,frameScript,armed=false,closed=false,bypassed=false,firstClick,protectUntil=0;
+  const expression=(method,...args)=>`window[${JSON.stringify(hook.key)}]?.[${JSON.stringify(method)}]?.(${[hookProof(hook,method),...args].map(value=>JSON.stringify(value)).join(',')})`;
   const call=async(method,...args)=>{
-    const expression=`window[${JSON.stringify(hook.key)}]?.[${JSON.stringify(method)}]?.(${[hookProof(hook,method),...args].map(value=>JSON.stringify(value)).join(',')})`;
-    const reply=await session.send('Runtime.evaluate',{expression,returnByValue:true,timeout:1000});
+    const reply=await session.send('Runtime.evaluate',{expression:expression(method,...args),returnByValue:true,timeout:1000});
     if(reply.exceptionDetails)throw Error('whole guard unavailable');
     return hookOpen(hook,reply.result?.value);
   };
   const blocked=kind=>{if(bank.blocked.length<100&&!bank.blocked.includes(kind))bank.blocked.push(kind);};
+  const report=value=>{
+    if(typeof value!=='string')throw Error('whole guard receipt unavailable');
+    const [failure,...counts]=value.split('\n');if(failure)blocked(failure);
+    for(const [i,kind] of ['SharedWorker creation','form.submit','form.requestSubmit'].entries()){
+      const count=Number(counts[i]);if(!Number.isSafeInteger(count)||count<0)throw Error('whole guard receipt unavailable');
+      if(count){const effects=bank.heldEffects??={};effects[kind]=(effects[kind]??0)+count;}
+    }
+  };
+  const frameCalls=async(method,...args)=>{
+    for(const name of entry.frames?.sessions()??[]){
+      try{const value=hookOpen(hook,await entry.frames.evaluate(name,expression(method,...args)));if(method==='wholeTake')report(value);else if(value!==true)throw Error('whole guard frame refused');}
+      catch(error){if(entry.frames.sessions().includes(name))throw error;}
+    }
+  };
+  const poll=async()=>{report(await call('wholeTake'));await frameCalls('wholeTake');};
   const requested=request=>{if(request.method()==='GET'&&['xhr','fetch'].includes(request.resourceType()))pending.add(request);};
   const finished=request=>pending.delete(request);
   const originOf=url=>{try{return new URL(url).origin;}catch{return 'unknown origin';}};
@@ -52,7 +67,7 @@ export async function guardWholeRead(entry, deadline, bank) {
     // Hold non-GETs until Fetch is released, including hook and input cleanup.
     // Keep the existing minimum drain after a click even for a capped read.
     for(;;){const remaining=protectUntil-Date.now();if(remaining<=0)break;await new Promise(resolve=>setTimeout(resolve,remaining));}
-    if(armed){try{const report=await call('wholeTake');if(report)blocked(report);if(await call('whole',token,0)!==true)throw Error('whole guard release');}catch(e){failure=e;}}
+    if(armed){try{await frameScript?.remove();await poll();await frameCalls('whole',token,0);if(await call('whole',token,0)!==true)throw Error('whole guard release');}catch(e){failure=e;}}
     if(session){
       await Promise.allSettled([...tasks]);
       if(children)try{await children.remove();}catch(e){failure??=e;}
@@ -73,8 +88,10 @@ export async function guardWholeRead(entry, deadline, bank) {
     // a controlling worker to issue a POST outside this target's interception.
     try{await session.send('Network.setBypassServiceWorker',{bypass:true});bypassed=true;}
     catch{throw Error('whole guard service worker bypass unavailable');}
-    if(await call('whole',token,Math.max(1,Math.min(125000,deadline-Date.now()+4000)))!==true)throw Error('whole guard refused');
+    const capMs=Math.max(1,Math.min(125000,deadline-Date.now()+4000));
+    if(await call('whole',token,capMs)!==true)throw Error('whole guard refused');
     armed=true;
+    if(entry.frames){frameScript=await entry.frames.addScript(expression('whole',token,capMs));await frameCalls('whole',token,capMs);}
     page.on('request',requested);page.on('requestfinished',finished);page.on('requestfailed',finished);
     session.on('Network.requestWillBeSent',initiated);session.on('Network.loadingFinished',done);session.on('Network.loadingFailed',done);
     await session.send('Network.enable');
@@ -84,6 +101,6 @@ export async function guardWholeRead(entry, deadline, bank) {
     page.on('framenavigated',navigated);page.on('dialog',dialog);
     return {pending:()=>pending.size>0,
       expanderClick(){firstClick??=Date.now();protectUntil=Date.now()+2000;return ()=>{protectUntil=Math.max(protectUntil,Date.now()+2000);};},
-      async poll(){const report=await call('wholeTake');if(report)blocked(report);},close};
+      poll,close};
   }catch(error){await close().catch(()=>{});throw Error(error.message.startsWith('whole guard')?error.message:'whole guard unavailable');}
 }

@@ -138,6 +138,10 @@ export function mergeWhole(bank, incoming, direction, limit) {
 export function renderWhole(bank, options = {}) {
   const n = bank.items.length, reasons = [...bank.reasons];
   const held=[];let receiptChars=0,hiddenHeld=bank.heldOverflow??0;
+  for(const [kind,count] of Object.entries(bank.heldEffects??{})){
+    const line=`held during whole read: ${kind} x${count}`;
+    if(receiptChars+line.length+1<=1500){held.push(line);receiptChars+=line.length+1;}else hiddenHeld+=count;
+  }
   for(const {method,origin,count} of bank.held??[]){
     const line=`held after expander click: ${method} ${origin} x${count}`;
     if(receiptChars+line.length+1<=1500){held.push(line);receiptChars+=line.length+1;}else hiddenHeld+=count;

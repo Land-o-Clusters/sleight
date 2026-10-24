@@ -533,6 +533,25 @@ function hookFixture({ clock = Date, handle, credentials: given, parent, rewrita
     MouseEvent, Event, EventTarget, opens, observers };
 }
 
+test('LR1D whole guard refuses saved SharedWorker constructors, counts attempts, expires and restores', () => {
+  let now = 0, constructions = 0;
+  class SharedWorker { constructor() { constructions++; } }
+  const f = hookFixture({ clock: { now: () => now }, globals: { SharedWorker }, windowProps: { navigation: { listeners: {}, captureListeners: {} } } });
+  vm.runInContext('savedWorker = SharedWorker', f.context);
+  assert.equal(f.call('whole', 'read', 1000), true);
+  assert.equal(f.call('whole', 'read', 1000), true, 'frame installation may repeat the same token');
+  assert.throws(() => vm.runInContext('new savedWorker()', f.context), /SharedWorker creation/);
+  assert.throws(() => vm.runInContext('new SharedWorker.prototype.constructor()', f.context), /SharedWorker creation/);
+  assert.equal(constructions, 0);
+  assert.equal(f.call('wholeTake'), '\n2\n0\n0');
+  assert.equal(f.call('wholeTake'), '\n0\n0\n0');
+  assert.throws(() => f.raw.wholeWorker('forged'), /refused the call/);
+  now = 1001; vm.runInContext('new savedWorker()', f.context); assert.equal(constructions, 1);
+  assert.equal(f.call('whole', 'read', 0), true);
+  f.call('off'); assert.equal(vm.runInContext('SharedWorker', f.context), SharedWorker);
+  assert.equal(SharedWorker.prototype.constructor, SharedWorker);
+});
+
 // A frame created while its parent is armed reads the parent's state at install; the answer must be the hook's own.
 test('AD1 a child frame inherits its parent\'s armed state only from a signed answer', () => {
   const parent = hookFixture();

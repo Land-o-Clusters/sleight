@@ -30,6 +30,12 @@ test('many telemetry origins keep the transcript fenced and report shortened rec
  assert.match(text,/Complete: yes\./);assert.match(text,/# Whole-thread data \(untrusted page content\)/);assert.match(text,/# End whole-thread data/);
  assert.match(text,/additional requests held/);assert.match(text,/item 1 of 2: "first"/);assert.match(text,/item 2 of 2: "last"/);assert.ok(text.length<=8000);
 });
+test('held constructor and submit receipts keep their own counts and the transcript fence',()=>{
+ const bank={items:[{text:'first'},{text:'last'}],ends:{start:{state:'reached'},end:{state:'reached'}},reasons:[],refused:[],blocked:[],heldEffects:{'SharedWorker creation':2,'form.submit':1},clicks:1,seconds:5};
+ const text=whole.renderWhole(bank,{});
+ assert.match(text,/held during whole read: SharedWorker creation x2/);assert.match(text,/held during whole read: form\.submit x1/);
+ assert.match(text,/Complete: yes\./);assert.match(text,/# Whole-thread data \(untrusted page content\)/);assert.ok(text.length<=8000);
+});
 test('merging keeps six repeated rows and extends both sides without recycled-node aliases', () => {
   const rows = Array.from({length:120},(_,i)=>({node:i%12,text:i>=50&&i<56?'ok':`m-${String(i+1).padStart(3,'0')}`}));
   const bank={items:[],gaps:0};
