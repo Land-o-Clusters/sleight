@@ -4,7 +4,7 @@ import { userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { isMainModule } from './main-module.mjs';
+import { fileURLToPath } from 'node:url';
 
 export function resolveInstall(home = userInfo().homedir) {
   const registry = JSON.parse(readFileSync(join(home, '.claude/plugins/installed_plugins.json'), 'utf8'));
@@ -21,11 +21,12 @@ async function notifyFailure(message) {
   await promisify(execFile)('/usr/bin/osascript', ['-e',
     `display notification ${JSON.stringify(message)} with title "sleight routine could not start"`], { timeout: 5000 });
 }
-export async function launchRoutine(id, { home = userInfo().homedir, notify = notifyFailure, spawnChild = spawn } = {}) {
+export async function launchRoutine(id, { home = userInfo().homedir, notify = notifyFailure, spawnChild = spawn, kind = 'routine' } = {}) {
   try {
     if (!/^[a-f0-9]{20}$/.test(id ?? '')) throw new Error('invalid routine ID');
+    if (!['routine', 'watch'].includes(kind)) throw new Error('invalid scheduled task kind');
     const bin = resolveInstall(home);
-    const child = spawnChild(bin, ['routine', 'run-now', id, '--scheduled'], { stdio: 'inherit' });
+    const child = spawnChild(bin, [kind, 'run-now', id, '--scheduled'], { stdio: 'inherit' });
     return await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', code => resolve(code ?? 1)); });
   } catch (error) {
     process.stderr.write(`sleight: current plugin install or registry unavailable: ${error.message}\n`);
@@ -34,4 +35,6 @@ export async function launchRoutine(id, { home = userInfo().homedir, notify = no
     return 1;
   }
 }
-if (isMainModule(import.meta.url)) process.exitCode = await launchRoutine(process.argv[2]);
+// This file is copied alone to Application Support, so it must have no relative imports.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  process.exitCode = await launchRoutine(process.argv[2], { kind: process.argv[3] ?? 'routine' });
