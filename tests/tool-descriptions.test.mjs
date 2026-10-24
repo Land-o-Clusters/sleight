@@ -37,7 +37,7 @@ function descriptions(value, path) {
   return Object.entries(value).flatMap(([key, item]) => key === 'description' ? [[path, item]] : descriptions(item, `${path}.${key}`));
 }
 
-test('PDF discovery adds 84 description characters while preserving the read cap and permission boundary', () => {
+test('PDF and whole-thread discovery preserve the read cap and permission boundary within the measured budget', () => {
   const tool = browserTools('bfixture').find(tool => tool.name === 'browser_read');
   // 303 on codex/g4b; +102 from fd5b links and fd1b screenshot in the p143 merge.
   assert.equal(tool.description.length, 647);

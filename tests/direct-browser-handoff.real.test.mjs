@@ -260,3 +260,18 @@ test('ending a waiting turn keeps the tab and a late Continue cannot capture it'
   assert.equal(f.captures.length, before);
   assert.equal(f.ownerPage.isClosed(), false);
 });
+
+test('whole expansion guards work through the production filtered owned-tab runtime', { skip, timeout: 15000 }, async t => {
+  const f = await fixture(t);
+  await f.ownerPage.evaluate(() => {
+    document.body.innerHTML = '<div role="log" style="width:850px;height:560px;overflow:auto"><p>Beginning of chat</p><div role="list"><article data-key="one">first message</article><article data-key="two">last message</article></div><button type="button">Load more</button><p>You\'re all caught up</p></div>';
+    window.wholeEffect = 'waiting';
+    document.querySelector('button').onclick = () => fetch('/whole-expander-post', { method: 'POST' })
+      .then(() => { window.wholeEffect = 'sent'; }, () => { window.wholeEffect = 'held'; });
+  });
+  const result = await f.call('browser_read', { tab: f.tab, whole: { max_seconds: 4 } });
+  assert.equal(result.isError, false, result.text);
+  assert.match(result.text, /Items read: 2 .*Clicks: 1\./);
+  assert.match(result.text, /blocked: "POST http:\/\/127\.0\.0\.1:/);
+  assert.equal(await f.ownerPage.evaluate(() => window.wholeEffect), 'held');
+});

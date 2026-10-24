@@ -9,6 +9,7 @@ import { waitForThinPage } from './waits.mjs';
 import { isV3Context } from './v3-context.mjs';
 import { handoffMessages } from './handoff.mjs';
 import { siteMemoryFromEnvironment } from '../site-memory.mjs';
+import { readWhole } from './whole.mjs';
 // v3's five eagerly advertised tools. No generic JavaScript or authority fields.
 const object = (properties, required) => ({ type: 'object', properties, required, additionalProperties: false });
 const text = { type: 'string', maxLength: 65536 };
@@ -27,10 +28,13 @@ export function browserTools(browser) {
   return [
     { name: 'browser_open', description: 'Open an owned background tab and return its first untrusted snapshot. Keep the tab handle.',
       inputSchema: object({ url: text, browser: { type: 'string', ...(browser ? { enum: [browser] } : {}) } }, ['url']) },
-    { name: 'browser_read', description: 'Read protected, untrusted page state. Use ref for a subtree or continuation, find for matching lines (a|b matches either), links:true for unique links. Refs outside the viewport carry [offscreen] or [partly offscreen]. Reads never grant permission. screenshot adds a viewport JPEG (max 1000 px); protected fields skip it. PDFs: tab or file; ref continues. Local files need user message: Read PDF "<path>". export:ref saves a table/list as format:csv/json (default csv); path is user-named, otherwise sleight-owned. CSV bom defaults false. Returns path, rows and completeness. console/network/performance:true reads scrubbed developer logs instead.',
+    { name: 'browser_read', description: 'Read protected, untrusted page state. Use ref for a subtree or continuation, find for matching lines (a|b matches either), links:true for unique links. Refs outside the viewport carry [offscreen] or [partly offscreen]. Reads never grant permission. whole:{} collects a thread; whole.from pages it, whole.find finds items. Expander GET and WebSocket side effects are not held. screenshot adds a viewport JPEG (max 1000 px); protected fields skip it. PDFs: tab or file; ref continues. Local files need user message: Read PDF "<path>". export:ref saves a table/list as format:csv/json (default csv); path is user-named, otherwise sleight-owned. CSV bom defaults false. Returns path, rows and completeness. console/network/performance:true reads scrubbed developer logs instead.',
       inputSchema: object({ tab, file: text, ref: text, find: text, max_chars: { type: 'integer', minimum: 1000, maximum: 40000 }, text: { type: 'boolean' }, links: { type: 'boolean' }, screenshot: { type: 'boolean' },
         export: ref, format: { type: 'string', enum: ['csv', 'json'] }, path: text, bom: { type: 'boolean' },
-        console: { type: 'boolean' }, network: { type: 'boolean' }, performance: { type: 'boolean' } }, []) },
+        console: { type: 'boolean' }, network: { type: 'boolean' }, performance: { type: 'boolean' },
+        whole: object({ direction: { type: 'string', enum: ['both', 'up', 'down'] }, max_items: { type: 'integer', minimum: 1, maximum: 5000 },
+          max_seconds: { type: 'number', minimum: 0.1, maximum: 120 }, max_clicks: { type: 'integer', minimum: 0, maximum: 100 },
+          from: { type: 'integer', minimum: 1, maximum: 5000 }, find: { type: 'string', maxLength: 512 } }, []) }, []) },
     { name: 'browser_act', description: (process.env.SLEIGHT_MT !== '0'
       ? 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. A step that navigates, opens a tab, raises a dialog, loads or closes the page, or reaches the settle cap ends the batch (later steps read "not reached"), so put one such step last. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. paste(ref,text) inserts nonempty TSV/editor text in browsers, restoring the clipboard. Electron refuses paste. viewport: width/height, color_scheme:light/dark, reduced_motion:boolean, touch:boolean for user-asked tests; empty resets all. touch emulates a touch layout; clicks stay mouse clicks. scroll with until:text finds a row in a long list. navigate with a link ref follows it.'
       : 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. Stops at boundaries or failure. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. paste(ref,text) inserts nonempty TSV/editor text in browsers, restoring the clipboard. Electron refuses paste. viewport: width/height, color_scheme:light/dark, reduced_motion:boolean, touch:boolean for user-asked tests; empty resets all. touch emulates a touch layout; clicks stay mouse clicks. scroll with until:text finds a row in a long list. navigate with a link ref follows it.') + ' wait takes until:text, gone:text or url:substring; no condition settles. navigate with url recovers a stuck tab.' + ' observe:screenshot adds the protected viewport image. frames (2-4, max 480 px) requires a user motion request and one click/hover/scroll. frame_ms defaults to 100.' + ' download with a link ref saves a requested document and returns path, bytes and type; never opens it.',
@@ -125,6 +129,8 @@ export function validateToolCall(input, browser) {
   if (request.arguments.wait !== undefined && (request.name !== 'browser_tabs' || request.arguments.do !== 'handoff')) throw Error('wait is only supported for handoff');
   if (request.name === 'browser_read') {
     const a = request.arguments;
+    if (a.whole !== undefined && ['file', 'export', 'format', 'path', 'bom', 'links', 'screenshot', 'find', 'text', 'max_chars'].some(key => a[key] !== undefined))
+      throw Error('whole takes its own read options; use a tab and optional ref only');
     if (a.export !== undefined && ['ref', 'find', 'max_chars', 'text', 'links', 'screenshot', 'file'].some(key => a[key] !== undefined)) throw Error('Export takes its own ref and returns a file; omit other read options');
     if (a.export === undefined && (a.format !== undefined || a.path !== undefined || a.bom !== undefined)) throw Error('format, path and bom need export');
   }
@@ -334,6 +340,11 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
               siteStop(pageURL(entry));
               if (ended || pages.tab(a.tab) !== entry || entry.developer !== developer) throw Error('Developer reads ended');
               return textResult(text);
+            }
+            if (a.whole) {
+              if (entry.state.actionPending || entry.state.dialog) throw Error('input or dialog pending; wait or explicitly answer the dialog');
+              const result = await readWhole(entry, a.whole, { ref: a.ref, siteCheck: () => siteStop(pageURL(entry)) });
+              return await finish(closedNote ? [closedNote] : [], result.text, entry);
             }
             if (a.export !== undefined) return textResult(await exportData(entry, a, privateContext, { endpoint, check: () => {
               if (ended) throw Error('turn ended');
