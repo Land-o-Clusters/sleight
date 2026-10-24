@@ -1,3 +1,4 @@
+import { setTouch, restoreTouch } from './touch.mjs';
 // The viewport step of browser_act: set a size and report the old one, or give the original back.
 // The original size and media stay private to this page until reset or release.
 const original = new WeakMap();
@@ -29,7 +30,7 @@ async function cssSize(page, size) {
   return measured;
 }
 
-export async function restoreViewport(page, { release = false } = {}) {
+async function restoreSizeAndMedia(page, { release = false } = {}) {
   const saved = original.get(page);
   if (!saved || saved.reset && !release) return 'viewport unchanged: no size was set on this tab';
   if (release) {
@@ -60,10 +61,23 @@ export async function restoreViewport(page, { release = false } = {}) {
     + (Object.keys(saved.media).length ? '; media restored' : '');
 }
 
-export async function setViewport(page, { width, height, color_scheme, reduced_motion }) {
+export async function restoreViewport(page, options) {
+  // Each override remains independently restorable if the other operation fails.
+  const results = await Promise.allSettled([restoreSizeAndMedia(page, options), restoreTouch(page)]);
+  const errors = results.filter(result => result.status === 'rejected').map(result => result.reason);
+  if (errors.length === 1) throw errors[0];
+  if (errors.length) throw new AggregateError(errors, errors.map(error => error.message).join('; '));
+  const [size, touch] = results.map(result => result.value);
+  return touch ? size + '; ' + touch : size;
+}
+
+export async function setViewport(page, { width, height, color_scheme, reduced_motion, touch }) {
   const media = { ...(color_scheme === undefined ? {} : { colorScheme: color_scheme }),
     ...(reduced_motion === undefined ? {} : { reducedMotion: reduced_motion ? 'reduce' : 'no-preference' }) };
-  if (width === undefined && !Object.keys(media).length) return restoreViewport(page);
+  if (width === undefined && !Object.keys(media).length && touch === undefined) return restoreViewport(page);
+  if (width === undefined && !Object.keys(media).length) return 'viewport ' + await setTouch(page, touch);
+  // A refused touch request must not resize the page or change its media.
+  const touchNote = touch === undefined ? null : await setTouch(page, touch);
   const before = width === undefined ? null : await innerSize(page);
   let saved = original.get(page);
   if (!saved) { saved = { media: {} }; original.set(page, saved); }
@@ -85,5 +99,6 @@ export async function setViewport(page, { width, height, color_scheme, reduced_m
     await page.emulateMedia(media);
   }
   return [sizeNote, color_scheme === undefined ? null : 'color_scheme ' + color_scheme,
-    reduced_motion === undefined ? null : 'reduced_motion ' + reduced_motion].filter(Boolean).join('; ');
+    reduced_motion === undefined ? null : 'reduced_motion ' + reduced_motion,
+    touchNote].filter(Boolean).join('; ');
 }

@@ -51,6 +51,7 @@ function validate(steps) {
       throw Error('keyboard-only refs support only type and press');
     if (s.modifier !== undefined && (s.do !== 'click' || typeof s.modifier !== 'string' || !Object.hasOwn(clickModifiers, s.modifier)))
       throw Error('click modifier must be cmd or ctrl');
+    if (s.touch !== undefined && (s.do !== 'viewport' || typeof s.touch !== 'boolean')) throw Error('touch must be boolean on viewport');
     const needs = name => { throw Error(s.do + ' needs ' + name); };
     if (REF_OPS.has(s.do) && !refOf(s.ref)) needs('ref');
     if (s.do === 'navigate' && !refOf(s.ref)) needs(navigateNeeds);

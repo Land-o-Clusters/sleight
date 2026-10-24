@@ -151,7 +151,7 @@ test('the tool boundary takes both sizes or neither, and the descriptions name t
   assert.throws(() => call({ do: 'viewport', width: 390 }), /width and height, or neither/);
   assert.throws(() => call({ do: 'viewport', height: 844 }), /width and height, or neither/);
   const text = Object.fromEntries(browserTools('bbench').map(tool => [tool.name, tool.description]));
-  assert.match(text.browser_act, /viewport takes width\/height, color_scheme:light\/dark and reduced_motion:boolean for user-asked tests; an empty viewport resets size and media/);
+  assert.match(text.browser_act, /viewport: width\/height, color_scheme:light\/dark, reduced_motion:boolean, touch:boolean for user-asked tests; empty resets all/);
   assert.match(text.browser_read, /Refs outside the viewport carry \[offscreen\] or \[partly offscreen\]/);
 });
 
