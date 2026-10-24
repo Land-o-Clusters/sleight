@@ -40,6 +40,14 @@ export function pdfFileAllowed(binding, path) {
   } catch { return false; }
 }
 
+// A literal directive at the start of the authenticated message, followed by the task.
+// Quoted text, negations, page content and tool arguments never opt in.
+export function recordingPermission(binding) {
+  const bound = bindings.get(binding);
+  const requested = !!bound && /^Record this turn\.(?:\r?\n|$)/.test(bound.message.text);
+  return () => { try { return requested && bound.current() === true; } catch { return false; } };
+}
+
 // A closed request grammar: ambiguous prose, negations and mentions ask the
 // native UI. JSON here is text from the authenticated user message, not tool JSON.
 // The quoted prose form has the same exact terms. Never infer omitted terms.

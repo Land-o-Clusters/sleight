@@ -280,16 +280,17 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
   const lossFixes = process.env.SLEIGHT_LB12 !== '0';
   // siteCheck() gives the user's line when the page now shows a site sleight may not act on (permissions.mjs). It runs in the
   // gate, right before each step's input, so a step that moved the page to such a site stops every step after it.
-  return async function runSteps(tab, steps, ctx = {}, { nextStep, siteCheck, observe, beforeObserve, download, downloadAllowed, onControl, onStep, controlObservation = {} } = {}) {
+  return async function runSteps(tab, steps, ctx = {}, { nextStep, siteCheck, observe, beforeObserve, download, downloadAllowed, onControl, onStep, onAction, controlObservation = {} } = {}) {
     // A bad step list is refused before any input, so the caller must not report it as an unconfirmed outcome.
     try { validate(steps); } catch (error) { error.notRun = true; throw error; }
     const { page, state } = tab, since = state.snapshotNo > 0 ? state.snapshotNo : undefined, lines = []; let stoppedAt = null;
-    let observed, observeError, confirmation, blocker, carry, closed = false, observeWaitMs = 600;
+    let observed, observeError, confirmation, blocker, carry, closed = false, observeWaitMs = 600, recordingStopped = false;
     const read = async options => { const capturedAt = now(), result = await snapshot(page, options); observed = { ...result, capturedAt }; return observed; };
     // Keep requests across step watchers: a wait after a click must see work that click left in flight.
     const batchWatch = watch(page, state, now);
     try {
     for (let index = 0; index < steps.length; index++) {
+      if (recordingStopped) { stoppedAt = index; break; }
       // navigate on a link is that link's click, so every click rule, guard and popup rule applies unchanged.
       const named = steps[index], step = named.do === 'navigate' ? { ...named, do: 'click' } : named, label = `${index + 1} ${named.do}${step.ref ? ' ' + step.ref : ''}`;
       let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false, controlRecipe, controlObserved = false;
@@ -610,6 +611,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         if (!inputPending && armed !== carry) armed?.stop();
         try { await staging?.cleanup?.(); } catch { lines.push('Upload staging cleanup unavailable.'); }
         if (isV3Context(ctx) && target && !inputPending) await ctx.releaseTarget(target);
+        if (started && onAction) { try { recordingStopped = (await onAction(tab))?.stop === true; } catch {} }
       }
     }
     if (stoppedAt !== null) for (let i = stoppedAt; i < steps.length; i++) lines.push(`${i + 1} ${steps[i].do}: not reached`);
@@ -639,7 +641,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     if (observeError) lines.push('Read unavailable: ' + observeError + '; use browser_read before retrying.');
     if (!needsRead) for (let i = 0; i < lines.length; i++) lines[i] = lines[i].replace('input sent; observation below', 'input sent');
     return { lines, stoppedAt, observe: observed, ...(closed ? { closed: true } : {}), ...(confirmation ? { confirmation } : {}) };
-    } finally { batchWatch.stop(); }
+    } finally { batchWatch.stop(); if (recordingStopped) carry?.stop(); }
   };
 }
 

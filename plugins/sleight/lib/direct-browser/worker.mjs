@@ -9,7 +9,7 @@ import { browserTools, validateToolCall, createToolDispatcher } from './tools.mj
 import { validImages } from './screenshot.mjs';
 import { MOTION_SIDE } from './motion.mjs';
 import { HANDOFF_WAIT_MS } from './handoff.mjs';
-import { createV3TurnBinding, createV3Context } from './v3-context.mjs';
+import { createV3TurnBinding, createV3Context, recordingPermission } from './v3-context.mjs';
 import { browserApplicationName } from './browsers.mjs';
 import { readHandConfig } from '../hand/settings.mjs';
 import { createPermissionCheck, stampUse } from '../permissions.mjs';
@@ -347,6 +347,14 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
     import('./act.mjs'), import('./fill.mjs'), import('./rules.mjs'),
   ]);
   const ctx = (dependencies.createContext ?? createV3Context)({ binding, browser, ui });
+  const permitted = recordingPermission(binding);
+  let recording;
+  if (permitted() && dependencies.recordingSupported !== false) {
+    const [{ createTurnRecording }, { captureRecordingFrame }] = await Promise.all([import('../turn-recording.mjs'), import('./recording.mjs')]);
+    recording = createTurnRecording({ current: permitted, capture: entry => captureRecordingFrame(entry,
+      { pages, current: permitted, endpoint, sites: dependencies.sites }), ...dependencies.recording });
+  }
+  const originals = new WeakMap();
   let pdf, pdfBuilding;
   if (dependencies.pdfInventory || dependencies.pdfExtract) {
     const [{ createPdfReader }, { pdfFileAllowed }] = await Promise.all([import('./pdf.mjs'), import('./v3-context.mjs')]);
@@ -368,7 +376,7 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
   }
   const runtime = createToolDispatcher({ browser, pages, snapshot, ctx, endpoint, sites: dependencies.sites, onSite: dependencies.onSite,
     pdf,
-    tracePhase: dependencies.tracePhase,
+    tracePhase: dependencies.tracePhase, ...(recording ? { onAction: recording.capture } : {}),
     runSteps: dependencies.runSteps ?? runSteps, fillFields: dependencies.fillFields ?? fillFields,
     deliverSnapshot(state, capture) {
       if (capture.state !== state || !Number.isSafeInteger(capture.number) || capture.number < 1 ||
@@ -382,9 +390,21 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
   return Object.freeze({ async call(request, control) {
       let notified = false;
       pdfBuilding = () => { if (!notified) { notified = true; control?.pdfBuilding?.(); } };
-      try { return await runtime.call(request, control); } finally { pdfBuilding = undefined; }
-    }, delivered: runtime.delivered,
-    async end() { const cleanup = ctx.dispose(); const previous = await runtime.end();
+      try {
+        if (recording?.blocked() && !['browser_read', 'browser_tabs'].includes(request?.name))
+          return { text: recording.note() + ' Nothing was sent.', isError: true };
+        const result = await runtime.call(request, control);
+        if (!recording && !permitted()) return result;
+        const noted = { ...result, text: result.text + '\n' + (recording?.note() ?? 'Recording: unavailable for app windows; no frames saved.') };
+        originals.set(noted, { result, text: noted.text, isError: noted.isError }); return noted;
+      } finally { pdfBuilding = undefined; }
+    }, delivered(result) {
+      const original = originals.get(result); originals.delete(result);
+      if (!original) return runtime.delivered(result);
+      return result.text === original.text && result.isError === original.isError && runtime.delivered(original.result);
+    },
+    async end() { const recordingEnded = recording?.end(); const cleanup = ctx.dispose(); const previous = await runtime.end();
+      await recordingEnded;
       const receipt = { ...previous, cleanup: [...previous.cleanup] };
       if ((await cleanup).retained) receipt.cleanup.push({ resource: 'uploads', status: 'retained', code: 'CLEANUP_UNPROVED' });
       return receipt;
@@ -396,7 +416,7 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
  * acknowledgment and the fenced runners. The installed worker and the EPV3-8 harness both compose an app turn here. */
 export function createAppTurnRuntime({ surface, binding, browser, ui, sites, onSite, createRuntime } = {}) {
   return (createRuntime ?? createV3TurnRuntime)({ binding, browser, pages: surface.pages, snapshot: surface.snapshot, ui, endpoint: undefined,
-    dependencies: { createContext: () => surface.context, runSteps: surface.runSteps, fillFields: surface.fillFields, acknowledgeSnapshot: surface.acknowledgeSnapshot, sites, onSite } });
+    dependencies: { createContext: () => surface.context, runSteps: surface.runSteps, fillFields: surface.fillFields, acknowledgeSnapshot: surface.acknowledgeSnapshot, sites, onSite, recordingSupported: false } });
 }
 
 // Only an inherited fork channel reaches this entry. MCP calls carry tool JSON,

@@ -98,7 +98,7 @@ function refusal(result) {
 
 export function createFillFields({ check, runSteps, backgroundClick = guardedClick, inspectElement = inspect, now = Date.now, sleep = pause } = {}) {
   if (typeof check !== 'function' || typeof runSteps !== 'function') throw new FieldError('fill requires rules and actions');
-  return async function fillFields(tab, fields, { submit } = {}, ctx) {
+  return async function fillFields(tab, fields, { submit, onAction } = {}, ctx) {
     validate(fields, submit);
     if (!tab?.page || !tab.state) throw new FieldError('fill needs an owned tab');
     const { page } = tab, rows = fields.map(({ ref }) => ({ ref, status: 'not reached' }));
@@ -399,11 +399,13 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
           // page text. After attempted input report uncertainty without that log.
           rows[i].reason = error.said ? String(error.message).slice(0, 300) : sent ? 'field may have changed; read the page before retrying' : error instanceof FieldError ? String(error.message).slice(0, 200) : 'field unavailable; read the page before retrying';
           stopped ||= 'field failed';
+        } finally {
+          if (sent && onAction) { try { if ((await onAction(tab))?.stop === true) stopped = 'recording could not resume page scripts'; } catch {} }
         }
       }
       if (submit !== undefined && !stopped && rows.every(row => row.status === 'set')) {
         try {
-          const result = await runSteps(tab, [{ do: 'click', ref: submit }], ctx);
+          const result = await runSteps(tab, [{ do: 'click', ref: submit }], ctx, onAction ? { onAction } : undefined);
           submitted = { ...result, status: actionFailed(result) ? 'failed' : tab.state.submitUnconfirmed ? 'unconfirmed' : 'done' };
         } catch (error) { submitted = { status: 'failed', reason: /^[A-Z_]+$/.test(error.message) ? error.message : 'submit stopped; read the page before retrying' }; }
       }
