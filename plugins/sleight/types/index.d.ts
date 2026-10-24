@@ -40,6 +40,7 @@ declare module 'claude-code' {
       replayFile: string
       replaying: boolean
       receipt: { path?: string; review?: string; unavailable?: boolean } | null
+      stats: import('../hooks/turn-stats.mjs').TurnSummary | null
     }
   }
 }

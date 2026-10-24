@@ -742,6 +742,13 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
     const actionOutcome = ${actionOutcome.toString()};
     state.outcomeMark = update?.outcomeMark;
     state.outcomes = []; state.outcomeDropped = 0; state.outcomePending = new WeakMap();
+    // Only the engine input promise, excluding this guard's reads, checks and approval cards.
+    state.runOutcome = async (attempt, run) => {
+      if (!state.outcomeMark) return run();
+      const start = clock();
+      try { return await run(); }
+      finally { if (attempt.rec) attempt.rec.ms = (attempt.rec.ms ?? 0) + Math.max(0, clock() - start); }
+    };
     // settled: the engine waited for the UI before this read. A read that didn't can't show "no visible change".
     state.noteRead = (raw, text, settled = true) => {
       const pending = state.outcomeMark ? state.outcomePending.get(raw) : undefined;
@@ -1157,7 +1164,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
             state.reads = new WeakMap();
             input();${O ? '\n            ' + 'attempt.sent = true;' : ''}
             let result;
-            try { result = await value.apply(raw, args); } catch (error) { state.unknown.push(shown); throw error; }${O ? '\n            ' + 'attempt.completed = true;' : ''}
+            try { result = await ${O ? 'state.runOutcome(attempt, () => value.apply(raw, args))' : 'value.apply(raw, args)'}; } catch (error) { state.unknown.push(shown); throw error; }${O ? '\n            ' + 'attempt.completed = true;' : ''}
             state.completedActions++;
             state.ran.push(shown);${O ? '\n            ' + 'state.keepOutcome(raw, attempt.rec);' : ''}
             return result;
@@ -1642,7 +1649,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           input();${O ? '\n          ' + 'if (state.outcomeMark) attempt.rec = state.outcomeRec(name, asked, args, text ?? priorText, before); attempt.sent = true;' : ''}
           // Input went out before the engine answered, so a rejected action may have acted.
           let result;
-          try { result = await value.apply(raw, args); } catch (error) {
+          try { result = await ${O ? 'state.runOutcome(attempt, () => value.apply(raw, args))' : 'value.apply(raw, args)'}; } catch (error) {
             let fresh, resent = false;
             const keep = () => {
               nodeRepl.write(${JSON.stringify(GUARD_MARK)} + fresh + ${JSON.stringify(GUARD_END)});
@@ -1708,7 +1715,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
                   if (!state.boundNumbers.has(proxy)) state.boundNumbers.set(proxy, new Map());
                   state.boundNumbers.get(proxy).set(literal, { number: to[0][0], line: to[0][1] });
                 }
-                try { result = await value.apply(raw, args); resent = true; } catch (again) {
+                try { result = await ${O ? 'state.runOutcome(attempt, () => value.apply(raw, args))' : 'value.apply(raw, args)'}; resent = true; } catch (again) {
                   state.unknown.push(shown);
                   keep();
                   throw again;

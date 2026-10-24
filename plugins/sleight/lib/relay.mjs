@@ -120,6 +120,7 @@ import { TabClickResults } from './tab-click-result.mjs';
 import { openedTabNote, tabReuseCode, readOpened, createdTabCall, parseOpenedPayload } from './tab-reuse.mjs';
 import { menuBarOnlyNote, offSpace, offSpaceNote, readFailureAdvice, savePanelNote } from './read-failure.mjs';
 import { TurnJournal, writeReceipt } from './turn-receipts.mjs';
+import { TurnStats, unavailableStatsFrame } from './turn-stats.mjs';
 import { simulatorScreenshotNote } from './simulator-focus.mjs';
 import { splitTextSave } from './text-save.mjs';
 import { autoPrintCode, noOutputNotice } from './no-output.mjs';
@@ -714,6 +715,8 @@ function internalTurnEnd(tool, keepHidden = false) {
   };
 }
 
+const STATS_TOOLS = new Set(['js', 'replay', 'browser_open', 'browser_read', 'browser_act', 'browser_fill']);
+
 export function createRelay({
   directBrowser,
   turboUnavailable,
@@ -1012,6 +1015,10 @@ export function createRelay({
     // again before the first drag (3/3 textedit-drag runs, 2026-10-08). sleight's descriptions
     // are short, so all but the internal turn_ended load up front, local tools included.
     .map(t => promptTool(t, prompt))
+    // The host validates rewritten calls too. Admit only this private optional object,
+    // which the mod overwrites and the relay removes before any tool executes.
+    .map(t => modHost() && STATS_TOOLS.has(t.name) && t.inputSchema?.type === 'object' && t.inputSchema.additionalProperties === false ? { ...t,
+      inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, sleight_stats: { type: 'object' } } } } : t)
     .map(t => (t.name !== TURN_END_TOOL && t.name !== TURN_START_TOOL ? { ...t, _meta: { ...t._meta, 'anthropic/alwaysLoad': true } } : t)) });
   let startup = startupCache?.bind({
     send: msg => toClient(msg), forward: msg => clientLine(JSON.stringify(msg), true),
@@ -1019,6 +1026,48 @@ export function createRelay({
   });
   const clickResults = new TabClickResults();
   const journal = receipts || stateReview ? new TurnJournal({ redactTitles: redactReceiptTitles }) : undefined;
+  const turnStats = new Map(), statsCalls = new Map(), closedStats = new Set();
+  const statsEnds = new Map();
+  const statsId = value => typeof value === 'string' && value.length > 0 && value.length <= 128 ? value : undefined;
+  const finishStats = id => {
+    const log = turnStats.get(id);
+    turnStats.delete(id);
+    for (const [call, owner] of statsCalls) if (owner === log) statsCalls.delete(call);
+    closedStats.add(id);
+    if (closedStats.size > 64) closedStats.delete(closedStats.values().next().value);
+    return log ? log.frame() : unavailableStatsFrame();
+  };
+  const recordAction = (method, ...args) => {
+    try { actionLog?.[method](...args); } catch {}
+    try {
+      if (method === 'request') {
+        const msg = args[0], tag = msg.params?.arguments?.sleight_stats;
+        // This transport never reaches the engine, nor does its title select the exclusion.
+        if (msg.params?.name !== TURN_END_TOOL && msg.params?.arguments) delete msg.params.arguments.sleight_stats;
+        const id = statsId(tag?.turn);
+        if (!modHost() || !id || tag.internal === true || closedStats.has(id) ||
+            !STATS_TOOLS.has(msg.params?.name)) return;
+        if (!turnStats.has(id)) {
+          if (turnStats.size >= 8) {
+            // Quarantine dropped turns as closed so later spare capacity cannot produce partial totals.
+            closedStats.add(id);
+            if (closedStats.size > 64) closedStats.delete(closedStats.values().next().value);
+            return;
+          }
+          turnStats.set(id, new TurnStats({ clock }));
+        }
+        const log = turnStats.get(id);
+        log.request(msg);
+        if (log.calls.has(msg.id)) statsCalls.set(msg.id, log);
+      } else if (method === 'waitStart' || method === 'waitEnd') {
+        for (const log of turnStats.values()) log[method](...args);
+      } else {
+        const id = method === 'reply' ? args[0]?.id : args[0];
+        statsCalls.get(id)?.[method](...args);
+        if (method === 'reply') statsCalls.delete(id);
+      }
+    } catch {}
+  };
   const receiptEnds = new Map();
   let latestReceipt;
   function finishReceipt() {
@@ -2330,7 +2379,7 @@ export function createRelay({
         closeKeyApp = request.closeKeyApp;
         msg = { ...msg, id: request.id };
       } else if (engineEpoch > 0) return;
-      if (actionLog) try { actionLog.waitEnd('s:' + msg.id); } catch {}
+      recordAction('waitEnd', 's:' + msg.id);
     }
     if (stopCollected || (closing && msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL &&
         !(internalRequests.has(msg.id) && String(msg.id).startsWith('sleight-tab-cleanup-')))) return;
@@ -2375,7 +2424,7 @@ export function createRelay({
     }
     if (msg.method === 'tools/call' && menuCalls.has(msg.id)) menuCalls.get(msg.id).forwardedAt ??= clock();
     // The action log times a call from here, after sleight's own checks and waits.
-    if (actionLog && msg.method === 'tools/call' && msg.id !== undefined) try { actionLog.sent(msg.id); } catch {}
+    if (msg.method === 'tools/call' && msg.id !== undefined) recordAction('sent', msg.id);
     serverIn.write(JSON.stringify(msg) + '\n');
     replWarmup.sent(msg);
   };
@@ -2470,7 +2519,7 @@ export function createRelay({
   }
   const toClient = (msg, afterWrite) => {
     // An approval prompt's time comes off the action log's call times (the engine's prompts and sleight's own).
-    if (actionLog && msg.method === 'elicitation/create' && msg.id !== undefined) try { actionLog.waitStart('c:' + msg.id); } catch {}
+    if (msg.method === 'elicitation/create' && msg.id !== undefined) recordAction('waitStart', 'c:' + msg.id);
     // Every call's reply ends it, by whatever path: its parent lease pin ends too.
     if (msg.method === undefined && msg.id !== undefined) releasePin(msg.id);
     if (msg.method === undefined && stoppedClients.has(msg.id)) return;
@@ -2564,6 +2613,13 @@ export function createRelay({
         content: [...(msg.result.content ?? []), { type: 'text', text: 'sleight-receipt: ' + JSON.stringify({ ...receipt,
           ...(receipt.review?.length > 32000 ? { review: receipt.review.slice(0, 32000) + '\nReview truncated; open the receipt for the full review.' } : {}) }) }] };
     }
+    if (statsEnds.has(msg.id) && msg.method === undefined) {
+      const pending = statsEnds.get(msg.id); statsEnds.delete(msg.id);
+      let frame;
+      try { frame = typeof pending === 'string' ? finishStats(pending) : pending; } catch {}
+      if (msg.result && frame) msg.result = { ...msg.result, _meta: { ...msg.result._meta, 'sleight/stats': frame.stats },
+        content: [...(msg.result.content ?? []), frame.content] };
+    }
     const saveNote = msg.method === undefined && saveNotes.get(msg.id);
     if (saveNote) {
       saveNotes.delete(msg.id);
@@ -2652,7 +2708,7 @@ export function createRelay({
     }
     journal?.reply(msg);
     // The log is a side record: its failure never costs Claude a reply.
-    try { actionLog?.reply(msg); } catch {}
+    recordAction('reply', msg);
     trace('to-client', msg);
     if (msg.method === undefined && msg.id !== undefined) onClientReply(msg);
     const retainedGuidance = modelVisible && Array.isArray(msg.result?.content)
@@ -3198,7 +3254,7 @@ export function createRelay({
       if (requestsFullDocumentation(msg.params?.arguments?.code ?? '') || /\bsleight\.nativeDocumentation\s*\(/.test(msg.params?.arguments?.code ?? ''))
         fullDocumentationCalls.add(msg.id);
     }
-    if (actionLog && msg.method === undefined && msg.id !== undefined) try { actionLog.waitEnd('c:' + msg.id); } catch {}
+    if (msg.method === undefined && msg.id !== undefined) recordAction('waitEnd', 'c:' + msg.id);
     if (msg.method === 'tools/call' && msg.params?.name === TURN_START_TOOL && !modHost()) { codexTurnStart(msg); return; }
     // Stop and resume are the user's controls and work on every host. Only binding a turbo turn needs the mod. (A turbo
     // tool called by name in another host reaches a bridge no turn ever bound, which fails it.)
@@ -3228,6 +3284,11 @@ export function createRelay({
       return;
     }
     if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && msg.params.arguments?.sleight_stop === true) startup?.cancel();
+    if (modHost() && msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && msg.id !== undefined &&
+        msg.params.arguments?.sleight_stop === true && statsId(msg.params.arguments?.sleight_stats)) {
+      if (statsEnds.size >= 200) statsEnds.delete(statsEnds.keys().next().value);
+      statsEnds.set(msg.id, msg.params.arguments.sleight_stats);
+    }
     if (!startupReady && startup?.request(msg)) return;
     // When each tool call arrived, so a trace can time the relay's own work on it.
     if (msg.method === 'tools/call' && msg.id !== undefined) {
@@ -3272,7 +3333,7 @@ export function createRelay({
       msg.params.arguments.code.trim().match(/^((?:let|const|var)\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+cua\.getApp\([^;]*\))\s*;\s*([A-Za-z_$][\w$]*)\s*;?$/);
     if (echo && echo[2] === echo[3]) msg.params.arguments.code = echo[1];
     journal?.request(msg);
-    try { actionLog?.request(msg); } catch {}
+    recordAction('request', msg);
     if (completeness && msg.method === 'tools/call' && msg.id !== undefined) {
       const name = msg.params?.name, code = codeOnly(msg.params?.arguments?.code ?? '');
       const action = /\.\s*(?:click|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|pickFromList)\s*\(/.test(code);
@@ -3944,7 +4005,7 @@ export function createRelay({
       if (browserBlock) { blockStop(msg, browserBlock); return; }
       running.add(msg.id);
       callDetails.set(msg.id, msg.params.name);
-      if (actionLog) try { actionLog.sent(msg.id); } catch {}
+      recordAction('sent', msg.id);
       directBrowser.call({ name: msg.params.name, arguments: msg.params.arguments }).then(result => {
         finishedCall(msg.id);
         const rendered = result.text;
@@ -4331,6 +4392,7 @@ export function createRelay({
       const { name } = msg.params;
       if (clipboard && name === 'js_reset') clipboardResets.add(msg.id);
       if (name === TURN_END_TOOL) {
+        const wantStats = modHost() && statsId(msg.params.arguments?.sleight_stats);
         collectDirectEnd(msg.id);
         // The mod's Stop or Interrupt: the user's turn is over, and so is the payment gate's copy of their message.
         if (msg.params.arguments?.hook_event_name) paymentMessages.end();
@@ -4350,6 +4412,10 @@ export function createRelay({
             const summary = turnOutcomes.text(pending);
             if (summary) outcomeEnds.set(msg.id, summary);
           }
+          if (msg.id !== undefined && wantStats) try {
+            if (statsEnds.size >= 200) statsEnds.delete(statsEnds.keys().next().value);
+            statsEnds.set(msg.id, finishStats(wantStats));
+          } catch {}
           toServer(msg);
           const receipt = finishReceipt();
           if (journal) receiptEnds.set(msg.id, receipt);
@@ -4695,7 +4761,7 @@ export function createRelay({
     if (msg.method === 'elicitation/create' || msg.error || msg.result?.isError) docOrigin.invalidate();
     // A completed warmup ID remains private, including duplicate engine replies.
     if (msg.method === undefined && docOrigin.owns(msg.id) && !internalRequests.has(msg.id)) return;
-    if (actionLog && msg.method === 'elicitation/create' && msg.id !== undefined) try { actionLog.waitStart('s:' + msg.id); } catch {}
+    if (msg.method === 'elicitation/create' && msg.id !== undefined) recordAction('waitStart', 's:' + msg.id);
     let certifiedRead; // { number, title } of this result's read, when its native window number is certified
     if (msg.method === undefined) {
       const stripConst = text => text.split('\n').filter(line =>
@@ -5633,7 +5699,7 @@ export function createRelay({
       }
       if (continued?.head) continuedOutcomes.set(msg.id, { start: (continued.start ?? 0) + (kept?.outcomes?.length ?? 0) });
       const savedReads = automatic ? 0 : compactor.takeSaved();
-      if (actionLog) try { actionLog.outcomes(msg.id, kept); actionLog.saved(msg.id, savedReads); } catch {}
+      recordAction('outcomes', msg.id, kept); recordAction('saved', msg.id, savedReads);
       if (!automatic && elementVisibility && jsCode !== undefined && !msg.result.isError) listClicks = compactor.listClicks();
       if (typingReceipt) msg.result.content.push({ type: 'text', text: typingReceipt });
       if (!automatic && openReads.has(msg.id) && !msg.result.isError && compactor.lastReadNoted()) textlessOpens.add(msg.id);
@@ -5854,6 +5920,8 @@ export function createRelay({
 
   function dispose() {
     if (disposed) return;
+    for (const log of turnStats.values()) log.reset();
+    turnStats.clear(); statsCalls.clear(); closedStats.clear(); statsEnds.clear();
     finishReceipt();
     disposed = true;
     nativeHandoff?.cancel?.();

@@ -156,23 +156,33 @@ test('SLEIGHT_PROMPT=lean shortens every outcome phrase, on every line', () => {
 });
 
 // The guard in the engine's JavaScript, run in a vm against a fake app whose tree each action changes.
-function engine(states) {
-  let at = 0;
+function engine(states, { timed = false } = {}) {
+  let at = 0, time = 0;
   const output = [];
   const raw = {
-    async getAXState() { return states[Math.min(at, states.length - 1)]; },
+    async getAXState() { time += 100; return states[Math.min(at, states.length - 1)]; },
     async getAXStateAndScreenshot() { return { state: states[Math.min(at, states.length - 1)] }; },
   };
   for (const name of ['click', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction', 'paste', 'pressKey', 'typeText']) {
-    raw[name] = async (...args) => { if (args[0] === 99) throw new Error('99 is an invalid element ID'); at++; };
+    raw[name] = async (...args) => { time += 7; if (args[0] === 99) throw new Error('99 is an invalid element ID'); at++; };
   }
-  const context = { app: raw, rawApp: raw, setTimeout, clearTimeout, cua: { getApp: async () => raw, listApps: async () => [] }, nodeRepl: { write: value => output.push(value), emitImage: async () => {} } };
+  const context = { app: raw, rawApp: raw, setTimeout, clearTimeout, ...(timed ? { performance: { now: () => time } } : {}),
+    cua: { getApp: async () => raw, listApps: async () => [] }, nodeRepl: { write: value => output.push(value), emitImage: async () => {} } };
   const run = (code, options = {}) => runInNewContext(`(async () => { ${guardedCode(code, window, 'changed window', undefined,
     { focused: true, adoptUrl: true, ...(options.outcomeMark ? { outcomes: true } : {}), ...options })} })()`, context);
   const records = mark => output.filter(line => typeof line === 'string' && line.startsWith(mark)).map(line => JSON.parse(line.slice(mark.length)));
   return { run, output, records };
 }
 const MARK = '[sleight:filtered-read:0123456789abcdef]';
+
+test('outcome receipts time only the input span, excluding guard reads and later reads', async () => {
+  const f = engine([form(), form(), form()], { timed: true });
+  await f.run('await app.click(3); await app.getAXState(); await app.click(3);', { outcomeMark: MARK, actions: ['click', 'click'] });
+  assert.deepEqual(f.records(MARK).at(-1).outcomes.map(rec => rec.ms), [7, 7]);
+  const failed = engine([form()], { timed: true });
+  await failed.run('await app.click(99);', { outcomeMark: MARK, actions: ['click'] }).catch(() => {});
+  assert.equal(failed.records(MARK).at(-1).outcomes[0].ms, 7);
+});
 
 test('the guard records each action with the read that followed it, and sends no typed text', async () => {
   const f = engine([form(), saveSheet, editor('draft').replace(/notes\.txt/g, 'report.txt')]);
@@ -507,6 +517,20 @@ test('outcomes can be disabled while the log still gets them', async t => {
   assert.equal(JSON.parse(readFileSync(path, 'utf8').trim()).outcome, 'now checked');
 });
 
+test('turn stats receive input-span receipts when outcomes are enabled', async t => {
+  const h = relayHarness(t, { outcomes: true });
+  await h.call(1, '', 'js', { code: 'let app = await cua.getApp("TextEdit")', sleight_stats: { turn: 'timed-turn' } });
+  await h.reply(1, form());
+  await h.call(2, '', 'js', { code: 'await app.click(3);', sleight_stats: { turn: 'timed-turn' } });
+  const mark = /"outcomeMark":"(\[sleight:filtered-read:[0-9a-f]{16}\])"/.exec(h.sentCode(2))[1];
+  const f = engine([form(), form()], { timed: true });
+  await f.run('await app.click(3);', { outcomeMark: mark, actions: ['click'] });
+  await h.reply(2, f.output.join(''));
+  await h.call(3, '', 'turn_ended', { hook_event_name: 'Stop', sleight_stats: 'timed-turn' });
+  const result = await h.reply(3, '');
+  assert.deepEqual(result._meta['sleight/stats'].paths.native, { actions: 1, estimatedActions: 0, estimatedCalls: 0, actionMs: 7, timedActions: 1 });
+});
+
 test('with outcomes disabled and no log the relay sends no outcome mark', async t => {
   const h = relayHarness(t, { outcomes: false });
   await h.call(1, 'let app = await cua.getApp("TextEdit")');
@@ -646,13 +670,13 @@ test('a call sleight continues after its stop shows each action once, numbered a
 
 test('typing with no known plain field target keeps its length out, and so does a secure field', async () => {
   const noFocus = text => text.replace(/\n\nThe focused UI element is .*$/, '');
-  const f = engine([noFocus(form()), noFocus(form())]);
+  const f = engine([noFocus(form()), noFocus(form())], { timed: true });
   await f.run('await app.typeText("123456");', { outcomeMark: MARK, actions: ['typeText'] });
-  assert.deepEqual(f.records(MARK).at(-1).outcomes[0], { a: 'typeText', f: [{ o: 'none' }] });
+  assert.deepEqual(f.records(MARK).at(-1).outcomes[0], { a: 'typeText', ms: 7, f: [{ o: 'none' }] });
   const pin = form().replace(/The focused UI element is .*$/, 'The focused UI element is 1 text field (settable) Description: PIN, Value: ');
-  const g = engine([pin, pin]);
+  const g = engine([pin, pin], { timed: true });
   await g.run('await app.typeText("4821");', { outcomeMark: MARK, actions: ['typeText'] });
-  assert.deepEqual(g.records(MARK).at(-1).outcomes[0], { a: 'typeText', t: { r: 'text field', s: true } });
+  assert.deepEqual(g.records(MARK).at(-1).outcomes[0], { a: 'typeText', ms: 7, t: { r: 'text field', s: true } });
 });
 
 test('single-line lengths stay out regardless of the field name, and password names still count as secure', async () => {
