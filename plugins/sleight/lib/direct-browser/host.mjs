@@ -75,7 +75,7 @@ async function compileNative({ name, source, binary, moduleCache, signal }) {
   // Abort can reject before close. Keep the bank and lock until the compiler has closed its pipes.
   await new Promise((resolve, reject) => {
     let failure;
-    const child = execFile('/usr/bin/xcrun', args, { env: environment(), timeout: 300000, maxBuffer: 65536, signal }, error => { failure = error; });
+    const child = execFile('/usr/bin/xcrun', args, { env: environment(), timeout: 300000, maxBuffer: 65536, signal, killSignal: 'SIGKILL' }, error => { failure = error; });
     child.once('close', () => failure ? reject(failure) : resolve());
   });
 }
@@ -237,11 +237,11 @@ async function prepareHelpers({ inventory, cacheRoot = defaultHelperCache(),
 }
 
 // Data only on stdin. PDFKit never creates a view, runs actions, or opens another application.
-export async function extractPdf(receipt, path, { page = 0, offset = 0 } = {}) {
+export async function extractPdf(receipt, path, { page = 0, offset = 0 } = {}, { signal } = {}) {
   const binary = executable('pdf-host', receipt);
   return new Promise((resolve, reject) => {
     let failure, output;
-    const child = execFile(binary, [], { env: environment(), timeout: 10000, maxBuffer: 300000 }, (error, stdout) => {
+    const child = execFile(binary, [], { env: environment(), timeout: 10000, maxBuffer: 300000, killSignal: 'SIGKILL', signal }, (error, stdout) => {
       failure = error; output = stdout;
     });
     child.once('close', () => {

@@ -58,6 +58,14 @@ test('owned headless PDF tab returns page 3 through PDFKit without refetching; H
     assert.equal(result.isError, false, result.text); dispatcher.delivered(result); return result; };
   const html = await call('browser_open', { url: origin + '/pdf-total' });
   assert.match(html.text, /Read invoice PDF/);
+  const htmlTab = /^t\S+/.exec(html.text)[0];
+  let originalCdp;
+  await pages.enqueue(htmlTab, async entry => {
+    originalCdp = entry.cdp;
+    entry.cdp = { async send() { throw Error('Resource tree unavailable for this ordinary page'); } };
+  });
+  try { assert.match((await call('browser_read', { tab: htmlTab })).text, /Read invoice PDF/); }
+  finally { await pages.enqueue(htmlTab, async entry => { entry.cdp = originalCdp; }); }
   const opened = await call('browser_open', { url: origin + '/invoice' }), tab = /^t\S+/.exec(opened.text)[0];
   assert.match(opened.text, /Page 3\/3: "Final invoice total: USD 731.42\."/);
   assert.equal(dispatcher.delivered(opened), false, 'PDF reads never deliver DOM refs');

@@ -1,8 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { constants } from 'node:fs';
-import { open, mkdtemp, writeFile, rm, realpath } from 'node:fs/promises';
-import { isAbsolute, normalize, join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { open, mkdtemp, writeFile, rm, realpath, lstat } from 'node:fs/promises';
+import { parse, join } from 'node:path';
+import { tmpdir, userInfo } from 'node:os';
+import { assertUploadLocation, assertUploadOwnership, checkUploadMetadata, uploadRefusals } from './upload-paths.mjs';
 
 const MAX_BYTES = 32 * 1024 * 1024;
 const MORE = /^pdf_[a-f0-9]{24}$/;
@@ -13,12 +14,35 @@ const pdfBytes = bytes => {
   return bytes;
 };
 async function localBytes(path) {
-  if (typeof path !== 'string' || !isAbsolute(path) || normalize(path) !== path || path.includes('\0') || await realpath(path) !== path)
+  try { return await auditedLocalBytes(path); }
+  catch (error) {
+    if (error.message?.startsWith('Upload refused:')) throw Error(error.message.replace(/^Upload refused:/, 'PDF read refused:'));
+    throw error;
+  }
+}
+async function auditedLocalBytes(path) {
+  // Share the upload audit's lexical, owner, ancestor, Finder flag and ACL policy.
+  const uid = userInfo().uid;
+  assertUploadLocation(path);
+  let current = parse(path).root, entry;
+  const chain = [current];
+  assertUploadOwnership(await lstat(current), uid, true);
+  for (const part of path.slice(current.length).split('/')) {
+    current = join(current, part); chain.push(current);
+    entry = await lstat(current, { bigint: true });
+    if (entry.isSymbolicLink()) throw Error(uploadRefusals.links);
+    assertUploadOwnership(entry, uid, current !== path);
+  }
+  if (!entry?.isFile() || entry.size > BigInt(MAX_BYTES)) throw Error('PDF must be a regular file of at most 32 MiB.');
+  checkUploadMetadata(chain, uid);
+  if (await realpath(path) !== path)
     throw Error('PDF file needs an absolute, normalized path without symbolic links.');
   const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const before = await file.stat({ bigint: true });
     if (!before.isFile() || before.size > BigInt(MAX_BYTES)) throw Error('PDF must be a regular file of at most 32 MiB.');
+    assertUploadOwnership(before, uid);
+    if (before.dev !== entry.dev || before.ino !== entry.ino) throw Error('PDF file path changed.');
     const bank = Buffer.alloc(Number(before.size) + 1);
     let length = 0;
     while (length < bank.length) {
@@ -27,7 +51,7 @@ async function localBytes(path) {
       length += bytesRead;
     }
     const bytes = bank.subarray(0, length), after = await file.stat({ bigint: true });
-    if (['dev', 'ino', 'size', 'mtimeNs', 'ctimeNs'].some(key => before[key] !== after[key])) throw Error('PDF changed during the read.');
+    if (BigInt(length) !== before.size || ['dev', 'ino', 'uid', 'mode', 'size', 'mtimeNs', 'ctimeNs'].some(key => before[key] !== after[key])) throw Error('PDF changed during the read.');
     return pdfBytes(bytes);
   } finally { await file.close(); }
 }
@@ -80,6 +104,7 @@ function render(result, maxChars, token) {
 export function createPdfReader({ extract, authorizeFile = () => false } = {}) {
   if (typeof extract !== 'function') throw Error('PDF helper required.');
   const continuations = new Map(), tasks = new Set(), directories = new Set();
+  const controller = new AbortController();
   let ended = false;
   const current = () => { if (ended) throw Error('PDF read turn ended.'); };
   const track = action => {
@@ -97,7 +122,8 @@ export function createPdfReader({ extract, authorizeFile = () => false } = {}) {
     try {
       const path = join(directory, 'document.pdf');
       await writeFile(path, bytes, { flag: 'wx', mode: 0o600 });
-      const result = await extract(path, previous?.next ?? { page: 0, offset: 0 });
+      current();
+      const result = await extract(path, previous?.next ?? { page: 0, offset: 0 }, { signal: controller.signal });
       current(); await verify(); current();
       const token = 'pdf_' + randomBytes(12).toString('hex'), rendered = render(result, maxChars, token);
       if (rendered.next) {
@@ -127,8 +153,11 @@ export function createPdfReader({ extract, authorizeFile = () => false } = {}) {
             timer = setTimeout(() => reject(Error('PDF tab read timed out; read again.')), 10000);
           })]); } finally { clearTimeout(timer); }
         };
-        const frameOf = async () => (await send('Page.getResourceTree')).frameTree.frame;
-        const frame = await frameOf();
+        const treeOf = async () => (await send('Page.getResourceTree')).frameTree;
+        let tree;
+        try { tree = await treeOf(); if (!tree?.frame) throw Error('PDF metadata unavailable.'); }
+        catch { if (options.ref && MORE.test(options.ref)) throw Error('PDF continuation expired; PDF metadata is unavailable.'); return null; }
+        const frame = tree.frame;
         if (frame.mimeType?.split(';')[0].toLowerCase() !== 'application/pdf') {
           if (options.ref && MORE.test(options.ref)) throw Error('PDF continuation expired; the tab is no longer a PDF.');
           return null;
@@ -136,6 +165,8 @@ export function createPdfReader({ extract, authorizeFile = () => false } = {}) {
         optionsCheck(options);
         const url = new URL(entry.page.url());
         if (!['http:', 'https:'].includes(url.protocol) || frame.url !== url.href) throw Error('PDF document identity is unavailable.');
+        if (frame.contentSize > MAX_BYTES || tree.resources?.some(resource => resource.url === frame.url && resource.contentSize > MAX_BYTES))
+          throw Error('PDF exceeds the 32 MiB read limit.');
         await send('Page.enable');
         let resource;
         try { resource = await send('Page.getResourceContent', { frameId: frame.id, url: frame.url }); }
@@ -145,14 +176,14 @@ export function createPdfReader({ extract, authorizeFile = () => false } = {}) {
         const bytes = Buffer.from(resource.content, resource.base64Encoded ? 'base64' : 'utf8');
         const identity = JSON.stringify([frame.id, frame.loaderId, frame.url]);
         return await read(bytes, entry.page, identity, options, async () => {
-          const after = await frameOf();
+          const after = (await treeOf()).frame;
           if (entry.page.isClosed?.() || entry.page.url() !== frame.url || JSON.stringify([after.id, after.loaderId, after.url]) !== identity)
             throw Error('PDF tab changed during the read; read again.');
         });
       } finally { if (owned) await session.detach(); }
     }); },
     async dispose() {
-      ended = true; continuations.clear();
+      ended = true; controller.abort(); continuations.clear();
       await Promise.allSettled([...tasks]);
       for (const directory of directories) {
         try { await rm(directory, { recursive: true, force: true }); directories.delete(directory); } catch { /* reported below */ }

@@ -1,11 +1,11 @@
 // A text PDF with deterministic page numbers. No app or third-party generator.
-export function textPdf(texts, { script = false } = {}) {
+export function textPdf(texts, { script = false, font = 'Helvetica', fontSize = 12 } = {}) {
   const escape = text => text.replace(/[\\()]/g, '\\$&');
   const objects = [null, '<< /Type /Catalog /Pages 2 0 R' + (script ? ' /OpenAction << /S /JavaScript /JS (app.alert\("PDF_SCRIPT_RAN"\)) >>' : '') + ' >>',
     `<< /Type /Pages /Count ${texts.length} /Kids [${texts.map((_, i) => `${4 + i * 2} 0 R`).join(' ')}] >>`,
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+    `<< /Type /Font /Subtype /Type1 /BaseFont /${font} >>`];
   for (const text of texts) {
-    const content = 'BT /F1 12 Tf 40 740 Td (' + escape(text) + ') Tj ET';
+    const content = `BT /F1 ${fontSize} Tf 40 740 Td (` + escape(text) + ') Tj ET';
     objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${objects.length + 1} 0 R >>`);
     objects.push(`<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`);
   }

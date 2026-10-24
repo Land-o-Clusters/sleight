@@ -203,6 +203,16 @@ test('PDFKit compiles lazily from accepted source, reads three pages, and resume
   assert.match((await reader.file(noText)).text, /No extractable text/);
   const corrupt = await fixture('corrupt.pdf', Buffer.from('%PDF-1.7\nbroken'));
   await assert.rejects(reader.file(corrupt), /not a readable PDF/);
+  for (const font of ['Times-Roman', 'Courier']) {
+    const alternate = await fixture(font + '.pdf', textPdf(['Alternate font text'], { font }));
+    assert.match((await reader.file(alternate)).text, /Alternate font text/);
+  }
+  const boundary = await fixture('slice-boundary.pdf', textPdf(['x'.repeat(39990) + '4111 1111 1111 1111 end-marker'], { fontSize: 0.01 }));
+  const firstSlice = await extract(boundary, { page: 0, offset: 0 });
+  assert.equal(firstSlice.pages[0].text.length, 40000);
+  assert.doesNotMatch(firstSlice.pages[0].text, /4111|1111/);
+  const nextSlice = await extract(boundary, firstSlice.next);
+  assert.doesNotMatch(nextSlice.pages[0].text, /1111/); assert.match(nextSlice.pages[0].text, /end-marker/);
   await writeFile(join(built.directory, 'pdf-host'), 'tampered');
   await assert.rejects(extract(path, {}), /HOST_PACKAGE_MISMATCH/);
 });

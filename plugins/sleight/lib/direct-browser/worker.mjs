@@ -311,12 +311,12 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
     const [{ createPdfReader }, { pdfFileAllowed }] = await Promise.all([import('./pdf.mjs'), import('./v3-context.mjs')]);
     let prepared;
     pdf = createPdfReader({ authorizeFile: path => pdfFileAllowed(binding, path),
-      extract: dependencies.pdfExtract ?? (async (path, cursor) => {
+      extract: dependencies.pdfExtract ?? (async (path, cursor, { signal }) => {
         const { preparePdfHelper, extractPdf } = await import('./host.mjs');
-        const built = await (prepared ??= (dependencies.preparePdfHelper ?? preparePdfHelper)({ inventory: dependencies.pdfInventory,
+        const built = await (prepared ??= (dependencies.preparePdfHelper ?? preparePdfHelper)({ inventory: dependencies.pdfInventory, signal,
           onProgress: event => { if (event.stage === 'compile') pdfBuilding?.(); } }));
         if (built.status !== 'ready') throw Error('PDF helper needs Apple command-line tools and a successful local build.');
-        return (dependencies.extractPdf ?? extractPdf)(built.receipt, path, cursor);
+        return (dependencies.extractPdf ?? extractPdf)(built.receipt, path, cursor, { signal });
       }) });
   }
   const runtime = createToolDispatcher({ browser, pages, snapshot, ctx, endpoint, sites: dependencies.sites, onSite: dependencies.onSite,
