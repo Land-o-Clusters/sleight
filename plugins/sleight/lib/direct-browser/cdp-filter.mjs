@@ -78,6 +78,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
   };
   const owned = new Set(ownedTargets), routes = new Map(), listeners = new Set(), attaching = new Map(), bridges = new Set(), browserRoutes = new Set(), attachmentParents = new Map();
   const endpointTargets = new Set();
+  const inputObservers = new Map();
   const attachments = new Map(), outstanding = new Set(), collectedSessions = new Set();
   let closed = false, autoAttach = false, disposal, listening = true;
   const root = upstream.sessionId;
@@ -127,6 +128,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
   }
   function revoke(target) {
     owned.delete(target);
+    inputObservers.delete(target);
     for (const [name, route] of routes) if (route.target === target || route.owner === target) removeRoute(name);
   }
   function event(frame) {
@@ -244,6 +246,14 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
   // Private routes are the read-only sessions attach() hands out for an owned page's iframes; they carry no hook and are never counted.
   const frameRoutes = owner => [...routes].filter(([, route]) => route.type === 'iframe' && route.owner === owner && !route.private);
   const frames = Object.freeze({
+    // Fixed input metadata only, for an opt-in motion capture on this owned tab.
+    // No key text, coordinates, values or authority cross this observer.
+    observeInput(owner, listener) {
+      live(); checkTarget(owner);
+      if (typeof listener !== 'function') throw Error('INVALID_CDP_EVENT');
+      const bank = inputObservers.get(owner) ?? new Set(); bank.add(listener); inputObservers.set(owner, bank);
+      return () => { bank.delete(listener); if (!bank.size) inputObservers.delete(owner); };
+    },
     // The running iframe sessions of an owned page, at any depth: the frames in other processes.
     sessions(owner) { live(); checkTarget(owner); return frameRoutes(owner).filter(([, route]) => route.live).map(([name]) => name); },
     // Install source in every iframe session of the page, now and for every one that attaches before remove() is called.
@@ -454,6 +464,18 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
         }
         if (['Fetch.continueRequest','Fetch.continueResponse'].includes(method) && params.url && protectedUrl(params.url)) refuse();
       }
+      if (inputObservers.size && ['Input.dispatchMouseEvent', 'Input.dispatchKeyEvent'].includes(method)) {
+        const owner = routes.get(route)?.owner, bank = inputObservers.get(owner), observers = [...bank ?? []];
+        const type = ['mousePressed', 'mouseReleased', 'mouseMoved', 'mouseWheel', 'keyDown', 'rawKeyDown', 'keyUp'].includes(params.type) ? params.type : undefined;
+        const dispatchedAt = performance.now(), result = upstream.send(method, params, route);
+        // Wait for the input reply before a capture can pause its renderer.
+        // Retain its send time, so capture offsets still name the actual dispatch.
+        if (type) result.then(() => {
+          if (inputObservers.get(owner) !== bank) return;
+          for (const listener of observers) if (bank.has(listener)) try { listener(type, dispatchedAt); } catch {}
+        }, () => {});
+        return result;
+      }
       return upstream.send(method, params, route);
     },
     on(name, listener) { live(); if (name !== 'event' || typeof listener !== 'function') throw Error('INVALID_CDP_EVENT'); listeners.add(listener); },
@@ -514,7 +536,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
   function dispose() {
     if (disposal) return disposal;
     if (!closed) {
-      closed = true; listeners.clear();
+      closed = true; listeners.clear(); inputObservers.clear();
       routes.clear(); owned.clear(); browserRoutes.clear();
       finishEvents();
     }

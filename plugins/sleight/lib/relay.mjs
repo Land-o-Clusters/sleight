@@ -3807,7 +3807,7 @@ export function createRelay({
       directBrowser.call({ name: msg.params.name, arguments: msg.params.arguments }).then(result => {
         finishedCall(msg.id);
         const rendered = result.text;
-        const content = [{ type: 'text', text: rendered }];
+        const content = [{ type: 'text', text: rendered }, ...(result.images ?? [])];
         const rules = rulesFor(true);
         if (rules) content.push(ruleItem(rules));
         toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: result.isError,

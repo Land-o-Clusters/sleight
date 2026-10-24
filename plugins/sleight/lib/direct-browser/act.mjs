@@ -237,7 +237,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
   const lossFixes = process.env.SLEIGHT_LB12 !== '0';
   // siteCheck() gives the user's line when the page now shows a site sleight may not act on (permissions.mjs). It runs in the
   // gate, right before each step's input, so a step that moved the page to such a site stops every step after it.
-  return async function runSteps(tab, steps, ctx = {}, { nextStep, siteCheck, observe } = {}) {
+  return async function runSteps(tab, steps, ctx = {}, { nextStep, siteCheck, observe, beforeObserve } = {}) {
     // A bad step list is refused before any input, so the caller must not report it as an unconfirmed outcome.
     try { validate(steps); } catch (error) { error.notRun = true; throw error; }
     const { page, state } = tab, since = state.snapshotNo > 0 ? state.snapshotNo : undefined, lines = []; let stoppedAt = null;
@@ -533,6 +533,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
       }
     }
     if (stoppedAt !== null) for (let i = stoppedAt; i < steps.length; i++) lines.push(`${i + 1} ${steps[i].do}: not reached`);
+    if (beforeObserve) await beforeObserve();
     // Never turn a delivered input into a tool error because its observation
     // failed. The caller delivers this snapshot and records its number.
     const needsRead = !lossFixes || observe !== 'none' || stoppedAt !== null || lines.some(line => /\[ref=/.test(line));

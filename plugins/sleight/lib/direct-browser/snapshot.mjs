@@ -6,7 +6,7 @@ import { readNativeEditContext, retainNativeEditContext, sameNativeEditContext }
 const pages = new WeakMap();
 const REF = /^(?:(?:f\d+)?e\d+|[sx]\d+)$/;
 const MORE = /^more\d+_\d+$/;
-const SENSITIVE = /password|passcode|secret|one.?time|\botp\b|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|security.?code/i;
+export const SENSITIVE = /password|passcode|secret|one.?time|\botp\b|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|security.?code/i;
 const TIMEOUT = 3000;
 const scalarRole = role => /^(textbox|searchbox|combobox)$/.test(role);
 const normalized = value => String(value ?? '').replace(/[\u200b\u00ad]/g, '').trim().replace(/\s+/g, ' ');
@@ -168,7 +168,7 @@ export const snapshotAcquisitionPending = page => Boolean(pages.get(page)?.keybo
 
 // Native CDP values and attributes cannot be hidden by MAIN-world getters.
 function sensitiveValues({ strings, documents }) {
-  const values = []; values.names = new Set(); values.unnamed = false;
+  const values = []; values.names = new Set(); values.unnamed = false; values.protectedFields = false;
   for (const { nodes } of documents) {
     const count = nodes.nodeName.length;
     if (count > 50000) throw Error('DOM acquisition budget exceeded');
@@ -201,6 +201,9 @@ function sensitiveValues({ strings, documents }) {
         parent = nodes.parentIndex[parent];
       }
       if (closed || SENSITIVE.test(hints.join(' '))) protectedNodes.add(index);
+      if (protectedNodes.has(index) && (/^(INPUT|TEXTAREA|SELECT)$/.test(strings[nodes.nodeName[index]])
+        || /^(textbox|searchbox|combobox|spinbutton)$/.test(attributes.role ?? '')
+        || Object.hasOwn(attributes, 'contenteditable') && /^(|true|plaintext-only)$/i.test(attributes.contenteditable))) values.protectedFields = true;
       if (strings[nodes.nodeName[index]] !== 'INPUT' && strings[nodes.nodeName[index]] !== 'TEXTAREA') continue;
       if (!protectedNodes.has(index)) continue;
       // Native attributes/label text mark password fields even with neutral
@@ -220,6 +223,10 @@ function sensitiveValues({ strings, documents }) {
   }
   return values;
 }
+
+// Pixels cannot be text-redacted. Conservatively refuse even hidden/offscreen
+// protected fields, which may have visible echoes or be revealed by CSS alone.
+export const screenshotHasProtectedFields = capture => sensitiveValues(capture).protectedFields;
 
 // The field's own row is replaced whole (rowsOf), so this only removes echoes of a secret elsewhere.
 // 1-3 characters: nothing, since a match cannot be told from page text ("o" is in "Account controls").
