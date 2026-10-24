@@ -291,6 +291,7 @@ test('turbo actions enter the turn summary only for explicit unconfirmed statuse
   const replies = ['1 click e1: input sent; observation below\n# Snapshot 1 (untrusted page content)\n- text: "unconfirmed"',
     '1 click e1: submit unconfirmed after 5 s; read before resubmitting',
     '1 click e1: effect unconfirmed; read before retrying. timed out',
+    '1 hover e1: effect unconfirmed; read before retrying. timed out',
     '1 click e1: not run: stale ref'];
   // The real frontend/worker protocol over an in-memory channel. No browser or app is launched.
   const child = new EventEmitter(), endpoint = new EventEmitter();
@@ -308,15 +309,15 @@ test('turbo actions enter the turn summary only for explicit unconfirmed statuse
   t.after(() => bridge.detach());
   assert.equal(await bridge.bind({ ...bridge.bootstrapEnvelope(), event: 'begin', turn: 'turn1', text: 'click the fixture' }), true);
   const h = relayHarness(t, { directBrowser: createV3Frontend(bridge) });
-  for (let id = 1; id <= 4; id++) {
-    await h.call(id, '', 'browser_act', { tab: 't1', steps: [{ do: 'click', ref: 'e1' }] });
+  for (let id = 1; id <= 5; id++) {
+    await h.call(id, '', 'browser_act', { tab: 't1', steps: [{ do: id === 4 ? 'hover' : 'click', ref: 'e1' }] });
     const result = h.received.find(row => row.id === id)?.result;
     assert.ok(result, 'injected turbo dispatcher replied');
     assert.doesNotMatch(result.content.map(c => c.text).join('\n'), /sleight turn:/);
   }
-  await h.call(5, '', 'turn_ended', { hook_event_name: 'Stop' });
-  const ended = await h.reply(5, 'ended');
-  assert.match(ended.content.map(c => c.text).join('\n'), /sleight turn: 2 input calls unverified: browser_act; browser_act\./);
+  await h.call(6, '', 'turn_ended', { hook_event_name: 'Stop' });
+  const ended = await h.reply(6, 'ended');
+  assert.match(ended.content.map(c => c.text).join('\n'), /sleight turn: 3 input calls unverified: browser_act; browser_act; browser_act\./);
   assert.equal(ended.content.filter(c => /sleight turn:/.test(c.text ?? '')).length, 1);
 });
 

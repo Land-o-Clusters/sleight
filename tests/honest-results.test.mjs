@@ -22,6 +22,7 @@ test('unconfirmed tool statuses are distinct from untrusted page wording', () =>
   const content = text => [{ type: 'text', text }];
   for (const line of ['Input outcome is unconfirmed. Read again.', 'Input outcome unconfirmed; read again.',
     'Operation outcome is unconfirmed. Read current state.', '1 press: effect unconfirmed; read before retrying.',
+    '1 hover e1: effect unconfirmed; read before retrying.',
     '1 click f2e1: tab closed; its submit is unconfirmed; check the opener', 'submit: unconfirmed',
     'e1: failed: selection unconfirmed after a page boundary; read the list']) assert.equal(unconfirmedInput(content(line)), true, line);
   for (const line of ['1 click e1: input sent; observation below', '1 click e1: not run: unconfirmed ref',

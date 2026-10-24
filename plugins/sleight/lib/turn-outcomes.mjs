@@ -6,7 +6,7 @@ export function unconfirmedInput(content) {
   const text = (content ?? []).filter(c => c?.type === 'text').map(c => c.text ?? '').join('\n')
     .split(/^# (?:Snapshot |Changes since snapshot )/m)[0];
   return /^(?:Operation|Input) outcome (?:is )?unconfirmed[.;]/m.test(text) ||
-    /^\d+ (?:click|type|press|select|check|uncheck|scroll|drag|upload|dialog|navigate|back|forward|reload)(?: (?:f\d+)?e\d+| [sx]\d+)?: (?:effect unconfirmed;|submit unconfirmed after \d+ s;|tab closed; its submit is unconfirmed;)/m.test(text) ||
+    /^\d+ (?:click|type|press|select|check|uncheck|hover|scroll|drag|upload|dialog|navigate|back|forward|reload)(?: (?:f\d+)?e\d+| [sx]\d+)?: (?:effect unconfirmed;|submit unconfirmed after \d+ s;|tab closed; its submit is unconfirmed;)/m.test(text) ||
     /^(?:submit: |(?:f\d+)?e\d+: (?:failed: selection )?)unconfirmed\b/m.test(text);
 }
 export class TurnOutcomes {
