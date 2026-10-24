@@ -13,7 +13,7 @@ for (const mode of [undefined, '0']) test(`MTb worker distinguishes uncertain in
   assert.match(failure(false).text, /Use the engine browser path/);
 }));
 
-async function fixture(config = {}, tracePhase) {
+async function fixture(config = {}, tracePhase, bridgeOptions = {}, call) {
   const child = new EventEmitter(), endpoint = new EventEmitter(), events = [];
   child.connected = endpoint.connected = true;
   child.send = value => { queueMicrotask(() => endpoint.emit('message', structuredClone(value))); };
@@ -22,15 +22,27 @@ async function fixture(config = {}, tracePhase) {
   child.unref = () => {};
   const session = serveV3Worker({ channel: endpoint, browser: 'bfixture', async begin(message, _binding, extra) {
     events.push(['begin', message, extra]);
-    return { async call(request) { events.push(['call', request]); return { text: 'plain result', isError: false }; },
+    return { async call(request) { events.push(['call', request]); return call ? call(request) : { text: 'plain result', isError: false }; },
       delivered(result) { events.push(['delivered', result]); return true; },
       async end() { events.push(['end']); return { revoked: true, cleanup: [] }; } };
   } });
   let forkOptions;
-  const bridge = await createV3Bridge({}, { readConfig: () => config, acceptPackage: () => ({ current: () => true }), tracePhase,
+  const bridge = await createV3Bridge(bridgeOptions, { readConfig: () => config, acceptPackage: () => ({ current: () => true }), tracePhase,
     forkWorker(path, args, options) { assert.match(path, /worker\.mjs$/); assert.deepEqual(args, []); forkOptions = options; queueMicrotask(() => session.ready()); return child; } });
   return { child, endpoint, events, bridge, forkOptions };
 }
+test('waiting handoff can exceed the normal RPC timeout without losing the worker', async () => {
+  const f = await fixture({}, undefined, { timeoutMs: 10 }, async request => {
+    if (request.name === 'browser_tabs') await new Promise(resolve => setTimeout(resolve, 30));
+    return { text: 'fresh state', isError: false };
+  });
+  try {
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'handoff-turn', text: 'Find my receipt.' });
+    const result = await f.bridge.call({ name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } });
+    assert.equal(result.isError, false, result.text);
+    assert.equal((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).text, 'fresh state');
+  } finally { await f.bridge.detach(); }
+});
 test('bridge phases bracket startup, first admission and the last result to turn end without tracing content', async () => {
   const phases = [], f = await fixture({}, (...row) => phases.push(row));
   try {

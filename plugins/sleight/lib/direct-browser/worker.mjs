@@ -6,6 +6,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { readInstalledConfig, readInstalledConfigFile, acceptedInstalledPackage, installedConfigPath } from './installed-config.mjs';
 import { browserTools, validateToolCall, createToolDispatcher } from './tools.mjs';
+import { HANDOFF_WAIT_MS } from './handoff.mjs';
 import { createV3TurnBinding, createV3Context } from './v3-context.mjs';
 import { browserApplicationName } from './browsers.mjs';
 import { readHandConfig } from '../hand/settings.mjs';
@@ -263,7 +264,8 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       if (call === 1) trace('first-call-admitted', turn);
       trace('call-start', turn, call);
       try {
-        const reply = await rpc('call', request, callTimeoutMs);
+        const waiting = request.name === 'browser_tabs' && request.arguments.do === 'handoff' && request.arguments.wait === true;
+        const reply = await rpc('call', request, waiting ? Math.max(callTimeoutMs, HANDOFF_WAIT_MS + 10000) : callTimeoutMs);
         if (epoch === generation) callTimeoutMs = timeoutMs;
         if (!active || lost || epoch !== generation || !current()) return failure(request.name !== 'browser_read');
         if (!exact(reply, ['resultId', 'result']) || !id(reply.resultId) || !exact(reply.result, ['text', 'isError']) ||

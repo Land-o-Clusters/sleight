@@ -37,7 +37,7 @@ func personInput(_ event: CGEvent?) -> Bool {
 func personChoice(_ kind: String, _ choice: String) -> Bool {
     if ["cancel", "decline", "session"].contains(choice) { return false }
     // A debugger's Once is also a consent to debugging. Plain session app approvals remain host-answerable.
-    return choice == "always" || ["action", "debugger", "relaunch", "opt-in", "resume", "turbo-off"].contains(kind)
+    return choice == "always" || ["action", "debugger", "relaunch", "opt-in", "resume", "turbo-off", "handoff"].contains(kind)
 }
 // NSAlert owns its NSButtons and their private subclasses. Add only an AX override to a zero-storage runtime
 // subclass of the actual button class, preserving its layout, key equivalents and original modal action.
@@ -512,7 +512,7 @@ struct AskCard {
     var diagnostics: String = ""
     var labels: [String] {
         if kind == "app" || kind == "action" { return ["Don't allow", kind == "app" ? "Allow this session" : "Allow once"] }
-        let names = ["once": "Allow once", "session": "Allow this session", "always": "Always allow", "relaunch": "Quit and reopen", "cancel": kind == "relaunch" ? "Cancel" : "Don't allow"]
+        let names = ["once": "Allow once", "session": "Allow this session", "always": "Always allow", "relaunch": "Quit and reopen", "continue": "Continue", "cancel": ["relaunch", "handoff"].contains(kind) ? "Cancel" : "Don't allow"]
         return choices.map { names[$0] ?? "Cancel" }
     }
 }
@@ -541,8 +541,27 @@ func consentIconPath(_ icon: String = ProcessInfo.processInfo.environment["SLEIG
     guard icon.hasPrefix("/"), icon.hasSuffix("/assets/icon.png") else { return "" }
     return icon
 }
+// No page words or credential fields enter this card. Tab/session identifiers
+// come from the worker, and Continue is protected by the same person input guard.
+func handoffFrame(_ data: [String: Any], _ choices: [String]) -> (session: String, tab: String)? {
+    func identifier(_ value: Any?) -> String? {
+        guard let value = value as? String, !value.isEmpty, value.count <= 4096,
+            value.unicodeScalars.allSatisfy({ $0.value >= 0x20 && $0.value != 0x7f && !(0x80...0x9f).contains($0.value) }) else { return nil }
+        return value
+    }
+    guard Set(data.keys) == ["kind", "session", "turn", "tab"], data["kind"] as? String == "handoff",
+        let session = identifier(data["session"]), identifier(data["turn"]) != nil,
+        let tab = identifier(data["tab"]), tab.range(of: "^t[A-Za-z0-9_-]{1,64}$", options: .regularExpression) != nil,
+        choices == ["continue", "cancel"] else { return nil }
+    return (session, tab)
+}
 func automaticCard(_ data: [String: Any], _ choices: [String]) -> AskCard? {
     if data["presentation"] != nil { return askCard(data, choices) }
+    if let handoff = handoffFrame(data, choices) {
+        return AskCard(question: "Finish signing in or entering your code in tab " + handoff.tab,
+            detail: "Use the tab or your password manager yourself. sleight is paused. Only click Continue after the secret fields are gone. Continue reads the page again; it does not approve a payment or submit. Cancel leaves the tabs open.",
+            host: "sleight", icon: consentIconPath(), kind: "handoff", choices: ["cancel", "continue"], diagnostics: "Session: " + handoff.session)
+    }
     guard let card = appFrame(data, choices) else { return nil }
     let words = appCardText(card)
     return AskCard(question: words.title, detail: words.summary, host: "sleight", icon: consentIconPath(), kind: card.kind,
@@ -907,6 +926,8 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
             for old in Array(pending.keys) where old != id && (pending[old]?["data"] as? [String: Any])?["status"] != nil {
                 pending.removeValue(forKey: old)
             }
+        } else if data["kind"] as? String == "handoff" {
+            guard handoffFrame(data, choices) != nil else { exit(65) }
         } else if data["kind"] as? String == "debugger" || data["kind"] as? String == "relaunch" {
             guard appFrame(data, choices) != nil else { exit(65) }
         } else if data["kind"] != nil {

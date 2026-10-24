@@ -1,5 +1,6 @@
 import { assertEndpointRead, endpointURL, endpointBlock } from './endpoint-guard.mjs';
 import { originOf, chooserNote } from './output-hygiene.mjs'; // a page picks its title and URL path, so trusted lines carry only the origin
+import { handoffMessages } from './handoff.mjs';
 // v3's five eagerly advertised tools. No generic JavaScript or authority fields.
 const object = (properties, required) => ({ type: 'object', properties, required, additionalProperties: false });
 const text = { type: 'string', maxLength: 65536 };
@@ -28,9 +29,9 @@ export function browserTools(browser) {
       inputSchema: object({ tab, fields: { type: 'array', minItems: 1, maxItems: 60, items: object({ ref,
         value: { type: ['string', 'boolean', 'number', 'array'], items: text, maxItems: 100, maxLength: 65536 } }, ['ref', 'value']) }, submit: ref }, ['tab', 'fields']) },
     { name: 'browser_tabs', description: (process.env.SLEIGHT_MT !== '0'
-      ? 'List owned tabs, close one, keep one open for the user to look at after the turn, or hand one off when the user must act in it (sign-in, payment the user did not ask for, a code). Owned tabs only.'
-      : 'List only owned tabs, or explicitly close, keep or hand off an owned tab. Never acquire engine-path tabs.'),
-      inputSchema: object({ do: { type: 'string', enum: ['list', 'close', 'keep', 'handoff'] }, tab }, ['do']) },
+      ? 'List, close, keep or hand off owned tabs. For sign-in or a code, handoff wait:true waits for the user\'s Continue click and reads fresh. Never request secrets. Hand off a payment the user did not ask for.'
+      : 'List, close, keep or hand off owned tabs. handoff wait:true waits for the user\'s Continue click, then reads fresh. Never request secrets. Never acquire engine-path tabs.'),
+      inputSchema: object({ do: { type: 'string', enum: ['list', 'close', 'keep', 'handoff'] }, tab, wait: { type: 'boolean' } }, ['do']) },
   ].map(tool => structuredClone(tool));
 }
 
@@ -87,6 +88,7 @@ export function validateToolCall(input, browser) {
     if (item.do === 'viewport' && (item.width === undefined) !== (item.height === undefined)) throw Error('viewport needs width and height, or neither to restore');
   }
   if (request.name === 'browser_tabs' && request.arguments.do !== 'list' && !request.arguments.tab) throw Error(`${request.arguments.do} needs tab`);
+  if (request.arguments.wait !== undefined && (request.name !== 'browser_tabs' || request.arguments.do !== 'handoff')) throw Error('wait is only supported for handoff');
   return request;
 }
 const clean = value => String(value ?? '').replace(/[\r\n\t]/g, ' ').slice(0, 240);
@@ -99,7 +101,7 @@ export const closedTabOutcome = 'tab closed itself (sign-in and payment popups d
 export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillFields, ctx, sites, onSite,
   endpoint, tracePhase, deliverSnapshot = (state, capture) => { state.snapshotNo = Math.max(state.snapshotNo, capture.number); return true; }, now = Date.now } = {}) {
   if (!pages || [snapshot, runSteps, fillFields, deliverSnapshot].some(fn => typeof fn !== 'function')) throw Error('v3 tool dependencies required');
-  let ended = false, ending, callNo = 0;
+  let ended = false, ending, callNo = 0, handingOff = false;
   const lossFixes = process.env.SLEIGHT_LB12 !== '0';
   const deliveries = new WeakMap();
   const pageURL = entry => { try { return typeof entry.page?.url === 'function' ? entry.page.url() : undefined; } catch { return undefined; } };
@@ -135,8 +137,24 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
       try {
         request = validateToolCall(input, browser);
         if (ended) throw Error('turn ended');
+        if (handingOff) throw Error(handoffMessages.pending);
         let a = request.arguments, closedNote;
         if (request.name === 'browser_tabs') {
+          if (a.do === 'handoff' && a.wait === true) {
+            if (typeof pages.beginHandoff !== 'function' || typeof ctx?.handoff !== 'function') throw Error('waiting handoff unavailable on this surface');
+            handingOff = true;
+            let suspension;
+            try {
+              suspension = await pages.beginHandoff(a.tab);
+              const resumed = await ctx.handoff(a.tab);
+              const target = await suspension.finish(!resumed || ended);
+              if (!target || ended) return textResult(handoffMessages.cancelled);
+              return await pages.enqueue(target, async entry => {
+                const observed = await capture(entry, { maxChars: 8000 });
+                return finish([`${target}: ${handoffMessages.resumed}`], observed.text, entry, observed);
+              });
+            } finally { if (suspension) await suspension.finish(true); handingOff = false; }
+          }
           // An app window has no web origin to show (vscode-file: is opaque), so its row carries the registry's trusted label.
           if (a.do === 'list') return textResult((await pages.list()).map(row => `${clean(row.tab)} ${row.label ? clean(row.label) : originOf(row.url)}${row.opener ? ' (opener ' + clean(row.opener) + ')' : ''}`).join('\n') || 'No owned tabs.');
           pages.tab(a.tab); started = true;
