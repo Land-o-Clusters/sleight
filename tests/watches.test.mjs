@@ -14,11 +14,11 @@ const binding = { browser: 'browser1', incarnation: 'incarnation1', target: 'tar
 function fixture(t, options = {}) {
   const home = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-page-watch-'))));
   const calls = [], notices = [];
-  let matched = false, reads = 0;
-  const store = new WatchStore({ home, launchctl: async args => calls.push(args), confirm: async () => true,
+  let matched = false, reads = 0, time = Date.parse('2026-10-24T12:00:00.000Z');
+  const store = new WatchStore({ home, now: () => time, boot: () => 'boot1', launchctl: async args => calls.push(args), confirm: async () => true,
     read: async (spec, previous) => { reads++; assert.deepEqual(spec, query); if (previous) assert.deepEqual(previous, binding); return { matched, binding }; },
     notify: async value => notices.push(value), ...options });
-  return { home, store, calls, notices, reads: () => reads, match: value => { matched = value; } };
+  return { home, store, calls, notices, reads: () => reads, match: value => { matched = value; }, advance: ms => { time += ms; } };
 }
 
 test('watch scheduling reuses routine launcher and bounded intervals without writing', t => {
@@ -54,7 +54,7 @@ test('installed watch demonstrates one read, then repeated checks need no model 
   assert.equal((await f.store.run(plan.id, { scheduled: true })).changed, true);
   assert.equal(f.notices.length, 1);
   assert.equal((await f.store.run(plan.id, { scheduled: true })).changed, false);
-  f.match(false);
+  f.advance(3600000); f.match(false);
   assert.equal((await f.store.run(plan.id, { scheduled: true })).changed, true);
   assert.equal(f.notices.length, 2);
   assert.ok(f.notices.every(value => !JSON.stringify(value).includes('example.test') && !JSON.stringify(value).includes('shipped')));
@@ -106,6 +106,9 @@ test('failed change notification is retried without a new transition', async t =
   assert.equal(first.notificationError, true);
   assert.equal(JSON.parse(readFileSync(join(plan.directory, 'state.json'))).pending.matched, true);
   f.store.notify = notify;
+  assert.equal((await f.store.run(plan.id)).notificationError, false);
+  assert.equal(f.notices.length, 0);
+  f.advance(3600000);
   const second = await f.store.run(plan.id);
   assert.equal(second.changed, false); assert.equal(second.notificationError, false);
   assert.equal(f.notices.length, 1);
@@ -190,4 +193,183 @@ test('the copied standalone routine launcher resolves the current install and ro
   assert.deepEqual(sent[0], { file: join(installPath, 'bin/sleight-mcp'), args: ['watch', 'run-now', 'a'.repeat(20), '--scheduled'] });
   assert.equal(await launchRoutine('a'.repeat(20), { home: f.home, spawnChild, notify, kind: 'arbitrary' }), 1);
   assert.equal(sent.length, 1);
+});
+
+
+test('installation saves public origin, creation and bounded expiry before launchd starts', async t => {
+  const f = fixture(t);
+  const launchctl = f.store.launchctl;
+  f.store.launchctl = async args => {
+    if (args[0] === 'bootstrap') {
+      const plan = f.store.plan(query, '10m');
+      const saved = JSON.parse(readFileSync(join(plan.directory, 'routine.json')));
+      assert.equal(saved.publicOrigin, 'https://example.test');
+      assert.equal(saved.boot, 'boot1');
+      assert.equal(Date.parse(saved.expires) - Date.parse(saved.created), 7 * 86400000);
+    }
+    return launchctl(args);
+  };
+  const plan = await f.store.add(query, '10m');
+  assert.equal(f.store.load(plan.id).publicOrigin, 'https://example.test');
+  for (const expires of ['32d', '0d', 'forever']) await assert.rejects(f.store.add(query, '10m', { expires }), /expiry|interval/i);
+});
+
+test('unattested legacy watches refuse before reading and explain the public-page rule', async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  const path = join(plan.directory, 'routine.json'), metadata = JSON.parse(readFileSync(path));
+  delete metadata.publicOrigin; writeFileSync(path, JSON.stringify(metadata));
+  const result = await f.store.run(plan.id, { scheduled: true });
+  assert.equal(result.error, 'WATCH_PUBLIC_HOST_REQUIRED'); assert.equal(f.reads(), 1);
+  assert.match(f.notices[0].status, /not marked public.*Account pages need the user present/i);
+});
+
+test('protected page failures preserve the baseline and explain why the read was refused', async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  f.store.read = async () => { throw Error('WATCH_PROTECTED_FIELDS'); };
+  assert.equal((await f.store.run(plan.id, { scheduled: true })).error, 'WATCH_PROTECTED_FIELDS');
+  assert.match(f.notices[0].status, /password or protected fields.*Account pages need the user present/i);
+  assert.equal(JSON.parse(readFileSync(join(plan.directory, 'state.json'))).matched, false);
+});
+
+test('expired and rebooted watches remove themselves even when already paused, before a read', async t => {
+  for (const reason of ['expired', 'reboot']) {
+    const f = fixture(t), plan = await f.store.add(query, '10m');
+    writeFileSync(join(plan.directory, 'paused.json'), '{}');
+    if (reason === 'expired') f.advance(7 * 86400000);
+    else f.store.boot = () => 'boot2';
+    const result = await f.store.run(plan.id, { scheduled: true });
+    assert.equal(result.removed, true, reason); assert.equal(f.reads(), 1);
+    assert.equal(existsSync(plan.directory), false); assert.equal(existsSync(plan.plistPath), false);
+    assert.deepEqual(f.calls.at(-1), ['bootout', `gui/${process.getuid()}/${plan.label}`]);
+    assert.match(readFileSync(plan.logPath, 'utf8'), /WATCH_EXPIRED|WATCH_REBOOTED/);
+  }
+});
+
+test('three consecutive missing-tab ticks remove the job; success resets the streak', async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m'), read = f.store.read;
+  f.store.read = async () => { throw Error('WATCH_NEEDS_ONE_EXISTING_TAB'); };
+  assert.equal((await f.store.run(plan.id, { scheduled: true })).missingTabs, 1);
+  assert.equal(f.store.list()[0].paused, false);
+  f.store.read = read; assert.equal((await f.store.run(plan.id, { scheduled: true })).ok, true);
+  f.store.read = async () => { throw Error('WATCH_NEEDS_ONE_EXISTING_TAB'); };
+  for (let n = 1; n <= 3; n++) {
+    const result = await f.store.run(plan.id, { scheduled: true });
+    assert.equal(result.missingTabs, n); assert.equal(Boolean(result.removed), n === 3);
+  }
+  assert.equal(f.notices.length, 1); assert.equal(f.store.list().length, 0);
+});
+
+test('watch list shows origin, find, age and expiry without URL path, query or fragment', async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  f.advance(60000);
+  const lines = []; await watchCommand(['list'], { store: f.store, print: text => lines.push(text) });
+  const [value] = JSON.parse(lines[0]);
+  assert.equal(value.origin, 'https://example.test'); assert.equal(value.find, 'shipped');
+  assert.equal(value.ageSeconds, 60); assert.equal(value.expires, '2026-10-31T12:00:00.000Z');
+  assert.doesNotMatch(lines[0], /ticket|script|directory/); assert.equal(value.id, plan.id);
+});
+
+test('five installed watches is a hard cap, including simultaneous installers', async t => {
+  const f = fixture(t); f.store.read = async () => ({ matched: false, binding });
+  for (let n = 0; n < 4; n++) await f.store.add({ ...query, find: 'find' + n }, '10m');
+  let release; const held = new Promise(resolve => { release = resolve; });
+  const launchctl = f.store.launchctl;
+  f.store.launchctl = async args => { if (args[0] === 'bootstrap') await held; return launchctl(args); };
+  const fifth = f.store.add({ ...query, find: 'fifth' }, '10m');
+  await new Promise(resolve => setImmediate(resolve));
+  const sixth = f.store.add({ ...query, find: 'sixth' }, '10m');
+  try {
+    await assert.rejects(Promise.race([sixth, new Promise((_, reject) => setTimeout(() => reject(Error('installer did not refuse')), 100))]), /limit|install.*busy/i);
+  } finally { release(); await Promise.allSettled([fifth, sixth]); }
+  await assert.rejects(f.store.add({ ...query, find: 'sixth' }, '10m'), /limit/i);
+  assert.equal(f.store.list().length, 5);
+});
+
+test('all notices share a rolling hourly cap and retain only the latest undelivered change', async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  f.match(true); await f.store.run(plan.id); assert.equal(f.notices.length, 1);
+  f.match(false); await f.store.run(plan.id); assert.equal(f.notices.length, 1);
+  f.store.read = async () => { throw Error('WATCH_PROTECTED_FIELDS'); };
+  await f.store.run(plan.id); assert.equal(f.notices.length, 1);
+  f.store.read = async () => ({ matched: true, binding }); await f.store.run(plan.id);
+  f.advance(3599999); await f.store.run(plan.id); assert.equal(f.notices.length, 1);
+  f.advance(1); await f.store.run(plan.id); assert.equal(f.notices.length, 2);
+  assert.match(f.notices[1].status, /Condition changed: matching/);
+});
+
+test('missing plugin writes a paused marker and notifies once across launcher restarts', async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  const { launchRoutine } = await import('../plugins/sleight/lib/routine-launcher.mjs');
+  const notices = [], spawnChild = () => { throw Error('must not spawn a missing install'); };
+  for (let n = 0; n < 3; n++) assert.equal(await launchRoutine(plan.id, { home: f.home, kind: 'watch', spawnChild,
+    notify: async message => notices.push(message) }), 1);
+  assert.equal(notices.length, 1);
+  assert.equal(JSON.parse(readFileSync(join(plan.directory, 'paused.json'))).error, 'WATCH_INSTALL_MISSING');
+  assert.deepEqual(await f.store.run(plan.id, { scheduled: true }), { ok: false, paused: true });
+});
+
+test('CLI accepts a bounded custom lifetime for URL and recorded watches', async () => {
+  const seen = [], store = { add: async (...args) => { seen.push(args); } };
+  await watchCommand([query.url, '--find', query.find, '--every', '10m', '--expires', '31d'], { store });
+  assert.equal(seen[0][2].expires, '31d');
+});
+
+
+test('automatic removal persists before bootout, reports uncertainty, and retries without reading', async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  f.advance(7 * 86400000);
+  f.store.launchctl = async args => {
+    assert.equal(args[0], 'bootout');
+    assert.equal(existsSync(plan.directory), false, 'a self-bootout may terminate the process');
+    assert.equal(existsSync(plan.plistPath), false);
+    throw Object.assign(Error('fixture launchd unavailable'), { code: 5 });
+  };
+  const first = await f.store.run(plan.id, { scheduled: true });
+  assert.equal(first.error, 'WATCH_REMOVAL_UNCONFIRMED'); assert.equal(first.removed, false);
+  assert.equal(f.reads(), 1); assert.match(readFileSync(plan.logPath, 'utf8'), /WATCH_REMOVAL_UNCONFIRMED/);
+  await assert.rejects(f.store.add(query, '10m'), /removal.*unconfirmed/i);
+  f.store.launchctl = async args => f.calls.push(args);
+  assert.equal((await f.store.run(plan.id, { scheduled: true })).removed, true);
+  assert.equal(f.reads(), 1);
+});
+
+test('a failed or concurrent missing-install notice still consumes its hour and never follows symlink storage', async t => {
+  const { launchRoutine, claimWatchNotice } = await import('../plugins/sleight/lib/routine-launcher.mjs');
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  let notices = 0;
+  const options = { home: f.home, kind: 'watch', notify: async () => { notices++; throw Error('fixture delivery unavailable'); } };
+  await Promise.all([launchRoutine(plan.id, options), launchRoutine(plan.id, options)]);
+  assert.equal(notices, 1);
+  assert.equal(claimWatchNotice(plan.directory, Date.now()), false);
+  rmSync(join(plan.directory, 'notice.json'));
+  symlinkSync(join(f.home, 'external'), join(plan.directory, 'notice.json'));
+  assert.throws(() => claimWatchNotice(plan.directory), /symlink/);
+  assert.equal(existsSync(join(f.home, 'external')), false);
+});
+
+test('custom expiry persists, oversized metadata refuses, and unknown boot identity never reads', async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m', { expires: '31d' });
+  assert.equal(f.store.load(plan.id).expires, '2026-11-24T12:00:00.000Z');
+  f.store.boot = () => undefined;
+  assert.equal((await f.store.run(plan.id, { scheduled: true })).error, 'WATCH_BOOT_UNAVAILABLE');
+  assert.equal(f.reads(), 1);
+  f.store.boot = () => 'boot1';
+  const path = join(plan.directory, 'routine.json'), saved = JSON.parse(readFileSync(path));
+  writeFileSync(path, JSON.stringify({ ...saved, expires: '2026-11-25T12:00:00.000Z' }));
+  assert.equal((await f.store.run(plan.id)).error, 'WATCH_EXPIRY_INVALID');
+  assert.equal(f.reads(), 1);
+});
+
+
+test('a throttled refusal notice is delivered on a later paused tick without reading the page', async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  f.match(true); await f.store.run(plan.id); assert.equal(f.notices.length, 1);
+  let reads = 0;
+  f.store.read = async () => { reads++; throw Error('WATCH_PROTECTED_FIELDS'); };
+  await f.store.run(plan.id); assert.equal(f.notices.length, 1);
+  f.advance(3600000);
+  assert.deepEqual(await f.store.run(plan.id, { scheduled: true }), { ok: false, paused: true });
+  assert.equal(f.notices.length, 2); assert.match(f.notices[1].status, /password or protected fields/);
+  assert.equal(reads, 1);
+  f.advance(3600000); await f.store.run(plan.id, { scheduled: true }); assert.equal(f.notices.length, 2);
 });

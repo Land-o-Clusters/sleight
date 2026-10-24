@@ -1,12 +1,14 @@
 // Model-free page watches use routine scheduling and locks, with a closed read-only query.
-import { existsSync, readFileSync, writeFileSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, renameSync, rmSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { RoutineStore, schedulePlan, ordinary } from './routines.mjs';
+import { RoutineStore, schedulePlan, ordinary, intervalSeconds } from './routines.mjs';
 import { watchQuery, readWatch } from './watch-read.mjs';
 import { notification } from './notification.mjs';
 import { transcriptPath } from './replay.mjs';
 import { terminalConfirm } from './terminal-confirm.mjs';
 import { randomUUID } from 'node:crypto';
+import { processStartTime } from './routine-lock.mjs';
+import { claimWatchNotice, queueWatchNotice } from './routine-launcher.mjs';
 
 export function watchPlan(query, every, options = {}) {
   return schedulePlan(watchQuery(query), every, { ...options, kind: 'watch' });
@@ -27,22 +29,51 @@ const notifyWatch = ({ id, status }) => notification(`sleight watch ${id}`, stat
 const validBinding = value => value && Object.keys(value).sort().join(',') === 'browser,incarnation,target' &&
   Object.values(value).every(item => typeof item === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(item));
 const noteFor = (id, state) => `Watch ${id}: ${state.matched ? 'matching' : 'not matching'} main-document accessibility names at ${state.at}.`;
+const isoTime = value => typeof value === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value) && Number.isFinite(Date.parse(value));
+const pauseNotice = error => ({
+  WATCH_PROTECTED_FIELDS: 'Watch refused: the page has password or protected fields. Account pages need the user present; unattended account watching is unsupported.',
+  WATCH_PUBLIC_HOST_REQUIRED: 'Watch refused: the page or an embedded origin was not marked public at creation, or an embedded document cannot be checked. Account pages need the user present; reinstall only for a public page.',
+  WATCH_NEEDS_ONE_EXISTING_TAB: 'Watch needs one existing tab at its saved URL. Three consecutive missing-tab results remove the watch.',
+  WATCH_INSTALL_MISSING: 'Watch paused: the current sleight plugin install is unavailable. Check the installation, then use watch run-now.',
+})[error] ?? `Watch paused (${error}); check the page and use watch run-now.`;
 
 export class WatchStore extends RoutineStore {
-  constructor({ read = readWatch, notify = notifyWatch,
+  constructor({ read = readWatch, notify = notifyWatch, now = Date.now, boot = () => processStartTime(1),
     confirm = word => terminalConfirm(word === 'install' ? 'install-public-watch' : word), ...options } = {}) {
     super({ ...options, confirm, notify });
     this.kind = 'watch';
     this.root = join(this.home, 'Library/Application Support/sleight/watches');
     this.read = read;
+    this.now = now;
+    this.boot = boot;
   }
   plan(query, every) { return watchPlan(query, every, this); }
   approve(query) { watchQuery(query); }
-  async add(query, every, { print = () => {} } = {}) {
+  metadata(query, plan, { expires = '7d' } = {}) {
+    const boot = this.boot(), created = this.now();
+    if (typeof boot !== 'string' || !boot) throw Error('WATCH_BOOT_UNAVAILABLE');
+    return { seconds: plan.seconds, publicOrigin: new URL(query.url).origin, boot,
+      created: new Date(created).toISOString(), expires: new Date(created + intervalSeconds(expires) * 1000).toISOString() };
+  }
+  async install(plan, query, options) {
+    ordinary(this.root); mkdirSync(this.root, { recursive: true, mode: 0o700 });
+    const lock = this.lock(this.root, 'install');
+    if (!lock) throw Error('watch install busy; try again after the other installer finishes');
+    try {
+      if (existsSync(this.retirementPath(plan.id))) throw Error('watch removal is unconfirmed; use run-now to retry bootout before reinstalling');
+      const retiring = readdirSync(this.root).filter(file => /^\.retiring-[a-f0-9]{20}\.json$/.test(file)).length;
+      if (this.list().length + retiring >= 5) throw Error('watch limit is 5; remove an installed watch first');
+      return await super.install(plan, query, options);
+    } finally { lock.release(); }
+  }
+  async add(query, every, { print = () => {}, expires = '7d' } = {}) {
+    intervalSeconds(expires);
     const existed = existsSync(ordinary(this.plan(query, every).directory));
-    const plan = await super.add(query, every, { print: text => print(
+    const plan = await super.add(query, every, { expires, print: text => print(
       `Read-only watch of ${JSON.stringify(query.url)}; find ${JSON.stringify(query.find)}.\n` +
-      'Only public pages. Account pages need the owner watching. Keep the existing tab open; checks never reload it.\n' + text) });
+      `Only public pages. Installing marks ${new URL(query.url).origin} public for this watch, for ${expires}.\n` +
+      'Account pages need the user present; unattended account watching is unsupported. Password or protected fields refuse the whole page.\n' +
+      'Keep the existing tab open; checks never reload it. Scheduled ticks show no connection window.\n' + text) });
     // super.add returns the plan on a declined preview too. Never observe before terminal installation.
     if (!existed && existsSync(plan.directory)) {
       const result = await this.run(plan.id);
@@ -50,6 +81,49 @@ export class WatchStore extends RoutineStore {
       return { ...plan, initial: result };
     }
     return plan;
+  }
+  listings() {
+    return this.list().map(({ id, seconds, paused, script, created, expires }) => ({ id, seconds, paused,
+      origin: new URL(script.url).origin, find: script.find,
+      ageSeconds: isoTime(created) ? Math.max(0, Math.floor((this.now() - Date.parse(created)) / 1000)) : null,
+      expires: isoTime(expires) ? expires : null }));
+  }
+  async notice(id, error) {
+    const directory = this.paths(id).directory, pending = ordinary(join(directory, 'notice-pending.json'));
+    try {
+      if (error) queueWatchNotice(directory, error);
+      if (!existsSync(pending)) return false;
+      const code = safeError(Error(readJSON(pending).error));
+      if (claimWatchNotice(directory, this.now())) {
+        await this.notify({ id, status: pauseNotice(code) });
+        rmSync(pending, { force: true });
+      }
+      return false;
+    } catch { return true; }
+  }
+  retirementPath(id) { return ordinary(join(this.root, `.retiring-${this.paths(id).id}.json`)); }
+  async retire(id, result) {
+    const paths = this.paths(id);
+    // bootout can terminate its own scheduled process. Persist the receipt and remove disk
+    // installation first. The tombstone blocks reinstallation until bootout is confirmed.
+    const pending = { ok: false, error: /^WATCH_[A-Z_]+$/.test(result.error) ? result.error : 'WATCH_REMOVED',
+      ...(Number.isSafeInteger(result.missingTabs) && result.missingTabs > 0 ? { missingTabs: result.missingTabs } : {}) };
+    save(this.retirementPath(id), pending);
+    await this.receipt(id, { ...pending, installationRemoved: false, bootout: 'pending' });
+    rmSync(ordinary(paths.plistPath), { force: true });
+    rmSync(ordinary(paths.directory), { recursive: true, force: true });
+    try { await this.launchctl(['bootout', `gui/${process.getuid()}/${paths.label}`]); }
+    catch (error) {
+      if (error.code !== 3) {
+        const unconfirmed = { ok: false, error: 'WATCH_REMOVAL_UNCONFIRMED', installationRemoved: true, removed: false };
+        await this.receipt(id, unconfirmed);
+        return unconfirmed;
+      }
+    }
+    rmSync(this.retirementPath(id), { force: true });
+    const removed = { ...pending, removed: true };
+    await this.receipt(id, removed);
+    return removed;
   }
   notes() {
     return this.list().flatMap(({ id, directory, paused }) => {
@@ -62,7 +136,9 @@ export class WatchStore extends RoutineStore {
   }
   async run(id, { scheduled = false } = {}) {
     const paths = this.paths(id), paused = ordinary(join(paths.directory, 'paused.json'));
-    if (scheduled && existsSync(paused)) return { ok: false, paused: true };
+    const retiring = this.retirementPath(id);
+    if (existsSync(retiring)) return this.retire(id, readJSON(retiring));
+    if (!existsSync(paths.directory)) return { ok: false, error: 'WATCH_NOT_FOUND' };
     const lock = this.lock(paths.directory, id);
     if (!lock) return { ok: false, busy: true };
     let collected = true;
@@ -70,33 +146,56 @@ export class WatchStore extends RoutineStore {
       let result;
       try {
         const plan = this.load(id), statePath = ordinary(join(plan.directory, 'state.json'));
+        if (plan.publicOrigin !== new URL(plan.script.url).origin) throw Error('WATCH_PUBLIC_HOST_REQUIRED');
+        if (!isoTime(plan.created) || !isoTime(plan.expires) || Date.parse(plan.expires) <= Date.parse(plan.created) ||
+            Date.parse(plan.expires) - Date.parse(plan.created) > 31 * 86400000) throw Error('WATCH_EXPIRY_INVALID');
+        if (this.now() >= Date.parse(plan.expires)) return await this.retire(id, { ok: false, error: 'WATCH_EXPIRED' });
+        const boot = this.boot();
+        if (!boot || !plan.boot) throw Error('WATCH_BOOT_UNAVAILABLE');
+        if (boot !== plan.boot) return await this.retire(id, { ok: false, error: 'WATCH_REBOOTED' });
+        if (scheduled && existsSync(paused)) {
+          await this.notice(id);
+          return { ok: false, paused: true };
+        }
         const before = existsSync(statePath) ? readJSON(statePath) : undefined;
         if (before && (typeof before.matched !== 'boolean' || !validBinding(before.binding) ||
             before.pending && (typeof before.pending.matched !== 'boolean' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(before.pending.at))))
           throw Error('WATCH_STATE_INVALID');
-        const observed = await this.read(plan.script, before?.binding);
+        const observed = await this.read(plan.script, before?.binding, { publicOrigin: plan.publicOrigin });
         if (typeof observed?.matched !== 'boolean' || !validBinding(observed.binding)) throw Error('WATCH_READ_INCOMPLETE');
         const changed = before !== undefined && before.matched !== observed.matched;
-        const at = new Date().toISOString();
+        const at = new Date(this.now()).toISOString();
         // Retain a pending change until delivery succeeds. No page text enters notes, logs or notifications.
         const state = { matched: observed.matched, binding: observed.binding, at,
           pending: changed ? { matched: observed.matched, at } : before?.pending ?? null };
         save(statePath, state);
+        save(join(plan.directory, 'health.json'), { missingTabs: 0 });
+        rmSync(ordinary(join(plan.directory, 'notice-pending.json')), { force: true });
         let notificationError = false;
         if (state.pending) {
-          try {
-            await this.notify({ id, status: `Condition changed: ${state.pending.matched ? 'matching' : 'not matching'} main-document accessibility names (${state.pending.at}).` });
-            save(statePath, { ...state, pending: null });
-          } catch { notificationError = true; }
+          if (claimWatchNotice(plan.directory, this.now())) {
+            try {
+              await this.notify({ id, status: `Condition changed: ${state.pending.matched ? 'matching' : 'not matching'} main-document accessibility names (${state.pending.at}).` });
+              save(statePath, { ...state, pending: null });
+            } catch { notificationError = true; }
+          }
         }
         result = { ok: true, matched: observed.matched, baseline: !before, changed, notificationError };
         rmSync(paused, { force: true });
       } catch (error) {
         collected = !error.cleanupUnconfirmed;
         result = { ok: false, error: safeError(error), ...(collected ? {} : { cleanupUnconfirmed: true }) };
-        save(paused, result);
+        const healthPath = ordinary(join(paths.directory, 'health.json'));
+        const health = existsSync(healthPath) ? readJSON(healthPath) : {};
+        const missingTabs = result.error === 'WATCH_NEEDS_ONE_EXISTING_TAB' && collected
+          ? (Number.isSafeInteger(health.missingTabs) && health.missingTabs >= 0 ? health.missingTabs : 0) + 1 : 0;
+        save(healthPath, { missingTabs });
+        if (missingTabs) result.missingTabs = missingTabs;
+        if (missingTabs >= 3) return await this.retire(id, result);
+        if (!missingTabs) save(paused, result);
       }
-      await this.receipt(id, result, { notify: !result.ok, status: 'Watch paused; read its log and run-now after checking the page.' });
+      if (!result.ok) await this.notice(id, result.error);
+      await this.receipt(id, result);
       return result;
     } finally { if (collected) lock.release(); else lock.preserve(); }
   }
@@ -132,21 +231,23 @@ export function recordWatchRead(entries) {
 export async function watchCommand(args, { store = new WatchStore(), print = console.log } = {}) {
   const [operation, value, ...options] = args;
   if (operation === 'list' && !value) {
-    print(JSON.stringify(store.list().map(({ id, seconds, paused }) => ({ id, seconds, paused })), null, 2)); return 0;
+    print(JSON.stringify(store.listings(), null, 2)); return 0;
   }
   if (operation === 'notes' && !value) { print(JSON.stringify(store.notes())); return 0; }
   if (['remove', 'unlock'].includes(operation) && value && !options.length) { await store[operation](value, { print }); return 0; }
   if (operation === 'run-now' && value && (options.length === 0 || options.length === 1 && options[0] === '--scheduled')) {
     const result = await store.run(value, { scheduled: options.length === 1 }); print(JSON.stringify(result)); return result.ok ? 0 : 1;
   }
-  if (operation === 'record' && value && options.length === 2 && options[0] === '--every') {
+  const lifetime = values => values.length === 2 && values[0] === '--expires' ? values[1] : undefined;
+  if (operation === 'record' && value && options[0] === '--every' &&
+      (options.length === 2 || options.length === 4 && lifetime(options.slice(2)))) {
     const entries = readFileSync(transcriptPath(value), 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line));
-    const plan = await store.add(recordWatchRead(entries), options[1], { print }); return plan?.initial?.ok === false ? 1 : 0;
+    const plan = await store.add(recordWatchRead(entries), options[1], { print, expires: lifetime(options.slice(2)) }); return plan?.initial?.ok === false ? 1 : 0;
   }
-  if (args.length === 5 && args[1] === '--find' && args[3] === '--every') {
+  if ((args.length === 5 || args.length === 7 && lifetime(args.slice(5))) && args[1] === '--find' && args[3] === '--every') {
     if (/[\u0000-\u0020\u007f]/.test(operation)) throw Error('watch URL must not contain whitespace or control characters');
     const url = new URL(operation).href;
-    const plan = await store.add(watchQuery({ sleightWatch: 1, url, find: args[2] }), args[4], { print }); return plan?.initial?.ok === false ? 1 : 0;
+    const plan = await store.add(watchQuery({ sleightWatch: 1, url, find: args[2] }), args[4], { print, expires: lifetime(args.slice(5)) }); return plan?.initial?.ok === false ? 1 : 0;
   }
-  throw Error('usage: sleight-mcp watch <url> --find <text> --every <interval>; watch record <transcript> --every <interval>; watch list|notes|run-now|remove|unlock');
+  throw Error('usage: sleight-mcp watch <url> --find <text> --every <interval> [--expires <duration>]; watch record <transcript> --every <interval> [--expires <duration>]; watch list|notes|run-now|remove|unlock');
 }

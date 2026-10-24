@@ -226,7 +226,7 @@ export class RoutineStore {
     const script = JSON.parse(readFileSync(ordinary(join(directory, 'script.json')), 'utf8'));
     const plan = this.plan(script, `${saved.seconds}s`);
     if (plan.id !== id) throw new Error('saved routine changed; remove it and add the reviewed script again');
-    return { ...plan, script, paused: existsSync(join(directory, 'paused.json')) };
+    return { ...saved, ...plan, script, paused: existsSync(join(directory, 'paused.json')) };
   }
   paths(id) {
     if (!ID.test(id)) throw new Error('invalid routine ID');
@@ -244,11 +244,15 @@ export class RoutineStore {
     const grants = this.preapproved();
     for (const app of routineApps(script)) if (!grants.allows(app, 'medium')) throw new Error(`routine app ${JSON.stringify(app)} must be preapproved at medium risk in the user's fixed list`);
   }
-  async add(script, every, { print = () => {} } = {}) {
+  metadata(_script, plan) { return { seconds: plan.seconds }; }
+  async add(script, every, { print = () => {}, ...options } = {}) {
     const plan = this.plan(script, every);
     this.approve(script);
     print(`Install ${plan.label}\nScript: ${join(plan.directory, 'script.json')}\nLog: ${plan.logPath}\nLauncher: ${plan.launcherPath}\nPlist: ${plan.plistPath}\n${plan.plist}`);
     if (!await this.confirm('install')) return plan;
+    return this.install(plan, script, options);
+  }
+  async install(plan, script, options) {
     ordinary(plan.directory); ordinary(plan.plistPath); ordinary(plan.logPath);
     if (existsSync(plan.directory) || existsSync(plan.plistPath)) throw new Error('routine already exists; remove it explicitly before reinstalling');
     privateDir(dirname(plan.directory)); privateDir(dirname(plan.plistPath)); privateDir(dirname(plan.logPath));
@@ -261,7 +265,7 @@ export class RoutineStore {
         renameSync(temporary, plan.launcherPath);
       } finally { rmSync(temporary, { force: true }); }
       writeFileSync(join(plan.directory, 'script.json'), json(script), { flag: 'wx', mode: 0o600 });
-      writeFileSync(join(plan.directory, 'routine.json'), json({ seconds: plan.seconds }), { flag: 'wx', mode: 0o600 });
+      writeFileSync(join(plan.directory, 'routine.json'), json(this.metadata(script, plan, options)), { flag: 'wx', mode: 0o600 });
       writeFileSync(plan.plistPath, plan.plist, { flag: 'wx', mode: 0o600 });
       await this.launchctl(['bootstrap', `gui/${process.getuid()}`, plan.plistPath]);
     } catch (error) {

@@ -16,7 +16,10 @@ function fixture(options = {}) {
     if (method === 'Target.getTargets') return { targetInfos: options.targets ?? [target] };
     if (method === 'Target.attachToTarget') return { sessionId: 'attached1' };
     if (method === 'Target.getTargetInfo') return { targetInfo: options.changedTarget ?? target };
-    if (method === 'Page.getFrameTree') return { frameTree: { frame: { ...frame, ...(frames++ && options.changedFrame) } } };
+    if (method === 'Page.getFrameTree') return { frameTree: { frame: { ...frame, ...(frames++ && options.changedFrame) }, ...(options.children ? { childFrames: options.children } : {}) } };
+    if (method === 'DOM.enable') return {};
+    if (method === 'DOM.performSearch') return { searchId: 'guard1', resultCount: 0 };
+    if (method === 'DOM.discardSearchResults') return {};
     if (method === 'Accessibility.getFullAXTree') return { nodes: options.nodes ?? tree('Shipped') };
     if (method === 'Target.detachFromTarget') return {};
     throw Error('unexpected command: ' + method);
@@ -26,7 +29,7 @@ function fixture(options = {}) {
     async connect() { calls.push({ method: 'connect' }); return session; },
     async verifyConnection() { return !closed && options.current !== false; },
     async disconnect() { closed = true; calls.push({ method: 'disconnect' }); return options.collected !== false; } };
-  const dependencies = { readConfig: () => config, acceptPackage: () => ({ current: () => true }),
+  const dependencies = { publicOrigin: new URL(query.url).origin, readConfig: () => config, acceptPackage: () => ({ current: () => true }),
     prepareHelpers: async () => ({ status: 'ready', receipt: {} }), selectConnection: async () => selected,
     createUi: () => ({ present() {}, close() {} }),
     permissions: { app: () => false, site: () => false }, timeoutMs: 20, ...options.dependencies };
@@ -50,14 +53,17 @@ test('a scheduled read cannot compile missing helpers or trigger their setup', a
   assert.deepEqual(f.calls, []);
 });
 
-test('predicate reads names only, excludes title, protected subtrees, hidden nodes and values', () => {
+test('predicate reads element names only and refuses the whole protected snapshot', () => {
   assert.equal(watchMatch(tree('SHIPPED'), 'shipped'), true);
   assert.equal(watchMatch(tree('Waiting'), 'shipped'), false);
   assert.equal(watchMatch(tree('Delivered'), 'shipped|delivered'), true);
   assert.equal(watchMatch(tree('anything'), '.*'), false);
   assert.equal(watchMatch([node('RootWebArea', 'shipped'), node('StaticText', 'waiting', { value: { value: 'shipped' } })], 'shipped'), false);
   const secret = node('textbox', 'shipped', { properties: [{ name: 'protected', value: { value: true } }] });
-  assert.equal(watchMatch([node('RootWebArea', 'Ticket'), secret, node('StaticText', 'shipped', { parentId: secret.nodeId })], 'shipped'), false);
+  assert.throws(() => watchMatch([node('RootWebArea', 'Ticket'), secret, node('StaticText', 'shipped', { parentId: secret.nodeId })], 'shipped'), /WATCH_PROTECTED_FIELDS/);
+  assert.throws(() => watchMatch([...tree('Shipped'), node('password', '')], 'shipped'), /WATCH_PROTECTED_FIELDS/);
+  assert.equal(watchMatch([node('RootWebArea', 'Ticket'), node('button', 'waiting')], 'button'), false);
+  assert.equal(watchMatch([node('RootWebArea', 'Ticket'), node('button', 'waiting')], 'button waiting'), false);
   assert.equal(watchMatch([node('RootWebArea', 'Ticket'), node('StaticText', 'shipped', { ignored: true })], 'shipped'), false);
   for (const nodes of [[], [node('StaticText', 'shipped')], Array.from({ length: 10001 }, () => node('StaticText', 'shipped')),
     [node('RootWebArea', 'Ticket'), node('StaticText', 'x'.repeat(1048576))]]) assert.throws(() => watchMatch(nodes, 'shipped'), /INCOMPLETE/);
@@ -69,7 +75,8 @@ test('one check attaches, checks identity around a names-only read and detaches,
   assert.deepEqual(result, { matched: true, binding: { browser: 'browser1', incarnation: 'incarnation1', target: 'target1' },
     scope: 'main-document accessibility names' });
   assert.deepEqual(f.calls.map(call => call.method), ['connect', 'Target.getTargets', 'Target.attachToTarget', 'Target.getTargetInfo',
-    'Page.getFrameTree', 'Accessibility.getFullAXTree', 'Page.getFrameTree', 'Target.getTargetInfo', 'Target.detachFromTarget', 'disconnect']);
+    'Page.getFrameTree', 'DOM.enable', 'DOM.performSearch', 'DOM.discardSearchResults', 'DOM.performSearch', 'DOM.discardSearchResults',
+    'Accessibility.getFullAXTree', 'Page.getFrameTree', 'Target.getTargetInfo', 'DOM.performSearch', 'DOM.discardSearchResults', 'DOM.performSearch', 'DOM.discardSearchResults', 'Target.detachFromTarget', 'disconnect']);
   assert.deepEqual(f.calls.find(call => call.method === 'Accessibility.getFullAXTree').params, { frameId: 'frame1' });
 });
 
@@ -134,32 +141,46 @@ test('a hung read is bounded and the selected connection is closed', async () =>
   assert.equal(f.calls.at(-1).method, 'disconnect');
 });
 
-test('the connection indicator accepts only authenticated person events and closes on every check', async () => {
-  for (const authentic of [false, true]) {
-    let closed = false;
-    const f = fixture({ dependencies: { createUi: () => ({
-      present(_id, data, choices, deliver) {
-        assert.equal(data.status, 'connected'); assert.deepEqual(choices, ['pause', 'disconnect']);
-        deliver({ action: 'disconnect' });
-      }, authenticate: () => authentic, close: () => { closed = true; },
-    }) } });
-    if (authentic) {
-      await assert.rejects(readWatch(query, undefined, f.dependencies), /PERMISSION_OR_CONNECTION_CHANGED|WATCH_STOPPED/);
-      assert.ok(!f.calls.some(call => call.method === 'Accessibility.getFullAXTree'));
-    } else assert.equal((await readWatch(query, undefined, f.dependencies)).matched, true);
-    assert.equal(closed, true);
+test('watch reads have no UI, window, focus, Space or pointer command path', async () => {
+  const f = fixture({ dependencies: { createUi: () => { throw Error('a watch must never create native UI'); } } });
+  assert.equal((await readWatch(query, undefined, f.dependencies)).matched, true);
+  const source = (await import('node:fs')).readFileSync(new URL('../plugins/sleight/lib/watch-read.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /createNativeUi|createUi|\.present\(|activate|bringToFront|mouse|pointer|osascript|NSPanel/);
+});
+
+test('only the origin attested public at creation may be read', async () => {
+  for (const publicOrigin of [undefined, false, 'https://other.test', query.url]) {
+    const f = fixture({ dependencies: { publicOrigin } });
+    await assert.rejects(readWatch(query, undefined, f.dependencies), /WATCH_PUBLIC_HOST_REQUIRED/);
+    assert.deepEqual(f.calls, []);
   }
 });
 
-test('a person stopping during detach still pauses, and ordinary UI closure is not a user stop', async () => {
-  let deliver, onLoss;
-  const f = fixture({ send: method => {
-    if (method === 'Target.detachFromTarget') deliver({ action: 'pause' });
-  }, dependencies: { createUi: (_receipt, loss) => {
-    onLoss = loss;
-    return { present(_id, _data, _choices, callback) { deliver = callback; }, authenticate: () => true, close() { onLoss(); } };
-  } } });
-  await assert.rejects(readWatch(query, undefined, f.dependencies), /WATCH_STOPPED/);
-  const ordinary = fixture({ dependencies: { createUi: (_receipt, loss) => ({ present() {}, close: loss }) } });
-  assert.equal((await readWatch(query, undefined, ordinary.dependencies)).matched, true);
+test('query and fragment credentials and secret-shaped values are refused', () => {
+  for (const suffix of ['?token=abc', '?api_key=x', '?accessToken=x', '?password=x', '?sessionid=x', '?code=x', '?auth=abc', '?key=abc', '?sid=abc', '?q=Bearer+abc',
+    '#access_token=abc', '#/reset?secret=abc', '?q=Bearer%20abc', '?q=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature',
+    '?q=0123456789abcdef0123456789abcdef', '#abcDEF0123456789abcDEF0123456789', '?%2574oken=x'])
+    assert.throws(() => watchQuery({ ...query, url: 'https://example.test/ticket' + suffix }), /secret/i, suffix);
+  assert.equal(watchQuery({ ...query, url: 'https://example.test/ticket?sort=recent#status' }).find, 'shipped');
+});
+
+
+test('DOM protected-field checks refuse before matching, including a field that appears during the read', async () => {
+  for (const appear of [1, 2]) {
+    let checks = 0;
+    const f = fixture({ send: (method, params) => {
+      if (method === 'DOM.performSearch' && params.query.includes('password')) return { searchId: 'guard1', resultCount: ++checks >= appear ? 1 : 0 };
+    } });
+    await assert.rejects(readWatch(query, undefined, f.dependencies), /WATCH_PROTECTED_FIELDS/);
+    assert.equal(checks, appear);
+    if (appear === 1) assert.ok(!f.calls.some(call => call.method === 'Accessibility.getFullAXTree'));
+    assert.deepEqual(f.calls.slice(-2).map(call => call.method), ['Target.detachFromTarget', 'disconnect']);
+  }
+});
+
+
+test('an embedded origin not marked public at creation refuses before the page read', async () => {
+  const f = fixture({ children: [{ frame: { id: 'child', url: 'https://account.test/login' } }] });
+  await assert.rejects(readWatch(query, undefined, f.dependencies), /WATCH_PUBLIC_HOST_REQUIRED/);
+  assert.ok(!f.calls.some(call => call.method === 'Accessibility.getFullAXTree'));
 });
