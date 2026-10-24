@@ -11,6 +11,7 @@ import { restoreViewport } from './viewport.mjs';
 import { receiveDownload } from './download-response.mjs';
 import { createDownloadStore } from './downloads.mjs';
 import { handoffReadReady, handoffMessages } from './handoff.mjs';
+import { createDeveloperRead } from './developer-read.mjs';
 
 // Preserve recovery advice when the dispatcher hides an uncertain operation's details.
 const capabilityError = message => Object.assign(Error(message), { capability: true });
@@ -2717,16 +2718,20 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     allocations.delete(entry.targetId);
     const notice = opener && { tab: entry.tab, opener: opener.tab, closed: entry.closed };
     if (notice) opener.popups.push(notice);
-    page.once('close', () => { entry.closed = true; if (notice) notice.closed = true; });
+    page.once('close', () => { entry.closed = true; entry.developer?.stop(); if (notice) notice.closed = true; });
     entry.ready = track((async () => {
       if (!entry.closed && !ended) await deadline(() => install(entry), timeoutMs);
+      if (!entry.closed && !ended) {
+        entry.developer = createDeveloperRead(entry.cdp);
+        await deadline(() => entry.developer.ready, timeoutMs);
+      }
       if (ended && !entry.closed) await deadline(() => page.close({ runBeforeUnload: false }), timeoutMs);
     })());
     return entry;
   };
   const blockPage = async (page, info, opener) => {
     const targetId = info.targetInfo.targetId, entry = targets.get(targetId);
-    if (entry) entry.blocked = true;
+    if (entry) { entry.blocked = true; entry.developer?.stop(); }
     if (!blockedTargets.has(targetId)) {
       const notice = opener && (opener.popups.find(row => row.tab === entry?.tab && row.tab) ??
         { opener: opener.tab, closed: false, blocked: true });
@@ -2818,6 +2823,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
         await deadline(() => entry.ready, timeoutMs);
         const viewport = await deadline(() => restoreViewport(entry.page, { release: true }), timeoutMs);
         await deadline(() => removeHook(entry), timeoutMs);
+        entry.developer?.stop();
         await entry.cdp?.detach();
         await releaseTarget?.(entry.targetId);
         if (entry.page.isClosed()) throw Error('owned tab closed during release');
@@ -3030,6 +3036,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     keep: id => release(id, 'keep'), handoff: id => release(id, 'handoff'),
     endTurn() {
       ended = true;
+      for (const entry of records.values()) entry.developer?.stop();
       if (!cleanup) cleanup = (async () => {
         let settled = true;
         if (handoffActive) try { await handoffActive.finish(true); } catch { settled = false; }

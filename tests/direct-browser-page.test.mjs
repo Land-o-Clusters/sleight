@@ -249,6 +249,25 @@ test('never exposes an existing user page or a popup with a foreign opener', asy
   assert.equal(f.pages.some(p => p.closed), false);
 });
 
+test('developer capture starts on owned tabs before navigation and stops on keep, close and turn end', async () => {
+  const f = fixture(), foreign = f.page('foreign');
+  const { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/start' });
+  const entry = f.registry.tab(tab), developer = entry.developer;
+  assert.ok(developer);
+  for (const method of ['Runtime.enable', 'Network.enable'])
+    assert.ok(f.calls.findIndex(c => c[0] === method) < f.calls.findIndex(c => c[0] === 'goto'));
+  assert.equal(foreign.cdp.listenerCount('Runtime.consoleAPICalled'), 0);
+  await f.registry.keep(tab);
+  assert.equal(entry.cdp.listenerCount('Runtime.consoleAPICalled'), 0);
+  await assert.rejects(developer.read({ console: true }), /ended/);
+  const second = await f.registry.openTab({ url: 'https://fixture.invalid/second' });
+  const closed = f.registry.tab(second.tab).developer;
+  await f.registry.close(second.tab); await assert.rejects(closed.read({ network: true }), /ended/);
+  const third = await f.registry.openTab({ url: 'https://fixture.invalid/third' });
+  const ended = f.registry.tab(third.tab).developer;
+  await f.registry.endTurn(); await assert.rejects(ended.read({ performance: true }), /ended/);
+});
+
 test('adopts only a popup whose CDP opener is owned, retaining opener through self-close', async () => {
   const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
   const popup = f.page('popup', 'target-1'); await f.registry.idle();
