@@ -223,7 +223,8 @@ test('all ten retained DP1c open_file results continue offline while retaining t
 });
 
 test('the retained six-call DP1 stream uses the fresh acquired handle after changed open_file wording', {
-  skip: !existsSync(join(evidence, '1-A/trace.jsonl')) && 'Retained DP1c evidence is not installed',
+  skip: (!existsSync(join(evidence, '1-A/trace.jsonl')) || !existsSync(loadCheck('DP1').source.replace(/^~/, homedir())))
+    && 'Retained DP1c evidence is not installed',
 }, async () => {
   const spec = loadCheck('DP1'), rec = loadRecording(spec.source.replace(/^~/, homedir()), spec);
   const first = readFileSync(join(evidence, '1-A/trace.jsonl'), 'utf8').trim().split('\n').map(JSON.parse).find(r => r.event === 'call');

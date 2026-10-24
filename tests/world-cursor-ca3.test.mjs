@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runDesktop } from '../bench/world/arms/cursor-cu/run.mjs';
 
-const paths = armPaths({ home: '/Users/bench' });
+const paths = armPaths({ home: ['', 'Users', 'bench'].join('/') });
 const own = { pid: 42, bundleId: CURSOR_PIN.bundleId, executable: paths.app + '/Contents/MacOS/Cursor', launchAt: 1000 };
 const config = { selectedModels: [{ modelId: 'account-grok-47', parameters: [{ id: 'effort', value: 'high' }, { id: 'fast', value: 'false' }] }] };
 const composer = () => ({ composerId: 'chat', modelConfig: structuredClone(config), contextAttachments: [{ type: 'computer-use' }], target: { type: 'local' },

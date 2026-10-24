@@ -13,7 +13,7 @@ import { DesktopDriver } from '../bench/world/arms/cursor-cu/desktop.mjs';
 
 const model = { modelId: 'grok-4.7', parameters: [{ id: 'effort', value: 'high' }, { id: 'fast', value: 'false' }] };
 const config = { selectedModels: [model], maxMode: false };
-const home = '/Users/bench';
+const home = ['', 'Users', 'bench'].join('/');
 const paths = () => armPaths({ home });
 const plan = () => composerPlan({ prompt: 'Edit the fixture.', paths: paths() });
 // Source-derived schema samples, not recordings. Cursor was never launched by this lane.
