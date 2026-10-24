@@ -1,6 +1,6 @@
 // Downloads are data. No shell, opener, browser download preference or caller-selected path.
 import { createHash, randomUUID } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { constants, lstatSync, mkdirSync, openSync, closeSync, writeSync, readSync, fstatSync, linkSync, unlinkSync, realpathSync, readdirSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { dirname, join, extname } from 'node:path';
@@ -62,8 +62,11 @@ function fileType(name, claimed, head, tail) {
   const detected = head.subarray(0, 5).toString() === '%PDF-' ? 'application/pdf' :
     head.subarray(0, 8).toString('hex') === '89504e470d0a1a0a' ? 'image/png' :
     head.subarray(0, 3).toString('hex') === 'ffd8ff' ? 'image/jpeg' : /^GIF8[79]a/.test(head.toString('ascii')) ? 'image/gif' : undefined;
+  // A version or an unrecognized dotted label is part of the name. Known file
+  // suffixes still have to agree with the bytes, including unsupported formats.
+  const final = extname(name).toLowerCase();
+  const suffix = /^\.(?:pdf|png|jpe?g|gif|txt|csv|tsv|json|log|zip|gz|tgz|tar|bz2|xz|7z|rar|docx?|xlsx?|pptx?|rtf|odt|ods|odp|webp|bmp|tiff?)$/.test(final) ? final : '';
   if (detected) {
-    const suffix = extname(name).toLowerCase();
     if (suffix && suffix !== extensions[detected] && !(detected === 'image/jpeg' && suffix === '.jpeg')) refused();
     return detected;
   }
@@ -71,7 +74,7 @@ function fileType(name, claimed, head, tail) {
   if (['application/octet-stream', 'application/vnd.ms-excel'].includes(type) && /\.csv$/i.test(name)) type = 'text/csv';
   if (!['text/plain', 'text/csv', 'text/tab-separated-values', 'application/json'].includes(type) || head.includes(0) ||
       /^\s*(?:<!doctype\s+html|<html|<script|<svg)/i.test(head.toString('utf8'))) refused();
-  if (extname(name) && !/\.(?:txt|csv|tsv|json|log)$/i.test(name)) refused();
+  if (suffix && !/^\.(?:txt|csv|tsv|json|log)$/.test(suffix)) refused();
   return type;
 }
 
@@ -96,14 +99,18 @@ function sweep(bank, log) {
 }
 function quarantineFile(path) {
   const value = '0081;' + Math.floor(Date.now() / 1000).toString(16) + ';sleight;' + randomUUID().toUpperCase();
-  execFileSync('/usr/bin/xattr', ['-w', 'com.apple.quarantine', value, path], { stdio: 'pipe', timeout: 5000 });
+  return new Promise((resolve, reject) => {
+    execFile('/usr/bin/xattr', ['-w', 'com.apple.quarantine', value, path], { timeout: 5000 }, error => error ? reject(error) : resolve());
+  });
 }
 export function createDownloadStore({ home = userInfo().homedir, limit = DOWNLOAD_LIMIT, sessionLimit = DOWNLOAD_SESSION_LIMIT,
   quarantine = quarantineFile, removeStage = unlinkSync, log = line => console.error(line) } = {}) {
   const bank = join(home, 'Library/Application Support/sleight/downloads');
   // A new page registry must not reset limits for the same authenticated session.
   const sessions = budgets.get(home) ?? new Map(); budgets.set(home, sessions);
-  sweep(bank, log);
+  try { sweep(bank, log); } catch {
+    try { log('download stale stage cleanup failed'); } catch { /* Cleanup logging cannot stop turbo startup. */ }
+  }
   return Object.freeze({ async save({ session, message, current, suggested, url, transfer }) {
     const request = downloadRequest(message);
     if (typeof session !== 'string' || !session || typeof current !== 'function' || !current()) throw Error('download authority expired');
@@ -115,7 +122,7 @@ export function createDownloadStore({ home = userInfo().homedir, limit = DOWNLOA
     privateDirectory(bank);
     const folder = join(bank, createHash('sha256').update(session).digest('hex').slice(0, 24));
     const identity = privateDirectory(folder), stage = join(folder, '.' + randomUUID() + '.part');
-    let fd, published = false;
+    let fd, published = false, chargedBytes = 0;
     budget.messages.set(messageKey, (budget.messages.get(messageKey) ?? 0) + 1);
     activeStages.add(stage);
     try {
@@ -134,6 +141,7 @@ export function createDownloadStore({ home = userInfo().homedir, limit = DOWNLOA
           if (bytes > limit) throw Error('download exceeds 32 MiB limit');
           if (chunk.length > sessionLimit - budget.bytes) throw Error('download exceeds session byte quota');
           budget.bytes += chunk.length;
+          chargedBytes += chunk.length;
           digest.update(chunk);
           let written = 0;
           while (written < chunk.length) written += writeSync(fd, chunk, written, chunk.length - written);
@@ -150,7 +158,7 @@ export function createDownloadStore({ home = userInfo().homedir, limit = DOWNLOA
       const destIdentity = request.downloads ? directory(destination) : identity;
       if (destIdentity.uid !== process.getuid()) throw Error('download directory is unsafe');
       if (request.downloads) {
-        try { quarantine(stage); } catch { throw Error('download quarantine failed'); }
+        try { await quarantine(stage); } catch { throw Error('download quarantine failed'); }
       }
       const again = lstatSync(folder), destAgain = lstatSync(destination), source = lstatSync(stage), file = fstatSync(fd);
       if (!current() || again.ino !== identity.ino || again.dev !== identity.dev || destAgain.ino !== destIdentity.ino || destAgain.dev !== destIdentity.dev ||
@@ -163,12 +171,14 @@ export function createDownloadStore({ home = userInfo().homedir, limit = DOWNLOA
       if (!published) budget.messages.set(messageKey, budget.messages.get(messageKey) - 1);
       if (fd !== undefined) closeSync(fd);
       activeStages.delete(stage);
-      try { removeStage(stage); } catch (error) {
+      let discarded = false;
+      try { removeStage(stage); discarded = true; } catch (error) {
         if (error.code !== 'ENOENT') {
-          if (published) { try { log('download stage cleanup failed after publication'); } catch { /* Logging cannot undo publication. */ } }
-          else throw error;
-        }
+          try { log(published ? 'download stage cleanup failed after publication' : 'download stage cleanup failed before publication'); }
+          catch { /* Logging cannot replace the download result. */ }
+        } else discarded = true;
       }
+      if (!published && discarded) budget.bytes -= chargedBytes;
     }
   } });
 }
