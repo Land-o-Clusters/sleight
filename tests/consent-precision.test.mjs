@@ -5,7 +5,7 @@ import { guardedCode, readCode, windowFromText } from '../plugins/sleight/lib/do
 import { engineConsent } from '../plugins/sleight/lib/consent-wall.mjs';
 
 const header = 'Window: "Fixture", App: Browser\n0 standard window Fixture\n\t1 HTML content Fixture';
-const tree = (role = 'dialog', words = 'Cookies', target = 'button Accept all', reject = true) => header +
+const tree = (role = 'dialog', words = 'We use cookies', target = 'button Accept all', reject = true) => header +
   `\n\t\t2 ${role}\n\t\t\t3 text ${words}\n\t\t\t4 ${target}` + (reject ? '\n\t\t\t5 button Reject all' : '');
 
 for (const [title, role, words, target] of [
@@ -27,15 +27,15 @@ for (const [title, role, words, target] of [
 
 for (const target of ['button I understand', 'button Yes, that is fine', 'check box Accept all cookies',
   'switch Accept all', 'group Accept all', 'image Accept all', 'text Accept all']) test(`engine blocks role and name ${target}`, () => {
-  assert.equal(engineConsent('click', [4], tree('dialog', 'Cookies', target))?.blocked, true);
+  assert.equal(engineConsent('click', [4], tree('dialog', 'We use cookies', target))?.blocked, true);
 });
 
-for (const role of ['dialog', 'alert dialog', 'group OneTrust', 'container Cookiebot', 'region Cookies', 'section Cookies']) {
+for (const role of ['dialog', 'alert dialog', 'group OneTrust', 'container Cookiebot', 'dialog Cookie preferences', 'alertdialog']) {
   test(`engine qualifying ${role}`, () => assert.equal(engineConsent('click', [4], tree(role))?.blocked, true));
 }
-for (const [role, ask] of [['region Cookies', false], ['section Cookies', false], ['dialog', true], ['group OneTrust', true]]) {
+for (const [role, ask] of [['alertdialog', true], ['dialog Cookie preferences', true], ['dialog', true], ['group OneTrust', true]]) {
   test(`engine no reject ${role} ask=${ask}`, () => {
-    const result = engineConsent('click', [4], tree(role, 'Cookies', 'button Accept all', false));
+    const result = engineConsent('click', [4], tree(role, 'We use cookies', 'button Accept all', false));
     assert.equal(result?.blocked, true);
     assert.match(result.why, /accepting cookies is blocked/);
     assert.equal(/stop and ask/i.test(result.why), ask);
@@ -55,12 +55,12 @@ test('engine ordinary typing on Accept does not activate it', () => {
   assert.equal(engineConsent('typeText', ['fixture'], tree() + '\nThe focused UI element is 4 button Accept all'), undefined);
 });
 for (const method of ['click', 'doubleClick', 'press']) test(`engine maps ${method} point to deepest framed row`, () => {
-  const before = tree('dialog', 'Cookies', 'group Accept all, Frame: [20, 30, 100, 40]', false) + '\n\t\t\t\t6 text Accept all, Frame: [30, 35, 60, 20]\n\t\t\t5 button Reject all';
+  const before = tree('dialog', 'We use cookies', 'group Accept all, Frame: [20, 30, 100, 40]', false) + '\n\t\t\t\t6 text Accept all, Frame: [30, 35, 60, 20]\n\t\t\t5 button Reject all';
   assert.equal(engineConsent(method, [[40, 40]], before)?.blocked, true);
   assert.equal(engineConsent(method, [[500, 500]], before), undefined);
 });
 test('engine point outside a cookie dialog does not borrow its context', () => {
-  const before = tree('dialog', 'Cookies', 'button Accept all, Frame: [20, 30, 100, 40]') + '\n\t\t7 button Continue, Frame: [200, 200, 100, 40]';
+  const before = tree('dialog', 'We use cookies', 'button Accept all, Frame: [20, 30, 100, 40]') + '\n\t\t7 button Continue, Frame: [200, 200, 100, 40]';
   assert.equal(engineConsent('click', [[220, 220]], before), undefined);
 });
 test('engine CMP root supplies privacy wording but unknown root does not', () => {
@@ -75,7 +75,7 @@ for (const id of ['sketch', 'ketchup', 'myonetruststory']) test(`engine ordinary
   assert.equal(engineConsent('click', [4], tree('group ' + id, 'Your privacy')), undefined);
 });
 test('engine point with overlapping sibling frames has no proved target', () => {
-  const before = tree('dialog', 'Cookies', 'button Accept all, Frame: [20, 30, 100, 40]') + '\n\t\t\t6 button Manage preferences, Frame: [20, 30, 100, 40]';
+  const before = tree('dialog', 'We use cookies', 'button Accept all, Frame: [20, 30, 100, 40]') + '\n\t\t\t6 button Manage preferences, Frame: [20, 30, 100, 40]';
   assert.equal(engineConsent('click', [[40, 40]], before), undefined);
 });
 test('engine point without observed geometry stays unclassified', () => {
@@ -87,9 +87,9 @@ for (const row of ['text Reject all', 'button (disabled) Reject all']) test(`eng
   assert.match(result.why, /no reject option.*stop and ask/i);
 });
 
-test('engine retry blocks a newly identified cookie region without asking', async () => {
-  const before = header + '\n\t\t2 region\n\t\t\t10 heading Preferences\n\t\t\t3 text Choices\n\t\t\t4 button Allow all\n\t\t8 button Read recipe';
-  const after = before.replace('heading Preferences', 'heading Cookies');
+test('engine retry blocks a newly identified cookie dialog and names the decline', async () => {
+  const before = header + '\n\t\t2 dialog\n\t\t\t10 heading Preferences\n\t\t\t3 text Choices\n\t\t\t4 button Allow all\n\t\t\t5 button Reject all\n\t\t8 button Read recipe';
+  const after = before.replace('heading Preferences', 'heading Cookie preferences');
   let current = before;
   const sent = [];
   const raw = { getAXState: async () => current, click: async number => {
@@ -112,7 +112,7 @@ for (const [code, target] of [
   ['await app.typeText(" ");', 'button Accept all'],
   ['await app.typeText("\\n");', 'button Accept all'],
 ]) test(`generated guard refuses ${code}`, async () => {
-  const before = tree('dialog', 'Cookies', target) + '\nThe focused UI element is 4 button Accept all';
+  const before = tree('dialog', 'We use cookies', target) + '\nThe focused UI element is 4 button Accept all';
   const sent = [];
   const raw = { getAXState: async () => before, click: async (...args) => sent.push(args), typeText: async (...args) => sent.push(args) };
   const context = { cua: { getApp: async () => raw }, nodeRepl: { write() {} } };

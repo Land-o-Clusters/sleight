@@ -52,7 +52,7 @@ for (const [title, html, label] of [
 });
 
 for (const label of ['I understand', 'Yes, that is fine', 'Accept all']) test(`precision blocks banner ${label}`, { skip, timeout: 30000 }, async t => {
-  const f = await setup(t, wrap('Cookies', button(label) + button('Reject all')));
+  const f = await setup(t, wrap('We use cookies', button(label) + button('Reject all')));
   assert.match(await blocked(f, f.entry.page.getByRole('button', { name: label, exact: true })), /Reject all/);
 });
 
@@ -65,13 +65,13 @@ for (const [title, control, selector, operation] of [
   ['CSS before', `<style>#yes::before{content:'Accept all'}</style><button id="yes" ${hit}></button>`, '#yes', 'click'],
   ['aria-labelledby', `<span id="label">Accept all</span><button aria-labelledby="label" ${hit}>◼</button>`, 'button', 'press'],
 ]) test(`precision blocks ${title}`, { skip, timeout: 30000 }, async t => {
-  const f = await setup(t, wrap('Cookies', control));
+  const f = await setup(t, wrap('We use cookies', control));
   const target = f.entry.page.locator(selector);
   await blocked(f, target, operation);
 });
 
 test('browser_act check and browser_fill cannot activate an Accept switch', { skip, timeout: 30000 }, async t => {
-  const f = await setup(t, wrap('Cookies', '<input type="checkbox" role="switch" aria-label="Accept all cookies" onchange="document.body.dataset.hit=\'yes\'">'));
+  const f = await setup(t, wrap('We use cookies', '<input type="checkbox" role="switch" aria-label="Accept all cookies" onchange="document.body.dataset.hit=\'yes\'">'));
   let before = await f.read();
   assert.match(await f.call('browser_act', { steps: [{ do: 'check', ref: f.ref(before, 'Accept all cookies') }] }), /accepting cookies is blocked/);
   before = await f.read();
@@ -80,13 +80,13 @@ test('browser_act check and browser_fill cannot activate an Accept switch', { sk
 });
 
 for (const [title, attrs, words, ask] of [
-  ['fixed', 'style="position:fixed"', 'Cookies', false],
-  ['sticky', 'style="position:sticky"', 'Cookies', false],
-  ['named region', 'role="region" aria-label="Cookies"', 'Cookies', false],
-  ['heading section', '', '<h2>Cookies</h2>', false],
-  ['dialog', 'role="dialog"', 'Cookies', true],
-  ['alertdialog', 'role="alertdialog"', 'Cookies', true],
-  ['aria-modal', 'aria-modal="true"', 'Cookies', true],
+  ['fixed', 'style="position:fixed"', 'We use cookies', false],
+  ['sticky', 'style="position:sticky"', 'We use cookies', false],
+  ['fixed named region', 'role="region" aria-label="Cookies" style="position:fixed"', 'We use cookies', false],
+  ['sticky heading section', 'style="position:sticky"', '<h2>Cookie preferences</h2>', false],
+  ['dialog', 'role="dialog"', 'We use cookies', true],
+  ['alertdialog', 'role="alertdialog"', 'We use cookies', true],
+  ['aria-modal', 'aria-modal="true"', 'We use cookies', true],
   ['CMP privacy', 'id="onetrust-banner-sdk"', 'Your privacy', true],
   ['CMP biscuits', 'class="didomi-popup-container"', 'Biscuits', true],
 ]) test(`no reject in ${title}: ask=${ask}`, { skip, timeout: 30000 }, async t => {
@@ -96,13 +96,13 @@ for (const [title, attrs, words, ask] of [
   assert.equal(await f.entry.page.locator('body').getAttribute('data-hit'), null);
 });
 
-for (const word of ['Galletas', 'Kekse', '쿠키', 'クッキー', 'Çerezler', 'Kakor', 'Evästeet', 'Sütik']) test(`localized banner ${word}`, { skip, timeout: 30000 }, async t => {
+for (const word of ['Usamos galletas', 'Wir verwenden Kekse', '쿠키를 사용', 'クッキーを使用', 'Çerez kullanıyoruz', 'Vi använder kakor', 'Käytämme evästeitä', 'Sütiket használunk']) test(`localized banner ${word}`, { skip, timeout: 30000 }, async t => {
   const f = await setup(t, wrap(word, button('Accept all')));
   await blocked(f, f.entry.page.getByRole('button', { name: 'Accept all', exact: true }));
 });
 
 test('fill submit uses precision guard', { skip, timeout: 30000 }, async t => {
-  const f = await setup(t, wrap('Cookies', '<label>Name<input aria-label="Name"></label>' + button('Accept all')));
+  const f = await setup(t, wrap('We use cookies', '<label>Name<input aria-label="Name"></label>' + button('Accept all')));
   const before = await f.read();
   assert.match(await f.call('browser_fill', { fields: [{ ref: f.ref(before, 'Name'), value: 'Fixture' }], submit: f.ref(before, 'Accept all') }), /accepting cookies is blocked/);
   assert.equal(await f.entry.page.locator('body').getAttribute('data-hit'), null);
@@ -113,7 +113,7 @@ test('known CMP iframe supplies container identity across an origin boundary', {
   const server = createServer((req, res) => { res.setHeader('Content-Type', 'text/html'); res.end(page(`<p>Your privacy</p>${button('Continue')}`)); });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
-  const f = await setup(t, `<iframe title="OneTrust choices" src="http://127.0.0.1:${server.address().port}/"></iframe>`);
+  const f = await setup(t, `<iframe name="OneTrust" title="OneTrust choices" src="http://127.0.0.1:${server.address().port}/"></iframe>`);
   await f.entry.page.waitForLoadState('load');
   await assert.rejects(checkConsent(f.entry.page.frames()[1].getByRole('button', { name: 'Continue' }), 'click', f.entry.state), /accepting cookies is blocked.*stop and ask/i);
 });
@@ -135,6 +135,6 @@ test('an ordinary SVG descendant does not become an Accept label', { skip, timeo
 });
 
 test('an image-only decline is named rather than asking the user', { skip, timeout: 30000 }, async t => {
-  const f = await setup(t, wrap('Cookies', button('Accept all') + `<button><img alt="Reject all" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'/%3E"></button>`, 'role="dialog"'));
+  const f = await setup(t, wrap('We use cookies', button('Accept all') + `<button><img alt="Reject all" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'/%3E"></button>`, 'role="dialog"'));
   assert.match(await blocked(f, f.entry.page.getByRole('button', { name: 'Accept all', exact: true })), /Reject all/);
 });

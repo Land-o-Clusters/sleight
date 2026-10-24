@@ -5,7 +5,7 @@ import { guardedCode, readCode, windowFromText } from '../plugins/sleight/lib/do
 import { cookieWording, declinesCookies, engineConsent } from '../plugins/sleight/lib/consent-wall.mjs';
 
 const header = 'Window: "Fixture", App: Browser\n0 standard window Fixture\n\t1 HTML content Fixture, URL: http://127.0.0.1:1234/';
-const tree = (label = 'Reject all', role = 'dialog', words = 'Cookies and tracking') => header + `\n\t\t2 ${role}\n\t\t\t3 text ${words}\n\t\t\t4 button Accept all\n\t\t\t5 button ${label}\n\t\t\t6 button Manage preferences\n\t\t\t7 button\n\t\t8 button Read recipe`;
+const tree = (label = 'Reject all', role = 'dialog', words = 'We use cookies and tracking') => header + `\n\t\t2 ${role}\n\t\t\t3 text ${words}\n\t\t\t4 button Accept all\n\t\t\t5 button ${label}\n\t\t\t6 button Manage preferences\n\t\t\t7 button\n\t\t8 button Read recipe`;
 const cleared = header + '\n\t\t8 button Read recipe';
 async function guarded(before, code, after = cleared, loseCompletion = false) {
   let current = before;
@@ -22,7 +22,7 @@ async function guarded(before, code, after = cleared, loseCompletion = false) {
   return { sent, text: written.join('\n'), error };
 }
 
-for (const role of ['dialog', 'region Cookies', 'group OneTrust', 'container Cookiebot']) test(`engine blocks accept in a qualifying ${role} with cookie text`, async () => {
+for (const role of ['dialog', 'alertdialog', 'group OneTrust', 'container Cookiebot']) test(`engine blocks accept in a qualifying ${role} with cookie text`, async () => {
   const result = await guarded(tree('Reject all', role), 'await app.click(4);');
   assert.match(result.error?.message ?? '', /Reject all/);
   assert.deepEqual(result.sent, []);
@@ -109,8 +109,8 @@ test('engine does not use cookie wording beyond the nearest landmark', () => {
   assert.equal(engineConsent('click', [5], before)?.blocked, undefined);
 });
 
-for (const words of ['Çerezler', 'Kakor', 'Evästeet', 'Sütik', 'Galletas', 'Kekse']) test(`cookie wording recognises ${words}`, () => {
-  assert.equal(cookieWording(words), true);
+for (const words of ['Çerezler', 'Kakor', 'Evästeet', 'Sütik', 'Galletas', 'Kekse']) test(`bare cookie topic excludes ${words}`, () => {
+  assert.equal(cookieWording(words), false);
 });
 for (const words of ['consent', '同意', '동의', 'zgoda', 'OAuth permission', 'personalisierte Werbung', 'OneTrust', 'Cookiebot', 'partenaires', 'tracking', 'privacy', 'partners']) test(`cookie wording excludes bare ${words}`, () => {
   assert.equal(cookieWording(words), false);

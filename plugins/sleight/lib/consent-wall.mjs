@@ -1,14 +1,16 @@
 // These closure-free classifiers also run in the engine REPL and Chromium's
 // isolated utility world. Page claims never supply authority to this policy.
-export function cookieWording(text, cmp = false) {
-  const words = String(text ?? '').normalize('NFKC');
-  return /(?<![\p{L}\p{N}])(?:cookies?|galletas|kekse|çerez(?:ler)?|kakor|kaka|eväste(?:et|itä)?|süti(?:k|ket)?)(?![\p{L}\p{N}])|クッキー|饼干|餅乾|쿠키/iu.test(words) ||
-    cmp && /(?<![\p{L}\p{N}])(?:biscuits|privacy|tracking|trackers?|partners?|consent)(?![\p{L}\p{N}])/iu.test(words);
+export function cookieWording(text) {
+  const words = String(text ?? '').normalize('NFKC').replace(/\s+/g, ' ');
+  // Whole consent phrases keep cookie recipes, games and settings usable.
+  return /(?<![\p{L}\p{N}])(?:we use (?:(?:essential|necessary|optional|strictly necessary|non-essential) )?cookies|this site uses cookies|cookie (?:policy|settings|preferences)|accept cookies|consent to cookies|wir (?:verwenden|nutzen|benutzen) (?:cookies|kekse)|(?:cookie|cookies)[ -](?:einstellungen|richtlinie)|nous utilisons (?:des )?cookies|(?:politique|paramètres|préférences) (?:de |des |en matière de )?cookies|(?:usamos|utilizamos) (?:cookies|galletas)|(?:política|configuración|preferencias) de cookies|utilizziamo (?:i )?cookie|(?:impostazioni|preferenze) (?:dei )?cookie|(?:usamos|utilizamos) (?:cookies|biscoitos)|(?:política|configurações|preferências) de cookies|wij gebruiken cookies|cookie[ -]?(?:instellingen|voorkeuren|beleid)|używamy (?:plików )?cookie|(?:ustawienia|preferencje) (?:plików )?cookie|çerez(?:ler)? kullanıyoruz|çerez (?:ayarları|tercihleri|politikası)|vi använder kakor|(?:inställningar|policy) för kakor|käytämme evästeitä|eväste(?:asetukset|käytännöt)|sütiket használunk|süti(?:beállítások|szabályzat))(?![\p{L}\p{N}])|クッキー(?:を使用|の設定|のポリシー|の同意)|(?:我们|我們)使用\s*(?:cookies?|饼干|餅乾)|(?:cookies?|饼干|餅乾)(?:政策|设置|設定|偏好)|쿠키(?:를 사용| 설정| 정책| 동의)/iu.test(words);
 }
 
 export function consentManager(text) {
-  return /(?:^|[^a-z0-9])(?:one[ _-]?trust|cookie[ _-]?bot|didomi|quantcast|trust[ _-]?arc|user[ _-]?centrics|cookie[ _-]?yes|osano|iubenda|source[ _-]?point|ketch|termly|complianz|borlabs)(?=$|[^a-z0-9])/i.test(
-    String(text ?? '').replace(/([a-z])([A-Z])/g, '$1 $2'));
+  // Camel-case roots expose vendor words. Exclude the ordinary hyphenated
+  // word ketch-up before testing whole vendor words, including root suffixes.
+  return /(?<![\p{L}\p{N}])(?:one[ _-]?trust|cookie[ _-]?bot|didomi|quantcast|trust[ _-]?arc|user[ _-]?centrics|cookie[ _-]?yes|osano|iubenda|source[ _-]?point|ketch(?![-_]up(?=$|[^\p{L}\p{N}]))|termly|complianz|borlabs)(?![\p{L}\p{N}])/iu.test(
+    String(text ?? '').normalize('NFKC').replace(/([a-z])([A-Z])/g, '$1 $2'));
 }
 
 // Whole accessible names only. A substring such as "reject and customise" or
@@ -23,7 +25,7 @@ export function declinesCookies(name) {
 export function acceptsCookies(name) {
   const text = String(name ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
   if (declinesCookies(text)) return false;
-  return /(?<![\p{L}\p{N}])(?:accept(?: all)?|allow(?: all)?|agree|ok(?:ay)?|got it|continue|i understand|yes,? that is fine|akzeptieren|zustimmen|einverstanden|zulassen|verstanden|accepter|j'accepte|autoriser|d'accord|compris|continuer|aceptar|permitir|acepto|de acuerdo|continuar|entiendo|accetta|consenti|acconsento|concordo|ho capito|aceitar|permitir|concordar|entendi|accepteren|toestaan|akkoord|doorgaan|begrepen|zaakceptuj|akceptuj|zezwól|zgadzam się|kontynuuj|rozumiem|kabul et|onayla|tamam|devam|anladım|godkänn|acceptera|tillåt|jag godkänner|fortsätt|jag förstår|hyväksy|salli|jatka|ymmärrän|elfogad(?:ás|ása|om)?|engedélyez(?:és|em)?|rendben|folytatás|értem)(?![\p{L}\p{N}])|同意する|同意して|すべて許可|全て許可|受け入れる|承諾|続行|わかりました|同意|接受|允[许許]|繼續|继续|知道了|동의|허용|계속|확인|이해했습니다/iu.test(text);
+  return /(?<![\p{L}\p{N}])(?:accept(?: all)?|allow(?: all)?|agree|ok(?:ay)?|got it|continue|i understand|yes,? that is fine|consent|understood|proceed|yes|sounds good|enable all|akzeptieren|zustimmen|einverstanden|zulassen|verstanden|accepter|j'accepte|autoriser|d'accord|compris|continuer|aceptar|permitir|acepto|de acuerdo|continuar|entiendo|accetta|consenti|acconsento|concordo|ho capito|aceitar|permitir|concordar|entendi|accepteren|toestaan|akkoord|doorgaan|begrepen|zaakceptuj|akceptuj|zezwól|zgadzam się|kontynuuj|rozumiem|kabul et|onayla|tamam|devam|anladım|godkänn|acceptera|tillåt|jag godkänner|fortsätt|jag förstår|hyväksy|salli|jatka|ymmärrän|elfogad(?:ás|ása|om)?|engedélyez(?:és|em)?|rendben|folytatás|értem)(?![\p{L}\p{N}])|同意する|同意して|すべて許可|全て許可|受け入れる|承諾|続行|わかりました|同意|接受|允[许許]|繼續|继续|知道了|동의|허용|계속|확인|이해했습니다/iu.test(text);
 }
 
 export function engineConsent(name, args, text, after = false) {
@@ -48,7 +50,7 @@ export function engineConsent(name, args, text, after = false) {
       if (values?.length === 4 && values[2] > 0 && values[3] > 0) frame = values;
     }
     const row = { id: Number(m[2]), depth: m[1].length, body, own, name: description ?? own, frame,
-      words: parts.filter(part => !/^(?:Help|ID|URL|Placeholder|Secondary Actions|Frame): /.test(part)).join(' '),
+      words: [own, description !== own ? description : '', parts.find(part => part.startsWith('Value: '))?.slice(7)].filter(Boolean).join(' '),
       ancestors: stack.length ? [stack.at(-1), ...stack.at(-1).ancestors] : [] };
     rows.push(row); stack.push(row);
   }
@@ -58,13 +60,14 @@ export function engineConsent(name, args, text, after = false) {
   const container = row => {
     const cmp = consentManager(row.name + ' ' + row.own + ' ' + (/, ID: ([^,]+)/.exec(row.body)?.[1] ?? ''));
     const dialog = /^(?:dialog|alert dialog|alertdialog)\b/.test(row.body);
-    const namedRegion = /^(?:region|section)\b/.test(row.body) && (cookieWording(row.name) ||
-      rows.some(other => under(other, row) && /^heading\b/.test(other.body) && cookieWording(other.words)));
-    if (!cmp && !dialog && !namedRegion) return;
+    // AX exposes dialog roles, but no CSS fixed/sticky observation. A named
+    // region or heading cannot supply that missing shape.
+    if (!cmp && !dialog) return;
+    if (cmp) return { row, ask: true };
     const fullText = rows.filter(other => under(other, row)).map(other => other.words).join(' ').replace(/\s+/g, ' ').trim();
     if (fullText.length >= 1500) return;
     const words = rows.filter(other => scopedUnder(other, row)).map(other => other.words).join(' ').replace(/\s+/g, ' ').trim();
-    if (words.length >= 1500 || !cookieWording(words, cmp) && !cmp) return;
+    if (words.length >= 1500 || !cookieWording(words)) return;
     return { row, ask: cmp || dialog };
   };
   const contextual = row => {

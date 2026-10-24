@@ -83,13 +83,12 @@ export function inspectConsent(el, options = {}, read) {
     const cmp = consentManager(attr(node, 'id') + ' ' + attr(node, 'class')) ||
       options.cmpFrame && /^(?:body|html)$/.test(read(node, 'localName'));
     const dialog = read(node, 'localName') === 'dialog' || /^(?:dialog|alertdialog)$/.test(attr(node, 'role')) || attr(node, 'aria-modal') === 'true';
-    const region = (read(node, 'localName') === 'section' || attr(node, 'role') === 'region') &&
-      (cookieWording(name(node)) && !!(attr(node, 'aria-label') || attr(node, 'aria-labelledby')) ||
-        descendants(node).some(child => /^(?:h[1-6])$/.test(read(child, 'localName')) && visible(child) && cookieWording(visibleText(child))));
-    if (!cmp && !dialog && !region && !/^(?:fixed|sticky)$/.test(style(node)?.position)) return;
+    // A heading or aria-label never supplies banner shape by itself.
+    if (cmp) return { node, ask: true };
+    if (!dialog && !/^(?:fixed|sticky)$/.test(style(node)?.position)) return;
     if (visibleText(node).replace(/\s+/g, ' ').trim().length >= 1500) return;
     const text = words(node);
-    if (text === null || text.length >= 1500 || !cookieWording(text, cmp) && !cmp) return;
+    if (text === null || text.length >= 1500 || !cookieWording(text)) return;
     return { node, ask: !!(cmp || dialog) };
   };
   if (options.after) return { closed: !visible(el) };
@@ -126,7 +125,7 @@ function consentContainer(el, options, read) { return inspectConsent(el, { ...op
 consentContainer.helpers = [inspectConsent, ...inspectConsent.helpers];
 
 function cmpFrameIdentity(el, options, read) {
-  return consentManager(['id', 'class', 'name', 'title', 'src'].map(key => read(el, 'getAttribute')?.(key) ?? '').join(' '));
+  return consentManager(['id', 'class', 'name'].map(key => read(el, 'getAttribute')?.(key) ?? '').join(' '));
 }
 cmpFrameIdentity.helpers = [consentManager];
 

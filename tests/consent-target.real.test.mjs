@@ -12,7 +12,7 @@ const wall = (controls, attrs = '') => `<!doctype html><meta charset="utf-8"><se
 const accept = `<button ${bad}>Accept all</button>`;
 const reject = `<button ${close}>Reject all</button>`;
 
-for (const [label, attrs] of [['GOV.UK static region', 'role="region" aria-label="Cookies on this site"'], ['unnamed fixed container', 'style="position:fixed"']]) {
+for (const [label, attrs] of [['GOV.UK fixed region', 'role="region" aria-label="Cookies on this site" style="position:fixed"'], ['unnamed fixed container', 'style="position:fixed"']]) {
   test(`${label}: accept is blocked and the result names Reject all`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, wall(accept + reject, attrs));
     const result = await f.act('Accept all');
@@ -61,8 +61,8 @@ for (const label of ['Refuser', 'Alles ablehnen', '拒絕全部', 'Reject option
   });
 }
 
-for (const [words, label, decline] of [['Çerezler', 'Tümünü kabul et', 'Tümünü reddet'], ['Kakor', 'Godkänn alla', 'Avvisa alla'],
-  ['Evästeet', 'Hyväksy kaikki', 'Hylkää kaikki'], ['Sütik', 'Összes elfogadása', 'Összes elutasítása']]) {
+for (const [words, label, decline] of [['Çerez kullanıyoruz', 'Tümünü kabul et', 'Tümünü reddet'], ['Vi använder kakor', 'Godkänn alla', 'Avvisa alla'],
+  ['Käytämme evästeitä', 'Hyväksy kaikki', 'Hylkää kaikki'], ['Sütiket használunk', 'Összes elfogadása', 'Összes elutasítása']]) {
   test(`${words}: localized accept blocks and names the decline`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, `<meta charset="utf-8"><section role="dialog"><p>${words}</p><button ${bad}>${label}</button><button ${close}>${decline}</button></section>`);
     assert.match(await f.act(label), new RegExp(decline));
