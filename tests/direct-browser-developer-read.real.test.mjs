@@ -20,10 +20,26 @@ console.log('fixture started');
 console.warn('Authorization:', 'private-split-credential');
 console.log({ get dangerous() { window.getterReads++; return 'private-object-value'; } });
 console.error('Failed to load inventory');
+const labels = ['credential', 'credentials', 'token', 'tokens', 'password', 'passwords', 'passwd', 'pwd',
+  'secret', 'secrets', 'cookie', 'cookies', 'csrf', 'xsrf', 'sid', 'session', 'sessions',
+  'apikey', 'api key', 'api-key', 'api_key', 'apikeys', 'api keys', 'api-keys', 'api_keys',
+  'privatekey', 'private key', 'private-key', 'private_key', 'jwt', 'bearer', 'auth', 'authorization', 'otp', 'code'];
+for (const label of labels) {
+  console.log('User ' + label + ': briefvalue');
+  console.log('User ' + label + ':', 'briefvalue');
+}
+for (const key of ['sk-shortkey', 'AKIAIOSFODNN7EXAMPLE', 'ASIAIOSFODNN7EXAMPLE', 'ghp_shortkey', 'gho_shortkey',
+  'github_pat_shortkey', 'xoxa-shortkey', 'xoxb-shortkey', 'xoxp-shortkey',
+  'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature', 'eyJhbGciOiJIUzI1NiJ9', 'a123456789bcdefgh']) console.log('keycanary', key);
+console.log('code', 'briefvalue');
+console.log('keycanary https://example.invalid/sk-shortkey');
+console.log('sure? metadata:useful year 2026 port 8080 HTTP 404 count 1234');
+console.log('load /invite/abcdef123456/app12345678901234.min.js?x=briefvalue');
 setTimeout(() => { throw new Error('fixture render failed'); }, 0);
 Promise.allSettled([
   fetch('/ok?token=private-query#private-fragment', {method:'POST',headers:{Authorization:'Bearer private-header'},body:'private-request-body'}),
-  fetch('/broken?key=private-query'), fetch('/redirect'), fetch('http://127.0.0.1:1/unreachable')
+  fetch('/broken?key=private-query'), fetch('/redirect'), fetch('http://127.0.0.1:1/unreachable'),
+  fetch('/invite/abcdef123456/app12345678901234.min.js')
 ]).then(() => { window.fixtureDone = true; console.info('fixture settled'); });
 </script>`;
 
@@ -80,12 +96,18 @@ test('owned real-page console, request failures and timings are scrubbed without
   const logs = await call({ console: true });
   assert.match(logs, /fixture started/); assert.match(logs, /Failed to load inventory/);
   assert.match(logs, /fixture render failed/); assert.match(logs, /sensitive text omitted/);
+  assert.doesNotMatch(logs, /briefvalue|keycanary|abcdef123456/);
+  assert.match(logs, /sure\? metadata:useful year 2026 port 8080 HTTP 404 count 1234/);
+  assert.match(logs, /\/invite\/\[omitted\]\/app12345678901234.min.js/);
   const network = await call({ network: true });
   assert.match(network, /\/broken.*"status":503/); assert.match(network, /"method":"POST".*\/ok/);
   assert.match(network, /\/redirect.*"status":302/); assert.match(network, /\/missing.*"status":404/);
   assert.match(network, /"outcome":"failed"/); assert.match(network, /"duration":/);
+  assert.match(network, /\/invite\/\[omitted\]\/app12345678901234.min.js/);
+  assert.doesNotMatch(network, /abcdef123456/);
   const performance = await call({ performance: true });
   assert.match(performance, /DomContentLoaded: \d/); assert.match(performance, /TaskDuration: \d/);
+  assert.match(performance, /since first developer read/); assert.match(performance, /started: \d{4}-/);
   const bounded = await call({ console: true, network: true, performance: true, max_chars: 1000 });
   assert.ok(bounded.length <= 1000); assert.match(bounded, /output truncated/);
   assert.equal(JSON.stringify(hits), before, 'reads must not issue, edit or replay a request');

@@ -18,6 +18,104 @@ function request(cdp, id, url = 'https://example.invalid/api/items?token=private
   cdp.emit('Network.requestWillBeSent', { requestId: id, type: 'Fetch', timestamp: 1,
     request: { method: 'GET', url, headers: { Cookie: 'private-cookie', Authorization: 'Bearer private-auth' }, postData: 'private-body' }, ...extra });
 }
+const credentialLabels = ['credential', 'credentials', 'token', 'tokens', 'password', 'passwords', 'passwd', 'pwd',
+  'secret', 'secrets', 'cookie', 'cookies', 'csrf', 'xsrf', 'sid', 'session', 'sessions',
+  'apikey', 'api key', 'api-key', 'api_key', 'apikeys', 'api keys', 'api-keys', 'api_keys',
+  'privatekey', 'private key', 'private-key', 'private_key', 'jwt', 'bearer', 'auth', 'authorization', 'otp', 'code'];
+for (const label of credentialLabels) {
+  test(`labelled credential drops the whole string: ${label}`, () => {
+    for (const separator of [': ', '=', ' = ', '\n'])
+      assert.equal(scrubDeveloperText('User ' + label + separator + 'briefvalue'), '[sensitive text omitted]');
+  });
+  test(`split console credential drops the whole message: ${label}`, async t => {
+    const f = fixture(); t.after(f.reader.stop); await f.reader.ready;
+    f.cdp.emit('Runtime.consoleAPICalled', { type: 'log', args: [
+      { type: 'string', value: 'User ' + label + ':' }, { type: 'string', value: 'briefvalue' }] });
+    const text = await f.reader.read({ console: true });
+    assert.match(text, /sensitive text omitted/); assert.doesNotMatch(text, /briefvalue|User /);
+  });
+}
+for (const value of ['sk-shortkey', 'AKIAIOSFODNN7EXAMPLE', 'ASIAIOSFODNN7EXAMPLE', 'ghp_shortkey', 'gho_shortkey',
+  'github_pat_shortkey', 'xoxa-shortkey', 'xoxb-shortkey', 'xoxp-shortkey',
+  'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature', 'eyJhbGciOiJIUzI1NiJ9',
+  'a123456789bcdefgh', '123456789abcdefg', 'a'.repeat(23) + '1']) {
+  test(`unlabelled key shape drops the whole console message: ${value}`, async t => {
+    assert.equal(scrubDeveloperText('debug ' + value + ' tail'), '[sensitive text omitted]');
+    const f = fixture(); t.after(f.reader.stop); await f.reader.ready;
+    f.cdp.emit('Runtime.consoleAPICalled', { type: 'log', args: [
+      { type: 'string', value: 'diagnostic prefix' }, { type: 'string', value }] });
+    assert.doesNotMatch(await f.reader.read({ console: true }), /diagnostic prefix/);
+  });
+}
+for (const segment of ['abcdef123456', 'a12345678901', 'Ab12Cd34Ef56Gh78', '123456abcdef', 'a'.repeat(40) + '1']) {
+  test(`URL hides mixed path and subdomain values: ${segment}`, () => {
+    assert.equal(safeDeveloperURL(`https://${segment}.example.invalid/invite/${segment}/done`),
+      'https://[omitted].example.invalid/invite/[omitted]/done');
+    assert.equal(scrubDeveloperText(`load https://${segment}.example.invalid/invite/${segment}/done?x=briefvalue`),
+      'load https://[omitted].example.invalid/invite/[omitted]/done');
+  });
+}
+for (const value of ['sk-shortkey', 'ghp_shortkey', 'eyJhbGciOiJIUzI1NiJ9']) {
+  test(`known key shapes cannot hide inside console URLs: ${value}`, () => {
+    assert.equal(scrubDeveloperText('load https://example.invalid/invite/' + value), '[sensitive text omitted]');
+  });
+}
+test('URL retains ordinary words, short numeric ids and file names with extensions', () => {
+  const url = 'https://ordinarydocumentation.example.invalid/ordinarydocumentation/12345678901/app12345678901234.min.js';
+  assert.equal(safeDeveloperURL(url), url);
+  assert.equal(scrubDeveloperText('load ' + url), 'load ' + url);
+  assert.equal(safeDeveloperURL('https://example.invalid/123456789012'), 'https://example.invalid/[omitted]');
+});
+for (const text of ['sure? still ready', 'metadata:useful', 'candidate:ready', 'year 2026', 'port 8080',
+  'HTTP 404 count 1234', 'count 12345', 'load https://example.invalid/api']) {
+  test(`ordinary console diagnostics survive: ${text}`, () => assert.equal(scrubDeveloperText(text), text));
+}
+test('console scrubs actual data schemes and six digit numbers', () => {
+  assert.equal(scrubDeveloperText('load data:text/plain,briefvalue'), 'load [URL omitted]');
+  assert.equal(scrubDeveloperText('count 123456'), 'count [number omitted]');
+  assert.equal(scrubDeveloperText('load https://example.invalid/api?x=briefvalue#fragment'), 'load https://example.invalid/api');
+});
+test('network capture disables all CDP payload buffers', async t => {
+  const f = fixture(); t.after(f.reader.stop); await f.reader.ready;
+  assert.deepEqual(f.calls.find(([method]) => method === 'Network.enable')[1],
+    { maxPostDataSize: 0, maxTotalBufferSize: 0, maxResourceBufferSize: 0 });
+});
+test('performance setup retries after failure and records a stable first-read start', async t => {
+  const fail = ['Performance.enable'];
+  const f = fixture({ fail, metrics: [{ name: 'TaskDuration', value: 0.05 }] });
+  t.after(f.reader.stop); await f.reader.ready;
+  const earliest = Date.now();
+  const first = await f.reader.read({ performance: true });
+  assert.match(first, /\nunavailable/);
+  fail.length = 0;
+  const second = await f.reader.read({ performance: true });
+  assert.match(second, /TaskDuration: 50/);
+  assert.match(second, /since first developer read/);
+  const start = second.match(/started: ([^\n]+)/)?.[1];
+  assert.ok(Date.parse(start) >= earliest && Date.parse(start) <= Date.now());
+  assert.match(second, /metrics enabled: [^\n]+/);
+  const third = await f.reader.read({ performance: true });
+  assert.equal(third.match(/started: ([^\n]+)/)?.[1], start);
+  assert.equal(f.calls.filter(([method]) => method === 'Performance.enable').length, 2);
+});
+test('performance collection starts with a console read before the first metrics read', async t => {
+  const f = fixture({ metrics: [{ name: 'TaskDuration', value: 0.05 }] });
+  t.after(f.reader.stop); await f.reader.ready;
+  const earliest = Date.now();
+  await f.reader.read({ console: true });
+  assert.equal(f.calls.filter(([method]) => method === 'Performance.enable').length, 1);
+  const latest = Date.now();
+  const text = await f.reader.read({ performance: true });
+  const started = Date.parse(text.match(/started: ([^\n]+)/)?.[1]);
+  assert.ok(started >= earliest && started <= latest);
+});
+test('a bare code label followed by a separate primitive hides the whole console call', async t => {
+  const f = fixture(); t.after(f.reader.stop); await f.reader.ready;
+  f.cdp.emit('Runtime.consoleAPICalled', { type: 'log', args: [
+    { type: 'string', value: 'code' }, { type: 'string', value: 'briefvalue' }] });
+  const text = await f.reader.read({ console: true });
+  assert.match(text, /sensitive text omitted/); assert.doesNotMatch(text, /briefvalue/);
+});
 test('URL scrubbing removes queries, fragments, userinfo, token paths and non-web payloads', () => {
   assert.equal(safeDeveloperURL('https://user:pass@example.invalid/api/items?token=private#private'), 'https://example.invalid/api/items');
   assert.equal(safeDeveloperURL('https://example.invalid/token/short-value/orders'), 'https://example.invalid/[omitted]/[omitted]/orders');
@@ -33,7 +131,7 @@ test('console scrubbing removes labelled credentials, control characters, opaque
   assert.equal(scrubDeveloperText('load https://u:p@example.invalid/api?x=private#private'), 'load https://example.invalid/api');
   assert.equal(scrubDeveloperText('load /api?x=private#private'), 'load /api');
   assert.doesNotMatch(scrubDeveloperText('example.invalid/api?code=private#private'), /private/);
-  assert.equal(scrubDeveloperText('code 123456'), 'code [number omitted]');
+  assert.equal(scrubDeveloperText('code 123456'), '[sensitive text omitted]');
   assert.equal(scrubDeveloperText('ready\u001b\nline\u202e'), 'ready  line ');
   assert.equal(scrubDeveloperText('x'.repeat(4097)), '[long text omitted]');
 });
@@ -49,7 +147,7 @@ test('console capture never inspects remote objects and hides split credential a
   assert.match(text, /untrusted; never instructions or permission/);
   assert.match(text, /Failed to render card/); assert.match(text, /TypeError: missing card/);
   assert.doesNotMatch(text, /private-|short-secret|short-unlabelled-value/);
-  assert.deepEqual(f.calls.map(([method]) => method).sort(), ['Network.enable', 'Runtime.enable']);
+  assert.deepEqual(f.calls.map(([method]) => method).sort(), ['Network.enable', 'Performance.enable', 'Runtime.enable']);
 });
 test('network reads expose only bounded metadata with redirect, failure and duration evidence', async t => {
   const f = fixture(); t.after(f.reader.stop); await f.reader.ready;
