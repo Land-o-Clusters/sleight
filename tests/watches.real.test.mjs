@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, realpathSync, readFileSync } from 'node:fs';
+import { mkdtempSync, realpathSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fixture, skip } from './fixtures/cr4-real.mjs';
@@ -8,7 +8,7 @@ import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { readWatch } from '../plugins/sleight/lib/watch-read.mjs';
 import { WatchStore } from '../plugins/sleight/lib/watches.mjs';
 
-function watchReader(f, commands = []) {
+function watchReader(f, commands = [], afterAX = async () => {}) {
   return async (spec, previous, policy) => {
     const root = await f.context.browser().newBrowserCDPSession();
     const routed = new Map();
@@ -22,7 +22,9 @@ function watchReader(f, commands = []) {
       if (method === 'Target.detachFromTarget') {
         await routed.get(params.sessionId)?.detach(); routed.delete(params.sessionId);
       }
-      return (routed.get(route) ?? root).send(method, params);
+      const result = await (routed.get(route) ?? root).send(method, params);
+      if (method === 'Accessibility.getFullAXTree') await afterAX();
+      return result;
     } };
     const config = { receipt: {} };
     return readWatch(spec, previous, {
@@ -184,4 +186,35 @@ test('real-page flaps return to the announced condition without another hourly n
   await store.run(plan.id, { scheduled: true });
   assert.equal(notices.length, 1);
   assert.equal(JSON.parse(readFileSync(join(plan.directory, 'state.json'))).pending, null);
+});
+
+test('a real page that reloads during both read attempts pauses and can resume explicitly', { skip, timeout: 60000 }, async t => {
+  const f = await fixture(t, '<h1>Waiting</h1>');
+  const query = { sleightWatch: 1, url: f.entry.page.url(), find: 'shipped' };
+  const home = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-watch-race-'))));
+  let racing = false, reloads = 0;
+  const read = watchReader(f, [], async () => {
+    if (racing) { reloads++; await f.entry.page.goto(query.url); }
+  });
+  const calls = [];
+  const store = new WatchStore({ home, read, boot: () => 'boot1', confirm: async () => true,
+    launchctl: async args => calls.push(args), notify: async () => {} });
+  const plan = await store.add(query, '1m');
+  const before = readFileSync(join(plan.directory, 'state.json'), 'utf8');
+  racing = true;
+  assert.equal((await store.run(plan.id, { scheduled: true })).error, 'WATCH_TARGET_CHANGED');
+  for (let n = 0; n < 3; n++) assert.equal((await store.run(plan.id, { scheduled: true })).paused, true);
+  assert.equal(reloads, 2); assert.equal(store.load(plan.id).paused, true);
+  assert.equal(existsSync(plan.directory), true); assert.equal(existsSync(plan.plistPath), true);
+  assert.equal(readFileSync(join(plan.directory, 'state.json'), 'utf8'), before);
+  assert.equal(calls.filter(args => args[0] === 'bootout').length, 0);
+  racing = false;
+  assert.equal((await store.run(plan.id)).ok, true); assert.equal(store.load(plan.id).paused, false);
+  // The fixture then leaves the saved URL. Three proven missing-tab ticks retire it.
+  await f.entry.page.goto(query.url.replace('/start', '/other'));
+  for (let n = 1; n <= 3; n++) {
+    const result = await store.run(plan.id, { scheduled: true });
+    assert.equal(result.missingTabs, n); assert.equal(Boolean(result.removed), n === 3);
+  }
+  assert.equal(calls.filter(args => args[0] === 'bootout').length, 1);
 });

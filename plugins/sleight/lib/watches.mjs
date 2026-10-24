@@ -1,5 +1,5 @@
 // Model-free page watches use routine scheduling and locks, with a closed read-only query.
-import { existsSync, readFileSync, writeFileSync, renameSync, rmSync, mkdirSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, renameSync, rmSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { RoutineStore, schedulePlan, ordinary, intervalSeconds } from './routines.mjs';
 import { watchQuery, readWatch } from './watch-read.mjs';
@@ -159,6 +159,9 @@ export class WatchStore extends RoutineStore {
     try {
       let result;
       try {
+        // A damaged query or metadata file cannot renew the maximum installed lifetime.
+        if (existsSync(paths.plistPath) && this.now() - statSync(paths.plistPath).mtimeMs >= 31 * 86400000)
+          return await this.retire(id, { ok: false, error: 'WATCH_EXPIRED' });
         const plan = this.load(id), statePath = ordinary(join(plan.directory, 'state.json'));
         if (plan.publicOrigin !== new URL(plan.script.url).origin) throw Error('WATCH_PUBLIC_HOST_REQUIRED');
         if (!isoTime(plan.created) || !isoTime(plan.expires) || Date.parse(plan.expires) <= Date.parse(plan.created) ||
@@ -208,9 +211,11 @@ export class WatchStore extends RoutineStore {
         collected = !error.cleanupUnconfirmed;
         result = { ok: false, error: safeError(error), ...(collected ? {} : { cleanupUnconfirmed: true }) };
         const healthPath = ordinary(join(paths.directory, 'health.json'));
-        const health = existsSync(healthPath) ? readJSON(healthPath) : {};
-        const missingTabs = ['WATCH_NEEDS_ONE_EXISTING_TAB', 'WATCH_TARGET_CHANGED'].includes(result.error) && collected
-          ? (Number.isSafeInteger(health.missingTabs) && health.missingTabs >= 0 ? health.missingTabs : 0) + 1 : 0;
+        let health;
+        try { health = existsSync(healthPath) ? readJSON(healthPath) : {}; }
+        catch (failure) { if (!(failure instanceof SyntaxError)) throw failure; }
+        const missingTabs = result.error === 'WATCH_NEEDS_ONE_EXISTING_TAB' && collected
+          ? (Number.isSafeInteger(health?.missingTabs) && health.missingTabs >= 0 ? health.missingTabs : 0) + 1 : 0;
         save(healthPath, { missingTabs });
         if (missingTabs) result.missingTabs = missingTabs;
         if (missingTabs >= 3) return await this.retire(id, result);
