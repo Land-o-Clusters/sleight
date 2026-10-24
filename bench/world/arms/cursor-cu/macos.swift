@@ -13,7 +13,7 @@ func identity(_ app: NSRunningApplication) throws -> [String: Any] {
     guard let bundle = app.bundleIdentifier, let executable = app.executableURL?.path, let birth = app.launchDate else { try refuse("Cursor launch identity unavailable") }
     return ["pid": Int(app.processIdentifier), "bundleId": bundle, "executable": executable, "launchAt": birth.timeIntervalSince1970 * 1000]
 }
-func owned(_ wanted: [String: Any]) throws -> NSRunningApplication {
+func owned(_ wanted: [String: Any], _ expectedExecutable: String) throws -> NSRunningApplication {
     guard let pid = wanted["pid"] as? Int, pid > 0, pid <= Int(Int32.max),
           let app = NSRunningApplication(processIdentifier: pid_t(pid)), !app.isTerminated else { try refuse("Cursor approval stop: process absent") }
     let actual = try identity(app)
@@ -21,6 +21,12 @@ func owned(_ wanted: [String: Any]) throws -> NSRunningApplication {
         guard let a = actual[key] as? NSObject, let b = wanted[key] as? NSObject, a == b else { try refuse("Cursor approval stop: launch binding changed") }
     }
     guard ["com.todesktop.230313mzl4w4u92", "co.anysphere.cursor-computer-use"].contains(app.bundleIdentifier ?? "") else { try refuse("Cursor approval stop: bundle") }
+    if app.bundleIdentifier == "com.todesktop.230313mzl4w4u92" {
+        guard expectedExecutable.hasPrefix("/"), expectedExecutable.hasSuffix("/Cursor.app/Contents/MacOS/Cursor"),
+              app.executableURL?.path == expectedExecutable else { try refuse("Cursor approval stop: expected copy executable differs") }
+    } else {
+        guard app.executableURL?.path.hasSuffix("/Contents/MacOS/CUCursorService") == true else { try refuse("Cursor approval stop: helper executable differs") }
+    }
     return app
 }
 func attr(_ node: AXUIElement, _ key: String) -> CFTypeRef? {
@@ -37,10 +43,14 @@ struct Card {
 }
 func cards(_ data: [String: Any]) throws -> [Card] {
     guard let owners = data["owners"] as? [[String: Any]], !owners.isEmpty, owners.count <= 2,
-          let apps = data["apps"] as? [String: String] else { try refuse("Cursor approval stop: invalid owner set") }
+          let apps = data["apps"] as? [String: String], let expectedExecutable = data["expectedExecutable"] as? String else { try refuse("Cursor approval stop: invalid owner set") }
     var result: [Card] = []
     for owner in owners {
-        let app = try owned(owner), pid = app.processIdentifier, root = AXUIElementCreateApplication(pid)
+        let app = try owned(owner, expectedExecutable), pid = app.processIdentifier, root = AXUIElementCreateApplication(pid)
+        if app.bundleIdentifier == "com.todesktop.230313mzl4w4u92" {
+            // Chromium builds web AX lazily. This touches only the validated benchmark copy.
+            guard AXUIElementSetAttributeValue(root, "AXManualAccessibility" as CFString, kCFBooleanTrue) == .success else { try refuse("Cursor approval stop: web accessibility unavailable") }
+        }
         guard AXUIElementSetMessagingTimeout(root, 2) == .success,
               let windows = attr(root, "AXWindows") as? [AXUIElement] else { try refuse("Cursor approval stop: AX windows unavailable") }
         var visited = 0
@@ -91,8 +101,8 @@ do {
         guard let requested = data["card"] as? NSDictionary, requested["button"] as? String == "Allow in this chat" else { try refuse("Cursor approval stop: button") }
         let current = try cards(data).filter { NSDictionary(dictionary: $0.row).isEqual(requested) }
         guard current.count == 1, let button = current[0].button,
-              let owner = current[0].row["owner"] as? [String: Any] else { try refuse("Cursor approval stop: stale card") }
-        _ = try owned(owner)
+              let owner = current[0].row["owner"] as? [String: Any], let expectedExecutable = data["expectedExecutable"] as? String else { try refuse("Cursor approval stop: stale card") }
+        _ = try owned(owner, expectedExecutable)
         var actions: CFArray?
         guard AXUIElementCopyActionNames(button, &actions) == .success,
               (actions as? [String])?.contains("AXPress") == true,

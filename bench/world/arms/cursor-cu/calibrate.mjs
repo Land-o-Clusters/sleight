@@ -1,15 +1,19 @@
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CURSOR_PIN, armPaths, ordinaryPath, resolveModel } from './contract.mjs';
 import { prepareCopy } from './setup.mjs';
 import { detectRun } from './state.mjs';
 
-const roots = /^(contextAttachments|attachments|context|selectedContext|subagentType|selectedSubagents|selectedMcp|mcp|target|environment|location|computerUse|isComputerUse)/;
-const forbidden = /auth|token|secret|password|account|email|credential|^(?:text|richText|prompt|message|conversation|history|usage)/i;
+const roots = new Set(['contextAttachments', 'attachments', 'context', 'selectedContext', 'subagentType', 'selectedSubagents', 'selectedMcp', 'mcp', 'target', 'environment', 'location', 'computerUse', 'isComputerUse']);
+// Field names are data too. Keep only known schema keys, never dynamic identifiers.
+const markerKeys = new Set([...roots, 'type', 'kind', 'name', 'provider', 'providerIdentifier', 'targetType']);
+const shapeKeys = new Set([...markerKeys, 'composer', 'bubbles', 'modelConfig', 'selectedModels', 'parameters', 'maxMode', 'value',
+  'status', 'generatingBubbleIds', 'fullConversationHeadersOnly', 'timingInfo', 'clientStartTime', 'clientSettleTime',
+  'toolFormerData', 'toolCall', 'tool', 'case', 'args', 'result', 'params', 'additionalData', 'operation', 'details', 'computerUseApp', 'success', 'isError']);
 const values = { attachment: ['computer-use', 'computerUse', 'Computer Use', 'cursor-computer-use'], target: ['local', 'This Mac', 'this-mac'] };
-const safePath = path => Array.isArray(path) && path.length > 0 && path.length < 16 && typeof path[0] === 'string' && roots.test(path[0]) &&
-  path.every(k => (Number.isSafeInteger(k) && k >= 0 && k < 100) || typeof k === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,80}$/.test(k) && !forbidden.test(k));
+const safePath = path => Array.isArray(path) && path.length > 0 && path.length < 16 && roots.has(path[0]) &&
+  path.every(k => (Number.isSafeInteger(k) && k >= 0 && k < 100) || markerKeys.has(k));
 const at = (row, path) => path.reduce((v, k) => v?.[k], row);
 function markers(row, kind) {
   const found = [];
@@ -26,7 +30,7 @@ function shape(value, depth = 0) {
   if (depth > 12) return 'nested';
   if (Array.isArray(value)) return [...new Map(value.map(v => { const s = shape(v, depth + 1); return [JSON.stringify(s), s]; })).values()];
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
-    .filter(([k]) => /^[A-Za-z][A-Za-z0-9_]{0,80}$/.test(k) && !forbidden.test(k))
+    .filter(([k]) => shapeKeys.has(k))
     .map(([k, v]) => [k, shape(v, depth + 1)]));
   return value === null ? 'null' : typeof value;
 }
@@ -57,7 +61,7 @@ export function validateCalibration(c) {
     if (depth > 16) throw Error('invalid calibration shape depth');
     if (typeof v === 'string') { if (!['string', 'number', 'boolean', 'undefined', 'null', 'nested'].includes(v)) throw Error('invalid calibration shape value'); }
     else if (v && typeof v === 'object') for (const [k, child] of Object.entries(v)) {
-      if (!Array.isArray(v) && (!/^[A-Za-z][A-Za-z0-9_]{0,80}$/.test(k) || forbidden.test(k))) throw Error('invalid calibration shape field');
+      if (!Array.isArray(v) && !shapeKeys.has(k)) throw Error('invalid calibration shape field');
       checkShape(child, depth + 1);
     } else throw Error('invalid calibration shape');
   };
@@ -89,13 +93,14 @@ export function calibrationPlan() {
       'Submit exactly: Say ready. Wait for the turn to settle. The harness reads only the isolated profile and writes scrubbed calibration.'],
     writes: ['isolated Cursor profile through the owner UI', 'calibration.json with selection markers and field shapes'] };
 }
-export async function calibrate({ dryRun = false } = {}, { driver, lock, print = console.log, now = Date.now,
+export async function calibrate({ dryRun = false, ownerAway = false } = {}, { driver, lock, print = console.log, now = Date.now, exists = existsSync,
   pause = ms => new Promise(r => setTimeout(r, ms)), signal, prepare = prepareCopy, guard,
   save = (file, data) => writeFileSync(ordinaryPath(file), data, { mode: 0o600, flag: 'wx' }) } = {}) {
   const plan = calibrationPlan();
   if (dryRun) return plan;
+  if (exists(plan.paths.calibration)) throw Error('Cursor calibration already exists; refusing launch');
   const { guardLive } = await import('./contract.mjs');
-  (guard ?? guardLive)({ ownerAway: true });
+  (guard ?? guardLive)({ ownerAway, supervised: true });
   driver ??= new (await import('./desktop.mjs')).DesktopDriver();
   // Admission is read-only and precedes lock acquisition and launch.
   await driver.preflight(plan, { calibration: true });

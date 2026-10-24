@@ -66,5 +66,5 @@ export async function runOwned(command, args, { cwd, env, timeoutMs = 180000, gr
   }
   const groupGone = !await alive();
   stamps.groupGoneAt = Date.now();
-  return { stamps, agentSeconds: clock.seconds(), exit, timedOut, cancelled, spawnError, stdout, stderr, signalErrors, groupClean: groupGone && signalErrors.length === 0 };
+  return { stamps, agentSeconds: clock.seconds(), agentTiming: clock.timing(), exit, timedOut, cancelled, spawnError, stdout, stderr, signalErrors, groupClean: groupGone && signalErrors.length === 0 };
 }

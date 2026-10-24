@@ -15,7 +15,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { comparisonSeconds } from './agent-time.mjs';
+import { comparisonSeconds, timingSummary, hasAgentSeconds } from './agent-time.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const arg = name => { const i = process.argv.indexOf(name); return i < 0 ? undefined : process.argv[i + 1]; };
@@ -126,7 +126,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       const why = excluded(row, file, rules, raw);
       if (why) { if (why !== 'not a claim task') dropped[why] = (dropped[why] ?? 0) + 1; continue; }
       const passed = !!(row.passed || (row.cleanupContained && row.taskPassed)), g = !passed && regradeFor(row, file, rules);
-      rows.push({ arm: row.arm, task: row.task, seconds: row.seconds, ...(row.agentSeconds !== undefined && { agentSeconds: row.agentSeconds }), passed, file, run: row.run, engine: passRowEngine(raw, row, { file, mtimeMs, timeline }),
+      rows.push({ arm: row.arm, task: row.task, seconds: row.seconds, ...(row.agentSeconds !== undefined && { agentSeconds: row.agentSeconds }),
+        ...(row.agentTiming && { agentTiming: row.agentTiming }), ...(row.secondsTiming && { secondsTiming: row.secondsTiming }),
+        passed, file, run: row.run, engine: passRowEngine(raw, row, { file, mtimeMs, timeline }),
         ...(!passed && { reason: (g && g.reason) || (row.reason ?? 'no reason recorded'), ...(g && { recorded: row.reason, regraded: g.why }) }) });
     }
   }
@@ -136,11 +138,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const table = score(rows, { agentSeconds }), verdict = claim(table, rules), gpt = sameModel(table, rules), warned = warnings(rows, rules, since), failures = rows.filter(r => !r.passed);
   if (process.argv.includes('--json')) {
     console.log(JSON.stringify({ since, dropped, table, claim: verdict, sameModel: gpt, failures: failures.map(({ engine, ...f }) => f), warnings: warned, engines, engineMix: mix,
-      ...(agentSeconds && { timing: 'agentSeconds where present; seconds for older rows', legacyTimingRows: rows.filter(r => !Number.isFinite(r.agentSeconds)).length }) }, null, 1));
+      ...(agentSeconds && { timing: 'agentSeconds where present; seconds otherwise; consult timingByArm for boundaries',
+        timingByArm: timingSummary(rows), legacyTimingRows: rows.filter(r => !hasAgentSeconds(r)).length }) }, null, 1));
     process.exit(0);
   }
   const arms = rules.arms.filter(a => table[a]), n = x => x == null ? '-' : x.toFixed(0), pct = x => x == null ? '-' : `${(x * 100).toFixed(1)}%`;
-  if (agentSeconds) console.log('Timing: agentSeconds where present; seconds for older rows.');
+  if (agentSeconds) console.log('Timing: agentSeconds where present; seconds otherwise. Per arm: ' + JSON.stringify(timingSummary(rows)));
   console.log(`Claim score since ${since}. Cell: expected s to a correct result (passes/runs), median of passes in brackets.`);
   console.log('task'.padEnd(20) + arms.map(a => a.padStart(22)).join(''));
   for (const task of rules.tasks) console.log(task.padEnd(20) + arms.map(a => {

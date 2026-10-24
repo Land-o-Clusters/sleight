@@ -136,6 +136,7 @@ test('fake interactive session sends the exact task once and exits after a trans
   const result = await runInteractive(p, { prepare() {}, verify() {}, serverReady: () => true, launch: h.launch, transcript: h.transcript, turnEnded: () => true, pollMs: 1 });
   assert.deepEqual(h.writes, ['\x1b[200~' + p.prompt + '\x1b[201~\r', '\x04', '\x04']);
   assert.equal(result.result, 'RESULT ok'); assert.equal(result.is_error, false);
+  assert.deepEqual(result.agentTiming, { start: 'ready-prompt-and-mcp-submit', end: 'result-and-idle', startupIncluded: false });
   assert.equal(result.num_turns, 1); assert.equal(result.groupClean, true);
   assert.equal(result.usage.output_tokens, 3);
 });

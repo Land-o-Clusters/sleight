@@ -320,7 +320,7 @@ export async function runInteractive(plan, { dryRun = false, prepare = prepareIn
     onEvent?.({ type: 'approval_block', ...approvalBlock });
   };
   // Output is drawn as it arrives, so a redraw overwrites the card in place and the parser sees the whole updated card.
-  const agentSpawnAt = Date.now(); let agentEndAt;
+  let agentStartAt, agentEndAt;
   const pty = launch(plan, data => { screen.write(data); tail = (tail + data).slice(-4000); }, { onSpawn });
   pty.closed.then(result => { closed = result; });
   try {
@@ -354,7 +354,7 @@ export async function runInteractive(plan, { dryRun = false, prepare = prepareIn
       if (gate.blocked) { block(gate.blocked, text); break; }
       if (!sent && gate.ready && !serverReady(plan)) {
         if (Date.now() - start > connectMs) { reason = 'computer-use server did not connect'; break; }
-      } else if (!sent && gate.ready) { sent = true; pty.write('\x1b[200~' + plan.prompt + '\x1b[201~\r'); }
+      } else if (!sent && gate.ready) { sent = true; agentStartAt = Date.now(); pty.write('\x1b[200~' + plan.prompt + '\x1b[201~\r'); }
       else if (sent && (state.answer ?? state.lastText) !== undefined && gate.ready && turnEnded(plan) && !exiting) {
         agentEndAt = Date.now();
         exiting = true; pty.write('\x04'); await wait(50);
@@ -368,7 +368,8 @@ export async function runInteractive(plan, { dryRun = false, prepare = prepareIn
   const priced = Object.keys(state.modelUsage).length && Object.keys(state.modelUsage).every(m => PRICES[m]);
   return { type: 'result', subtype: clean ? 'success' : 'error', is_error: !clean, result: state.answer ?? state.lastText ?? '',
     duration_ms: Date.now() - start, num_turns: state.modelCalls, calls: state.calls, usage: state.usage, modelUsage: state.modelUsage,
-    agentSeconds: agentEndAt === undefined ? null : (agentEndAt - agentSpawnAt) / 1000,
+    agentSeconds: agentEndAt === undefined ? null : (agentEndAt - agentStartAt) / 1000,
+    agentTiming: { start: 'ready-prompt-and-mcp-submit', end: 'result-and-idle', startupIncluded: false },
     ...(priced && { total_cost_usd: runCost({ modelUsage: state.modelUsage }) }), groupClean: closed?.clean === true, timedOut,
     ...(gateBlocked && { gateBlocked, approvalBlock }),
     ...(reason && { reason }), requestedModel: plan.model, effort: plan.effort, session_id: plan.sessionId, auth: plan.auth };

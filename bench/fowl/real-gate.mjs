@@ -25,7 +25,7 @@ import { CODEX_SLEIGHT_HOME, ensureCodexSleightHome, writeCodexSleightConfig, ap
 import { engineSpan, readEngine } from '../engine-version.mjs';
 import { runDesktop as runCursorDesktop } from '../world/arms/cursor-cu/run.mjs';
 import { DesktopDriver as CursorDesktopDriver } from '../world/arms/cursor-cu/desktop.mjs';
-import { armPaths } from '../world/arms/cursor-cu/contract.mjs';
+import { armPaths, guardLive as guardCursorLive } from '../world/arms/cursor-cu/contract.mjs';
 import { inspectBundle as inspectCursorBundle, readLoginReadiness as cursorReadiness } from '../world/arms/cursor-cu/setup.mjs';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -121,7 +121,7 @@ export function realGatePlan({ args, tasks, repo = repoRoot, mcpRoot, armHome, r
     return { ...setup, args: runsCodexExec(surface) ? setup.args : [...setup.args, setup.prompt],
       task, surface, dir };
   });
-  return { mode: 'real-browser', out, browser, arms, unsupported, mcpRoot, surface };
+  return { mode: 'real-browser', out, browser, arms, unsupported, mcpRoot, surface, ownerAway: args['owner-away'] === true };
 }
 
 async function freePort(port) {
@@ -165,8 +165,8 @@ export async function runGateAgent(plan, { signal, runClaude = runOwned, runNati
       result = { exitCode: out.is_error ? 1 : 0, result: out, groupClean, toolCalls: out.calls, toolErrors: null,
         safetyStop: out.safetyStop,
         agentSeconds: out.agentSeconds ?? (Number.isFinite(out.duration_ms) ? out.duration_ms / 1000 : null),
-        qualificationOnly: true, timingBoundary: 'harness-submit to persisted clientSettleTime',
-        ...(Number.isFinite(out.duration_ms) ? { started: out.submittedAt, finished: out.recordedEndAt } : {}) };
+        agentTiming: out.agentTiming ?? { start: 'submit', end: 'persisted-clientSettleTime', startupIncluded: false },
+        qualificationOnly: true, timingBoundary: 'harness-submit to persisted clientSettleTime' };
       writeFileSync(join(plan.dir, 'stderr.txt'), out.reason ?? '');
     } else if (runsCodexExec(plan.surface)) {
       // sleight's arms: this run's servers go into the arm's own Codex home first (a copy sits in the run's folder as evidence).
@@ -184,6 +184,7 @@ export async function runGateAgent(plan, { signal, runClaude = runOwned, runNati
       }).length;
       result = { exitCode: run.code, result: run.out, timedOut: run.timedOut, groupClean: run.groupClean,
         agentSeconds: run.agentSeconds ?? null,
+        agentTiming: run.agentTiming,
         forbidden: run.forbidden, toolCalls: run.toolCalls, toolErrors, engineMs: run.engineMs,
         // The model id Codex ran (its rollout's turn_context), beside the one the arm asked for.
         modelRequested: run.modelRequested, modelsRan: run.modelsRan,
@@ -200,18 +201,23 @@ export async function runGateAgent(plan, { signal, runClaude = runOwned, runNati
       writeFileSync(events, run.stdout); writeFileSync(join(plan.dir, 'stderr.txt'), run.stderr);
       const messages = run.stdout.split('\n').flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
       const final = messages.findLast(event => event.type === 'result');
+      const innerInteractive = plan.metadata?.interactive === true && Number.isFinite(final?.agentSeconds) && final.agentSeconds >= 0;
       result = { exitCode: run.exit.code, result: final,
         // Only our interactive adapter has an inner agent boundary. Ordinary CLIs
         // cannot replace the harness clock by printing their own timing field.
-        agentSeconds: plan.metadata?.interactive === true && Number.isFinite(final?.agentSeconds) && final.agentSeconds >= 0 ? final.agentSeconds : run.agentSeconds ?? null,
+        agentSeconds: innerInteractive ? final.agentSeconds : run.agentSeconds ?? null,
+        agentTiming: innerInteractive ? final.agentTiming : run.agentTiming,
         timedOut: run.timedOut, groupClean: run.groupClean,
         toolCalls: messages.reduce((count, event) => count + (event.message?.content || []).filter(item => item.type === 'tool_use').length, 0),
         toolErrors: messages.reduce((count, event) => count + (event.message?.content || []).filter(item => item.type === 'tool_result' && item.is_error).length, 0) };
     }
     // Graders require a successful browser call (and for lookups a visit), so an answer from memory fails.
     const evidence = browserEvidence(readFileSync(events, 'utf8'));
-    const receipt = { started, finished: Date.now(), ...result, evidence, name: plan.task.name,
-      ...(plan.surface === 'cursor-cu' && { outerStarted: started, outerFinished: Date.now() }), agentConfig: plan.metadata };
+    const finished = Date.now();
+    const receipt = { ...result, started, finished, secondsTiming: { start: 'outer-drive', end: 'driver-collection', startupIncluded: true }, evidence, name: plan.task.name,
+      ...(plan.surface === 'cursor-cu' && { outerStarted: started, outerFinished: finished,
+        ...(Number.isFinite(result.result?.duration_ms) && { started: result.result.submittedAt, finished: result.result.recordedEndAt,
+          secondsTiming: { start: 'submit', end: 'persisted-clientSettleTime', startupIncluded: false } }) }), agentConfig: plan.metadata };
     writeFileSync(join(plan.dir, 'run.json'), JSON.stringify(receipt, null, 2));
     if (!groupClean) throw Object.assign(Error('BENCH_AGENT_CLEANUP_UNPROVED'), { groupClean: false });
     return receipt;
@@ -272,6 +278,7 @@ export function gatePreflight(plan, { executable = executableProblem } = {}) {
 }
 
 export async function admitRealGate(plan, { terminal = terminalAncestor } = {}) {
+  if (plan.surface === 'cursor-cu') guardCursorLive({ ownerAway: plan.ownerAway });
   if (existsSync('/Library/Application Support/ClaudeCode/CLAUDE.md')) throw Error('Managed Claude policy cannot be excluded');
   if (existsSync(plan.out)) throw Error('Gate output already exists');
   const problems = gatePreflight(plan);
@@ -447,7 +454,8 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
       // The first watched tasks name every window owner the watch saw, overlays included, so a new overlay owner shows up early.
       if (coverRun?.seen?.length && coverLogged++ < 3) console.error(`cover watch ${arm.task.name}: ${coverRun.seen.map(w =>
         `${w.owner} ${Math.round(w.fraction * 100)}% layer ${w.layer ?? '?'}${w.counted ? '' : ' (overlay, not counted)'}`).join('; ')}`);
-      const row = { task: arm.task, surface: arm.surface, status: 'ran', wallMs: run.finished - run.started, agentSeconds: run.agentSeconds ?? null, toolCalls: run.toolCalls, toolErrors: run.toolErrors,
+      const row = { task: arm.task, surface: arm.surface, status: 'ran', wallMs: run.finished - run.started, agentSeconds: run.agentSeconds ?? null,
+        agentTiming: run.agentTiming, secondsTiming: run.secondsTiming, toolCalls: run.toolCalls, toolErrors: run.toolErrors,
         successfulBrowserCalls: evidence?.successfulCalls ?? null, run: { ...run, tabs: [...run.tabs] }, start, observation, navigation: navigation ?? null,
         agentConfig: arm.metadata, grade, site, outcome, errorClass, cover, coverRun, ...(covered ? { coverEvidence: covered } : {}) };
       rows.push(row);

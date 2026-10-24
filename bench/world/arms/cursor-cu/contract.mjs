@@ -14,8 +14,8 @@ export function assertDesktopReady(paths = armPaths()) {
   return JSON.parse(readFileSync(paths.calibration, 'utf8'));
 }
 
-export function guardLive({ ownerAway = false } = {}, { exists = existsSync } = {}) {
-  if (!ownerAway) throw Error('Cursor desktop requires --owner-away');
+export function guardLive({ ownerAway = false, supervised = false } = {}, { exists = existsSync } = {}) {
+  if (!ownerAway && !supervised) throw Error('Cursor desktop requires --owner-away');
   if (exists('/tmp/sleight-hold')) throw Error('sleight-hold is active');
   if (exists('/tmp/sleight-live.lock')) throw Error('sleight live lock is held');
 }

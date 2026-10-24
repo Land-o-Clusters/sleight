@@ -24,6 +24,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SAME_MODEL, claim, sameModel, score } from '../claim-score.mjs';
+import { timingSummary, hasAgentSeconds } from '../agent-time.mjs';
 import { ANSWER_GRADER_FILE, answerProblems, browserEvidence, coverEvidence, coverExclusions, currentAnswerGraders, graderId, harnessFailure, isAnswerProblem,
   raceProblems, runErrorClass, runnerGradesAnswer } from './real-gate-grade.mjs';
 import { currentTimeline, dayRange, engineForRun, engineMix, engineNote, engineText, loadTimeline, summarizeEngines } from '../engine-version.mjs';
@@ -66,6 +67,8 @@ export function regradeRow(row, { eventsText = '', stderr = '', graders } = {}) 
   const cover = eventsText ? coverEvidence({ eventsText, readings: [row.cover, row.coverRun] }) : row.coverEvidence ?? null;
   return { task: row.task.name, arm: row.surface, seconds: row.wallMs / 1000, passed, problems, successfulCalls: calls,
     ...((row.agentSeconds ?? row.run?.agentSeconds) != null && { agentSeconds: row.agentSeconds ?? row.run.agentSeconds }),
+    ...((row.agentTiming ?? row.run?.agentTiming) && { agentTiming: row.agentTiming ?? row.run.agentTiming }),
+    ...((row.secondsTiming ?? row.run?.secondsTiming) && { secondsTiming: row.secondsTiming ?? row.run.secondsTiming }),
     recordedOk: row.outcome?.ok === true, errorClass: passed ? null : row.errorClass ?? runErrorClass({ eventsText, stderr }),
     graders: swap ? { used: 'current', saved, current: graderId(wanted), passedSaved: regradeRow(row, { eventsText, stderr }).passed } : { used: 'saved', saved },
     ...(cover ? { coverEvidence: cover } : {}) };
@@ -129,7 +132,7 @@ export function scoreRounds(rounds, { excludeCovered = false, agentSeconds = fal
     const counted = summarizeEngines(rows), engines = Object.fromEntries([...arms, ...hosted].filter(a => counted[a]).map(a => [a, counted[a]]));
     const same = sameModel(table, { tasks }).filter(p => table[p.hosted]).map(p => ({ ...p, arms: [p.hosted, p.base], stats: p.stats ?? {},
       topUps: p.pairs.filter(x => x.short?.length), ...rank(table, tasks, [p.hosted, p.base]) }));
-    out[browser] = { me, tasks, arms, hosted, table, stats: verdict.stats, pairs: verdict.pairs, topUps: verdict.pairs.filter(p => p.short?.length),
+    out[browser] = { me, tasks, arms, hosted, table, ...(agentSeconds && { timingByArm: timingSummary(rows) }), stats: verdict.stats, pairs: verdict.pairs, topUps: verdict.pairs.filter(p => p.short?.length),
       ...rank(table, tasks, arms), engines, engineMix: engineMix(engines), sameModel: same };
   }
   return out;
@@ -217,8 +220,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const excludeCovered = args.includes('--exclude-covered');
   const agentSeconds = args.includes('--agent-seconds');
   const scored = scoreRounds(rounds, { excludeCovered, agentSeconds });
+  const timingRows = rounds.filter(r => !r.excluded).flatMap(r => r.rows).filter(r => !excludeCovered || !r.harnessCover);
   if (args.includes('--json')) console.log(JSON.stringify({ coverExclusions: excludeCovered, graders: current ? `current ${ANSWER_GRADER_FILE}` : 'saved', rounds,
     browsers: scored, flipped: flipped(rounds), covered: coveredRows(rounds), ...(current ? { regraded: regraded(rounds) } : {}),
-    ...(agentSeconds && { timing: 'agentSeconds where present; seconds for older rows', legacyTimingRows: rounds.flatMap(r => r.rows).filter(r => !Number.isFinite(r.agentSeconds)).length }) }, null, 1));
-  else { if (agentSeconds) console.log('Timing: agentSeconds where present; seconds for older rows.'); print(rounds, scored, { current, excludeCovered }); }
+    ...(agentSeconds && { timing: 'agentSeconds where present; seconds otherwise; consult timingByArm for boundaries',
+      timingByArm: timingSummary(timingRows), legacyTimingRows: timingRows.filter(r => !hasAgentSeconds(r)).length }) }, null, 1));
+  else { if (agentSeconds) console.log('Timing: agentSeconds where present; seconds otherwise. Per arm: ' + JSON.stringify(timingSummary(timingRows))); print(rounds, scored, { current, excludeCovered }); }
 }

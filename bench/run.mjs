@@ -461,7 +461,7 @@ async function runClaude(prompt, arm, env = {}, { signal, evidenceDir, onPermiss
     if (out.approvalBlock && evidenceDir && !privateMail) writeFileSync(join(evidenceDir, 'approval-block.json'), scrub(JSON.stringify(out.approvalBlock, null, 2)) + '\n', { mode: 0o600 });
     const approvalStop = out.gateBlocked ? out.reason : !out.groupClean ? 'interactive cleanup unverified' : undefined;
     if (approvalStop) onPermissionRefusal?.();
-    return { code: out.is_error ? 1 : 0, out, agentSeconds: out.agentSeconds ?? null, groupClean: out.groupClean, timedOut: out.timedOut,
+    return { code: out.is_error ? 1 : 0, out, agentSeconds: out.agentSeconds ?? null, agentTiming: out.agentTiming, groupClean: out.groupClean, timedOut: out.timedOut,
       ...(out.is_error && { passed: false, reason: out.reason }),
       ...(auditDrag && { methodAudit: dragMethodAudit(events.join('\n')) }),
       ...(approvalStop && { approvalStop }) };
@@ -824,7 +824,7 @@ pass: for (let run = 1; run <= runs; run++) {
       const codexRun = arm.codex ? await runCodex(prompt, { cwd: arm.cwd, model: arm.codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS, signal: controller.signal, onSpawn: cpu.onSpawn,
         ...(codexHome.home && { home: codexHome.home }) }) : undefined;
       if (codexRun) strayServers(codexRun, codexHome);
-      const { code, out, stderr, groupClean = true, cancelled, stamps, agentSeconds } = codexRun ?? await runClaude(prompt, arm, armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {}, { onSpawn: cpu.onSpawn });
+      const { code, out, stderr, groupClean = true, cancelled, stamps, agentSeconds, agentTiming } = codexRun ?? await runClaude(prompt, arm, armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {}, { onSpawn: cpu.onSpawn });
       const cpuUsed = await cpu.finish();
       const appWindows = await stopWatching();
       const answer = out?.result ?? '';
@@ -849,6 +849,8 @@ pass: for (let run = 1; run <= runs; run++) {
         reason: verdict === true ? undefined : scrub(verdict),
         seconds: Math.round(elapsedMs / 100) / 10,
         agentSeconds: agentSeconds ?? null,
+        agentTiming,
+        secondsTiming: { start: 'outer-drive', end: 'task-cleanup', startupIncluded: true },
         turns: out?.num_turns,
         costUsd: runCost(out), reportedCostUsd: out?.total_cost_usd,
         // Input, cached and output tokens: what a smaller result would save.

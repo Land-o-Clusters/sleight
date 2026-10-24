@@ -42,7 +42,7 @@ export async function runDriver(command, args, { format = 'json', evidenceDir, p
       : JSON.parse(response.stdout);
   } catch { out = undefined; }
   if (evidenceDir && !privateMail) writeFileSync(join(evidenceDir, 'transcript.jsonl'), response.stdout, { mode: 0o600 });
-  return { stamps: response.stamps, agentSeconds: response.agentSeconds, code: response.exit.code, out, stderr: response.stderr.slice(-2000), groupClean: response.groupClean,
+  return { stamps: response.stamps, agentSeconds: response.agentSeconds, agentTiming: response.agentTiming, code: response.exit.code, out, stderr: response.stderr.slice(-2000), groupClean: response.groupClean,
     ...(auditDrag && !privateMail && { methodAudit: (await import('./world/method-check.mjs')).dragMethodAudit(response.stdout) }),
     timedOut: response.timedOut, cancelled: response.cancelled, spawnError: response.spawnError };
 }

@@ -33,6 +33,18 @@ test('native driver retains final-event interval while its child finishes later'
   assert.equal(r.code, 0); assert.equal(r.groupClean, true);
   assert.ok(r.agentSeconds >= 0);
   assert.ok((r.stamps.closeAt - r.stamps.spawnAt) / 1000 - r.agentSeconds >= 0.15);
+  assert.equal(r.agentTiming.startupIncluded, true); assert.equal(r.agentTiming.start, 'spawn');
+});
+
+test('CLI init becomes the ready boundary and its metadata reaches native results', async () => {
+  const r = await runDriver(process.execPath, ['-e', 'console.log(JSON.stringify({type:"system",subtype:"init"})); setTimeout(()=>console.log(JSON.stringify({type:"result"})),20)'], { format: 'stream-json' });
+  assert.equal(r.code, 0); assert.equal(r.groupClean, true);
+  assert.deepEqual(r.agentTiming, { start: 'system/init', end: 'final-result-event', startupIncluded: false });
+  const dir = mkdtempSync(join(tmpdir(), 'ca4-time-'));
+  try {
+    const out = await executeRealTask({ prompt: () => 'fixture', check: () => true }, { dir }, { lockHeld: true, drive: async () => r });
+    assert.deepEqual(out.agentTiming, r.agentTiming); assert.equal(out.secondsTiming.startupIncluded, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('native results keep agentSeconds before checks and cleanup', async () => {

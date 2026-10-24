@@ -4,6 +4,7 @@ import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { armPaths, assertBundlePin, ordinaryPath, CURSOR_PIN, DESKTOP_BLOCKERS } from './contract.mjs';
+import { retryBusy } from './state.mjs';
 const require = createRequire(import.meta.url);
 
 export function prepareCopy(paths = armPaths(), { run = spawnSync, inspect = inspectBundle } = {}) {
@@ -28,7 +29,7 @@ export function inspectBundle(app, run = spawnSync) {
   const verified = run('/usr/bin/codesign', ['--verify', '--deep', '--strict', app], { stdio: 'pipe', timeout: 60000 });
   if (verified.error || verified.status !== 0) throw Error('Cursor signature verification failed');
   // codesign metadata is written to stderr; the CLI's status and verified seal are separate checks.
-  const result = run('/usr/bin/codesign', ['-d', '--verbose=4', app], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  const result = run('/usr/bin/codesign', ['-d', '--verbose=4', app], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20000 });
   if (result.error || result.status !== 0) throw Error('Cursor signature metadata unavailable');
   return assertBundlePin({ version: product.version, commit: product.commit, bundleId: product.darwinBundleIdentifier,
     teamId: /^TeamIdentifier=(.+)$/m.exec(result.stderr)?.[1], cdhash: /^CDHash=(.+)$/m.exec(result.stderr)?.[1], signatureVerified: true });
@@ -71,14 +72,14 @@ function storedAuth(paths) {
   if (!existsSync(paths.database)) return false;
   // Presence only, never select or display a credential. Load SQLite only for this arm.
   const { DatabaseSync } = require('node:sqlite');
-  const db = new DatabaseSync(ordinaryPath(paths.database), { readOnly: true });
+  const db = new DatabaseSync(ordinaryPath(paths.database), { readOnly: true, timeout: 100 });
   try {
     const row = db.prepare("SELECT count(*) AS n FROM ItemTable WHERE key = 'cursorAuth/accessToken' AND length(value) > 0").get();
     return row.n === 1;
   } finally { db.close(); }
 }
 
-export async function readLoginReadiness(paths = armPaths()) { return loginReadiness({ paths }); }
+export async function readLoginReadiness(paths = armPaths()) { return retryBusy(() => loginReadiness({ paths })); }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);

@@ -1,11 +1,22 @@
 import { existsSync } from 'node:fs';
 import { ordinaryPath, resolveModel } from './contract.mjs';
 
+export async function retryBusy(read, { now = Date.now, pause = ms => new Promise(r => setTimeout(r, ms)), timeoutMs = 2000 } = {}) {
+  const deadline = now() + timeoutMs;
+  for (;;) {
+    try { return await read(); }
+    catch (error) {
+      if (!/database (?:is )?(?:locked|busy)/i.test(error.message) || now() >= deadline) throw error;
+      await pause(Math.min(100, Math.max(1, deadline - now())));
+    }
+  }
+}
+
 export function readCursorState(paths, { exists = existsSync, open } = {}) {
   ordinaryPath(paths.database);
   if (!exists(paths.database)) return { composers: [], bubbles: {} };
   if (!open) throw Error('Cursor state reader needs a readonly SQLite opener');
-  const db = open(paths.database, { readOnly: true });
+  const db = open(paths.database, { readOnly: true, timeout: 100 });
   try {
     // No auth values, file contents or unrelated app state are selected.
     const rows = db.prepare("SELECT key, value FROM cursorDiskKV WHERE key LIKE 'composerData:%'").all();
@@ -22,7 +33,7 @@ export function readCursorState(paths, { exists = existsSync, open } = {}) {
 
 export async function profileState(paths) {
   const { DatabaseSync } = await import('node:sqlite');
-  return readCursorState(paths, { open: (file, opts) => new DatabaseSync(file, opts) });
+  return retryBusy(() => readCursorState(paths, { open: (file, opts) => new DatabaseSync(file, opts) }));
 }
 
 export function pendingAppApprovals(snapshot, composerId) {

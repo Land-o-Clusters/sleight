@@ -52,7 +52,7 @@ export async function runCursorPlan(plan, { signal, ...options } = {}) {
 export async function nativeMain(argv, runtime = {}) {
   const args = parseOptions(argv), plan = nativePlan(args);
   if (args['dry-run']) { (runtime.print ?? console.log)(JSON.stringify(plan, null, 2)); return plan; }
-  guardLive({ ownerAway: plan.ownerAway });
+  (runtime.guard ?? guardLive)({ ownerAway: plan.ownerAway });
   await (runtime.preflight ?? (p => new DesktopDriver().preflight(p)))({ paths: armPaths() });
   (runtime.inspect ?? inspectBundle)(armPaths().app);
   const readiness = await (runtime.readiness ?? readLoginReadiness)();
@@ -68,7 +68,7 @@ export async function nativeMain(argv, runtime = {}) {
   try {
     const all = getTasks('world');
     for (const row of plan.runs) {
-      if (existsSync('/tmp/sleight-hold')) throw Error('sleight-hold appeared');
+      if ((runtime.held ?? (() => existsSync('/tmp/sleight-hold')))()) throw Error('sleight-hold appeared');
       const task = all.find(t => t.id === row.task);
       const ctx = { dir: join(armPaths().workspace, `fixture-${randomUUID()}`), nonce: randomUUID().slice(0, 8), ownerAway: true, stopOnAppDialog: true };
       const result = await (runtime.execute ?? executeRealTask)(task, ctx, { signal: controller.signal, lockHeld: true,
@@ -77,11 +77,14 @@ export async function nativeMain(argv, runtime = {}) {
           const p = composerPlan({ prompt, allowedApps: row.allowedApps, timeoutMs: row.timeoutMs,
             allowBenchmarkAppPrompts: !args['no-allow-benchmark-app-prompts'] });
           const out = await (runtime.run ?? runCursorPlan)(p, { signal: controller.signal });
-          return { code: out.is_error ? 1 : 0, out, agentSeconds: out.agentSeconds, groupClean: out.groupClean, reason: out.reason, safetyStop: out.safetyStop,
+          return { code: out.is_error ? 1 : 0, out, agentSeconds: out.agentSeconds, agentTiming: out.agentTiming, groupClean: out.groupClean, reason: out.reason, safetyStop: out.safetyStop,
             ...(/approval stop/.test(out.reason ?? '') && { approvalStop: out.reason }) };
         } });
-      results.push({ ...row, ...result, outerSeconds: result.seconds, seconds: result.out?.duration_ms == null ? null : result.out.duration_ms / 1000,
-        timingBoundary: plan.timingBoundary, qualificationOnly: true });
+      const inner = result.out?.duration_ms != null;
+      results.push({ ...row, ...result, arm: 'cursor-cu', outerSeconds: result.seconds, seconds: inner ? result.out.duration_ms / 1000 : result.seconds,
+        secondsTiming: inner ? { start: 'submit', end: 'persisted-clientSettleTime', startupIncluded: false }
+          : { start: 'outer-drive', end: 'task-check', startupIncluded: true },
+        timingBoundary: inner ? plan.timingBoundary : 'outer drive through task check, including startup', qualificationOnly: true });
       if (result.groupClean === false || result.cleanupUnconfirmed || ctx.fixtureLockUnconfirmed || result.liveLockKept) clean = false;
       mkdirSync(resolve(plan.out, '..'), { recursive: true, mode: 0o700 });
       writeFileSync(plan.out, JSON.stringify({ ...plan, results, groupClean: clean }, null, 2), { mode: 0o600 });

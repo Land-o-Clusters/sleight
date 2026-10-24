@@ -85,6 +85,7 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, setupO
         verdict !== true ? verdict?.reason ?? verdict : response.code !== 0 ? response.reason ?? `driver exited ${response.code}` : undefined);
       const elapsedMs = Date.now() - started;
       result.seconds = Math.round(elapsedMs / 100) / 10;
+      result.secondsTiming = { start: 'outer-drive', end: 'task-check', startupIncluded: true };
       withElapsed(result.timing, elapsedMs);
       withStamps(result.timing, response.stamps, started);
     }

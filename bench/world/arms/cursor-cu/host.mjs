@@ -23,8 +23,9 @@ export async function answerCards(plan, owners, ax, requests = []) {
   for (const card of cards) {
     const decision = approvalDecision(card, { ownerApproved: plan.allowBenchmarkAppPrompts, allowedApps: plan.allowedApps });
     const matches = requests.filter(r => r.name === card.name && r.bundleId === card.bundleId && r.toolCallId && r.generationId);
-    if (!owners.some(owner => sameLaunch(owner, card.owner)) || !decision.allow || matches.length !== 1)
+    if (!owners.some(owner => sameLaunch(owner, card.owner)) || !decision.allow || matches.length > 1)
       throw Error('Cursor approval stop: unknown, unbound or disallowed card');
+    if (!matches.length) throw Object.assign(Error('Cursor approval stop: unbound card'), { code: 'CURSOR_CARD_UNBOUND' });
   }
   for (const card of cards) await ax.press(card, owners);
   return cards.length;
@@ -52,6 +53,6 @@ export async function hostCall(operation, data = {}) {
 }
 export const inventory = paths => hostCall('inventory', { executable: paths.app + '/Contents/MacOS/Cursor' });
 export const accessibility = {
-  read: owners => hostCall('cards', { owners, apps: BENCHMARK_APPS }),
-  press: (card, owners) => hostCall('press', { owners, apps: BENCHMARK_APPS, card }),
+  read: (owners, expectedExecutable) => hostCall('cards', { owners, expectedExecutable, apps: BENCHMARK_APPS }),
+  press: (card, owners, expectedExecutable) => hostCall('press', { owners, expectedExecutable, apps: BENCHMARK_APPS, card }),
 };

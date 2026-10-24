@@ -2,6 +2,13 @@ import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { renameSync, rmSync, writeFileSync } from 'node:fs';
 
+function publicTiming(timing) {
+  const starts = ['spawn', 'system/init', 'ready-prompt-and-mcp-submit', 'submit', 'outer-drive'];
+  const ends = ['final-result-event', 'result-and-idle', 'persisted-clientSettleTime', 'task-check', 'task-cleanup', 'driver-collection'];
+  return timing && starts.includes(timing.start) && ends.includes(timing.end) && typeof timing.startupIncluded === 'boolean'
+    ? { start: timing.start, end: timing.end, startupIncluded: timing.startupIncluded } : undefined;
+}
+
 const ids = new Set(['mimestream-label', 'mimestream-message', 'mimestream-thread', 'mimestream-scroll', 'mimestream-search',
   'slack-read', 'discord-read', 'whatsapp-read']);
 
@@ -20,7 +27,7 @@ export function privateMailResult(task, ctx, result, { arm, run }) {
   const salt = randomBytes(32);
   const hash = value => typeof value === 'string' ? createHash('sha256').update(salt).update(value).digest('hex') : null;
   return publicPrivateMailRow({ arm, task: task.id, run, passed: result.passed === true,
-    seconds: result.seconds, ...(result.agentSeconds !== undefined && { agentSeconds: result.agentSeconds }), turns: result.out?.num_turns,
+    seconds: result.seconds, ...(result.agentSeconds !== undefined && { agentSeconds: result.agentSeconds }), agentTiming: result.agentTiming, secondsTiming: result.secondsTiming, turns: result.out?.num_turns,
     expectedHash: hash(task.privateExpected(ctx)), actualHash: hash(answerValue(result.out?.result)) });
 }
 
@@ -30,6 +37,8 @@ export function publicPrivateMailRow(row) {
   return { arm: row.arm, task: row.task, run: row.run, passed: row.passed === true,
     seconds: Number.isFinite(row.seconds) && row.seconds >= 0 ? row.seconds : 0,
     ...(row.agentSeconds !== undefined && { agentSeconds: Number.isFinite(row.agentSeconds) && row.agentSeconds >= 0 ? row.agentSeconds : null }),
+    ...(publicTiming(row.agentTiming) && { agentTiming: publicTiming(row.agentTiming) }),
+    ...(publicTiming(row.secondsTiming) && { secondsTiming: publicTiming(row.secondsTiming) }),
     turns: Number.isSafeInteger(row.turns) && row.turns >= 0 ? row.turns : null,
     expectedHash: digest(row.expectedHash), actualHash: digest(row.actualHash) };
 }
