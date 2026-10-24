@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { createTurnRecording, gifFrame, gifHeader, recordingFile } from '../plugins/sleight/lib/turn-recording.mjs';
 import { createV3TurnBinding, recordingPermission } from '../plugins/sleight/lib/direct-browser/v3-context.mjs';
 import { createV3TurnRuntime } from '../plugins/sleight/lib/direct-browser/worker.mjs';
-import { captureRecordingFrame } from '../plugins/sleight/lib/direct-browser/recording.mjs';
+import { captureRecordingFrame, maskRecordingPixels } from '../plugins/sleight/lib/direct-browser/recording.mjs';
 
 const image = (r = 255, g = 0, b = 0) => ({ width: 2, height: 2, data: Buffer.from(Array.from({ length: 4 }, () => [r, g, b, 255]).flat()) });
 const limits = { width: 4, height: 4, frames: 3, bytes: 4096 };
@@ -18,6 +18,7 @@ function bank(t) {
   return { path, get allocations() { return allocations; }, createFile() { allocations++; return { path, fd: openSync(path, 'wx', 0o600) }; } };
 }
 const entry = () => ({ state: {}, page: { isClosed: () => false } });
+const rootAccess = getRoot => ({ _connection: { toImpl: () => ({ mainFrame: () => ({ utilityContext: async () => ({ world: 'utility', evaluateExpressionHandle: getRoot }) }) }) } });
 const binding = (text, current = () => true) => createV3TurnBinding({ source: 'user', session: 'fixture', turn: 'turn', id: 'user', text }, current);
 
 test('only a leading literal directive in this authenticated, current turn permits recording', () => {
@@ -128,16 +129,16 @@ test('ownership and site failures happen before CDP; masking failures always try
     async send(name, args) {
       calls.push([name, args]);
       if (name === 'Page.getLayoutMetrics') return { cssLayoutViewport: { pageX: 0, pageY: 0, clientWidth: 800, clientHeight: 600 } };
-      if (name === 'DOMSnapshot.captureSnapshot') return { strings: ['closed'], documents: [{ nodes: { nodeName: [0], shadowRootType: { index: [0], value: [0] } } }] };
+      if (name === 'Runtime.evaluate') return restoreFails ? {} : { result: { value: 1 } };
       if (restoreFails && name === 'Emulation.setScriptExecutionDisabled' && args.value === false) throw Error('private failure');
     }, async detach() { calls.push(['detach']); },
-  }) }) };
+  }) }), ...rootAccess(async () => { throw Error('RECORDING_TREE_LIMIT'); }) };
   owned = { tab: 't1', state: {}, page };
   const options = { pages: { tab: () => owned }, current: () => true };
   await assert.rejects(captureRecordingFrame({ ...owned }, options), /TARGET_UNAVAILABLE/);
   await assert.rejects(captureRecordingFrame(owned, { ...options, sites: () => 'blocked' }), /TARGET_UNAVAILABLE/);
   assert.deepEqual(calls, []);
-  await assert.rejects(captureRecordingFrame(owned, options), /OPAQUE_TREE/);
+  await assert.rejects(captureRecordingFrame(owned, options), /TREE_LIMIT/);
   assert.deepEqual(calls.filter(([name]) => name === 'Emulation.setScriptExecutionDisabled').map(([, args]) => args.value), [true, false]);
   assert.equal(calls.at(-1)[0], 'detach');
   calls = []; restoreFails = true;
@@ -150,7 +151,7 @@ test('unconfirmed script resumption is a visible fixed warning', async t => {
   const recorder = createTurnRecording({ current: () => true, createFile: files.createFile, limits,
     capture: async () => { throw Error('RECORDING_RESUME_UNCONFIRMED'); } });
   await recorder.capture(entry());
-  assert.match(recorder.note(), /Page script resumption is unconfirmed; check the tab before continuing\./);
+  assert.match(recorder.note(), /Page script resumption is unconfirmed; further recording frames are blocked for this turn\. Browser actions remain available\./);
   await recorder.end();
 });
 
@@ -171,6 +172,7 @@ test('a failed first write removes the empty recording', async t => {
     createFile() { const file = files.createFile(); closeSync(file.fd); return file; } });
   await recorder.capture(entry()); await recorder.end();
   assert.equal(existsSync(files.path), false);
+  assert.equal(existsSync(join(files.path, '..')), false);
 });
 
 test('a recording inside the system home reports a tilde path and per-frame processing times', async t => {
@@ -197,7 +199,7 @@ test('an attach that resolves after its deadline is detached without freezing sc
   assert.equal(detached, true);
 });
 
-test('record start prunes only owned ordinary recording banks older than thirty days', t => {
+test('pruning starts asynchronously after the first frame and keeps fresh or linked banks', async t => {
   const home = mkdtempSync(join(process.cwd(), '.g13-home-'));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const old = recordingFile({ home }), fresh = recordingFile({ home });
@@ -208,13 +210,15 @@ test('record start prunes only owned ordinary recording banks older than thirty 
   const outside = join(home, 'outside'); mkdirSync(outside);
   writeFileSync(join(outside, 'actions.gif'), 'keep');
   symlinkSync(outside, join(root, 'turn-link'));
-  const next = recordingFile({ home }); closeSync(next.fd);
+  const recorder = createTurnRecording({ current: () => true, capture: async () => image(), limits, createFile: () => recordingFile({ home }) });
+  assert.equal(existsSync(old.path), true, 'arming does not prune');
+  await recorder.capture(entry()); await recorder.end();
   assert.equal(existsSync(old.path), false);
   assert.equal(existsSync(fresh.path), true);
   assert.equal(readFileSync(join(outside, 'actions.gif'), 'utf8'), 'keep');
 });
 
-for (const stuck of ['attach', 'disable', 'Page.getLayoutMetrics', 'DOMSnapshot.captureSnapshot', 'resume', 'detach']) {
+for (const stuck of ['attach', 'disable', 'Page.getLayoutMetrics', 'utility read', 'resume', 'detach']) {
   test(`recording bounds a stalled ${stuck} and completes cleanup`, { timeout: 6000 }, async () => {
     const sent = [], forever = new Promise(() => {});
     const cdp = { async send(name, args) {
@@ -222,13 +226,11 @@ for (const stuck of ['attach', 'disable', 'Page.getLayoutMetrics', 'DOMSnapshot.
       sent.push(step);
       if (step === stuck) return forever;
       if (step === 'Page.getLayoutMetrics') return { cssLayoutViewport: { pageX: 0, pageY: 0, clientWidth: 800, clientHeight: 600 } };
-      if (step === 'DOMSnapshot.captureSnapshot') return { strings: ['closed'], documents: [{ nodes: {
-        nodeName: [0], shadowRootType: { index: [0], value: [0] } } }] };
-      // The old implementation's tree refusal makes its resume/detach hang observable too.
-      if (step === 'DOM.getDocument') return { root: { shadowRoots: [{ shadowRootType: 'closed' }] } };
+      if (step === 'Runtime.evaluate') return stuck === 'resume' ? forever : { result: { value: 1 } };
     }, async detach() { sent.push('detach'); if (stuck === 'detach') return forever; } };
     const page = { url: () => 'https://fixture.invalid', isClosed: () => false,
-      context: () => ({ newCDPSession: () => stuck === 'attach' ? forever : Promise.resolve(cdp) }) };
+      context: () => ({ newCDPSession: () => stuck === 'attach' ? forever : Promise.resolve(cdp) }),
+      ...rootAccess(() => stuck === 'utility read' ? forever : Promise.reject(Error('RECORDING_TREE_LIMIT'))) };
     const owned = { tab: 't1', state: {}, page };
     const start = performance.now();
     await assert.rejects(captureRecordingFrame(owned, { pages: { tab: () => owned }, current: () => true }),
@@ -270,5 +272,71 @@ test('runtime recording preserves snapshot delivery, opt-out, and unavailable ap
     if (supported && text !== 'Fill.') assert.match(ended.recording, /actions.gif \(2 frames\)/);
     assert.equal((await runtime.end()).recording, undefined, 'the saved path appears only on the first end receipt');
     const after = captures; await runtime.call({ name: 'browser_act', arguments: { tab: 't1', steps: [{ do: 'click', ref: 'e1' }] } }); assert.equal(captures, after);
+  }
+});
+
+for (const mode of ['slow acknowledgment', 'retry', 'probe failure', 'acknowledgment failure']) test(`script resume: ${mode}`, { timeout: 6000 }, async () => {
+  let resumes = 0, probes = 0;
+  const cdp = { async send(name, args) {
+    if (name === 'Page.getLayoutMetrics') return { cssLayoutViewport: { pageX: 0, pageY: 0, clientWidth: 800, clientHeight: 600 } };
+    if (name === 'Emulation.setScriptExecutionDisabled' && !args.value) {
+      resumes++;
+      if (mode === 'slow acknowledgment') await new Promise(r => setTimeout(r, 350));
+      if (mode === 'acknowledgment failure' || mode === 'retry' && resumes === 1) throw Error('ack missed');
+    }
+    if (name === 'Runtime.evaluate') {
+      probes++;
+      assert.equal(args.expression, '1');
+      if (mode === 'probe failure' || mode === 'retry' && probes === 1) throw Error('probe missed');
+      return { result: { value: 1 } };
+    }
+  }, async detach() {} };
+  const page = { isClosed: () => false, url: () => 'https://fixture.invalid', context: () => ({ newCDPSession: async () => cdp }),
+    ...rootAccess(async () => { throw Error('RECORDING_TREE_LIMIT'); }) };
+  const owned = { page, tab: 't1', state: {} };
+  await assert.rejects(captureRecordingFrame(owned, { pages: { tab: () => owned }, current: () => true }),
+    mode.endsWith('failure') ? /RESUME_UNCONFIRMED/ : /TREE_LIMIT/);
+  assert.equal(resumes, mode === 'slow acknowledgment' ? 1 : 2);
+  assert.equal(probes, resumes);
+});
+
+test('unconfirmed resume blocks only recording frames and returns no input stop signal', async t => {
+  let captures = 0;
+  const files = bank(t), recorder = createTurnRecording({ current: () => true, createFile: files.createFile,
+    capture: async () => { captures++; throw Error('RECORDING_RESUME_UNCONFIRMED'); } });
+  assert.equal(await recorder.capture(entry()), undefined);
+  assert.equal(await recorder.capture(entry()), undefined);
+  assert.equal(captures, 1);
+  assert.equal(recorder.blocked(), true);
+  assert.match(recorder.warning(), /Browser actions remain available/);
+  await recorder.end();
+});
+
+test('a utility root acquired after its deadline is disposed after scripts resume', { timeout: 6000 }, async () => {
+  let release, disposed = 0, resumed = 0;
+  const cdp = { async send(name, args) {
+    if (name === 'Page.getLayoutMetrics') return { cssLayoutViewport: { pageX: 0, pageY: 0, clientWidth: 800, clientHeight: 600 } };
+    if (name === 'Emulation.setScriptExecutionDisabled' && !args.value) resumed++;
+    if (name === 'Runtime.evaluate') return { result: { value: 1 } };
+  }, async detach() {} };
+  const page = { isClosed: () => false, url: () => 'https://fixture.invalid', context: () => ({ newCDPSession: async () => cdp }),
+    ...rootAccess(() => new Promise(resolve => { release = resolve; })) };
+  const owned = { page, tab: 't1', state: {} };
+  await assert.rejects(captureRecordingFrame(owned, { pages: { tab: () => owned }, current: () => true }), /RECORDING_TIMEOUT/);
+  assert.equal(resumed, 1);
+  release({ async dispose() { disposed++; } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(disposed, 1);
+});
+
+test('two thousand overlapping field masks use bounded pixel painting', { timeout: 6000 }, () => {
+  const width = 400, height = 300, frame = { width, height, data: Buffer.alloc(width * height * 4, 255) };
+  const fields = Array.from({ length: 2000 }, () => [0, 0, width, height]);
+  const start = performance.now();
+  maskRecordingPixels(frame, { fields, opaque: [] });
+  assert.ok(performance.now() - start < 2000, 'overlap does not multiply pixel painting by field count');
+  for (let at = 0; at < frame.data.length; at += 4) {
+    assert.equal(frame.data[at] + frame.data[at + 1] + frame.data[at + 2], 0);
+    assert.equal(frame.data[at + 3], 255);
   }
 });

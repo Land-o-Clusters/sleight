@@ -351,8 +351,8 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
   let recording;
   if (permitted() && dependencies.recordingSupported !== false) {
     const [{ createTurnRecording }, { captureRecordingFrame }] = await Promise.all([import('../turn-recording.mjs'), import('./recording.mjs')]);
-    recording = createTurnRecording({ current: permitted, capture: entry => captureRecordingFrame(entry,
-      { pages, current: permitted, endpoint, sites: dependencies.sites }), ...dependencies.recording });
+    recording = createTurnRecording({ current: permitted, capture: (entry, target) => captureRecordingFrame(entry,
+      { pages, current: permitted, endpoint, sites: dependencies.sites, target }), ...dependencies.recording });
   }
   const originals = new WeakMap();
   let pdf, pdfBuilding;
@@ -392,21 +392,17 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
       let notified = false;
       pdfBuilding = () => { if (!notified) { notified = true; control?.pdfBuilding?.(); } };
       try {
-      if (recording?.blocked() && !['browser_read', 'browser_tabs'].includes(request?.name))
-        return { text: recording.warning() + ' Nothing was sent.', isError: true };
-      const result = await runtime.call(request);
+      const result = await runtime.call(request, control);
       if (!recording && !permitted()) return result;
       const notes = [];
       if (!recordingStarted) {
         recordingStarted = true;
-        notes.push(recording ? 'Recording this turn: fields, frames, objects, canvases and videos are masked. Whole forms and containers identified by checkout/payment/2FA/security wording are masked, including their text and images, SVGs and backgrounds. Other text and images are not checked for secrets. Saved path follows at turn end.'
+        notes.push(recording ? 'Recording this turn: frames are pixelated except the acted-on control. Fields and editable controls are black; targeted frames, canvases, images, SVGs and videos are black. The pointer and target outline are drawn on top. Saved path follows at turn end.'
           : 'Recording: unavailable for app windows; no frames saved.');
       }
       if (recording?.warning()) notes.push(recording.warning());
       if (!notes.length) return result;
-      const noted = { ...result, text: result.text + '
-' + notes.join('
-') };
+      const noted = { ...result, text: result.text + '\n' + notes.join('\n') };
       originals.set(noted, { result, text: noted.text, isError: noted.isError }); return noted;
       } finally { pdfBuilding = undefined; }
     }, delivered(result) {

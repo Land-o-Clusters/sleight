@@ -42,3 +42,25 @@ test('a delegate without a separate utility world cannot supply trusted evidence
   const handle = { _connection: { toImpl: () => impl } };
   await assert.rejects(api.trustedRead(handle, el => el.form), /TRUSTED_DOM_REQUIRED/);
 });
+
+test('recording acquires the root directly in the utility world without a CSS or MAIN-world walk', async () => {
+  const root = {}, calls = [];
+  const utility = { world: 'utility', evaluateExpressionHandle(source, options) { calls.push({ source, options }); return root; } };
+  const page = { _connection: { toImpl: () => ({ mainFrame: () => ({ utilityContext: async () => utility }) }) },
+    locator() { assert.fail('root acquisition must not search shadow hosts'); }, evaluate() { assert.fail('MAIN world must not run'); } };
+  assert.equal(await api.trustedDocumentHandle(page), root);
+  assert.deepEqual(calls, [{ source: 'document.documentElement', options: { isFunction: false } }]);
+  for (const world of ['main', undefined]) {
+    utility.world = world;
+    await assert.rejects(api.trustedDocumentHandle(page), /TRUSTED_DOM_REQUIRED/);
+  }
+});
+
+test('ordinary trusted handle acquisition still passes the held node with no reader argument', async () => {
+  const retained = {}, node = { _frame: { utilityContext: async () => utility } };
+  const utility = { world: 'utility', evaluateExpression() {}, evaluateExpressionHandle(source, options, args) {
+    assert.deepEqual(args, [node, undefined]); return retained;
+  } };
+  const handle = { _connection: { toImpl: () => node } };
+  assert.equal(await api.trustedHandle(handle, el => el.ownerDocument), retained);
+});

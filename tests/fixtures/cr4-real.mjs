@@ -18,7 +18,7 @@ const executablePath = process.platform === 'darwin'
 export const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'real-page qualification belongs to sleight-arch host runner'
   : !existsSync(executablePath) ? 'pinned Chromium headless shell is unavailable' : false;
 
-export async function fixture(t, html, routes = {}, { observeTabs = false, smoothScrolling = false } = {}) {
+export async function fixture(t, html, routes = {}, { observeTabs = false, smoothScrolling = false, deviceScaleFactor } = {}) {
   const sockets = new Set(), requests = [];
   const profile = trackTemp(mkdtempSync(join(realpathSync(tmpdir()), 'sleight-cr4-')));
   let context, registry;
@@ -45,6 +45,7 @@ export async function fixture(t, html, routes = {}, { observeTabs = false, smoot
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const args = ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'];
   if (smoothScrolling) args.push('--enable-smooth-scrolling');
+  if (deviceScaleFactor !== undefined) args.push('--force-device-scale-factor=' + deviceScaleFactor);
   if (observeTabs) {
     // Only this disposable browser loads the read-only observer. Chrome's tab
     // active bit distinguishes background disposition even in headless mode,
@@ -56,6 +57,7 @@ export async function fixture(t, html, routes = {}, { observeTabs = false, smoot
     args.push('--disable-extensions-except=' + extension, '--load-extension=' + extension);
   }
   context = await inprocess.playwright.chromium.launchPersistentContext(profile, { headless: true, executablePath, args,
+    ...(deviceScaleFactor === undefined ? {} : { deviceScaleFactor }),
     ...(observeTabs ? { channel: 'chromium', ignoreDefaultArgs: ['--disable-extensions'] } : {}) });
   const worker = observeTabs ? context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker', { timeout: 5000 }) : undefined;
   const tabState = () => worker.evaluate(async () => (await chrome.tabs.query({})).map(({ id, url, active }) => ({ id, url, active })));

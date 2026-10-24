@@ -610,8 +610,9 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         // its dialog listener until that exact promise settles or the page closes.
         if (!inputPending && armed !== carry) armed?.stop();
         try { await staging?.cleanup?.(); } catch { lines.push('Upload staging cleanup unavailable.'); }
-        if (isV3Context(ctx) && target && !inputPending) await ctx.releaseTarget(target);
-        if (started && onAction) { try { recordingStopped = (await onAction(tab))?.stop === true; } catch {} }
+        try {
+          if (started && onAction) { try { recordingStopped = (await onAction(tab, { handle: target?.locator }))?.stop === true; } catch {} }
+        } finally { if (isV3Context(ctx) && target && !inputPending) await ctx.releaseTarget(target); }
       }
     }
     if (stoppedAt !== null) for (let i = stoppedAt; i < steps.length; i++) lines.push(`${i + 1} ${steps[i].do}: not reached`);

@@ -84,3 +84,19 @@ export async function trustedLocatorRead(locator, reader, arg) {
   try { return await trustedRead(handle, reader, arg); }
   finally { if (handle !== locator) await handle?.dispose(); }
 }
+
+// Root acquisition for bounded recording reads. A Playwright CSS locator may
+// search every shadow host even for :root; native utility-world access avoids it.
+export async function trustedDocumentHandle(page) {
+  const impl = page?._connection?.toImpl?.(page);
+  if (!impl || impl.delegate?.noUtilityWorld?.()) throw Error('TRUSTED_DOM_REQUIRED');
+  const utility = await impl.mainFrame()?.utilityContext?.();
+  if (utility?.world !== 'utility' || typeof utility.evaluateExpressionHandle !== 'function') throw Error('TRUSTED_DOM_REQUIRED');
+  return utility.evaluateExpressionHandle('document.documentElement', { isFunction: false });
+}
+
+export async function trustedHandleNode(node, reader, arg) {
+  const utility = await node?._frame?.utilityContext?.();
+  if (utility?.world !== 'utility' || typeof utility.evaluateExpressionHandle !== 'function') throw Error('TRUSTED_DOM_REQUIRED');
+  return utility.evaluateExpressionHandle(expression(reader), { isFunction: true }, [node, arg]);
+}

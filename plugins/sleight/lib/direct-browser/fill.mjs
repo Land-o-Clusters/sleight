@@ -119,7 +119,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
           const nativeText = async () => {
             if (!isV3Context(ctx)) throw new FieldError('keyboard-only refs require a trusted context');
             if (!['string', 'number'].includes(typeof value)) throw new FieldError('EditContext fields need text or a number');
-            const result = await runSteps(tab, [{ do: 'type', ref, text: String(value) }], ctx);
+            const result = await runSteps(tab, [{ do: 'type', ref, text: String(value) }], ctx, onAction ? { onAction } : undefined);
             sent = !!result?.lines?.length && !result.lines.some(line => /: not run:/.test(line));
             if (!result?.lines?.length || actionFailed(result)) throw new FieldError('EditContext field stopped; read the page');
             rows[i].status = 'set';
@@ -132,7 +132,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
             const step = typeof value === 'boolean' ? { do: value ? 'check' : 'uncheck', ref } :
               Array.isArray(value) ? { do: 'select', ref, values: value } :
               kind === 'select' ? { do: 'select', ref, values: [String(value)] } : { do: 'type', ref, text: String(value) };
-            const result = await runSteps(tab, [step], ctx);
+            const result = await runSteps(tab, [step], ctx, onAction ? { onAction } : undefined);
             sent = !result?.lines?.some(line => /: not run:/.test(line));
             if (actionFailed(result)) throw new FieldError('closed-root field stopped; read the page');
             rows[i].status = 'set'; continue;
@@ -170,7 +170,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
               // V4 classifies, consumes consent once, journals the submit and
               // retains pending input through its settle. Never pre-consume here.
               sent = true;
-              const result = await runSteps(tab, [{ do: 'click', ref }], ctx);
+              const result = await runSteps(tab, [{ do: 'click', ref }], ctx, onAction ? { onAction } : undefined);
               if (!Array.isArray(result?.lines)) throw said('guarded submit result unavailable; field may have changed; read before retrying; use the engine browser path if needed');
               sent = !result.lines.some(line => /: not run:/.test(line));
               if (actionFailed(result)) throw new FieldError('submit stopped; read the page before retrying');
@@ -196,12 +196,13 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
               return modifier ? await backgroundClick(tab, trusted ? target.locator : locator, perform, { modifier }) : await perform();
             } finally {
               if (tab.state.actionPending === pending) tab.state.actionPending = false;
-              if (trusted) await ctx.releaseTarget(target);
+              try { if (sent && onAction) await onAction(tab, { handle: target.locator }); } catch {}
+              finally { if (trusted) await ctx.releaseTarget(target); }
             }
           };
           if (state.kind === 'file') {
             if (!Array.isArray(value) || !value.length) throw new FieldError('file fields need browser_act upload with user-named paths');
-            const result = await runSteps(tab, [{ do: 'upload', ref, paths: value }], ctx);
+            const result = await runSteps(tab, [{ do: 'upload', ref, paths: value }], ctx, onAction ? { onAction } : undefined);
             sent = !result?.lines?.some(line => /: not run:/.test(line));
             if (actionFailed(result)) throw new FieldError('upload stopped; read the page');
           } else if (state.kind === 'check' || state.kind === 'custom' && typeof value === 'boolean' && state.checked !== null) {
@@ -399,8 +400,6 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
           // page text. After attempted input report uncertainty without that log.
           rows[i].reason = error.said ? String(error.message).slice(0, 300) : sent ? 'field may have changed; read the page before retrying' : error instanceof FieldError ? String(error.message).slice(0, 200) : 'field unavailable; read the page before retrying';
           stopped ||= 'field failed';
-        } finally {
-          if (sent && onAction) { try { if ((await onAction(tab))?.stop === true) stopped = 'recording could not resume page scripts'; } catch {} }
         }
       }
       if (submit !== undefined && !stopped && rows.every(row => row.status === 'set')) {
