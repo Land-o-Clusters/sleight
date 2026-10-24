@@ -12,6 +12,13 @@ function rules() {
     }));
 }
 
+export function hasDeveloperSuffix(hostname) {
+  const last = hostname.toLowerCase().split('.').at(-1);
+  if (['localhost', 'local', 'internal', 'invalid', 'test', 'example'].includes(last)) return true;
+  try { return rules().has(last) || rules().has('*.' + last); }
+  catch { return true; } // A missing list must fail closed in the URL scrubber.
+}
+
 export function scrubDeveloperHost(hostname) {
   if (/^(?:\d+\.){3}\d+$/.test(hostname) || hostname.startsWith('[')) return '[ip]';
   const names = hostname.replace(/\.$/, '').split('.');

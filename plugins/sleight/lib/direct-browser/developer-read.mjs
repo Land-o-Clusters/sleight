@@ -1,6 +1,6 @@
 // Owned-page CDP metadata only. Never inspect remote objects, read bodies or headers,
 // intercept/replay requests, evaluate page code, or retain a raw protocol event.
-import { scrubDeveloperHost } from './developer-domain.mjs';
+import { scrubDeveloperHost, hasDeveloperSuffix } from './developer-domain.mjs';
 const LIMIT = 100, LINE = 512, OUTPUT = 8000, SEND_MS = 1500;
 const consoleTypes = new Set('log debug info error warning dir dirxml table trace clear startGroup startGroupCollapsed endGroup assert profile profileEnd count timeEnd'.split(' '));
 const resourceTypes = new Set('Document Stylesheet Image Media Font Script TextTrack XHR Fetch Prefetch EventSource WebSocket Manifest SignedExchange Ping CSPViolationReport Preflight Other'.split(' '));
@@ -31,16 +31,16 @@ const source = /^(.*)\.(js|mjs|cjs|ts|tsx|jsx|vue|svelte|css|html|wasm)$/i;
 const identity = /^(?:users?|accounts?|profiles?|u|@|members?|people|persons?|customers?|clients?|contacts?|authors?|usernames?|emails?|handles?|identit(?:y|ies))$/i;
 // Count complete runs after NFKC folds digits and compatibility spaces. These
 // spans must be protected before a label splits the message into smaller parts.
-const numberRuns = /(?<![\p{L}\p{N}_.+-])[+-]?\d+(?:\.\d+)?(?:\s+[+-]?\d+(?:\.\d+)?)+(?![\p{L}\p{N}_.+-])/gu;
+const numberRuns = /(?<![\p{L}\p{N}_.+-])[+-]?\d+(?:\.\d+)?(?:\s+[+-]?\d+(?:\.\d+)?)+(?=$|[^\p{L}\p{N}_.+-]|\.+(?=[\s"'`)\]}>;,!?]|$))/gu;
 // Special spans are parsed as data, never caller-forgeable placeholder strings.
 // A relative URL may follow any punctuation, including the colon in "failed:/".
-const special = /(?<![^\s<>"'`()\[\]{}])(?:(?:\.\.?\/)?(?:[a-z0-9_.-]+\/)*[a-z0-9_.-]+:\d{1,8}:\d{1,8}(?![\w:])(?:[?#][^\s<>"'`()\[\]{},;]*)?|(?:https?|wss?|file|data|blob):[^\s<>"'`(){}]+|(?:(?:\d{1,3}\.){3}\d{1,3}|\[[a-f0-9:.]+\])(?::\d+)?(?:[/?#][^\s<>"'`()\[\]{},;]*)?|(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?|[/?#][^\s<>"'`()\[\]{},;]*)|[a-z0-9-]+:\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?)|(?<![\p{L}\p{N}])(?:\.\.?\/|\/)[^\s<>"'`()\[\]{},;]*/giu;
+const special = /(?<![^\s<>"'`()\[\]{}])(?:(?:\.\.?\/)?(?:[a-z0-9_.-]+\/)*[a-z0-9_.-]+:\d{1,8}:\d{1,8}(?![\w:])(?:[?#][^\s<>"'`()\[\]{},;]*)?|(?:https?|wss?|file|data|blob):[^\s<>"'`(){}]+|(?:(?:\d{1,3}\.){3}\d{1,3}|\[[a-f0-9:.]+\])(?::\d+)?(?:[/?#][^\s<>"'`()\[\]{},;]*)?|(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?|[/?#][^\s<>"'`()\[\]{},;]*)?|[a-z0-9-]+:\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?)|(?<![\p{L}\p{N}])(?:\.\.?\/|\/)[^\s<>"'`()\[\]{},;]*/giu;
 
 const allowedWord = word => statusWords.has(word.toLowerCase()) ||
   (/^[a-z]{1,15}$/i.test(word) && !/^[a-f]{4,}$/i.test(word));
 const allowedToken = word => allowedWord(word) || /^[+-]?\d{1,4}(?:\.\d{1,4})?$/.test(word) ||
   /^\d+(?:\.\d+)?(?:ms|s|px|kb|mb|%)$/i.test(word) || /^net::ERR_[A-Z_]{1,64}$/.test(word) ||
-  /^v\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(word) ||
+  /^v?\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(word) ||
   (/^[a-z]+(?:['’][a-z]+)+$/i.test(word) && allowedWord(word.replace(/['’]/g, ''))) ||
   (/^[a-z]+(?:\.[a-z]+)+$/i.test(word) && word.split('.').every(allowedWord));
 
@@ -83,18 +83,26 @@ export function scrubDeveloperText(value) {
   if (typeof value !== 'string') return '[value]';
   const text = normalize(value), spans = [];
   if (text.length > 4096) return '[long text omitted]';
+  // A complete digit run takes precedence over a URL-shaped prefix such as
+  // "phone:555". Otherwise that prefix exempts the rest of the run.
+  for (const match of text.matchAll(numberRuns)) {
+    if (match[0].split(/\s+/).length >= 3 || match[0].replace(/\D/g, '').length >= 7)
+      spans.push({ start: match.index, end: match.index + match[0].length, safe: '[value]' });
+  }
   for (const match of text.matchAll(special)) {
     if (statusWords.has(match[0].toLowerCase())) continue;
     // Do not recognize a URL prefix inside an unknown token or email address.
     const end = match.index + match[0].length;
     if (end < text.length && /[a-z0-9_@]/i.test(text[end])) continue;
+    if (spans.some(span => match.index < span.end && end > span.start)) continue;
+    const bare = /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(match[0]);
+    // Without a URL delimiter, permitted dotted identifiers and source files
+    // stay readable. A recognized DNS suffix instead uses the URL host policy.
+    if (bare && (!hasDeveloperSuffix(match[0]) || (source.test(match[0]) && allowedToken(match[0])))) continue;
     const frame = match[0].split(/[?#]/, 1)[0];
-    spans.push({ start: match.index, end, safe: safeFrame(frame) ?? safeDeveloperURL(match[0]) });
-  }
-  for (const match of text.matchAll(numberRuns)) {
-    const start = match.index, end = start + match[0].length;
-    if ((match[0].split(/\s+/).length >= 3 || match[0].replace(/\D/g, '').length >= 7) &&
-      !spans.some(span => start < span.end && end > span.start)) spans.push({ start, end, safe: '[value]' });
+    let safe = safeFrame(frame) ?? safeDeveloperURL(match[0]);
+    if (bare && safe.toLowerCase() === match[0].toLowerCase()) safe = match[0];
+    spans.push({ start: match.index, end, safe });
   }
   spans.sort((a, b) => a.start - b.start);
   let labelText = '', cursor = 0;

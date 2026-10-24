@@ -191,6 +191,64 @@ test('short diagnostic numbers separated by words or punctuation stay readable',
   for (const text of ['size 12 34', 'size 123 456', 'HTTP 404 count 1234', 'year 2026 port 8080',
     'size 1, 2, 3', 'ready 45ms 2s 20px 8kb 4mb 50%']) assert.equal(scrubDeveloperText(text), text);
 });
+for (const [input, expected] of [
+  ['Customer phone 555 123 4567.', 'Customer phone [value].'],
+  ['paid with 4111 1111 1111 1111.', 'paid with [value].'],
+  ['SSN on file 123 45 6789.', '[omitted].'],
+  ['phone:555 123 4567', 'phone:[value]'],
+  ['phone:555 123 4567.', 'phone:[value].'],
+  ['phone:555 123 4567...; render failed', 'phone:[value]...; render failed'],
+  ['Customer phone "555 123 4567."', 'Customer phone "[value]."'],
+]) test(`review digit runs are masked whole: ${input}`, () => assert.equal(scrubDeveloperText(input), expected));
+for (const punctuation of ['.', '...', '…']) {
+  test(`sentence punctuation cannot expose a digit run: ${punctuation}`, () => {
+    for (const space of [' ', '\u00a0', '\u2009', '\u202f', '\u3000', '\t', '\n']) {
+      for (const prefix of ['Customer phone ', 'phone:', 'order:']) {
+        for (const tail of ['', ' render failed']) {
+          const input = prefix + ['555', '123', '4567'].join(space) + punctuation + tail;
+          assert.equal(scrubDeveloperText(input), prefix + '[value]' + punctuation.normalize('NFKC') + tail, input);
+        }
+      }
+    }
+    assert.equal(scrubDeveloperText('token 4111 1111 1111 1111' + punctuation + ' render failed'),
+      '[omitted]' + punctuation.normalize('NFKC') + ' render failed');
+  });
+}
+test('digit runs win over host-port parsing in console arguments and exception text', async t => {
+  const f = fixture(); t.after(f.reader.stop); await f.reader.ready;
+  f.cdp.emit('Runtime.consoleAPICalled', { type: 'log', args: [
+    { type: 'string', value: 'phone:555' }, { type: 'number', value: 123 }, { type: 'string', value: '4567...' }] });
+  f.cdp.emit('Runtime.exceptionThrown', { exceptionDetails: { exception: { description: 'Customer phone 555 123 4567.' } } });
+  const text = await f.reader.read({ console: true });
+  assert.doesNotMatch(text, /555|123|4567/);
+  assert.match(text, /phone:\[value\]\.\.\./);
+  assert.match(text, /Customer phone \[value\]\./);
+});
+for (const [host, expected] of [
+  ['alice.example.com', '[sub].example.com'],
+  ['alice.smith.example.com', '[sub].[sub].example.com'],
+  ['alice.example.co.uk', '[sub].example.co.uk'],
+  ['alice.example.github.io', '[sub].example.github.io'],
+  ['alice.example.foo.ck', '[sub].example.foo.ck'],
+  ['alice.www.ck', '[sub].www.ck'],
+  ['alice.city.kawasaki.jp', '[sub].city.kawasaki.jp'],
+  ['alice.example.invalid', '[sub].example.invalid'],
+  ['alice.localhost', '[sub].localhost'],
+  ['alice.token.example.com', '[sub].[sub].example.com'],
+]) test(`bare hostname subdomains use the URL host policy: ${host}`, () => {
+  for (const [before, after] of [['', ''], ['"', '"'], ["'", "'"], ['(', ')'], ['[', ']'], ['', ','], ['', '.'], ['', '...'], ['', '…'], ['', ';']])
+    assert.equal(scrubDeveloperText('load ' + before + host + after + ' render failed'),
+      'load ' + before + expected + after.normalize('NFKC') + ' render failed');
+});
+test('dotted diagnostics and known source files remain readable beside bare hostnames', () => {
+  for (const text of ['Object.render', 'Array.map', 'Object.prototype.render', 'app.js', 'app.min.js', 'Next.js docs',
+    'package.json', 'README.md', 'React version: 18.2.0', 'version 18.2.0.', 'localhost:3000', 'example.com'])
+    assert.equal(scrubDeveloperText(text), text);
+  assert.equal(scrubDeveloperText('Object.render app.min.js alice.example.com React version: 18.2.0'),
+    'Object.render app.min.js [sub].example.com React version: 18.2.0');
+  for (const text of ['version 12345.2.0', 'version 18.12345.0', 'version 18.2.12345'])
+    assert.equal(scrubDeveloperText(text), 'version [value]');
+});
 const translatedLabels = ['passwort', 'kennwort', 'schlüssel', 'zugangstoken', 'clave', 'contraseña',
   'ficha', 'mot de passe', 'jeton', 'clé', 'parola segreta', 'chiave', 'gettone', 'senha', 'palavra-passe',
   'chave', 'wachtwoord', 'sleutel', 'toegangstoken'];
