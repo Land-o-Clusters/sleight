@@ -2437,6 +2437,14 @@ export function createPageRegistry({ browser, session, context = browser?.contex
   const track = promise => {
     tasks.add(promise); promise.then(() => tasks.delete(promise), () => tasks.delete(promise)); return promise;
   };
+  const startDeveloper = async (entry, resuming = false) => {
+    entry.developer?.stop();
+    if (ended || entry.closed || entry.released || !entry.cdp || handoffActive && !resuming) return;
+    // Round forward so buffered events from the same millisecond are excluded.
+    const developer = entry.developer = createDeveloperRead(entry.cdp, { since: Date.now() + 1 });
+    await deadline(() => developer.ready, timeoutMs);
+    if (ended || entry.closed || entry.released || entry.developer !== developer) developer.stop();
+  };
   const identify = page => {
     if (!metadata.has(page)) metadata.set(page, (async () => {
       const cdp = await context.newCDPSession(page);
@@ -2473,6 +2481,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
       });
       cdp.on('close', () => {
         if (ended || entry.closed || entry.page.isClosed() || entry.released || entry.releasing || entry.cdp !== cdp || entry.reattaching) return;
+        entry.developer?.stop();
         entry.state.nativeAttachmentLost = true;
         entry.state.nativeNavigationNo = (entry.state.nativeNavigationNo ?? 0) + 1;
         entry.state.nativeDetachNo = entry.state.nativeNavigationNo;
@@ -2491,10 +2500,12 @@ export function createPageRegistry({ browser, session, context = browser?.contex
             entry.cdp = next;
             await install(entry);
             if (ended || entry.released || entry.closed) throw Error('owned target released during attachment');
+            await startDeveloper(entry);
             metadata.set(entry.page, Promise.resolve({ cdp: next, targetInfo }));
             entry.state.nativeAttachmentLost = false;
           } catch (error) { await next.detach().catch(() => {}); throw error; }
         })().catch(() => {
+          entry.developer?.stop();
           entry.state.nativeAttachmentLost = true;
           entry.script = null; entry.cdp = null;
           metadata.delete(entry.page);
@@ -2721,10 +2732,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     page.once('close', () => { entry.closed = true; entry.developer?.stop(); if (notice) notice.closed = true; });
     entry.ready = track((async () => {
       if (!entry.closed && !ended) await deadline(() => install(entry), timeoutMs);
-      if (!entry.closed && !ended) {
-        entry.developer = createDeveloperRead(entry.cdp);
-        await deadline(() => entry.developer.ready, timeoutMs);
-      }
+      if (!entry.closed && !ended) await startDeveloper(entry);
       if (ended && !entry.closed) await deadline(() => page.close({ runBeforeUnload: false }), timeoutMs);
     })());
     return entry;
@@ -2914,7 +2922,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
       const preserve = () => preserved ??= (async () => {
         // Mark every tab before awaiting anything: one failed detach must never
         // make turn cleanup close another tab the person is using.
-        for (const entry of entries) { entry.released = true; entry.release = 'handoff'; }
+        for (const entry of entries) { entry.developer?.stop(); entry.released = true; entry.release = 'handoff'; }
         const results = await Promise.allSettled(entries.map(async entry => {
           let unproved = false;
           if (!entry.page.isClosed()) {
@@ -2973,6 +2981,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
                     entry.cdp = info.cdp;
                   }
                   await deadline(() => install(entry), timeoutMs);
+                  await startDeveloper(entry, true);
                   entry.state.nativeAttachmentLost = false;
                   invalidateRefs(entry.page); entry.state.snapshotNo = 0;
                 }
@@ -2999,6 +3008,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
         for (const entry of entries) {
           await deadline(() => entry.queue, timeoutMs);
           await deadline(() => entry.ready, timeoutMs);
+          entry.developer?.stop();
           await deadline(() => removeHook(entry), timeoutMs);
           entry.handoffHooksOff = true;
           invalidateRefs(entry.page);

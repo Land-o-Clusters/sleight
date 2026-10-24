@@ -62,6 +62,24 @@ test('waiting handoff switches hooks off, blocks access, and resumes the same ta
   assert.equal(f.registry.tab(tab), entry);
   await f.registry.endTurn();
 });
+test('developer capture stops throughout handoff and starts fresh after Continue', async t => {
+  const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
+  t.after(() => f.registry.endTurn());
+  const entry = f.registry.tab(tab), before = entry.developer;
+  entry.cdp.emit('Runtime.consoleAPICalled', { timestamp: Date.now() + 1, type: 'log', args: [{ type: 'string', value: 'before handoff' }] });
+  const suspended = await f.registry.beginHandoff(tab);
+  await assert.rejects(before.read({ console: true }), /ended/);
+  assert.equal(entry.cdp.listenerCount('Runtime.consoleAPICalled'), 0);
+  entry.cdp.emit('Runtime.consoleAPICalled', { timestamp: Date.now() + 1, type: 'log', args: [{ type: 'string', value: 'handoff private' }] });
+  assert.equal(await suspended.finish(false), tab);
+  assert.notEqual(entry.developer, before);
+  entry.cdp.emit('Runtime.consoleAPICalled', { timestamp: Date.now() + 1, type: 'log', args: [{ type: 'string', value: 'resumed ready' }] });
+  const text = await entry.developer.read({ console: true });
+  assert.match(text, /resumed ready/);
+  assert.doesNotMatch(text, /before handoff|handoff private/);
+  await f.registry.endTurn();
+  assert.equal(entry.cdp.listenerCount('Runtime.consoleAPICalled'), 0);
+});
 
 test('cancel and turn end preserve tabs used for the secret handoff', async () => {
   for (const end of [false, true]) {
@@ -169,6 +187,21 @@ test('FD3B native navigation reports attempts and an unexpectedly detached auxil
   await f.registry.keep(tab); next.emit('close'); await f.registry.idle();
   assert.equal(entry.cdp, next, 'release must not trigger reattachment');
   await f.registry.endTurn();
+});
+test('developer capture follows only the verified replacement session after detach', async t => {
+  const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
+  t.after(() => f.registry.endTurn());
+  const entry = f.registry.tab(tab), before = entry.developer, first = entry.cdp;
+  const next = Object.assign(new EventEmitter(), { send: first.send.bind(first), detach: first.detach });
+  f.context.newCDPSession = async () => next;
+  first.emit('close'); await f.registry.idle();
+  await assert.rejects(before.read({ console: true }), /ended/);
+  assert.equal(first.listenerCount('Runtime.consoleAPICalled'), 0);
+  assert.notEqual(entry.developer, before);
+  first.emit('Runtime.consoleAPICalled', { timestamp: Date.now() + 1, type: 'log', args: [{ type: 'string', value: 'stale private' }] });
+  next.emit('Runtime.consoleAPICalled', { timestamp: Date.now() + 1, type: 'log', args: [{ type: 'string', value: 'current ready' }] });
+  const text = await entry.developer.read({ console: true });
+  assert.match(text, /current ready/); assert.doesNotMatch(text, /stale private/);
 });
 
 test('FD5 failed media restoration prevents a browser keep from releasing ownership', async () => {

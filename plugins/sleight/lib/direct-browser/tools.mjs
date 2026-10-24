@@ -128,8 +128,9 @@ export function validateToolCall(input, browser) {
     if (a.export === undefined && (a.format !== undefined || a.path !== undefined || a.bom !== undefined)) throw Error('format, path and bom need export');
   }
   if (request.name === 'browser_read' && developerRead(request.arguments) &&
-      (request.arguments.ref !== undefined || request.arguments.find !== undefined || request.arguments.text === true))
-    throw Error('console/network/performance reads cannot use ref, find or text');
+      (['ref', 'find', 'file', 'export'].some(key => request.arguments[key] !== undefined) ||
+        ['text', 'links', 'screenshot'].some(key => request.arguments[key] === true)))
+    throw Error('console/network/performance reads require an owned tab without snapshot, file, export or image options');
   return request;
 }
 const developerRead = args => args.console === true || args.network === true || args.performance === true;
@@ -322,14 +323,15 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
           if (request.name === 'browser_read') {
             if (developerRead(a)) {
               if (entry.state.actionPending || entry.state.dialog) throw Error('input or dialog pending; wait or explicitly answer the dialog');
-              if (!entry.developer) throw Error('Developer reads unavailable for this tab');
+              const developer = entry.developer;
+              if (!developer) throw Error('Developer reads unavailable for this tab');
               let text;
-              try { text = await entry.developer.read(a); }
+              try { text = await developer.read(a); }
               catch { throw Error('Developer reads unavailable for this tab'); }
-              if (ended || pages.tab(a.tab) !== entry) throw Error('Developer reads ended');
+              if (ended || pages.tab(a.tab) !== entry || entry.developer !== developer) throw Error('Developer reads ended');
               await assertEndpointRead(entry.page, endpoint);
               siteStop(pageURL(entry));
-              if (ended || pages.tab(a.tab) !== entry) throw Error('Developer reads ended');
+              if (ended || pages.tab(a.tab) !== entry || entry.developer !== developer) throw Error('Developer reads ended');
               return textResult(text);
             }
             if (a.export !== undefined) return textResult(await exportData(entry, a, privateContext, { endpoint, check: () => {

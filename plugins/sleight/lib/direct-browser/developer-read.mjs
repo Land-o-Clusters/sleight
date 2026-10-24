@@ -190,7 +190,7 @@ export function safeDeveloperURL(value) {
   } catch { return '[URL omitted]'; }
 }
 
-export function createDeveloperRead(cdp) {
+export function createDeveloperRead(cdp, { since } = {}) {
   const logs = [], requests = [], pending = new Map(), listeners = [];
   let stopped = false, consoleReady = false, networkReady = false, performanceReady, performanceStartedAt, performanceEnabledAt;
   let droppedLogs = 0, droppedRequests = 0;
@@ -227,6 +227,9 @@ export function createDeveloperRead(cdp) {
     for (const [id, row] of navigation) { requests.push(row); pending.set(id, row); }
   });
   listen('Runtime.consoleAPICalled', event => {
+    // Runtime.enable on a replacement session replays old buffered messages.
+    // The registry supplies an attachment cutoff, including after handoff.
+    if (since !== undefined && (!numeric(event.timestamp) || event.timestamp < since)) return;
     const type = consoleTypes.has(event.type) ? event.type : 'log';
     const values = (Array.isArray(event.args) ? event.args.slice(0, 8) : []).map(arg =>
       arg?.type === 'string' && typeof arg.value === 'string' ? arg.value
@@ -239,6 +242,7 @@ export function createDeveloperRead(cdp) {
     push(logs, { type, text }, 'console');
   });
   listen('Runtime.exceptionThrown', event => {
+    if (since !== undefined && (!numeric(event.timestamp) || event.timestamp < since)) return;
     const error = event.exceptionDetails?.exception;
     const text = scrubDeveloperText(error?.description ?? event.exceptionDetails?.text);
     push(logs, { type: 'exception', text }, 'console');

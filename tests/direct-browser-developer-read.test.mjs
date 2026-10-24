@@ -4,14 +4,14 @@ import { EventEmitter } from 'node:events';
 import { createDeveloperRead, scrubDeveloperText, safeDeveloperURL } from '../plugins/sleight/lib/direct-browser/developer-read.mjs';
 import { createToolDispatcher, validateToolCall } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 
-function fixture({ fail = [], metrics = [] } = {}) {
+function fixture({ fail = [], metrics = [], since } = {}) {
   const calls = [], cdp = new EventEmitter();
   cdp.send = async (method, params) => {
     calls.push([method, params]);
     if (fail.includes(method)) throw Error('cookie=private-protocol-error');
     return { metrics };
   };
-  const reader = createDeveloperRead(cdp);
+  const reader = createDeveloperRead(cdp, { since });
   return { reader, cdp, calls };
 }
 function request(cdp, id, url = 'https://example.invalid/api/items?token=private-query#private-fragment', extra = {}) {
@@ -563,6 +563,26 @@ test('developer schemas accept boolean flags and reject snapshot selectors or re
     { console: true, text: true }, { network: true, replay: true }, { network: true, headers: {} }])
     assert.throws(() => validateToolCall({ name: 'browser_read', arguments: { tab: 't1', ...fields } }));
 });
+test('p143 developer reads cannot mix with file, export, links or image reads', () => {
+  for (const flag of ['console', 'network', 'performance']) {
+    for (const fields of [{ links: true }, { screenshot: true }, { export: 'e1' }, { export: 'e1', format: 'json' }])
+      assert.throws(() => validateToolCall({ name: 'browser_read', arguments: { tab: 't1', [flag]: true, ...fields } }));
+    assert.throws(() => validateToolCall({ name: 'browser_read', arguments: { file: '/fixture.pdf', [flag]: true } }));
+    assert.doesNotThrow(() => validateToolCall({ name: 'browser_read', arguments: { tab: 't1', [flag]: false, links: true } }));
+  }
+});
+test('p143 conflicting developer options refuse before any page, image, export or PDF access', async () => {
+  const unexpected = () => assert.fail('conflicting modes must refuse before access');
+  const dispatcher = createToolDispatcher({ pages: { enqueue: unexpected }, snapshot: unexpected,
+    runSteps: unexpected, fillFields: unexpected, captureImage: unexpected, exportData: unexpected,
+    pdf: { file: unexpected } });
+  for (const args of [{ tab: 't1', console: true, screenshot: true }, { tab: 't1', network: true, export: 'e1' },
+    { tab: 't1', performance: true, links: true }, { file: '/fixture.pdf', console: true }]) {
+    const result = await dispatcher.call({ name: 'browser_read', arguments: args });
+    assert.equal(result.isError, true);
+    assert.equal(result.images, undefined);
+  }
+});
 test('dispatcher reads only the named owned tab, never redirects logs to an opener or admits refs', async () => {
   const f = dispatcherFixture();
   const result = await f.dispatcher.call({ name: 'browser_read', arguments: { tab: 't1', network: true } });
@@ -570,6 +590,27 @@ test('dispatcher reads only the named owned tab, never redirects logs to an open
   assert.equal(f.dispatcher.delivered(result), false); assert.equal(f.state.snapshotNo, 7);
   const foreign = await f.dispatcher.call({ name: 'browser_read', arguments: { tab: 'tforeign', console: true } });
   assert.equal(foreign.isError, true); assert.equal(f.calls.length, 1);
+});
+test('replacing developer capture during a read withholds the previous session text', async () => {
+  const f = dispatcherFixture();
+  f.entry.developer.read = async () => {
+    f.entry.developer = { read: async () => 'fresh capture' };
+    return 'stale capture';
+  };
+  const result = await f.dispatcher.call({ name: 'browser_read', arguments: { tab: 't1', console: true } });
+  assert.equal(result.isError, true); assert.doesNotMatch(result.text, /stale capture/);
+});
+test('an attachment cutoff rejects buffered Runtime events and events without timestamps', async t => {
+  const f = fixture({ since: 500 }); t.after(f.reader.stop); await f.reader.ready;
+  for (const timestamp of [400, undefined, NaN]) {
+    f.cdp.emit('Runtime.consoleAPICalled', { timestamp, type: 'log', args: [{ type: 'string', value: 'historical private' }] });
+    f.cdp.emit('Runtime.exceptionThrown', { timestamp, exceptionDetails: { text: 'historical private' } });
+  }
+  f.cdp.emit('Runtime.consoleAPICalled', { timestamp: 510, type: 'log', args: [{ type: 'string', value: 'current ready' }] });
+  f.cdp.emit('Runtime.exceptionThrown', { timestamp: 510, exceptionDetails: { text: 'current error' } });
+  const text = await f.reader.read({ console: true });
+  assert.doesNotMatch(text, /historical private/);
+  assert.match(text, /current ready/); assert.match(text, /current error/);
 });
 test('site blocks, missing capability, pending dialogs and ended turns refuse before developer access', async () => {
   for (const options of [{ sites: () => 'Blocked by user' }, { noDeveloper: true }]) {
