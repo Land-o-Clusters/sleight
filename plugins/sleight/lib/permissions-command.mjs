@@ -13,6 +13,7 @@ import { installedConfigPath, readInstalledConfigFile } from './direct-browser/i
 import { grantStorePath } from './direct-browser/electron-config.mjs';
 import { createGrantStore } from './direct-browser/electron-consent.mjs';
 import { browserApplicationName } from './direct-browser/browsers.mjs';
+import { SiteMemory, recipeLine, recipeOrigin } from './site-memory.mjs';
 import { ALIASES, BUNDLE_ID, LIMIT, NAME, PERMISSIONS_BYTES, currentApp, lastUse, permissionsPath, readPermissions, coveringBlock, sameBlock, sameListed, siteOrigin, usedFolder, usedWords } from './permissions.mjs';
 
 // ChatGPT's own Always allow list, which its helper honors itself. sleight only reads it, for the listing.
@@ -27,7 +28,8 @@ function installedAppNames(bundleId) {
   } catch { return []; }
 }
 
-function context({ home = userInfo().homedir, uid = process.getuid(), out = text => process.stdout.write(text), now = Date.now, appNames = installedAppNames,
+// Library callers may share stdout with MCP JSON-RPC. Only the CLI supplies a stdout writer.
+function context({ home = userInfo().homedir, uid = process.getuid(), out = () => {}, now = Date.now, appNames = installedAppNames,
   tty = process.stdout.isTTY === true, ...rest } = {}) {
   return { home, uid, out, now, appNames, tty, path: permissionsPath(home), folder: usedFolder(home), logs: join(home, 'Library/Logs/sleight'),
     grants: () => createGrantStore({ path: grantStorePath(home) }), engineFile: engineFile(home), ...rest };
@@ -106,8 +108,21 @@ const appNames = (id, names) => names.filter(NAME).filter((name, at, all) => nam
 // A block by bundle id alone also stores the names the app goes by, so Claude's getApp("Its Name") matches it.
 const blockApp = (o, id, name, names = name ? [name] : o.appNames(id)) => update(o, p => p.apps.some(app => app.id.toLowerCase() === id.toLowerCase()) ? false
   : (([first, ...aliases]) => ({ ...p, apps: [...p.apps, { id, ...first ? { name: first } : {}, ...aliases.length ? { aliases } : {} }] }))(appNames(id, names.map(n => String(n).slice(0, 128)))));
+// Permission changes commit before optional cache cleanup. A damaged cache cannot undo or hide a restriction.
+function clearSiteMemory(o, matches) {
+  try {
+    const memory = new SiteMemory({ home: o.home });
+    if (matches) memory.clearMatching(matches); else memory.clear();
+  } catch (error) {
+    o.out(`Permission change applied; site memory not cleared: ${error.message}; run memory clear all (sleight-mcp permissions memory clear all).\n`);
+  }
+}
 // A site an existing block already covers (the same host, www. or not, or a subdomain) is already blocked.
-const blockSite = (o, origin) => update(o, p => coveringBlock(p.sites, origin) ? false : { ...p, sites: [...p.sites, origin] });
+const blockSite = (o, origin) => {
+  const changed = update(o, p => coveringBlock(p.sites, origin) ? false : { ...p, sites: [...p.sites, origin] });
+  clearSiteMemory(o, site => !!coveringBlock([origin], site));
+  return changed;
+};
 
 /** Turbo's worker writes the menu's Never Act on row through this. */
 export function blockSiteForUser(origin, options) {
@@ -133,6 +148,7 @@ function revokeAll(o, { includeTurbo = true } = {}) {
   for (const record of store.list()) if (store.remove(record.key)) bundles.add(record.bundleId);
   debuggers = bundles.size;
   if (includeTurbo) try { if (readInstalledConfigFile(installedConfigPath(o.home))?.enabled === true) { revokeTurbo(o); turbo = true; } } catch {}
+  clearSiteMemory(o);
   return { apps, debuggers, turbo };
 }
 
@@ -195,7 +211,7 @@ function repair(o, discard = false) {
 const count = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const usage = 'usage: sleight-mcp permissions [list]\n       sleight-mcp permissions revoke <app|turbo|all|origin>\n       sleight-mcp permissions repair [--discard]\n' +
   '       sleight-mcp permissions block|unblock <app bundle id|origin>\n       sleight-mcp permissions sites only <origin...>\n' +
-  '       sleight-mcp permissions sites all\n';
+  '       sleight-mcp permissions sites all\n       sleight-mcp permissions memory [list|clear <origin|all>]\n';
 const target = value => typeof value === 'string' && value.includes('://') ? (siteOrigin(value) && { site: siteOrigin(value) })
   : typeof value === 'string' && value.length <= 255 && BUNDLE_ID.test(value) ? { app: value } : undefined;
 
@@ -211,6 +227,10 @@ function listing(o) {
     ...perms.sites.map(site => `  ${site}`), 'sleight-mcp permissions unblock <app bundle id|origin> lifts a block.');
   lines.push(perms.only ? `Sites: only ${perms.only.join(', ')} (turbo and browser windows on the engine path)`
     : 'Sites: any site you haven\'t blocked (sleight-mcp permissions sites only <origin...> limits sleight to those)');
+  try {
+    const entries = new SiteMemory({ home: o.home }).list();
+    lines.push(`${entries.reduce((n, entry) => n + entry.recipes.length, 0)} saved control recipes. sleight-mcp permissions memory lists them; memory clear <origin|all> clears them.`);
+  } catch (error) { lines.push(error.line?.trim() ?? 'Control recipes are unreadable; sleight-mcp permissions memory clear all clears them.'); }
   // ChatGPT's list lives in its group container, and reading that can raise macOS's "data from other apps" prompt. Only a
   // person at a terminal gets it; Claude's shell, which has no terminal, gets the pointer.
   if (!o.tty) { lines.push("ChatGPT's own Always allow list: run sleight-mcp permissions in Terminal to see it."); return lines.join('\n') + '\n'; }
@@ -224,6 +244,19 @@ function listing(o) {
 export function permissionsCommand(args, options) {
   const o = context(options), [op = 'list', ...rest] = args;
   try {
+    if (op === 'memory') {
+      const memory = new SiteMemory({ home: o.home });
+      if (!rest.length || rest.length === 1 && rest[0] === 'list') {
+        const entries = memory.list();
+        o.out(entries.length ? entries.map(entry => `${entry.origin}\n${entry.recipes.map(item => '  ' + recipeLine(item)).join('\n')}`).join('\n') + '\n'
+          : 'No saved control recipes. Learning follows the action-log opt-in.\n');
+        return 0;
+      }
+      if (rest.length === 2 && rest[0] === 'clear' && (rest[1] === 'all' || recipeOrigin(rest[1]))) {
+        o.out(`Cleared ${memory.clear(rest[1] === 'all' ? undefined : rest[1])} control recipes.\n`); return 0;
+      }
+      o.out(usage); return 2;
+    }
     if (op === 'list' && !rest.length) { o.out(listing(o)); return 0; }
     if (op === 'repair' && (!rest.length || rest.length === 1 && rest[0] === '--discard')) { o.out(repair(o, rest[0] === '--discard')); return 0; }
     if (op === 'revoke' && rest.length === 1) {
@@ -243,6 +276,7 @@ export function permissionsCommand(args, options) {
           return 1;
         }
         const changed = update(o, p => p.only?.some(s => sameListed(s, site)) ? { ...p, only: p.only.filter(s => !sameListed(s, site)) } : false);
+        if (changed) clearSiteMemory(o, origin => sameListed(origin, site));
         o.out(changed ? `${site} is off the sites sleight may act on.\n` : `${site} isn't on an allow-only list.\n`); return 0;
       }
       const removed = revokeApp(o, what);

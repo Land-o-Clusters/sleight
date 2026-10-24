@@ -8,7 +8,8 @@ import { join } from 'node:path';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 import { appRefusal, createPermissionCheck, lastUse, noteCurrentApp, pageRefusal, pageSite, permissionsPath, readPermissions, siteRefusal, stampUse, usedWords }
   from '../plugins/sleight/lib/permissions.mjs';
-import { applyMenuEvent, grantUses, permissionsCommand, permissionsDoctorLines, permissionsMenu } from '../plugins/sleight/lib/permissions-command.mjs';
+import { applyMenuEvent, blockSiteForUser, grantUses, permissionsCommand, permissionsDoctorLines, permissionsMenu } from '../plugins/sleight/lib/permissions-command.mjs';
+import { SiteMemory } from '../plugins/sleight/lib/site-memory.mjs';
 import { livePreapproved, PreapprovedApps } from '../plugins/sleight/lib/preapproved.mjs';
 
 const HOUR = 3600000;
@@ -598,4 +599,119 @@ test('a check primes itself when created, so a file deleted before the first cal
   const check = createPermissionCheck({ path: w.path });
   rmSync(w.path);
   assert.match(check.site('https://fine.example/'), /^sleight's permissions file is gone since this session read it/);
+});
+
+// A recipe failure must never prevent or misreport a permission restriction.
+for (const fault of ['mode', 'bad-json', 'busy']) {
+  for (const operation of ['revoke-site', 'block-site', 'revoke-all', 'menu-block-site', 'menu-revoke-all', 'menu-revoke-app']) {
+    test(`${operation} keeps its permission result with ${fault} site memory`, t => {
+      const w = world(t);
+      w.write('permissions.json', { version: 1, apps: [], sites: [], only: ['https://a.example', 'https://b.example'] });
+      w.write('preapproved.json', { version: 1, apps: [{ app: 'Calculator', riskLevel: 'low' }] });
+      w.write('turbo.json', { version: 1, enabled: true, executable: '/Applications/Helium.app/Contents/MacOS/Helium', profileRoot: '/x' });
+      w.records.push({ key: 'k1', name: 'Chat App', bundleId: 'com.example.chat' });
+      const memory = w.write('site-memory.json', { version: 1, epoch: '0', origins: [
+        { origin: 'https://b.example', recipes: [{ target: { role: 'button', name: 'Export' }, lastUsed: Date.now() }] }
+      ] });
+      if (fault === 'mode') chmodSync(memory, 0o644);
+      if (fault === 'bad-json') writeFileSync(memory, '{');
+      if (fault === 'busy') w.write('site-memory.json.lock', { pid: process.pid });
+      const before = readFileSync(memory, 'utf8');
+      if (operation === 'revoke-site') {
+        assert.equal(w.command(['revoke', 'https://b.example']), 0);
+        assert.deepEqual(readPermissions(w.path).only, ['https://a.example']);
+        assert.match(w.output(), /site memory not cleared: .*run memory clear all[\s\S]*is off the sites/);
+      } else if (operation.endsWith('block-site')) {
+        if (operation === 'block-site') assert.equal(w.command(['block', 'https://b.example']), 0);
+        else assert.equal(blockSiteForUser('https://b.example', w.options), true);
+        assert.match(createPermissionCheck({ path: w.path }).site('https://b.example/'), /^You blocked/);
+        const output = w.output();
+        assert.match(output, /[Pp]ermission change applied.*site memory not cleared: .*run memory clear all/);
+        if (operation === 'block-site') assert.match(output, /sleight won't act on/);
+      } else if (operation === 'menu-revoke-app') {
+        assert.equal(applyMenuEvent({ permissions: 'revoke', target: 'app:Calculator' }, new Set(['app:Calculator']), w.options), true);
+        assert.deepEqual(JSON.parse(readFileSync(join(w.support, 'preapproved.json'))).apps, []);
+        assert.equal(w.output(), '');
+      } else {
+        if (operation === 'revoke-all') assert.equal(w.command(['revoke', 'all']), 0);
+        else assert.equal(applyMenuEvent({ permissions: 'revoke-all' }, new Set(), w.options), true);
+        assert.deepEqual(JSON.parse(readFileSync(join(w.support, 'preapproved.json'))).apps, []);
+        assert.deepEqual(w.records, []);
+        assert.equal(JSON.parse(readFileSync(join(w.support, 'turbo.json'))).enabled, operation === 'menu-revoke-all');
+        const output = w.output();
+        if (operation === 'revoke-all') assert.match(output, /Revoked everything/);
+        if (fault === 'busy') assert.match(output, /[Pp]ermission change applied.*site memory not cleared: .*run memory clear all/);
+        else { assert.doesNotMatch(output, /site memory not cleared/); assert.equal(existsSync(memory), false); }
+      }
+      if (operation.includes('site') || fault === 'busy' || operation === 'menu-revoke-app') assert.equal(readFileSync(memory, 'utf8'), before);
+      if (fault === 'busy') assert.equal(existsSync(memory + '.lock'), true);
+    });
+  }
+}
+
+test('a refused or unchanged site revoke leaves recipes and their generation untouched', t => {
+  const w = world(t);
+  w.write('permissions.json', { version: 1, apps: [], sites: [], only: ['https://a.example'] });
+  const memory = w.write('site-memory.json', { version: 1, epoch: '0', origins: [
+    { origin: 'https://a.example', recipes: [{ target: { role: 'button', name: 'Export' }, lastUsed: Date.now() }] }
+  ] });
+  const before = readFileSync(memory, 'utf8');
+  assert.equal(w.command(['revoke', 'https://a.example']), 1);
+  assert.equal(readFileSync(memory, 'utf8'), before);
+  assert.equal(w.command(['revoke', 'https://missing.example']), 0);
+  assert.equal(readFileSync(memory, 'utf8'), before);
+  chmodSync(w.path, 0o644);
+  assert.equal(w.command(['revoke', 'https://a.example']), 1);
+  assert.equal(readFileSync(memory, 'utf8'), before);
+});
+
+test('permission restrictions are visible before optional memory cleanup begins', t => {
+  const w = world(t), seen = [];
+  w.write('permissions.json', { version: 1, apps: [], sites: [], only: ['https://a.example', 'https://b.example'] });
+  w.write('preapproved.json', { version: 1, apps: [{ app: 'Calculator', riskLevel: 'low' }] });
+  w.records.push({ key: 'k1', name: 'Chat App', bundleId: 'com.example.chat' });
+  t.mock.method(SiteMemory.prototype, 'clearMatching', () => {
+    seen.push(readPermissions(w.path));
+    throw Error('SITE_MEMORY_BUSY');
+  });
+  assert.equal(w.command(['revoke', 'https://b.example']), 0);
+  assert.deepEqual(seen[0].only, ['https://a.example']);
+  assert.equal(w.command(['block', 'https://b.example']), 0);
+  assert.deepEqual(seen[1].sites, ['https://b.example']);
+  assert.equal(blockSiteForUser('https://c.example', w.options), true);
+  assert.deepEqual(seen[2].sites, ['https://b.example', 'https://c.example']);
+  let atClear;
+  t.mock.method(SiteMemory.prototype, 'clear', () => {
+    atClear = { apps: JSON.parse(readFileSync(join(w.support, 'preapproved.json'))).apps, grants: [...w.records] };
+    throw Error('SITE_MEMORY_BUSY');
+  });
+  assert.equal(applyMenuEvent({ permissions: 'revoke-all' }, new Set(), w.options), true);
+  assert.deepEqual(atClear, { apps: [], grants: [] });
+});
+
+for (const operation of ['revoke-all', 'block-site']) test(`menu ${operation} failure never writes to process.stdout without a writer`, t => {
+  const w = world(t), { out, ...options } = w.options;
+  w.write('preapproved.json', { version: 1, apps: [{ app: 'Calculator', riskLevel: 'low' }] });
+  w.write('site-memory.json', { version: 1, epoch: '0', origins: [] });
+  const lock = w.write('site-memory.json.lock', JSON.stringify({ pid: process.pid }));
+  const stdout = t.mock.method(process.stdout, 'write', () => true);
+  let changed;
+  try {
+    changed = operation === 'revoke-all' ? applyMenuEvent({ permissions: 'revoke-all' }, new Set(), options)
+      : blockSiteForUser('https://blocked.example', options);
+  } finally { stdout.mock.restore(); }
+  assert.equal(changed, true);
+  assert.equal(stdout.mock.callCount(), 0, 'plain text would corrupt the MCP JSON-RPC stream');
+  assert.equal(existsSync(lock), true, 'the other writer keeps its lock');
+  if (operation === 'revoke-all') assert.deepEqual(JSON.parse(readFileSync(join(w.support, 'preapproved.json'))).apps, []);
+  else assert.deepEqual(readPermissions(w.path).sites, ['https://blocked.example']);
+});
+
+test('library command calls without a writer leave stdout alone', t => {
+  const w = world(t), { out, ...options } = w.options;
+  const stdout = t.mock.method(process.stdout, 'write', () => true);
+  let code;
+  try { code = permissionsCommand(['unknown'], options); } finally { stdout.mock.restore(); }
+  assert.equal(code, 2);
+  assert.equal(stdout.mock.callCount(), 0);
 });

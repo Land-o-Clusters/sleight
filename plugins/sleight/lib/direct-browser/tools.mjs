@@ -8,6 +8,7 @@ import { check } from './rules.mjs';
 import { waitForThinPage } from './waits.mjs';
 import { isV3Context } from './v3-context.mjs';
 import { handoffMessages } from './handoff.mjs';
+import { siteMemoryFromEnvironment } from '../site-memory.mjs';
 // v3's five eagerly advertised tools. No generic JavaScript or authority fields.
 const object = (properties, required) => ({ type: 'object', properties, required, additionalProperties: false });
 const text = { type: 'string', maxLength: 65536 };
@@ -136,11 +137,23 @@ export const closedTabOutcome = 'tab closed itself (sign-in and payment popups d
 // checked before every open, read and input and after every step, so a blocked page is never read or acted on, and onSite hears
 // each allowed origin turbo works on (the menu's Never Act on row).
 export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillFields, ctx, sites, onSite, pdf,
-  endpoint, tracePhase, captureImage = screenshot, exportData = exportPageData, deliverSnapshot = (state, capture) => { state.snapshotNo = Math.max(state.snapshotNo, capture.number); return true; }, now = Date.now } = {}) {
+  endpoint, tracePhase, captureImage = screenshot, exportData = exportPageData, siteMemory = siteMemoryFromEnvironment(), deliverSnapshot = (state, capture) => { state.snapshotNo = Math.max(state.snapshotNo, capture.number); return true; }, now = Date.now } = {}) {
   if (!pages || [snapshot, runSteps, fillFields, deliverSnapshot].some(fn => typeof fn !== 'function')) throw Error('v3 tool dependencies required');
   let ended = false, ending, callNo = 0, handingOff = false;
   const lossFixes = process.env.SLEIGHT_LB12 !== '0';
   const deliveries = new WeakMap();
+  const hintedOrigins = new Set(), openers = new WeakMap(), controlObservations = new WeakMap();
+  const recipePages = new WeakSet(), recipeListeners = new Set();
+  const watchRecipes = entry => {
+    const page = entry.page;
+    if (!siteMemory || recipePages.has(page) || typeof page.on !== 'function') return;
+    recipePages.add(page);
+    const reset = () => openers.delete(entry);
+    const navigate = frame => { if (frame === page.mainFrame()) reset(); };
+    const release = () => { reset(); page.off('framenavigated', navigate); page.off('domcontentloaded', reset); page.off('load', reset); page.off('close', release); recipeListeners.delete(release); };
+    page.on('framenavigated', navigate); page.on('domcontentloaded', reset); page.on('load', reset); page.on('close', release);
+    recipeListeners.add(release);
+  };
   const pageURL = entry => { try { return typeof entry.page?.url === 'function' ? entry.page.url() : undefined; } catch { return undefined; } };
   // A failed check refuses: the user's blocks can't be read, so nothing is sent.
   const siteLine = url => { if (!sites) return undefined; try { return sites(url); } catch { return "sleight couldn't read your site blocks, so nothing was sent."; } };
@@ -162,7 +175,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     return { ...value, capturedAt };
   };
   // A file chooser a page opens after its step returned is reported on the next result; delivered() commits the count.
-  const finish = async (lines, body, entry, observed, imageRequested = false) => {
+  const finish = async (lines, body, entry, observed, imageRequested = false, { allowHints = true } = {}) => {
     let picture = typeof imageRequested === 'object' ? imageRequested : undefined;
     if (imageRequested === true) try { picture = await captureImage(entry, { current: () => !ended, allowed: () => !siteLine(pageURL(entry)) }); }
     catch { picture = { note: 'Screenshot skipped: safe capture unavailable.' }; }
@@ -172,11 +185,16 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
       ? ((entry.state.nativeDetachNo ?? 0) > (entry.state.nativeNavigationReported ?? 0)
         ? 'Native debugger detach attempted.' : 'Native navigation attempted; cancellation requested.')
         + ' Native UI outcome unconfirmed; tell the user. Attachment checked on the same target.' : undefined;
-    const text = [...lines, ...(chooser ? [chooser.note.replace(/^a/, 'A') + '.'] : []), ...(nativeNotice ? [nativeNotice] : []), ...(body === undefined ? [] : [body]), ...(picture ? [picture.note] : [])].join('\n');
+    let hints, hintOrigin;
+    if (allowHints && siteMemory && observed && body !== undefined) try {
+      const url = pageURL(entry), origin = new URL(url).origin;
+      if (!hintedOrigins.has(origin)) { hints = siteMemory.hints(url); hintOrigin = origin; }
+    } catch {}
+    const text = [...lines, ...(chooser ? [chooser.note.replace(/^a/, 'A') + '.'] : []), ...(nativeNotice ? [nativeNotice] : []), ...(body === undefined ? [] : [body]), ...(picture ? [picture.note] : []), ...(hints ? [hints] : [])].join('\n');
     const result = textResult(text);
     if (!ended && picture?.images) result.images = picture.images;
     if (!ended && (chooser || nativeNotice || observed && Number.isSafeInteger(observed.number))) deliveries.set(result, { state: entry.state, chooser, nativeNavigationNo,
-      capture: observed && Number.isSafeInteger(observed.number) ? { page: entry.page, state: entry.state, number: observed.number, capturedAt: observed.capturedAt } : null, text, images: imageDigest(result.images) });
+      capture: observed && Number.isSafeInteger(observed.number) ? { page: entry.page, state: entry.state, number: observed.number, capturedAt: observed.capturedAt } : null, hintOrigin, text, images: imageDigest(result.images) });
     return result;
   };
   return Object.freeze({ tools: () => browserTools(browser),
@@ -254,6 +272,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
           const recovery = request.name === 'browser_act' && a.steps.length === 1 && a.steps[0].do === 'navigate' && a.steps[0].url !== undefined;
           if (recovery) {
             if (!entry.state.stuck) throw Object.assign(Error('navigate with url is only for a stuck tab; use a link ref or browser_open'), { notRun: true });
+            openers.delete(entry);
             const destination = a.steps[0].url;
             if (endpointURL(destination, endpoint)) throw Error(endpointBlock);
             siteStop(destination);
@@ -281,7 +300,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
               siteStop(pageURL(entry));
               await guardPageTask(entry, () => waitForThinPage(entry.page));
               const observed = await capture(entry, { maxChars: 8000 });
-              return finish(['1 navigate: terminated stuck script; navigated in the same tab; ' + discarded], observed.text, entry, observed);
+              return finish(['1 navigate: terminated stuck script; navigated in the same tab; ' + discarded], observed.text, entry, observed, false, { allowHints: false });
             } catch (error) {
               throw Object.assign(Error('Recovery navigation completed; scripts terminated; ' + discarded + '. Recovery observation unavailable. ' +
                 (error.siteBlocked || error.message === endpointBlock ? error.message : entry.state.stuck ? 'Script seems stuck; tab retained. Use navigate with url to recover, or close, keep or handoff.' : 'Read before input, or close, keep or handoff.')),
@@ -289,6 +308,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             }
           }
           await ensurePageResponsive(entry);
+          watchRecipes(entry);
           await assertEndpointRead(entry.page, endpoint);
           const popupStart = entry.popups?.length ?? 0;
           const blocked = () => entry.popups?.slice(popupStart).filter(row => row.blocked).map(() => endpointBlock) ?? [];
@@ -311,8 +331,19 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
               current: () => !ended && userRequestedMotion(privateContext), allowed: () => !siteLine(pageURL(entry)) });
             let picture, result;
             // The site is checked again before each step's input, so a step that lands on a blocked site stops the rest there.
+            const epoch = siteMemory?.generation();
+            // One stalled pre-click read disables optional observation only on this page, until this turn ends.
+            if (siteMemory && !controlObservations.has(entry.page)) controlObservations.set(entry.page, {});
             try {
               result = await guardPageTask(entry, () => runSteps(entry, a.steps, privateContext, { observe: a.observe, siteCheck: () => siteLine(pageURL(entry)),
+                ...(siteMemory ? { controlObservation: controlObservations.get(entry.page), onControl(event) {
+                  const prior = openers.get(entry);
+                  siteMemory.record({ ...event, ...(prior?.origin === event.origin && prior.url === pageURL(entry) && !event.expanded ? { via: prior.target } : {}) }, epoch);
+                  if (event.expanded) openers.set(entry, { ...event, url: pageURL(entry), remaining: 3 }); else openers.delete(entry);
+                }, onStep({ control, boundary }) {
+                  const prior = openers.get(entry);
+                  if (boundary || prior && !control && --prior.remaining <= 0) openers.delete(entry);
+                } } : {}),
                 ...(motion ? { beforeObserve: async () => { picture = await motion.finish(); } } : {}),
                 ...(a.steps.some(step => step.do === 'download') ? { download: pages.download,
                   downloadAllowed: url => !endpointURL(url, endpoint) && !siteLine(url) } : {}) }));
@@ -378,10 +409,13 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
       if (!record || ended || result.isError || result.text !== record.text || imageDigest(result.images) !== record.images) return false;
       if (record.chooser) { record.state.chooserReported = record.chooser.chooser; record.state.hiddenReported = record.chooser.hidden; }
       if (record.nativeNavigationNo) record.state.nativeNavigationReported = Math.max(record.state.nativeNavigationReported ?? 0, record.nativeNavigationNo);
-      return !!record.capture && deliverSnapshot(record.state, record.capture) === true;
+      const delivered = !!record.capture && deliverSnapshot(record.state, record.capture) === true;
+      if (delivered && record.hintOrigin) hintedOrigins.add(record.hintOrigin);
+      return delivered;
     },
     end() {
       ended = true;
+      for (const release of recipeListeners) release();
       const pdfCleanup = pdf?.dispose();
       if (!ending) ending = Promise.allSettled([Promise.resolve().then(() => pages.endTurn()), pdfCleanup]).then(([tabs, files]) => ({ revoked: true,
         cleanup: [...(tabs.status === 'fulfilled' && tabs.value?.cleanedUp ? [] : [{ resource: 'owned-tabs', status: 'retained', code: 'CLEANUP_UNPROVED' }]),
