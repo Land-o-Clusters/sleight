@@ -57,7 +57,7 @@ export const terminalAncestor = function terminalAncestor(el, unused, read = (no
 const clean = value => String(value ?? '').replace(/[\r\n\t]+/g, ' ').slice(0, 240);
 const refused = message => Object.assign(Error(message), { notRun: true });
 const NAVIGATION = new Set(['reload', 'back', 'forward', 'navigate']);
-const TERMINAL_INPUT = new Set(['click', 'type', 'press', 'select', 'check', 'uncheck', 'drag', 'fill']);
+const TERMINAL_INPUT = new Set(['click', 'type', 'paste', 'press', 'select', 'check', 'uncheck', 'drag', 'fill']);
 const SCROLL_KEY = /(?:^|\+)(?:PageUp|PageDown|Home|End|Arrow(?:Up|Down|Left|Right))$/;
 const scrolls = step => step.do === 'scroll' || step.do === 'press' && SCROLL_KEY.test(step.key);
 const failedLine = result => result?.lines?.some(line => /: not run:|effect unconfirmed;/.test(line));

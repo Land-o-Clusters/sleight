@@ -1181,7 +1181,7 @@ export function popupHook(options) {
   // An unreadable chain leaves the element itself as the anchor, as on a page where the natives are absent (the unit fakes).
   const armAnchor = element => { try { return anchorOf(element); } catch { return element; } };
   const pointerType = type => type === 'pointerdown' || type === 'mousedown' || type === 'pointerup' || type === 'mouseup' || type === 'click' || type === 'auxclick' || type === 'dblclick' || type === 'contextmenu';
-  const keyType = type => type === 'keydown' || type === 'keypress' || type === 'keyup' || type === 'submit';
+  const keyType = (type, paste = false) => type === 'keydown' || type === 'keypress' || type === 'keyup' || type === 'submit' || paste && (type === 'paste' || type === 'beforeinput');
   const interactiveBetween = (path, at, forwarded) => {
     for (let i = 0; i < at; i++) if (path[i] !== forwarded && shieldIsElement(path[i]) && matchesNode(path[i], interactive)) return true;
     return false;
@@ -1211,6 +1211,7 @@ export function popupHook(options) {
   const DENIED = 'the key landed in a frame that was not checked', RELEASED = 'the key was released in a document that was not checked';
   const inspect = (event, type) => {
     const { element, anchor, forwarded, areas, keys, activation, form, submitter } = shield;
+    if (shield.paste && (type === 'submit' || pointerType(type))) return 'paste cannot activate a control or submit a form';
     if (!connected(element)) return 'target left the page';
     if (arm?.modifier && refusesModifier(element)) return changedReason;
     const path = pathOf(event);
@@ -1249,7 +1250,7 @@ export function popupHook(options) {
     let bad, quiet = false;
     try {
       const type = typeOf(event);
-      if (!(pointerType(type) || current.keys && keyType(type))) return;
+      if (!(pointerType(type) || current.keys && keyType(type, current.paste))) return;
       if (current.violation && current.violation !== RELEASED) bad = current.violation;
       else if (now() >= current.until) bad = lateReason;
       // A frame locked for a key (not the checked one): a key landing there is denied, and a key release is reported on its own.
@@ -1274,7 +1275,7 @@ export function popupHook(options) {
     try { stopNow(event); } catch { /* The prevent below still cancels the default. */ }
     try { cancel(event); } catch { /* Nothing further can be done to this event. */ }
   };
-  const guarded = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'auxclick', 'dblclick', 'contextmenu', 'keydown', 'keypress', 'keyup', 'submit'];
+  const guarded = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'auxclick', 'dblclick', 'contextmenu', 'keydown', 'keypress', 'keyup', 'paste', 'beforeinput', 'submit'];
   // Three ways a window loses its listeners while the hook stays. document.open() (and a document.write that opens implicitly)
   // erases every one, so they are added by a function that can run again: add is idempotent for the same callback, and a re-add
   // lands before any listener the page registers afterwards. A script-created frame whose first navigation is same-origin reuses
@@ -1365,7 +1366,7 @@ export function popupHook(options) {
     let bad;
     try {
       const type = typeOf(event);
-      if (!(pointerType(type) || current.keys && keyType(type)) || type === 'submit') return;
+      if (!(pointerType(type) || current.keys && keyType(type, current.paste)) || type === 'submit') return;
       const path = pathOf(event);
       if (pathIndex(path, stand) >= 0 || current.forwarded && pathIndex(path, current.forwarded) >= 0 || listHas(current.areas, path[0])
         || (current.keys || current.activation) && current.submitter && pathIndex(path, current.submitter) >= 0) return;
@@ -1411,7 +1412,7 @@ export function popupHook(options) {
   };
   const impl = {
     // See the key-shield API above. Any throw here reaches the caller as a rejected call, which reads as "page changed".
-    guard(element, token, capMs, { keys = false, press = false, mc1 = false } = {}) {
+    guard(element, token, capMs, { keys = false, press = false, paste = false, mc1 = false } = {}) {
       if (retired.has(token) || !isFinite(capMs) || capMs <= 0 || !shieldIsElement(element) || !connected(element)) return false;
       const withKeys = keys === true, activation = press === true, control = shieldControlOf(element), form = withKeys || activation ? control?.form ?? null : null;
       const forwarded = forwardedOf(element), areas = areasOf(element);
@@ -1419,7 +1420,7 @@ export function popupHook(options) {
       for (let i = 0; areas && i < listLength(areas); i++) parts[parts.length] = digest(areas[i]);
       const until = now() + capMs;
       shield = holdShield({ token, element, anchor: anchorOf(element), forwarded, areas, keys: withKeys, activation, form, submitter: form ? submitterOf(form) : null,
-        parts, signature: sealed(element, forwarded, areas, withKeys), routing: withKeys ? routed(element, forwarded, areas) : undefined, down: false,
+        paste: paste === true, parts, signature: sealed(element, forwarded, areas, withKeys), routing: withKeys ? routed(element, forwarded, areas) : undefined, down: false,
         until, landed: false, passed: false, reports: !activation && !swallowsInput(element) }, capMs);
       if (mc1 && !withKeys && !activation) {
         shield.mc1 = true;
@@ -1437,16 +1438,16 @@ export function popupHook(options) {
     // cancelled until the shield is released or its cap passes. Called from Node for every frame but the owner's,
     // and again before the click (idempotent for one token); a frame created while armed calls it on itself.
     // Returns true only when the listeners are confirmed present.
-    adopt(token, capMs, keys = false) {
+    adopt(token, capMs, keys = false, paste = false) {
       if (retired.has(token) || !isFinite(capMs) || capMs <= 0) return false;
       if (shield && (!shield.foreign || shield.token !== token)) {
         if (!shield.foreign) return false;
         dropShield(shield); shield = undefined;
       }
-      shield ??= holdShield({ foreign: true, token, keys: keys === true, until: now() + capMs, landed: false, passed: false }, capMs);
+      shield ??= holdShield({ foreign: true, token, keys: keys === true, paste: paste === true, until: now() + capMs, landed: false, passed: false }, capMs);
       return install();
     },
-    armed() { return shield ? { token: shield.token, until: shield.until, keys: shield.keys === true } : undefined; },
+    armed() { return shield ? { token: shield.token, until: shield.until, keys: shield.keys === true, paste: shield.paste === true } : undefined; },
     // Node releases a frame's foreign shield (the token is retired, so a late adopt of it is refused) and reads its veto.
     release(token) {
       retired.add(token);
@@ -1461,17 +1462,17 @@ export function popupHook(options) {
     // the one holding the checked element (a page script could move focus into it). A foreign shield with its own messages. Called
     // at document start by the script that is registered for the key's duration, so no page listener is earlier. Refused where
     // an owner's shield is already armed.
-    lock(token, capMs) {
+    lock(token, capMs, paste = false) {
       if (retired.has(token) || !isFinite(capMs) || capMs <= 0 || shield && !shield.foreign) return false;
       if (shield) dropShield(shield);
-      shield = holdShield({ foreign: true, deny: true, token, keys: true, until: now() + capMs, landed: false, passed: false }, capMs);
+      shield = holdShield({ foreign: true, deny: true, token, keys: true, paste: paste === true, until: now() + capMs, landed: false, passed: false }, capMs);
       install(); // Not read: a document that may not run scripts (a sandbox without allow-scripts) fires no listener, and nothing in it can act on a key.
       return true;
     },
     // After a key goes down: restore the listeners a reused window lost, and lock this window if it is not the checked one (a frame
     // the key's handler created or navigated). The checked document keeps its seal while the checked element is still in it; if the
     // element left, the lock replaces the seal and keeps any veto it had recorded.
-    resync(token, capMs) {
+    resync(token, capMs, paste = false) {
       if (retired.has(token) || !isFinite(capMs) || capMs <= 0) return false;
       install(); // The result is not read, as in lock.
       const own = shield?.token === token ? shield : undefined;
@@ -1479,7 +1480,7 @@ export function popupHook(options) {
       if (shield && !own && !shield.foreign) return false;
       const violation = own?.violation;
       if (shield) dropShield(shield);
-      shield = holdShield({ foreign: true, deny: true, token, keys: true, until: now() + capMs, violation, landed: false, passed: false }, capMs);
+      shield = holdShield({ foreign: true, deny: true, token, keys: true, paste: paste === true, until: now() + capMs, violation, landed: false, passed: false }, capMs);
       return true;
     },
     // This window as one of the windows a walk visits.
@@ -1672,8 +1673,8 @@ export function popupHook(options) {
     // not answer), and the same walk for the calls the key path makes. A frame in another process has its own session and is
     // reached by that.
     tree() { const out = []; walk((peer, info) => { out[out.length] = info ? info : { id: null, n: 0, fresh: false }; }); return out; },
-    lockAll(token, capMs, skip) { let ok = true; walk((peer, info) => { if (!peer) ok = false; else if (info.id !== skip && !peer.lock(token, capMs)) ok = false; }); return ok; },
-    resyncAll(token, capMs) { let ok = true; walk(peer => { if (!peer || !peer.resync(token, capMs)) ok = false; }); return ok; },
+    lockAll(token, capMs, skip, paste) { let ok = true; walk((peer, info) => { if (!peer) ok = false; else if (info.id !== skip && !peer.lock(token, capMs, paste)) ok = false; }); return ok; },
+    resyncAll(token, capMs, paste) { let ok = true; walk(peer => { if (!peer || !peer.resync(token, capMs, paste)) ok = false; }); return ok; },
     finishAll(token) {
       const out = [];
       walk((peer, info) => { if (peer) { const reason = peer.release(token); if (typeof reason === 'string') out[out.length] = [info.id, reason]; } });
@@ -1715,7 +1716,7 @@ export function popupHook(options) {
   const triText = value => value === true ? 't' : value === false ? 'f' : 'u';
   // conclude: 'c', landed and passed as t/f/u, then 's' and the veto or 'u'. Its fields are always own properties.
   const concludeText = value => 'c' + triText(value.landed) + triText(value.passed) + (typeof value.bad === 'string' ? 's' + value.bad : 'u');
-  const armedText = value => value === undefined ? 'u' : 'a' + value.token + NUL + String(value.until) + NUL + (value.keys === true ? 't' : 'f');
+  const armedText = value => value === undefined ? 'u' : 'a' + value.token + NUL + String(value.until) + NUL + (value.paste === true ? 'p' : value.keys === true ? 't' : 'f');
   // info: 'i', the window's id, its child count and whether its hook was there at the start of its document, NUL between.
   const infoText = value => 'i' + value.id + NUL + String(value.n) + NUL + (value.fresh === true ? 't' : 'f');
   // tree: 'r' and one record per window, NUL between records, SOH between the fields (an empty id: a window with no hook).
@@ -1759,7 +1760,7 @@ export function popupHook(options) {
   };
   // The windows a walk visits: this one (direct calls) and each child whose hook is asked through its signed API. Every call to a
   // child carries a proof and its answer is checked here, so a page that planted an object under the key takes no part.
-  const selfPeer = { lock: (token, capMs) => impl.lock(token, capMs), resync: (token, capMs) => impl.resync(token, capMs), release: token => impl.release(token) };
+  const selfPeer = { lock: (token, capMs, paste) => impl.lock(token, capMs, paste), resync: (token, capMs, paste) => impl.resync(token, capMs, paste), release: token => impl.release(token) };
   // undefined: a window this one cannot read (another origin; the controller reaches it through its own route). null: a window with
   // no hook, or one whose answer cannot be vouched for.
   const peerOf = child => {
@@ -1769,8 +1770,8 @@ export function popupHook(options) {
     const ask = (method, invoke) => { const proof = proofFor(method); try { return openAnswer(method, proof, invoke(proof)); } catch { return undefined; } };
     return {
       info: () => { const text = ask('info', proof => hook.info(proof)); return text === undefined ? undefined : parseInfo(text); },
-      lock: (token, capMs) => ask('lock', proof => hook.lock(proof, token, capMs)) === 't',
-      resync: (token, capMs) => ask('resync', proof => hook.resync(proof, token, capMs)) === 't',
+      lock: (token, capMs, paste) => ask('lock', proof => hook.lock(proof, token, capMs, paste)) === 't',
+      resync: (token, capMs, paste) => ask('resync', proof => hook.resync(proof, token, capMs, paste)) === 't',
       // A hook that does not answer may have vetoed something: report a change rather than nothing.
       release: token => {
         const text = ask('release', proof => hook.release(proof, token));
@@ -1813,16 +1814,16 @@ export function popupHook(options) {
     off: proof => seal('off', proof, () => impl.off(), booleanText),
     expect: (proof, token, evidence) => seal('expect', proof, () => impl.expect(token, evidence), stringText),
     conclude: (proof, token) => seal('conclude', proof, () => impl.conclude(token), concludeText),
-    adopt: (proof, token, capMs, keys) => seal('adopt', proof, () => impl.adopt(token, capMs, keys), booleanText),
+    adopt: (proof, token, capMs, keys, paste) => seal('adopt', proof, () => impl.adopt(token, capMs, keys, paste), booleanText),
     armed: proof => seal('armed', proof, () => impl.armed(), armedText),
     release: (proof, token) => seal('release', proof, () => impl.release(token), stringText),
     reinstall: proof => seal('reinstall', proof, () => impl.reinstall(), booleanText),
-    lock: (proof, token, capMs) => seal('lock', proof, () => impl.lock(token, capMs), booleanText),
-    resync: (proof, token, capMs) => seal('resync', proof, () => impl.resync(token, capMs), booleanText),
+    lock: (proof, token, capMs, paste) => seal('lock', proof, () => impl.lock(token, capMs, paste), booleanText),
+    resync: (proof, token, capMs, paste) => seal('resync', proof, () => impl.resync(token, capMs, paste), booleanText),
     info: proof => seal('info', proof, () => impl.info(), infoText),
     tree: proof => seal('tree', proof, () => impl.tree(), treeText),
-    lockAll: (proof, token, capMs, skip) => seal('lockAll', proof, () => impl.lockAll(token, capMs, skip), booleanText),
-    resyncAll: (proof, token, capMs) => seal('resyncAll', proof, () => impl.resyncAll(token, capMs), booleanText),
+    lockAll: (proof, token, capMs, skip, paste) => seal('lockAll', proof, () => impl.lockAll(token, capMs, skip, paste), booleanText),
+    resyncAll: (proof, token, capMs, paste) => seal('resyncAll', proof, () => impl.resyncAll(token, capMs, paste), booleanText),
     finishAll: (proof, token) => seal('finishAll', proof, () => impl.finishAll(token), pairsText),
     flight: proof => seal('flight', proof, () => impl.flight(), booleanText),
   };
@@ -1836,8 +1837,8 @@ export function popupHook(options) {
       const proof = proofFor('armed'), text = openAnswer('armed', proof, parent[key].armed(proof));
       if (text !== undefined && charCodeAt(text, 0) === 97) {
         const first = indexOf(text, NUL), second = indexOf(text, NUL, first + 1);
-        const until = Number(slice(text, first + 1, second)), keys = slice(text, second + 1) === 't';
-        if (first > 0 && second > first && until > now()) impl.adopt(slice(text, 1, first), until - now(), keys);
+        const until = Number(slice(text, first + 1, second)), mode = slice(text, second + 1), keys = mode === 't' || mode === 'p';
+        if (first > 0 && second > first && until > now()) impl.adopt(slice(text, 1, first), until - now(), keys, mode === 'p');
       }
     }
   } catch { /* A cross-origin parent, or none: nothing to inherit. */ }
@@ -1900,7 +1901,7 @@ export function hookOpen(hook, answer) {
   if (method === 'armed' && text !== 'u') {
     const [token, until, keys, ...extra] = text.slice(1).split('\0');
     if (text[0] !== 'a' || extra.length || keys === undefined || !Number.isFinite(Number(until))) throw refused();
-    return { token, until: Number(until), keys: keys === 't' };
+    return { token, until: Number(until), keys: keys === 't' || keys === 'p', ...(keys === 'p' ? { paste: true } : {}) };
   }
   if (method === 'tree') {
     if (text[0] !== 'r') throw refused();
@@ -2124,7 +2125,7 @@ export async function backgroundClick(tab, locator, click, options = {}) {
   } finally { await pinned?.dispose().catch(() => {}); }
 }
 
-async function backgroundClickOnce(tab, locator, click = options => locator.click({ ...options, timeout: timeoutMs }), { timeoutMs = 1000, press = false, keys = false, mc1 = false, retried = false, recover = true, modifier } = {}) {
+async function backgroundClickOnce(tab, locator, click = options => locator.click({ ...options, timeout: timeoutMs }), { timeoutMs = 1000, press = false, keys = false, paste = false, mc1 = false, retried = false, recover = true, modifier } = {}) {
   const token = randomUUID(), hook = hookOf(tab), { key } = hook;
   let frame = tab.page, completed = false, others;
   // Concludes the owner frame's shield and releases every other frame; each runs even if the other throws. A key concludes the
@@ -2178,7 +2179,7 @@ async function backgroundClickOnce(tab, locator, click = options => locator.clic
       : 'Enter would submit this form into a new tab; click its submit button instead');
     const modified = prepared === true || prepared?.kind === 'link';
     frame = await ownerFrame(locator, tab.page, timeoutMs);
-    others = keys ? keyFrames(tab, frame === tab.page ? tab.page.mainFrame?.() ?? frame : frame, { hook, token, capMs: timeoutMs + 4000, timeoutMs })
+    others = keys ? keyFrames(tab, frame === tab.page ? tab.page.mainFrame?.() ?? frame : frame, { hook, token, capMs: timeoutMs + 4000, timeoutMs, paste })
       : frameShield(tab.page, frame, { hook, token, capMs: timeoutMs + 4000, timeoutMs });
     // Move the pointer onto the element first, so a swap the pointer's arrival triggers lands before the seal is
     // taken, then wait one frame in the page and seal what this click activates. The click callback classifies
@@ -2192,11 +2193,11 @@ async function backgroundClickOnce(tab, locator, click = options => locator.clic
       // The shield outlives the click timeout: a click delayed by a busy page is still checked, and one that
       // arrives after this cap is cancelled. The other frames are armed in the same step. Enter in a field makes the
       // browser click the form's default button: for a press that click is the press working.
-      const [armed, othersArmed] = await Promise.all([deadline(() => locator.evaluate(async (element, { key, settle, guard, token, capMs, press, keys, mc1 }) => {
+      const [armed, othersArmed] = await Promise.all([deadline(() => locator.evaluate(async (element, { key, settle, guard, token, capMs, press, keys, paste, mc1 }) => {
         const hook = window[key];
         await hook.settle(settle);
-        return hook.guard(guard, element, token, capMs, { press, keys, ...(mc1 ? { mc1: true } : {}) });
-      }, { key, settle: hookProof(hook, 'settle'), guard: hookProof(hook, 'guard'), token, capMs: timeoutMs + 4000, press: !!press, keys: keys === true, ...(mc1 ? { mc1: true } : {}) }, { timeout: timeoutMs }), timeoutMs), others.arm()]);
+        return hook.guard(guard, element, token, capMs, { press, keys, paste, ...(mc1 ? { mc1: true } : {}) });
+      }, { key, settle: hookProof(hook, 'settle'), guard: hookProof(hook, 'guard'), token, capMs: timeoutMs + 4000, press: !!press, keys: keys === true, paste: paste === true, ...(mc1 ? { mc1: true } : {}) }, { timeout: timeoutMs }), timeoutMs), others.arm()]);
       if (hookOpen(hook, armed) !== true) throw capabilityError('click guard unavailable; use the engine browser path');
       if (!othersArmed) throw others.unarmable ? capabilityError('background popup hook unavailable; use the engine browser path') : capabilityError('frame unavailable; use the engine browser path');
     } catch (error) {
@@ -2214,7 +2215,12 @@ async function backgroundClickOnce(tab, locator, click = options => locator.clic
     } catch (error) {
       if ((tab.closed || tab.page.isClosed?.()) && tab.parent && !tab.parent.page.isClosed()
         && /target.*closed/i.test(error.message)) result = { closed: true, opener: tab.opener };
-      else throw error;
+      else {
+        // Paste owns clipboard cleanup inside the callback. Preserve its
+        // restoration result even when the shield also observed a page change.
+        if (paste) failure = error;
+        throw error;
+      }
     } finally { if (modified) await tab.page.keyboard.up('ControlOrMeta').catch(() => {}); }
     if (result?.closed !== true && !tab.closed && !tab.page.isClosed?.() && (prepared?.kind === 'link' || prepared?.kind === 'watch')) {
       // A plain click on a watched link or form often navigates, which destroys the arm with the document: that
@@ -2266,7 +2272,7 @@ async function backgroundClickOnce(tab, locator, click = options => locator.clic
       throw error;
     }
     // A click was sent and no press or click reached the sealed element's document: it went somewhere else.
-    if (completed && report.landed === false && !failure && !reported) throw Error(missedClick);
+    if (completed && (paste ? report.passed === false : report.landed === false) && !failure && !reported) throw Error(missedClick);
   }
 }
 
@@ -2291,7 +2297,7 @@ const keyError = message => Object.assign(Error(message), { code: 'KEY_FRAMES' }
 // not read (the surveys below check what it did).
 // Returns { arm, between, release, unguarded, confirm }: release() removes the scripts, reads every frame's veto and returns the
 // first, if any (an Error with code KEY_FRAMES from arm() is a frame that could not be guarded).
-function keyFrames(tab, owner, { hook, token, capMs, timeoutMs = 1000, settleMs = 400 }) {
+function keyFrames(tab, owner, { hook, token, capMs, timeoutMs = 1000, settleMs = 400, paste = false }) {
   const until = Date.now() + capMs, { key } = hook, literal = JSON.stringify;
   const settle = (work, ms = timeoutMs) => deadline(work, ms);
   let lockScript, frameLock, unguarded = false, ownerId = null;
@@ -2358,12 +2364,12 @@ function keyFrames(tab, owner, { hook, token, capMs, timeoutMs = 1000, settleMs 
   };
   // The checked frame keeps its seal; every other window below any route is locked. A lock that does not take means the frame is not
   // guarded.
-  const lockAll = found => walkAll(found, 'lockAll', [token, capMs, ownerId], () => { throw keyError(keyFramesUnguarded); });
+  const lockAll = found => walkAll(found, 'lockAll', [token, capMs, ownerId, paste], () => { throw keyError(keyFramesUnguarded); });
   // Restores a reused window's listeners and locks every document that is not the checked one; a frame that cannot be reached
   // or locked (and is not the checked frame) means the key may have been taken unguarded.
   const resync = async found => {
     if (found.unreached.some(context => !context.owner)) unguarded = true;
-    await walkAll(found, 'resyncAll', [token, capMs], context => { if (!context.owner) unguarded = true; });
+    await walkAll(found, 'resyncAll', [token, capMs, paste], context => { if (!context.owner) unguarded = true; });
   };
   // A frame in another process is known to the page before anything can reach it, and one that nothing reaches cannot be locked.
   // Resolves to the frames once every frame the windows count has been reached, or to undefined when that does not happen in ms.
@@ -2377,22 +2383,33 @@ function keyFrames(tab, owner, { hook, token, capMs, timeoutMs = 1000, settleMs 
     }
   };
   // Called with the key down. A round trip to the page first, so every frame event its handlers caused has arrived.
-  const between = async () => {
+  const between = async ({ timeoutMs: budgetMs } = {}) => {
+    // Paste shares one deadline across the existing frame-lock wait. Enter and
+    // Space retain their landed behavior and their existing wait budget.
+    const end = paste ? Date.now() + Math.min(500, Math.max(1, budgetMs ?? 500)) : Infinity;
+    const remaining = () => {
+      if (Date.now() >= end) throw keyError('paste frame-lock wait exceeded the 500 ms staged limit');
+      return Math.min(timeoutMs, end - Date.now());
+    };
+    const bounded = work => paste ? deadline(work, remaining()) : work();
     for (let round = 0; round < 4; round++) {
-      await settle(() => tab.page.mainFrame().evaluate(() => 0)).catch(() => {});
-      const waitUntil = Date.now() + settleMs;
+      if (paste) await bounded(() => tab.page.mainFrame().evaluate(() => 0));
+      else await settle(() => tab.page.mainFrame().evaluate(() => 0)).catch(() => {});
+      const waitUntil = Math.min(end, Date.now() + settleMs);
       while (track.pending.size && Date.now() < waitUntil) await new Promise(resolve => { track.wake = resolve; setTimeout(wake, Math.max(1, waitUntil - Date.now())); });
+      remaining();
       if (!track.dirty) return;
       track.dirty = false;
-      const found = await reached(settleMs);
-      if (found) await resync(found); else unguarded = true;
+      const found = await bounded(() => reached(Math.min(settleMs, remaining())));
+      remaining();
+      if (found) await bounded(() => resync(found)); else unguarded = true;
     }
   };
   return {
     async arm() {
       // The same install source the registry uses (the key and the secret, by hookSource), then the lock with a proof: a document
       // that has no hook yet gets it first, and one that has it (the registry's script ran earlier) is locked at once.
-      const lockSource = `${hookSource(hook)};try{window[${literal(key)}].lock(${literal(hookProof(hook, 'lock'))},${literal(token)},${until}-Date.now())}catch(e){}`;
+      const lockSource = `${hookSource(hook)};try{window[${literal(key)}].lock(${literal(hookProof(hook, 'lock'))},${literal(token)},${until}-Date.now(),${paste === true})}catch(e){}`;
       try {
         if (tab.cdp?.send) lockScript = (await settle(() => tab.cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: lockSource }))).identifier;
         if (tab.frames) frameLock = await settle(() => tab.frames.addScript(lockSource));

@@ -9,8 +9,9 @@ import { withMT } from './fixtures/mt-env.mjs';
 
 for (const mode of [undefined, '0']) test(`G10B touch layout guidance has a measured description budget, switch=${mode}`, async () => withMT(mode, async () => {
   const tools = browserTools('bfixture'), act = tools.find(tool => tool.name === 'browser_act');
-  assert.equal(act.description.length, mode === '0' ? 829 : 978);
-  assert.equal(tools.map(tool => tool.description).join('\n').length, mode === '0' ? 2065 : 2345);
+  assert.equal(act.description.length, mode === '0' ? 940 : 1089);
+  assert.equal(tools.map(tool => tool.description).join('\n').length, mode === '0' ? 2176 : 2456);
+  assert.match(act.description, /paste\(ref,text\).*Electron refuses paste/);
   assert.match(act.description, /touch emulates a touch layout; clicks stay mouse clicks/);
   assert.match(act.description, /empty resets all/);
 }));

@@ -14,8 +14,8 @@ import { assertPageResponsive, ensurePageResponsive, probePage } from './page-he
 import { waitForPage, waitForThinPage } from './waits.mjs';
 import { downloadLink } from './download-link.mjs';
 import { prepareControlRecipe } from './control-recipes.mjs';
-const OPS = new Set('click type press select check uncheck hover scroll drag upload download dialog wait back forward reload viewport navigate'.split(' '));
-const REF_OPS = new Set('click type select check uncheck hover drag upload download'.split(' '));
+const OPS = new Set('click type paste press select check uncheck hover scroll drag upload download dialog wait back forward reload viewport navigate'.split(' '));
+const REF_OPS = new Set('click type paste select check uncheck hover drag upload download'.split(' '));
 const WAIT_CAP = 5000, SCROLL_CAP = 10000, navigateNeeds = 'the ref of an http(s) link (browser_open takes a url); to press other elements use click';
 const TIMEOUT = 1000;
 const clickModifiers = Object.freeze({ cmd: 'Meta', ctrl: 'Control' });
@@ -48,8 +48,8 @@ function validate(steps) {
   if (!Array.isArray(steps) || !steps.length || steps.length > 12) throw Error('steps needs 1 to 12 operations');
   for (const s of steps) {
     if (!s || !OPS.has(s.do)) throw Error('unsupported do operation');
-    if (/^x\d+$/.test(s.to) || /^x\d+$/.test(s.ref) && !['type', 'press'].includes(s.do))
-      throw Error('keyboard-only refs support only type and press');
+    if (/^x\d+$/.test(s.to) || /^x\d+$/.test(s.ref) && !['type', 'paste', 'press'].includes(s.do))
+      throw Error('keyboard-only refs support only type, paste and press');
     if (s.modifier !== undefined && (s.do !== 'click' || typeof s.modifier !== 'string' || !Object.hasOwn(clickModifiers, s.modifier)))
       throw Error('click modifier must be cmd or ctrl');
     if (s.touch !== undefined && (s.do !== 'viewport' || typeof s.touch !== 'boolean')) throw Error('touch must be boolean on viewport');
@@ -57,7 +57,8 @@ function validate(steps) {
     if (REF_OPS.has(s.do) && !refOf(s.ref)) needs('ref');
     if (s.do === 'navigate' && !refOf(s.ref)) needs(navigateNeeds);
     if (s.ref !== undefined && !refOf(s.ref)) needs('a valid ref');
-    if (s.do === 'type' && typeof s.text !== 'string') needs('text');
+    if (['type', 'paste'].includes(s.do) && (typeof s.text !== 'string' || s.text.length > 65536)) needs('text');
+    if (s.do === 'paste' && !s.text.length) needs('nonempty text');
     if (s.do === 'press' && (typeof s.key !== 'string' || !s.key || s.key.length > 100)) needs('key');
     if (s.do === 'select' && (!Array.isArray(s.values) || !s.values.length || s.values.some(v => typeof v !== 'string'))) needs('values');
     if (s.do === 'drag' && !refOf(s.to)) needs('to');
@@ -300,7 +301,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         if (named !== step && info.link !== true) throw Error('navigate needs ' + navigateNeeds);
         // Chrome treats text inserted into a single-line input as implicit submission when it is a lone line break, so a line
         // break typed there is an Enter press that skipped the submit checks. Pressing Enter is the one way to send it.
-        if (step.do === 'type' && info.tag === 'input' && lineBreak.test(step.text)) throw Error(lineBreakRefusal);
+        if (['type', 'paste'].includes(step.do) && info.tag === 'input' && lineBreak.test(step.text)) throw Error(lineBreakRefusal);
         const activation = step.do === 'press' ? activationKey(step.key) : null, enter = !!activation;
         let submits = step.do === 'click' && info.submit || enter && (info.submit || info.form && activation === 'enter');
         target = { ...info, element: info, page, locator, state, ref: step.ref, do: step.do, key: step.key,
@@ -328,7 +329,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         };
         // Pin the element before popup preparation. Check final risk and consume
         // authority inside the actual click callback, after that preparation.
-        if (trusted && locator) { await ctx.prepareTarget(target); locator = target.locator; }
+        if (trusted && locator && step.do !== 'paste') { await ctx.prepareTarget(target); locator = target.locator; }
         if (!trusted) await gate();
         if (step.do === 'upload') {
           if (trusted) await gate();
@@ -366,6 +367,16 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
             begin(); return locator.click({ ...options, ...extra, ...aim, ...modifiers });
           }, { recover: () => recoverClick, onRetry: () => { clickRetry = '; waited for the page to settle and retried the click once'; },
             ...(step.modifier === undefined ? {} : { modifier: clickModifiers[step.modifier] }) });
+          }
+          if (step.do === 'paste') {
+            if (!trusted) throw Error('Paste requires a trusted context.');
+            return ctx.pasteTarget(target, step.text, async send => {
+              // Clipboard snapshot and size check precede the first focus proof.
+              await gate(); locator = target.locator;
+              return backgroundClick(tab, locator, async extra => {
+                await gate(); return send(extra, () => { ctx.beginInput(target); begin(); });
+              }, { keys: true, paste: true, recover: false });
+            });
           }
           const pressKey = keys => trusted ? ctx.pressTarget(target, step.key, options, keys) : step.ref ? locator.press(step.key, options) : page.keyboard.press(step.key);
           // Enter and Space can follow a link or submit a form into a new tab: arm the popup hook, as a click does. In a trusted turn

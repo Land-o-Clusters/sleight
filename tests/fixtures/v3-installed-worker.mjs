@@ -34,6 +34,7 @@ const selected = {selectedBrowser:'bfixture',session:raw,endpoint,
 let uiClosed=false;
 const pipe=new Socket({fd:4});
 const host = await startInstalledV3Worker({channel:process},{
+  recoverClipboard: async () => {},
   onError:error=>process.stderr.write('Installed fixture startup: '+error.message+'\n'),
   readConfig:()=>({}),acceptPackage:()=>({current:()=>true}),
   prepareHelpers:async()=>({status:'ready',receipt:{}}),selectConnection:async()=>selected,

@@ -2,7 +2,8 @@
 ObjC.import('AppKit');
 const LIMIT = 64 * 1024 * 1024;
 
-function read(board) {
+function read(board, maxBytes = LIMIT) {
+  if (!Number.isInteger(maxBytes) || maxBytes < 1 || maxBytes > LIMIT) throw new Error('Invalid clipboard snapshot limit');
   const count = Number(board.changeCount), items = [];
   const objects = board.pasteboardItems;
   let total = 0;
@@ -15,7 +16,7 @@ function read(board) {
       const data = item.dataForType(type);
       if (data.isNil()) throw new Error('Unreadable clipboard format');
       total += Number(data.length);
-      if (total > LIMIT) throw new Error('Clipboard exceeds 64 MiB');
+      if (total > maxBytes) throw new Error('Clipboard exceeds ' + maxBytes / (1024 * 1024) + ' MiB');
       reps.push({ type, data: ObjC.unwrap(data.base64EncodedStringWithOptions(0)) });
     }
     items.push(reps);
@@ -46,7 +47,8 @@ function write(board, request) {
   }
   // Stage and validate every byte before the generation check and first write.
   if (Number(board.changeCount) !== request.expectedCount) throw new Error('Clipboard ownership changed; current contents were left alone');
-  const ownedCount = Number(board.clearContents);
+  const ownedCount = Number(request.localOnly === true && board.respondsToSelector('prepareForNewContentsWithOptions:')
+    ? board.prepareForNewContentsWithOptions($.NSPasteboardContentsCurrentHostOnly) : board.clearContents);
   try {
     if (objects.count && !board.writeObjects(objects)) throw new Error('Clipboard write failed after clearing');
     // Materialize every published representation before acknowledging the write.
@@ -69,7 +71,7 @@ function dispatch(request) {
   let board;
   try {
     board = $.NSPasteboard.generalPasteboard;
-    if (request.op === 'read') return read(board);
+    if (request.op === 'read') return read(board, request.maxBytes);
     if (request.op === 'write') return write(board, request);
     throw new Error('Unknown clipboard operation');
   } catch (error) { return { ok: false, mutated: error.clipboardMutation ?? false, count: error.clipboardCount ?? (board ? Number(board.changeCount) : null), error: String(error.message || error) }; }

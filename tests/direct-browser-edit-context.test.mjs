@@ -57,7 +57,7 @@ function fixture() {
   return { sandbox, invoke, run: source => runInContext(source, sandbox) };
 }
 
-function inputFixture({ native = true, width = 0 } = {}) {
+function inputFixture({ native = true, width = 0, clipboardIO } = {}) {
   const f = fixture(), events = [], page = new EventEmitter(), state = { snapshotNo: 1, submitUnconfirmed: false };
   f.run(`elements.get(el).rect.width = ${width}; ${native ? '' : 'elements.get(el).context = null;'}
     elements.get(el).localName = '${native ? 'div' : 'input'}';`);
@@ -104,7 +104,7 @@ function inputFixture({ native = true, width = 0 } = {}) {
     },
   };
   const binding = v3.createV3TurnBinding({ source: 'user', session: 'session', turn: 'turn', id: 'request', text: 'Replace the editor text' }, () => live);
-  const ctx = v3.createV3Context({ binding, browser: 'fixture' });
+  const ctx = v3.createV3Context({ binding, browser: 'fixture', clipboardIO });
   const target = { page, state, locator: { elementHandle: async () => handle }, ref: 'e1', do: 'type' };
   return { ...f, events, page, frame, ctx, target, risk: f.risk = {},
     afterSelect: callback => { afterSelect = callback; }, beforeRead: callback => { beforeRead = callback; },
@@ -327,4 +327,91 @@ for (const hidden of [false, true]) test(`native eligibility checks the iframe o
     elements.get(frame).document = outerDoc; view.frameElement = frame;
     ${hidden ? "elements.get(frame).style.display = 'none';" : ''}`);
   assert.equal(f.invoke('readNativeEditContext').eligible, !hidden);
+});
+
+function pasteFixture({ onStage, ...options } = {}) {
+  let board = { count: 1, items: [[{ type: 'public.utf8-plain-text', data: 'b2xk' }]] };
+  const events = [];
+  const clipboardIO = async request => {
+    events.push(request.op);
+    if (request.op === 'read') return structuredClone(board);
+    if (request.op === 'write') {
+      assert.equal(request.expectedCount, board.count);
+      board = { count: board.count + 1, items: request.items };
+      if (board.count === 2) onStage?.(f);
+    }
+    return { count: board.count };
+  };
+  const f = inputFixture({ width: 20, ...options, clipboardIO });
+  f.target.do = 'paste';
+  return { ...f, clipboardEvents: events, board: () => board,
+    copy() { board = { count: board.count + 1, items: [[{ type: 'external', data: '' }]] }; } };
+}
+test('paste stages after shield preparation and final ready, restoring before shield cleanup', async () => {
+  const f = pasteFixture({ native: false });
+  assert.equal((await f.ctx.check('paste', f.target)).verdict, 'allow');
+  let stageCount;
+  f.beforeRead(name => { if (name === 'inspectElement') stageCount = f.board().count; });
+  await f.ctx.pasteTarget(f.target, 'text', async send => {
+    assert.equal(f.board().count, 1, 'shield preparation sees the user clipboard');
+    await send();
+    assert.equal(f.board().count, 3, 'restoration finishes before disarm/settle');
+  });
+  assert.equal(stageCount, 2, 'focus and field are checked again after staging');
+  await f.ctx.dispose();
+});
+test('a copy during the post-stage field read prevents input and is preserved', async () => {
+  const f = pasteFixture({ native: false });
+  assert.equal((await f.ctx.check('paste', f.target)).verdict, 'allow');
+  f.beforeRead(name => { if (name === 'inspectElement' && f.board().count === 2) f.copy(); });
+  await assert.rejects(f.ctx.pasteTarget(f.target, 'text', send => send()), /restoration unconfirmed/);
+  assert.equal(f.events.length, 0);
+  assert.equal(f.board().items[0][0].type, 'external');
+  await f.ctx.dispose();
+});
+for (const change of ['focus', 'readonly']) test('post-stage ' + change + ' change prevents Meta down', async () => {
+  const f = pasteFixture({ native: false, onStage(f) {
+    if (change === 'focus') f.run('doc.activeElement = parent;');
+    else f.risk.enabled = false;
+  } });
+  assert.equal((await f.ctx.check('paste', f.target)).verdict, 'allow');
+  f.page.keyboard.down = async () => assert.fail('no Meta down');
+  await assert.rejects(f.ctx.pasteTarget(f.target, 'text', send => send({ between: async () => {} })), /FOCUS|checked text field/);
+  assert.equal(f.events.length, 0); assert.equal(f.board().count, 3);
+  await f.ctx.dispose();
+});
+test('paste uses the between-frame lock and releases every pressed key on failure', async () => {
+  const f = pasteFixture({ native: false }), keys = [];
+  assert.equal((await f.ctx.check('paste', f.target)).verdict, 'allow');
+  f.page.keyboard.down = async key => keys.push('down ' + key);
+  f.page.keyboard.up = async key => keys.push('up ' + key);
+  await assert.rejects(f.ctx.pasteTarget(f.target, 'text', send => send({ between: async () => {
+    keys.push('between'); throw Error('new frame refused');
+  } })), /new frame refused/);
+  assert.deepEqual(keys, ['down ControlOrMeta', 'down V', 'between', 'up V', 'up ControlOrMeta']);
+  assert.equal(f.board().count, 3); await f.ctx.dispose();
+});
+test('a copy after the modifier goes down prevents V and survives restoration', async () => {
+  const f = pasteFixture({ native: false }), keys = [];
+  assert.equal((await f.ctx.check('paste', f.target)).verdict, 'allow');
+  f.page.keyboard.down = async key => { keys.push('down ' + key); f.copy(); };
+  f.page.keyboard.up = async key => keys.push('up ' + key);
+  await assert.rejects(f.ctx.pasteTarget(f.target, 'text', send => send({ between: () => assert.fail('no keydown') })), /restoration unconfirmed/);
+  assert.deepEqual(keys, ['down ControlOrMeta', 'up ControlOrMeta']);
+  assert.equal(f.board().items[0][0].type, 'external'); await f.ctx.dispose();
+});
+for (const change of ['focus', 'context', 'document', 'turn']) test(`paste final EditContext read refuses a post-press ${change} change`, async () => {
+  const f = pasteFixture();
+  assert.equal((await f.ctx.check('paste', f.target)).verdict, 'allow');
+  f.page.keyboard.press = async key => {
+    f.events.push({ op: 'press', key });
+    if (change === 'focus') f.run('doc.activeElement = parent;');
+    if (change === 'context') f.run('elements.get(el).context = elements.get(parent).context;');
+    if (change === 'document') f.run('doc = {activeElement:el,defaultView:view};');
+    if (change === 'turn') f.revoke();
+  };
+  await assert.rejects(f.ctx.pasteTarget(f.target, 'text', send => send()), /FOCUS|EDIT_CONTEXT/);
+  assert.equal(f.events.length, 1, 'never replay input');
+  assert.equal(f.board().count, 3, 'restore even after failed final ready');
+  await f.ctx.dispose();
 });

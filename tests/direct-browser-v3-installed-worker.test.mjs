@@ -25,7 +25,7 @@ function fixture() {
     close() { events.push('ui-close'); } };
   const pages = { endTurn: async () => { events.push('pages-end'); return { cleanedUp:true }; },
     list: async () => [] };
-  const dependencies = { schedule: () => undefined, readConfig: () => ({}), readConfigFile: () => null, readHand: () => ({ state: 'on' }), setHand: () => assert.fail('the hand setting was written without a click'), acceptPackage: () => ({ current: () => true }),
+  const dependencies = { recoverClipboard: async () => {}, schedule: () => undefined, readConfig: () => ({}), readConfigFile: () => null, readHand: () => ({ state: 'on' }), setHand: () => assert.fail('the hand setting was written without a click'), acceptPackage: () => ({ current: () => true }),
     prepareHelpers: async () => ({ status:'ready', receipt:{} }), selectConnection: async () => selected,
     createUi: (_receipt, onLoss) => { ui.loss = onLoss; return ui; }, loadPlaywright: () => ({ inprocess: { playwright: { chromium: { async connectOverCDP(endpoint, options) {
       assert.equal(endpoint, 'private'); assert.equal(options.noDefaults,true);
@@ -41,6 +41,17 @@ const begin = async (f, use = true) => {
   await settle(); assert.equal(f.frames.find(x=>x.id==='begin').result.available,true);
   if(use){f.channel.emit('message',{version:3,id:'first-call',method:'call',params:{name:'browser_tabs',arguments:{do:'list'}}});await settle();}
 };
+test('worker recovery completes before connection selection or ready publication', async () => {
+  const f = fixture(); let finish, entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  f.dependencies.recoverClipboard = () => { entered(); return new Promise(resolve => { finish = resolve; }); };
+  f.dependencies.selectConnection = async () => { f.events.push('select'); return f.selected; };
+  const starting = startInstalledV3Worker({ channel: f.channel }, f.dependencies);
+  await Promise.race([started, new Promise(resolve => setTimeout(resolve, 50))]);
+  assert.equal(f.events.includes('select'), false); assert.equal(f.frames.length, 0);
+  assert.equal(typeof finish, 'function'); finish();
+  const host = await starting; await host.close();
+});
 test('installed phases separate the helper check, selection and lazy connection before the first result', async () => {
   const f = fixture(), phases = [];
   f.dependencies.tracePhase = phase => phases.push(phase);
