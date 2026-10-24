@@ -52,3 +52,27 @@ test('the runtime signals a real compiler stage once, and cached extraction does
     assert.equal(builds, 1); assert.equal(signals, 1);
   } finally { await runtime.end(); await rm(root, { recursive: true, force: true }); }
 });
+
+for (const failure of ['rejected', 'unavailable']) {
+  test(`${failure === 'unavailable' ? 'an' : 'a'} ${failure} PDF preparation allows the next read in the same turn to retry and cache success`, async t => {
+    const root = await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-retry-')), path = join(root, 'invoice.pdf');
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await writeFile(path, textPdf(['Retry total'])); let builds = 0;
+    const binding = createV3TurnBinding({ source: 'user', session: 's', turn: 't', id: 'm', text: `Read PDF "${path}"` }, () => true);
+    const runtime = await createV3TurnRuntime({ binding, browser: 'bfixture', pages: { endTurn: async () => ({ cleanedUp: true }) }, snapshot() {},
+      dependencies: { pdfInventory: { accepted: true }, preparePdfHelper: async () => {
+        if (++builds === 1) {
+          if (failure === 'rejected') throw Error('temporary compiler failure');
+          return { status: 'unavailable', code: 'NATIVE_HELPERS_UNAVAILABLE' };
+        }
+        return { status: 'ready', receipt: {} };
+      }, extractPdf: async () => ({ pageCount: 1, pages: [{ page: 1, offset: 0, text: 'Retry total' }], next: null }) } });
+    t.after(() => runtime.end());
+    const read = () => runtime.call({ name: 'browser_read', arguments: { file: path } });
+    assert.equal((await read()).isError, true); assert.equal(builds, 1, 'no automatic retry inside the failed read');
+    for (let i = 0; i < 2; i++) {
+      const result = await read(); assert.equal(result.isError, false, result.text); assert.match(result.text, /Retry total/);
+    }
+    assert.equal(builds, 2, 'successful retry is reused for later reads');
+  });
+}

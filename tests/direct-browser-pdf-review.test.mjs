@@ -67,6 +67,23 @@ test('PDF metadata size refuses before any resource content fetch', async () => 
   } } };
   await assert.rejects(reader().tab(entry), /32 MiB/); assert.equal(fetched, false);
 });
+test('PDF sizes come from resources, ignoring non-CDP frame sizes, with a post-fetch byte limit', async () => {
+  const frame = { id: 'f', loaderId: 'l', url: 'https://example.test/invoice', mimeType: 'application/pdf', contentSize: 33554433 };
+  let bytes = textPdf(['fixture']), fetched = 0, parsed = 0;
+  const pdf = createPdfReader({ extract: async () => { parsed++; return extracted; } });
+  const entry = { page: { url: () => frame.url }, cdp: { async send(method) {
+    if (method === 'Page.getResourceTree') return { frameTree: { frame, resources: [] } };
+    if (method === 'Page.getResourceContent') { fetched++; return { content: bytes.toString('base64'), base64Encoded: true }; }
+    return {};
+  } } };
+  try {
+    assert.match((await pdf.tab(entry)).text, /fixture/);
+    assert.equal(fetched, 1); assert.equal(parsed, 1);
+    bytes = Buffer.alloc(33554433); bytes.write('%PDF-1.7\n');
+    await assert.rejects(pdf.tab(entry), /32 MiB/);
+    assert.equal(fetched, 2); assert.equal(parsed, 1, 'oversized loaded bytes never reach the parser');
+  } finally { await pdf.dispose(); }
+});
 test('an unavailable PDF metadata probe falls through to ordinary snapshots but preserves PDF continuation refusal', async () => {
   const entry = { page: { url: () => 'https://example.test/html' }, cdp: { async send() { throw Error('not supported'); } } };
   assert.equal(await reader().tab(entry), null);

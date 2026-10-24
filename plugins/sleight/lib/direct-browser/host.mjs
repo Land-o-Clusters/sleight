@@ -74,9 +74,37 @@ async function compileNative({ name, source, binary, moduleCache, signal }) {
     : ['swiftc', '-module-cache-path', moduleCache, source, '-o', binary];
   // Abort can reject before close. Keep the bank and lock until the compiler has closed its pipes.
   await new Promise((resolve, reject) => {
-    let failure;
-    const child = execFile('/usr/bin/xcrun', args, { env: environment(), timeout: 300000, maxBuffer: 65536, signal, killSignal: 'SIGKILL' }, error => { failure = error; });
-    child.once('close', () => failure ? reject(failure) : resolve());
+    signal?.throwIfAborted();
+    let failure, stderr = '';
+    // swiftc starts swift-frontend children that inherit its pipes. Own the whole
+    // group so a deadline or turn abort cannot leave a compiler using the bank.
+    const child = spawn('/usr/bin/xcrun', args, { env: environment(), detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const stop = error => {
+      failure ??= error;
+      if (child.pid) {
+        try { process.kill(-child.pid, 'SIGKILL'); }
+        catch (error) { if (error.code !== 'ESRCH') failure = error; }
+      }
+    };
+    const abort = () => stop(Object.assign(Error('Native helper build aborted.'), { name: 'AbortError', code: 'ABORT_ERR' }));
+    const timer = setTimeout(() => stop(Object.assign(Error('Native helper build timed out.'), { killed: true })), 300000);
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
+    for (const [name, stream] of [['stdout', child.stdout], ['stderr', child.stderr]]) {
+      let length = 0;
+      stream.on('data', bytes => {
+        if (name === 'stderr') stderr += bytes.subarray(0, Math.max(0, 65536 - length)).toString('utf8');
+        length += bytes.length;
+        if (length > 65536) stop(Object.assign(Error('Native helper compiler output exceeded its limit.'), { code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER', killed: true }));
+      });
+    }
+    child.once('error', error => stop(error));
+    child.once('close', (code, killedBy) => {
+      clearTimeout(timer); signal?.removeEventListener('abort', abort);
+      if (code !== 0 || killedBy) failure ??= Object.assign(Error('Native helper compiler failed.'), { code, signal: killedBy });
+      if (failure && killedBy) failure.signal ??= killedBy;
+      if (failure) { failure.stderr = stderr; reject(failure); } else resolve();
+    });
   });
 }
 

@@ -167,7 +167,10 @@ test('an uncollected PDF stage remains visible in the turn cleanup receipt', asy
 test('empty pages report OCR limitation and known parser errors contain no document strings', async () => {
   const path = await fixture('empty.pdf');
   const empty = createPdfReader({ authorizeFile: () => true, extract: async () => extracted(['']) });
-  assert.match((await empty.file(path)).text, /No extractable text; OCR is unavailable/);
+  const result = (await empty.file(path)).text;
+  assert.match(result, /extraction returned no text under the sandbox/i);
+  assert.match(result, /OCR is unavailable/);
+  assert.doesNotMatch(result, /No extractable text/i);
   for (const error of ['The PDF is locked; unlock a copy first.', 'The PDF does not allow text copying.']) {
     const reader = createPdfReader({ authorizeFile: () => true, extract: async () => ({ error }) });
     await assert.rejects(reader.file(path), { message: error });
@@ -200,7 +203,7 @@ test('PDFKit compiles lazily from accepted source, reads three pages, and resume
     seen += '\n' + part.text; ref = nextRef(part); assert.ok(++attempts < 10); } while (ref);
   for (let i = 1; i <= 40; i++) assert.ok(seen.includes(`Page ${i}/40: "Page marker ${i}"`), i);
   const noText = await fixture('scan.pdf', textPdf(['']));
-  assert.match((await reader.file(noText)).text, /No extractable text/);
+  assert.match((await reader.file(noText)).text, /extraction returned no text under the sandbox/i);
   const corrupt = await fixture('corrupt.pdf', Buffer.from('%PDF-1.7\nbroken'));
   await assert.rejects(reader.file(corrupt), /not a readable PDF/);
   for (const font of ['Times-Roman', 'Courier']) {

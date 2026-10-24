@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import childProcess from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { syncBuiltinESMExports } from 'node:module';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 import { macCommandSkip } from './requirements.mjs';
@@ -129,22 +130,19 @@ test('a compiler abort is identified and releases its bank and lock', { skip }, 
   assert.equal(existsSync(join(f.cacheRoot, 'build.lock')), false);
 });
 test('an aborted compiler keeps its bank and lock until the child closes', { skip }, async t => {
-  const f = fixture(t), controller = new AbortController(), original = childProcess.execFile;
-  let child, stopped, source;
-  const abortSeen = new Promise(resolve => { stopped = resolve; });
-  t.after(() => { childProcess.execFile = original; syncBuiltinESMExports(); });
-  childProcess.execFile = (_command, args, options, callback) => {
-    assert.equal(options.killSignal, 'SIGKILL');
+  const f = fixture(t), controller = new AbortController(), original = childProcess.spawn;
+  let child, source;
+  t.after(() => { childProcess.spawn = original; syncBuiltinESMExports(); });
+  childProcess.spawn = (_command, args, options) => {
+    assert.equal(options.detached, true);
     source = args[args.indexOf('-o') - 2];
     child = new EventEmitter();
-    options.signal.addEventListener('abort', () => {
-      callback(Object.assign(Error('aborted'), { name: 'AbortError', code: 'ABORT_ERR' })); stopped();
-    });
+    child.stdout = new PassThrough(); child.stderr = new PassThrough();
     return child;
   };
   syncBuiltinESMExports();
   const building = host.prepareNativeHelpers({ ...f.options, compile: undefined, signal: controller.signal });
-  controller.abort(); await abortSeen;
+  controller.abort();
   await new Promise(resolve => setImmediate(resolve));
   const lock = join(f.cacheRoot, 'build.lock');
   assert.equal(existsSync(lock), true, 'the compiler still owns its lock');
@@ -190,13 +188,14 @@ test('Darwin first-use compiler builds both real sources without launching conse
 }, async t => {
   assert.equal(typeof host.prepareNativeHelpers, 'function', 'first-use compiler is missing');
   const root = registerTemp(t, trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-turbo-compile-')))));
-  const execFile = childProcess.execFile, cache = swiftModuleCache();
-  t.after(() => { childProcess.execFile = execFile; syncBuiltinESMExports(); });
+  const spawn = childProcess.spawn, cache = swiftModuleCache();
+  t.after(() => { childProcess.spawn = spawn; syncBuiltinESMExports(); });
   // Exercise the default compiler and its deadline, but reuse SDK modules in
   // this fixture instead of rebuilding AppKit alongside the other test files.
-  childProcess.execFile = (command, args, options, callback) => {
+  childProcess.spawn = (command, args, options) => {
     assert.equal(command, '/usr/bin/xcrun');
-    assert.equal(options.timeout, 300000);
+    assert.equal(options.detached, true);
+    assert.deepEqual(options.stdio, ['ignore', 'pipe', 'pipe']);
     assert.deepEqual(options.env, { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' });
     const index = args.indexOf('-module-cache-path');
     const moduleCache = index < 0 ? args.find(arg => arg.startsWith('-fmodules-cache-path=')).split('=')[1] : args[index + 1];
@@ -204,7 +203,7 @@ test('Darwin first-use compiler builds both real sources without launching conse
     assert.equal(lstatSync(moduleCache).mode & 0o777, 0o700);
     const shared = args.map((arg, i) => i === index + 1 && index >= 0 ? cache
       : arg.startsWith('-fmodules-cache-path=') ? '-fmodules-cache-path=' + cache : arg);
-    return execFile(command, shared, options, callback);
+    return spawn(command, shared, options);
   };
   syncBuiltinESMExports();
   const sourceRoot = fileURLToPath(new URL('../plugins/sleight/lib/direct-browser/native/', import.meta.url)).replace(/\/$/, '');
