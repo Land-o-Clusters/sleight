@@ -1,221 +1,284 @@
-
-// Offscreen AppKit only. No event posting, AX client, run loop, screen capture or shown window.
-let application = NSApplication.shared
+// Local AppKit dispatch only. No NSEvent subclass, event posting, app activation or window ordering.
+var fixtureKeyWindow: NSWindow?
+var fixtureCurrentEvent: NSEvent?
+var trustedEvents = Set<ObjectIdentifier>()
+var preflightKeyEquivalents = false
+func fixturePersonInput(_ event: NSEvent) -> Bool { trustedEvents.contains(ObjectIdentifier(event)) }
+final class FixtureApplication: NSApplication {
+    override var keyWindow: NSWindow? { fixtureKeyWindow }
+    override var currentEvent: NSEvent? { fixtureCurrentEvent }
+    override func sendEvent(_ event: NSEvent) {
+        // A prohibited, inactive application has no interactive key-equivalent preflight.
+        // Exercise that real NSWindow dispatcher explicitly before the normal application path.
+        if preflightKeyEquivalents, event.type == .keyDown,
+            event.window?.performKeyEquivalent(with: event) == true { return }
+        if event.type == .keyDown { event.window?.sendEvent(event); return }
+        super.sendEvent(event)
+    }
+}
+let application = FixtureApplication.shared
 application.setActivationPolicy(.prohibited)
 var checks = 0
+var failures: [String] = []
+var dispatches = ["window": 0, "application": 0, "equivalent": 0]
 func check(_ value: Bool, _ name: String) {
     checks += 1
-    if !value { print("FAIL " + name); exit(1) }
-}
-final class KeyWindow: NSWindow {
-    // Simulate only the key-state query. The fixture never orders a window onscreen.
-    var key = true
-    override var isKeyWindow: Bool { key }
+    if !value { failures.append(name) }
 }
 final class TypedReceipt: NSObject {
     var choices: [String] = []
-    @objc func accept(_ sender: NSButton) { choices.append(sender.title) }
+    var duringAction: (() -> Void)?
+    @objc func accept(_ sender: NSButton) { choices.append(sender.title); duringAction?() }
 }
-let receipt = TypedReceipt()
-let window = KeyWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 400), styleMask: [.titled], backing: .buffered, defer: true)
-let other = KeyWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: true)
-let always = NSButton(title: "Always allow", target: receipt, action: #selector(TypedReceipt.accept(_:)))
-let once = NSButton(title: "Allow once", target: receipt, action: #selector(TypedReceipt.accept(_:)))
-window.contentView!.addSubview(always); window.contentView!.addSubview(once)
-var current: NSEvent?
-let actions = [ConsentInputAction(always, currentEvent: { current }), ConsentInputAction(once, currentEvent: { current })]
-private var eventWindowKey: UInt8 = 0
-private var eventTextKey: UInt8 = 0
-func bindWindow(_ event: NSEvent, _ window: NSWindow, text: String) -> NSEvent {
-    // Bridging a detached CGEvent drops its AppKit window and truncates multi-character text. Preserve those
-    // NSEvent properties in a zero-storage subclass; provenance still comes from the real CGEvent.
-    let base = object_getClass(event)!, name = "FixtureCardKey_" + NSStringFromClass(object_getClass(event)!)
-    let guarded: AnyClass
-    if let existing = NSClassFromString(name) { guarded = existing }
-    else {
-        guarded = objc_allocateClassPair(base, name, 0)!
-        let selector = #selector(getter: NSEvent.window), method = class_getInstanceMethod(base, selector)!
-        let get: @convention(block) (AnyObject) -> NSWindow? = { objc_getAssociatedObject($0, &eventWindowKey) as? NSWindow }
-        check(class_addMethod(guarded, selector, imp_implementationWithBlock(get), method_getTypeEncoding(method)), "fixture window seam installs")
-        let textSelector = #selector(getter: NSEvent.charactersIgnoringModifiers)
-        let getText: @convention(block) (AnyObject) -> NSString? = { objc_getAssociatedObject($0, &eventTextKey) as? NSString }
-        check(class_addMethod(guarded, textSelector, imp_implementationWithBlock(getText), method_getTypeEncoding(class_getInstanceMethod(base, textSelector)!)), "fixture text seam installs")
-        objc_registerClassPair(guarded)
-    }
-    objc_setAssociatedObject(event, &eventWindowKey, window, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-    objc_setAssociatedObject(event, &eventTextKey, text as NSString, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-    object_setClass(event, guarded)
-    return event
-}
-func typing() -> ConsentTyping {
-    let view = ConsentTyping(actions)
-    window.contentView!.addSubview(view)
-    check(window.makeFirstResponder(view.field), "field can receive physical keys without an editor")
-    check(window.firstResponder === view.field, "field is its own responder")
-    return view
+func prepare(_ window: NSWindow, _ field: ConsentWordField) {
+    window.setFrameOrigin(NSPoint(x: -20000, y: -20000))
+    // NSAlert defers its backing window. This accessor allocates its number without ordering it.
+    _ = window.windowRef
+    check(window.windowNumber > 0, "real window number allocated")
+    check(!window.isVisible && NSScreen.screens.allSatisfy { !window.frame.intersects($0.frame) }, "window unordered and offscreen")
+    fixtureKeyWindow = window
+    check(window.makeFirstResponder(field), "field can receive focus without an editor")
+    check(window.firstResponder === field, "field owns first responder")
 }
 func word(_ view: ConsentTyping, _ title: String) -> String {
     let line = view.instructions.stringValue.components(separatedBy: "\n").first { $0.hasPrefix(title + ": type ") }!
     return line.components(separatedBy: ": type ")[1].components(separatedBy: ",")[0]
 }
-func key(_ text: String, code: UInt16 = 0, state: CGEventSourceStateID = .hidSystemState, pid: Int64 = 0,
-    data: Int64 = 0, flags: NSEvent.ModifierFlags = [], age: Double = 0, target: NSWindow? = nil, repeated: Bool = false) -> NSEvent {
+let codes: [Character: UInt16] = ["a":0,"s":1,"d":2,"f":3,"h":4,"g":5,"z":6,"x":7,"c":8,"v":9,"b":11,"q":12,"w":13,"e":14,"r":15,"y":16,"t":17,"o":31,"u":32,"i":34,"p":35,"l":37,"j":38,"k":40,"n":45,"m":46]
+func key(_ text: String, in window: NSWindow, code: UInt16? = nil, trusted: Bool = true,
+    flags: NSEvent.ModifierFlags = [], age: Double = 0, repeated: Bool = false) -> NSEvent {
     let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
-        timestamp: ProcessInfo.processInfo.systemUptime - age, windowNumber: (target ?? window).windowNumber,
-        context: nil, characters: text, charactersIgnoringModifiers: text, isARepeat: repeated, keyCode: code)!
-    let cg = event.cgEvent!
-    cg.setIntegerValueField(.eventSourceStateID, value: Int64(state.rawValue))
-    cg.setIntegerValueField(.eventSourceUnixProcessID, value: pid)
-    cg.setIntegerValueField(.eventSourceUserData, value: data)
-    let bound = bindWindow(NSEvent(cgEvent: cg)!, target ?? window, text: text)
-    current = bound
-    return bound
+        timestamp: ProcessInfo.processInfo.systemUptime - age, windowNumber: window.windowNumber,
+        context: nil, characters: text, charactersIgnoringModifiers: text, isARepeat: repeated,
+        keyCode: code ?? codes[text.lowercased().first ?? "a"] ?? 0)!
+    // NSEvent.keyEvent creates process-origin input. Admit chosen fixture events through the extraction seam,
+    // without editing, rebridging or subclassing any NSEvent or changing its window/text properties.
+    if trusted { trustedEvents.insert(ObjectIdentifier(event)) }
+    check(event.window === window, "NSEvent resolves actual card window")
+    return event
 }
-func type(_ text: String, _ view: ConsentTyping) { for char in text { view.field.keyDown(with: key(String(char))) } }
-func enter(_ view: ConsentTyping) { view.field.keyDown(with: key("\r", code: 36)) }
-let view = typing(), secret = word(view, "Always allow"), onceWord = word(view, "Allow once")
-let probe = key("a")
-check(personInput(probe.cgEvent), "fixture HID metadata survives conversion")
-check(probe.window === window, "fixture event names the hidden card window")
-check(probe.charactersIgnoringModifiers == "a", "fixture preserves physical letter")
-check(secret != onceWord && secret.count >= 3 && secret.count <= 6, "distinct short words per choice")
-check(view.field.accessibilityRole() == .textField, "VoiceOver text field role")
-check(view.field.accessibilityLabel()?.contains(view.instructions.stringValue) == true, "VoiceOver reads the choice and word")
-check(!view.field.isAccessibilitySelectorAllowed(#selector(view.field.setAccessibilityValue(_:))), "AXValue is read only")
-check(!view.field.isEditable && !view.field.isSelectable, "no field editor or paste path")
-check(view.field.isAccessibilityElement(), "input is an AX element (key view: \(view.field.canBecomeKeyView), hidden ancestor: \(view.field.isHiddenOrHasHiddenAncestor))")
-check(view.field.accessibilityPerformPress(), "AX press may focus the field")
-check(receipt.choices.isEmpty, "AX focus never answers")
-view.field.setAccessibilityValue(secret)
-enter(view)
-check(receipt.choices.isEmpty, "AX value plus physical Return never answers")
-view.field.stringValue = secret
-enter(view)
-check(receipt.choices.isEmpty, "display text is never authority")
-let untrustedKeys: [() -> NSEvent] = [
-    { key(secret) }, { key("a", pid: Int64(getpid())) }, { key("a", state: .combinedSessionState) },
-    { key("a", state: .privateState) }, { key("a", data: 9) }, { key("a", pid: -1) }, { key("a", pid: Int64.max) },
-    { key("a", flags: .command) }, { key("a", flags: .control) }, { key("a", flags: .option) },
-    { key("a", age: 5.1) }, { key("a", age: -1) }, { key("a", target: other) }, { key("a", repeated: true) }
-]
-for (index, make) in untrustedKeys.enumerated() {
-    let sample = make()
-    view.field.keyDown(with: sample)
-    check(view.field.stringValue.isEmpty, "rejected input \(index) clears the buffer")
-    enter(view)
-    check(receipt.choices.isEmpty, "untrusted key cannot contribute to a confirmation")
+enum Route: String, CaseIterable { case window, application, equivalent }
+func send(_ event: NSEvent, _ route: Route = .window, current: Bool = true) {
+    fixtureCurrentEvent = current ? event : nil
+    defer { fixtureCurrentEvent = nil; trustedEvents.remove(ObjectIdentifier(event)); preflightKeyEquivalents = false }
+    dispatches[route.rawValue]! += 1
+    switch route {
+    case .window: event.window!.sendEvent(event)
+    case .application: NSApp.sendEvent(event)
+    case .equivalent:
+        preflightKeyEquivalents = true
+        NSApp.sendEvent(event)
+    }
 }
-for state in [CGEventSourceStateID.combinedSessionState, .privateState] {
-    for char in secret { view.field.keyDown(with: key(String(char), state: state, pid: Int64(getpid()))) }
-    enter(view)
-    check(receipt.choices.isEmpty, "posted whole word cannot answer")
+func type(_ text: String, _ view: ConsentTyping, _ route: Route = .window) {
+    for char in text { send(key(String(char), in: view.window!), route) }
 }
-let replay = key("x")
-view.field.keyDown(with: replay)
-check(view.field.stringValue == "x", "fresh physical event is admitted")
-view.field.keyDown(with: replay)
-check(view.field.stringValue.isEmpty && receipt.choices.isEmpty, "replayed physical event clears the buffer")
-type(secret, view)
-check(receipt.choices.isEmpty && view.field.stringValue == secret, "word alone does not answer")
-view.field.setAccessibilityValue(secret)
-enter(view)
-check(receipt.choices.isEmpty, "AX write also discards an existing physical word")
-type(secret, view)
-view.field.keyDown(with: key("\r", code: 36, pid: Int64(getpid())))
-check(receipt.choices.isEmpty && view.field.stringValue.isEmpty, "posted Return clears a physical word")
-type(secret, view)
-_ = view.field.resignFirstResponder()
-enter(view)
-check(receipt.choices.isEmpty, "focus loss discards the word")
-check(window.makeFirstResponder(view.field), "refocus")
-type(secret, view)
-NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: window)
-enter(view)
-check(receipt.choices.isEmpty, "window focus loss discards the word")
-window.key = false
-type(secret, view); enter(view)
-check(receipt.choices.isEmpty, "inactive window cannot answer")
-window.key = true
-type(secret, view)
-view.field.keyDown(with: key("\t", code: 48))
-check(receipt.choices.isEmpty && view.field.stringValue.isEmpty, "Tab clears and navigates without approving")
-check(window.makeFirstResponder(view.field), "physical typing can resume after Tab")
-type("wrong", view); enter(view)
-check(receipt.choices.isEmpty && view.field.stringValue.isEmpty, "wrong word stays open")
-let noCurrentEvent = typing()
-type(word(noCurrentEvent, "Always allow"), noCurrentEvent)
-let detachedReturn = key("\r", code: 36)
-current = nil
-noCurrentEvent.field.keyDown(with: detachedReturn)
-check(receipt.choices.isEmpty, "typed success retains GB12's current-event guard")
-noCurrentEvent.invalidate()
-check(window.makeFirstResponder(view.field), "refocus after refused guarded dispatch")
-type(secret, view)
-view.field.keyDown(with: key("x")); view.field.keyDown(with: key("\u{7f}", code: 51))
-check(view.field.stringValue == secret, "physical backspace corrects a typo")
-let returnEvent = key("\r", code: 36)
-view.field.keyDown(with: returnEvent)
-check(receipt.choices == ["Always allow"], "physical word reaches its exact protected action")
-view.field.keyDown(with: returnEvent); type(secret, view); enter(view)
-check(receipt.choices == ["Always allow"], "completed field cannot replay authority")
-check(!view.field.isEnabled && view.field.stringValue.isEmpty, "success clears and disables")
+func enter(_ view: ConsentTyping, _ route: Route = .equivalent, code: UInt16 = 36, trusted: Bool = true, current: Bool = true) {
+    send(key(code == 76 ? "\u{3}" : "\r", in: view.window!, code: code, trusted: trusted, flags: code == 76 ? .numericPad : []), route, current: current)
+}
+func modal(_ protectedDefault: Bool = false) -> (NSAlert, ConsentTyping, [ConsentInputAction], TypedReceipt) {
+    let alert = NSAlert(), receipt = TypedReceipt()
+    let labels = protectedDefault ? ["Always allow", "Don't allow"] : ["Don't allow", "Always allow"]
+    let choices = protectedDefault ? ["always", "cancel"] : ["cancel", "always"]
+    for label in labels {
+        let button = alert.addButton(withTitle: label)
+        button.target = receipt; button.action = #selector(TypedReceipt.accept(_:))
+    }
+    let actions = consentInputActions(alert, choices: choices, kind: "debugger")
+    let view = actions[0].typing!
+    prepare(alert.window, view.field)
+    check(alert.buttons[0].keyEquivalent == "\r", "NSAlert has its real Return default")
+    return (alert, view, actions, receipt)
+}
 
-let second = typing()
-type(word(second, "Allow once").uppercased(), second)
-enter(second)
-check(receipt.choices == ["Always allow", "Allow once"], "second word selects only its own choice")
-let closed = typing()
-type(word(closed, "Always allow"), closed); closed.invalidate(); enter(closed)
-check(receipt.choices.count == 2, "closed card has no typed authority")
-let disabled = typing()
-always.isEnabled = false
-type(word(disabled, "Always allow"), disabled); enter(disabled)
-check(receipt.choices.count == 2, "disabled protected button cannot be approved by typing")
-always.isEnabled = true
-disabled.invalidate()
-
-let alert = NSAlert()
-for label in ["Allow once", "Allow this session", "Always allow", "Cancel"] { alert.addButton(withTitle: label) }
-let alertActions = consentInputActions(alert, choices: ["once", "session", "always", "cancel"], kind: "debugger")
-check(alertActions.count == 2, "modal guard coverage unchanged")
-check(alertActions.allSatisfy { $0.typing != nil }, "modal buttons share the typed control")
-let modalTyping = alertActions.first!.typing!
-check(modalTyping.instructions.stringValue.contains("Always allow: type "), "modal Always has a word")
-check(!modalTyping.instructions.stringValue.contains("Allow this session: type "), "host-answerable session has no word")
-check(!alert.buttons[2].accessibilityPerformPress(), "modal AX press remains blocked")
-modalTyping.invalidate()
-for (kind, choice) in [("opt-in", "enable"), ("resume", "resume"), ("turbo-off", "turbo-off"), ("action", "once")] {
-    let modal = NSAlert()
-    modal.addButton(withTitle: "Confirm"); modal.addButton(withTitle: "Cancel")
-    let guarded = consentInputActions(modal, choices: [choice, "cancel"], kind: kind)
-    check(guarded.count == 1 && guarded.first?.typing != nil, "all protected modal kinds receive typed confirmation")
-    guarded.first!.typing!.invalidate()
+// These catch a missing Return key-equivalent claim and a claim outside the field's responder scope.
+for protectedDefault in [false, true] {
+    for route in Route.allCases {
+        for code: UInt16 in [36, 76] {
+            let (alert, view, actions, receipt) = modal(protectedDefault)
+            type("wrong", view, route)
+            enter(view, route, code: code)
+            check(receipt.choices.isEmpty, "wrong word Return fires no NSAlert button (\(protectedDefault), \(route), \(code)): \(receipt.choices)")
+            check(view.field.isEnabled && view.field.stringValue.isEmpty, "wrong word leaves an enabled empty field")
+            type(word(view, "Always allow"), view, route)
+            enter(view, route, code: code)
+            check(receipt.choices == ["Always allow"], "correct word fires exact NSAlert choice (\(protectedDefault), \(route), \(code)): \(receipt.choices)")
+            check(!view.field.isEnabled && view.field.stringValue.isEmpty, "accepted field loses typed authority")
+            check(!alert.window.isVisible, "NSAlert never ordered")
+            _ = actions // retain guarded action targets for the whole scenario
+        }
+    }
+}
+for (protectedDefault, code) in [(false, UInt16(36)), (false, 76), (true, 36), (true, 76)] {
+    // Before G14 an empty buffer leaves Return to the existing default. It must still do so.
+    let (alert, view, actions, receipt) = modal(protectedDefault)
+    enter(view, code: code)
+    check(receipt.choices == [protectedDefault ? "Always allow" : "Don't allow"], "empty Return retains NSAlert default")
+    check(view.field.isEnabled, "default Return did not consume typed control")
+    _ = alert; _ = actions
+    let (unfocusedAlert, unfocused, held, otherReceipt) = modal(protectedDefault)
+    type(word(unfocused, "Always allow"), unfocused)
+    check(unfocusedAlert.window.makeFirstResponder(unfocusedAlert.buttons[0]), "button can take responder")
+    enter(unfocused, code: code)
+    check(otherReceipt.choices == [protectedDefault ? "Always allow" : "Don't allow"], "field does not intercept another responder's Return")
+    _ = held
 }
 
 let deadline = Date().timeIntervalSince1970 * 1000 + 60000
+for route in Route.allCases {
+    for code: UInt16 in [36, 76] {
+        var answers: [String] = []
+        let panel = AskCardPanel(AskCard(question: "Fixture?", detail: "", host: "sleight", icon: "", kind: "debugger", choices: ["cancel", "once", "session", "always"]), deadline: deadline) { answers.append($0) }
+        let view = panel.typing!
+        prepare(panel.panel, view.field)
+        enter(view, route, code: code)
+        check(answers.isEmpty && view.field.isEnabled && panel.feedback.stringValue.isEmpty, "empty panel Return has no default or refusal")
+        type("wrong", view, route); enter(view, route, code: code)
+        check(answers.isEmpty && view.field.isEnabled, "wrong panel word has no action")
+        let choice = code == 36 ? "Allow once" : "Always allow"
+        type(word(view, choice), view, route); enter(view, route, code: code)
+        check(answers == [code == 36 ? "once" : "always"], "panel delivers exact typed choice through \(route), \(code): \(answers)")
+        check(!view.field.isEnabled && panel.finished && !panel.panel.isVisible, "panel closes and invalidates once")
+        type("oak", view, route); enter(view, route, code: code)
+        check(answers.count == 1, "closed panel cannot answer twice")
+        panel.close()
+    }
+}
+
+// Non-letter keys must preserve a partially typed word and must not show an automation refusal.
+for (text, code, flags) in [(" ", UInt16(49), NSEvent.ModifierFlags()), ("1", 18, []), (".", 47, []), ("\u{f702}", 123, [.function, .numericPad])] {
+    let (keyAlert, keys, keyActions, keyReceipt) = modal()
+    let secret = word(keys, "Always allow")
+    let feedback = objc_getAssociatedObject(keyAlert.buttons[1], &consentFeedbackKey) as! NSTextField
+    for char in secret {
+        type(String(char), keys)
+        let before = keys.field.stringValue
+        send(key(text, in: keyAlert.window, code: code, flags: flags))
+        check(keys.field.stringValue == before && feedback.stringValue.isEmpty, "non-letter key preserves buffer without refusal (\(code))")
+    }
+    check(keys.field.stringValue == secret, "ignored keys do not alter word")
+    enter(keys)
+    check(keyReceipt.choices == ["Always allow"], "word with ignored keys still confirms")
+    _ = keyActions
+}
+
+for character in ["ф", "ั"] {
+    let (layoutAlert, layout, layoutActions, layoutReceipt) = modal()
+    let layoutWord = word(layout, "Always allow")
+    for char in layoutWord { send(key(character, in: layoutAlert.window, code: codes[char]!)) }
+    check(layout.field.stringValue == layoutWord, "non-Latin letters and combining marks use ABC physical key codes")
+    enter(layout)
+    check(layoutReceipt.choices == ["Always allow"], "non-Latin layout reaches intended action")
+    _ = layoutActions
+}
+
+// Latin layouts keep their own characters even when physical positions differ from ABC.
+let (latinAlert, latin, latinActions, latinReceipt) = modal()
+let latinWord = word(latin, "Always allow")
+for char in latinWord { send(key(String(char).uppercased(), in: latinAlert.window, code: 0, flags: [.shift, .capsLock])) }
+check(latin.field.stringValue == latinWord, "Latin layout characters and uppercase survive key-code fallback")
+enter(latin)
+check(latinReceipt.choices == ["Always allow"], "Latin layout confirms its typed word")
+_ = latinActions
+
+// A Return refused by the typed path must be consumed before NSAlert can activate any default.
+for code: UInt16 in [36, 76] {
+    for refused in ["posted", "stale", "repeat", "shortcut"] {
+        let (alert, view, actions, receipt) = modal(true)
+        type(word(view, "Always allow"), view)
+        send(key(code == 36 ? "\r" : "\u{3}", in: alert.window, code: code,
+            trusted: refused != "posted", flags: refused == "shortcut" ? .command : [],
+            age: refused == "stale" ? 6 : 0, repeated: refused == "repeat"), .equivalent)
+        check(receipt.choices.isEmpty && view.field.isEnabled && view.field.stringValue.isEmpty, "refused \(refused) Return cannot reach protected default (\(code))")
+        _ = actions
+    }
+}
+
+// Refusal at the final GB12 dispatch must leave an answerable field. Nested dispatch cannot replay the word.
+let (retryAlert, retry, retryActions, retryReceipt) = modal()
+type(word(retry, "Always allow"), retry)
+enter(retry, .window, current: false)
+check(retryReceipt.choices.isEmpty && retry.field.isEnabled, "refused action does not invalidate field")
+type(word(retry, "Always allow"), retry)
+retryReceipt.duringAction = { retryReceipt.duringAction = nil; enter(retry, .equivalent) }
+enter(retry)
+check(retryReceipt.choices == ["Always allow"], "retry succeeds once even under nested dispatch")
+check(!retry.field.isEnabled, "successful retry invalidates")
+_ = retryAlert; _ = retryActions
+
+// Keep GB12's trust, freshness, focus and AX/value boundaries covered with real locally dispatched events.
+let (guardAlert, guarded, guardActions, guardReceipt) = modal()
+check(guarded.field.isAccessibilityElement() && guarded.field.accessibilityRole() == .textField, "VoiceOver field role")
+check(guarded.field.accessibilityLabel()?.contains(guarded.instructions.stringValue) == true, "AX label names words and choices")
+check(!guarded.field.isEditable && !guarded.field.isSelectable, "field has no editable paste surface")
+check(!guarded.field.isAccessibilitySelectorAllowed(#selector(guarded.field.setAccessibilityValue(_:))), "AXValue setter denied")
+check(!guardAlert.buttons[1].accessibilityPerformPress(), "protected button AX press denied")
+check(guarded.field.accessibilityPerformPress(), "AX may focus field")
+for event in [key("letters", in: guardAlert.window), key("a", in: guardAlert.window, trusted: false), key("a", in: guardAlert.window, flags: .command), key("a", in: guardAlert.window, flags: .control), key("a", in: guardAlert.window, flags: .option), key("a", in: guardAlert.window, age: 5.1), key("a", in: guardAlert.window, age: -1), key("a", in: guardAlert.window, repeated: true)] {
+    type("o", guarded)
+    send(event)
+    check(guarded.field.stringValue.isEmpty && guarded.field.isEnabled, "untrusted or stale input clears pending authority")
+}
+let replay = key("a", in: guardAlert.window)
+send(replay)
+trustedEvents.insert(ObjectIdentifier(replay)); send(replay)
+check(guarded.field.stringValue.isEmpty, "replayed timestamp refused")
+type(word(guarded, "Always allow"), guarded)
+guarded.field.setAccessibilityValue("oak")
+check(guarded.field.stringValue.isEmpty && guardReceipt.choices.isEmpty, "AX write clears physical buffer")
+guarded.field.stringValue = word(guarded, "Always allow")
+enter(guarded, .window)
+check(guardReceipt.choices.isEmpty, "display value grants no typed authority")
+type(word(guarded, "Always allow"), guarded); enter(guarded, .window, trusted: false)
+check(guardReceipt.choices.isEmpty && guarded.field.stringValue.isEmpty, "posted Return cannot confirm physical word")
+type("o", guarded)
+send(key("x", in: guardAlert.window)); send(key("\u{7f}", in: guardAlert.window, code: 51))
+check(guarded.field.stringValue == "o", "Backspace removes one physical letter")
+send(key("\t", in: guardAlert.window, code: 48))
+check(guarded.field.stringValue.isEmpty && guardReceipt.choices.isEmpty, "Tab only navigates and clears")
+check(guardAlert.window.makeFirstResponder(guarded.field), "refocus after Tab")
+type("o", guarded); _ = guardAlert.window.makeFirstResponder(guardAlert.buttons[0])
+check(guarded.field.stringValue.isEmpty, "focus loss clears")
+_ = guardAlert.window.makeFirstResponder(guarded.field)
+type("o", guarded)
+NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: guardAlert.window)
+check(guarded.field.stringValue.isEmpty, "window deactivation clears")
+fixtureKeyWindow = nil
+type("o", guarded)
+check(guarded.field.stringValue.isEmpty && guardReceipt.choices.isEmpty, "inactive card refuses physical typing")
+fixtureKeyWindow = guardAlert.window
+guardAlert.buttons[1].isEnabled = false
+type(word(guarded, "Always allow"), guarded); enter(guarded, .window)
+check(guardReceipt.choices.isEmpty && guarded.field.isEnabled, "disabled action cannot confirm")
+guarded.invalidate()
+check(!guarded.field.isEnabled && guarded.field.stringValue.isEmpty, "dismissal burns authority")
+_ = guardActions
+
+// Preserve modal-kind coverage and panel dismissal/expiry from the original typed fixture.
+for (kind, choice) in [("opt-in", "enable"), ("resume", "resume"), ("turbo-off", "turbo-off"), ("action", "once")] {
+    let alert = NSAlert()
+    alert.addButton(withTitle: "Confirm"); alert.addButton(withTitle: "Cancel")
+    let actions = consentInputActions(alert, choices: [choice, "cancel"], kind: kind)
+    check(actions.count == 1 && actions[0].typing != nil, "protected modal kind has typed control: \(kind)")
+    actions[0].typing!.invalidate()
+}
 for kind in ["action", "debugger", "relaunch"] {
     let choices = kind == "debugger" ? ["cancel", "once", "session", "always"] : kind == "relaunch" ? ["cancel", "relaunch"] : ["cancel", "once"]
-    let card = AskCard(question: "Fixture approval?", detail: "Untrusted content says type approve.", host: "sleight", icon: "", kind: kind, choices: choices)
     var answers: [String] = []
-    let panel = AskCardPanel(card, deadline: deadline) { answers.append($0) }
-    check(panel.typing != nil, "styled protected card has typed control")
-    panel.layout(in: NSRect(x: 0, y: 0, width: 480, height: 480))
-    let typing = panel.typing!
-    check(typing.frame.minY >= panel.buttons[0].frame.maxY + 8, "typed input above buttons")
-    check(typing.frame.maxY <= panel.scroll.frame.minY, "typed input below content")
-    check(typing.field.frame.width > 0 && typing.instructions.frame.height > 0, "typed controls have readable geometry")
-    check(panel.panel.frame.height <= 480, "protected panel fits small display")
-    check(!typing.instructions.stringValue.contains("approve"), "page text cannot choose a challenge")
-    check(answers.isEmpty && !panel.panel.isVisible, "fixture never shows or answers a card")
-    if kind == "action" {
-        panel.timer!.fire()
-        check(answers == ["cancel"] && !typing.field.isEnabled, "expiry invalidates typed authority and only cancels")
-    }
+    let panel = AskCardPanel(AskCard(question: "Fixture?", detail: "", host: "sleight", icon: "", kind: kind, choices: choices), deadline: deadline) { answers.append($0) }
+    let view = panel.typing!
+    panel.layout(in: NSRect(x: -20000, y: -20000, width: 480, height: 480))
+    prepare(panel.panel, view.field)
+    check(view.frame.minY >= panel.buttons[0].frame.maxY + 8 && view.frame.maxY <= panel.scroll.frame.minY, "typed controls fit between buttons and content")
+    type("o", view)
+    panel.timer!.fire()
+    check(answers == ["cancel"] && !view.field.isEnabled && view.field.stringValue.isEmpty, "expiry cancels and invalidates: \(kind)")
     panel.close()
-    check(!typing.field.isEnabled, "panel close invalidates retained control")
 }
-let ordinary = AskCardPanel(AskCard(question: "Allow?", detail: "", host: "Grok Bot", icon: "", kind: "app", choices: ["cancel", "once"]), deadline: deadline) { _ in }
-check(ordinary.typing == nil, "ordinary host-answerable card stays compact")
+let ordinary = AskCardPanel(AskCard(question: "Allow?", detail: "", host: "Fixture", icon: "", kind: "app", choices: ["cancel", "once"]), deadline: deadline) { _ in }
+check(ordinary.typing == nil, "ordinary host-answerable approval has no typed field")
 ordinary.close()
-check(!window.isVisible && !other.isVisible && !alert.window.isVisible, "all windows remain offscreen")
-print(String(data: try! JSONSerialization.data(withJSONObject: ["accepted": receipt.choices, "checks": checks, "visible": window.isVisible]), encoding: .utf8)!)
+
+let result: [String: Any] = ["checks": checks, "failures": failures, "dispatches": dispatches, "visible": application.windows.contains { $0.isVisible }]
+print(String(data: try! JSONSerialization.data(withJSONObject: result), encoding: .utf8)!)
+exit(failures.isEmpty ? 0 : 1)

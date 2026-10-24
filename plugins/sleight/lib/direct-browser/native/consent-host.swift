@@ -86,19 +86,46 @@ final class ConsentInputAction: NSObject {
         guard refuseAccessibilityPress(button) else { button.isEnabled = false; refuseConsentInput(button); return }
         button.target = self; button.action = #selector(press(_:))
     }
-    @objc func press(_ sender: NSButton) {
+    @objc @discardableResult func press(_ sender: NSButton) -> Bool {
         guard let event = currentEvent(), event.window === sender.window,
             event.timestamp <= ProcessInfo.processInfo.systemUptime,
             ProcessInfo.processInfo.systemUptime - event.timestamp < 5,
-            personInput(event.cgEvent) else { refuseConsentInput(sender); return }
-        _ = sender.sendAction(originalAction, to: originalTarget)
+            personInput(event.cgEvent) else { refuseConsentInput(sender); return false }
+        return sender.sendAction(originalAction, to: originalTarget)
     }
 }
 
 // No field editor: only keyDown can change the private buffer. AX may read/focus this control, never fill or submit it.
 final class ConsentWordField: NSTextField {
+    private static let abcLayout: CFData? = {
+        let filter = [kTISPropertyInputSourceID as String: "com.apple.keylayout.ABC"] as CFDictionary
+        guard let sources = TISCreateInputSourceList(filter, true)?.takeRetainedValue() as? [TISInputSource],
+            let source = sources.first,
+            let pointer = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else { return nil }
+        return Unmanaged<CFData>.fromOpaque(pointer).takeUnretainedValue()
+    }()
+    private static func letter(_ event: NSEvent) -> String? {
+        guard let text = event.charactersIgnoringModifiers?.lowercased(), text.count == 1 else { return nil }
+        func latin(_ value: String) -> String? {
+            guard value.utf8.count == 1, let byte = value.utf8.first, (97...122).contains(byte) else { return nil }
+            return value
+        }
+        if let letter = latin(text) { return letter }
+        // Retain Latin layouts' own letters. For a non-Latin letter, use the same physical key in ABC.
+        guard text.unicodeScalars.allSatisfy({ CharacterSet.letters.contains($0) }),
+            let data = abcLayout, let bytes = CFDataGetBytePtr(data) else { return nil }
+        let layout = UnsafeRawPointer(bytes).assumingMemoryBound(to: UCKeyboardLayout.self)
+        var deadKey: UInt32 = 0, count = 0
+        var characters = [UniChar](repeating: 0, count: 4)
+        let status = UCKeyTranslate(layout, event.keyCode, UInt16(kUCKeyActionDown), 0,
+            UInt32(LMGetKbdType()), OptionBits(kUCKeyTranslateNoDeadKeysMask), &deadKey,
+            characters.count, &count, &characters)
+        guard status == noErr, count == 1 else { return nil }
+        return latin(String(utf16CodeUnits: characters, count: count).lowercased())
+    }
     private var entries: [String: ConsentInputAction]
     private var typed = ""
+    private var dispatching = false
     private var lastTimestamp: TimeInterval = -.infinity
     private var focusObserver: NSObjectProtocol?
     init(_ entries: [String: ConsentInputAction], instructions: String) {
@@ -137,7 +164,23 @@ final class ConsentWordField: NSTextField {
     private func clear() { typed = ""; stringValue = "" }
     private func refuse() { clear(); refuseConsentInput(entries.values.first?.button) }
     func invalidate() { clear(); entries.removeAll(); isEnabled = false }
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // Let an empty field retain the card's existing default. A pending word owns both Return keys,
+        // including a wrong word, refused event or nested dispatch, so NSAlert cannot send them to another button.
+        guard window?.firstResponder === self, !typed.isEmpty || dispatching,
+            event.type == .keyDown, event.keyCode == 36 || event.keyCode == 76 else {
+            return super.performKeyEquivalent(with: event)
+        }
+        keyDown(with: event)
+        return true
+    }
     override func keyDown(with event: NSEvent) {
+        guard !dispatching else { return }
+        if typed.isEmpty && (event.keyCode == 36 || event.keyCode == 76) { return }
+        let letter = Self.letter(event)
+        // Navigation, digits, punctuation and dead keys do not change or refuse a pending word.
+        let multipleCharacters = (event.charactersIgnoringModifiers?.count ?? 0) > 1
+        guard [36, 76, 48, 51].contains(event.keyCode) || letter != nil || multipleCharacters else { return }
         let now = ProcessInfo.processInfo.systemUptime
         guard isEnabled, !entries.isEmpty, let window = window, window.isKeyWindow,
             window.firstResponder === self, event.window === window, event.type == .keyDown,
@@ -154,16 +197,17 @@ final class ConsentWordField: NSTextField {
         if event.keyCode == 36 || event.keyCode == 76 {
             guard let action = entries[typed], let button = action.button, button.isEnabled,
                 button.window === window else { refuse(); return }
-            // Burn authority before dispatch: the original action may close the card or run a nested modal loop.
-            invalidate()
-            action.press(button)
+            // Clear the word and block nested input before dispatch, but leave the field answerable if press refuses.
+            clear(); dispatching = true
+            let pressed = action.press(button)
+            dispatching = false
+            if pressed { invalidate() }
             return
         }
         if event.keyCode == 51 { if !typed.isEmpty { typed.removeLast() } }
         else {
-            guard let text = event.charactersIgnoringModifiers?.lowercased(), text.utf8.count == 1,
-                let letter = text.utf8.first, (97...122).contains(letter), typed.count < 12 else { refuse(); return }
-            typed += text
+            guard let letter = letter, typed.count < 12 else { refuse(); return }
+            typed += letter
         }
         stringValue = typed
     }
