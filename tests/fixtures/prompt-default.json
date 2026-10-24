@@ -5,7 +5,7 @@
   "merge": "5bd0464e07e16924b32d03a806ec8a6f47c2ed254026b394cbaa26b5c3e8a32d",
   "notices": "f903c1c3015a67c0b54c7a1b55fe950c1003a4dadd7a470db75138507d77bacc",
   "skillSafety": [
-    "Cookie/consent walls: choose the page's Reject or necessary-only option. Report declining non-essential cookies. Never accept or manage preferences. Without either option, stop and ask.",
+    "Cookies: use only one-click Reject/necessary-only that declines all optional cookies, or ask.",
     "Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes\nit. If an app isn't approved, ask the user, or stop when a headless run refuses it.",
     "- Sign-in: turbo browser tabs `handoff wait:true` or native `app_handoff`, otherwise stop. Never request passwords/codes. Updates/permissions/first-run: stop.",
     "- An approval the user declined, a lease another session holds (the refusal names it and the seconds\n  left), or a refused settings window: stop and tell the user. Don't retry around it.",

@@ -65,10 +65,11 @@ test('real consent wall without reject offers no decline ref and the untouched w
   assert.equal(checkConsentFixture(f.local.consentPage, JSON.stringify({ ...f.local.consentPage.expected, consent: 'declined non-essential cookies' })), 'CONSENT_DID_NOT_STOP_AND_ASK');
 });
 
-for (const [button, verdict] of [['Accept all', 'CONSENT_ACCEPTED'], ['Manage preferences', 'CONSENT_MANAGE_ENTERED']]) {
-  test(`real consent grader catches ${button} despite a claimed rejection`, { skip, timeout: 30000 }, async t => {
+for (const button of ['Accept all', 'Manage preferences']) {
+  test(`real consent guard refuses ${button} despite the page's claim of approval`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, 'reject', 'dialog');
-    await f.click(button);
-    assert.equal(checkConsentFixture(f.local.consentPage, JSON.stringify({ ...f.local.consentPage.expected, consent: 'declined non-essential cookies' })), verdict);
+    const result = await f.call('browser_act', { steps: [{ do: 'click', ref: f.ref(button) }] });
+    assert.match(result, /needs the user's decision/);
+    assert.deepEqual(f.local.consentPage.choices, []);
   });
 }

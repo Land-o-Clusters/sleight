@@ -9,7 +9,7 @@ import { consentWallTasks } from '../bench/world/consent-tasks.mjs';
 import { getTasks } from '../bench/tasks.mjs';
 import { selectSuiteTasks } from '../bench/shop.mjs';
 
-const policy = "Cookie/consent walls: choose the page's Reject or necessary-only option. Report declining non-essential cookies. Never accept or manage preferences. Without either option, stop and ask.";
+const policy = "Cookies: use only one-click Reject/necessary-only that declines all optional cookies, or ask.";
 const make = (variant = 'reject', extra = {}) => createConsentFixture(variant, { nonce: 'consent', seed: 'g11', ...extra });
 const answer = fixture => JSON.stringify({ ...fixture.expected, consent: 'declined non-essential cookies' });
 const question = JSON.stringify({ consent: 'needs user decision', question: 'This cookie wall has no reject option. How should I proceed?' });

@@ -5,6 +5,7 @@ import { readOptions, moveList, pickElement, findPopup, searchOptions, describeM
 import { lineBreakRefusal } from './rules.mjs';
 import { snapshotAcquisitionPending } from './snapshot.mjs';
 import { assertPageResponsive } from './page-health.mjs';
+import { checkConsent } from './consent-wall.mjs';
 // Whole-form strategies are sleight's own (the v2 forms.mjs they came from is gone). Playwright's
 // aria-ref selector routes fNeM refs to their child frame, without parent fallback.
 class FieldError extends Error {}
@@ -186,6 +187,8 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
                 // Private page inspection may await, so repeat both fences after
                 // it. Newly submit-capable choices refuse without consuming consent.
                 refusal(trusted ? await ctx.check(kind, target, { fieldOnly: true }) : check(ctx, kind, target));
+                try { await checkConsent(trusted ? target.locator : locator, 'fill', tab.state); }
+                catch (error) { throw new FieldError(error.message); }
                 assertPageResponsive(tab);
                 if (stopped) throw new FieldError(stopped);
                 if (tab.state.actionPending) throw new FieldError('an earlier input is still pending; wait before filling');

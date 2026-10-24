@@ -3,7 +3,7 @@
 Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes
 it. If an app isn't approved, ask the user, or stop when a headless run refuses it.
 
-Cookie/consent walls: choose the page's Reject or necessary-only option. Report declining non-essential cookies. Never accept or manage preferences. Without either option, stop and ask.
+Cookies: use only one-click Reject/necessary-only that declines all optional cookies, or ask.
 
 - Open a file with `open_file`, not the app's Open panel, which can bring the app to the front.
 - Sign-in: turbo browser tabs `handoff wait:true` or native `app_handoff`, otherwise stop. Never request passwords/codes. Updates/permissions/first-run: stop.

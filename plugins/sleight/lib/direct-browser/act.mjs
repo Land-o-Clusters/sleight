@@ -16,6 +16,7 @@ import { downloadLink } from './download-link.mjs';
 import { prepareControlRecipe } from './control-recipes.mjs';
 const OPS = new Set('click type paste press select check uncheck hover scroll drag upload download dialog wait back forward reload viewport navigate'.split(' '));
 const REF_OPS = new Set('click type paste select check uncheck hover drag upload download'.split(' '));
+import { checkConsent, verifyConsent, consentDecision } from './consent-wall.mjs';
 const WAIT_CAP = 5000, SCROLL_CAP = 10000, navigateNeeds = 'the ref of an http(s) link (browser_open takes a url); to press other elements use click';
 const TIMEOUT = 1000;
 const clickModifiers = Object.freeze({ cmd: 'Meta', ctrl: 'Control' });
@@ -292,9 +293,10 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     for (let index = 0; index < steps.length; index++) {
       // navigate on a link is that link's click, so every click rule, guard and popup rule applies unchanged.
       const named = steps[index], step = named.do === 'navigate' ? { ...named, do: 'click' } : named, label = `${index + 1} ${named.do}${step.ref ? ' ' + step.ref : ''}`;
-      let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false, controlRecipe, controlObserved = false;
+      let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false, controlRecipe, controlObserved = false, consentDecline = false, consentNote;
       try {
         await ensurePageResponsive(tab);
+        if (state.consentStopped && !['wait', 'scroll'].includes(step.do)) throw Error(consentDecision + ': the previous decline was unverified. Hand off to the user.');
         if (state.dialog && step.do !== 'dialog') throw Error('a page dialog is waiting; answer it with the dialog operation');
         if (step.do === 'dialog' && !state.dialog) throw Error('no waiting dialog; read the page');
         pendingGate(state, step);
@@ -330,6 +332,8 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           const message = ruleMessage(verdict);
           if (message) throw Error(message);
           if (trusted && target.locator) locator = target.locator;
+          if (locator && !['wait', 'scroll'].includes(step.do)) consentDecline = await checkConsent(locator, step.modifier ? 'modified click' : step.do, state);
+          if (consentDecline) recoverClick = false;
           if (trusted) submits = intent(step.do, target).submit && step.do !== 'dialog';
           if (submits) {
             submit = { startedAt: now(), snapshotNo: state.snapshotNo ?? 0 };
@@ -522,6 +526,11 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         if (batched && steps[index + 1] && !armed.boundary) carry = armed;
         const boundary = armed.boundary;
         if (boundary?.kind === 'navigation' && typeof page._connection?.toImpl === 'function') await waitForThinPage(page, { now, sleep });
+        if (consentDecline && ['popup', 'dialog', 'close'].includes(boundary?.kind)) {
+          state.consentStopped = true;
+          throw Error(consentDecision + ': the decline opened another surface or closed the tab. Stop and ask.');
+        }
+        if (consentDecline) consentNote = await verifyConsent(page, state);
         closed = lossFixes && boundary?.kind === 'close';
         if (boundary?.kind === 'dialog') state.dialog = boundary.dialog;
         if (submit && state.submitUnconfirmed === submit) {
@@ -558,7 +567,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         const heldOpenings = clicked ? await tab.takeHeld?.().catch(() => 0) : 0;
         // A page can raise a window it opened from another origin with focus(); no patch in the page, and no CDP call, stops or reports that.
         const raisable = clicked ? (await tab.raisablePopups?.().catch(() => []) ?? []) : [];
-        lines.push(label + ': ' + outcome + clickRetry + (foregroundTabs > 0 && boundary?.kind !== 'popup' && !popupTab ? `. A tab the page opened probably took the foreground (${why})` : '')
+        lines.push(label + ': ' + (consentNote ? consentNote + '; ' : '') + outcome + clickRetry + (foregroundTabs > 0 && boundary?.kind !== 'popup' && !popupTab ? `. A tab the page opened probably took the foreground (${why})` : '')
           + (raisable.length ? process.env.SLEIGHT_MT !== '0'
             ? boundary?.kind === 'popup' && raisable.length === 1 && raisable[0] === popupTab && !foregroundTabs
               ? '; the page can bring it forward on its own'
@@ -574,14 +583,23 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         if (error.stuckPage) throw error;
         if (!state.dialog && /timeout|timed out|deadline|Snapshot (unavailable|acquisition)/i.test(error.message)) await probePage(tab);
         if (lossFixes && started && armed?.boundary?.kind === 'close') {
+        if (lossFixes && started && armed?.boundary?.kind === 'close' && !consentDecline) {
           closed = true; lines.push(label + ': tab closed' + (submit && state.submitUnconfirmed === submit ? '; ' + closedSubmitWarning : '')); stoppedAt = index + 1; break;
         }
         if (started && submit && state.submitUnconfirmed === submit) submit.settledAt = now();
         let detail = step.do === 'upload' && started ? 'upload did not finish; inspect the control before retrying' : String(error.message);
+        if (consentDecline && started) {
+          state.consentStopped = true;
+          if (armed?.boundary?.kind === 'close') closed = true;
+          // Observe after a lost completion too, but never turn that uncertain
+          // input into a successful decline or let a later input follow it.
+          try { await verifyConsent(page, state); } catch (verification) { detail = verification.message; }
+          if (!detail.includes(consentDecision)) detail = consentDecision + ': the decline action did not finish. Stop and ask.';
+        }
         for (const value of [step.text, ...step.values ?? [], ...step.paths ?? []]) if (typeof value === 'string' && value) detail = detail.replaceAll(value, '[redacted]');
         detail = clean(detail);
-        if (/intercepts pointer events/i.test(error.message)) detail = 'covered by another element; dismiss the cover first'; // Playwright's message quotes the page's own markup
-        if (/intercepts pointer events/i.test(error.message) && locator) {
+        if (!consentDecline && /intercepts pointer events/i.test(error.message)) detail = 'covered by another element; dismiss the cover first'; // Playwright's message quotes the page's own markup
+        if (!consentDecline && /intercepts pointer events/i.test(error.message) && locator) {
           try {
             const cover = await locator.evaluate(coverDetails, undefined, { timeout: 250 });
             if (cover?.own) detail = 'covered by its own label; use check or uncheck, or click the label';
