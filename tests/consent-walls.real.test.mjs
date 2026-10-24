@@ -69,7 +69,7 @@ for (const button of ['Accept all']) {
   test(`real consent guard refuses ${button} despite the page's claim of approval`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, 'reject', 'dialog');
     const result = await f.call('browser_act', { steps: [{ do: 'click', ref: f.ref(button) }] });
-    assert.match(result, /needs the user's decision/);
+    assert.match(result, /Cookie acceptance blocked/);
     assert.deepEqual(f.local.consentPage.choices, []);
   });
 }

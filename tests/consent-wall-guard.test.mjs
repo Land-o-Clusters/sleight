@@ -22,7 +22,7 @@ async function guarded(before, code, after = cleared, loseCompletion = false) {
   return { sent, text: written.join('\n'), error };
 }
 
-for (const role of ['dialog', 'region', 'group', 'container']) test(`engine blocks accept in an unnamed ${role} with cookie text`, async () => {
+for (const role of ['dialog', 'region Cookies', 'group OneTrust', 'container Cookiebot']) test(`engine blocks accept in a qualifying ${role} with cookie text`, async () => {
   const result = await guarded(tree('Reject all', role), 'await app.click(4);');
   assert.match(result.error?.message ?? '', /Reject all/);
   assert.deepEqual(result.sent, []);
@@ -72,7 +72,7 @@ for (const code of ['await app.click(4);', 'await app.doubleClick(4);', 'await a
 
 for (const label of ['Accept all, Description: Reject all', 'Reject all, Description: Accept all']) test(`engine checks both visible and accessible names: ${label}`, async () => {
   const result = await guarded(tree(label), 'await app.click(5);');
-  assert.match(result.error?.message ?? '', /needs the user's decision/);
+  assert.match(result.error?.message ?? '', /Cookie acceptance blocked/);
   assert.deepEqual(result.sent, []);
 });
 
@@ -109,10 +109,10 @@ test('engine does not use cookie wording beyond the nearest landmark', () => {
   assert.equal(engineConsent('click', [5], before)?.blocked, undefined);
 });
 
-for (const words of ['Çerezler', 'Kakor', 'Evästeet', 'Sütik', 'personalisierte Werbung', 'OneTrust', 'Cookiebot', 'partenaires']) test(`cookie wording recognises ${words}`, () => {
+for (const words of ['Çerezler', 'Kakor', 'Evästeet', 'Sütik', 'Galletas', 'Kekse']) test(`cookie wording recognises ${words}`, () => {
   assert.equal(cookieWording(words), true);
 });
-for (const words of ['consent', '同意', '동의', 'zgoda', 'OAuth permission']) test(`cookie wording excludes bare ${words}`, () => {
+for (const words of ['consent', '同意', '동의', 'zgoda', 'OAuth permission', 'personalisierte Werbung', 'OneTrust', 'Cookiebot', 'partenaires', 'tracking', 'privacy', 'partners']) test(`cookie wording excludes bare ${words}`, () => {
   assert.equal(cookieWording(words), false);
 });
 for (const label of ['Refuser', 'Alles ablehnen', '拒絕全部', 'Reject optional cookies', 'Deny', 'Continue without accepting']) test(`decline classifier recognises ${label}`, () => {

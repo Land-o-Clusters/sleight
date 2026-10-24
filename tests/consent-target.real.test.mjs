@@ -12,7 +12,7 @@ const wall = (controls, attrs = '') => `<!doctype html><meta charset="utf-8"><se
 const accept = `<button ${bad}>Accept all</button>`;
 const reject = `<button ${close}>Reject all</button>`;
 
-for (const [label, attrs] of [['GOV.UK static region', 'role="region" aria-label="Cookies on this site"'], ['unnamed container', '']]) {
+for (const [label, attrs] of [['GOV.UK static region', 'role="region" aria-label="Cookies on this site"'], ['unnamed fixed container', 'style="position:fixed"']]) {
   test(`${label}: accept is blocked and the result names Reject all`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, wall(accept + reject, attrs));
     const result = await f.act('Accept all');
@@ -27,21 +27,21 @@ for (const [vendor, record, containerId, rejectId] of [['OneTrust', "document.co
   test(`${vendor}: Reject closes the wall and reports decline despite vendor encoding`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, wall(`<div class="cmp-actions"><button id="${rejectId}" onclick="${record};this.closest('section').remove()">Reject all</button></div>`, `id="${containerId}" role="dialog"`));
     assert.match(await f.act('Reject all'), /decline confirmed/i);
-    assert.doesNotMatch(await f.act('Continue'), /needs the user's decision/);
+    assert.doesNotMatch(await f.act('Continue'), /Cookie acceptance blocked/);
     assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'yes');
   });
 }
 
 test('sticky recipe sidebar with cookies does not fence the recipe action', { skip, timeout: 30000 }, async t => {
   const f = await setup(t, '<aside style="position:sticky;top:0"><h2>Cookies</h2><button>Manage preferences</button></aside><main><button onclick="document.body.dataset.next=\'yes\'">Continue</button></main>');
-  assert.doesNotMatch(await f.act('Continue'), /needs the user's decision/);
+  assert.doesNotMatch(await f.act('Continue'), /Cookie acceptance blocked/);
   assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'yes');
 });
 
 for (const heading of ['OAuth permission', '同意', '동의', 'Zgoda']) {
   test(`${heading}: bare consent permits I consent`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, `<section role="dialog"><h1>${heading}</h1><p>Share your name with this account.</p><button onclick="document.body.dataset.next='yes'">I consent</button></section>`);
-    assert.doesNotMatch(await f.act('I consent'), /needs the user's decision/);
+    assert.doesNotMatch(await f.act('I consent'), /Cookie acceptance blocked/);
     assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'yes', await f.read());
   });
 }
@@ -49,7 +49,7 @@ for (const heading of ['OAuth permission', '同意', '동의', 'Zgoda']) {
 for (const [name, visible] of [['Reject all', 'Accept all'], ['Accept all', 'Reject all']]) {
   test(`accept mismatch: name ${name}, visible ${visible} blocks`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, wall(`<button aria-label="${name}" ${bad}>${visible}</button>${reject}`, 'role="dialog"'));
-    assert.match(await f.act(name), /needs the user's decision/);
+    assert.match(await f.act(name), /Cookie acceptance blocked/);
     assert.equal(await f.entry.page.locator('body').getAttribute('data-accepted'), null);
   });
 }
@@ -79,14 +79,14 @@ test('a fading wall is confirmed once its transition finishes', { skip, timeout:
 test('persistent decline only reports unverified and later input passes', { skip, timeout: 30000 }, async t => {
   const f = await setup(t, wall('<button>Reject all</button>', 'role="dialog"'));
   assert.match(await f.act('Reject all'), /decline unverified/i);
-  assert.doesNotMatch(await f.act('Continue'), /needs the user's decision/);
+  assert.doesNotMatch(await f.act('Continue'), /Cookie acceptance blocked/);
   assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'yes');
 });
 
 test('accept without a reject asks, while unrelated page input passes', { skip, timeout: 30000 }, async t => {
   const f = await setup(t, wall(accept, 'role="dialog"'));
   assert.match(await f.act('Accept all'), /no reject option.*ask/i);
-  assert.doesNotMatch(await f.act('Continue'), /needs the user's decision/);
+  assert.doesNotMatch(await f.act('Continue'), /Cookie acceptance blocked/);
 });
 
 test('cross-origin Stripe field passes; a CMP frame blocks only its accept target', { skip, timeout: 30000 }, async t => {
@@ -118,25 +118,25 @@ test('keyboard activation blocks an accept target but ordinary preference fill p
   const f = await setup(t, wall(`${accept}<label><input type="checkbox">Analytics</label>${reject}`, 'role="dialog"'));
   const before = await f.read();
   const result = await f.call('browser_act', { steps: [{ do: 'press', ref: f.ref(before, 'Accept all'), key: 'Enter' }] });
-  assert.match(result, /needs the user's decision/);
+  assert.match(result, /Cookie acceptance blocked/);
   assert.equal(await f.entry.page.locator('body').getAttribute('data-accepted'), null);
   const fill = await f.call('browser_fill', { fields: [{ ref: f.ref(before, 'Analytics'), value: true }] });
-  assert.doesNotMatch(fill, /needs the user's decision/);
+  assert.doesNotMatch(fill, /Cookie acceptance blocked/);
   assert.equal(await f.entry.page.locator('input').isChecked(), true);
 });
 
 test('a sibling cookie dialog does not supply context to an outside Continue button', { skip, timeout: 30000 }, async t => {
   const f = await setup(t, '<section role="dialog"><p>Cookies</p><button>Accept all</button></section><button onclick="document.body.dataset.next=\'yes\'">Continue</button>');
   const result = await f.act('Continue');
-  assert.doesNotMatch(result, /needs the user's decision/);
+  assert.doesNotMatch(result, /Cookie acceptance blocked/);
   assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'yes', result);
 });
 
 test('browser_fill submit reaches the same accept-target guard', { skip, timeout: 30000 }, async t => {
-  const f = await setup(t, wall('<label>Name<input aria-label="Name"></label>' + accept + reject));
+  const f = await setup(t, wall('<label>Name<input aria-label="Name"></label>' + accept + reject, 'style="position:fixed"'));
   const before = await f.read();
   const result = await f.call('browser_fill', { fields: [{ ref: f.ref(before, 'Name'), value: 'Fixture' }], submit: f.ref(before, 'Accept all') });
-  assert.match(result, /needs the user's decision/);
+  assert.match(result, /Cookie acceptance blocked/);
   assert.equal(await f.entry.page.locator('body').getAttribute('data-accepted'), null);
   assert.equal(await f.entry.page.getByLabel('Name').inputValue(), 'Fixture');
 });

@@ -42,7 +42,7 @@ for (const [language, heading, reject, necessary] of labels) {
 for (const label of ['Accept all', 'Allow all', 'Accept all or reject all']) {
   test(`turbo blocks accepting control ${label}`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, wall(`<button aria-label="${label}" onclick="document.body.dataset.bad='sent';${remove}">◼</button>`));
-    assert.match(await f.act(label), /needs the user's decision/);
+    assert.match(await f.act(label), /Cookie acceptance blocked/);
     assert.equal(await f.entry.page.locator('body').getAttribute('data-bad'), null);
   });
 }
@@ -50,7 +50,7 @@ for (const label of ['Manage preferences', 'Customise', 'Save choices', 'X', 'Re
   test(`turbo passes nonaccept control ${label} without claiming decline`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, wall(`<button aria-label="${label}" onclick="document.body.dataset.next='sent'">◼</button>`));
     const result = await f.act(label);
-    assert.doesNotMatch(result, /needs the user's decision|decline confirmed/i);
+    assert.doesNotMatch(result, /Cookie acceptance blocked|decline confirmed/i);
     assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'sent');
   });
 }
@@ -66,7 +66,7 @@ for (const [why, handler, status] of [
     const f = await setup(t, wall('<button id="reject">Reject all</button>', `document.querySelector('#reject').onclick=()=>{${handler}}`));
     const result = await f.act('Reject all');
     assert.match(result, new RegExp('decline ' + status, 'i'));
-    assert.doesNotMatch(await f.act('Read article'), /needs the user's decision/);
+    assert.doesNotMatch(await f.act('Read article'), /Cookie acceptance blocked/);
     assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'sent');
   });
 }
@@ -74,7 +74,7 @@ for (const [why, handler, status] of [
 test('a cookie article without a dialog or fixed region does not trigger the guard', { skip, timeout: 30000 }, async t => {
   const f = await setup(t, '<article><h1>Cookie and consent guide</h1><p>How to reject cookies.</p><button onclick="document.body.dataset.next=\'sent\'">Read article</button></article>');
   const result = await f.act('Read article');
-  assert.doesNotMatch(result, /needs the user's decision|Declined non-essential cookies/);
+  assert.doesNotMatch(result, /Cookie acceptance blocked|Declined non-essential cookies/);
   assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'sent');
 });
 
@@ -82,14 +82,14 @@ test('an open shadow wall cannot hide an Accept control behind a Reject span', {
   const panel = '<section role="dialog"><h1>Cookies</h1><button aria-label="Accept all" onclick="document.body.dataset.bad=\'sent\'"><span>Reject all</span></button></section>';
   const f = await setup(t, `<div id="root"></div><script>document.querySelector('#root').attachShadow({mode:'open'}).innerHTML=${JSON.stringify(panel)}</script>`);
   const result = await f.act('Accept all');
-  assert.match(result, /needs the user's decision/);
+  assert.match(result, /Cookie acceptance blocked/);
   assert.equal(await f.entry.page.locator('body').getAttribute('data-bad'), null);
 });
 
 test('a fixed cookie region without a decline option lets unrelated page input pass', { skip, timeout: 30000 }, async t => {
   const f = await setup(t, wall('<button>Accept all</button><button>Manage preferences</button>', '', { banner: true }));
   const result = await f.act('Read article');
-  assert.doesNotMatch(result, /needs the user's decision/);
+  assert.doesNotMatch(result, /Cookie acceptance blocked/);
   assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'sent');
 });
 
@@ -112,16 +112,16 @@ test('a decline with lost completion reports unverified and does not fence later
   assert.match(result, /decline unverified/i);
   assert.doesNotMatch(result, /decline confirmed/i);
   const again = await f.act('Read article');
-  assert.doesNotMatch(again, /needs the user's decision/);
+  assert.doesNotMatch(again, /Cookie acceptance blocked/);
   assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'sent');
 });
 
 test('a same-origin frame uses its own cookie text and target', { skip, timeout: 30000 }, async t => {
-  const f = await setup(t, '<section style="position:fixed;inset:10px" aria-label="Cookie consent"><iframe title="Choices" src="/choices" style="width:600px;height:300px"></iframe></section>', {
+  const f = await setup(t, '<section style="position:fixed;inset:10px" aria-label="Cookie consent"><iframe title="OneTrust choices" src="/choices" style="width:600px;height:300px"></iframe></section>', {
     '/choices': '<p>Cookies and tracking</p><button onclick="parent.document.querySelector(\'section\').remove()">Reject all</button><button>Accept all</button>',
   });
   const frame = f.entry.page.frames()[1], target = frame.getByRole('button', { name: 'Reject all', exact: true });
-  await assert.rejects(checkConsent(frame.getByRole('button', { name: 'Accept all', exact: true }), 'click', f.entry.state), /needs the user's decision/);
+  await assert.rejects(checkConsent(frame.getByRole('button', { name: 'Accept all', exact: true }), 'click', f.entry.state), /Cookie acceptance blocked/);
   await backgroundClick(f.entry, target, async extra => {
     assert.equal(await checkConsent(target, 'click', f.entry.state), true);
     return target.click({ timeout: 1000, ...extra });
@@ -134,7 +134,7 @@ test('browser_fill may toggle a nonaccept preference inside a cookie container',
   const f = await setup(t, wall(`<label><input type="checkbox" onchange="document.body.dataset.bad='sent'">Analytics</label><button>Reject all</button>`));
   const before = await f.read(), target = f.ref(before, 'Analytics'); assert.ok(target, before);
   const result = await f.call('browser_fill', { fields: [{ ref: target, value: true }] });
-  assert.doesNotMatch(result, /needs the user's decision/);
+  assert.doesNotMatch(result, /Cookie acceptance blocked/);
   assert.equal(await f.entry.page.locator('input').isChecked(), true);
   assert.equal(await f.entry.page.locator('body').getAttribute('data-bad'), 'sent');
 });
@@ -144,7 +144,7 @@ for (const label of ['Accept all', 'Reject all']) test(`closed shadow consent ap
   const f = await setup(t, `<div id="root"></div><script>document.querySelector('#root').attachShadow({mode:'closed'}).innerHTML=${JSON.stringify(panel)}</script>`);
   const result = await f.act(label);
   if (label === 'Accept all') {
-    assert.match(result, /not run:.*needs the user's decision/);
+    assert.match(result, /not run:.*Cookie acceptance blocked/);
     assert.equal(await f.entry.page.locator('body').getAttribute('data-bad'), null);
   } else {
     assert.match(result, /decline unverified/i);

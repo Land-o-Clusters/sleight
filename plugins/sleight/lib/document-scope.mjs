@@ -6,7 +6,7 @@ import { literalElements } from './literal-elements.mjs';
 import { actionOutcome, outcomeRecord } from './action-outcomes.mjs';
 import { moneyFigures, moneyConflicts } from './payment-figures.mjs';
 import { enginePayment, paymentAction } from './payment-gate.mjs';
-import { cookieWording, declinesCookies, acceptsCookies, engineConsent } from './consent-wall.mjs';
+import { cookieWording, consentManager, declinesCookies, acceptsCookies, engineConsent } from './consent-wall.mjs';
 import { paymentWords, refundableName } from './direct-browser/rules.mjs';
 import { tabChromeRefusal, tabProbeRefusal } from './tab-probe.mjs';
 import { verifyWindowIdentity } from './window-identity.mjs';
@@ -825,6 +825,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
     const refundableName = ${refundableName.toString()};
     const paymentAction = ${paymentAction.toString()};
     const cookieWording = ${cookieWording.toString()};
+    const consentManager = ${consentManager.toString()};
     const declinesCookies = ${declinesCookies.toString()};
     const acceptsCookies = ${acceptsCookies.toString()};
     const engineConsent = ${engineConsent.toString()};
@@ -1616,7 +1617,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
             state.consentStops ??= new Map();
             if (consent?.blocked) {
               state.consentStops.set(consentKey, consent.why);
-              throw stop("Cookie wall needs the user's decision: " + state.consentStops.get(consentKey));
+              throw stop("Cookie acceptance blocked: " + state.consentStops.get(consentKey));
             }
             state.consentStops.delete(consentKey);
           }
@@ -1730,7 +1731,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
                 // wrap" resent as "Pay now" went through ungated, review of X5). The refusal sent nothing, so a stop here is
                 // a payment stop, not a refusal, and a spend the refused attempt recorded doesn't count.
                 const retryConsent = engineConsent(name, args, fresh);
-                if (retryConsent?.blocked) throw stop("Cookie wall needs the user's decision: " + retryConsent.why + '. Stop and ask.', fresh);
+                if (retryConsent?.blocked) throw stop("Cookie acceptance blocked: " + retryConsent.why, fresh);
                 consent = retryConsent;
                 if (state.payment && paymentAction(name, args)) {
                   attempt.text = fresh;
