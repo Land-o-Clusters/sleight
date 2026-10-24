@@ -92,7 +92,8 @@ alert.layout()
 check(alert.buttons[1].target === sessionTarget && alert.buttons[1].action == sessionAction, "session action unchanged")
 check(alert.buttons[3].target === cancelTarget && alert.buttons[3].action == cancelAction, "cancel action unchanged")
 check(alert.buttons[2].target === actions[1], "layout retains the guarded target")
-let feedback = alert.accessoryView as! NSTextField
+func textFields(_ view: NSView) -> [NSTextField] { (view as? NSTextField).map { [$0] } ?? view.subviews.flatMap(textFields) }
+let feedback = textFields(alert.accessoryView!).first { $0 !== actions.first?.typing?.instructions && !($0 is ConsentWordField) }!
 check(feedback.stringValue.isEmpty, "feedback starts blank")
 check(!alert.buttons[2].accessibilityPerformPress(), "real alert AXPress refused")
 check(feedback.stringValue == consentInputMessage, "AX refusal shows the fixed line")
