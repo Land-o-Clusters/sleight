@@ -396,6 +396,9 @@ import { withMT } from './fixtures/mt-env.mjs';
 for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned inside existing budgets, switch=${mode}`, async () => withMT(mode, async () => {
   const tools = browserTools('bfixture');
   assert.equal(hash(JSON.stringify(tools)), mode === '0' ? baseline.browserToolsLegacy : baseline.browserToolsMT);
+  // p143 integration (fd1b screenshots/motion, fd3b waits, fd5b links/viewport, g2b download, g1b handoff, g4b PDF):
+  // each lane measured its own increment; the merged catalog is pinned here.
+  assert.equal(JSON.stringify(tools).length, mode === '0' ? 5079 : 5361);
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);
 }));

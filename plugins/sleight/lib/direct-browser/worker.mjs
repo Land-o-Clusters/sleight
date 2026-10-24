@@ -148,6 +148,7 @@ const appNotice = error => APP_NOTICE.test(error?.message ?? '') && typeof error
 // and relaunch), the app's own Quit (60 s), the reopen and its windows (30 s). The begin reply carries that deadline, capped
 // at 10 minutes, so the bridge does not take the wait for a hung worker; later calls keep the default.
 const APP_PREPARE_WAIT_MS = 330000, APP_PREPARE_CAP_MS = 600000;
+const PDF_BUILD_WAIT_MS = 330000; // compiler 300 s, parser 10 s, and collection/identity checks
 const validWait = value => Number.isSafeInteger(value) && value >= 1000 && value <= APP_PREPARE_CAP_MS;
 export function handoffRpcWaitMs(waitMs, ownedTabs) {
   if (!Number.isSafeInteger(waitMs) || waitMs <= 0 || waitMs > HANDOFF_WAIT_MS ||
@@ -219,6 +220,13 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       } catch { lose(undefined, 'worker-protocol'); }
       return;
     }
+    // Only the trusted worker's active PDF compiler can extend this exact page-reading request, once.
+    if (hello && exact(frame, ['version', 'id', 'pdfBuild']) && frame.version === 3 && frame.pdfBuild === true) {
+      const entry = pending.get(frame.id);
+      if (!active || !current() || !entry || entry.pdfBuild || !['browser_read', 'browser_open', 'browser_act', 'browser_fill'].includes(entry.tool)) { lose(undefined, 'worker-protocol'); return; }
+      entry.pdfBuild = true; clearTimeout(entry.timer);
+      entry.timer = setTimeout(() => lose(), PDF_BUILD_WAIT_MS); return;
+    }
     if (!hello || !exact(frame, ['version', 'id', 'result']) || frame.version !== 3 || !pending.has(frame.id)) { lose(undefined, 'worker-protocol'); return; }
     const entry = pending.get(frame.id); pending.delete(frame.id); clearTimeout(entry.timer); entry.resolve(frame.result);
   });
@@ -234,7 +242,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
     if (Buffer.byteLength(JSON.stringify(frame)) > 131072) return Promise.reject(Error('INVALID_ARGUMENT'));
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { lose(); reject(Error('V3_WORKER_UNAVAILABLE')); }, deadlineMs);
-      pending.set(frame.id, { resolve, reject, timer, handoff: method === 'call' && params.name === 'browser_tabs' && params.arguments?.do === 'handoff' && params.arguments.wait === true });
+      pending.set(frame.id, { resolve, reject, timer, handoff: method === 'call' && params.name === 'browser_tabs' && params.arguments?.do === 'handoff' && params.arguments.wait === true, ...(method === 'call' ? { tool: params.name } : {}) });
       try { child.send(frame, error => { if (error) lose(); }); } catch { lose(); }
     });
   }
@@ -324,7 +332,21 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
     import('./act.mjs'), import('./fill.mjs'), import('./rules.mjs'),
   ]);
   const ctx = (dependencies.createContext ?? createV3Context)({ binding, browser, ui });
+  let pdf, pdfBuilding;
+  if (dependencies.pdfInventory || dependencies.pdfExtract) {
+    const [{ createPdfReader }, { pdfFileAllowed }] = await Promise.all([import('./pdf.mjs'), import('./v3-context.mjs')]);
+    let prepared;
+    pdf = createPdfReader({ authorizeFile: path => pdfFileAllowed(binding, path),
+      extract: dependencies.pdfExtract ?? (async (path, cursor, { signal }) => {
+        const { preparePdfHelper, extractPdf } = await import('./host.mjs');
+        const built = await (prepared ??= (dependencies.preparePdfHelper ?? preparePdfHelper)({ inventory: dependencies.pdfInventory, signal,
+          onProgress: event => { if (event.stage === 'compile') pdfBuilding?.(); } }));
+        if (built.status !== 'ready') throw Error('PDF helper needs Apple command-line tools and a successful local build.');
+        return (dependencies.extractPdf ?? extractPdf)(built.receipt, path, cursor, { signal });
+      }) });
+  }
   const runtime = createToolDispatcher({ browser, pages, snapshot, ctx, endpoint, sites: dependencies.sites, onSite: dependencies.onSite,
+    pdf,
     tracePhase: dependencies.tracePhase,
     runSteps: dependencies.runSteps ?? runSteps, fillFields: dependencies.fillFields ?? fillFields,
     deliverSnapshot(state, capture) {
@@ -336,7 +358,11 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
       // an ordinary snapshot was accepted. Both count as delivered text here.
       return true;
     } });
-  return Object.freeze({ call: runtime.call, delivered: runtime.delivered,
+  return Object.freeze({ async call(request, control) {
+      let notified = false;
+      pdfBuilding = () => { if (!notified) { notified = true; control?.pdfBuilding?.(); } };
+      try { return await runtime.call(request, control); } finally { pdfBuilding = undefined; }
+    }, delivered: runtime.delivered,
     async end() { const cleanup = ctx.dispose(); const previous = await runtime.end();
       const receipt = { ...previous, cleanup: [...previous.cleanup] };
       if ((await cleanup).retained) receipt.cleanup.push({ resource: 'uploads', status: 'retained', code: 'CLEANUP_UNPROVED' });
@@ -409,7 +435,10 @@ export function serveV3Worker({ channel, browser, begin, current = () => true, c
         return !!record && record.runtime === runtime && record.hash === frame.params.hash && record.hash === hash(record.result) && runtime.delivered(record.result) === true;
       }
       const request = validateToolCall(frame.params, browser), owner = runtime;
-      const result = await owner.call(request, { handoffDeadline: detail => send({ version: 3, id: frame.id, handoff: detail }) });
+      const result = await owner.call(request, { handoffDeadline: detail => send({ version: 3, id: frame.id, handoff: detail }), pdfBuilding: () => {
+        if (epoch === generation && !ended && runtime === owner && ['browser_read', 'browser_open', 'browser_act', 'browser_fill'].includes(request.name))
+          send({ version: 3, id: frame.id, pdfBuild: true });
+      } });
       if (epoch !== generation || ended || runtime !== owner) return { resultId: frame.id, result: failure(request.name !== 'browser_read') };
       if (results.size >= 128) results.delete(results.keys().next().value);
       results.set(frame.id, { runtime: owner, result, hash: hash(result) });
@@ -688,7 +717,7 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
               snapshot: snapshots.snapshot, ui, endpoint: selected.endpoint, dependencies: {
                 // Acknowledgment is coupled to the exact output identity in the
                 // fork protocol. Merely taking a snapshot never admits its refs.
-                acknowledgeSnapshot: snapshots.acknowledgeSnapshot, sites, onSite: noteSite,
+                acknowledgeSnapshot: snapshots.acknowledgeSnapshot, sites, onSite: noteSite, pdfInventory: config.receipt,
                 tracePhase: (phase, call) => trace(phase, turnNo, call),
               } });
             resource.runtime = runtime;

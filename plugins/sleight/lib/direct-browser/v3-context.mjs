@@ -27,6 +27,16 @@ export function createV3TurnBinding(message, current) {
   return binding;
 }
 
+// A page or tool argument cannot authorize reading a local file. Keep this grammar narrow until the owner expands it.
+export function pdfFileAllowed(binding, path) {
+  const bound = bindings.get(binding);
+  try {
+    if (!bound || bound.current() !== true) return false;
+    const match = /^(?:Please\s+)?(?:Read|Summarize)\s+(?:the\s+)?PDF\s+("(?:[^"\\\r\n]|\\.)*")(?=$|[.\s])/i.exec(bound.message.text.trim());
+    return !!match && JSON.parse(match[1]) === path;
+  } catch { return false; }
+}
+
 // A closed request grammar: ambiguous prose, negations and mentions ask the
 // native UI. JSON here is text from the authenticated user message, not tool JSON.
 // The quoted prose form has the same exact terms. Never infer omitted terms.

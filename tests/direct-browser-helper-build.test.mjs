@@ -134,6 +134,7 @@ test('an aborted compiler keeps its bank and lock until the child closes', { ski
   const abortSeen = new Promise(resolve => { stopped = resolve; });
   t.after(() => { childProcess.execFile = original; syncBuiltinESMExports(); });
   childProcess.execFile = (_command, args, options, callback) => {
+    assert.equal(options.killSignal, 'SIGKILL');
     source = args[args.indexOf('-o') - 2];
     child = new EventEmitter();
     options.signal.addEventListener('abort', () => {
@@ -148,7 +149,7 @@ test('an aborted compiler keeps its bank and lock until the child closes', { ski
   const lock = join(f.cacheRoot, 'build.lock');
   assert.equal(existsSync(lock), true, 'the compiler still owns its lock');
   assert.equal(existsSync(source), true, 'the compiler still owns its source bank');
-  child.emit('close', null, 'SIGTERM');
+  child.emit('close', null, 'SIGKILL');
   const result = await building;
   assert.equal(result.detail.errorCode, 'ABORT_ERR');
   assert.equal(existsSync(lock), false);

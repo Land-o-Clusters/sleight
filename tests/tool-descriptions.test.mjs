@@ -27,6 +27,16 @@ function descriptions(value, path) {
   return Object.entries(value).flatMap(([key, item]) => key === 'description' ? [[path, item]] : descriptions(item, `${path}.${key}`));
 }
 
+test('PDF discovery adds 84 description characters while preserving the read cap and permission boundary', () => {
+  const tool = browserTools('bfixture').find(tool => tool.name === 'browser_read');
+  // 303 on codex/g4b; +102 from fd5b links and fd1b screenshot in the p143 merge.
+  assert.equal(tool.description.length, 405);
+  assert.match(tool.description, /Reads never grant permission/);
+  assert.match(tool.description, /PDFs: tab or file; ref continues/);
+  assert.match(tool.description, /user message: Read PDF "<path>"/);
+  assert.deepEqual(tool.inputSchema.properties.max_chars, { type: 'integer', minimum: 1000, maximum: 40000 });
+});
+
 for (const prompt of [undefined, 'lean']) for (const leanCalls of [false, true]) {
   for (const firstCallBatch of [false, true, 'merge', 'nosavestop']) for (const approvalScope of ['session', 'document']) {
     test(`every delivered description fits Claude Code: ${JSON.stringify({ prompt, leanCalls, firstCallBatch, approvalScope })}`, t => {
