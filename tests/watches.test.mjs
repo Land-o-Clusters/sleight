@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, realpathSync, rmSync, readFileSync, writeFileSync, existsSync, statSync, symlinkSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, readFileSync, writeFileSync, existsSync, statSync, symlinkSync, mkdirSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WatchStore, watchPlan, watchCommand, recordWatchRead } from '../plugins/sleight/lib/watches.mjs';
@@ -192,9 +192,9 @@ test('the copied standalone routine launcher resolves the current install and ro
     sent.push({ file, args }); const child = new EventEmitter(); queueMicrotask(() => child.emit('close', 0)); return child;
   };
   mkdirSync(join(f.store.root, 'a'.repeat(20)), { recursive: true });
-  assert.equal(await launchRoutine('a'.repeat(20), { home: f.home, spawnChild, notify, kind: 'watch' }), 0);
+  assert.equal(await launchRoutine('a'.repeat(20), { home: f.home, spawnChild, notify, launchctl: f.store.launchctl, kind: 'watch' }), 0);
   assert.deepEqual(sent[0], { file: join(installPath, 'bin/sleight-mcp'), args: ['watch', 'run-now', 'a'.repeat(20), '--scheduled'] });
-  assert.equal(await launchRoutine('a'.repeat(20), { home: f.home, spawnChild, notify, kind: 'arbitrary' }), 1);
+  assert.equal(await launchRoutine('a'.repeat(20), { home: f.home, spawnChild, notify, launchctl: f.store.launchctl, kind: 'arbitrary' }), 1);
   assert.equal(sent.length, 1);
 });
 
@@ -342,6 +342,8 @@ test('a failed or concurrent missing-install notice still consumes its hour and 
   const f = fixture(t), plan = await f.store.add(query, '10m');
   let notices = 0;
   const options = { home: f.home, kind: 'watch', launchctl: async () => {}, notify: async () => { notices++; throw Error('fixture delivery unavailable'); } };
+  await launchRoutine(plan.id, options);
+  await launchRoutine(plan.id, options);
   await Promise.all([launchRoutine(plan.id, options), launchRoutine(plan.id, options)]);
   assert.equal(notices, 1);
   const directory = join(f.home, 'notice-fixture'); mkdirSync(directory);
@@ -419,7 +421,7 @@ test('retirement notices are attempted once and share the hourly allowance', asy
   assert.equal(f.notices.length, 1, 'retirement must share the condition-change hour');
 });
 
-test('target changes retry a fresh binding and count unresolved changes toward retirement', async t => {
+test('target changes retry a fresh binding but repeated read races pause without removal', async t => {
   const f = fixture(t), plan = await f.store.add(query, '10m'), calls = [];
   f.store.read = async (_query, previous, policy) => {
     calls.push({ previous, policy });
@@ -433,8 +435,11 @@ test('target changes retry a fresh binding and count unresolved changes toward r
   f.store.read = async () => { throw Error('WATCH_TARGET_CHANGED'); };
   for (let n = 1; n <= 3; n++) {
     const result = await f.store.run(plan.id, { scheduled: true });
-    assert.equal(result.missingTabs, n); assert.equal(Boolean(result.removed), n === 3);
+    assert.equal(Boolean(result.removed), false);
+    assert.equal(result.missingTabs, undefined);
   }
+  assert.equal(f.store.load(plan.id).paused, true);
+  assert.equal(f.calls.filter(args => args[0] === 'bootout').length, 0);
 });
 
 test('corrupt notice markers are rewritten without pausing a successful watch', async t => {
@@ -501,6 +506,8 @@ test('missing-plugin launcher waits for its shared hour, then retires even an al
     notify: async value => notices.push(value), launchctl: async args => calls.push(args) };
   await launchRoutine(plan.id, options);
   assert.equal(notices.length, 0); assert.equal(calls.length, 0); assert.equal(existsSync(plan.directory), true);
+  await launchRoutine(plan.id, options);
+  await launchRoutine(plan.id, options);
   at += 3600000;
   await launchRoutine(plan.id, options);
   assert.equal(notices.length, 1); assert.match(notices[0], /retired/);
@@ -526,4 +533,139 @@ test('a concurrent retirement sweep cannot boot out a new installation of the sa
   await f.store.add(query, '10m');
   assert.equal(existsSync(plan.directory), true);
   assert.equal(f.calls.at(-1)[0], 'bootstrap');
+});
+
+test('plugin loss requires the same registry failure on three consecutive ticks', async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  const { launchRoutine } = await import(pathToFileURL(plan.launcherPath).href);
+  const calls = [], notices = [], options = { home: f.home, kind: 'watch',
+    launchctl: async args => calls.push(args), notify: async value => notices.push(value),
+    spawnChild: () => { const child = new EventEmitter(); queueMicrotask(() => child.emit('close', 0)); return child; } };
+  const registry = join(f.home, '.claude/plugins/installed_plugins.json');
+  mkdirSync(join(f.home, '.claude/plugins'), { recursive: true });
+  writeFileSync(registry, '{');
+  await launchRoutine(plan.id, options);
+  assert.equal(existsSync(plan.directory), true); assert.equal(notices.length, 0);
+  const installPath = join(f.home, 'installed'); mkdirSync(join(installPath, 'bin'), { recursive: true });
+  writeFileSync(join(installPath, 'bin/sleight-mcp'), 'fixture');
+  writeFileSync(registry, JSON.stringify({ plugins: { 'sleight@sleight': [{ scope: 'user', installPath }] } }));
+  assert.equal(await launchRoutine(plan.id, options), 0);
+  writeFileSync(registry, '{');
+  for (let n = 1; n <= 2; n++) {
+    await launchRoutine(plan.id, options);
+    assert.equal(existsSync(plan.directory), true); assert.equal(notices.length, 0);
+  }
+  // A different failure breaks the streak too.
+  writeFileSync(registry, '{}');
+  for (let n = 1; n <= 3; n++) {
+    await launchRoutine(plan.id, options);
+    assert.equal(existsSync(plan.directory), n < 3);
+  }
+  assert.equal(notices.length, 1); assert.equal(calls.length, 1);
+});
+
+for (const pending of [false, true]) test(`paused install retirement retries without depending on pending notice (${pending})`, async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  const { launchRoutine } = await import(pathToFileURL(plan.launcherPath).href);
+  writeFileSync(join(plan.directory, 'paused.json'), JSON.stringify({ error: 'WATCH_INSTALL_MISSING', since: 10000000 }));
+  if (pending) writeFileSync(join(plan.directory, 'notice-pending.json'), JSON.stringify({ error: 'WATCH_INSTALL_MISSING' }));
+  // A notice succeeds, but a storage refusal prevents even creating the tombstone.
+  const locks = join(f.store.root, '.locks'); rmSync(locks, { recursive: true });
+  symlinkSync(join(f.home, 'external-locks'), locks);
+  const calls = [], notices = [], options = { home: f.home, kind: 'watch', now: () => 10000000,
+    launchctl: async args => calls.push(args), notify: async value => notices.push(value),
+    spawnChild: () => assert.fail('a retirement decision must not launch the plugin') };
+  await launchRoutine(plan.id, options);
+  assert.equal(existsSync(plan.directory), true);
+  assert.equal(notices.length, 1);
+  rmSync(locks);
+  rmSync(join(plan.directory, 'notice-pending.json'), { force: true });
+  await launchRoutine(plan.id, options);
+  assert.equal(existsSync(plan.directory), false); assert.equal(calls.length, 1);
+  assert.ok(notices.length <= 1);
+  assert.equal(existsSync(join(f.home, 'external-locks')), false);
+});
+
+for (const obstruction of ['symlink', 'stale-lock', 'hourly-cap']) test(`missing install retirement has a bounded wait with ${obstruction} notice admission`, async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  const { launchRoutine } = await import(pathToFileURL(plan.launcherPath).href);
+  let at = 10000000;
+  writeFileSync(join(plan.directory, 'paused.json'), JSON.stringify({ error: 'WATCH_INSTALL_MISSING', since: at }));
+  if (obstruction === 'symlink') symlinkSync(join(f.home, 'external-notice'), join(plan.directory, 'notice.json'));
+  if (obstruction === 'stale-lock') mkdirSync(join(plan.directory, 'notice.lock'));
+  if (obstruction === 'hourly-cap') writeFileSync(join(plan.directory, 'notice.json'), JSON.stringify({ at }));
+  const calls = [], notices = [], options = { home: f.home, kind: 'watch', now: () => at,
+    launchctl: async args => calls.push(args), notify: async value => notices.push(value) };
+  await launchRoutine(plan.id, options);
+  at += 3599999; await launchRoutine(plan.id, options);
+  assert.equal(existsSync(plan.directory), true); assert.equal(calls.length, 0); assert.equal(notices.length, 0);
+  at++; await launchRoutine(plan.id, options);
+  assert.equal(existsSync(plan.directory), false); assert.equal(calls.length, 1);
+  assert.equal(notices.length, obstruction === 'hourly-cap' ? 1 : 0);
+  assert.equal(existsSync(join(f.home, 'external-notice')), false);
+});
+
+test('an orphan launchd watch boots itself out without an existing tombstone or plugin', async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  const { launchRoutine } = await import(pathToFileURL(plan.launcherPath).href);
+  rmSync(plan.directory, { recursive: true });
+  const calls = [];
+  await launchRoutine(plan.id, { home: f.home, kind: 'watch', launchctl: async args => {
+    assert.equal(existsSync(plan.plistPath), false);
+    assert.equal(existsSync(f.store.retirementPath(plan.id)), true);
+    calls.push(args);
+  }, notify: async () => assert.fail('an orphan has no notice storage') });
+  assert.deepEqual(calls, [['bootout', `gui/${process.getuid()}/${plan.label}`]]);
+  assert.equal(existsSync(f.store.retirementPath(plan.id)), false);
+});
+
+test('corrupt watch expiry uses its own plist age and does not renew on failed ticks', async t => {
+  for (const file of ['routine.json', 'script.json', 'state.json', 'health.json']) {
+    const f = fixture(t), plan = await f.store.add(query, '10m');
+    const installed = Date.parse('2026-10-24T12:00:00.000Z');
+    utimesSync(plan.plistPath, installed / 1000, installed / 1000);
+    writeFileSync(join(plan.directory, file), '{');
+    f.store.read = async () => { throw Error('WATCH_READ_FAILED'); };
+    await f.store.run(plan.id, { scheduled: true });
+    assert.equal(existsSync(plan.directory), true, file);
+    // A future routine timestamp must not override the corrupt watch's plist age.
+    f.advance(31 * 86400000 - 1);
+    if (file !== 'routine.json') {
+      const metadata = JSON.parse(readFileSync(join(plan.directory, 'routine.json')));
+      writeFileSync(join(plan.directory, 'routine.json'), JSON.stringify({ ...metadata,
+        created: '2099-01-01T00:00:00.000Z', expires: '2099-01-08T00:00:00.000Z' }));
+    }
+    await f.store.run(plan.id, { scheduled: true });
+    assert.equal(existsSync(plan.directory), true, file);
+    f.advance(1);
+    const result = await f.store.run(plan.id, { scheduled: true });
+    assert.equal(result.removed, true, file); assert.equal(result.error, 'WATCH_EXPIRED', file);
+    assert.equal(f.reads(), 1, file);
+  }
+});
+
+test('a target race counts toward removal only when fresh checks find no matching tab', async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  f.store.read = async (_spec, previous) => { throw Error(previous ? 'WATCH_TARGET_CHANGED' : 'WATCH_NEEDS_ONE_EXISTING_TAB'); };
+  for (let n = 1; n <= 3; n++) {
+    const result = await f.store.run(plan.id, { scheduled: true });
+    assert.equal(result.missingTabs, n); assert.equal(Boolean(result.removed), n === 3);
+  }
+});
+
+test('an installed launcher spawn failure is not evidence that the plugin is gone', async t => {
+  const f = fixture(t), plan = await f.store.add(query, '10m');
+  const { launchRoutine } = await import(pathToFileURL(plan.launcherPath).href);
+  const installPath = join(f.home, 'installed'); mkdirSync(join(installPath, 'bin'), { recursive: true });
+  writeFileSync(join(installPath, 'bin/sleight-mcp'), 'fixture');
+  mkdirSync(join(f.home, '.claude/plugins'), { recursive: true });
+  writeFileSync(join(f.home, '.claude/plugins/installed_plugins.json'), JSON.stringify({ plugins: { 'sleight@sleight': [{ scope: 'user', installPath }] } }));
+  const calls = [], notices = [];
+  for (let n = 0; n < 3; n++) {
+    assert.equal(await launchRoutine(plan.id, { home: f.home, kind: 'watch',
+      spawnChild: () => { throw Error('fixture spawn unavailable'); },
+      launchctl: async args => calls.push(args), notify: async value => notices.push(value) }), 1);
+  }
+  assert.equal(existsSync(plan.directory), true); assert.equal(existsSync(join(plan.directory, 'paused.json')), false);
+  assert.deepEqual(calls, []); assert.deepEqual(notices, []);
 });

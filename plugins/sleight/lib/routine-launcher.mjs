@@ -6,7 +6,7 @@ import { join, resolve, dirname } from 'node:path';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 
 // Kept self-contained because launchd runs a copy of this module without its neighbours.
 function ordinary(path) {
@@ -90,7 +90,7 @@ export async function retireWatch(id, { home = userInfo().homedir, result, launc
     let pending;
     if (existsSync(paths.marker)) {
       try { pending = JSON.parse(readFileSync(paths.marker, 'utf8')); } catch { /* A damaged tombstone still needs bootout. */ }
-    } else if (!existsSync(paths.directory)) return { ok: false, error: 'WATCH_NOT_FOUND' };
+    } else if (!existsSync(paths.directory) && result?.error !== 'WATCH_NOT_FOUND') return { ok: false, error: 'WATCH_NOT_FOUND' };
     else {
       const error = /^WATCH_[A-Z_]+$/.test(result?.error) ? result.error : 'WATCH_REMOVED';
       pending = { ok: false, error, ...(Number.isSafeInteger(result?.missingTabs) && result.missingTabs > 0 ? { missingTabs: result.missingTabs } : {}) };
@@ -143,6 +143,52 @@ async function notifyFailure(message) {
   await promisify(execFile)('/usr/bin/osascript', ['-e',
     `display notification ${JSON.stringify(message)} with title "sleight routine could not start"`], { timeout: 5000 });
 }
+
+function optionalJSON(path) {
+  try { return JSON.parse(readFileSync(ordinary(path), 'utf8')); }
+  catch (error) { if (error.code === 'ENOENT' || error instanceof SyntaxError) return; throw error; }
+}
+
+// The pause is the durable retirement decision, independent of notice delivery or storage.
+async function retireMissingInstall(id, { home, directory, launchctl, notify, now }) {
+  const paused = ordinary(join(directory, 'paused.json')), decision = optionalJSON(paused);
+  if (decision?.error !== 'WATCH_INSTALL_MISSING') return;
+  const at = now();
+  const since = Number.isFinite(decision.since) && decision.since >= 0 && decision.since <= at ? decision.since : at;
+  if (decision.since !== since) privateJSON(paused, { ...decision, since });
+  if (decision.noticeAttempted !== true) {
+    let claimed = false;
+    try { claimed = claimWatchNotice(directory, at); }
+    catch { /* A failed claim must not postpone retirement forever. */ }
+    if (!claimed && at - since < 3600000) return;
+    // Persist before delivery or retirement, so a failed retirement retries on the next tick.
+    privateJSON(paused, { ...decision, since, noticeAttempted: true });
+    if (claimed) {
+      try { await notify('Watch retired: the current sleight plugin install is unavailable. Reinstall the plugin and create a new public watch.'); }
+      catch { /* A failed delivery consumes its notice allowance. */ }
+    }
+  }
+  await retireWatch(id, { home, launchctl, now, result: { error: 'WATCH_INSTALL_MISSING', noticeAttempted: true } });
+}
+
+async function missingInstallTick(id, error, options) {
+  const { home, directory, now } = options;
+  await withWatchLifecycle(home, id, () => {
+    if (!existsSync(directory)) return;
+    const paused = ordinary(join(directory, 'paused.json'));
+    if (optionalJSON(paused)?.error === 'WATCH_INSTALL_MISSING') return;
+    const path = ordinary(join(directory, 'launcher-health.json')), before = optionalJSON(path);
+    const failure = createHash('sha256').update(`${error.code ?? error.name}:${error.message}`).digest('hex');
+    const failures = before?.failure === failure && Number.isSafeInteger(before.failures) && before.failures > 0
+      ? Math.min(3, before.failures + 1) : 1;
+    privateJSON(path, { failure, failures });
+    if (failures < 3) return;
+    privateJSON(paused, { ok: false, error: 'WATCH_INSTALL_MISSING', since: now() });
+    try { queueWatchNotice(directory, 'WATCH_INSTALL_MISSING'); } catch { /* Retirement does not need a queued notice. */ }
+  });
+  if (existsSync(directory)) await retireMissingInstall(id, options);
+}
+
 export async function launchRoutine(id, { home = userInfo().homedir, notify = notifyFailure, spawnChild = spawn, kind = 'routine',
   launchctl = bootout, now = Date.now } = {}) {
   let directory;
@@ -151,34 +197,30 @@ export async function launchRoutine(id, { home = userInfo().homedir, notify = no
     if (!['routine', 'watch'].includes(kind)) throw new Error('invalid scheduled task kind');
     if (kind === 'watch') {
       directory = ordinary(join(home, 'Library/Application Support/sleight/watches', id));
+      const wasRetiring = existsSync(watchPaths(home, id).marker);
       await sweepRetiredWatches({ home, launchctl, now });
-      if (!existsSync(directory)) return 1;
+      if (!existsSync(directory)) {
+        if (!wasRetiring) await retireWatch(id, { home, launchctl, now, result: { error: 'WATCH_NOT_FOUND', noticeAttempted: true } });
+        return 1;
+      }
+      if (optionalJSON(join(directory, 'paused.json'))?.error === 'WATCH_INSTALL_MISSING') {
+        await retireMissingInstall(id, { home, directory, launchctl, notify, now }); return 1;
+      }
       // The installed CLI must still see paused watches so expiry and reboot cleanup can run.
     }
-    const bin = resolveInstall(home);
+    let bin;
+    try { bin = resolveInstall(home); }
+    catch (error) {
+      if (kind !== 'watch') throw error;
+      await missingInstallTick(id, error, { home, directory, launchctl, notify, now }); return 1;
+    }
+    if (kind === 'watch') rmSync(ordinary(join(directory, 'launcher-health.json')), { force: true });
     const child = spawnChild(bin, [kind, 'run-now', id, '--scheduled'], { stdio: 'inherit' });
     return await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', code => resolve(code ?? 1)); });
   } catch (error) {
     process.stderr.write(`sleight: current plugin install or registry unavailable: ${error.message}\n`);
     try {
-      if (kind === 'watch') {
-        if (!directory || !existsSync(directory)) return 1;
-        const paused = ordinary(join(directory, 'paused.json'));
-        let previous;
-        try { previous = JSON.parse(readFileSync(paused, 'utf8'))?.error; }
-        catch (failure) { if (failure.code !== 'ENOENT' && !(failure instanceof SyntaxError)) throw failure; }
-        if (previous !== 'WATCH_INSTALL_MISSING') {
-          privateJSON(paused, { ok: false, error: 'WATCH_INSTALL_MISSING' });
-          queueWatchNotice(directory, 'WATCH_INSTALL_MISSING');
-        }
-        const pending = ordinary(join(directory, 'notice-pending.json'));
-        if (JSON.parse(readFileSync(paused, 'utf8')).error !== 'WATCH_INSTALL_MISSING' || !existsSync(pending) ||
-            JSON.parse(readFileSync(pending, 'utf8')).error !== 'WATCH_INSTALL_MISSING') return 1;
-        if (!claimWatchNotice(directory, now())) return 1;
-        rmSync(pending, { force: true });
-        try { await notify('Watch retired: the current sleight plugin install is unavailable. Reinstall the plugin and create a new public watch.'); }
-        finally { await retireWatch(id, { home, launchctl, now, result: { error: 'WATCH_INSTALL_MISSING', noticeAttempted: true } }); }
-      } else await notify(`Current plugin install or registry unavailable: ${error.message}`);
+      if (kind !== 'watch') await notify(`Current plugin install or registry unavailable: ${error.message}`);
     }
     catch (failure) { process.stderr.write(`sleight: notification failed: ${failure.message}\n`); }
     return 1;
