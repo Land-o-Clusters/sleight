@@ -65,8 +65,8 @@ export function receiptOptions(env = process.env) {
     redactReceiptTitles: env.SLEIGHT_RECEIPT_REDACT_TITLES !== '0' };
 }
 
-// Outcomes are on unless SLEIGHT_OUTCOMES=0. SLEIGHT_ACTION_LOG=<absolute or
-// ~/ path> writes one JSON line per action there, rotated at 5 MB with two old files kept.
+// Outcomes are opt-in with SLEIGHT_OUTCOMES=1. SLEIGHT_ACTION_LOG names a file under
+// ~/Library/Logs/sleight/, rotated at 5 MB with two old files kept.
 export function outcomeOptions(env = process.env, warn = message => process.stderr.write(message + '\n')) {
   const path = actionLogPath(env.SLEIGHT_ACTION_LOG);
   // A user who set a path outside the folder would otherwise believe the log is on.

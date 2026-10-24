@@ -11,17 +11,17 @@ export function readCompleteness({ cut, ref, omitted = 0, unknown = false, filte
 }
 
 // Runs after result budgeting, so a byte-cap omission cannot leave a stale "complete" footer.
-export function resultCompleteness(content, { requested = false, filtered = false, failed = false } = {}) {
+export function resultCompleteness(content, { filtered = false, failed = false } = {}) {
   const text = (content ?? []).filter(c => c?.type === 'text').map(c => c.text ?? '').join('\n');
   const native = /^(?:Window: |Browser tab: )/m.test(text);
   const footer = [...text.matchAll(/^# (?:complete \([^\n]*\)|cut at [^\n]*|\d+ rows not rendered[^\n]*|row total unknown[^\n]*)$/gm)].at(-1)?.[0];
-  if (!requested && !native && !footer) return;
+  const changes = /^(?:sleight: (?:lines changed since (?:the|your) last full tree|no change since the last full tree)|The following is a diff from the previous accessibility tree)/m.test(text);
+  if (!native && !footer && !changes) return;
   if (failed || /(?:^| \u2014 )sleight: \d+ (?:browser tree lines|tree lines|controls|static or structural lines|structural lines|sibling rows) omitted\b/m.test(text))
     return '# incomplete read; omitted or unavailable content. Read again for missing information.';
   if (footer) return footer;
-  if (/^(?:sleight: (?:lines changed since (?:the|your) last full tree|no change since the last full tree)|The following is a diff from the previous accessibility tree)/m.test(text))
+  if (changes)
     return '# complete (changes only; returned engine view; unseen rows unknown).';
-  if (!native) return '# incomplete read; content unavailable.';
   return filtered ? '# incomplete read (filtered engine view).' : '# complete (returned engine view; unseen rows unknown).';
 }
 
@@ -31,6 +31,14 @@ export function declaredRows({ strings, documents }) {
   let omitted = 0, unknown = false, renderedUnknown = false;
   for (const { nodes, layout } of documents) {
     const collections = new Map();
+    const scrollable = new Set(nodes.isScrollable?.index ?? []);
+    for (let i = 0; i < (layout?.nodeIndex?.length ?? 0); i++)
+      if (layout.styles?.[i]?.some(value => /^(?:auto|scroll|overlay)$/.test(strings[value]))) scrollable.add(layout.nodeIndex[i]);
+    const inScrollContainer = index => {
+      for (let steps = 0; index >= 0 && steps++ < 128; index = nodes.parentIndex[index])
+        if (scrollable.has(index)) return true;
+      return false;
+    };
     const rendered = layout?.nodeIndex;
     const visible = new Set(rendered);
     if (rendered) for (let i = nodes.nodeName.length - 1; i >= 0; i--)
@@ -41,7 +49,9 @@ export function declaredRows({ strings, documents }) {
       for (let j = 0; j < raw.length; j += 2) attrs[strings[raw[j]]] = strings[raw[j + 1]];
       const role = attrs.role, total = attrs['aria-rowcount'] ?? attrs['aria-setsize'];
       if (/^(?:grid|table|treegrid|list|listbox|tree)$/.test(role) || /^(?:UL|OL|TABLE|SELECT)$/.test(strings[nodes.nodeName[i]])) {
-        collections.set(i, { total: number(total), declared: total !== undefined, unknown: total !== undefined && number(total) === null, positions: new Set(), count: 0 });
+        const plainList = /^(?:UL|OL)$/.test(strings[nodes.nodeName[i]]) && !role;
+        collections.set(i, { total: number(total), declared: total !== undefined, unknown: total !== undefined && number(total) === null,
+          renderedUnknown: !plainList || inScrollContainer(i), positions: new Set(), count: 0 });
       }
       if (!/^(?:row|option|listitem|treeitem)$/.test(role) && !/^(?:TR|OPTION|LI)$/.test(strings[nodes.nodeName[i]])) continue;
       let parent = nodes.parentIndex[i], steps = 0;
@@ -64,7 +74,7 @@ export function declaredRows({ strings, documents }) {
       else collection.count++;
     }
     for (const collection of collections.values()) {
-      if (!collection.declared) { renderedUnknown = true; continue; }
+      if (!collection.declared) { renderedUnknown ||= collection.renderedUnknown; continue; }
       if (collection.unknown || collection.total === null || collection.total < collection.positions.size + collection.count) unknown = true;
       else omitted += collection.total - collection.positions.size - collection.count;
     }

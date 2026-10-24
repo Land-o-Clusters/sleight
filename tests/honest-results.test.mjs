@@ -18,6 +18,14 @@ test('a fully verified turn needs no summary', () => {
   assert.equal(turn.text(), undefined);
 });
 
+test('all native input verbs enter the uncertainty ledger', () => {
+  const turn = new TurnOutcomes();
+  const actions = ['click', 'doubleClick', 'rightClick', 'pressKey', 'typeText', 'paste', 'setValue', 'scroll', 'drag',
+    'selectText', 'performSecondaryAction', 'performAction', 'press'];
+  turn.native({ outcomes: actions.map(a => ({ a })) });
+  assert.match(turn.text(), /13 actions, 13 unverified/);
+});
+
 test('unconfirmed tool statuses are distinct from untrusted page wording', () => {
   const content = text => [{ type: 'text', text }];
   for (const line of ['Input outcome is unconfirmed. Read again.', 'Input outcome unconfirmed; read again.',
@@ -69,7 +77,12 @@ test('completeness distinguishes returned view, limits, filters and unavailable 
 test('delivery-time omissions override a complete footer and ordinary arithmetic gets no read footer', () => {
   assert.equal(resultCompleteness([{ type: 'text', text: '4' }]), undefined);
   assert.match(resultCompleteness([{ type: 'text', text: '# complete (returned view)\nsleight: 10 tree lines omitted' }]), /incomplete/);
-  assert.match(resultCompleteness([], { requested: true, failed: true }), /incomplete/);
+  assert.equal(resultCompleteness([], { requested: true, failed: true }), undefined);
+});
+
+test('requested inventories and scalar replies never receive a tree completeness footer', () => {
+  for (const text of ['Apps:\n- Fixture', 'true', '42', '{"ok":true,"count":2}'])
+    assert.equal(resultCompleteness([{ type: 'text', text }], { requested: true }), undefined, text);
 });
 
 test('page prose containing truncated is not an engine omission marker', () => {
@@ -91,9 +104,11 @@ test('engine compacted changes and unchanged deltas are changes-only reads', () 
   assert.match(resultCompleteness(content('The following is a diff from the previous accessibility tree for Window: "Guide"\n+ \t99 button New'), { requested: true }), /changes only/);
 });
 
-test('collections without a declared total cannot claim unseen lazy rows were read', () => {
+test('plain lists omit the lazy-row note unless a scroll container contains them', () => {
   const strings = ['#document', 'UL', 'LI'];
   const nodes = { nodeName: [0, 1, 2], parentIndex: [-1, 0, 1], attributes: [[], [], []] };
+  assert.equal(readCompleteness(declaredRows({ strings, documents: [{ nodes }] })), 'complete (returned view)');
+  nodes.isScrollable = { index: [0] };
   const completeness = declaredRows({ strings, documents: [{ nodes }] });
   assert.equal(readCompleteness(completeness), 'complete (rendered view; lazy/virtual rows unknown)');
 });

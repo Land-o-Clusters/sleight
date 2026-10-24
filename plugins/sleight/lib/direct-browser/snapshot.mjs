@@ -296,7 +296,7 @@ function closedCandidates({ strings, documents }) {
 
 async function closedRoots(page, state) {
   const results = await sessionsOf(page, async ({ frame, send }) => {
-    const capture = await send('DOMSnapshot.captureSnapshot', { computedStyles: [] });
+    const capture = await send('DOMSnapshot.captureSnapshot', { computedStyles: ['overflow-x', 'overflow-y'] });
     const secrets = sensitiveValues(capture), { hasClosed, controls } = closedCandidates(capture);
     const children = [], refs = new Map();
     if (hasClosed) {

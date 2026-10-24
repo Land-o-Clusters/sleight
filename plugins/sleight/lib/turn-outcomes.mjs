@@ -1,5 +1,5 @@
 // A bounded turn ledger. It never keeps page text, target labels, typed values or printable keys.
-const ACTION = /^(?:click|doubleClick|rightClick|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction)$/;
+const ACTION = /^(?:click|doubleClick|rightClick|press|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|performAction)$/;
 const KEY = /^(?:Return|Enter|Escape|Tab|Space|Backspace|Delete|Page_Up|Page_Down|Up|Down|Left|Right)$/i;
 // Match the tool's status lines, before its untrusted snapshot. Page prose is not an input status.
 export function unconfirmedInput(content) {

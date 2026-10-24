@@ -2557,8 +2557,12 @@ export function createRelay({
       if (call && !call.recorded && (!call.statusOnly || unconfirmedInput(msg.result?.content))) call.turn.unknown(call.name);
       const summary = outcomeEnds.get(msg.id);
       outcomeEnds.delete(msg.id);
-      if (summary && msg.result) msg.result = { ...msg.result, content: [...(msg.result.content ?? []), { type: 'text', text: summary }] };
-      else if (summary && msg.error) msg.error = { ...msg.error, message: msg.error.message + '\n' + summary };
+      // Every action result carries the current ledger, including earlier uncertain actions. The last one
+      // therefore reaches the model before its final answer. turn_ended is a later user/host log only.
+      const actionSummary = call?.turn === turnOutcomes ? call.turn.text() : undefined;
+      const text = summary ?? (actionSummary && actionSummary + ' Report these unverified effects in your final answer.');
+      if (text && msg.result) msg.result = { ...msg.result, content: [...(msg.result.content ?? []), { type: 'text', text }] };
+      else if (text && msg.error) msg.error = { ...msg.error, message: msg.error.message + '\n' + text };
     }
     if (msg.method === undefined && msg.id !== undefined) {
       const read = completenessCalls.get(msg.id);
@@ -2566,7 +2570,7 @@ export function createRelay({
       if (read && Array.isArray(msg.result?.content)) {
         const footer = resultCompleteness(msg.result.content, { ...read, failed: !!msg.result.isError });
         if (footer && !msg.result.content.at(-1)?.text?.trimEnd().endsWith(footer)) msg.result.content.push({ type: 'text', text: footer });
-      } else if (read && msg.error) msg.error.message += '\n' + resultCompleteness([], { requested: true, failed: true });
+      }
     }
     journal?.reply(msg);
     // The log is a side record: its failure never costs Claude a reply.
@@ -3082,6 +3086,8 @@ export function createRelay({
   function rotateTurn() {
     releaseLeases();
     turnOutcomes = new TurnOutcomes();
+    outcomeCalls.clear();
+    completenessCalls.clear();
     turnId = randomUUID();
     turnUsed = false;
     spaceNoted.clear();
@@ -3188,7 +3194,7 @@ export function createRelay({
     try { actionLog?.request(msg); } catch {}
     if (msg.method === 'tools/call' && msg.id !== undefined) {
       const name = msg.params?.name, code = codeOnly(msg.params?.arguments?.code ?? '');
-      const action = /\.\s*(?:click|doubleClick|rightClick|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|pickFromList)\s*\(/.test(code);
+      const action = /\.\s*(?:click|doubleClick|rightClick|press|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|performAction|pickFromList)\s*\(/.test(code);
       if (name === 'browser_read' || name === 'js' && !action && /\.\s*(?:getAXState(?:AndScreenshot)?|getApp|getTab|getState)\s*\(/.test(code))
         completenessCalls.set(msg.id, { requested: true, filtered: /\.\s*(?:slice|filter|substring)\s*\(/.test(code) });
     }
@@ -3198,7 +3204,7 @@ export function createRelay({
         /^(?:hover|open_file)$/.test(name) || name === 'menu_bar' && /^(?:open|close)$/.test(args?.op);
       if (statusOnly || /^(?:drag|replay)$/.test(name) || name === 'menu_bar' && /^(?:choose|press)$/.test(args?.op) ||
           name === 'notifications' && args?.op === 'press' ||
-          name === 'js' && /\.\s*(?:click|doubleClick|rightClick|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|pickFromList)\s*\(/.test(codeOnly(args?.code ?? '')))
+          name === 'js' && /\.\s*(?:click|doubleClick|rightClick|press|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|performAction|pickFromList)\s*\(/.test(codeOnly(args?.code ?? '')))
         outcomeCalls.set(msg.id, { name, statusOnly, turn: turnOutcomes });
     }
     if (engineBrowserOpen && msg.method === 'tools/call' && msg.params?.name === 'browser_open' && msg.id !== undefined) {
@@ -5740,6 +5746,7 @@ export function createRelay({
     }
     turnOutcomes = new TurnOutcomes();
     outcomeCalls.clear();
+    completenessCalls.clear();
     toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: report.resources !== 'clear' || report.leases !== 'released and checked',
       content: [{ type: 'text', text: promptNotice(stopText(report), prompt) }, ...(report.directBrowser ? [{ type: 'text',
         text: JSON.stringify({ directBrowser: report.directBrowser }) }] : []), ...(tabNote ? [{ type: 'text', text: tabNote }] : [])], _meta: { 'sleight/stop': report } } });

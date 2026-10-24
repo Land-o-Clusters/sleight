@@ -313,7 +313,8 @@ test('turbo actions enter the turn summary only for explicit unconfirmed statuse
     await h.call(id, '', 'browser_act', { tab: 't1', steps: [{ do: id === 4 ? 'hover' : 'click', ref: 'e1' }] });
     const result = h.received.find(row => row.id === id)?.result;
     assert.ok(result, 'injected turbo dispatcher replied');
-    assert.doesNotMatch(result.content.map(c => c.text).join('\n'), /sleight turn:/);
+    if (id === 1) assert.doesNotMatch(result.content.map(c => c.text).join('\n'), /sleight turn:/);
+    else assert.match(result.content.map(c => c.text).join('\n'), /sleight turn:.*input calls unverified/);
   }
   await h.call(6, '', 'turn_ended', { hook_event_name: 'Stop' });
   const ended = await h.reply(6, 'ended');
@@ -321,7 +322,7 @@ test('turbo actions enter the turn summary only for explicit unconfirmed statuse
   assert.equal(ended.content.filter(c => /sleight turn:/.test(c.text ?? '')).length, 1);
 });
 
-test('opt-in uncertainty appears once at turn end and resets on the next turn', async t => {
+test('opt-in uncertainty reaches the model in action results and resets on the next turn', async t => {
   const h = relayHarness(t);
   await h.call(1, 'let app = await cua.getApp("TextEdit")');
   await h.reply(1, form());
@@ -329,10 +330,19 @@ test('opt-in uncertainty appears once at turn end and resets on the next turn', 
   const mark = /"outcomeMark":"(\[sleight:filtered-read:[0-9a-f]{16}\])"/.exec(h.sentCode(2))[1];
   const secure = { outcomes: [{ a: 'pressKey', k: 'Return', t: { r: 'secure text field', s: true } }] };
   const result = await h.reply(2, mark + JSON.stringify(secure) + '\n' + form());
-  assert.doesNotMatch(result.content.map(c => c.text).join('\n'), /sleight turn:|# complete \(returned engine view/);
+  assert.match(result.content.map(c => c.text).join('\n'), /sleight turn: 1 actions, 1 unverified/);
+  assert.match(result.content.at(-1).text, /Report these unverified effects in your final answer/);
+  assert.doesNotMatch(result.content.map(c => c.text).join('\n'), /# complete \(returned engine view/);
+  await h.call(20, 'await app.click(2);');
+  const lastMark = /"outcomeMark":"(\[sleight:filtered-read:[0-9a-f]{16}\])"/.exec(h.sentCode(20))[1];
+  const last = await h.reply(20, lastMark + JSON.stringify({ outcomes: [{ a: 'click', n: 2, f: [{ o: 'state', d: 'checked' }] }] }) + '\n' + form('', '1'));
+  assert.match(last.content.at(-1).text, /2 actions, 1 unverified: pressKey Return \(secure field\)/,
+    'the last action result retains earlier uncertainty even when its own action is verified');
   await h.call(3, '', 'turn_ended', { hook_event_name: 'Stop' });
   const ended = await h.reply(3, 'ended');
-  assert.match(ended.content.map(c => c.text).join('\n'), /1 actions, 1 unverified/);
+  assert.match(ended.content.map(c => c.text).join('\n'), /2 actions, 1 unverified/);
+  assert.doesNotMatch(ended.content.map(c => c.text).join('\n'), /Report these unverified/,
+    'turn_ended carries a host log, without instructions for the final answer already sent');
   await h.call(4, 'await app.click(2);');
   const nextMark = /"outcomeMark":"(\[sleight:filtered-read:[0-9a-f]{16}\])"/.exec(h.sentCode(4))[1];
   const next = await h.reply(4, nextMark + JSON.stringify({ outcomes: [{ a: 'click', n: 2, f: [{ o: 'state', d: 'checked' }] }] }) + '\n' + form('', '1'));
@@ -342,7 +352,7 @@ test('opt-in uncertainty appears once at turn end and resets on the next turn', 
   assert.doesNotMatch(next.content.map(c => c.text).join('\n'), /secure field/);
 });
 
-test('read results end in completeness even after result budgeting or a failed read', async t => {
+test('tree reads retain completeness while failed reads without trees get none', async t => {
   const h = relayHarness(t);
   await h.call(1, 'let app = await cua.getApp("TextEdit")');
   const acquired = await h.reply(1, form());
@@ -350,10 +360,46 @@ test('read results end in completeness even after result budgeting or a failed r
   await h.call(2, 'nodeRepl.write((await app.getAXState()).slice(0, 100));');
   assert.match((await h.reply(2, form().slice(0, 100))).content.at(-1).text, /^# incomplete read/);
   await h.call(3, 'await app.getAXState()');
-  assert.match((await h.reply(3, 'read failed', true)).content.at(-1).text, /^# incomplete read/);
+  assert.doesNotMatch((await h.reply(3, 'read failed', true)).content.at(-1).text, /# (?:incomplete|complete)/);
   await h.call(4, 'await app.getAXState()');
   const delta = await h.reply(4, 'The following is a diff from the previous accessibility tree for Window: "notes.txt"\n+ \t9 button New');
   assert.match(delta.content.at(-1).text, /changes only/);
+});
+
+test('getState inventories and scalar results receive no completeness line', async t => {
+  const h = relayHarness(t);
+  for (const [index, text] of ['Apps:\n- Fixture', 'true', '42', '{"ok":true}'].entries()) {
+    const id = index + 1;
+    await h.call(id, 'nodeRepl.write(await cua.getState());');
+    const result = await h.reply(id, text);
+    assert.doesNotMatch(result.content.map(c => c.text).join('\n'), /# (?:incomplete|complete)/);
+  }
+});
+
+test('AX action verbs carry uncertainty and never get read completeness', async t => {
+  const h = relayHarness(t);
+  await h.call(1, 'let app = await cua.getApp("TextEdit")');
+  await h.reply(1, form());
+  for (const [index, verb] of ['performAction', 'performSecondaryAction', 'doubleClick', 'rightClick', 'press'].entries()) {
+    const id = index + 2;
+    await h.call(id, `await app.${verb}(2, "AXPress"); await app.getAXState();`);
+    const result = await h.reply(id, form());
+    assert.match(result.content.map(c => c.text).join('\n'), /sleight turn:.*input calls unverified/);
+    assert.doesNotMatch(result.content.map(c => c.text).join('\n'), /# (?:incomplete|complete)/);
+  }
+});
+
+test('turn rotation retires pending read and action tracking before late replies', async t => {
+  const h = relayHarness(t, { inputLease: undefined });
+  await h.call(1, 'nodeRepl.write(await cua.getState());');
+  await h.call(2, 'await app.pressKey("Return");');
+  await h.call(3, '', 'turn_ended', { hook_event_name: 'Stop' });
+  assert.match((await h.reply(3, 'ended')).content.at(-1).text, /1 calls still pending/);
+  const oldRead = await h.reply(1, form());
+  assert.doesNotMatch(oldRead.content.map(c => c.text).join('\n'), /# complete|sleight turn:/);
+  assert.doesNotMatch((await h.reply(2, 'done')).content.map(c => c.text).join('\n'), /sleight turn:/);
+  await h.call(4, 'await app.pressKey("Return");');
+  assert.match((await h.reply(4, 'done')).content.at(-1).text, /sleight turn: 1 input calls unverified/);
 });
 
 test('turn end waits for pending input and resets its outcomes only after that input finishes', async t => {
@@ -591,7 +637,8 @@ test('a call sleight continues after its stop shows each action once, numbered a
   const text = result.content.map(item => item.text).join('\n');
   assert.match(text, /sleight outcomes:\n1 pressKey "Return": window now \[redacted 5 chars\]/);
   assert.match(text, /sleight outcomes:\n2 pressKey "Tab": no visible change/);
-  assert.doesNotMatch(text, /sleight turn:/);
+  assert.match(text, /sleight turn: 2 actions, 2 unverified/);
+  assert.equal(result.content.filter(c => /sleight turn:/.test(c.text ?? '')).length, 1);
   assert.doesNotMatch(text, /not run|filtered-read/);
   const rows = readFileSync(path, 'utf8').trim().split('\n').map(line => JSON.parse(line));
   assert.deepEqual(rows.map(row => [row.kind, row.key, row.result, row.outcome]), [['pressKey', 'Return', 'ok', 'window changed'], ['pressKey', 'Tab', 'ok', 'no visible change']]);

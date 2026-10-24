@@ -74,12 +74,18 @@ test('honest reads and selection on a loopback page in headless Chromium', { ski
     assert.doesNotMatch(result.text, /Unreturned closed-root prose/);
     assert.match(result.text, /closed shadow roots: controls only/);
   });
-  await t.test('iframe collections without totals leave lazy rows unknown', async () => {
+  await t.test('plain iframe lists omit the lazy-row warning', async () => {
     await page.setContent('<main><iframe srcdoc="<ul><li>Rendered item</li></ul>"></iframe></main>');
     await page.frameLocator('iframe').getByText('Rendered item').waitFor();
     const result = await snapshot(page);
     assert.match(result.text, /Rendered item/);
-    assert.match(result.text, /complete \(rendered view; lazy\/virtual rows unknown\)/);
+    assert.match(result.text, /# complete \(returned view\)$/);
+    assert.doesNotMatch(result.text, /lazy\/virtual/);
+  });
+  await t.test('lists inside scrolling containers retain unknown lazy-row scope', async () => {
+    await page.setContent('<div style="overflow:auto;height:50px"><ul>' +
+      Array.from({ length: 20 }, (_, i) => `<li>Item ${i}</li>`).join('') + '</ul></div>');
+    assert.match((await snapshot(page)).text, /lazy\/virtual rows unknown/);
   });
   await t.test('delta reads and find continuation chunks keep their scope on a real page', async () => {
     await page.setContent('<main><button>Before</button></main>');
