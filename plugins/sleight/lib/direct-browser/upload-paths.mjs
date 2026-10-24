@@ -45,15 +45,18 @@ export function assertUploadOwnership(stat, uid, directory = false) {
 // Node's stat omits macOS Finder flags and ACLs. ls reads both in one bounded,
 // metadata-only process for the path chain. Treat any write-granting ACL as
 // unsafe, including owner-only grants we cannot interpret conclusively.
-export function assertMacUploadMetadata(output, uid, expected) {
+export function assertMacUploadMetadata(output, uid, expected, roots = { home }) {
   const lines = output.split('\n');
-  const entries = lines.map(line => /^([bcdlps-][rwxstST-]{9})[+@]?\s+\d+\s+(\d+)\s+\d+\s+(\S+)/.exec(line)).filter(Boolean);
+  const entries = lines.map(line => /^([bcdlps-][rwxstST-]{9})[+@]?\s+\d+\s+(\d+)\s+\d+\s+(\S+)\s+\d+\s+\S+\s+\d+\s+\S+\s+(.+)$/.exec(line)).filter(Boolean);
   if (entries.length !== expected) throw Error(uploadRefusals.metadata);
+  const library = folded(roots.home + '/Library');
+  const iCloud = under(folded(entries.at(-1)?.[4] ?? ''), library + '/mobile documents/com~apple~clouddocs');
   for (const entry of entries) {
     // Canonical system/temp ancestors can be Finder-hidden. A root-owned
     // hidden directory inside Documents still refuses like any hidden folder.
-    const infrastructure = /\s\/(?:private(?:\/(?:tmp|var(?:\/folders)?))?)?$/.test(entry.input);
-    if ((entry[1][0] !== 'd' || Number(entry[2]) === uid || !infrastructure) && entry[3].split(',').includes('hidden'))
+    const infrastructure = /^\/(?:Volumes|private(?:\/(?:tmp|var(?:\/folders)?))?)?$/.test(entry[4]);
+    const exempt = entry[1][0] === 'd' && (iCloud && folded(entry[4]) === library || Number(entry[2]) === 0 && infrastructure);
+    if (!exempt && entry[3].split(',').includes('hidden'))
       throw Error(uploadRefusals.hidden);
   }
   if (lines.some(line => /^\s*\d+:\s/.test(line) && /\ballow\b/.test(line) &&

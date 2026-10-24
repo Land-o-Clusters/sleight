@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, chmodSync, renameSync, rmSync, realpathSync, openSync, ftruncateSync, closeSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
+import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { assertUploadLocation, assertUploadOwnership, assertMacUploadMetadata, uploadRefusals } from '../plugins/sleight/lib/direct-browser/upload-paths.mjs';
 import { createFileAuthority, consumeStagedFilePayloads } from '../plugins/sleight/lib/direct-browser/host-files.mjs';
@@ -67,6 +67,64 @@ test('ownership policy rejects foreign owners and writable entries; root sticky 
     refuses(() => assertUploadOwnership(stat(owner, mode), uid, directory), uploadRefusals.shared);
   for (const [owner, mode, directory] of [[0, 0o1777, true], [501, 0o700, true], [501, 0o644, false], [0, 0o755, true]])
     assert.doesNotThrow(() => assertUploadOwnership(stat(owner, mode), uid, directory));
+});
+
+test('iCloud metadata exempts only its hidden home Library ancestor', () => {
+  const library = `drwx------  2 501 20 hidden 64 Oct 24 12:00 ${home}/Library`;
+  const root = `drwx------  2 501 20 - 64 Oct 24 12:00 ${home}/Library/Mobile Documents/com~apple~CloudDocs`;
+  const file = `-rw-------  1 501 20 - 10 Oct 24 12:00 ${home}/Library/Mobile Documents/com~apple~CloudDocs/resume.txt`;
+  assert.doesNotThrow(() => assertMacUploadMetadata([library, root, file].join('\n'), 501, 3, { home }));
+  for (const hidden of [root, file]) {
+    const entries = [library, root, file].map(line => line === hidden ? line.replace('20 -', '20 hidden') : line);
+    refuses(() => assertMacUploadMetadata(entries.join('\n'), 501, 3, { home }), uploadRefusals.hidden);
+  }
+  for (const suffix of ['/Documents/resume.txt', '/Library/Application Support/resume.txt',
+    '/Library/Mobile Documents/com~apple~CloudDocs-backup/resume.txt']) {
+    refuses(() => assertMacUploadMetadata(library + '\n' + file.replace(/\/Library\/Mobile Documents\/com~apple~CloudDocs\/resume.txt$/, suffix),
+      501, 2, { home }), uploadRefusals.hidden);
+  }
+});
+
+test('hidden Volumes infrastructure passes but hidden mounts and files still refuse', () => {
+  const volumes = 'drwxr-xr-x  2 0 0 hidden 64 Oct 24 12:00 /Volumes';
+  const mount = 'drwxr-xr-x  2 501 20 - 64 Oct 24 12:00 /Volumes/Documents';
+  const file = '-rw-------  1 501 20 - 10 Oct 24 12:00 /Volumes/Documents/resume.txt';
+  assert.doesNotThrow(() => assertMacUploadMetadata([volumes, mount, file].join('\n'), 501, 3));
+  for (const hidden of [mount, file]) {
+    const entries = [volumes, mount, file].map(line => line === hidden ? line.replace('20 -', '20 hidden') : line);
+    refuses(() => assertMacUploadMetadata(entries.join('\n'), 501, 3), uploadRefusals.hidden);
+  }
+  refuses(() => assertMacUploadMetadata(volumes.replace('2 0 0', '2 501 20') + '\n' + file, 501, 2), uploadRefusals.hidden);
+});
+
+test('files created under a 002 umask refuse until group-write access is removed', async t => {
+  const f = fixture(t), file = join(f.directory, 'group-writable.txt');
+  const previous = process.umask(0o002);
+  try { writeFileSync(file, 'group writable'); } finally { process.umask(previous); }
+  await assert.rejects(f.authority.issue([file], binding), error => error.message === uploadRefusals.shared);
+  chmodSync(file, 0o640);
+  const cap = await f.authority.issue([file], binding), stage = f.authority.stage(cap, binding);
+  t.after(() => stage.cleanup());
+  assert.equal(Buffer.from(consumeStagedFilePayloads(f.authority, stage, binding).payloads[0].base64, 'base64').toString(), 'group writable');
+});
+
+test('macOS per-account temp paths pass the complete authority and retain staging cleanup', { skip: process.platform !== 'darwin' }, async t => {
+  const directory = mkdtempSync(join(realpathSync(tmpdir()), 'fd4b-temp-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  assert.match(directory, /^\/private\/var\/folders\/[^/]+\/[^/]+\/T\//);
+  const file = join(directory, 'resume.txt'); writeFileSync(file, 'temporary bytes', { mode: 0o600 });
+  const authority = createFileAuthority({ approve: async () => true });
+  const cap = await authority.issue([file], binding), stage = authority.stage(cap, binding);
+  t.after(() => stage.cleanup());
+  assert.equal(Buffer.from(consumeStagedFilePayloads(authority, stage, binding).payloads[0].base64, 'base64').toString(), 'temporary bytes');
+  assert.deepEqual(stage.cleanup(), { retained: false });
+  const uid = userInfo().uid;
+  assert.doesNotThrow(() => assertMacUploadMetadata([
+    'drwxr-xr-x  2 0 0 hidden 64 Oct 24 12:00 /private',
+    'drwxr-xr-x  2 0 0 hidden 64 Oct 24 12:00 /private/var',
+    'drwxr-xr-x  2 0 0 hidden 64 Oct 24 12:00 /private/var/folders',
+    `-rw-------  1 ${uid} 20 - 10 Oct 24 12:00 ${file}`,
+  ].join('\n'), uid, 4));
 });
 
 test('approved ordinary files retain opaque single-use byte transfer and owned staging cleanup', async t => {

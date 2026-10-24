@@ -16,7 +16,7 @@ test('shell guard denies app, URL and window launchers without executing them', 
     '"/Applications/Any App.app/Contents/MacOS/Any App"',
     '"/Applications/Any App.app/Contents/MacOS/Any App" --headless',
     'chrome https://example.invalid', 'chromium --new-window', 'google-chrome-stable --app=https://example.invalid',
-    'firefox -new-window https://example.invalid', 'helium https://example.invalid', 'safari https://example.invalid',
+    'firefox -new-window https://example.invalid', 'helium https://example.invalid', 'safari https://example.invalid', 'Safari',
     '"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" https://example.invalid',
   ]) assert.equal(denied(command), true, command);
 });
@@ -25,6 +25,7 @@ test('headless exemption belongs to the browser command and an actual flag', () 
   for (const command of [
     'chromium --headless', 'google-chrome --headless=new --dump-dom https://example.invalid',
     'firefox --headless --screenshot /tmp/fixture.png', 'chrome-headless-shell --headless',
+    'chromium --headless=new', 'msedge --headless', 'opera --headless',
     '"/Applications/Helium.app/Contents/MacOS/Helium" --headless=old',
     'chrome --version', 'chromium --help',
   ]) assert.equal(denied(command), false, command);
@@ -50,6 +51,18 @@ test('assignments, ordinary wrappers and literal shell scripts cannot hide a lau
     'command -- /usr/bin/open ./page.html', 'builtin open ./page.html', 'exec open ./page.html',
     'nohup open ./page.html &', 'sudo -u fixture open ./page.html', 'nice -n 10 open ./page.html',
     'time -p open ./page.html', 'printf x | xargs -I {} open {}',
+    'arch -arm64 open ./page.html', 'arch -arm64e open ./page.html', 'arch -arch arm64 open ./page.html',
+    'arch -d BROWSER -e LANG=C open ./page.html',
+    'timeout 10 open ./page.html', 'timeout -s TERM -k 2 10 open ./page.html',
+    'timeout --signal TERM --kill-after 2 10 open ./page.html',
+    'caffeinate -dimsu -t 10 -w 123 open ./page.html', 'setsid -f open ./page.html',
+    'caffeinate -dt 10 open ./page.html',
+    'stdbuf -o L -e0 open ./page.html', 'stdbuf --output L --error=0 open ./page.html',
+    'script -q /dev/null open ./page.html', 'script -q -c "open ./page.html" /dev/null',
+    'script --command="open ./page.html" /dev/null',
+    'script -qc "open ./page.html" /dev/null', 'script -c"open ./page.html" /dev/null',
+    'script -F -q /dev/null open ./page.html',
+    'launchctl asuser 501 open ./page.html', 'exec -a harmless open ./page.html',
     'sh -c "open ./page.html"', 'bash -lc \'echo ok && open ./page.html\'',
     'zsh -c \'chromium --headless; open ./page.html\'', 'eval "open ./page.html"',
     'find . -name page.html -exec open {} \\;', 'find . -execdir osascript {} +'])
@@ -78,6 +91,11 @@ test('Python webbrowser module and source forms are denied', () => {
 test('ordinary shell work, quoted examples and Python file I/O remain allowed', () => {
   for (const command of ['printf "%s" "open https://example.invalid"', 'echo "one; open a && open b | open c & open d"',
     'echo open ./preview.html', 'rg "webbrowser.open" tests', 'cat open',
+    'echo safari', 'printf "%s" Safari', 'rg Safari tests', 'cat safari',
+    'arch -arm64 chromium --headless', 'timeout 10 firefox --headless',
+    'caffeinate -t 5 msedge --headless', 'setsid opera --headless',
+    'stdbuf -oL chromium --headless', 'script -q /dev/null firefox --headless',
+    'launchctl asuser 501 msedge --headless', 'exec -a harmless opera --headless',
     'node --test tests/shell-guard.test.mjs', 'npm run lint:prose',
     'python3 -c \'open("fixture.txt", "w").write("hello")\'',
     'python3 -c \'print("one; two && three")\'', 'echo hi > /tmp/open',
@@ -88,28 +106,123 @@ test('ordinary shell work, quoted examples and Python file I/O remain allowed', 
     { tool: 'Bash', command: null }, {}]) assert.equal(guard.shellLaunchDenied(event), false);
 });
 
-test('installed PreToolUse returns the refusal before filesystem access and preserves the write guard', async () => {
+test('heredoc data is skipped through its exact terminator and later commands still run', () => {
+  for (const opener of ['<<EOF', "<<'EOF'", '<<"EOF"', '<<-EOF', '<<~EOF']) {
+    const command = `git commit -F - ${opener}\nopen the door\nSafari\nEOF\nprintf ok`;
+    assert.equal(denied(command), false, command);
+    assert.equal(denied(command + '\nopen ./page.html'), true, command);
+  }
+  for (const command of [
+    "cat <<'ONE' <<\"TWO\"\nopen the door\nONE\nSafari\nTWO",
+    'cat <<-EOF\n\topen the door\n\tEOF\nprintf ok',
+    'cat <<~EOF\n  open the door\n  EOF\nprintf ok',
+    'cat <<EOF\nopen the door\nEOFsuffix\nSafari\nEOF',
+    'printf "%s" "<<EOF"\nprintf ok',
+  ]) assert.equal(denied(command), false, command);
+  assert.equal(denied('cat <<EOF; open ./page.html\nplain data\nEOF'), true);
+});
+
+test('shell heredocs are scanned as commands, while ordinary shell input stays allowed', () => {
+  for (const launcher of ['sh', 'bash -s', 'zsh', 'env bash', 'timeout 5 sh', 'exec -a harmless zsh',
+    'env -S sh', 'env --split-string=sh', 'bash -c sh', 'eval sh', 'script -q -c sh /dev/null']) {
+    const command = `${launcher} <<'EOF'\nopen ./page.html\nEOF`;
+    assert.equal(denied(command), true, command);
+    assert.equal(denied(`${launcher} <<EOF\nprintf '%s' 'open the door'\nEOF`), false, launcher);
+  }
+  assert.equal(denied("sh <<'OUTER'\ncat <<'INNER'\nopen the door\nINNER\nOUTER"), false);
+});
+
+test('unquoted heredocs check expanding substitutions without interpreting ordinary data', () => {
+  for (const body of ['$(open ./page.html)', '`open ./page.html`', "'$(open ./page.html)'", '"$(open ./page.html)"']) {
+    assert.equal(denied(`cat <<EOF\n${body}\nEOF`), true, body);
+    assert.equal(denied(`cat <<'EOF'\n${body}\nEOF`), false, body);
+  }
+  assert.equal(denied('cat <<EOF # ordinary data follows\nopen the door\nEOF\nprintf ok'), false);
+  assert.equal(denied('cat <<EOF # ordinary data follows\nopen the door\nEOF\nopen ./page.html'), true);
+});
+
+function installedGuard({ disabled = false, refuseWrite = false } = {}) {
   const source = readFileSync(new URL('../plugins/sleight/hooks/register.tsx', import.meta.url), 'utf8');
   const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-  let checked = 0;
+  let checked = 0, ended = 0;
   const exports = {};
   runInNewContext(js, { exports, require(name) {
-    if (name === 'claude-code') return { atom: () => ({}) };
+    if (name === 'claude-code') return { atom: (_key, value) => ({ value }),
+      read: async (_$, atom) => atom.value, update: async (_$, atom, fn) => { atom.value = fn(atom.value); } };
     if (name === './shell-guard.mjs') return guard;
     if (name === './preapproved-write-guard.mjs') return {
-      loggingSwitchWriteDenied: () => false, preapprovedWriteDenied: async () => { checked++; return true; },
+      loggingSwitchWriteDenied: () => false, preapprovedWriteDenied: async () => { checked++; return refuseWrite; },
     };
     return {};
   } });
   const hooks = new Map();
-  exports.register((name, handler) => { hooks.set(name, handler); return { catch() {} }; });
+  exports.register((name, filter, handler) => {
+    hooks.set(handler ? `${name}:${filter.tool ?? filter.command}` : name, handler ?? filter);
+    return { catch() {} };
+  });
   const pre = hooks.get('classic.PreToolUse'); assert.equal(typeof pre, 'function');
   let passed = 0;
-  const $ = { env: { get: async () => '/synthetic-home' }, fs: { stat: async () => { throw Error('unexpected stat'); } } };
+  const $ = { env: { get: async key => key === 'SLEIGHT_SHELL_GUARD' ? (disabled ? '0' : undefined) : '/synthetic-home' },
+    fs: { stat: async () => { throw Error('unexpected stat'); } },
+    plugin: { root: '/synthetic-plugin' }, process: { run: async () => ({ exitCode: 0, stdout: '{"enabled":true}' }) },
+    mcp: { connect: async () => ({ isConnected: true, server: 'computer' }), call: async (_server, _tool, args) => {
+      if (args.sleight_turbo?.event === 'bootstrap') return { content: [{ type: 'text', text: JSON.stringify({ sleightTurbo: {
+        version: 1, session: 'fixture', nonce: 'a'.repeat(64) } }) }] };
+      if (args.hook_event_name) ended++;
+      return { content: [] };
+    } }, ui: { status() {}, log() {}, toast() {}, panes: async () => [] } };
   const next = event => { passed++; return event; };
-  assert.equal((await pre($, { tool: 'Bash', command: 'open ./page.html' }, next)).deny, guard.shellGuardReason);
-  assert.equal(checked, 0); assert.equal(passed, 0);
-  assert.match((await pre($, { tool: 'Write', file_path: 'policy' }, next)).deny, /Only the user edits/);
-  assert.equal(checked, 1);
-  await pre($, { tool: 'Read' }, next); assert.equal(passed, 1);
+  return { $, hooks, pre: event => pre($, event, next), checked: () => checked, passed: () => passed, ended: () => ended,
+    use: (tool = 'js', next = event => event) => hooks.get(`tool.call:mcp__plugin_sleight_computer__${tool}`)($, { tool_use_id: 'call' }, next),
+    complete: event => hooks.get('turn.complete')($, event ?? {}, event => event),
+    stop: () => hooks.get('command.run:sleight')($, { args: 'stop' }) };
+}
+
+test('installed PreToolUse returns the refusal before filesystem access and preserves the write guard', async () => {
+  const h = installedGuard({ refuseWrite: true });
+  await h.use();
+  const pre = h.pre;
+  assert.equal((await pre({ tool: 'Bash', command: 'open ./page.html' })).deny, guard.shellGuardReason);
+  assert.equal(h.checked(), 0); assert.equal(h.passed(), 0);
+  assert.match((await pre({ tool: 'Write', file_path: 'policy' })).deny, /Only the user edits/);
+  assert.equal(h.checked(), 1);
+  await pre({ tool: 'Read' }); assert.equal(h.passed(), 1);
+});
+
+test('shell guard covers only sleight turns, resets on completion or stop, and supports opt-out', async () => {
+  const event = { tool: 'Bash', command: 'open report.pdf' };
+  for (const tool of ['js', 'replay', 'browser_open', 'browser_read', 'browser_act', 'browser_fill']) {
+    const h = installedGuard();
+    assert.equal((await h.pre(event)).deny, undefined, tool);
+    await h.use(tool, async e => {
+      assert.equal((await h.pre(event)).deny, guard.shellGuardReason, 'guard active when the first call runs');
+      return e;
+    });
+    await h.complete({ agentId: 'child' });
+    assert.equal((await h.pre(event)).deny, guard.shellGuardReason);
+    await h.complete();
+    assert.equal((await h.pre(event)).deny, undefined, 'ordinary next turn');
+    await h.use(tool); await h.complete({ isAborted: true });
+    assert.equal((await h.pre(event)).deny, undefined, 'aborted turn');
+    await h.use(tool); await h.stop();
+    assert.equal((await h.pre(event)).deny, undefined, 'explicit stop');
+    assert.match((await h.use(tool)).deny, /user stopped/);
+    assert.equal((await h.pre(event)).deny, undefined, 'refused tool cannot reactivate');
+  }
+  const off = installedGuard({ disabled: true, refuseWrite: true });
+  await off.use();
+  assert.match((await off.pre(event)).deny, /Only the user edits/, 'opt-out retains the approval write guard');
+  const allow = installedGuard({ disabled: true }); await allow.use();
+  assert.equal((await allow.pre(event)).deny, undefined);
+  assert.match(guard.shellGuardReason, /sleight.*guard.*this turn/i);
+  assert.match(guard.shellGuardReason, /SLEIGHT_SHELL_GUARD=0/);
+});
+
+test('turbo prompt setup alone leaves ordinary shell work untouched and still ends its binding', async () => {
+  const h = installedGuard(), event = { tool: 'Bash', command: 'open report.pdf' };
+  await h.hooks.get('prompt.submit')(h.$, { origin: { kind: 'composer' }, text: 'ordinary work' }, event => event);
+  assert.equal((await h.pre(event)).deny, undefined);
+  await h.complete();
+  assert.equal(h.ended(), 1);
+  assert.equal((await h.pre(event)).deny, undefined);
 });

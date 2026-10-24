@@ -31,6 +31,9 @@ const receipt = atom({ plugin: 'sleight', key: 'receipt' } as const, null as { p
 
 // Not drawn from, so plain module variables (a reload resets them, harmlessly).
 let usedThisTurn = false
+// A genuine turbo prompt needs an end fence even if no sleight tool runs.
+// Binding that prompt alone must not activate the shell guard.
+let turboTurnBound = false
 let turnRunning = false
 let actions = 0
 let lastApp: string | undefined
@@ -82,7 +85,7 @@ async function beginTurboTurn($: any, text: string) {
       const response = await call($, 'turn_ended', { sleight_turbo: { ...turboEnvelope, event: 'begin', turn, text } })
       // A declined or unavailable begin grants no authority. The bootstrap is
       // one-use, so keep its validated envelope for a fresh genuine user turn.
-      if (!response.isError) usedThisTurn = true
+      if (!response.isError) turboTurnBound = true
     } catch { if (contactingHost) turboEnvelope = undefined }
   })
   // Serialize genuine submissions so simultaneous user turns cannot create
@@ -297,7 +300,7 @@ function ownCallVerdict(e: { tool: string; input: unknown }, origin: { plugin: s
 export const register: Register = on => {
   on('classic.PreToolUse', async ($, e, next) => {
     if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'].includes(e.tool)) return next(e)
-    if (shellLaunchDenied(e)) return { deny: shellGuardReason }
+    if (usedThisTurn && shellLaunchDenied(e) && await $.env.get('SLEIGHT_SHELL_GUARD') !== '0') return { deny: shellGuardReason }
     if (loggingSwitchWriteDenied(e)) return { deny: "Only the user turns on sleight's action log and outcome lines. Ask them to make this change." }
     const denied = await preapprovedWriteDenied(e, {
       stat: (path: string) => $.fs.stat(path, { resolve: true }),
@@ -410,8 +413,9 @@ export const register: Register = on => {
     const result = await next(e)
     if (e.agentId !== undefined) return result
     turnRunning = false
-    if (!usedThisTurn) return result
+    if (!usedThisTurn && !turboTurnBound) return result
     usedThisTurn = false
+    turboTurnBound = false
     // Refresh the pane while the engine turn is still open, then end it.
     if (lastApp && !e.isAborted && (await isPaneOpen($))) await snapshot($, lastApp)
     await endEngineTurn($, e.isAborted ? 'Interrupt' : 'Stop')
@@ -425,6 +429,7 @@ export const register: Register = on => {
       if (replayActive) replayCancelled = true
       await update($, stopped, () => true)
       usedThisTurn = false
+      turboTurnBound = false
       const receipt = await endEngineTurn($, 'Interrupt', true)
       $.ui.status('sleight · stopped')
       // The interrupted call usually ends Claude's turn at once (desktop app, 2026-10-11), so Esc
