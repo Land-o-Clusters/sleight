@@ -7,6 +7,105 @@ import * as guard from '../plugins/sleight/hooks/shell-guard.mjs';
 
 const denied = command => guard.shellLaunchDenied({ tool: 'Bash', command });
 
+// FD4D fixtures remain strings. No shell, interpreter or launcher runs here.
+for (const consumer of ['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'csh', 'tcsh',
+  'busybox sh', 'env sh', '/bin/sh -', 'env -S "sh"']) {
+  for (const producer of ['echo "open ./page.html"', 'echo open ./page.html',
+    'printf "%s\\n" "open ./page.html"', 'echo "open ./page.html" | cat',
+    'printf "%s" "open ./page.html" | grep open | cat',
+    "cat <<'EOF'\nopen ./page.html\nEOF"]) {
+    // Put the pipe on the heredoc declaration, before its body.
+    const command = producer.includes('\n')
+      ? producer.replace('\n', ` | ${consumer}\n`) : `${producer} | ${consumer}`;
+    test(`fd4d literal pipeline refuses: ${JSON.stringify(command)}`, () => assert.equal(denied(command), true));
+  }
+}
+
+const interpreterPayloads = [
+  ['python3 -c', 'import os; os.system("open ./page.html")'],
+  ['python -Ic', 'import subprocess; subprocess.run(["open", "./page.html"])'],
+  ['python3 -c', 'from os import popen; popen("open ./page.html")'],
+  ['python3 -c', 'open("fixture.txt", "w").write("hello")'],
+  ['node -e', 'require("child_process").execSync("open ./page.html")'],
+  ['node --eval', 'require("child_process").spawn("open", ["./page.html"])'],
+  ['node -e', 'import("child_process").then(cp => cp.exec("xdg-open ./page.html"))'],
+  ['perl -e', 'system("open ./page.html")'],
+  ['perl -E', 'exec "osascript", "script.scpt"'],
+  ['ruby -e', 'system("open ./page.html")'],
+  ['ruby -e', 'exec("xdg-open", "./page.html")'],
+  ['osascript -e', 'tell application "AnyApp" to activate'],
+  ['swift -e', 'import AppKit; NSWorkspace.shared.open(URL(fileURLWithPath: "./page.html"))'],
+  ['swift -e', 'LSOpenCFURLRef(url, nil)'],
+  ['python3 -c', 'print("webbrowser")'],
+];
+for (const [prefix, payload] of interpreterPayloads) {
+  const command = `${prefix} '${payload}'`;
+  test(`fd4d interpreter payload refuses: ${JSON.stringify(command)}`, () => assert.equal(denied(command), true));
+}
+for (const [interpreter, payload] of [
+  ['python', 'import os; os.system("open ./page.html")'],
+  ['python3', 'import subprocess; subprocess.run(["open", "./page.html"])'],
+  ['node', 'require("child_process").execSync("open ./page.html")'],
+  ['perl', 'system("open ./page.html")'], ['ruby', 'system("open ./page.html")'],
+  ['osascript', 'tell application "AnyApp" to activate'],
+  ['swift', 'import AppKit; NSWorkspace.shared.open(URL(fileURLWithPath: "./page.html"))'],
+]) {
+  for (const input of [
+    `${interpreter} - <<'EOF'\n${payload}\nEOF`,
+    `${interpreter} <<'EOF'\n${payload}\nEOF`,
+    `printf '%s' '${payload}' | ${interpreter}`,
+  ]) test(`fd4d interpreter stdin refuses: ${JSON.stringify(input)}`, () => assert.equal(denied(input), true));
+}
+
+for (const command of [
+  'source <(echo open ./page.html)', '. <(printf "%s" "open ./page.html")',
+  "source /dev/stdin <<'EOF'\nopen ./page.html\nEOF", ". /dev/stdin <<'EOF'\nopen ./page.html\nEOF",
+  'source /dev/stdin <<< "open ./page.html"',
+  'launchctl submit -l fixture -- open ./page.html', 'launchctl load fixture.plist',
+  'launchctl bootstrap gui/501 fixture.plist', 'launchctl kickstart gui/501/fixture',
+  '$(which open) ./page.html', '$(command -v open) ./page.html',
+  '`which open` ./page.html', '`command -v open` ./page.html',
+  'env $(which open) ./page.html', '"$(command -v /usr/bin/open)" ./page.html',
+]) test(`fd4d consumer or wrapper refuses: ${JSON.stringify(command)}`, () => assert.equal(denied(command), true));
+
+for (const command of [
+  'echo "open ./page.html" | sh | cat', 'printf harmless | echo "open ./page.html" | sh',
+  'echo "open ./page.html" |& env sh', 'echo "open ./page.html" | env sh -c "cat | sh"',
+  'echo "open ./page.html" |\nsh', 'echo "open ./page.html" | # next stage\ncat |\nenv sh',
+  'node -e\'require("child_process").execSync("open ./page.html")\'',
+  'node --eval=\'require("child_process").spawn("open")\'',
+  'perl -we\'system("open ./page.html")\'', 'ruby -e\'system("open ./page.html")\'',
+  'python3 -c \'os.system("/usr/bin/open ./page.html")\'',
+  'node -e "require(\'child_process\').execSync(\'open ./page.html\')"',
+  'ruby -e \'puts "hello"\' -e \'system("open ./page.html")\'',
+  'node -e \'open(url)\'', 'ruby -e \'NSWorkspace.sharedWorkspace\'',
+]) test(`fd4d literal spelling refuses: ${JSON.stringify(command)}`, () => assert.equal(denied(command), true));
+
+for (const sink of ['cat', 'cat 2>log', 'tee', 'pbcopy', 'grep open', 'wc -l', 'cat | grep open | wc -l']) {
+  const command = `${sink} <<'EOF'\nopen the door\nSafari\nIt's (an example).\nEOF`;
+  test(`fd4d heredoc output stays data: ${sink}`, () => {
+    assert.equal(denied(command), false);
+    assert.equal(denied(command + '\nopen ./page.html'), true, 'later commands still checked');
+    assert.equal(denied(command.replace("<<'EOF'", "<<'EOF' | sh")), true, 'downstream shell consumes the body');
+  });
+}
+
+test('fd4d data and headless controls do not become executable payloads', () => {
+  for (const command of [
+    'echo "open ./page.html" | cat', 'printf "%s" "open ./page.html" | grep open | wc',
+    'printf "%s" "chromium --headless" | /bin/sh -', 'echo "printf hello" | env sh',
+    'echo "open x"; printf hello | sh', // A separate pipeline has no launcher input.
+    'which open', 'command -v open', 'echo "$(which open)"', 'printf "%s" "`command -v open`"',
+    'python3 -c \'print("hello")\'', 'node -e \'console.log("hello")\'',
+    'perl -E \'say "hello"\'', 'ruby -e \'puts "hello"\'', 'swift -e \'print("hello")\'',
+    'python3 script.py open', 'node script.js open', 'ruby script.rb open', 'perl script.pl open', 'swift script.swift open',
+    'printf "%s" \'console.log("hello")\' | node',
+    "ruby <<'EOF'\nputs 'hello'\nEOF", "swift - <<'EOF'\nprint(\"hello\")\nEOF",
+    'cat <<EOF\n<(open x)\nEOF', "cat <<'EOF'\n$(open x)\nEOF",
+  ]) assert.equal(denied(command), false, command);
+  assert.equal(denied('cat <<EOF\n$(open x)\nEOF'), true, 'unquoted data still expands commands');
+});
+
 test('shell guard denies app, URL and window launchers without executing them', () => {
   for (const command of [
     'open https://example.invalid', '/usr/bin/open -a AnyApp', 'open -g -j ./preview.html',
@@ -88,7 +187,7 @@ test('Python webbrowser module and source forms are denied', () => {
     assert.equal(denied(command), true, command);
 });
 
-test('ordinary shell work, quoted examples and Python file I/O remain allowed', () => {
+test('ordinary shell work and quoted examples remain allowed', () => {
   for (const command of ['printf "%s" "open https://example.invalid"', 'echo "one; open a && open b | open c & open d"',
     'echo open ./preview.html', 'rg "webbrowser.open" tests', 'cat open',
     'echo safari', 'printf "%s" Safari', 'rg Safari tests', 'cat safari',
@@ -97,7 +196,6 @@ test('ordinary shell work, quoted examples and Python file I/O remain allowed', 
     'stdbuf -oL chromium --headless', 'script -q /dev/null firefox --headless',
     'launchctl asuser 501 msedge --headless', 'exec -a harmless opera --headless',
     'node --test tests/shell-guard.test.mjs', 'npm run lint:prose',
-    'python3 -c \'open("fixture.txt", "w").write("hello")\'',
     'python3 -c \'print("one; two && three")\'', 'echo hi > /tmp/open',
     '# open ./preview.html\necho hi', 'printf ok # open ./preview.html',
     'env -u BROWSER chromium --headless', 'sh -c \'printf "%s" "open ./preview.html"\''])
@@ -260,7 +358,6 @@ test('only matched data sinks may exempt heredoc bodies, across every pipeline c
     "cat >message <<'EOF'\nopen x", // No exact terminator.
     "cat >message <<'EOF'\nopen x\n EOF", // Spaces are not stripped.
     "cat >message <<-'EOF'\nopen x\n EOF",
-    "cat <<'EOF'\nopen x\nEOF", // Bare stdout has no proven data destination.
     "git commit -F - <<'A' <<'B'\nplain\nA\nopen x", // All docs must match.
     'git commit -F - <<EOF\nEO\\\nF\nopen x\nEOF', // Expanded delimiter continuation.
     "cat >message <<$'EOF'\nEOF\nopen x", // Unsupported delimiter quoting.
@@ -327,7 +424,6 @@ test('consumer checks follow quoted split strings, attached shell options and un
     "echo $(cat >message <<'EOF' | sh\nopen x\nEOF\n)",
     'cat >message <<EO\\\nF\n$(open x)\nEOF',
     'git commit -F - <<E\u00a0F\nE\u00a0F\nopen x\nE',
-    "cat 2>log <<'EOF'\nopen x\nEOF",
     "unknown <<'EOF'\nIt's data to an unknown consumer.\nop\\\nen x\nEOF",
   ]) assert.equal(denied(command), true, command);
 });

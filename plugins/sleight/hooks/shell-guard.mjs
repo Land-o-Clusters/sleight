@@ -7,7 +7,28 @@ const headlessBrowser = /^(?:(?:google[ -])?chrome(?:[ -](?:stable|beta|unstable
 const guiLauncher = /^(?:open|xdg-open|sensible-browser|osascript|safari)$/i;
 const shell = /^(?:(?:ba|z|da|k)?sh|fish|csh|tcsh)$/;
 const python = /^python(?:\d+(?:\.\d+)*)?$/;
+const interpreter = /^(?:python(?:\d+(?:\.\d+)*)?|node(?:js)?|perl|ruby|osascript|swift)$/;
 const base = word => word.split('/').at(-1);
+
+// Inspect literal source only. No escape decoding, imports, files or execution.
+// This deliberately also refuses harmless references to launcher names in code.
+function launcherPayloadDenied(payload) {
+  const launcherWord = /(?:^|[^\w])(?:open|osascript|xdg-open|webbrowser|NSWorkspace|LSOpen\w*)(?=$|[^\w])/i;
+  if (/\b(?:webbrowser|NSWorkspace|LSOpen\w*)\b|\b(?:open|osascript)\s*\(/i.test(payload)) return true;
+  return [...payload.matchAll(/(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1/g)]
+    .some(match => launcherWord.test(match[2]));
+}
+
+function lookupLauncher(body, depth) {
+  if (depth > 12) return '';
+  const parsed = lex(body, false, false, false, depth + 1);
+  if (parsed.uncertain || parsed.tokens.some(token => token.text === undefined)) return '';
+  const words = parsed.tokens.map(token => token.text), name = base(words[0] ?? '');
+  const args = words.slice(1).filter(word => word !== '--');
+  const target = name === 'which' && args.length === 1 ? args[0] :
+    name === 'command' && args.length === 2 && args[0] === '-v' ? args[1] : '';
+  return guiLauncher.test(base(target)) ? target : '';
+}
 
 // Preserve operators inside quotes as data and join quoted/escaped word parts.
 // Substitutions execute even within double quotes, so check their bodies too.
@@ -55,8 +76,11 @@ function lex(source, expansionOnly = false, extractHeredocs = true, stopAtParen 
       }
       if (j >= source.length) uncertain = true;
       if (awaitingHeredoc) uncertain = true; // Delimiter expansion is not certified.
-      substitutions.push({ body: source.slice(start, j), process });
-      text += '$substitution'; active = true; i = j;
+      const body = source.slice(start, j);
+      substitutions.push({ body, process });
+      // Resolving a literal availability lookup is only useful as a command
+      // word. An echo argument containing that lookup remains ordinary data.
+      text += !process && lookupLauncher(body, depth) || '$substitution'; active = true; i = j;
     } else if (quote) {
       if (c === quote) quote = ''; else text += c;
     } else if (!expansionOnly && (c === "'" || c === '"')) { quote = c; quoted = true; active = true; }
@@ -67,7 +91,7 @@ function lex(source, expansionOnly = false, extractHeredocs = true, stopAtParen 
       if (c === '(') parens++;
       if (c === ')') parens--;
       const pair = c + source[i + 1];
-      tokens.push({ op: ['&&', '||', '|&'].includes(pair) ? (i++, pair) : c === '\n' ? ';' : c });
+      tokens.push({ op: ['&&', '||', '|&'].includes(pair) ? (i++, pair) : c === '\n' ? ';' : c, newline: c === '\n' });
       if (c === '\n' && pending.length) {
         let cursor = i + 1;
         for (const doc of pending.splice(0)) {
@@ -120,7 +144,7 @@ function deniedCommand(words, depth, stdinSource, heredocs = [], consumerOnly = 
   const name = base(words[0]), args = words.slice(1);
   if (name === 'command' && args.some(arg => /^-[vV]+$/.test(arg)) &&
     args.filter(arg => arg.startsWith('-')).every(arg => /^-[vV]+$/.test(arg) || arg === '--')) return false;
-  if (consumerOnly && ['xargs', 'eval', 'su', 'parallel', 'watch'].includes(name)) return true;
+  if (consumerOnly && ['xargs', 'eval', 'su', 'parallel', 'watch', 'source', '.'].includes(name)) return true;
   if (name === 'busybox') return command(args, depth + 1, stdinSource, heredocs);
   if (name === 'shortcuts' && args[0] === 'run') return true;
   if (name === 'su') {
@@ -142,7 +166,11 @@ function deniedCommand(words, depth, stdinSource, heredocs = [], consumerOnly = 
       doas: ['-u', '-C'], ionice: ['-c', '-n', '-p', '-P', '-u', '--class', '--classdata', '--pid', '--pgid', '--uid'],
       chroot: ['--userspec', '--groups'], parallel: ['-j', '--jobs', '-S', '--sshlogin', '-a', '--arg-file', '-I', '--replace'],
       watch: ['-n', '--interval'], 'sandbox-exec': ['-f', '-p', '-D'], xcrun: ['-sdk', '--sdk', '-toolchain', '--toolchain'] };
-    if (name === 'launchctl') return args[0] === 'asuser' && command(args.slice(2), depth + 1, stdinSource, heredocs);
+    if (name === 'launchctl') {
+      // These start a job whose program may live in an opaque plist or service.
+      if (['submit', 'load', 'bootstrap', 'kickstart'].includes(args[0])) return true;
+      return args[0] === 'asuser' && command(args.slice(2), depth + 1, stdinSource, heredocs);
+    }
     while (i < args.length) {
       if (name === 'env' && ['-S', '--split-string'].includes(args[i])) return source(args.slice(i + 1).join(' '), depth + 1, heredocs);
       if (name === 'env' && /^--split-string=/.test(args[i])) return source(args[i].slice(15) + ' ' + args.slice(i + 1).join(' '), depth + 1, heredocs);
@@ -168,7 +196,7 @@ function deniedCommand(words, depth, stdinSource, heredocs = [], consumerOnly = 
   }
   if (name === 'find') return args.some((arg, i) => ['-exec', '-execdir', '-ok', '-okdir'].includes(arg) && command(args.slice(i + 1), depth + 1, stdinSource, heredocs));
   if (name === 'eval') return source(args.join(' '), depth + 1, heredocs);
-  if (shell.test(name)) {
+  if (shell.test(name) || ['source', '.'].includes(name)) {
     if (consumerOnly) return true;
     const at = args.findIndex(arg => /^-[^-]*c/.test(arg) || arg === '--command' || arg.startsWith('--command='));
     if (at < 0) return heredocs.some(doc => deniedSource(doc.body, depth + 1, [], false));
@@ -176,7 +204,7 @@ function deniedCommand(words, depth, stdinSource, heredocs = [], consumerOnly = 
     const attached = option.startsWith('--command=') ? option.slice(10) : /^-[^-]*?c(.*)$/s.exec(option)?.[1];
     return source(attached || args[at + 1] || '', depth + 1, heredocs);
   }
-  if (consumerOnly) return python.test(name) || name === 'node';
+  if (consumerOnly) return interpreter.test(name);
   if (guiLauncher.test(name) || name === 'gio' && args[0] === 'open') return true;
   const browser = headlessBrowser.test(name);
   if (browser || /\.app\/Contents\/MacOS\//i.test(words[0])) {
@@ -186,18 +214,29 @@ function deniedCommand(words, depth, stdinSource, heredocs = [], consumerOnly = 
     return !(browser && !flags.some(arg => arg.startsWith('--headless=') && !/^--headless=(?:new|old|true)$/.test(arg)) &&
       (flags.some(arg => /^--headless(?:=(?:new|old|true))?$/.test(arg)) || args.length === 1 && ['--version', '--help'].includes(args[0])));
   }
-  if (python.test(name)) {
+  if (interpreter.test(name)) {
+    const stdinDenied = () => Boolean(stdinSource || heredocs.some(doc => launcherPayloadDenied(doc.body)));
     for (let i = 0; i < args.length; i++) {
-      if (args[i] === '--') return args[i + 1] === '-' && stdinSource;
-      if (['-W', '-X'].includes(args[i])) { i++; continue; }
-      const option = /^-[bBdEhiIOPqRsSuvV]*([cm])(.*)$/s.exec(args[i]);
+      if (args[i] === '--') return (!args[i + 1] || args[i + 1] === '-') && stdinDenied();
+      if ((python.test(name) ? ['-W', '-X'] : name === 'node' ? ['-r', '--require', '--import'] : []).includes(args[i])) { i++; continue; }
+      const option = python.test(name) ? /^-[bBdEhiIOPqRsSuvV]*([cm])(.*)$/s.exec(args[i]) :
+        /^-(?:[wnpa]*)([ceE])(.*)$/s.exec(args[i]);
       if (option) {
         const payload = option[2] || args[i + 1] || '';
-        return option[1] === 'm' ? payload === 'webbrowser' : /\bwebbrowser\b/.test(payload);
+        if (option[1] === 'm') return payload === 'webbrowser';
+        if (launcherPayloadDenied(payload)) return true;
+        if (!option[2]) i++;
+        continue; // Perl and Ruby allow multiple -e payloads.
       }
+      if (args[i] === '--eval' || args[i].startsWith('--eval=')) {
+        const payload = args[i] === '--eval' ? args[++i] ?? '' : args[i].slice(7);
+        if (launcherPayloadDenied(payload)) return true;
+        continue;
+      }
+      if (args[i] === '-') return stdinDenied();
       if (!args[i].startsWith('-')) return false; // A script on disk is opaque.
     }
-    return stdinSource;
+    return stdinDenied();
   }
   return false;
 }
@@ -207,7 +246,8 @@ function segments(tokens) {
   let words = [], redirects = [], redirect;
   for (const token of [...tokens, { op: ';' }]) {
     if (token.op) {
-      commands.push({ words, redirects });
+      if (token.newline && !words.length && !redirects.length && ['|', '|&'].includes(commands.at(-1)?.after)) continue;
+      commands.push({ words, redirects, after: token.op });
       words = []; redirects = []; redirect = undefined;
     } else if (token.redirect) { redirect = { ...token }; redirects.push(redirect); }
     else if (redirect) { redirect.target = token.text; redirect = undefined; }
@@ -216,18 +256,13 @@ function segments(tokens) {
   return commands;
 }
 
-function dataSink({ words, redirects }, captured) {
+function dataSink({ words }) {
   const [executable = '', ...args] = words, name = base(executable);
   const optionStdin = (short, long) => args.some((arg, i) =>
     arg === short && args[i + 1] === '-' || arg === long && args[i + 1] === '-' || arg === `${long}=-`);
   if (name === 'git' && args[0] === 'commit') return optionStdin('-F', '--file');
   if (name === 'gh') return optionStdin(undefined, '--body-file');
-  const file = value => typeof value === 'string' && value !== '-' && !/[$`]/.test(value) &&
-    !/^\/dev\/(?:fd\/|stdin$|stdout$|stderr$)/.test(value);
-  if (name === 'cat') return captured || redirects.some(redir => ['>', '>>'].includes(redir.redirect) &&
-    (redir.fd === undefined || redir.fd === '1') && file(redir.target));
-  if (name === 'tee') return args.some(arg => !arg.startsWith('-') && file(arg));
-  return false;
+  return ['cat', 'tee', 'pbcopy', 'grep', 'wc'].includes(name);
 }
 
 // Conservative across the whole source, including nested substitutions. A
@@ -239,11 +274,24 @@ function hasCodeConsumer(parsed, depth) {
 }
 
 function scanParsed(parsed, depth, inheritedHeredocs, allowData) {
-  if (parsed.substitutions.some(sub => deniedSource(sub.body, depth + 1, [], allowData, !sub.process))) return true;
+  if (parsed.substitutions.some(sub => deniedSource(sub.body, depth + 1, [], allowData))) return true;
   const stdinSource = /\b(?:import\s+webbrowser|from\s+webbrowser\s+import)\b/.test(
     [...parsed.tokens, ...inheritedHeredocs].map(token => token.text ?? token.body ?? '').join('\n'));
-  return segments(parsed.tokens).some(({ words, redirects }) => deniedCommand(words, depth, stdinSource,
-    [...inheritedHeredocs, ...redirects.filter(redirect => redirect.body !== undefined)]));
+  const commands = segments(parsed.tokens);
+  return commands.some(({ words, redirects }, i) => {
+    if (deniedCommand(words, depth, stdinSource,
+      [...inheritedHeredocs, ...redirects.filter(redirect => redirect.body !== undefined)])) return true;
+    if (!deniedCommand(words, depth, false, [], true)) return false;
+    // Retain the actual pipe boundaries. Lists and separate commands do not
+    // feed a later shell, while every earlier stage of one pipeline can.
+    for (let j = i - 1; j >= 0 && ['|', '|&'].includes(commands[j].after); j--) {
+      const producer = commands[j];
+      if (streamInputDenied({ tokens: producer.words.map(text => ({ text })), substitutions: [] }, depth) ||
+        producer.redirects.some(redir => redir.body !== undefined &&
+          (deniedSource(redir.body, depth + 1, [], false) || launcherPayloadDenied(redir.body)))) return true;
+    }
+    return false;
+  });
 }
 
 // Here-strings and process substitutions may produce code for another command
@@ -251,23 +299,27 @@ function scanParsed(parsed, depth, inheritedHeredocs, allowData) {
 function streamInputDenied(parsed, depth) {
   if (depth > 12) return true;
   const words = parsed.tokens.filter(token => token.text !== undefined).map(token => token.text);
-  return words.some((word, i) => deniedCommand(words.slice(i), depth + 1, false) ||
+  return words.some((word, i) => launcherPayloadDenied(word) || deniedCommand(words.slice(i), depth + 1, false) ||
     /\s/.test(word) && deniedSource(word, depth + 1, [], false)) ||
     parsed.substitutions.some(sub => streamInputDenied(lex(sub.body, false, false), depth + 1));
 }
 
-function deniedSource(source, depth = 0, inheritedHeredocs = [], allowData = true, captured = false) {
+function deniedSource(source, depth = 0, inheritedHeredocs = [], allowData = true) {
   if (depth > 12) return true;
   const parsed = lex(source, false, allowData);
   const consumer = hasCodeConsumer(parsed, depth);
   const commands = segments(parsed.tokens);
   const docs = parsed.heredocs;
   const provenData = allowData && !parsed.uncertain && !consumer && !inheritedHeredocs.length &&
-    !parsed.tokens.some(token => ['|', '|&'].includes(token.op)) &&
+    commands.every((command, i) => !['|', '|&'].includes(command.after) ||
+      dataSink(command) && dataSink(commands[i + 1])) &&
     docs.every(doc => doc.matched && !/[$`]/.test(doc.delimiter)) && commands.every(command =>
       !command.redirects.some(redir => redir.body !== undefined) ||
-      dataSink(command, captured));
+      dataSink(command));
 
+  // Keep raw heredoc source available to interpreter and shell consumers before
+  // the fallback lexer treats its quotes as shell syntax.
+  if (scanParsed(parsed, depth, inheritedHeredocs, allowData)) return true;
   if (source.includes('<<') && !provenData) {
     // No omission is authorized. Ignore heredoc syntax and scan every line as
     // well as the whole text, so a body's unmatched quote cannot hide a later
@@ -277,7 +329,6 @@ function deniedSource(source, depth = 0, inheritedHeredocs = [], allowData = tru
     if (scanParsed(whole, depth, inheritedHeredocs, false) || source.replace(/\\\n/g, '').split('\n').some(line =>
       scanParsed(lex(line, false, false), depth, [], false))) return true;
   } else {
-    if (scanParsed(parsed, depth, inheritedHeredocs, allowData)) return true;
     for (const doc of docs) {
       if (!doc.quoted && lex(doc.body, true, false).substitutions.some(sub => deniedSource(sub.body, depth + 1))) return true;
     }
