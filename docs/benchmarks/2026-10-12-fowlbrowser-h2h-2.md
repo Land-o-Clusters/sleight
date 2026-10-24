@@ -1,5 +1,7 @@
 # sleight against FowlBrowser, later rounds (2026-10-12)
 
+These results used `8b68924` (baseline). The next race targets `6a12d60` (head).
+
 The setup is the one in [the 10:25 round](2026-10-12-fowlbrowser-h2h.md): FowlBrowser's runner and grader at
 `8b68924` with sleight's patch, its 13 tasks, each run in Chrome and Helium (normal and swapped order), Opus 5.5 at
 medium effort. These rounds ran on the owner's Claude account rather than the API key. sleight changed between

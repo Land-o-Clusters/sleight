@@ -3,7 +3,8 @@
   "provenance": {
     "fowlbrowser": {
       "repository": "https://github.com/argofowl/FowlBrowser",
-      "commit": "8b689249ba4e33d2626487aad930605c62e2c6a7",
+      "commit": "6a12d606511d8fd7cb6a32530aafb068cc64aeb2",
+      "previousCommit": "8b689249ba4e33d2626487aad930605c62e2c6a7",
       "path": "tools/agents/codex-h2h.json",
       "note": "14 rows in the pinned file, including both language-setting cases; ledger calls it 13"
     },

@@ -12,7 +12,7 @@
 #   starts Cua's daemon when it isn't running and stops it afterwards (bench/fowl/real-gate.mjs, arm-prep.json).
 # Usage: bench/fowl/rounds.sh --surface sleight|fowlbrowser|fowl+sleight|browser-use [rounds.mjs options]
 set -eu
-PIN=8b68924
+PIN=6a12d60
 DIR="$HOME/Library/Caches/sleight-bench/fowlbrowser"
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 # --no-hub (or SLEIGHT_NO_HUB=1) keeps a round from refreshing the benchmark hub when it ends. Tests and A/B runs that must not
@@ -65,6 +65,7 @@ if [ -n "$REAL" ]; then
   stop_child() { kill -"$1" "$CHILD" 2>/dev/null || true; wait "$CHILD" 2>/dev/null || true; exit 130; }
   trap 'stop_child INT' INT; trap 'stop_child TERM' TERM; trap 'stop_child HUP' HUP
   env -i HOME="$HOME" USER="$USER" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" LANG="${LANG:-en_US.UTF-8}" \
+    ${FOWLBROWSER_ROUNDS_CONFIG:+FOWLBROWSER_ROUNDS_CONFIG="$FOWLBROWSER_ROUNDS_CONFIG"} \
     SLEIGHT_REPO="$REPO" ${SLEIGHT_TRACE:+SLEIGHT_TRACE="$SLEIGHT_TRACE"} ${SLEIGHT_TS3:+SLEIGHT_TS3="$SLEIGHT_TS3"} ${SLEIGHT_FS:+SLEIGHT_FS="$SLEIGHT_FS"} ${SLEIGHT_RS+SLEIGHT_RS="$SLEIGHT_RS"} \
     ${SLEIGHT_BENCH_HAND:+SLEIGHT_BENCH_HAND="$SLEIGHT_BENCH_HAND"} ${SLEIGHT_BROWSER_CORE:+SLEIGHT_BROWSER_CORE="$SLEIGHT_BROWSER_CORE"} ${AS3_WINDOW_PROMPT:+AS3_WINDOW_PROMPT="$AS3_WINDOW_PROMPT"} \
     ${SLEIGHT_WORKFLOW_DOCS:+SLEIGHT_WORKFLOW_DOCS="$SLEIGHT_WORKFLOW_DOCS"} ${SLEIGHT_LB12:+SLEIGHT_LB12="$SLEIGHT_LB12"} ${SLEIGHT_MT:+SLEIGHT_MT="$SLEIGHT_MT"} \
@@ -99,6 +100,7 @@ trap 'rmdir /tmp/sleight-live.lock; [ "$AUTH" = api ] && [ -n "$OUT" ] && [ -d "
 RC=1
 env -i HOME="$HOME" USER="$USER" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" LANG="${LANG:-en_US.UTF-8}" \
   CLAUDE_CONFIG_DIR="$HOME/Library/Caches/sleight-bench/fowl-claude-config" \
+  ${FOWLBROWSER_ROUNDS_CONFIG:+FOWLBROWSER_ROUNDS_CONFIG="$FOWLBROWSER_ROUNDS_CONFIG"} \
   SLEIGHT_REPO="$REPO" SLEIGHT_TRACE="${SLEIGHT_TRACE:-}" SLEIGHT_PROMPT="${SLEIGHT_PROMPT:-}" SLEIGHT_ENGINE_DOCS="${SLEIGHT_ENGINE_DOCS:-}" ${KEY:+ANTHROPIC_API_KEY="$KEY"} \
   node tools/rounds.mjs --effort medium "$@" --model "$MODEL" && RC=0 || RC=$?
 [ -z "$OUT" ] || [ ! -d "$OUT" ] || node "$REPO/bench/engine-version.mjs" record "$OUT" --end || echo "rounds.sh: engine version at the end not recorded in $OUT" >&2

@@ -16,7 +16,7 @@ import { hasPermissionRefusal } from '../permission-refusal.mjs';
 export const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 export const RESET = '2026-10-21T15:00:00Z';
 const MODEL = 'claude-haiku-5-5';
-const UPSTREAM = '8b689249ba4e33d2626487aad930605c62e2c6a7';
+const UPSTREAM = '6a12d606511d8fd7cb6a32530aafb068cc64aeb2';
 const SOURCE_PATHS = ['plugins', 'bench', 'scripts', 'package.json', 'package-lock.json'];
 const SURVEYS = 'bench/world/tasks/browser-open-heldout.json';
 const sha = value => createHash('sha256').update(value).digest('hex');
