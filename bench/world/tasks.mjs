@@ -11,6 +11,7 @@ import { browserKinds, serveWorldPage, checkBrowserFixture } from './browser-fix
 import { heldOutTasks } from '../tasks-held-out.mjs';
 import { ccHeldOutTasks } from './cc-held-out.mjs';
 import { mailToSheetTask } from '../tasks-mail-to-sheet.mjs';
+import { consentWallTasks } from './consent-tasks.mjs';
 
 // Test constant only. Runtime approvals use the selected tasks through worldPassApps.
 export const WORLD_APPS = ['Calculator', 'com.apple.calculator', 'TextEdit', 'com.apple.TextEdit', 'Chess', 'com.apple.Chess',
@@ -244,7 +245,7 @@ export function getWorldTasks({ defaults, real, open = openFixture }) {
   const added = ['finder-rename', 'finder-move', 'finder-create-folder'].map(id => finderTask(id, open)).concat(
     ['textedit-two-windows', 'textedit-window-drag', 'textedit-replace-save', 'textedit-replace-all', 'textedit-insert-line'].map(id => textTask(id, open)), previewTask(open));
   // The held-out document tasks run only by name (--tasks), never in a pass without it.
-  return [...original, ...retained, ...apps, ...added, ...browserKinds.map(id => browserTask(id, open)), ...heldOutTasks(open), ...ccHeldOutTasks(open), mailToSheetTask(open)].map(task => ({ ...task, fixtureLifecycle: true,
+  return [...original, ...retained, ...apps, ...added, ...browserKinds.map(id => browserTask(id, open)), ...heldOutTasks(open), ...ccHeldOutTasks(open), mailToSheetTask(open), ...consentWallTasks()].map(task => ({ ...task, fixtureLifecycle: true,
     allowedApps: task.allowedApps ?? (task.id === 'textedit-calculator' ? ['TextEdit', 'Calculator'] : [task.app]).flatMap(app => fixtureApps[app] ?? []),
     // The cross-app task copies a number: Claude Code's computer use asks for the clipboard with its apps (live 2026-10-17 15:58Z).
     // Finder's own card always carries "can read/write any file": that is the app, not an extra grant (live 15:59Z).

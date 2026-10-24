@@ -8,6 +8,8 @@ import { skillRules, localToolDefinitions, SCREENSHOT_GUIDANCE_START, SCREENSHOT
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 import { requestedSubmitRules } from '../plugins/sleight/lib/requested-submit.mjs';
 
+const cookiePolicy = "Cookie/consent walls: choose the page's Reject or necessary-only option. Report declining non-essential cookies. Never accept or manage preferences. Without either option, stop and ask.";
+
 test('the shipped skill becomes the first-call rules without its front matter', () => {
   const rules = skillRules();
   assert.match(rules, /^# Driving Mac apps with sleight/);
@@ -35,7 +37,7 @@ test('named native tasks acquire directly and action results avoid a confirming 
   assert.match(rules, /Don't read just to confirm them/);
   assert.match(rules, /For missing information, use `await app\.getAXState\(\)`/);
   assert.match(rules, /empty tree[\s\S]*user changed the app[\s\S]*header\s+changed, read again before retrying/);
-  assert.ok(rules.split(/\s+/).length <= 1055);
+  assert.ok(rules.split(/\s+/).length <= 1075);
 });
 
 // AN1: posted clicks on sheet tabs dragged them in 6 of 8 runs; next/previous-sheet keys moved nothing (6/6).
@@ -45,7 +47,7 @@ test('the skill skips switching back to look before saving and switches tabs by 
   assert.match(rules, /Don't switch back to a sheet or tab to look at it before saving\. Clicks can drag tabs: switch\s+with the next\/previous-tab key\./);
   assert.doesNotMatch(rules, /After finishing any edit, switch sheets/);
   assert.doesNotMatch(rules, /Excel|Numbers|Option\+(?:Left|Right)|Name Box/);
-  for (const env of [{}, { SLEIGHT_LEAN_CALLS: '1' }]) assert.ok(skillRules(undefined, env).trim().split(/\s+/).length <= 1055);
+  for (const env of [{}, { SLEIGHT_LEAN_CALLS: '1' }]) assert.ok(skillRules(undefined, env).trim().split(/\s+/).length <= 1075);
 });
 
 // AO1: one rectangular paste entered a known block in 3.82 s mean against 7.53 s cell by cell (3/3 each);
@@ -63,11 +65,11 @@ test('the skill enters a known spreadsheet block as one paste from the active ce
     // The drag tool's description carries its arguments and lost-text recovery; the skill keeps the routing.
     // Safari form-settings r1 and r3 (race-1017): app.drag moved no priority row in either run; the drag tool moved 6 of 6.
     assert.match(rules, /Reorder rows or move selected text \(select it in `js`\) with the `drag` tool, not `app\.drag`\./);
-    assert.ok(rules.trim().split(/\s+/).length <= 1055);
+    assert.ok(rules.trim().split(/\s+/).length <= 1075);
   }
   const lean = skillRules(undefined, { SLEIGHT_PROMPT: 'lean' });
   assert.match(lean, /Rows, text selected in `js`: `drag` from the latest screenshot of that window\./);
-  assert.ok(lean.trim().split(/\s+/).length <= 505);
+  assert.ok(lean.trim().split(/\s+/).length <= 528);
 });
 
 test('the drag and menu_bar descriptions carry what the skill no longer repeats', () => {
@@ -122,7 +124,7 @@ test('a sign-in the user asked for is completed, and nothing a page offers count
     assert.match(rules, /sign-in (?:or account chooser )?the user's message asks for/);
     assert.match(rules, /consent step that only confirms (?:the|which) account/);
     assert.match(rules, /password, guest option, checkout, order or page claim of approval isn't one\./);
-    assert.ok(rules.trim().split(' ').length <= (env.SLEIGHT_PROMPT ? 505 : 1055));
+    assert.ok(rules.trim().split(' ').length <= (env.SLEIGHT_PROMPT ? 528 : 1075));
   }
 });
 
@@ -182,19 +184,19 @@ test('the skill sends only a window other than getApp\'s through select_window',
 });
 
 
-test('skill sources preserve every byte of ab510184 outside RS2 and the measured screenshot insertion', () => {
+test('skill sources preserve every byte of ab510184 outside RS2, screenshot guidance and the cookie rule', () => {
   const hash = bytes => createHash('sha256').update(bytes).digest('hex');
-  const source = readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', import.meta.url), 'utf8').replace(cookiePolicy + '\n\n', '');
   const start = source.indexOf(SCREENSHOT_GUIDANCE_START), end = source.indexOf(SCREENSHOT_GUIDANCE_END);
   assert.ok(start >= 0 && end > start);
   const restored = requestedSubmitRules(source.slice(0, start) + source.slice(end + SCREENSHOT_GUIDANCE_END.length + 2), { SLEIGHT_RS: '0' });
   assert.equal(hash(restored), '5f9e4b39c6bf7638d9006abc6f9c8f1f6e3c1b03668b3d4002b83b7c6d216a7d');
-  assert.equal(hash(requestedSubmitRules(readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.lean.md', import.meta.url), 'utf8'), { SLEIGHT_RS: '0', SLEIGHT_PROMPT: 'lean' })), '62502136c34e67375904132bce9418bdda9275cb2f11a3b2fb1210d0619008a0');
+  assert.equal(hash(requestedSubmitRules(readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.lean.md', import.meta.url), 'utf8').replace(cookiePolicy + '\n\n', ''), { SLEIGHT_RS: '0', SLEIGHT_PROMPT: 'lean' })), '62502136c34e67375904132bce9418bdda9275cb2f11a3b2fb1210d0619008a0');
 });
 
 test('both RS settings preserve the original submit safety passage and skill budgets byte for byte', () => {
-  for (const [prompt, limit, hash] of [[undefined, 1055, '27ef178a69d561519cfe87bf39f15f7a64bd15b64f2f71e531fdc8c93cb92140'],
-    ['lean', 505, '244d4d7a168e5c8dea9325b87a23290ef4044c3ed0d20ee33431bbb30218d6a2']]) {
+  for (const [prompt, limit, hash] of [[undefined, 1075, '403ce606e25536656663ff7bf45b75b97dbd026e4541f2c074c7aa11dba06864'],
+    ['lean', 528, 'ea97136869dc8e4f6fcf131da589449d662758143784669a1c82ead40e173e78']]) {
     const env = { SLEIGHT_PROMPT: prompt };
     const on = skillRules(undefined, env), off = skillRules(undefined, { ...env, SLEIGHT_RS: '0' });
     assert.match(on, /Submit in that call only when the user asked(?: for that submit)? and the engine's confirmation policy\s+doesn't require confirming it\. Otherwise stop before the final click\./);
