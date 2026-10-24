@@ -1,9 +1,9 @@
 {
-  "skill": "c8f645e94efd38827423ca2819e1ba5e14e04946030ce9113eb4be2043ddf69b",
+  "skill": "f42832edd95ce6513f0ac3f126e6508421c1ffe93dec46950249549061ed4044",
   "tools": "c1b796e8a8b2a155cadd5e5ae0463d12d5f90ad8147698050352bc95dde8b40b",
   "batch": "aab9c612b29e726dcacf915b1c565dfc65ae3c455bc7561a3f1ea2d3733d4406",
   "merge": "5bd0464e07e16924b32d03a806ec8a6f47c2ed254026b394cbaa26b5c3e8a32d",
-  "notices": "f903c1c3015a67c0b54c7a1b55fe950c1003a4dadd7a470db75138507d77bacc",
+  "notices": "f5ddc733d3ac2e276e63d4e1a4eee23000176d03575ad50825b37f08cf0e56d3",
   "skillSafety": [
     "Cookies: use only one-click Reject/necessary-only that declines all optional cookies, or ask.",
     "Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes\nit. If an app isn't approved, ask the user, or stop when a headless run refuses it.",
@@ -55,7 +55,7 @@
   "js": "9ec4a1d4a94be18503d350cf9cd3433d1adb9b6479ff5aa870df59e06574b491",
   "browserReviewOutcomes": "5c573cbc59689bbf2ba45e41b65b742c79050aa11cf002ec7d4f43a1acd80438",
   "browserClosedOutcome": "9e5f2ae21e3b53f89a2f31705de162fed1496da007e66246fdf84beb669a8698",
-  "browserToolsLegacy": "a8167896d8de9b12fdef0955bdf940a58e6207b68071e7692f05bba2c2cec0e2",
-  "browserToolsMT": "4631db13b44757bbffbecdc78f2ae41607056b1cab7f5018e3da824406ad0bc1",
+  "browserToolsLegacy": "657d318e30f0a6fe1b68340ca79b9a4c0aef801509b40b25b094d3d823232184",
+  "browserToolsMT": "00db6c74141fd39fe689cc922488b4f2670fa9794b5f68719b622fa2a9502f50",
   "browserHandoffOutcomes": "d99b28cc1fb0fa080bae67acd03d6001b190fd21819848c48897a1ac9bb5c6d2"
 }

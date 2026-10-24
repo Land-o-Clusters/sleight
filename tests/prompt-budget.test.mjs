@@ -26,7 +26,7 @@ const hash = text => createHash('sha256').update(text).digest('hex');
 const baseline = JSON.parse(readFileSync(new URL('fixtures/prompt-default.json', import.meta.url)));
 const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', import.meta.url);
 // G11B shortens the eager cookie rule and counts conditional guard notices.
-// Default with lean calls: 1066 words. Lean: 519 words.
+// p143 plus the cookie rule: default 1062 words, lean 517 words.
 const leanRatio = 31742 / 44482;
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
@@ -406,7 +406,14 @@ for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned i
   // +363 characters for g3g export (path, format, bom, completeness receipt).
   // G12F paste adds 119 catalog characters in each mode (111 description, 8 enum).
   // each lane measured its own increment; G10B adds 68 characters for touch schema and guidance.
-  assert.equal(JSON.stringify(tools).length, mode === '0' ? 5792 : 6074);
+  // The cookie rule adds 94 catalog characters to current p143, including developer reads.
+  assert.equal(tools.find(tool => tool.name === 'browser_act').description.length, mode === '0' ? 1034 : 1183);
+  assert.equal(JSON.stringify(tools).length, mode === '0' ? 5886 : 6168);
+  const descriptions = tools.map(tool => tool.description).join('\n');
+  for (const prompt of [undefined, 'lean']) {
+    const combined = skillRules(skillPath, { SLEIGHT_PROMPT: prompt }).length + descriptions.length;
+    assert.equal(combined, (prompt === 'lean' ? 6155 : 9782) - (mode === '0' ? 280 : 0));
+  }
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);
 }));

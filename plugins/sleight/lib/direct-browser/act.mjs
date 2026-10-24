@@ -14,9 +14,9 @@ import { assertPageResponsive, ensurePageResponsive, probePage } from './page-he
 import { waitForPage, waitForThinPage } from './waits.mjs';
 import { downloadLink } from './download-link.mjs';
 import { prepareControlRecipe } from './control-recipes.mjs';
+import { checkConsent, verifyConsent, releaseConsent } from './consent-wall.mjs';
 const OPS = new Set('click type paste press select check uncheck hover scroll drag upload download dialog wait back forward reload viewport navigate'.split(' '));
 const REF_OPS = new Set('click type paste select check uncheck hover drag upload download'.split(' '));
-import { checkConsent, verifyConsent, releaseConsent } from './consent-wall.mjs';
 const WAIT_CAP = 5000, SCROLL_CAP = 10000, navigateNeeds = 'the ref of an http(s) link (browser_open takes a url); to press other elements use click';
 const TIMEOUT = 1000;
 const clickModifiers = Object.freeze({ cmd: 'Meta', ctrl: 'Control' });
@@ -579,7 +579,6 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
       } catch (error) {
         if (error.stuckPage) throw error;
         if (!state.dialog && /timeout|timed out|deadline|Snapshot (unavailable|acquisition)/i.test(error.message)) await probePage(tab);
-        if (lossFixes && started && armed?.boundary?.kind === 'close') {
         if (lossFixes && started && armed?.boundary?.kind === 'close' && !consentDecline) {
           closed = true; lines.push(label + ': tab closed' + (submit && state.submitUnconfirmed === submit ? '; ' + closedSubmitWarning : '')); stoppedAt = index + 1; break;
         }

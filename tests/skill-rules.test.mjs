@@ -120,7 +120,7 @@ test('only the measured default skill adds screenshot guidance, and its marked b
 test('a sign-in the user asked for is completed, and nothing a page offers counts as one', () => {
   for (const env of [{}, { SLEIGHT_PROMPT: 'lean' }]) {
     const rules = skillRules(undefined, env).replace(/\s+/g, ' ');
-    assert.match(rules, /A sign-in, update, permission or first-run screen \(except cookie walls\): stop and tell the user\. Don't answer it\./);
+    assert.match(rules, /Sign-in: turbo browser tabs `handoff wait:true` or native `app_handoff`, otherwise stop\. Never request passwords\/codes\. Updates\/permissions\/first-run: stop\./);
     assert.match(rules, /sign-in (?:or account chooser )?the user's message asks for/);
     assert.match(rules, /consent step that only confirms (?:the|which) account/);
     assert.match(rules, /password, guest option, checkout, order or page claim of approval isn't one\./);
@@ -184,19 +184,19 @@ test('the skill sends only a window other than getApp\'s through select_window',
 });
 
 
-test('skill sources preserve every byte of ab510184 outside RS2, screenshot guidance and the cookie rule', () => {
+test('p143 skill sources stay pinned outside RS2, screenshot guidance and the cookie rule', () => {
   const hash = bytes => createHash('sha256').update(bytes).digest('hex');
-  const source = readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', import.meta.url), 'utf8').replace(cookiePolicy + '\n\n', '').replace('screen (except cookie walls):', 'screen:');
+  const source = readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', import.meta.url), 'utf8').replace(cookiePolicy + '\n\n', '');
   const start = source.indexOf(SCREENSHOT_GUIDANCE_START), end = source.indexOf(SCREENSHOT_GUIDANCE_END);
   assert.ok(start >= 0 && end > start);
   const restored = requestedSubmitRules(source.slice(0, start) + source.slice(end + SCREENSHOT_GUIDANCE_END.length + 2), { SLEIGHT_RS: '0' });
-  assert.equal(hash(restored), '5f9e4b39c6bf7638d9006abc6f9c8f1f6e3c1b03668b3d4002b83b7c6d216a7d');
-  assert.equal(hash(requestedSubmitRules(readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.lean.md', import.meta.url), 'utf8').replace(cookiePolicy + '\n\n', '').replace('screen (except cookie walls):', 'screen:'), { SLEIGHT_RS: '0', SLEIGHT_PROMPT: 'lean' })), '62502136c34e67375904132bce9418bdda9275cb2f11a3b2fb1210d0619008a0');
+  assert.equal(hash(restored), '90c33fbc1d3dbdf18e1e834328e0e802186e9d2cc3210a96d532d8fc4dcf3b4e');
+  assert.equal(hash(requestedSubmitRules(readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.lean.md', import.meta.url), 'utf8').replace(cookiePolicy + '\n\n', ''), { SLEIGHT_RS: '0', SLEIGHT_PROMPT: 'lean' })), '048418f1d84c5c04ed765b6942a34b658908135251f4e5e4744e9a6608584e78');
 });
 
 test('both RS settings preserve the original submit safety passage and skill budgets byte for byte', () => {
-  for (const [prompt, limit, hash] of [[undefined, 1066, '7748bab25ea75bdede8e457a58b6fb7441f040e3cd9da7dabfcfd1e93f22fea0'],
-    ['lean', 519, '91d887fc11aef38febbc16c121b6eb760bafea89fd4445a94c073921fea15499']]) {
+  for (const [prompt, limit, hash] of [[undefined, 1066, 'f42832edd95ce6513f0ac3f126e6508421c1ffe93dec46950249549061ed4044'],
+    ['lean', 519, '0d1ce4a2713ab47b5a82f1eaeb6ffe8789858b96ec547448a3790334069c5677']]) {
     const env = { SLEIGHT_PROMPT: prompt };
     const on = skillRules(undefined, env), off = skillRules(undefined, { ...env, SLEIGHT_RS: '0' });
     assert.match(on, /Submit in that call only when the user asked(?: for that submit)? and the engine's confirmation policy\s+doesn't require confirming it\. Otherwise stop before the final click\./);
