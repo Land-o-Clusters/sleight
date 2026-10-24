@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCDPFilter } from '../plugins/sleight/lib/direct-browser/cdp-filter.mjs';
-import { setViewport } from '../plugins/sleight/lib/direct-browser/viewport.mjs';
+import { setViewport, restoreViewport } from '../plugins/sleight/lib/direct-browser/viewport.mjs';
 import { app, identity, recipe, page, rect, fakeUpstream, fakeWindows, nativeWindow, fakeBrowser, tick } from './fixtures/electron-graph.mjs';
 import { withMT } from './fixtures/mt-env.mjs';
 import crypto from 'node:crypto';
@@ -77,6 +77,42 @@ test('FD5 a failed app media restore keeps ownership and can retry release', asy
   assert.equal(s.pages.tab(tab), entry); assert.equal(entry.released, false);
   fail = false; await s.pages.keep(tab); assert.equal(entry.released, true);
   await s.pages.endTurn();
+});
+
+for (const release of ['keep', 'handoff', 'endTurn']) test(`FD5B app ${release} clears metrics after reset and clears inherited media`, async t => {
+  const s = await world({ targets: [page('a')], windows: [nativeWindow(11, rect(0, 0))] }); t.after(() => s.filter.dispose());
+  await s.pages.seed();
+  const [{ tab }] = await s.pages.list(), entry = s.pages.tab(tab), calls = [];
+  let size = { width: 1000, height: 800 };
+  entry.page.context = () => ({ newCDPSession: async () => ({
+    send: async method => { calls.push(method); return { cssLayoutViewport: { clientWidth: size.width, clientHeight: size.height } }; },
+    detach: async () => {} }) });
+  entry.page.setViewportSize = async next => { size = next; };
+  entry.page._connection = { toImpl: () => ({ emulatedMedia: () => ({ colorScheme: 'light', reducedMotion: 'no-preference' }) }) };
+  entry.page.emulateMedia = async media => { calls.push(media); assert.equal(entry.released, false); };
+  await setViewport(entry.page, { width: 390, height: 844, color_scheme: 'dark', reduced_motion: true });
+  await restoreViewport(entry.page);
+  calls.length = 0;
+  if (release === 'endTurn') assert.equal((await s.pages.endTurn()).cleanedUp, true);
+  else await s.pages[release](tab);
+  assert.deepEqual(calls, ['Emulation.clearDeviceMetricsOverride', { colorScheme: null, reducedMotion: null }]);
+  assert.equal(entry.released, true); assert.deepEqual(s.pw.closes, []);
+  await s.pages.endTurn();
+});
+
+test('FD5B app turn end reports the unknown original size while clearing its override', async t => {
+  const s = await world({ targets: [page('a')], windows: [nativeWindow(11, rect(0, 0))] }); t.after(() => s.filter.dispose());
+  await s.pages.seed();
+  const [{ tab }] = await s.pages.list(), entry = s.pages.tab(tab);
+  entry.page.context = () => ({ newCDPSession: async () => ({ send: async method => {
+    if (method === 'Page.getLayoutMetrics') throw Error('size unavailable');
+    assert.equal(method, 'Emulation.clearDeviceMetricsOverride'); return {};
+  }, detach: async () => {} }) });
+  entry.page.setViewportSize = async () => {};
+  await setViewport(entry.page, { width: 390, height: 844 });
+  const result = await s.pages.endTurn();
+  assert.equal(result.cleanedUp, true);
+  assert.match(result.rows[0].viewport, /previous size unknown/);
 });
 
 test('the app filter refuses unadmitted targets before any attach, Target.create/close and focus emulation', async t => {

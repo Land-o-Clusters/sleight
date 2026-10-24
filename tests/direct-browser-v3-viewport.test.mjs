@@ -14,6 +14,7 @@ function sizedPage(initial = { width: 1280, height: 720 }, { readable = true } =
   page.context = () => ({ newCDPSession: async () => ({
     send: async (method, params) => {
       calls.push(method);
+      if (method === 'Emulation.clearDeviceMetricsOverride') { size = { ...initial }; return {}; }
       assert.equal(method, 'Page.getLayoutMetrics');
       if (!readable) throw Error('no session');
       return { cssLayoutViewport: { clientWidth: size.width, clientHeight: size.height } };
@@ -75,7 +76,63 @@ test('an unreadable page size still sets the viewport and says the old size is u
   const result = await run([{ do: 'viewport', width: 390, height: 844 }]);
   assert.deepEqual(size(), { width: 390, height: 844 });
   assert.match(result.lines[0], /viewport 390x844; previous size unknown$/);
-  assert.match((await run([{ do: 'viewport' }])).lines[0], /unchanged/);
+  await assert.rejects(restoreViewport(page), /previous size unknown/);
+  assert.match(await restoreViewport(page, { release: true }), /previous size unknown/);
+  assert.deepEqual(size(), { width: 1000, height: 800 });
+});
+
+test('FD5B a failed first size read stays unknown after a later readable resize', async () => {
+  const { page } = sizedPage({ width: 1000, height: 800 }, { readable: false });
+  await setViewport(page, { width: 390, height: 844 });
+  const readable = sizedPage({ width: 390, height: 844 });
+  page.context = readable.page.context;
+  assert.match(await setViewport(page, { width: 390, height: 844 }), /previous size unknown/);
+  await assert.rejects(restoreViewport(page), /previous size unknown/);
+});
+
+test('FD5B clears metrics on the Playwright session that installed the override', async () => {
+  const { page, calls } = sizedPage();
+  const impl = { delegate: { _mainFrameSession: { _metricsOverride: { width: 390 },
+    _client: { send: async method => calls.push(['owner', method]) } } },
+    _setEmulatedSize: () => {} };
+  page._connection = { toImpl: () => impl };
+  await setViewport(page, { width: 390, height: 844 });
+  calls.length = 0;
+  await restoreViewport(page, { release: true });
+  assert.deepEqual(calls, [['owner', 'Emulation.clearDeviceMetricsOverride']]);
+  assert.equal(impl.delegate._mainFrameSession._metricsOverride, undefined);
+});
+
+for (const reset of [false, true]) test(`FD5B release clears metrics and changed media after reset=${reset}`, async () => {
+  const { page, calls } = sizedPage();
+  const impl = { emulatedMedia: () => ({ colorScheme: 'light', reducedMotion: 'no-preference' }),
+    _setEmulatedSize: size => { calls.push(['implSize', size]); } };
+  page._connection = { toImpl: () => impl };
+  page.emulateMedia = async media => calls.push(['media', media]);
+  await setViewport(page, { width: 390, height: 844, color_scheme: 'dark', reduced_motion: true });
+  if (reset) await restoreViewport(page);
+  calls.length = 0;
+  await restoreViewport(page, { release: true });
+  assert.ok(calls.includes('Emulation.clearDeviceMetricsOverride'));
+  assert.ok(calls.some(call => call[0] === 'implSize' && call[1] === undefined));
+  assert.deepEqual(calls.find(call => call[0] === 'media'), ['media', { colorScheme: null, reducedMotion: null }]);
+  assert.equal(page.viewportSize?.() ?? page._viewportSize, null);
+  assert.equal(calls.some(call => call[0] === 'setViewportSize'), false);
+});
+
+test('FD5B failed metrics clearing stays retryable, including after a reset', async () => {
+  const { page } = sizedPage();
+  await setViewport(page, { width: 390, height: 844 });
+  await restoreViewport(page);
+  const context = page.context(); let fail = true;
+  page.context = () => ({ newCDPSession: async () => {
+    const session = await context.newCDPSession(); const send = session.send;
+    session.send = async (...args) => { if (fail && args[0] === 'Emulation.clearDeviceMetricsOverride') throw Error('clear failed'); return send(...args); };
+    return session;
+  } });
+  await assert.rejects(restoreViewport(page, { release: true }), /clear failed/);
+  fail = false;
+  assert.match(await restoreViewport(page, { release: true }), /cleared/);
 });
 
 test('half a size or an out-of-range size is refused before any input', async () => {

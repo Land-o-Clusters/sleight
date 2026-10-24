@@ -70,6 +70,18 @@ test('FD5 failed media restoration prevents a browser keep from releasing owners
   assert.equal((await f.registry.endTurn()).cleanedUp, true);
 });
 
+test('FD5B keep reports an unknown original size after safely clearing the override', async () => {
+  const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/start' });
+  const entry = f.registry.tab(tab);
+  entry.page.context = () => f.context;
+  entry.page.setViewportSize = async () => {};
+  await setViewport(entry.page, { width: 390, height: 844 });
+  assert.match((await f.registry.keep(tab)).viewport, /previous size unknown/);
+  assert.ok(f.calls.some(call => call[0] === 'Emulation.clearDeviceMetricsOverride'));
+  assert.equal(entry.released, true);
+  assert.equal((await f.registry.endTurn()).cleanedUp, true);
+});
+
 test('open phase events bracket allocation, attachment, adoption, readiness and navigation without page data', async () => {
   const f = fixture(), phases = [];
   await f.registry.openTab({ url: 'https://fixture.invalid/private', tracePhase: phase => phases.push([phase, f.calls.at(-1)?.[0]]) });

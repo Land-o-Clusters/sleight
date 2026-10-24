@@ -2673,13 +2673,14 @@ export function createPageRegistry({ browser, session, context = browser?.contex
       try {
         await deadline(() => entry.queue, timeoutMs);
         await deadline(() => entry.ready, timeoutMs);
-        await deadline(() => restoreViewport(entry.page), timeoutMs);
+        const viewport = await deadline(() => restoreViewport(entry.page, { release: true }), timeoutMs);
         await deadline(() => removeHook(entry), timeoutMs);
         await entry.cdp.detach();
         await releaseTarget?.(entry.targetId);
         if (entry.page.isClosed()) throw Error('owned tab closed during release');
         entry.released = true; entry.release = kind;
-        return { tab: id, kept: true, handoff: kind === 'handoff' };
+        return { tab: id, kept: true, handoff: kind === 'handoff',
+          ...(viewport.includes('previous size unknown') ? { viewport } : {}) };
       } finally { entry.releasing = false; }
     })());
     // A delayed detach/ownership reply remains tracked after the caller's cap.

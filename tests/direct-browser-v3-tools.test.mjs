@@ -7,8 +7,8 @@ import { hookSource } from '../plugins/sleight/lib/direct-browser/page.mjs';
 
 const names = ['browser_open', 'browser_read', 'browser_act', 'browser_fill', 'browser_tabs'];
 
-test('FD5 only browser_read advertises read-only behavior', () => {
-  for (const tool of browserTools()) assert.deepEqual(tool.annotations, tool.name === 'browser_read' ? { readOnlyHint: true } : undefined);
+test('FD5B browser tools omit the unmeasured read-only annotation', () => {
+  for (const tool of browserTools()) assert.equal(tool.annotations, undefined);
 });
 
 test('FD5 media belongs only to viewport and uses bounded typed values', () => {

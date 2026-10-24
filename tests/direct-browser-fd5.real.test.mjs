@@ -39,7 +39,7 @@ async function fixture(t, html, routes = {}) {
     assert.equal(existsSync(profile), false);
     t.diagnostic('cleanup: owned headless browser closed, private profile removed, fixture server and sockets closed');
   });
-  context = await chromium.launchPersistentContext(profile, { headless: true, executablePath });
+  context = await chromium.launchPersistentContext(profile, { headless: true, executablePath, viewport: null });
   const browser = context.browser(), page = context.pages()[0];
   const origin = 'http://127.0.0.1:' + server.address().port;
   await page.goto(origin + '/fixture');
@@ -109,18 +109,61 @@ test('FD5 real media works with and without a size, stays per tab and resets in 
   assert.equal(await page.frames()[1].evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches), before.reduce);
 });
 
-for (const release of ['keep', 'handoff']) test(`FD5 real ${release} restores viewport and media before ownership release`, { skip }, async t => {
+for (const release of ['keep', 'handoff']) for (const reset of [false, true]) test(`FD5B real ${release} clears emulation after reset=${reset}`, { skip }, async t => {
   const { browser, page, origin } = await fixture(t, '<p>Fixture</p>');
   const session = await browser.newBrowserCDPSession(), registry = createPageRegistry({ browser, session, timeoutMs: 5000 });
   t.after(() => registry.endTurn());
   const { tab } = await registry.openTab({ url: origin + '/owned' }), owned = registry.tab(tab).page;
   const before = await mediaState(owned), sentinel = await mediaState(page);
   await registry.enqueue(tab, entry => setViewport(entry.page, { width: 390, height: 844, color_scheme: 'dark', reduced_motion: true }));
+  if (reset) await registry.enqueue(tab, entry => restoreViewport(entry.page));
   await registry[release](tab);
-  assert.deepEqual(await mediaState(owned), before);
+  const impl = owned._connection.toImpl(owned);
+  assert.equal(owned.viewportSize(), null);
+  assert.equal(impl.emulatedSize(), undefined);
+  assert.equal(impl.emulatedMedia().colorScheme, 'no-override');
+  assert.equal(impl.emulatedMedia().reducedMotion, 'no-override');
+  const released = await mediaState(owned);
+  // Match a fresh page using cleared media, rather than Playwright's default light/no-preference overrides.
+  await page.emulateMedia({ colorScheme: null, reducedMotion: null });
+  const nativeMedia = await mediaState(page);
+  assert.deepEqual([released.dark, released.reduce], [nativeMedia.dark, nativeMedia.reduce]);
+  const cdp = await owned.context().newCDPSession(owned);
+  try {
+    const next = { width: before.width + 137, height: before.height + 91 };
+    const { windowId } = await cdp.send('Browser.getWindowForTarget');
+    await cdp.send('Browser.setWindowBounds', { windowId, bounds: next });
+    await owned.waitForFunction(({ width, height }) => innerWidth === width && innerHeight === height, next, { timeout: 2000 });
+    // A new viewport operation must still work if it repeats the size used before release.
+    await setViewport(owned, { width: 390, height: 844 });
+    assert.deepEqual(await mediaState(owned), { width: 390, height: 844, dark: nativeMedia.dark, reduce: nativeMedia.reduce });
+    await restoreViewport(owned, { release: true });
+  } finally { await cdp.detach(); }
   assert.deepEqual(await mediaState(page), sentinel);
   assert.equal((await registry.endTurn()).cleanedUp, true);
   assert.equal(owned.isClosed(), false, 'a released tab stays open');
+});
+
+test('FD5B ai snapshots write ref properties on utility-world element wrappers', { skip }, async t => {
+  const { page } = await fixture(t, '<button id="read-target">Read target</button>');
+  const cdp = await page.context().newCDPSession(page), contexts = [];
+  cdp.on('Runtime.executionContextCreated', ({ context }) => contexts.push(context));
+  t.after(() => cdp.detach().catch(() => {}));
+  await cdp.send('Runtime.enable');
+  await page.ariaSnapshotJSON({ mode: 'default' });
+  const utility = contexts.find(context => context.name.includes('utility'));
+  assert.ok(utility, 'snapshot utility world exists');
+  const read = async () => (await cdp.send('Runtime.evaluate', { contextId: utility.id,
+    expression: 'document.getElementById("read-target")._ariaRef', returnByValue: true })).result.value;
+  assert.equal(await read(), undefined);
+  const ai = await page.ariaSnapshotJSON({ mode: 'ai' });
+  const property = await read();
+  assert.equal(property.role, 'button'); assert.equal(property.name, 'Read target');
+  assert.match(property.ref, /^e\d+$/);
+  assert.ok(JSON.stringify(ai).includes(property.ref));
+  assert.equal(await page.evaluate(() => document.getElementById('read-target')._ariaRef), undefined,
+    'the ref property is on the isolated wrapper, not the main-world wrapper');
+  assert.deepEqual(await page.evaluate(() => [...document.getElementById('read-target').attributes].map(a => a.name)), ['id']);
 });
 
 test('FD5 real two-tab reads overlap while one-tab reads queue, with timing scoped to the headless harness', { skip }, async t => {
