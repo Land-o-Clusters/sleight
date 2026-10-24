@@ -220,6 +220,10 @@ for (const text of ['status code 404', 'Unexpected token in JSON', 'Warning: Eac
   'elapsed 45ms', 'delay 2s', 'width 20px', 'size 8kb', 'heap 4mb', 'progress 50%']) {
   test(`review readability survives: ${text}`, () => assert.equal(scrubDeveloperText(text), text));
 }
+test('unit-qualified diagnostics retain values beyond the plain-number limit', () => {
+  for (const text of ['elapsed 15000ms', 'delay 12345s', 'width 120000px', 'size 10000kb', 'heap 10000mb', 'progress 10000%'])
+    assert.equal(scrubDeveloperText(text), text);
+});
 test('phrase exemptions do not hide a later credential label from checks', () => {
   for (const prefix of ['status code 404', 'Unexpected token in JSON', '"key" prop', 'session expired', 'test pass']) {
     const text = scrubDeveloperText(prefix + ' token sunshine meadow blossom render failed');

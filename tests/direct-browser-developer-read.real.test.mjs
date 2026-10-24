@@ -56,7 +56,7 @@ console.log('passwort sunshine meadow blossom render failed');
 console.log('contraseña sunshine meadow blossom render failed');
 console.log('mot de passe sunshine meadow blossom render failed');
 console.log('status code 404; Unexpected token in JSON; "key" prop; session expired; test pass');
-console.log("Object.render Array.map v1.2.3 45ms net::ERR_CONNECTION_REFUSED don't retry");
+console.log("Object.render Array.map v1.2.3 45ms 15000ms net::ERR_CONNECTION_REFUSED don't retry");
 console.log('load https://alice.smith.example.com/users/clover/orders');
 console.log('load http://127.0.0.1:8080/profile/forest');
 console.log('keycanary https://example.invalid/sk-shortkey');
@@ -129,7 +129,7 @@ test('owned real-page console, request failures and timings are scrubbed without
   assert.match(logs, /\/invite\/\[seg\]\/\[seg\]/);
   assert.doesNotMatch(logs, /\b(?:4111|1111|123 45|6789|212|555|0123)\b|sunshine|meadow|blossom|alice|smith|clover|forest|127\.0\.0\.1/);
   for (const text of ['Compiled with exit code 1', 'code splitting enabled', 'Are you sure?', 'metadata: useful', 'Next.js docs', '../src/app.js:1:2',
-    'status code 404', 'Unexpected token in JSON', '\\"key\\" prop', 'session expired', 'test pass', 'Object.render Array.map v1.2.3 45ms net::ERR_CONNECTION_REFUSED don\'t retry',
+    'status code 404', 'Unexpected token in JSON', '\\"key\\" prop', 'session expired', 'test pass', 'Object.render Array.map v1.2.3 45ms 15000ms net::ERR_CONNECTION_REFUSED don\'t retry',
     '[omitted] render failed', 'https://[sub].[sub].example.com/users/[seg]/orders', 'http://[ip]:8080/profile/[seg]'])
     assert.ok(logs.includes(text), text);
   assert.match(logs, /localhost:3000\/api\/reset/);

@@ -39,7 +39,7 @@ const special = /(?<![^\s<>"'`()\[\]{}])(?:(?:\.\.?\/)?(?:[a-z0-9_.-]+\/)*[a-z0-
 const allowedWord = word => statusWords.has(word.toLowerCase()) ||
   (/^[a-z]{1,15}$/i.test(word) && !/^[a-f]{4,}$/i.test(word));
 const allowedToken = word => allowedWord(word) || /^[+-]?\d{1,4}(?:\.\d{1,4})?$/.test(word) ||
-  /^\d{1,4}(?:\.\d{1,4})?(?:ms|s|px|kb|mb|%)$/i.test(word) || /^net::ERR_[A-Z_]{1,64}$/.test(word) ||
+  /^\d+(?:\.\d+)?(?:ms|s|px|kb|mb|%)$/i.test(word) || /^net::ERR_[A-Z_]{1,64}$/.test(word) ||
   /^v\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(word) ||
   (/^[a-z]+(?:['’][a-z]+)+$/i.test(word) && allowedWord(word.replace(/['’]/g, ''))) ||
   (/^[a-z]+(?:\.[a-z]+)+$/i.test(word) && word.split('.').every(allowedWord));
