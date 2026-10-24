@@ -14,6 +14,8 @@ export function readExportCollection(el, limits, read) {
   const reasons = new Set(), signals = new Set(), rows = [], indices = [], totals = [], textTotals = [], observedTotals = [], hidden = new WeakMap();
   let nodes = 0, characters = 0, redacted = false, capped = false;
   const sensitive = /password|passcode|secret|one.?time|\botp\b|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|(?:security|verification).?code/i;
+  const protectedLabel = value => sensitive.test(value ?? '') || /(?:^|[\W_])code(?:$|[\W_])/i.test(
+    (value ?? '').replace(/\b(?:postal|zip|promo|coupon|discount|country|area)[-_\s]+code\b/gi, ''));
   const children = node => Array.from(read(node, 'children') ?? []);
   const branches = node => tag(node) === 'slot' ? HTMLSlotElement.prototype.assignedElements.call(node, { flatten: true }) : children(read(node, 'shadowRoot') ?? node);
   const parent = node => read(node, 'parentElement') ?? read(read(node, 'getRootNode')?.(), 'host');
@@ -21,9 +23,43 @@ export function readExportCollection(el, limits, read) {
   const scroller = read(document, 'scrollingElement') ?? read(document, 'documentElement');
   const width = Math.max(innerWidth, read(scroller, 'scrollWidth') ?? 0);
   const height = Math.max(innerHeight, read(scroller, 'scrollHeight') ?? 0);
-  // Client rects are viewport-relative. Compare them with the whole scrollable document, without scrolling it.
-  const onCanvas = box => box.width > 0 && box.height > 0 && box.left + scrollX >= -9999 && box.top + scrollY >= -9999 &&
-    box.right + scrollX > 0 && box.bottom + scrollY > 0 && box.left + scrollX < width && box.top + scrollY < height;
+  const clips = new WeakMap(), extents = new WeakMap();
+  const clippingAncestor = node => {
+    if (clips.has(node)) return clips.get(node);
+    const up = parent(node), style = up && getComputedStyle(up);
+    const clip = !up ? null : /^(hidden|auto|scroll|clip)$/.test(style.overflowX) || /^(hidden|auto|scroll|clip)$/.test(style.overflowY)
+      ? up : clippingAncestor(up);
+    clips.set(node, clip); return clip;
+  };
+  // Each clipping ancestor owns its full scroll extent, including content below its visible area.
+  // Its border box and scroll offsets locate that extent in the same coordinates as client rects.
+  const onCanvas = (node, box) => {
+    if (box.width <= 0 || box.height <= 0) return false;
+    const clip = clippingAncestor(node);
+    if (!clip) return box.left + scrollX >= -9999 && box.top + scrollY >= -9999 && box.right + scrollX > 0 &&
+      box.bottom + scrollY > 0 && box.left + scrollX < width && box.top + scrollY < height;
+    if (!extents.has(clip)) {
+      const origin = read(clip, 'getBoundingClientRect')();
+      const left = origin.left + read(clip, 'clientLeft') - read(clip, 'scrollLeft');
+      const top = origin.top + read(clip, 'clientTop') - read(clip, 'scrollTop');
+      extents.set(clip, { left, top, right: left + read(clip, 'scrollWidth'), bottom: top + read(clip, 'scrollHeight') });
+    }
+    const extent = extents.get(clip);
+    return box.right > extent.left && box.bottom > extent.top && box.left < extent.right && box.top < extent.bottom;
+  };
+  const farPositioned = (node, style, box) => {
+    if (clippingAncestor(node)) return false;
+    // ScrollWidth can be enlarged by the very text being checked. Use the containing block's
+    // layout size for extreme positioned offsets, without changing styles or reading page code.
+    if (!/^(absolute|fixed)$/.test(style.position) && style.transform === 'none' &&
+        !['left', 'top', 'right', 'bottom'].some(key => Math.abs(parseFloat(style[key])) >= 5000)) return false;
+    const block = style.position === 'fixed' ? null : read(node, 'offsetParent') ?? parent(node);
+    const origin = block && read(block, 'getBoundingClientRect')();
+    const left = origin ? origin.left + read(block, 'clientLeft') - read(block, 'scrollLeft') : 0;
+    const top = origin ? origin.top + read(block, 'clientTop') - read(block, 'scrollTop') : 0;
+    return box.left >= left + (block ? read(block, 'clientWidth') : innerWidth) + 5000 ||
+      box.top >= top + (block ? read(block, 'clientHeight') : innerHeight) + 5000;
+  };
   const zeroClip = (style, box) => {
     const length = (value, extent) => /^-?[\d.]+(?:px|%)?$/.test(value) ? parseFloat(value) * (value.endsWith('%') ? extent / 100 : 1) : NaN;
     const rect = /^rect\((.*)\)$/.exec(style.clip)?.[1].split(/,\s*|\s+/);
@@ -61,7 +97,7 @@ export function readExportCollection(el, limits, read) {
       const boxes = Array.from(read(node, 'getClientRects')?.() ?? []);
       const noBox = /^(br|wbr|col|colgroup)$/.test(tag(node)) || style.display === 'contents' ||
         style.display === 'inline' && !children(node).length && !(read(node, 'textContent') ?? '').trim();
-      const geometry = noBox || boxes.some(onCanvas);
+      const geometry = noBox || boxes.some(box => onCanvas(node, box) && !farPositioned(node, style, box));
       if (!geometry || Number(style.opacity) === 0 || parseFloat(style.fontSize) === 0 || boxes.length > 0 && boxes.every(box => zeroClip(style, box))) {
         yes = false; reasons.add('visually hidden text omitted');
       }
@@ -84,12 +120,12 @@ export function readExportCollection(el, limits, read) {
   const readableText = node => {
     const owner = parent(node), style = getComputedStyle(owner);
     const transparent = value => value === 'transparent' || /^rgba\([^)]*,\s*0(?:\.0*)?\)$/.test(value) || /\/\s*0(?:%|\.0*)?\s*\)$/.test(value);
-    let yes = !transparent(style.color) && !transparent(style.webkitTextFillColor);
+    let yes = !transparent(style.color) && !transparent(style.webkitTextFillColor) && Math.abs(parseFloat(style.textIndent) || 0) < 1000;
     if (yes && parseFloat(style.textIndent)) {
       const range = read(read(node, 'ownerDocument'), 'createRange')();
       Range.prototype.selectNodeContents.call(range, node);
       const boxes = Array.from(Range.prototype.getClientRects.call(range)).filter(box => box.width > 0 && box.height > 0);
-      yes = boxes.length > 0 && boxes.every(onCanvas);
+      yes = boxes.length > 0 && boxes.every(box => onCanvas(owner, box));
     }
     if (!yes) reasons.add('visually hidden text omitted');
     return yes;
@@ -168,10 +204,10 @@ export function readExportCollection(el, limits, read) {
       }
       const control = /^(input|textarea|select)$/.test(tag(current)) || /^(textbox|combobox|searchbox|spinbutton)$/.test(role(current)) || read(current, 'isContentEditable');
       if (/^(input|textarea|select)$/.test(tag(current)) || read(current, 'isContentEditable') ||
-        control && (/(?:^|\s)cc-/i.test(attribute(current, 'autocomplete') ?? '') || sensitive.test([
+        control && (/(?:^|\s)cc-/i.test(attribute(current, 'autocomplete') ?? '') || [
           attribute(current, 'type'), attribute(current, 'name'), attribute(current, 'id'), attribute(current, 'autocomplete'), attribute(current, 'aria-label'),
           attribute(current, 'placeholder'), attribute(current, 'data-placeholder'),
-          ...references(current, 'aria-describedby').map(node => (read(node, 'textContent') ?? '').slice(0, 1024))].join(' ')))) {
+          ...references(current, 'aria-describedby').map(node => (read(node, 'textContent') ?? '').slice(0, 1024))].some(protectedLabel))) {
         parts.push('[redacted]'); redacted = true; return;
       }
       if (current !== node && collection(current)) { reasons.add('nested collection omitted'); return; }
