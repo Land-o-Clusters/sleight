@@ -19,8 +19,10 @@ for (const [latin, letters] of Object.entries({
 })) for (const letter of letters) lookalikes.set(letter, latin);
 const normalize = text => text.normalize('NFKC').replace(/[\p{Cf}\u034f\ufe00-\ufe0f]/gu, '')
   .replace(/./gu, letter => lookalikes.get(letter) ?? letter)
-  .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ');
-const labels = /(?<![\p{L}\p{N}])(?:(?:api|access|private|client|refresh|reset|proxy|auth|oauth|session|bearer)[\s_.-]*)*(?:keys?|tokens?|pass(?:words?|phrases?|wd|es)?|pwd|pw|secrets?|codes?|sig(?:nature)?s?|sess(?:ions?)?(?:[\s_.-]*ids?)?|auth(?:orization|entication)?s?|otps?|pins?|cvvs?|ssns?|credentials?|cookies?|csrf|xsrf|sid|jwt|bearer|basic|passwort|kennwort|schlüssel|zugangstoken|clave|contraseña|ficha|mot[\s_.-]+de[\s_.-]+passe|jetons?|clé|parola[\s_.-]+segreta|chiave|gettone|senha|palavra[\s_.-]+passe|chave|wachtwoord|sleutel|toegangstoken)(?![\p{L}\p{N}])/giu;
+  .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')
+  // Dash, minus and bullet lookalikes between digit groups read as ASCII hyphens.
+  .replace(/[\u2010-\u2015\u2212\u00b7\u2022\u2027\u2043]/g, '-');
+const labels = /(?<![\p{L}\p{N}])(?:(?:api|access|private|client|refresh|reset|proxy|auth|oauth|session|bearer)[\s_.-]*)*(?:keys?|tokens?|pass(?:words?|phrases?|wd|es|codes?)?|pincodes?|mpins?|pwd|pw|secrets?|codes?|sig(?:nature)?s?|sess(?:ions?)?(?:[\s_.-]*ids?)?|auth(?:orization|entication)?s?|otps?|pins?|cvvs?|ssns?|credentials?|cookies?|csrf|xsrf|sid|jwt|bearer|basic|passwort|kennwort|schlüssel|zugangstoken|clave|contraseña|ficha|mot[\s_.-]+de[\s_.-]+passe|jetons?|clé|parola[\s_.-]+segreta|chiave|gettone|senha|palavra[\s_.-]+passe|chave|wachtwoord|sleutel|toegangstoken)(?![\p{L}\p{N}])/giu;
 // These exact diagnostics are admitted even when their spelling resembles an
 // opaque mixed-case value or exceeds the conservative plain-word limit.
 const statusWords = new Set(('true false null undefined NaN Infinity OK HTTP HTTPS GET POST PUT PATCH DELETE OPTIONS ' +
@@ -31,7 +33,7 @@ const source = /^(.*)\.(js|mjs|cjs|ts|tsx|jsx|vue|svelte|css|html|wasm)$/i;
 const identity = /^(?:users?|accounts?|profiles?|u|@|members?|people|persons?|customers?|clients?|contacts?|authors?|usernames?|emails?|handles?|identit(?:y|ies))$/i;
 // Count complete runs after NFKC folds digits and compatibility spaces. These
 // spans must be protected before a label splits the message into smaller parts.
-const numberRuns = /(?<![\p{L}\p{N}_.+-])[+-]?\d+(?:(?:\s*[-./]\s*|\s+)[+-]?\d+)+(?=$|[^\p{L}\p{N}_.+-]|\.+(?=[\s"'`)\]}>;,!?]|$))/gu;
+const numberRuns = /(?<![\p{L}\p{N}_.+-])[+-]?\d+(?:(?:\s*[-./_\\|~]\s*|\s+)[+-]?\d+)+(?=$|[^\p{L}\p{N}_.+-]|\.+(?=[\s"'`)\]}>;,!?]|$))/gu;
 // Special spans are parsed as data, never caller-forgeable placeholder strings.
 // A relative URL may follow any punctuation, including the colon in "failed:/".
 const special = /(?<![^\s<>"'`()\[\]{}])(?:(?:\.\.?\/)?(?:[a-z0-9_.-]+\/)*[a-z0-9_.-]+:\d{1,8}:\d{1,8}(?![\w:])(?:[?#][^\s<>"'`()\[\]{},;]*)?|(?:https?|wss?|file|data|blob):[^\s<>"'`(){}]+|(?:(?:\d{1,3}\.){3}\d{1,3}|\[[a-f0-9:.]+\])(?::\d+)?(?:[/?#][^\s<>"'`()\[\]{},;]*)?|(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?|[/?#][^\s<>"'`()\[\]{},;]*)?|[a-z0-9-]+:\d+(?:[/?#][^\s<>"'`()\[\]{},;]*)?)|(?<![\p{L}\p{N}])(?:\.\.?\/|\/)[^\s<>"'`()\[\]{},;]*/giu;
@@ -41,7 +43,7 @@ const allowedWord = word => statusWords.has(word.toLowerCase()) ||
 const wordNumber = /^([a-z]+):[+-]?\d{1,4}(?:\.\d{1,4})?$/i;
 const allowedToken = word => allowedWord(word) || /^[+-]?\d{1,4}(?:\.\d{1,4})?$/.test(word) ||
   /^\d+(?:\.\d+)?(?:ms|s|px|kb|mb|%)$/i.test(word) || /^net::ERR_[A-Z_]{1,64}$/.test(word) ||
-  (/^v?\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(word) && !/^\d{3}\.\d{2,3}\.\d{4}$/.test(word)) ||
+  (/^v?\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(word) && !/^\d{3}\.\d{2,3}\.\d{4}$/.test(word) && word.replace(/\D/g, '').length <= 8) ||
   (wordNumber.test(word) && allowedWord(word.match(wordNumber)[1])) ||
   (/^[a-z]+(?:['’][a-z]+)+$/i.test(word) && allowedWord(word.replace(/['’]/g, ''))) ||
   (/^[a-z]+(?:\.[a-z]+)+$/i.test(word) && word.split('.').every(allowedWord));
@@ -93,6 +95,9 @@ export function scrubDeveloperText(value) {
     if (match[0].split(/[\s./-]+/).filter(Boolean).length >= 3 || match[0].replace(/\D/g, '').length >= 7)
       spans.push({ start: match.index, end: match.index + match[0].length, safe: '[value]' });
   }
+  // Comma- or colon-separated groups of 3-4 digits totalling 9 or more are card, phone or id numbers, not lists.
+  for (const match of text.matchAll(/(?<![\p{N}])\d{3,4}(?:\s*[,:]\s*\d{3,4}){2,}(?![\p{N}])/gu))
+    if (match[0].replace(/\D/g, '').length >= 9) spans.push({ start: match.index, end: match.index + match[0].length, safe: '[value]' });
   for (const match of text.matchAll(special)) {
     if (statusWords.has(match[0].toLowerCase())) continue;
     // Do not recognize a URL prefix inside an unknown token or email address.
