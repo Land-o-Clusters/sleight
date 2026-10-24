@@ -67,6 +67,7 @@ test('Chrome run records Cursor fields and uses submit-to-end time while retaini
       type: 'result', is_error: false, result: 'RESULT: answer', duration_ms: 700, submittedAt: 1000, recordedEndAt: 1700,
       groupClean: true, cursorVersion: '3.27.12', route: 'desktop', model: 'grok-4.7', effort: 'high', calls: 0, tools: [] }) });
     assert.equal(r.result.cursorVersion, '3.27.12'); assert.equal(r.finished - r.started, 700); assert.ok(r.outerStarted > 0);
+    assert.equal(r.agentSeconds, 0.7);
     assert.equal(r.evidence.successfulCalls, 0);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

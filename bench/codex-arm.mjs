@@ -120,6 +120,7 @@ export async function runCodex(prompt, { cwd, model, effort, timeoutMs, signal, 
   return {
     code: run.exit.code ?? (run.spawnError ? 127 : 1), stderr: (run.spawnError ?? run.stderr).slice(-2000), forbidden,
     groupClean: run.groupClean, cancelled: run.cancelled, timedOut: run.timedOut,
+    agentSeconds: run.agentSeconds, stamps: run.stamps,
     // Shaped like Claude Code's JSON result, so the runner records both arms the same way.
     out: { result: answer, num_turns: lines ? facts.requests : undefined,
       usage: usage && { input_tokens: usage.input_tokens, cache_read_input_tokens: usage.cached_input_tokens,

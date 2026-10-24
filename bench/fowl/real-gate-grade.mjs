@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { cursorBrowserCalls } from '../world/arms/cursor-cu/evidence.mjs';
 
 // Public lookups have no site log, so the browser itself must show the visit: a memory answer cannot pass.
 export const LOOKUP_TARGETS = { wikipedia: { host: 'wikipedia.org', pattern: /^https?:\/\/([a-z0-9-]+\.)*wikipedia\.org\//i },
@@ -10,10 +11,13 @@ const SETUP_TOOLS = /(?:^|__)(?:select_browser|list_connected_browsers|switch_br
 // Successful arm tool calls in a run's event log (Claude Code stream-json or codex exec JSON), with the URLs their
 // inputs and results name, for arms whose browser has no navigation log.
 export function browserEvidence(eventsText = '') {
-  const uses = new Map(), texts = [];
+  const uses = new Map(), texts = [], cursorSeen = new Set();
   let successfulCalls = 0;
   for (const line of String(eventsText).split('\n')) {
     let event; try { event = JSON.parse(line); } catch { continue; }
+    for (const call of cursorBrowserCalls(event)) if (!cursorSeen.has(call.id)) {
+      cursorSeen.add(call.id); successfulCalls++; texts.push(call.text);
+    }
     if (event.type === 'item.completed' && event.item?.type === 'mcp_tool_call') {
       if (event.item.status === 'completed' && !event.item.error) { successfulCalls++; texts.push(JSON.stringify(event.item)); }
       continue;

@@ -15,6 +15,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { comparisonSeconds } from './agent-time.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const arg = name => { const i = process.argv.indexOf(name); return i < 0 ? undefined : process.argv[i + 1]; };
@@ -41,10 +42,13 @@ export function excluded(row, file, rules, raw) {
 
 export const regradeFor = (row, file, rules) => (rules.regrades ?? []).find(g => g.file === file && g.arm === row.arm && g.task === row.task && g.run === row.run);
 
-export function score(rows) {
+export function score(rows, options = {}) {
   const median = list => { const s = [...list].sort((a, b) => a - b); return s.length ? s[Math.floor((s.length - 1) / 2)] : null; };
   const out = {};
-  for (const { arm, task, seconds, passed } of rows) (((out[arm] ??= {})[task] ??= { runs: [], passes: [] }).runs.push(seconds), passed && out[arm][task].passes.push(seconds));
+  for (const row of rows) {
+    const { arm, task, passed } = row, seconds = comparisonSeconds(row, options);
+    (((out[arm] ??= {})[task] ??= { runs: [], passes: [] }).runs.push(seconds), passed && out[arm][task].passes.push(seconds));
+  }
   for (const tasks of Object.values(out)) for (const t of Object.values(tasks)) {
     t.mean = t.runs.reduce((a, b) => a + b, 0) / t.runs.length;
     t.median = median(t.passes);
@@ -122,18 +126,21 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       const why = excluded(row, file, rules, raw);
       if (why) { if (why !== 'not a claim task') dropped[why] = (dropped[why] ?? 0) + 1; continue; }
       const passed = !!(row.passed || (row.cleanupContained && row.taskPassed)), g = !passed && regradeFor(row, file, rules);
-      rows.push({ arm: row.arm, task: row.task, seconds: row.seconds, passed, file, run: row.run, engine: passRowEngine(raw, row, { file, mtimeMs, timeline }),
+      rows.push({ arm: row.arm, task: row.task, seconds: row.seconds, ...(row.agentSeconds !== undefined && { agentSeconds: row.agentSeconds }), passed, file, run: row.run, engine: passRowEngine(raw, row, { file, mtimeMs, timeline }),
         ...(!passed && { reason: (g && g.reason) || (row.reason ?? 'no reason recorded'), ...(g && { recorded: row.reason, regraded: g.why }) }) });
     }
   }
   const { engineMix, engineNote, engineText, summarizeEngines } = await import('./engine-version.mjs');
   const engines = summarizeEngines(rows), mix = engineMix(engines);
-  const table = score(rows), verdict = claim(table, rules), gpt = sameModel(table, rules), warned = warnings(rows, rules, since), failures = rows.filter(r => !r.passed);
+  const agentSeconds = process.argv.includes('--agent-seconds');
+  const table = score(rows, { agentSeconds }), verdict = claim(table, rules), gpt = sameModel(table, rules), warned = warnings(rows, rules, since), failures = rows.filter(r => !r.passed);
   if (process.argv.includes('--json')) {
-    console.log(JSON.stringify({ since, dropped, table, claim: verdict, sameModel: gpt, failures: failures.map(({ engine, ...f }) => f), warnings: warned, engines, engineMix: mix }, null, 1));
+    console.log(JSON.stringify({ since, dropped, table, claim: verdict, sameModel: gpt, failures: failures.map(({ engine, ...f }) => f), warnings: warned, engines, engineMix: mix,
+      ...(agentSeconds && { timing: 'agentSeconds where present; seconds for older rows', legacyTimingRows: rows.filter(r => !Number.isFinite(r.agentSeconds)).length }) }, null, 1));
     process.exit(0);
   }
   const arms = rules.arms.filter(a => table[a]), n = x => x == null ? '-' : x.toFixed(0), pct = x => x == null ? '-' : `${(x * 100).toFixed(1)}%`;
+  if (agentSeconds) console.log('Timing: agentSeconds where present; seconds for older rows.');
   console.log(`Claim score since ${since}. Cell: expected s to a correct result (passes/runs), median of passes in brackets.`);
   console.log('task'.padEnd(20) + arms.map(a => a.padStart(22)).join(''));
   for (const task of rules.tasks) console.log(task.padEnd(20) + arms.map(a => {

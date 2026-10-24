@@ -1,8 +1,10 @@
 import { spawn } from 'node:child_process';
+import { AgentClock } from './agent-time.mjs';
 
 // A fresh process group contains only this driver's Claude and its descendants.
 // Return after close, which also collects inherited output pipes.
 export async function runOwned(command, args, { cwd, env, timeoutMs = 180000, graceMs = 7000, signal, onStdout, onSpawn } = {}) {
+  const clock = new AgentClock(Date.now());
   const child = spawn(command, args, { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   // The new process group's ID, which is the leader's pid (detached).
   if (child.pid) onSpawn?.(child.pid);
@@ -12,7 +14,7 @@ export async function runOwned(command, args, { cwd, env, timeoutMs = 180000, gr
   child.once('exit', () => { leaderExited = true; stamps.exitAt = Date.now(); });
   let stdout = '', stderr = '', spawnError, timedOut = false, cancelled = false, stopping = false, force;
   const signalErrors = [];
-  child.stdout.on('data', data => { stdout += data; stamps.stdoutAt = Date.now(); onStdout?.(data); });
+  child.stdout.on('data', data => { stdout += data; stamps.stdoutAt = Date.now(); clock.append(data); onStdout?.(data); });
   child.stderr.on('data', data => { stderr += data; });
   function collected(error) {
     if (error.code !== 'ESRCH' && !(leaderExited && error.code === 'EPERM')) return false;
@@ -64,5 +66,5 @@ export async function runOwned(command, args, { cwd, env, timeoutMs = 180000, gr
   }
   const groupGone = !await alive();
   stamps.groupGoneAt = Date.now();
-  return { stamps, exit, timedOut, cancelled, spawnError, stdout, stderr, signalErrors, groupClean: groupGone && signalErrors.length === 0 };
+  return { stamps, agentSeconds: clock.seconds(), exit, timedOut, cancelled, spawnError, stdout, stderr, signalErrors, groupClean: groupGone && signalErrors.length === 0 };
 }

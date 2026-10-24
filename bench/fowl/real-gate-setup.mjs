@@ -107,7 +107,7 @@ export function gateWindowApps(realBrowser) {
   const app = /^(\/.+?\.app)\//.exec(realBrowser.executable ?? '')?.[1];
   return { apps: [...names, ...(app ? [app] : [])], title: realBrowser.marker };
 }
-export function realAgentSetup({ task, surface, dir, realBrowser, armHome, dryRun = false, allowBenchmarkAppPrompts = false, repo = repoRoot,
+export function realAgentSetup({ task, surface, dir, realBrowser, armHome, dryRun = false, allowBenchmarkAppPrompts = true, repo = repoRoot,
   model = 'haiku', effort = 'high', settings = join(dir, 'settings.json'), mcpRoot, armRoot, chromeFiles }) {
   if (!REAL_SURFACES.includes(surface)) throw Error(`Unknown real-browser arm: ${surface}`);
   const browserName = { chrome: 'Chrome', helium: 'Helium', firefox: 'Firefox', safari: 'Safari' }[realBrowser.browser];
@@ -115,7 +115,7 @@ export function realAgentSetup({ task, surface, dir, realBrowser, armHome, dryRu
     `\n\nEnd your answer with one line starting with RESULT: that states ${task.result}.`;
   if (surface === 'cursor-cu') {
     if (realBrowser.browser !== 'chrome') throw Error('Cursor desktop qualification is Chrome only');
-    const cursorPlan = cursorComposerPlan({ prompt, allowedApps: ['com.google.Chrome', 'com.apple.TextEdit', 'com.apple.Preview'],
+    const cursorPlan = cursorComposerPlan({ prompt, allowedApps: task.allowedApps ?? ['com.google.Chrome'],
       timeoutMs: (task.budgetSeconds || 600) * 1000, allowBenchmarkAppPrompts });
     return { command: null, args: [], env: {}, prompt, mcpConfig: null, cursorPlan,
       metadata: { arm: 'cursor-cu', route: 'desktop', cursorVersion: '3.27.12', model: 'Grok 4.7 High', effort: 'high', speed: 'normal',

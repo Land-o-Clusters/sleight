@@ -65,6 +65,7 @@ export function regradeRow(row, { eventsText = '', stderr = '', graders } = {}) 
   // Rows saved before the cover watch have only the start reading; a saved row without events keeps what the gate recorded.
   const cover = eventsText ? coverEvidence({ eventsText, readings: [row.cover, row.coverRun] }) : row.coverEvidence ?? null;
   return { task: row.task.name, arm: row.surface, seconds: row.wallMs / 1000, passed, problems, successfulCalls: calls,
+    ...((row.agentSeconds ?? row.run?.agentSeconds) != null && { agentSeconds: row.agentSeconds ?? row.run.agentSeconds }),
     recordedOk: row.outcome?.ok === true, errorClass: passed ? null : row.errorClass ?? runErrorClass({ eventsText, stderr }),
     graders: swap ? { used: 'current', saved, current: graderId(wanted), passedSaved: regradeRow(row, { eventsText, stderr }).passed } : { used: 'saved', saved },
     ...(cover ? { coverEvidence: cover } : {}) };
@@ -115,7 +116,7 @@ export function markCover(rounds) {
   return rounds;
 }
 
-export function scoreRounds(rounds, { excludeCovered = false } = {}) {
+export function scoreRounds(rounds, { excludeCovered = false, agentSeconds = false } = {}) {
   // The results hub marks its whole pool once, so a study's subset keeps the pool's verdicts.
   if (excludeCovered && !rounds.every(round => round.coverMarked)) markCover(rounds);
   const browsers = {};
@@ -124,7 +125,7 @@ export function scoreRounds(rounds, { excludeCovered = false } = {}) {
   for (const [browser, rows] of Object.entries(browsers)) {
     const me = sleightArm(browser), tasks = [...new Set(rows.map(r => r.task))], seen = [...new Set(rows.map(r => r.arm))];
     const arms = [me, ...seen.filter(a => a !== me && !HOSTED.includes(a)).sort()], hosted = HOSTED.filter(a => seen.includes(a));
-    const table = score(rows), verdict = claim(table, { tasks, arms }, me);
+    const table = score(rows, { agentSeconds }), verdict = claim(table, { tasks, arms }, me);
     const counted = summarizeEngines(rows), engines = Object.fromEntries([...arms, ...hosted].filter(a => counted[a]).map(a => [a, counted[a]]));
     const same = sameModel(table, { tasks }).filter(p => table[p.hosted]).map(p => ({ ...p, arms: [p.hosted, p.base], stats: p.stats ?? {},
       topUps: p.pairs.filter(x => x.short?.length), ...rank(table, tasks, [p.hosted, p.base]) }));
@@ -214,8 +215,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (args.includes('--mark')) for (const r of rounds) if (r.detected) writeFileSync(join(r.dir, 'harness-failure.json'),
     JSON.stringify({ ...r.detected, decided: 'automatic (race-score --mark)', at: new Date().toISOString() }, null, 2));
   const excludeCovered = args.includes('--exclude-covered');
-  const scored = scoreRounds(rounds, { excludeCovered });
+  const agentSeconds = args.includes('--agent-seconds');
+  const scored = scoreRounds(rounds, { excludeCovered, agentSeconds });
   if (args.includes('--json')) console.log(JSON.stringify({ coverExclusions: excludeCovered, graders: current ? `current ${ANSWER_GRADER_FILE}` : 'saved', rounds,
-    browsers: scored, flipped: flipped(rounds), covered: coveredRows(rounds), ...(current ? { regraded: regraded(rounds) } : {}) }, null, 1));
-  else print(rounds, scored, { current, excludeCovered });
+    browsers: scored, flipped: flipped(rounds), covered: coveredRows(rounds), ...(current ? { regraded: regraded(rounds) } : {}),
+    ...(agentSeconds && { timing: 'agentSeconds where present; seconds for older rows', legacyTimingRows: rounds.flatMap(r => r.rows).filter(r => !Number.isFinite(r.agentSeconds)).length }) }, null, 1));
+  else { if (agentSeconds) console.log('Timing: agentSeconds where present; seconds for older rows.'); print(rounds, scored, { current, excludeCovered }); }
 }

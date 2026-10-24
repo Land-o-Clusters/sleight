@@ -15,7 +15,7 @@ export async function runDesktop(plan, { driver, signal, now = Date.now, pause =
       signal?.throwIfAborted();
       await driver.guard?.(plan);
       found = detectRun(await driver.readState(), { prompt: plan.prompt, submittedAt, baselineIds: bound.baselineIds,
-        ...pinnedRun });
+        calibration: driver.calibration, ...pinnedRun });
       if (found.started && !pinnedRun) pinnedRun = { composerId: found.composerId, generationId: found.generationId };
       if (found.started) onEvent?.({ type: 'cursor_state', ...found });
       if (found.ended) { completed = true; break; }
@@ -31,11 +31,13 @@ export async function runDesktop(plan, { driver, signal, now = Date.now, pause =
     }
   }
   return { type: 'result', is_error: !!reason || !completed, result: found?.answer ?? '', reason, groupClean: clean,
+    ...(reason && !/Cursor run timeout/.test(reason) && { safetyStop: reason }),
     route: 'desktop', cursorVersion: CURSOR_PIN.version, cursorCommit: CURSOR_PIN.commit, cursorCdhash: CURSOR_PIN.cdhash,
     model: found?.model?.model ?? null, effort: found?.model?.effort ?? plan.effort, speed: found?.model?.speed ?? plan.speed,
     modelRequested: plan.modelLabel, composerId: found?.composerId ?? null, generationId: found?.generationId ?? null,
     submittedAt: submittedAt ?? null, recordedEndAt: completed ? found.endedAt : null,
     duration_ms: completed ? found.endedAt - submittedAt : null, setupExcluded: true,
+    agentSeconds: completed ? (found.endedAt - submittedAt) / 1000 : null,
     startDetection: found?.started ? 'persisted human prompt and generation' : null,
     endDetection: completed ? 'persisted clientSettleTime' : null,
     calls: found?.tools?.length ?? 0, tools: found?.tools ?? [], usage: found?.usage ?? null,

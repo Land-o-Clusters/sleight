@@ -20,7 +20,7 @@ export function privateMailResult(task, ctx, result, { arm, run }) {
   const salt = randomBytes(32);
   const hash = value => typeof value === 'string' ? createHash('sha256').update(salt).update(value).digest('hex') : null;
   return publicPrivateMailRow({ arm, task: task.id, run, passed: result.passed === true,
-    seconds: result.seconds, turns: result.out?.num_turns,
+    seconds: result.seconds, ...(result.agentSeconds !== undefined && { agentSeconds: result.agentSeconds }), turns: result.out?.num_turns,
     expectedHash: hash(task.privateExpected(ctx)), actualHash: hash(answerValue(result.out?.result)) });
 }
 
@@ -29,6 +29,7 @@ export function publicPrivateMailRow(row) {
   const digest = value => value == null ? null : /^[a-f0-9]{64}$/.test(value) ? value : (() => { throw new Error('PRIVATE_MAIL_RESULT_INVALID'); })();
   return { arm: row.arm, task: row.task, run: row.run, passed: row.passed === true,
     seconds: Number.isFinite(row.seconds) && row.seconds >= 0 ? row.seconds : 0,
+    ...(row.agentSeconds !== undefined && { agentSeconds: Number.isFinite(row.agentSeconds) && row.agentSeconds >= 0 ? row.agentSeconds : null }),
     turns: Number.isSafeInteger(row.turns) && row.turns >= 0 ? row.turns : null,
     expectedHash: digest(row.expectedHash), actualHash: digest(row.actualHash) };
 }

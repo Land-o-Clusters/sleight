@@ -25,7 +25,7 @@ import { CODEX_SLEIGHT_HOME, ensureCodexSleightHome, writeCodexSleightConfig, ap
 import { engineSpan, readEngine } from '../engine-version.mjs';
 import { runDesktop as runCursorDesktop } from '../world/arms/cursor-cu/run.mjs';
 import { DesktopDriver as CursorDesktopDriver } from '../world/arms/cursor-cu/desktop.mjs';
-import { armPaths, assertDesktopReady as assertCursorDesktopReady } from '../world/arms/cursor-cu/contract.mjs';
+import { armPaths } from '../world/arms/cursor-cu/contract.mjs';
 import { inspectBundle as inspectCursorBundle, readLoginReadiness as cursorReadiness } from '../world/arms/cursor-cu/setup.mjs';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -117,7 +117,7 @@ export function realGatePlan({ args, tasks, repo = repoRoot, mcpRoot, armHome, r
     const chromeFiles = { ...(deviceFile ? { deviceFile } : {}),
       ...(args['chrome-local-state'] ? { localState: args['chrome-local-state'] } : {}) };
     const setup = realAgentSetup({ task, surface, dir, realBrowser: browser, repo, armHome, dryRun, mcpRoot, chromeFiles,
-      model: args.model || 'haiku', effort: args.effort || 'high', allowBenchmarkAppPrompts: args['allow-benchmark-app-prompts'] === true });
+      model: args.model || 'haiku', effort: args.effort || 'high', allowBenchmarkAppPrompts: args['no-allow-benchmark-app-prompts'] !== true });
     return { ...setup, args: runsCodexExec(surface) ? setup.args : [...setup.args, setup.prompt],
       task, surface, dir };
   });
@@ -163,6 +163,8 @@ export async function runGateAgent(plan, { signal, runClaude = runOwned, runNati
         onEvent: event => appendFileSync(events, JSON.stringify(event) + '\n') }));
       groupClean = out.groupClean;
       result = { exitCode: out.is_error ? 1 : 0, result: out, groupClean, toolCalls: out.calls, toolErrors: null,
+        safetyStop: out.safetyStop,
+        agentSeconds: out.agentSeconds ?? (Number.isFinite(out.duration_ms) ? out.duration_ms / 1000 : null),
         qualificationOnly: true, timingBoundary: 'harness-submit to persisted clientSettleTime',
         ...(Number.isFinite(out.duration_ms) ? { started: out.submittedAt, finished: out.recordedEndAt } : {}) };
       writeFileSync(join(plan.dir, 'stderr.txt'), out.reason ?? '');
@@ -181,6 +183,7 @@ export async function runGateAgent(plan, { signal, runClaude = runOwned, runNati
         catch { return false; }
       }).length;
       result = { exitCode: run.code, result: run.out, timedOut: run.timedOut, groupClean: run.groupClean,
+        agentSeconds: run.agentSeconds ?? null,
         forbidden: run.forbidden, toolCalls: run.toolCalls, toolErrors, engineMs: run.engineMs,
         // The model id Codex ran (its rollout's turn_context), beside the one the arm asked for.
         modelRequested: run.modelRequested, modelsRan: run.modelsRan,
@@ -196,7 +199,11 @@ export async function runGateAgent(plan, { signal, runClaude = runOwned, runNati
       groupClean = run.groupClean;
       writeFileSync(events, run.stdout); writeFileSync(join(plan.dir, 'stderr.txt'), run.stderr);
       const messages = run.stdout.split('\n').flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
-      result = { exitCode: run.exit.code, result: messages.findLast(event => event.type === 'result'),
+      const final = messages.findLast(event => event.type === 'result');
+      result = { exitCode: run.exit.code, result: final,
+        // Only our interactive adapter has an inner agent boundary. Ordinary CLIs
+        // cannot replace the harness clock by printing their own timing field.
+        agentSeconds: plan.metadata?.interactive === true && Number.isFinite(final?.agentSeconds) && final.agentSeconds >= 0 ? final.agentSeconds : run.agentSeconds ?? null,
         timedOut: run.timedOut, groupClean: run.groupClean,
         toolCalls: messages.reduce((count, event) => count + (event.message?.content || []).filter(item => item.type === 'tool_use').length, 0),
         toolErrors: messages.reduce((count, event) => count + (event.message?.content || []).filter(item => item.type === 'tool_result' && item.is_error).length, 0) };
@@ -273,7 +280,7 @@ export async function admitRealGate(plan, { terminal = terminalAncestor } = {}) 
   if (plan.surface === 'peekaboo' && !terminal()) throw Error('Peekaboo\'s grants are on Terminal.app, so its rounds run from a Terminal window: ' +
     'put the rounds.sh command in a .command file and run: open -a Terminal <file>.command');
   if (plan.surface === 'cursor-cu') {
-    assertCursorDesktopReady();
+    await new CursorDesktopDriver().preflight({ paths: armPaths() });
     inspectCursorBundle(armPaths().app);
     if (!(await cursorReadiness()).authStored) throw Error('Cursor desktop needs login in its isolated profile; run node bench/world/arms/cursor-cu/setup.mjs');
   } else if (isCodexSurface(plan.surface)) {
@@ -440,12 +447,13 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
       // The first watched tasks name every window owner the watch saw, overlays included, so a new overlay owner shows up early.
       if (coverRun?.seen?.length && coverLogged++ < 3) console.error(`cover watch ${arm.task.name}: ${coverRun.seen.map(w =>
         `${w.owner} ${Math.round(w.fraction * 100)}% layer ${w.layer ?? '?'}${w.counted ? '' : ' (overlay, not counted)'}`).join('; ')}`);
-      const row = { task: arm.task, surface: arm.surface, status: 'ran', wallMs: run.finished - run.started, toolCalls: run.toolCalls, toolErrors: run.toolErrors,
+      const row = { task: arm.task, surface: arm.surface, status: 'ran', wallMs: run.finished - run.started, agentSeconds: run.agentSeconds ?? null, toolCalls: run.toolCalls, toolErrors: run.toolErrors,
         successfulBrowserCalls: evidence?.successfulCalls ?? null, run: { ...run, tabs: [...run.tabs] }, start, observation, navigation: navigation ?? null,
         agentConfig: arm.metadata, grade, site, outcome, errorClass, cover, coverRun, ...(covered ? { coverEvidence: covered } : {}) };
       rows.push(row);
       writeFileSync(join(arm.dir, 'run.json'), JSON.stringify(row, null, 2));
       writeFileSync(join(plan.out, 'results.json'), JSON.stringify(rows, null, 2));
+      if (run.safetyStop) throw Error(run.safetyStop);
     }
   } catch (error) {
     if (existsSync(plan.out)) {

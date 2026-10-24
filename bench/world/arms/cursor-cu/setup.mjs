@@ -1,10 +1,26 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, mkdtempSync, renameSync, rmSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { armPaths, assertBundlePin, ordinaryPath, CURSOR_PIN, DESKTOP_BLOCKERS } from './contract.mjs';
 const require = createRequire(import.meta.url);
+
+export function prepareCopy(paths = armPaths(), { run = spawnSync, inspect = inspectBundle } = {}) {
+  if (existsSync(ordinaryPath(paths.app))) return inspect(paths.app);
+  inspect('/Applications/Cursor.app');
+  mkdirSync(ordinaryPath(paths.root), { recursive: true, mode: 0o700 });
+  const staging = mkdtempSync(join(paths.root, 'copy-'));
+  try {
+    const copy = join(staging, 'Cursor.app');
+    const result = run('/usr/bin/ditto', ['/Applications/Cursor.app', copy], { stdio: 'pipe', timeout: 120000 });
+    if (result.error || result.status !== 0) throw Error('Cursor benchmark copy failed');
+    const pin = inspect(copy);
+    if (existsSync(paths.app)) throw Error('Cursor copy appeared during preparation; refusing overwrite');
+    renameSync(copy, paths.app);
+    return pin;
+  } finally { rmSync(staging, { recursive: true, force: true }); }
+}
 
 export function inspectBundle(app, run = spawnSync) {
   ordinaryPath(app);
@@ -30,15 +46,15 @@ export function launchPlan(paths = armPaths()) {
 export function setupPlan({ paths = armPaths() } = {}) {
   return { arm: 'cursor-cu', route: 'desktop', liveReady: false, blockers: DESKTOP_BLOCKERS, pin: CURSOR_PIN, paths, launch: launchPlan(paths), mutates: false,
     ownerSteps: [
-      `Copy /Applications/Cursor.app to ${paths.app} with ditto. Keep its signature; the runner verifies it before every launch.`,
+      `Calibration prepares the pinned signed copy at ${paths.app} if absent. The runner verifies it before every launch.`,
       'Launch only the copied executable with the printed arguments and environment. Do not use the global cursor URL handler.',
       'Log in once in that isolated desktop profile. Keep the profile between runs.',
       'Trust only the empty benchmark workspace if Cursor asks.',
-      'STOP before enabling Computer Use until helper launch isolation is resolved. The desktop launch environment alone does not isolate the helper.',
-      'After that gate is resolved: enable Computer Use, target This Mac, in the agent composer and install the signed helper in benchmark storage.',
+      'Quit your own Cursor first. The copy shares its computer-use helper; a pre-existing helper also stops admission.',
+      'Enable Computer Use and target This Mac in the isolated composer. Keep the helper shared, as the owner decided.',
       'Grant Cursor Computer Use Accessibility and Screen Recording in System Settings. Complete any Enable Computer Use click yourself.',
       'Select Grok 4.7 High, high effort, normal speed. The probe refuses missing or different recorded parameters.',
-      'App cards say Allow Cursor to use <app>?, with Allow once or Allow in this chat and Always Allow. Automatic answers default off.',
+      'The harness answers only Allow in this chat for benchmark and task apps through bound Accessibility. Use --no-allow-benchmark-app-prompts to stop on every card.',
       'Quit the isolated copy before the probe; never grant it Always Allow through the harness.',
     ] };
 }

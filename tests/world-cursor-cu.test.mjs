@@ -43,9 +43,10 @@ test('bundle inspection verifies the resource seal and captures cdhash from code
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('all persistent paths and HOME are in the fixed arm cache, overrides and symlinks refuse', () => {
+test('desktop profile and HOME stay in the fixed cache, helper rendezvous is shared, symlinks refuse', () => {
   const p = paths();
-  for (const key of ['app', 'home', 'userData', 'extensions', 'helperSupport', 'workspace']) assert.ok(p[key].startsWith(p.root + '/'), key);
+  for (const key of ['app', 'home', 'userData', 'extensions', 'workspace']) assert.ok(p[key].startsWith(p.root + '/'), key);
+  assert.equal(p.helperSupport, `${home}/Library/Application Support/cursor-computer-use`);
   assert.equal(p.userData, `${home}/Library/Caches/sleight-bench/cursor-cu-arm/desktop/user-data`);
   for (const root of [`${home}/.cursor`, `${home}/Library/Application Support/Cursor`, '/tmp/cursor', p.root + '/../escape'])
     assert.throws(() => armPaths({ home, root }), /fixed/);
@@ -75,7 +76,7 @@ test('composer plan excludes setup from timing, uses desktop UI, and never selec
   assert.throws(() => composerPlan({ prompt: '', paths: paths() }), /prompt/);
 });
 
-test('launch requests isolated desktop paths but marks helper propagation unverified, with no test mocks', () => {
+test('launch requests isolated desktop paths and the shared helper rendezvous, with no test mocks', () => {
   const p = launchPlan(paths());
   assert.equal(p.env.HOME, paths().home); assert.equal(p.env.CUA_APP_SUPPORT_DIR, paths().helperSupport);
   assert.ok(p.args.includes('--user-data-dir=' + paths().userData));
@@ -147,10 +148,10 @@ test('live guards refuse owner-present, hold and lock; dry probe does not even i
   assert.deepEqual(probePlan().runs.map(r => r.runs), [1, 1]);
 });
 
-test('unproved helper isolation blocks before inspection, profile writes or desktop launch', async () => {
-  assert.throws(() => assertDesktopReady(), /helper.*isolation/i);
-  const driver = new DesktopDriver({ inspect: () => assert.fail('must not inspect or launch'), launch: () => assert.fail('must not launch') });
-  await assert.rejects(driver.open(plan()), /helper.*isolation/i);
+test('missing calibration blocks before inspection, profile writes or desktop launch', async () => {
+  assert.throws(() => assertDesktopReady(paths()), /calibration missing/i);
+  const driver = new DesktopDriver({ processes: async () => [], inspect: () => assert.fail('must not inspect or launch'), launch: () => assert.fail('must not launch') });
+  await assert.rejects(driver.open(plan()), /calibration missing/i);
   assert.equal(probePlan().liveReady, false);
 });
 
@@ -164,6 +165,7 @@ test('desktop results record exact provenance and timing and collect only their 
   const driver = fakeDriver();
   const r = await runDesktop(plan(), { driver, now: () => 1000, pause: async () => {} });
   assert.equal(r.duration_ms, 600); assert.equal(r.route, 'desktop'); assert.equal(r.cursorVersion, '3.27.12');
+  assert.equal(r.agentSeconds, 0.6);
   assert.equal(r.model, 'grok-4.7'); assert.equal(r.effort, 'high'); assert.equal(r.speed, 'normal'); assert.equal(r.groupClean, true);
   assert.equal(r.startDetection, 'persisted human prompt and generation'); assert.equal(r.endDetection, 'persisted clientSettleTime');
   assert.equal(r.usage, null); assert.equal(r.total_cost_usd, null);
@@ -171,7 +173,7 @@ test('desktop results record exact provenance and timing and collect only their 
 });
 test('setup failure and cancellation clean up; uncertain cleanup remains failed', async () => {
   const driver = fakeDriver({ failSetup: true }); const failed = await runDesktop(plan(), { driver });
-  assert.equal(failed.is_error, true); assert.deepEqual(driver.calls, ['open', 'setup', 'close']);
+  assert.equal(failed.is_error, true); assert.equal(failed.safetyStop, 'setup refused'); assert.deepEqual(driver.calls, ['open', 'setup', 'close']);
   const cancelled = fakeDriver(); const ctl = new AbortController(); ctl.abort();
   const c = await runDesktop(plan(), { driver: cancelled, signal: ctl.signal }); assert.equal(c.is_error, true); assert.deepEqual(cancelled.calls, []);
   const dirty = await runDesktop(plan(), { driver: fakeDriver({ cleanup: false }), now: () => 1000, pause: async () => {} });

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { armPaths, composerPlan, guardLive, DESKTOP_BLOCKERS, assertDesktopReady } from './contract.mjs';
+import { armPaths, composerPlan, guardLive, DESKTOP_BLOCKERS } from './contract.mjs';
 import { setupPlan } from './setup.mjs';
 
 export { guardLive } from './contract.mjs';
@@ -19,7 +19,8 @@ export async function runProbe(options = {}, { exists = existsSync, run } = {}) 
   const plan = probePlan();
   if (options.dryRun) return plan;
   guardLive(options, { exists });
-  assertDesktopReady();
+  const { DesktopDriver } = await import('./desktop.mjs');
+  await new DesktopDriver().preflight({ paths: armPaths() });
   const { nativeMain, chromeMain } = await import('./suite.mjs');
   const execute = run ?? (async row => row.suite === 'world'
     ? nativeMain(row.command.slice(2)) : chromeMain(row.command.slice(2)));
