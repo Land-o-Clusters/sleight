@@ -339,9 +339,15 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
     pdf = createPdfReader({ authorizeFile: path => pdfFileAllowed(binding, path),
       extract: dependencies.pdfExtract ?? (async (path, cursor, { signal }) => {
         const { preparePdfHelper, extractPdf } = await import('./host.mjs');
-        const built = await (prepared ??= (dependencies.preparePdfHelper ?? preparePdfHelper)({ inventory: dependencies.pdfInventory, signal,
-          onProgress: event => { if (event.stage === 'compile') pdfBuilding?.(); } }));
-        if (built.status !== 'ready') throw Error('PDF helper needs Apple command-line tools and a successful local build.');
+        let built;
+        try {
+          built = await (prepared ??= (dependencies.preparePdfHelper ?? preparePdfHelper)({ inventory: dependencies.pdfInventory, signal,
+            onProgress: event => { if (event.stage === 'compile') pdfBuilding?.(); } }));
+        } catch (error) { prepared = undefined; throw error; }
+        if (built.status !== 'ready') {
+          prepared = undefined;
+          throw Error('PDF helper needs Apple command-line tools and a successful local build.');
+        }
         return (dependencies.extractPdf ?? extractPdf)(built.receipt, path, cursor, { signal });
       }) });
   }

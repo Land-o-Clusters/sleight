@@ -90,7 +90,7 @@ function render(result, maxChars, token) {
     if (length === 0 && row.text.length || available < 80) {
       next = { page: row.page - 1, offset: row.offset }; break;
     }
-    lines.push(label + encoded(row.text.length ? protectedText.slice(0, length) : '[No extractable text; OCR is unavailable.]'));
+    lines.push(label + encoded(row.text.length ? protectedText.slice(0, length) : '[Extraction returned no text under the sandbox; OCR is unavailable.]'));
     if (length < row.text.length) { next = { page: row.page - 1, offset: row.offset + length }; break; }
     if (index + 1 < result.pages.length && lines.join('\n').length + footer.length + 100 >= maxChars) {
       const following = result.pages[index + 1]; next = { page: following.page - 1, offset: following.offset }; break;
@@ -165,7 +165,9 @@ export function createPdfReader({ extract, authorizeFile = () => false } = {}) {
         optionsCheck(options);
         const url = new URL(entry.page.url());
         if (!['http:', 'https:'].includes(url.protocol) || frame.url !== url.href) throw Error('PDF document identity is unavailable.');
-        if (frame.contentSize > MAX_BYTES || tree.resources?.some(resource => resource.url === frame.url && resource.contentSize > MAX_BYTES))
+        // CDP Frame has no contentSize. Only resources[] can advertise a size;
+        // the loaded bytes still need the independent post-fetch length check.
+        if (tree.resources?.some(resource => resource.url === frame.url && resource.contentSize > MAX_BYTES))
           throw Error('PDF exceeds the 32 MiB read limit.');
         await send('Page.enable');
         let resource;

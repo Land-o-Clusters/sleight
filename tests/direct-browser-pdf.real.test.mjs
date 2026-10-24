@@ -14,6 +14,7 @@ import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tool
 import { snapshot } from '../plugins/sleight/lib/direct-browser/snapshot.mjs';
 import { pdfTotalFixture } from '../bench/world/pdf-total.mjs';
 import { textPdf } from '../bench/pdf-fixture.mjs';
+import { type3Pdf } from './fixtures/pdf-type3.mjs';
 
 const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url))).browsers.find(row => row.name === 'chromium');
 const executablePath = join(homedir(), 'Library/Caches/ms-playwright', `chromium-${pin.revision}`,
@@ -30,6 +31,9 @@ test('owned headless PDF tab returns page 3 through PDFKit without refetching; H
     hits.push(request.url);
     if (request.url === '/many') {
       const pdf = textPdf(Array.from({ length: 20 }, (_, i) => 'Continuation page ' + (i + 1) + ': ' + 'invoice terms '.repeat(25)));
+      response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': pdf.length }); response.end(pdf);
+    } else if (request.url === '/type3' || request.url === '/empty') {
+      const pdf = request.url === '/type3' ? type3Pdf() : textPdf(['']);
       response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': pdf.length }); response.end(pdf);
     } else fixture.serve(request, response);
   });
@@ -73,6 +77,11 @@ test('owned headless PDF tab returns page 3 through PDFKit without refetching; H
   const read = await call('browser_read', { tab, max_chars: 1000 });
   assert.match(read.text, /Page 3\/3/); assert.equal(fixture.grade('Page 3: USD 731.42'), true);
   assert.equal(hits.filter(url => url === '/invoice').length, firstHits, 'read uses loaded bytes');
+  const type3 = await call('browser_open', { url: origin + '/type3' });
+  assert.match(type3.text, /Page 1\/1: "ABC"/);
+  const empty = await call('browser_open', { url: origin + '/empty' });
+  assert.match(empty.text, /extraction returned no text under the sandbox/i);
+  assert.doesNotMatch(empty.text, /No extractable text/i);
   const large = await call('browser_open', { url: origin + '/many' }), longTab = /^t\S+/.exec(large.text)[0];
   let part = await call('browser_read', { tab: longTab, max_chars: 1000 }), ref = /ref="(pdf_[a-f0-9]+)"/.exec(part.text)[1];
   assert.ok(part.text.length <= 1000);
