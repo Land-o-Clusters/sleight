@@ -6,6 +6,8 @@ import { randomBytes, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { readInstalledConfig, readInstalledConfigFile, acceptedInstalledPackage, installedConfigPath } from './installed-config.mjs';
 import { browserTools, validateToolCall, createToolDispatcher } from './tools.mjs';
+import { validImages } from './screenshot.mjs';
+import { MOTION_SIDE } from './motion.mjs';
 import { createV3TurnBinding, createV3Context } from './v3-context.mjs';
 import { browserApplicationName } from './browsers.mjs';
 import { readHandConfig } from '../hand/settings.mjs';
@@ -266,9 +268,15 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
         const reply = await rpc('call', request, callTimeoutMs);
         if (epoch === generation) callTimeoutMs = timeoutMs;
         if (!active || lost || epoch !== generation || !current()) return failure(request.name !== 'browser_read');
-        if (!exact(reply, ['resultId', 'result']) || !id(reply.resultId) || !exact(reply.result, ['text', 'isError']) ||
-            typeof reply.result.text !== 'string' || typeof reply.result.isError !== 'boolean' || reply.result.text.length > 100000) throw Error();
-        const result = reply.result;
+        const result = reply?.result, hasImages = Object.hasOwn(result ?? {}, 'images');
+        const frames = request.name === 'browser_act' ? request.arguments.frames : undefined;
+        const imageRequested = request.name === 'browser_read' && request.arguments.screenshot === true
+          || request.name === 'browser_act' && (request.arguments.observe === 'screenshot' || frames !== undefined);
+        if (!exact(reply, ['resultId', 'result']) || !id(reply.resultId) || !exact(result, hasImages ? ['text', 'isError', 'images'] : ['text', 'isError'])
+          || typeof result.text !== 'string' || typeof result.isError !== 'boolean' || result.text.length > 100000) throw Error();
+        if (hasImages && (result.isError || !imageRequested
+          || !validImages(result.images, frames === undefined ? {} : { maxImages: frames, maxSide: MOTION_SIDE })
+          || frames !== undefined && result.images.length !== frames)) throw Error();
         if (!result.isError) deliveries.set(result, { id: reply.resultId, hash: hash(result), epoch });
         return result;
       } catch { lose(); return failure(request.name !== 'browser_read'); }
