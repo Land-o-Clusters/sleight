@@ -6,14 +6,14 @@ import { inspectTarget } from '../plugins/sleight/lib/direct-browser/act.mjs';
 import { trustedLocatorRead } from '../plugins/sleight/lib/direct-browser/trusted-dom.mjs';
 import { recoverPage, ensurePageResponsive } from '../plugins/sleight/lib/direct-browser/page-health.mjs';
 const content = '<h1>Fixture with enough visible text to avoid the thin document delay</h1>';
-test('FD3C real native forms allow unrelated clicks and Enter on textareas and checkboxes', { skip, timeout: 60000 }, async t => {
+test('FD3C real native forms allow unrelated clicks and Enter on textareas', { skip, timeout: 60000 }, async t => {
   const f = await fixture(t, content + '<form action="mailto:fixture@example.invalid"><input id="text"><textarea id="area"></textarea>' +
     '<input id="check" type="checkbox"><input id="radio" type="radio"><button id="ordinary" type="button">Other</button>' +
     '<a id="link" href="/landed">Web</a><div id="div">Other</div><button id="submit">Open <span id="nested">app</span></button></form>');
   for (const inspector of [inspectElement, inspectTarget]) for (const id of ['text', 'area', 'check', 'radio', 'ordinary', 'link', 'div', 'submit', 'nested']) {
     const value = await trustedLocatorRead(f.entry.page.locator('#' + id), inspector);
     assert.equal(value.appLink, ['submit', 'nested'].includes(id), inspector.name + ':' + id);
-    assert.equal(value.nativeFormEnter, ['text', 'submit', 'nested'].includes(id), inspector.name + ':' + id);
+    assert.equal(value.nativeFormEnter, ['text', 'check', 'radio', 'submit', 'nested'].includes(id), inspector.name + ':' + id);
   }
   const events = await f.entry.page.evaluate(() => {
     const result = {};
@@ -23,7 +23,7 @@ test('FD3C real native forms allow unrelated clicks and Enter on textareas and c
     }
     return result;
   });
-  assert.deepEqual(events, { text: false, area: true, check: true, radio: true, ordinary: true, link: true, div: true, submit: false, nested: false });
+  assert.deepEqual(events, { text: false, area: true, check: false, radio: false, ordinary: true, link: true, div: true, submit: false, nested: false });
   const clicks = await f.entry.page.evaluate(() => {
     const seen = [];
     // No browser default is dispatched by Event; this observes the early guard and page listeners only.

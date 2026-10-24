@@ -1,6 +1,8 @@
 // Renderer failures retain the owned tab. Only an explicit recovery or release
 // terminates its scripts; a timeout never creates a replacement tab.
 const pending = new WeakMap();
+const recoveryGuards = new WeakMap(), fetchDisables = new WeakMap();
+const fetchOwners = new WeakMap(), closedRecoverySessions = new WeakSet();
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 export const stuckPageMessage = 'Script seems stuck; tab retained. Use navigate with url to recover, or close, keep or handoff.';
 const stuckError = () => Object.assign(Error(stuckPageMessage), { stuckPage: true });
@@ -23,18 +25,19 @@ async function deadline(task, ms) {
   })]); } finally { clearTimeout(timer); }
 }
 export async function probePage(tab, probeMs = 3000, current = () => true) {
+  if (tab.closed || tab.page.isClosed?.()) return false;
   // A stuck child renderer matters too. These evaluations carry no user gesture.
   const frames = tab.page.frames?.() ?? [tab.page];
   try {
     const results = await deadline(() => Promise.allSettled(frames.map(async frame => {
-      if (frame.isDetached?.()) return;
-      try { await frame.evaluate(() => 0); }
+      if (frame.isDetached?.()) return false;
+      try { await frame.evaluate(() => 0); return !frame.isDetached?.(); }
       catch (error) { if (!frame.isDetached?.()) throw error; }
     })), probeMs);
-    return results.length > 0 && results.every(result => result.status === 'fulfilled');
+    return !tab.closed && !tab.page.isClosed?.() && results.some(result => result.value === true) && results.every(result => result.status === 'fulfilled');
   } catch (error) {
     if (!error.probeTimeout) return false; // Navigation or closure is not proof of a stuck script.
-    if (!current()) return false;
+    if (!current() || tab.closed || tab.page.isClosed?.()) return false;
     tab.state.stuck = true;
     try { tab.state.stuckOrigin ??= new URL(tab.page.url()).origin; } catch { /* No web origin. */ }
     throw stuckError();
@@ -93,12 +96,36 @@ export async function terminatePageScripts(tab, timeoutMs = 3000) {
   if (tab.state.actionPending) throw Error('Earlier input still pending after script termination; tab retained. Close or hand off the tab.');
 }
 export async function disableRecoveryFetch(tab, cdp = tab.cdp) {
+  if (!cdp) return;
+  if (fetchDisables.has(cdp)) return fetchDisables.get(cdp);
+  if (closedRecoverySessions.has(cdp)) return;
+  fetchOwners.set(tab, cdp);
   tab.state.recoveryFetchDisablePending = true;
-  try {
-    // Cleanup has its own budget and cannot replace a navigation's result.
-    await deadline(() => cdp.send('Fetch.disable'), 500);
-    if (tab.cdp === cdp) tab.state.recoveryFetchDisablePending = false;
-  } catch { /* Retry at the next main-frame load, even if this session still answers. */ }
+  const work = (async () => {
+    try {
+      // Cleanup has its own budget and cannot replace a navigation's result.
+      await deadline(() => cdp.send('Fetch.disable'), 500);
+      recoveryGuards.get(cdp)?.();
+      if (fetchOwners.get(tab) === cdp) {
+        fetchOwners.delete(tab);
+        tab.state.recoveryFetchDisablePending = false;
+      }
+    } catch { /* Keep the guard until cleanup succeeds or this session closes. */ }
+    finally { fetchDisables.delete(cdp); }
+  })();
+  fetchDisables.set(cdp, work);
+  return work;
+}
+export function sameRecoveryURL(left, right) {
+  const a = new URL(left), b = new URL(right);
+  a.hash = ''; b.hash = '';
+  return a.href === b.href;
+}
+function namedRecoveryOrigin(hop, named) {
+  // Permit the named host's www spelling and an HTTP to HTTPS upgrade. Do not
+  // collapse arbitrary subdomains or ports into the user's named destination.
+  return hop.hostname.replace(/^www\./, '') === named.hostname.replace(/^www\./, '') && hop.port === named.port &&
+    (hop.protocol === named.protocol || named.protocol === 'http:' && hop.protocol === 'https:');
 }
 export async function recoverPage(tab, url, { siteCheck, allowCrossOrigin = false } = {}) {
   const parsed = new URL(url);
@@ -109,6 +136,10 @@ export async function recoverPage(tab, url, { siteCheck, allowCrossOrigin = fals
   let origin;
   try { origin = tab.state.stuckOrigin ?? new URL(tab.page.url()).origin; } catch { /* Unknown origin refuses below. */ }
   if (parsed.origin !== origin && !allowCrossOrigin) throw Error('Recovery stays on the stuck page origin unless the user message named the destination URL');
+  if (tab.state.recoveryFetchDisablePending) {
+    await disableRecoveryFetch(tab);
+    if (tab.state.recoveryFetchDisablePending) throw Error('Recovery navigation cleanup pending; tab retained');
+  }
   tab.state.recoveryScriptsTerminated = false;
   await terminatePageScripts(tab);
   // Only a successful navigation clears the mark. A failed escape keeps the handle.
@@ -122,13 +153,16 @@ export async function recoverPage(tab, url, { siteCheck, allowCrossOrigin = fals
     const frameId = frameTree.frame.id;
     tab.state.recoveryFrameId = frameId;
     let first = true;
+    const retryCleanup = () => {
+      if (tab.cdp === cdp && tab.state.recoveryFetchDisablePending) void disableRecoveryFetch(tab, cdp);
+    };
     navigationGuard = event => {
       let blocked = false;
       try {
         const hop = new URL(event.request.url);
         blocked = !['http:', 'https:'].includes(hop.protocol) || !!hop.username || !!hop.password || !!siteCheck?.(hop.href);
         if (event.frameId === frameId) {
-          const named = first && allowCrossOrigin && hop.href === parsed.href;
+          const named = allowCrossOrigin && (first ? sameRecoveryURL(hop.href, parsed.href) : namedRecoveryOrigin(hop, parsed));
           first = false;
           blocked ||= !named && hop.origin !== origin;
         }
@@ -136,18 +170,35 @@ export async function recoverPage(tab, url, { siteCheck, allowCrossOrigin = fals
       cdp.send(blocked ? 'Fetch.failRequest' : 'Fetch.continueRequest', {
         requestId: event.requestId, ...(blocked ? { errorReason: 'BlockedByClient' } : {}),
       }).catch(() => {});
+      retryCleanup();
     };
+    const removeGuard = () => {
+      cdp.off('Fetch.requestPaused', navigationGuard);
+      cdp.off('close', closed);
+      tab.page.off?.('request', retryCleanup);
+      recoveryGuards.delete(cdp);
+    };
+    const closed = () => {
+      closedRecoverySessions.add(cdp);
+      removeGuard();
+      if (fetchOwners.get(tab) === cdp) {
+        fetchOwners.delete(tab);
+        tab.state.recoveryFetchDisablePending = false;
+      }
+    };
+    recoveryGuards.set(cdp, removeGuard);
     cdp.on('Fetch.requestPaused', navigationGuard);
+    cdp.on('close', closed);
+    tab.page.on?.('request', retryCleanup);
   }
   try {
     if (navigationGuard) await deadline(() => cdp.send('Fetch.enable', { patterns: [{ resourceType: 'Document', requestStage: 'Request' }] }), 3000);
     await tab.page.goto(parsed.href, { waitUntil: 'domcontentloaded', timeout: 5000 });
     const landed = new URL(tab.page.url());
     if (!['http:', 'https:'].includes(landed.protocol) || landed.username || landed.password || siteCheck?.(landed.href) ||
-      landed.origin !== origin && !(allowCrossOrigin && landed.href === parsed.href)) throw Error('Recovery left the allowed destination; tab retained');
+      landed.origin !== origin && !(allowCrossOrigin && namedRecoveryOrigin(landed, parsed))) throw Error('Recovery left the allowed destination; tab retained');
   } finally {
     if (navigationGuard) {
-      cdp.off('Fetch.requestPaused', navigationGuard);
       await disableRecoveryFetch(tab, cdp);
     }
   }

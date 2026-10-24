@@ -190,7 +190,7 @@ export function popupHook(options) {
     const form = own.control.form.call(node);
     if (!form) return;
     if (isSubmitType(own.type)) return { form, submitter: node };
-    if (!implicit || !/^(text|search|tel|url|email|password|date|month|week|time|datetime-local|number)$/.test(own.type)) return;
+    if (!implicit || !/^(text|search|tel|url|email|password|date|month|week|time|datetime-local|number|checkbox|radio|range)$/.test(own.type)) return;
     for (const candidate of elementsOf(form)) {
       const other = controlOf(candidate);
       if (other && isSubmitType(other.type)) return { form, submitter: candidate };

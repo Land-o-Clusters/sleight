@@ -3,7 +3,7 @@ import { originOf, chooserNote } from './output-hygiene.mjs'; // a page picks it
 import { screenshot } from './screenshot.mjs';
 import { startMotion, userRequestedMotion, motionOps } from './motion.mjs';
 import { createHash } from 'node:crypto';
-import { ensurePageResponsive, guardPageTask, recoverPage, probePage } from './page-health.mjs';
+import { ensurePageResponsive, guardPageTask, recoverPage, probePage, sameRecoveryURL } from './page-health.mjs';
 import { check } from './rules.mjs';
 import { waitForThinPage } from './waits.mjs';
 import { isV3Context } from './v3-context.mjs';
@@ -288,7 +288,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             const message = typeof context?.userMessage === 'function' ? context.userMessage() : context?.userMessage;
             const user = message?.source === 'user' && message.id && message.session === context?.session && message.turn === context?.turn ? message : undefined;
             const namedURL = user && (user.text.match(/https?:\/\/[^\s<>"']+/gi) ?? []).some(value => {
-              try { return new URL(value.replace(/[.,!?;)]*$/, '')).href === new URL(destination).href; } catch { return false; }
+              try { return sameRecoveryURL(value.replace(/[.,!?;)]*$/, ''), destination); } catch { return false; }
             });
             if (originOf(destination) !== previousOrigin && !namedURL)
               throw Object.assign(Error('Recovery stays on the stuck page origin unless the user message named the destination URL'), { notRun: true });
