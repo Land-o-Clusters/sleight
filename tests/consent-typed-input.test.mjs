@@ -19,7 +19,7 @@ test('typed consent runs only inside the native card and preserves GB12 button g
   assert.doesNotMatch(source, /CGEventPost|AXUIElementSetAttributeValue|\.post\(/);
 });
 
-test('real NSAlert and AskCardPanel events route Return to the typed choice without ordering windows', { skip: macCommandSkip('xcrun') }, t => {
+test('real modal and handoff events route typed choices only after field focus without ordering windows', { skip: macCommandSkip('xcrun') }, t => {
   assert.match(source, /class ConsentWordField: NSTextField/, 'typed confirmation is missing');
   const blocks = ['PERSON INPUT', 'APP FRAME', 'ASK CARD'].map(name => {
     const block = source.split(`// BEGIN ${name}\n`)[1]?.split(`// END ${name}`)[0];
@@ -27,6 +27,7 @@ test('real NSAlert and AskCardPanel events route Return to the typed choice with
     // Headless seams supply hardware provenance and key-window/current-event state only.
     // Real NSEvents, window association, key equivalents and responder dispatch stay intact.
     return block.replaceAll('window.isKeyWindow', '(window === fixtureKeyWindow)')
+      .replaceAll('makeKey()', 'fixtureMakeKey(self)')
       .replaceAll('personInput(event.cgEvent)', 'fixturePersonInput(event)');
   });
   const dir = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-typed-input-'))));

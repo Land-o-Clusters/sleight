@@ -88,8 +88,17 @@ final class ConsentInputAction: NSObject {
         button.target = self; button.action = #selector(press(_:))
     }
     @objc @discardableResult func press(_ sender: NSButton) -> Bool {
+        return dispatch(sender)
+    }
+    func pressTyped(_ sender: NSButton, from field: ConsentWordField) -> Bool {
+        guard typing?.field === field, field.isEnabled, let window = sender.window,
+            window.isKeyWindow, window.firstResponder === field else { refuseConsentInput(sender); return false }
+        return dispatch(sender, typed: true)
+    }
+    private func dispatch(_ sender: NSButton, typed: Bool = false) -> Bool {
         guard let event = currentEvent(), event.window === sender.window,
-            !mouseOnly || [.leftMouseDown, .leftMouseUp].contains(event.type),
+            !typed || event.type == .keyDown,
+            !mouseOnly || typed || [.leftMouseDown, .leftMouseUp].contains(event.type),
             event.timestamp <= ProcessInfo.processInfo.systemUptime,
             ProcessInfo.processInfo.systemUptime - event.timestamp < 5,
             personInput(event.cgEvent) else { refuseConsentInput(sender); return false }
@@ -97,6 +106,9 @@ final class ConsentInputAction: NSObject {
     }
 }
 
+protocol ConsentWordFocusing: AnyObject {
+    func focusWordField(_ field: ConsentWordField) -> Bool
+}
 // No field editor: only keyDown can change the private buffer. AX may read/focus this control, never fill or submit it.
 final class ConsentWordField: NSTextField {
     private static let abcLayout: CFData? = {
@@ -150,11 +162,20 @@ final class ConsentWordField: NSTextField {
         return super.isAccessibilitySelectorAllowed(selector)
     }
     override func setAccessibilityValue(_ value: Any?) { refuse() }
-    override func accessibilityPerformPress() -> Bool {
+    private func focusForTyping() -> Bool {
         guard isEnabled else { return false }
+        if let panel = window as? ConsentWordFocusing { return panel.focusWordField(self) }
         return window?.makeFirstResponder(self) ?? false
     }
-    override func mouseDown(with event: NSEvent) { _ = window?.makeFirstResponder(self) }
+    override func setAccessibilityFocused(_ focused: Bool) {
+        if focused { _ = focusForTyping() }
+        else if window?.firstResponder === self { _ = window?.makeFirstResponder(nil) }
+        super.setAccessibilityFocused(focused)
+    }
+    override func accessibilityPerformPress() -> Bool {
+        return focusForTyping()
+    }
+    override func mouseDown(with event: NSEvent) { _ = focusForTyping() }
     override func resignFirstResponder() -> Bool { clear(); return super.resignFirstResponder() }
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow(); clear()
@@ -201,7 +222,7 @@ final class ConsentWordField: NSTextField {
                 button.window === window else { refuse(); return }
             // Clear the word and block nested input before dispatch, but leave the field answerable if press refuses.
             clear(); dispatching = true
-            let pressed = action.press(button)
+            let pressed = action.pressTyped(button, from: self)
             dispatching = false
             if pressed { invalidate() }
             return
@@ -730,7 +751,7 @@ func automaticCard(_ data: [String: Any], _ choices: [String]) -> AskCard? {
         let continuation = handoff.app != nil ? "Continue acquires and reads the same app fresh, including its new window. "
             : "Continue reads this tab or its owned opener again. "
         return AskCard(question: "Finish signing in or entering your code in " + target,
-            detail: "Use the app or your password manager yourself. sleight is paused. Only click Continue after the secret fields are gone. " + continuation + "Payments and submits still need their usual checks. Cancel leaves your work open. This request expires in at most four minutes.",
+            detail: "Use the app or your password manager yourself. sleight is paused. Confirm Continue only after the secret fields are gone. To use the keyboard, focus the confirmation field first. " + continuation + "Payments and submits still need their usual checks. Cancel leaves your work open. This request expires in at most four minutes.",
             host: "sleight", icon: consentIconPath(), kind: "handoff", choices: ["cancel", "continue"], diagnostics: "Session: " + handoff.session)
     }
     guard let card = appFrame(data, choices) else { return nil }
@@ -739,9 +760,24 @@ func automaticCard(_ data: [String: Any], _ choices: [String]) -> AskCard? {
         choices: ["cancel"] + choices.filter { $0 != "cancel" }, diagnostics: words.identity)
 }
 
-final class HandoffPanel: NSPanel {
-    override var canBecomeKey: Bool { false }
+final class HandoffPanel: NSPanel, ConsentWordFocusing {
+    private var wordFocusAllowed = false
+    override var canBecomeKey: Bool { wordFocusAllowed }
     override var canBecomeMain: Bool { false }
+    func focusWordField(_ field: ConsentWordField) -> Bool {
+        guard field.window === self, field.isEnabled else { return false }
+        wordFocusAllowed = true
+        guard makeFirstResponder(field) else { wordFocusAllowed = false; return false }
+        // A nonactivating panel takes keys only after the person focuses this
+        // field. Showing or reviewing the card never calls this method.
+        makeKey()
+        return firstResponder === field
+    }
+    override func resignKey() {
+        wordFocusAllowed = false
+        _ = makeFirstResponder(nil)
+        super.resignKey()
+    }
 }
 final class AskCardPanel: NSObject {
     let panel: NSPanel
@@ -782,6 +818,7 @@ final class AskCardPanel: NSObject {
             styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
             : NSPanel(contentRect: .zero, styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
         super.init()
+        if passive { panel.becomesKeyOnlyIfNeeded = true }
         panel.title = "sleight"; panel.titlebarAppearsTransparent = true; panel.titleVisibility = .hidden
         panel.isMovableByWindowBackground = true; panel.isOpaque = false; panel.backgroundColor = .clear
         // Keep the card visible while the accessory host is inactive.

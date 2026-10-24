@@ -189,7 +189,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
               let target;
               const resumed = await ctx.handoff(a.tab, async () => {
                 target = await suspension.finish(false);
-                return !!target;
+                return target === null ? null : !!target;
               }, (deadline, waitMs) => handoffDeadline?.({ deadline, waitMs, ownedTabs: suspension.ownedTabs ?? 1 }));
               if (!resumed || ended) {
                 if (suspension.cancel) await suspension.cancel(); else await suspension.finish(true);

@@ -154,6 +154,7 @@ test('input hints reject auth secrets and populated unnamed fields without match
     ['<p>Enter your authentication code or PIN</p><input placeholder="Promo code" value="SAVE10"><input name="postal-code" value="90210">', true],
     ['<input name="verification-code">', false],
     ['<input name="code">', false],
+    ...['otp_code', 'sms_code', 'user_pin', 'otp-code', 'sms-code', 'user-pin'].map(name => [`<input name="${name}">`, false]),
     ['<input aria-label="PIN">', false],
     ['<input placeholder="Postal PIN code" value="90210">', true],
     ['<input autocomplete="one-time-code" hidden>', false],
@@ -168,6 +169,35 @@ test('input hints reject auth secrets and populated unnamed fields without match
     await f.ownerPage.setContent(html);
     assert.equal(await handoffReadReady(f.entry.page), ready, html);
   }
+});
+
+test('snapshot redacts plain and separated code hints before handing control to the person', { skip, timeout: 60000 }, async t => {
+  const f = await fixture(t);
+  for (const name of ['code', 'otp_code', 'sms_code', 'user_pin', 'otp-code', 'sms-code', 'user-pin']) {
+    await f.ownerPage.setContent(`<label>Account<input name="${name}" value="482913"></label><p>Echo 482913</p>`);
+    const result = await f.call('browser_read', { tab: f.tab });
+    assert.equal(result.isError, false, result.text);
+    assert.doesNotMatch(result.text, /482913/, name);
+    assert.match(result.text, /redacted/, name);
+  }
+  await f.ownerPage.setContent('<label>Promo code<input value="SAVE10"></label><label>Postal code<input value="90210"></label>');
+  const benign = await f.call('browser_read', { tab: f.tab });
+  assert.match(benign.text, /SAVE10/); assert.match(benign.text, /90210/);
+});
+
+test('Continue after every owned tab closes ends the handoff without another card or read', { skip, timeout: 60000 }, async t => {
+  const f = await fixture(t), before = f.captures.length;
+  const pending = f.call('browser_tabs', { do: 'handoff', tab: f.tab, wait: true });
+  await waitForCard(f);
+  await f.ownerPage.close();
+  f.answer('continue');
+  const result = await Promise.race([pending, new Promise((_, reject) => {
+    const timer = setTimeout(() => reject(Error('handoff did not finish after the last tab closed')), 2000);
+    timer.unref(); pending.finally(() => clearTimeout(timer));
+  })]);
+  assert.match(result.text, /not resumed/);
+  assert.equal(f.cards.length, 1);
+  assert.equal(f.captures.length, before);
 });
 
 test('premature Continue keeps every owned tab paused until the person cancels', { skip, timeout: 60000 }, async t => {

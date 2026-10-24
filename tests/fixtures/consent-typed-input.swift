@@ -4,6 +4,10 @@ var fixtureCurrentEvent: NSEvent?
 var trustedEvents = Set<ObjectIdentifier>()
 var preflightKeyEquivalents = false
 func fixturePersonInput(_ event: NSEvent) -> Bool { trustedEvents.contains(ObjectIdentifier(event)) }
+func fixtureMakeKey(_ window: NSWindow) {
+    check(window.canBecomeKey, "only an explicitly focused handoff may become key")
+    if window.canBecomeKey { fixtureKeyWindow = window }
+}
 final class FixtureApplication: NSApplication {
     override var keyWindow: NSWindow? { fixtureKeyWindow }
     override var currentEvent: NSEvent? { fixtureCurrentEvent }
@@ -278,6 +282,79 @@ for kind in ["action", "debugger", "relaunch"] {
 let ordinary = AskCardPanel(AskCard(question: "Allow?", detail: "", host: "Fixture", icon: "", kind: "app", choices: ["cancel", "once"]), deadline: deadline) { _ in }
 check(ordinary.typing == nil, "ordinary host-answerable approval has no typed field")
 ordinary.close()
+
+// Handoff starts outside the keyboard path. Only explicit focus of its word field
+// permits a key window; real page-window events keep their own window association.
+for route in Route.allCases {
+    for focus in ["press", "focused", "mouse"] {
+        var answers: [String] = []
+        let target: [String: Any] = ["kind": "handoff", "session": "fixture-session", "turn": "fixture-turn", "tab": "t1"]
+        let card = AskCardPanel(automaticCard(target, ["continue", "cancel"])!, deadline: deadline) { answers.append($0) }
+        let view = card.typing!, window = card.panel
+        card.layout(in: NSRect(x: -20000, y: -20000, width: 480, height: 480)); _ = window.windowRef
+        check(view.frame.minY >= card.buttons[0].frame.maxY + 8 && view.frame.maxY <= card.scroll.frame.minY, "handoff word field fits below its explanation")
+        check(window.frame.height <= 480 && window.frame.width <= 480, "handoff fits a small display")
+        let page = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 400, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
+        _ = page.windowRef
+        let pageField = ConsentWordField([:], instructions: "Fixture page")
+        page.contentView!.addSubview(pageField); _ = page.makeFirstResponder(pageField)
+        fixtureKeyWindow = page
+        check(window.styleMask.contains(.nonactivatingPanel) && !window.canBecomeMain, "handoff stays nonactivating and never main")
+        check(!window.canBecomeKey, "handoff cannot become key before explicit word focus")
+        check(window.firstResponder !== view.field, "handoff field is not initially focused")
+        for char in word(view, "Continue") + " \r" {
+            send(key(String(char), in: page, code: char == "\r" ? 36 : char == " " ? 49 : nil), route)
+        }
+        check(answers.isEmpty && view.field.stringValue.isEmpty && fixtureKeyWindow === page, "page typing never reaches handoff")
+        check(!card.buttons[1].accessibilityPerformPress(), "AX cannot press handoff Continue")
+        if focus == "press" { check(view.field.accessibilityPerformPress(), "AX press focuses handoff field") }
+        else if focus == "focused" { view.field.setAccessibilityFocused(true) }
+        else {
+            let event = NSEvent.mouseEvent(with: .leftMouseDown, location: view.field.convert(.zero, to: nil), modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+            view.field.mouseDown(with: event)
+        }
+        check(window.canBecomeKey && fixtureKeyWindow === window && window.firstResponder === view.field, "explicit \(focus) focus opens handoff keyboard path")
+        enter(view, route)
+        send(key(" ", in: window, code: 49), route)
+        check(answers.isEmpty, "empty Return and Space cannot Continue")
+        // Even a focused protected button must retain its mouse-only guard.
+        _ = window.makeFirstResponder(card.buttons[1])
+        for (text, code) in [(" ", UInt16(49)), ("\r", 36)] { send(key(text, in: window, code: code), route) }
+        check(answers.isEmpty, "button focus cannot turn ordinary Space or Return into Continue")
+        check(view.field.accessibilityPerformPress(), "field can be refocused")
+        type("wrong", view, route); enter(view, route)
+        check(answers.isEmpty && view.field.isEnabled, "wrong handoff word is retryable")
+        type(word(view, "Continue"), view, route); enter(view, route, trusted: false)
+        check(answers.isEmpty && view.field.stringValue.isEmpty, "posted Return cannot complete handoff word")
+        type(word(view, "Continue"), view, route)
+        // A page event with the same Return never completes a card's pending word.
+        send(key("\r", in: page, code: 36), route)
+        check(answers.isEmpty, "foreign page Return cannot complete handoff word")
+        enter(view, route, code: focus == "focused" ? 76 : 36)
+        check(answers == ["continue"] && card.finished && !view.field.isEnabled, "focused physical word confirms handoff exactly once: \(route), \(focus)")
+        check(!window.isVisible && !page.isVisible, "handoff and page were never ordered")
+        card.close()
+    }
+}
+for ending in ["expiry", "dismiss", "focus-loss"] {
+    var answers: [String] = []
+    let card = AskCardPanel(AskCard(question: "Finish signing in", detail: "", host: "sleight", icon: "", kind: "handoff", choices: ["cancel", "continue"]), deadline: deadline) { answers.append($0) }
+    let view = card.typing!, window = card.panel
+    window.setFrameOrigin(NSPoint(x: -20000, y: -20000)); _ = window.windowRef
+    _ = view.field.accessibilityPerformPress()
+    type(word(view, "Continue"), view)
+    if ending == "expiry" { card.timer!.fire() }
+    else if ending == "dismiss" { card.close() }
+    else { window.resignKey(); fixtureKeyWindow = nil }
+    check(view.field.stringValue.isEmpty, "\(ending) clears handoff word")
+    if ending == "focus-loss" {
+        check(!window.canBecomeKey, "focus loss resets handoff key permission")
+        check(view.field.accessibilityPerformPress(), "explicit field focus may resume after focus loss")
+        enter(view)
+        check(answers.isEmpty, "refocus cannot replay previous word")
+    } else { check(!view.field.isEnabled, "\(ending) invalidates handoff field") }
+    card.close()
+}
 
 let result: [String: Any] = ["checks": checks, "failures": failures, "dispatches": dispatches, "visible": application.windows.contains { $0.isVisible }]
 print(String(data: try! JSONSerialization.data(withJSONObject: result), encoding: .utf8)!)

@@ -32,7 +32,7 @@ function handoffControlState(root, _arg, read) {
     if (!['input', 'textarea'].includes(tag) && !['textbox', 'spinbutton'].includes(attr('role')) && attr('contenteditable') === null) continue;
     const hints = ['type', 'name', 'id', 'placeholder', 'autocomplete', 'aria-label'].map(name => read(node, 'getAttribute')(name) ?? '');
     for (const label of read(node, 'labels') ?? []) hints.push(read(label, 'textContent') ?? '');
-    const hint = hints.join(' '), benignCode = /promo|coupon|postal|zip|discount|voucher|referral|product|area.?code|country.?code/i.test(hint);
+    const hint = hints.join(' ').replace(/[_-]/g, ' '), benignCode = /promo|coupon|postal|zip|discount|voucher|referral|product|area.?code|country.?code/i.test(hint);
     if (sensitive.test(hint) || /\b(?:code|pin)\b/i.test(hint) && !benignCode) return { secret: true, auth: true, filled: false };
     if (/username|current-password|new-password|one-time-code/i.test(attr('autocomplete') ?? '') &&
         read(node, 'checkVisibility')({ checkVisibilityCSS: true })) authForm = true;
@@ -98,7 +98,8 @@ export function createHandoffWaiter({ ui, current, session, turn, timeoutMs = HA
               dismiss();
               const resumed = await ready();
               if (settled) return;
-              if (resumed) finish(active() && Date.now() < deadline);
+              if (resumed === null) finish(false);
+              else if (resumed) finish(active() && Date.now() < deadline);
               else present();
             } catch { finish(false); }
           }, { deadline });

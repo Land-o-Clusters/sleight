@@ -17,8 +17,8 @@ test('native handoff card uses guarded Continue and fixed instructions outside p
   assert.match(source, /"continue": "Continue"/);
   assert.match(source, /func handoffFrame\(/);
   assert.match(source, /Finish signing in or entering your code in /);
-  assert.match(source, /final class HandoffPanel: NSPanel \{\s*override var canBecomeKey: Bool \{ false \}\s*override var canBecomeMain: Bool \{ false \}/);
-  assert.match(source, /Only click Continue after the secret fields are gone/);
+  assert.match(source, /override var canBecomeMain: Bool \{ false \}/);
+  assert.match(source, /Confirm Continue only after the secret fields are gone/);
   assert.match(source, /else if data\["kind"\] as\? String == "handoff"/);
   assert.match(source, /if let handoff = handoffFrame\(data, choices\)/);
 });
@@ -47,6 +47,19 @@ test('expiry during a Continue check dismisses the card and cannot grant a late 
   complete(true); await new Promise(resolve => setImmediate(resolve));
   assert.equal(f.cards.length, 1);
   assert.deepEqual(f.dismissed, [f.cards[0].id]);
+});
+
+test('null readiness ends the handoff immediately while false readiness remains retryable', async () => {
+  const f = uiFixture();
+  const waiter = createHandoffWaiter({ ui: f.ui, current: () => true, session: 's', turn: 't', timeoutMs: 1000 });
+  const pending = waiter.wait('t1', async () => null);
+  f.answer('continue');
+  let result = 'pending'; pending.then(value => { result = value; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(result, false);
+  assert.equal(f.cards.length, 1);
+  assert.deepEqual(f.dismissed, [f.cards[0].id]);
+  waiter.dispose();
 });
 
 test('waiting handoff takes no authority or secret from tool arguments', () => {

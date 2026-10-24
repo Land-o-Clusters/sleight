@@ -149,10 +149,15 @@ const appNotice = error => APP_NOTICE.test(error?.message ?? '') && typeof error
 // at 10 minutes, so the bridge does not take the wait for a hung worker; later calls keep the default.
 const APP_PREPARE_WAIT_MS = 330000, APP_PREPARE_CAP_MS = 600000;
 const PDF_BUILD_WAIT_MS = 330000; // compiler 300 s, parser 10 s, and collection/identity checks
+const MAX_HANDOFF_TABS = 1024;
+// Before the card exists, allow one idle wait, three drain waits per tab, the
+// card wait and one post-card allowance per tab at the largest accepted count.
+// The first deadline frame replaces this ceiling with the actual card budget.
+const HANDOFF_DRAIN_WAIT_MS = HANDOFF_WAIT_MS + 5000 * (1 + 4 * MAX_HANDOFF_TABS);
 const validWait = value => Number.isSafeInteger(value) && value >= 1000 && value <= APP_PREPARE_CAP_MS;
 export function handoffRpcWaitMs(waitMs, ownedTabs) {
   if (!Number.isSafeInteger(waitMs) || waitMs <= 0 || waitMs > HANDOFF_WAIT_MS ||
-      !Number.isSafeInteger(ownedTabs) || ownedTabs < 1 || ownedTabs > 1024) throw Error('INVALID_HANDOFF_WAIT');
+      !Number.isSafeInteger(ownedTabs) || ownedTabs < 1 || ownedTabs > MAX_HANDOFF_TABS) throw Error('INVALID_HANDOFF_WAIT');
   return waitMs + 5000 * ownedTabs;
 }
 
@@ -291,7 +296,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       trace('call-start', turn, call);
       try {
         const waiting = request.name === 'browser_tabs' && request.arguments.do === 'handoff' && request.arguments.wait === true;
-        const reply = await rpc('call', request, waiting ? Math.max(callTimeoutMs, handoffRpcWaitMs(HANDOFF_WAIT_MS, 1)) : callTimeoutMs);
+        const reply = await rpc('call', request, waiting ? Math.max(callTimeoutMs, HANDOFF_DRAIN_WAIT_MS) : callTimeoutMs);
         if (epoch === generation) callTimeoutMs = timeoutMs;
         if (!active || lost || epoch !== generation || !current()) return failure(request.name !== 'browser_read');
         const result = reply?.result, hasImages = Object.hasOwn(result ?? {}, 'images');

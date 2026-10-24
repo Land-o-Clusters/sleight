@@ -69,6 +69,32 @@ test('worker sends the actual handoff card deadline across IPC once for its wait
   } finally { await f.bridge.detach(); }
 });
 
+test('handoff allows the bounded drain before a card, then shrinks to its actual deadline budget', async t => {
+  let progress, complete;
+  const f = await fixture({}, undefined, {}, async (_request, options) => {
+    progress = options.handoffDeadline;
+    return new Promise(resolve => { complete = resolve; });
+  });
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.now() });
+  t.after(() => { complete?.({ text: 'late state', isError: false }); t.mock.timers.reset(); });
+  await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'drain-turn', text: 'Find my receipt.' });
+  const pending = f.bridge.call({ name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } });
+  // Let private IPC reach the worker without advancing its timeout.
+  for (let i = 0; i < 10 && !progress; i++) await Promise.resolve();
+  assert.equal(typeof progress, 'function');
+  t.mock.timers.tick(15365000);
+  assert.equal(f.child.connected, true, 'a multi-tab drain must not consume the four-minute card wait');
+  progress({ deadline: Date.now() + 100, waitMs: 100, ownedTabs: 2 });
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  t.mock.timers.tick(10099);
+  assert.equal(f.child.connected, true, 'two tabs retain their five-second allowance after the deadline');
+  t.mock.timers.tick(2);
+  const result = await pending;
+  assert.match(result.text, /Input outcome is unconfirmed/);
+  assert.equal(f.child.connected, false, 'the initial drain timer must be replaced, not retained');
+  t.mock.timers.reset();
+});
+
 test('a worker cannot extend an ordinary read with handoff deadline evidence', async () => {
   const f = await fixture({}, undefined, {}, async (_request, options) => {
     options.handoffDeadline({ deadline: Date.now() + 200, waitMs: 200, ownedTabs: 12 });
