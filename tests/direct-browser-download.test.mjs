@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, realpathSync, rmSync, readdirSync, readFileSync, mkdirSync, symlinkSync, statSync, existsSync, writeFileSync, utimesSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, readdirSync, readFileSync, mkdirSync, symlinkSync, statSync, existsSync, writeFileSync, utimesSync, chmodSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { createDownloadStore, downloadRequest, downloadName } from '../plugins/sleight/lib/direct-browser/downloads.mjs';
 import { validateToolCall } from '../plugins/sleight/lib/direct-browser/tools.mjs';
@@ -112,7 +114,7 @@ test('failed transfers release their message slot', async t => {
   for (let n = 0; n < 3; n++) await f.save();
   await assert.rejects(f.save(), /3 downloads/);
 });
-test('session quota counts streamed bytes across messages, stores, failed responses and concurrent transfers', async t => {
+test('session quota counts published and in-flight bytes across messages, stores and concurrent transfers', async t => {
   const f = fixture(t, { sessionLimit: 50 });
   const results = await Promise.allSettled([f.save(), f.save(), f.save()]);
   assert.equal(results.filter(result => result.status === 'fulfilled').length, 2);
@@ -130,8 +132,95 @@ test('session quota counts streamed bytes across messages, stores, failed respon
     yield Buffer.alloc(20, 'a'); yield Buffer.alloc(20, 'b');
   })()) }), /session byte quota/);
   assert.equal(streamed.files().length, 0);
-  await streamed.save(Buffer.from('1234567890'));
+  await streamed.save(Buffer.from('123456789012345678901234567890'));
   await assert.rejects(streamed.save(), /session byte quota/);
+});
+test('startup logs an unsafe bank and saves still refuse it', async t => {
+  const f = fixture(t), file = await f.save(), bank = join(file.path, '../..'), logs = [];
+  chmodSync(bank, 0o755);
+  const store = createDownloadStore({ home: f.home, log: line => logs.push(line) });
+  assert.deepEqual(logs, ['download stale stage cleanup failed']);
+  await assert.rejects(store.save({ session: 'two', message: { text: 'Download this.' }, current: () => true }), /download directory is unsafe/);
+  assert.doesNotThrow(() => createDownloadStore({ home: f.home, log: () => { throw Error('logger failed'); } }));
+  assert.equal(f.files().length, 1);
+});
+for (const [name, mime, body, type] of [
+  ['Report v1.2', 'application/octet-stream', '%PDF-1.7', 'application/pdf'],
+  ['Q3 notes v2.1', 'text/plain', 'quarterly notes', 'text/plain'],
+  ['Report v1.2.PDF', 'application/octet-stream', '%PDF-1.7', 'application/pdf'],
+  ['Q3 notes v2.1.txt', 'text/plain', 'quarterly notes', 'text/plain'],
+  ['Report.draft', 'application/octet-stream', '%PDF-1.7', 'application/pdf'],
+]) test(`dotted document name ${name} uses its final known extension`, async t => {
+  const f = fixture(t), file = await f.save(Buffer.from(body), {}, { 'content-type': mime, 'content-disposition': `attachment; filename="${name}"` });
+  assert.equal(file.type, type); assert.equal(readFileSync(file.path, 'utf8'), body);
+});
+test('discarding an aborted transfer releases only its own bytes while another transfer is active', async t => {
+  const f = fixture(t, { sessionLimit: 30 });
+  let resume, ready;
+  const started = new Promise(resolve => { ready = resolve; });
+  const held = new Promise(resolve => { resume = resolve; });
+  const pending = f.save(undefined, { transfer: receive => receive({ 'content-type': 'text/csv' }, (async function* () {
+    yield Buffer.alloc(20, 'a'); ready(); await held;
+  })()) });
+  await started;
+  const original = Error('fixture transport stopped');
+  await assert.rejects(f.save(undefined, { transfer: async receive => {
+    await receive({ 'content-type': 'text/csv' }, (async function* () { yield Buffer.alloc(10, 'b'); })());
+    throw original;
+  } }), error => error === original);
+  await assert.rejects(f.save(Buffer.alloc(11, 'c')), /session byte quota/);
+  resume(); await pending;
+  await f.save(Buffer.alloc(10, 'c'));
+  await assert.rejects(f.save(Buffer.from('x')), /session byte quota/);
+});
+test('unpublished cleanup errors preserve the original failure and retain undiscarded byte charges', async t => {
+  const logs = [], original = Error('fixture transport stopped');
+  const f = fixture(t, { sessionLimit: 25, removeStage: () => { throw Error('secret stage path'); }, log: line => logs.push(line) });
+  await assert.rejects(f.save(undefined, { transfer: async receive => {
+    await receive({ 'content-type': 'text/csv' }, (async function* () { yield Buffer.alloc(25, 'a'); })()); throw original;
+  } }), error => error === original);
+  assert.deepEqual(logs, ['download stage cleanup failed before publication']);
+  assert.equal(f.files().length, 1);
+  await assert.rejects(f.save(Buffer.from('x')), /session byte quota/);
+  const brokenLog = fixture(t, { removeStage: () => { throw Error('cleanup failed'); }, log: () => { throw Error('logger failed'); } });
+  await assert.rejects(brokenLog.save(undefined, { transfer: async () => { throw original; } }), error => error === original);
+});
+test('Downloads publication awaits asynchronous quarantine and rechecks authority', async t => {
+  let finish, started, active = true;
+  const ready = new Promise(resolve => { started = resolve; });
+  const f = fixture(t, { quarantine: async () => { started(); await new Promise(resolve => { finish = resolve; }); } });
+  const pending = f.save(undefined, { message: { text: 'Download this to Downloads.' }, current: () => active });
+  await ready;
+  assert.equal(f.files().filter(path => !path.endsWith('.part')).length, 0);
+  active = false; finish();
+  await assert.rejects(pending, /directory changed/);
+  assert.equal(f.files().length, 0);
+});
+test('asynchronous quarantine failures refuse publication with a fixed error', async t => {
+  const f = fixture(t, { quarantine: async () => { throw Error('secret xattr details'); } });
+  await assert.rejects(f.save(undefined, { message: { text: 'Download this to Downloads.' } }), /^Error: download quarantine failed$/);
+  assert.equal(f.files().length, 0);
+});
+test('the xattr writer yields to the event loop and uses a five second child deadline', async t => {
+  const original = childProcess.execFile, originalSync = childProcess.execFileSync;
+  let complete, called = false, settled = false;
+  childProcess.execFileSync = () => { throw Error('synchronous xattr forbidden'); };
+  childProcess.execFile = (command, args, options, callback) => {
+    assert.equal(command, '/usr/bin/xattr');
+    assert.deepEqual(args.slice(0, 2), ['-w', 'com.apple.quarantine']);
+    assert.equal(options.timeout, 5000);
+    called = true; complete = callback;
+  };
+  syncBuiltinESMExports();
+  t.after(() => { childProcess.execFile = original; childProcess.execFileSync = originalSync; syncBuiltinESMExports(); });
+  const f = fixture(t), pending = f.save(undefined, { message: { text: 'Download this to Downloads.' } });
+  pending.then(() => { settled = true; }, () => { settled = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(called, true); assert.equal(settled, false);
+  assert.equal(f.files().filter(path => !path.endsWith('.part')).length, 0);
+  complete(Object.assign(Error('deadline'), { killed: true }));
+  await assert.rejects(pending, /^Error: download quarantine failed$/);
+  assert.equal(f.files().length, 0);
 });
 test('store startup sweeps only old owned UUID partial files in private session folders', async t => {
   const f = fixture(t), file = await f.save(), folder = join(file.path, '..');
