@@ -161,6 +161,37 @@ test('FD1 protected cross-origin frame refuses the entire viewport', { skip, tim
   assert.equal(f.sessions.size, 0);
 });
 
+for (const shared of [false, true]) test('FD1C eight same-process iframes and two OOPIFs capture the real viewport, shared isolate=' + shared, { skip, timeout: 30000 }, async t => {
+  const f = await fixture(t, '<main>Mixed renderers</main>' + '<iframe src="/same"></iframe>'.repeat(8) +
+    '<iframe id="remote1"></iframe><iframe id="remote2"></iframe>', { routes: { '/same': '<p>Same process</p>' } });
+  for (const id of [1, 2]) {
+    const origin = 'http://' + (id === 1 || shared ? 'localhost' : '127.0.0.2') + ':' + new URL(f.page.url()).port;
+    await f.page.route(origin + '/remote*', route => route.fulfill({ contentType: 'text/html', body: '<p>Remote renderer</p>' }));
+    const url = origin + '/remote' + id;
+    const navigated = f.page.waitForEvent('framenavigated', frame => frame.url() === url);
+    await f.page.locator('#remote' + id).evaluate((el, url) => { el.src = url; }, url);
+    await (await navigated).waitForLoadState();
+  }
+  assert.equal(f.page.frames().length, 11);
+  const started = performance.now(), result = await screenshot(f.entry);
+  t.diagnostic(`Mixed-frame screenshot total latency: ${(performance.now() - started).toFixed(1)} ms`);
+  assert.equal(result.images?.length, 1, result.note + JSON.stringify({ errors: f.errors, calls: f.calls.map(c => [c.frame.url(), c.method]) }));
+  assert.equal(f.calls.filter(c => c.method === 'Debugger.pause').length, shared ? 2 : 3);
+  assert.equal(f.calls.filter(c => c.method === 'Runtime.getIsolateId').length, 3);
+  assert.equal(f.calls.filter(c => c.method === 'DOMSnapshot.captureSnapshot').length, 3);
+  assert.equal(f.sessions.size, 0);
+  for (const frame of f.page.frames()) assert.equal(await frame.evaluate(() => 42), 42);
+  const remote = f.page.frames().find(frame => frame.url().endsWith('/remote2'));
+  await remote.evaluate(() => { const field = document.createElement('input'); field.type = 'password'; document.body.append(field); });
+  f.calls.length = 0;
+  const protectedResult = await screenshot(f.entry);
+  assert.equal(protectedResult.images, undefined);
+  assert.match(protectedResult.note, /protected fields/);
+  assert.ok(f.calls.some(c => c.frame === remote && c.method === 'DOMSnapshot.captureSnapshot'));
+  assert.equal(f.calls.filter(c => c.method === 'Page.captureScreenshot').length, 0);
+  assert.equal(f.sessions.size, 0);
+});
+
 test('FD1 read and post-action capture stay opt-in and preserve delivered refs', { skip, timeout: 30000 }, async t => {
   const f = await fixture(t, '<button onclick="document.querySelector(\'p\').textContent=\'Changed\'">Animate</button><p>Ready</p>', { width: 640, height: 480 });
   const pages = { enqueue: async (_id, run) => run(f.entry) };

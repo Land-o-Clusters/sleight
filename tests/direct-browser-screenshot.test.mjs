@@ -12,18 +12,21 @@ const native = type => ({ strings: ['INPUT', 'type', type], documents: [{ nodes:
   nodeName: [0], nodeValue: [-1], parentIndex: [-1], attributes: [[1, 2]],
 } }] });
 
-function fixture({ type = 'text', fail, after, extraFrames = 0, send, attach } = {}) {
+function fixture({ type = 'text', fail, after, extraFrames = 0, sameProcessFrames = 0, send, attach } = {}) {
   const calls = [], page = new EventEmitter(), frames = Array.from({ length: extraFrames + 1 }, () => ({}));
   frames[0]._connection = { toImpl: () => ({ utilityContext: async () => ({ world: 'utility', evaluateExpression: async () => {} }) }) };
   const state = { snapshotNo: 0 }, entry = { page, state };
   Object.assign(page, { url: () => 'https://fixture.invalid/', frames: () => frames, mainFrame: () => frames[0], isClosed: () => false,
     context: () => ({ async newCDPSession(frame) {
+      if (frames.indexOf(frame) > 0 && frames.indexOf(frame) <= sameProcessFrames)
+        throw Error("This frame does not have a separate CDP session, it is a part of the parent frame's session");
       const cdp = new EventEmitter();
       cdp.send = async (method, params) => {
         calls.push({ method, params, frame });
         const override = await send?.(method, params, cdp);
         if (override !== undefined) return override;
         if (fail === method) throw Error('private fixture detail must not escape');
+        if (method === 'Runtime.getIsolateId') return { id: 'renderer-' + frames.indexOf(frame) };
         if (method === 'Runtime.evaluate') cdp.emit('Debugger.paused');
         if (method === 'Debugger.disable') cdp.emit('Debugger.resumed');
         if (method === 'DOMSnapshot.captureSnapshot') return native(type);
@@ -80,16 +83,54 @@ test('FD1B cumulative capture work shares one absolute deadline and still releas
   assert.equal(result.images, undefined);
   assert.match(result.note, /Screenshot skipped/);
   assert.equal(f.calls.filter(c => c.method === 'Page.captureScreenshot').length, 0);
-  const enabled = f.calls.filter(c => c.method === 'Debugger.enable').length;
-  assert.equal(f.calls.filter(c => c.method === 'Debugger.disable').length, enabled);
-  assert.equal(f.calls.filter(c => c.method === 'detach').length, enabled);
+  const acquired = new Set(f.calls.map(c => c.frame)).size;
+  assert.equal(f.calls.filter(c => c.method === 'Debugger.disable').length, acquired);
+  assert.equal(f.calls.filter(c => c.method === 'detach').length, acquired);
 });
 
-test('FD1B pages beyond four frames are refused before any renderer pauses', async () => {
+test('FD1C eight same-process iframes and two OOPIFs capture with three paused sessions', async () => {
+  const f = fixture({ extraFrames: 10, sameProcessFrames: 8 });
+  const result = await screenshot(f.entry);
+  assert.equal(result.images?.length, 1, result.note);
+  assert.equal(f.calls.filter(c => c.method === 'Debugger.pause').length, 3);
+  assert.equal(f.calls.filter(c => c.method === 'DOMSnapshot.captureSnapshot').length, 3);
+  assert.equal(f.calls.filter(c => c.method === 'detach').length, 3);
+});
+
+test('FD1C a fifth renderer session refuses capture without pausing beyond the cap', async () => {
   const f = fixture({ extraFrames: 4 });
   const result = await screenshot(f.entry);
   assert.equal(result.images, undefined);
-  assert.equal(f.calls.length, 0);
+  assert.equal(f.calls.filter(c => c.method === 'Debugger.enable').length, 4);
+  assert.equal(f.calls.filter(c => c.method === 'Debugger.pause').length, 0);
+  assert.equal(f.calls.filter(c => c.method === 'Page.captureScreenshot').length, 0);
+  assert.equal(f.calls.filter(c => c.method === 'detach').length, 5);
+});
+
+test('FD1C capture near the work deadline gets a separate cleanup budget', async () => {
+  let clock = 0;
+  const f = fixture({ send: method => {
+    if (method === 'Page.captureScreenshot') clock = 2990;
+    if (method === 'Debugger.disable') clock += 20;
+  } });
+  const result = await screenshot(f.entry, { now: () => clock });
+  assert.equal(result.images?.length, 1, result.note);
+  assert.equal(clock, 3010);
+  assert.equal(f.calls.at(-1).method, 'detach');
+});
+
+test('FD1C detach waits for the debugger disable reply', async () => {
+  let release, disabling;
+  const started = new Promise(resolve => { disabling = resolve; });
+  const f = fixture({ send: method => {
+    if (method === 'Debugger.disable') { disabling(); return new Promise(resolve => { release = resolve; }); }
+  } });
+  const pending = screenshot(f.entry);
+  await started;
+  try { assert.equal(f.calls.some(c => c.method === 'detach'), false); }
+  finally { release({}); }
+  assert.equal((await pending).images?.length, 1);
+  assert.equal(f.calls.at(-1).method, 'detach');
 });
 
 test('FD1B a stalled capture returns in about three seconds and resumes the renderer', { timeout: 10000 }, async () => {
@@ -108,9 +149,10 @@ test('FD1B a stalled capture returns in about three seconds and resumes the rend
 test('FD1B a hung debugger cleanup cannot delay detaching other paused sessions', { timeout: 10000 }, async () => {
   const f = fixture({ extraFrames: 3, send: method => method === 'Debugger.disable' ? new Promise(() => {}) : undefined });
   const started = performance.now(), result = await screenshot(f.entry);
-  assert.ok(performance.now() - started < 3600);
+  assert.ok(performance.now() - started < 1000, 'cleanup has its own short budget');
   assert.equal(result.images, undefined);
   assert.match(result.note, /cleanup unconfirmed/);
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(f.calls.filter(c => c.method === 'detach').length, 4);
 });
 
@@ -185,7 +227,7 @@ test('FD1 protected fields suppress capture before pixels are acquired', async (
   assert.equal(f.calls.at(-1).method, 'detach');
 });
 
-for (const fail of ['Debugger.enable', 'Debugger.pause', 'DOMSnapshot.captureSnapshot', 'Accessibility.getFullAXTree', 'Page.getLayoutMetrics', 'Page.captureScreenshot', 'Debugger.disable'])
+for (const fail of ['Runtime.getIsolateId', 'Debugger.enable', 'Debugger.pause', 'DOMSnapshot.captureSnapshot', 'Accessibility.getFullAXTree', 'Page.getLayoutMetrics', 'Page.captureScreenshot', 'Debugger.disable'])
   test('FD1 failed ' + fail + ' discards pixels, scrubs errors and collects its session', async () => {
     const f = fixture({ fail }), result = await screenshot(f.entry);
     assert.equal(result.images, undefined); assert.match(result.note, /Screenshot skipped/);
