@@ -106,6 +106,20 @@ check(feedback.stringValue == consentInputMessage, "action refusal shows the fix
 check(alert.informativeText == "Private fixture details", "refusal preserves private card body")
 check(alert.buttons[2].isEnabled && alert.buttons[2].target === actions[1], "refused card stays answerable")
 check(!alert.window.isVisible, "fixture never opens a window")
+// The field's focus guard uses the production CGEvent classifier, with no HID seam.
+final class PersonFocusPanel: NSPanel, ConsentWordFocusing {
+    var focusCalls = 0
+    func focusWordField(_ field: ConsentWordField) -> Bool { focusCalls += 1; return true }
+}
+let focusPanel = PersonFocusPanel(contentRect: NSRect(x: -20000, y: -20000, width: 300, height: 100), styleMask: [.titled, .nonactivatingPanel], backing: .buffered, defer: false)
+let focusField = ConsentWordField([:], instructions: "Fixture")
+focusPanel.contentView!.addSubview(focusField); _ = focusPanel.windowRef
+let postedMouse = NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: focusPanel.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+check(postedMouse.window === focusPanel, "posted-style event names the actual field window")
+check(!personInput(postedMouse.cgEvent), "local NSEvent has non-HID provenance")
+focusField.mouseDown(with: postedMouse)
+check(focusPanel.focusCalls == 0, "posted-style mouse cannot request field focus")
+check(!focusPanel.isVisible, "focus fixture stays unordered")
 // G1B: the same action used by the Continue card, with no window or event posting.
 check(personChoice("handoff", "continue"), "Continue is person-only")
 let continuation = button("Continue")

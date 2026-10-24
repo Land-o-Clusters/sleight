@@ -48,6 +48,8 @@ test('handoff RPC budget starts at the card deadline and adds five seconds for e
   const { handoffRpcWaitMs } = await import('../plugins/sleight/lib/direct-browser/worker.mjs');
   assert.equal(handoffRpcWaitMs(240000, 1), 245000);
   assert.equal(handoffRpcWaitMs(240000, 12), 300000);
+  assert.equal(handoffRpcWaitMs(240000, 72), 600000);
+  assert.equal(handoffRpcWaitMs(240000, 1024), 600000);
   for (const args of [[0, 1], [240001, 1], [240000, -1], [240000, 1.5]]) assert.throws(() => handoffRpcWaitMs(...args));
 });
 
@@ -69,6 +71,53 @@ test('worker sends the actual handoff card deadline across IPC once for its wait
   } finally { await f.bridge.detach(); }
 });
 
+test('handoff allows a tab-count drain before a card, then shrinks to its actual deadline budget', async t => {
+  let progress, complete;
+  const f = await fixture({}, undefined, {}, async (_request, options) => {
+    options.handoffDrain?.({ ownedTabs: 12 });
+    progress = options.handoffDeadline;
+    return new Promise(resolve => { complete = resolve; });
+  });
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.now() });
+  t.after(() => { complete?.({ text: 'late state', isError: false }); t.mock.timers.reset(); });
+  await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'drain-turn', text: 'Find my receipt.' });
+  const pending = f.bridge.call({ name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } });
+  // Let private IPC reach the worker without advancing its timeout.
+  for (let i = 0; i < 10 && !progress; i++) await Promise.resolve();
+  assert.equal(typeof progress, 'function');
+  t.mock.timers.tick(299999);
+  assert.equal(f.child.connected, true, 'a multi-tab drain must not consume the four-minute card wait');
+  progress({ deadline: Date.now() + 100, waitMs: 100, ownedTabs: 2 });
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  t.mock.timers.tick(10099);
+  assert.equal(f.child.connected, true, 'two tabs retain their five-second allowance after the deadline');
+  t.mock.timers.tick(2);
+  const result = await pending;
+  assert.match(result.text, /Input outcome is unconfirmed/);
+  assert.equal(f.child.connected, false, 'the initial drain timer must be replaced, not retained');
+  t.mock.timers.reset();
+});
+
+for (const [ownedTabs, ceiling] of [[1, 245000], [12, 300000], [1024, 600000], [undefined, 600000]]) {
+  test(`handoff drain with ${ownedTabs ?? 'unknown'} tabs expires at ${ceiling} ms`, async t => {
+    let complete;
+    const f = await fixture({}, undefined, {}, async (_request, options) => {
+      if (ownedTabs !== undefined) options.handoffDrain?.({ ownedTabs });
+      return new Promise(resolve => { complete = resolve; });
+    });
+    t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.now() });
+    t.after(() => { complete?.({ text: 'late', isError: false }); t.mock.timers.reset(); });
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'drain-turn', text: 'Find my receipt.' });
+    const pending = f.bridge.call({ name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } });
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    t.mock.timers.tick(ceiling - 1);
+    assert.equal(f.child.connected, true);
+    t.mock.timers.tick(2);
+    assert.equal(f.child.connected, false, 'the bridge must release a worker that never produces a card');
+    assert.match((await pending).text, /Input outcome is unconfirmed/);
+  });
+}
+
 test('a worker cannot extend an ordinary read with handoff deadline evidence', async () => {
   const f = await fixture({}, undefined, {}, async (_request, options) => {
     options.handoffDeadline({ deadline: Date.now() + 200, waitMs: 200, ownedTabs: 12 });
@@ -78,6 +127,25 @@ test('a worker cannot extend an ordinary read with handoff deadline evidence', a
   assert.notEqual((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).text, 'must not be delivered');
   assert.equal(f.child.connected, false);
 });
+
+for (const mode of ['ordinary', 'duplicate', 'after-card', 'zero', 'oversized', 'fractional', 'extra']) {
+  test(`handoff drain evidence refuses ${mode} frames`, async () => {
+    const f = await fixture({}, undefined, {}, async (_request, options) => {
+      if (mode === 'duplicate') options.handoffDrain({ ownedTabs: 1 });
+      if (mode === 'after-card') options.handoffDeadline({ deadline: Date.now() + 200, waitMs: 200, ownedTabs: 1 });
+      options.handoffDrain(mode === 'extra' ? { ownedTabs: 1, extra: true }
+        : { ownedTabs: mode === 'zero' ? 0 : mode === 'oversized' ? 1025 : mode === 'fractional' ? 1.5 : 1 });
+      return { text: 'must not be delivered', isError: false };
+    });
+    try {
+      await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'drain-turn', text: 'Find my receipt.' });
+      const request = mode === 'ordinary' ? { name: 'browser_read', arguments: { tab: 't1' } }
+        : { name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } };
+      assert.notEqual((await f.bridge.call(request)).text, 'must not be delivered');
+      assert.equal(f.child.connected, false);
+    } finally { await f.bridge.detach(); }
+  });
+}
 test('bridge phases bracket startup, first admission and the last result to turn end without tracing content', async () => {
   const phases = [], f = await fixture({}, (...row) => phases.push(row));
   try {

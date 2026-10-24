@@ -149,11 +149,15 @@ const appNotice = error => APP_NOTICE.test(error?.message ?? '') && typeof error
 // at 10 minutes, so the bridge does not take the wait for a hung worker; later calls keep the default.
 const APP_PREPARE_WAIT_MS = 330000, APP_PREPARE_CAP_MS = 600000;
 const PDF_BUILD_WAIT_MS = 330000; // compiler 300 s, parser 10 s, and collection/identity checks
+const MAX_HANDOFF_TABS = 1024;
+// Until the registry reports its population, a missing card gets at most ten minutes.
+// The drain frame sizes that ceiling to five seconds per tab plus the card wait.
+const HANDOFF_DRAIN_WAIT_MS = 600000;
 const validWait = value => Number.isSafeInteger(value) && value >= 1000 && value <= APP_PREPARE_CAP_MS;
 export function handoffRpcWaitMs(waitMs, ownedTabs) {
   if (!Number.isSafeInteger(waitMs) || waitMs <= 0 || waitMs > HANDOFF_WAIT_MS ||
-      !Number.isSafeInteger(ownedTabs) || ownedTabs < 1 || ownedTabs > 1024) throw Error('INVALID_HANDOFF_WAIT');
-  return waitMs + 5000 * ownedTabs;
+      !Number.isSafeInteger(ownedTabs) || ownedTabs < 1 || ownedTabs > MAX_HANDOFF_TABS) throw Error('INVALID_HANDOFF_WAIT');
+  return Math.min(HANDOFF_DRAIN_WAIT_MS, waitMs + 5000 * ownedTabs);
 }
 
 export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31000 } = {}, dependencies = {}) {
@@ -208,6 +212,16 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
     if (!hello && exact(frame, ['version', 'session', 'nonce', 'browser']) && frame.version === 3 && id(frame.session) &&
         /^[a-f0-9]{64}$/.test(frame.nonce) && /^b[A-Za-z0-9_-]{1,63}$/.test(frame.browser)) {
       hello = frame; clearTimeout(timer); trace('bridge-ready'); resolveReady(); return;
+    }
+    if (hello && exact(frame, ['version', 'id', 'handoffDrain']) && frame.version === 3) {
+      const entry = pending.get(frame.id), detail = frame.handoffDrain;
+      try {
+        if (!entry?.handoff || entry.draining || entry.extended || !exact(detail, ['ownedTabs'])) throw Error();
+        const wait = handoffRpcWaitMs(HANDOFF_WAIT_MS, detail.ownedTabs);
+        clearTimeout(entry.timer); entry.draining = true;
+        entry.timer = setTimeout(() => lose(), wait);
+      } catch { lose(undefined, 'worker-protocol'); }
+      return;
     }
     if (hello && exact(frame, ['version', 'id', 'handoff']) && frame.version === 3) {
       const entry = pending.get(frame.id), detail = frame.handoff;
@@ -291,7 +305,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       trace('call-start', turn, call);
       try {
         const waiting = request.name === 'browser_tabs' && request.arguments.do === 'handoff' && request.arguments.wait === true;
-        const reply = await rpc('call', request, waiting ? Math.max(callTimeoutMs, handoffRpcWaitMs(HANDOFF_WAIT_MS, 1)) : callTimeoutMs);
+        const reply = await rpc('call', request, waiting ? HANDOFF_DRAIN_WAIT_MS : callTimeoutMs);
         if (epoch === generation) callTimeoutMs = timeoutMs;
         if (!active || lost || epoch !== generation || !current()) return failure(request.name !== 'browser_read');
         const result = reply?.result, hasImages = Object.hasOwn(result ?? {}, 'images');
@@ -441,7 +455,8 @@ export function serveV3Worker({ channel, browser, begin, current = () => true, c
         return !!record && record.runtime === runtime && record.hash === frame.params.hash && record.hash === hash(record.result) && runtime.delivered(record.result) === true;
       }
       const request = validateToolCall(frame.params, browser), owner = runtime;
-      const result = await owner.call(request, { handoffDeadline: detail => send({ version: 3, id: frame.id, handoff: detail }), pdfBuilding: () => {
+      const result = await owner.call(request, { handoffDrain: detail => send({ version: 3, id: frame.id, handoffDrain: detail }),
+        handoffDeadline: detail => send({ version: 3, id: frame.id, handoff: detail }), pdfBuilding: () => {
         if (epoch === generation && !ended && runtime === owner && ['browser_read', 'browser_open', 'browser_act', 'browser_fill'].includes(request.name))
           send({ version: 3, id: frame.id, pdfBuild: true });
       } });

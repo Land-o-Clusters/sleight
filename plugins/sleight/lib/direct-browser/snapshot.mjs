@@ -7,7 +7,9 @@ import { declaredRows, readCompleteness } from '../read-completeness.mjs';
 const pages = new WeakMap();
 const REF = /^(?:(?:f\d+)?e\d+|[sx]\d+)$/;
 const MORE = /^more\d+_\d+$/;
-export const SENSITIVE = /password|passcode|secret|one.?time|\botp\b|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|security.?code/i;
+export const SENSITIVE = /password|passcode|secret|one.?time|(?:^|[\W_])otp(?=$|[\W_])|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|security.?code/i;
+// Extra plain code/PIN hints belong to the handoff readiness check. Pending
+// handoff refuses reads entirely, including any echoed code values.
 const TIMEOUT = 3000;
 const scalarRole = role => /^(textbox|searchbox|combobox)$/.test(role);
 const normalized = value => String(value ?? '').replace(/[\u200b\u00ad]/g, '').trim().replace(/\s+/g, ' ');

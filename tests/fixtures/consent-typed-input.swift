@@ -1,9 +1,16 @@
 // Local AppKit dispatch only. No NSEvent subclass, event posting, app activation or window ordering.
 var fixtureKeyWindow: NSWindow?
 var fixtureCurrentEvent: NSEvent?
+var fixtureVoiceOver = false
+var fixtureSwitchControl = false
+var fixtureKeyAllowed = true
 var trustedEvents = Set<ObjectIdentifier>()
 var preflightKeyEquivalents = false
 func fixturePersonInput(_ event: NSEvent) -> Bool { trustedEvents.contains(ObjectIdentifier(event)) }
+func fixtureMakeKey(_ window: NSWindow) {
+    check(window.canBecomeKey, "only an explicitly focused handoff may become key")
+    if fixtureKeyAllowed && window.canBecomeKey { fixtureKeyWindow = window }
+}
 final class FixtureApplication: NSApplication {
     override var keyWindow: NSWindow? { fixtureKeyWindow }
     override var currentEvent: NSEvent? { fixtureCurrentEvent }
@@ -71,7 +78,53 @@ func send(_ event: NSEvent, _ route: Route = .window, current: Bool = true) {
     }
 }
 func type(_ text: String, _ view: ConsentTyping, _ route: Route = .window) {
-    for char in text { send(key(String(char), in: view.window!), route) }
+    for char in text {
+        send(key(String(char), in: view.window!), route)
+        check(view.field.stringValue.allSatisfy { $0 == "•" }, "display contains only bullets")
+        check(view.field.accessibilityValue() == String(repeating: "•", count: view.field.stringValue.count), "AX exposes only masked length")
+    }
+}
+func checkMaskedText(_ field: ConsentWordField, count: Int) {
+    let mask = String(repeating: "•", count: count), full = NSRange(location: 0, length: count)
+    let caret = NSRange(location: count, length: 0)
+    check(field.stringValue == mask, "stringValue holds only the masked word")
+    check(field.attributedStringValue.string == mask, "attributed display holds only the masked word")
+    check(field.cell?.stringValue == mask, "drawing cell holds only the masked word")
+    check(field.accessibilityValue() == mask, "AXValue is masked")
+    check(field.accessibilityString(for: full) == mask, "AXStringForRange is masked")
+    check(field.accessibilityAttributedString(for: full)?.string == mask, "AXAttributedStringForRange is masked")
+    check(field.accessibilitySelectedText() == "", "AXSelectedText is empty without selection")
+    check(field.accessibilitySelectedTextRange() == caret, "AXSelectedTextRange is the masked caret")
+    check(field.accessibilityNumberOfCharacters() == count, "AXNumberOfCharacters is the masked length")
+    check(field.accessibilityVisibleCharacterRange() == full, "AXVisibleCharacterRange covers the mask")
+    for (attribute, expected) in [(NSAccessibility.Attribute.value, mask), (.selectedText, "")] {
+        check(field.accessibilityAttributeValue(attribute) as? String == expected, "legacy \(attribute.rawValue) is masked")
+    }
+    check((field.accessibilityAttributeValue(.numberOfCharacters) as? NSNumber)?.intValue == count, "legacy AXNumberOfCharacters is masked length")
+    check((field.accessibilityAttributeValue(.selectedTextRange) as? NSValue)?.rangeValue == caret, "legacy AXSelectedTextRange is masked caret")
+    check((field.accessibilityAttributeValue(.visibleCharacterRange) as? NSValue)?.rangeValue == full, "legacy AXVisibleCharacterRange covers mask")
+    for range in [full, NSRange(location: min(1, count), length: max(0, count - 1)), caret] {
+        let expected = String(repeating: "•", count: range.length), value = NSValue(range: range)
+        check(field.accessibilityString(for: range) == expected, "AX substring is masked")
+        check(field.accessibilityAttributedString(for: range)?.string == expected, "AX attributed substring is masked")
+        check(field.accessibilityAttributeValue(.stringForRange, forParameter: value) as? String == expected, "legacy AXStringForRange is masked")
+        check((field.accessibilityAttributeValue(.attributedStringForRange, forParameter: value) as? NSAttributedString)?.string == expected, "legacy AXAttributedStringForRange is masked")
+    }
+    for range in [NSRange(location: count + 1, length: 1), NSRange(location: NSNotFound, length: 1), NSRange(location: 1, length: Int.max)] {
+        check(field.accessibilityString(for: range) == nil, "invalid AX string range returns no text")
+        check(field.accessibilityAttributedString(for: range) == nil, "invalid AX attributed range returns no text")
+        check(field.accessibilityAttributeValue(.stringForRange, forParameter: NSValue(range: range)) == nil, "invalid legacy AX string range returns no text")
+        check(field.accessibilityAttributeValue(.attributedStringForRange, forParameter: NSValue(range: range)) == nil, "invalid legacy AX attributed range returns no text")
+    }
+    for parameter: Any? in [nil, "oak", NSNumber(value: 3), NSValue(point: .zero)] {
+        check(field.accessibilityAttributeValue(.stringForRange, forParameter: parameter) == nil, "malformed legacy AX string parameter returns no text")
+        check(field.accessibilityAttributeValue(.attributedStringForRange, forParameter: parameter) == nil, "malformed legacy AX attributed parameter returns no text")
+    }
+}
+func mouse(_ view: ConsentTyping, trusted: Bool = true, age: Double = 0) -> NSEvent {
+    let event = NSEvent.mouseEvent(with: .leftMouseDown, location: view.field.convert(.zero, to: nil), modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime - age, windowNumber: view.window!.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+    if trusted { trustedEvents.insert(ObjectIdentifier(event)) }
+    return event
 }
 func enter(_ view: ConsentTyping, _ route: Route = .equivalent, code: UInt16 = 36, trusted: Bool = true, current: Bool = true) {
     send(key(code == 76 ? "\u{3}" : "\r", in: view.window!, code: code, trusted: trusted, flags: code == 76 ? .numericPad : []), route, current: current)
@@ -156,7 +209,7 @@ for (text, code, flags) in [(" ", UInt16(49), NSEvent.ModifierFlags()), ("1", 18
         send(key(text, in: keyAlert.window, code: code, flags: flags))
         check(keys.field.stringValue == before && feedback.stringValue.isEmpty, "non-letter key preserves buffer without refusal (\(code))")
     }
-    check(keys.field.stringValue == secret, "ignored keys do not alter word")
+    check(keys.field.stringValue == String(repeating: "•", count: secret.count), "ignored keys do not alter word length")
     enter(keys)
     check(keyReceipt.choices == ["Always allow"], "word with ignored keys still confirms")
     _ = keyActions
@@ -166,7 +219,7 @@ for character in ["ф", "ั"] {
     let (layoutAlert, layout, layoutActions, layoutReceipt) = modal()
     let layoutWord = word(layout, "Always allow")
     for char in layoutWord { send(key(character, in: layoutAlert.window, code: codes[char]!)) }
-    check(layout.field.stringValue == layoutWord, "non-Latin letters and combining marks use ABC physical key codes")
+    check(layout.field.stringValue == String(repeating: "•", count: layoutWord.count), "non-Latin letters and combining marks keep masked length")
     enter(layout)
     check(layoutReceipt.choices == ["Always allow"], "non-Latin layout reaches intended action")
     _ = layoutActions
@@ -176,7 +229,7 @@ for character in ["ф", "ั"] {
 let (latinAlert, latin, latinActions, latinReceipt) = modal()
 let latinWord = word(latin, "Always allow")
 for char in latinWord { send(key(String(char).uppercased(), in: latinAlert.window, code: 0, flags: [.shift, .capsLock])) }
-check(latin.field.stringValue == latinWord, "Latin layout characters and uppercase survive key-code fallback")
+check(latin.field.stringValue == String(repeating: "•", count: latinWord.count), "Latin layout characters and uppercase keep masked length")
 enter(latin)
 check(latinReceipt.choices == ["Always allow"], "Latin layout confirms its typed word")
 _ = latinActions
@@ -224,16 +277,23 @@ send(replay)
 trustedEvents.insert(ObjectIdentifier(replay)); send(replay)
 check(guarded.field.stringValue.isEmpty, "replayed timestamp refused")
 type(word(guarded, "Always allow"), guarded)
+let legacyValue = guarded.field.accessibilityAttributeValue(.value) as? String
+check(legacyValue == nil || legacyValue == String(repeating: "•", count: guarded.field.stringValue.count), "legacy AX value never returns the typed buffer")
 guarded.field.setAccessibilityValue("oak")
 check(guarded.field.stringValue.isEmpty && guardReceipt.choices.isEmpty, "AX write clears physical buffer")
 guarded.field.stringValue = word(guarded, "Always allow")
+checkMaskedText(guarded.field, count: 0)
+guarded.field.attributedStringValue = NSAttributedString(string: word(guarded, "Always allow"))
+checkMaskedText(guarded.field, count: 0)
+guarded.field.objectValue = word(guarded, "Always allow")
+checkMaskedText(guarded.field, count: 0)
 enter(guarded, .window)
 check(guardReceipt.choices.isEmpty, "display value grants no typed authority")
 type(word(guarded, "Always allow"), guarded); enter(guarded, .window, trusted: false)
 check(guardReceipt.choices.isEmpty && guarded.field.stringValue.isEmpty, "posted Return cannot confirm physical word")
 type("o", guarded)
 send(key("x", in: guardAlert.window)); send(key("\u{7f}", in: guardAlert.window, code: 51))
-check(guarded.field.stringValue == "o", "Backspace removes one physical letter")
+check(guarded.field.stringValue == "•", "Backspace removes one masked physical letter")
 send(key("\t", in: guardAlert.window, code: 48))
 check(guarded.field.stringValue.isEmpty && guardReceipt.choices.isEmpty, "Tab only navigates and clears")
 check(guardAlert.window.makeFirstResponder(guarded.field), "refocus after Tab")
@@ -278,6 +338,128 @@ for kind in ["action", "debugger", "relaunch"] {
 let ordinary = AskCardPanel(AskCard(question: "Allow?", detail: "", host: "Fixture", icon: "", kind: "app", choices: ["cancel", "once"]), deadline: deadline) { _ in }
 check(ordinary.typing == nil, "ordinary host-answerable approval has no typed field")
 ordinary.close()
+
+// Handoff starts outside the keyboard path. Only explicit focus of its word field
+// permits a key window; real page-window events keep their own window association.
+for route in Route.allCases {
+    for focus in ["press", "focused", "mouse"] {
+        fixtureVoiceOver = focus == "press"
+        fixtureSwitchControl = focus == "focused"
+        var answers: [String] = []
+        let target: [String: Any] = ["kind": "handoff", "session": "fixture-session", "turn": "fixture-turn", "tab": "t1"]
+        let card = AskCardPanel(automaticCard(target, ["continue", "cancel"])!, deadline: deadline) { answers.append($0) }
+        let view = card.typing!, window = card.panel
+        card.layout(in: NSRect(x: -20000, y: -20000, width: 480, height: 480)); _ = window.windowRef
+        check(view.frame.minY >= card.buttons[0].frame.maxY + 8 && view.frame.maxY <= card.scroll.frame.minY, "handoff word field fits below its explanation")
+        check(window.frame.height <= 480 && window.frame.width <= 480, "handoff fits a small display")
+        let page = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 400, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
+        _ = page.windowRef
+        let pageField = ConsentWordField([:], instructions: "Fixture page")
+        page.contentView!.addSubview(pageField); _ = page.makeFirstResponder(pageField)
+        fixtureKeyWindow = page
+        check(window.styleMask.contains(.nonactivatingPanel) && !window.canBecomeMain, "handoff stays nonactivating and never main")
+        check(!window.canBecomeKey, "handoff cannot become key before explicit word focus")
+        check(window.firstResponder !== view.field, "handoff field is not initially focused")
+        for char in word(view, "Continue") + " \r" {
+            send(key(String(char), in: page, code: char == "\r" ? 36 : char == " " ? 49 : nil), route)
+        }
+        check(answers.isEmpty && view.field.stringValue.isEmpty && fixtureKeyWindow === page, "page typing never reaches handoff")
+        check(!card.buttons[1].accessibilityPerformPress(), "AX cannot press handoff Continue")
+        if focus == "press" { check(view.field.accessibilityPerformPress(), "AX press focuses handoff field") }
+        else if focus == "focused" { view.field.setAccessibilityFocused(true) }
+        else {
+            let event = mouse(view)
+            view.field.mouseDown(with: event)
+            trustedEvents.remove(ObjectIdentifier(event))
+        }
+        check(window.canBecomeKey && fixtureKeyWindow === window && window.firstResponder === view.field, "explicit \(focus) focus opens handoff keyboard path")
+        enter(view, route)
+        send(key(" ", in: window, code: 49), route)
+        check(answers.isEmpty, "empty Return and Space cannot Continue")
+        // Even a focused protected button must retain its mouse-only guard.
+        _ = window.makeFirstResponder(card.buttons[1])
+        for (text, code) in [(" ", UInt16(49)), ("\r", 36)] { send(key(text, in: window, code: code), route) }
+        check(answers.isEmpty, "button focus cannot turn ordinary Space or Return into Continue")
+        fixtureVoiceOver = true
+        check(view.field.accessibilityPerformPress(), "field can be refocused")
+        type("wrong", view, route); enter(view, route)
+        check(answers.isEmpty && view.field.isEnabled, "wrong handoff word is retryable")
+        type(word(view, "Continue"), view, route); enter(view, route, trusted: false)
+        check(answers.isEmpty && view.field.stringValue.isEmpty, "posted Return cannot complete handoff word")
+        type(word(view, "Continue"), view, route)
+        checkMaskedText(view.field, count: word(view, "Continue").count)
+        view.field.stringValue = "overwritten"
+        checkMaskedText(view.field, count: word(view, "Continue").count)
+        view.field.attributedStringValue = NSAttributedString(string: "overwritten")
+        checkMaskedText(view.field, count: word(view, "Continue").count)
+        view.field.objectValue = "overwritten"
+        checkMaskedText(view.field, count: word(view, "Continue").count)
+        // A page event with the same Return never completes a card's pending word.
+        send(key("\r", in: page, code: 36), route)
+        check(answers.isEmpty, "foreign page Return cannot complete handoff word")
+        enter(view, route, code: focus == "focused" ? 76 : 36)
+        check(answers == ["continue"] && card.finished && !view.field.isEnabled, "focused physical word confirms handoff exactly once: \(route), \(focus)")
+        checkMaskedText(view.field, count: 0)
+        check(!window.isVisible && !page.isVisible, "handoff and page were never ordered")
+        card.close()
+    }
+}
+// AX without an active assistive technology and posted/stale pointer events cannot steal page focus.
+for attempt in ["press", "focused", "posted", "stale", "future", "failed-key"] {
+    fixtureVoiceOver = false; fixtureSwitchControl = false
+    var answers: [String] = []
+    let card = AskCardPanel(AskCard(question: "Finish signing in", detail: "", host: "sleight", icon: "", kind: "handoff", choices: ["cancel", "continue"]), deadline: deadline) { answers.append($0) }
+    let view = card.typing!, window = card.panel
+    window.setFrameOrigin(NSPoint(x: -20000, y: -20000)); _ = window.windowRef
+    let page = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 400, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
+    fixtureKeyWindow = page
+    if attempt == "press" { check(!view.field.accessibilityPerformPress(), "ordinary AX press is refused") }
+    else if attempt == "focused" { view.field.setAccessibilityFocused(true) }
+    else {
+        fixtureKeyAllowed = attempt != "failed-key"
+        let event = mouse(view, trusted: attempt != "posted", age: attempt == "stale" ? 5.1 : attempt == "future" ? -1 : 0)
+        if attempt == "posted" { check(!personInput(event.cgEvent), "posted-style mouse has non-HID provenance") }
+        view.field.mouseDown(with: event)
+        trustedEvents.remove(ObjectIdentifier(event)); fixtureKeyAllowed = true
+    }
+    check(fixtureKeyWindow === page && !window.canBecomeKey, "\(attempt) leaves page key and resets handoff permission")
+    check(answers.isEmpty && view.field.stringValue.isEmpty, "\(attempt) supplies no typed authority")
+    card.close()
+}
+fixtureVoiceOver = true
+// Inject the assistive-technology state independently of the workspace defaults.
+for state in [(false, false), (true, false), (false, true), (true, true)] {
+    for focus in ["press", "focused"] {
+        let panel = HandoffPanel(contentRect: NSRect(x: -20000, y: -20000, width: 400, height: 200), styleMask: [.titled, .nonactivatingPanel], backing: .buffered, defer: false)
+        let field = ConsentWordField([:], instructions: "Fixture", accessibilityState: { (state.0, state.1) })
+        panel.contentView!.addSubview(field)
+        fixtureKeyWindow = nil
+        if focus == "press" { check(field.accessibilityPerformPress() == (state.0 || state.1), "AX press follows injected state \(state)") }
+        else { field.setAccessibilityFocused(true) }
+        check((fixtureKeyWindow === panel) == (state.0 || state.1), "AX \(focus) only makes key for active assistive technology \(state)")
+        check(panel.canBecomeKey == (state.0 || state.1), "AX \(focus) retains permission only when allowed \(state)")
+        panel.resignKey(); fixtureKeyWindow = nil
+    }
+}
+for ending in ["expiry", "dismiss", "focus-loss"] {
+    var answers: [String] = []
+    let card = AskCardPanel(AskCard(question: "Finish signing in", detail: "", host: "sleight", icon: "", kind: "handoff", choices: ["cancel", "continue"]), deadline: deadline) { answers.append($0) }
+    let view = card.typing!, window = card.panel
+    window.setFrameOrigin(NSPoint(x: -20000, y: -20000)); _ = window.windowRef
+    _ = view.field.accessibilityPerformPress()
+    type(word(view, "Continue"), view)
+    if ending == "expiry" { card.timer!.fire() }
+    else if ending == "dismiss" { card.close() }
+    else { window.resignKey(); fixtureKeyWindow = nil }
+    check(view.field.stringValue.isEmpty, "\(ending) clears handoff word")
+    if ending == "focus-loss" {
+        check(!window.canBecomeKey, "focus loss resets handoff key permission")
+        check(view.field.accessibilityPerformPress(), "explicit field focus may resume after focus loss")
+        enter(view)
+        check(answers.isEmpty, "refocus cannot replay previous word")
+    } else { check(!view.field.isEnabled, "\(ending) invalidates handoff field") }
+    card.close()
+}
 
 let result: [String: Any] = ["checks": checks, "failures": failures, "dispatches": dispatches, "visible": application.windows.contains { $0.isVisible }]
 print(String(data: try! JSONSerialization.data(withJSONObject: result), encoding: .utf8)!)

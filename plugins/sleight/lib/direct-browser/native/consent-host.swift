@@ -88,8 +88,17 @@ final class ConsentInputAction: NSObject {
         button.target = self; button.action = #selector(press(_:))
     }
     @objc @discardableResult func press(_ sender: NSButton) -> Bool {
+        return dispatch(sender)
+    }
+    func pressTyped(_ sender: NSButton, from field: ConsentWordField) -> Bool {
+        guard typing?.field === field, field.isEnabled, let window = sender.window,
+            window.isKeyWindow, window.firstResponder === field else { refuseConsentInput(sender); return false }
+        return dispatch(sender, typed: true)
+    }
+    private func dispatch(_ sender: NSButton, typed: Bool = false) -> Bool {
         guard let event = currentEvent(), event.window === sender.window,
-            !mouseOnly || [.leftMouseDown, .leftMouseUp].contains(event.type),
+            !typed || event.type == .keyDown,
+            !mouseOnly || typed || [.leftMouseDown, .leftMouseUp].contains(event.type),
             event.timestamp <= ProcessInfo.processInfo.systemUptime,
             ProcessInfo.processInfo.systemUptime - event.timestamp < 5,
             personInput(event.cgEvent) else { refuseConsentInput(sender); return false }
@@ -97,7 +106,10 @@ final class ConsentInputAction: NSObject {
     }
 }
 
-// No field editor: only keyDown can change the private buffer. AX may read/focus this control, never fill or submit it.
+protocol ConsentWordFocusing: AnyObject {
+    func focusWordField(_ field: ConsentWordField) -> Bool
+}
+// No field editor: only keyDown can change the private buffer. AX reads only its masked length.
 final class ConsentWordField: NSTextField {
     private static let abcLayout: CFData? = {
         let filter = [kTISPropertyInputSourceID as String: "com.apple.keylayout.ABC"] as CFDictionary
@@ -127,11 +139,17 @@ final class ConsentWordField: NSTextField {
     }
     private var entries: [String: ConsentInputAction]
     private var typed = ""
+    private var maskedText: String { String(repeating: "•", count: typed.count) }
     private var dispatching = false
     private var lastTimestamp: TimeInterval = -.infinity
     private var focusObserver: NSObjectProtocol?
-    init(_ entries: [String: ConsentInputAction], instructions: String) {
+    let accessibilityState: () -> (voiceOver: Bool, switchControl: Bool)
+    init(_ entries: [String: ConsentInputAction], instructions: String,
+        accessibilityState: @escaping () -> (voiceOver: Bool, switchControl: Bool) = {
+            (NSWorkspace.shared.isVoiceOverEnabled, NSWorkspace.shared.isSwitchControlEnabled)
+        }) {
         self.entries = entries
+        self.accessibilityState = accessibilityState
         super.init(frame: .zero)
         isEditable = false; isSelectable = false; isBezeled = true; drawsBackground = true
         setAccessibilityElement(true)
@@ -143,18 +161,85 @@ final class ConsentWordField: NSTextField {
     deinit { if let observer = focusObserver { NotificationCenter.default.removeObserver(observer) } }
     override var acceptsFirstResponder: Bool { isEnabled }
     override var canBecomeKeyView: Bool { isEnabled && !isHiddenOrHasHiddenAncestor }
+    // Keep plaintext out of NSTextField and its drawing cell, including programmatic value writes.
+    override var stringValue: String {
+        get { super.stringValue }
+        set { super.stringValue = maskedText }
+    }
+    override var attributedStringValue: NSAttributedString {
+        get { super.attributedStringValue }
+        set { super.stringValue = maskedText }
+    }
+    override var objectValue: Any? {
+        get { super.objectValue }
+        set { super.stringValue = maskedText }
+    }
     override func accessibilityRole() -> NSAccessibility.Role? { .textField }
-    override func accessibilityValue() -> String? { typed }
+    override func accessibilityValue() -> String? { maskedText }
+    override func accessibilityString(for range: NSRange) -> String? {
+        guard range.location >= 0, range.length >= 0,
+            range.location <= typed.count, range.length <= typed.count - range.location else { return nil }
+        return String(repeating: "•", count: range.length)
+    }
+    override func accessibilityAttributedString(for range: NSRange) -> NSAttributedString? {
+        guard let text = accessibilityString(for: range) else { return nil }
+        return NSAttributedString(string: text)
+    }
+    override func accessibilitySelectedText() -> String? { "" }
+    override func accessibilitySelectedTextRange() -> NSRange { NSRange(location: typed.count, length: 0) }
+    override func accessibilityNumberOfCharacters() -> Int { typed.count }
+    override func accessibilityVisibleCharacterRange() -> NSRange { NSRange(location: 0, length: typed.count) }
+    override func accessibilityAttributeValue(_ attribute: NSAccessibility.Attribute) -> Any? {
+        switch attribute {
+        case .value: return accessibilityValue()
+        case .selectedText: return accessibilitySelectedText()
+        case .selectedTextRange: return NSValue(range: accessibilitySelectedTextRange())
+        case .numberOfCharacters: return accessibilityNumberOfCharacters()
+        case .visibleCharacterRange: return NSValue(range: accessibilityVisibleCharacterRange())
+        default: return super.accessibilityAttributeValue(attribute)
+        }
+    }
+    override func accessibilityAttributeValue(_ attribute: NSAccessibility.ParameterizedAttribute, forParameter parameter: Any?) -> Any? {
+        if attribute == .stringForRange || attribute == .attributedStringForRange {
+            guard let value = parameter as? NSValue,
+                String(cString: value.objCType) == String(cString: NSValue(range: NSRange()).objCType) else { return nil }
+            let range = value.rangeValue
+            return attribute == .stringForRange ? accessibilityString(for: range) : accessibilityAttributedString(for: range)
+        }
+        return super.accessibilityAttributeValue(attribute, forParameter: parameter)
+    }
     override func isAccessibilitySelectorAllowed(_ selector: Selector) -> Bool {
         if selector == #selector(setAccessibilityValue(_:)) { return false }
         return super.isAccessibilitySelectorAllowed(selector)
     }
     override func setAccessibilityValue(_ value: Any?) { refuse() }
-    override func accessibilityPerformPress() -> Bool {
+    private func focusForTyping() -> Bool {
         guard isEnabled else { return false }
+        if let panel = window as? ConsentWordFocusing { return panel.focusWordField(self) }
         return window?.makeFirstResponder(self) ?? false
     }
-    override func mouseDown(with event: NSEvent) { _ = window?.makeFirstResponder(self) }
+    private func focusFromAccessibility() -> Bool {
+        if window is ConsentWordFocusing {
+            let state = accessibilityState()
+            guard state.voiceOver || state.switchControl else { refuse(); return false }
+        }
+        return focusForTyping()
+    }
+    override func setAccessibilityFocused(_ focused: Bool) {
+        if focused { guard focusFromAccessibility() else { return } }
+        else if window?.firstResponder === self { _ = window?.makeFirstResponder(nil) }
+        super.setAccessibilityFocused(focused)
+    }
+    override func accessibilityPerformPress() -> Bool {
+        return focusFromAccessibility()
+    }
+    override func mouseDown(with event: NSEvent) {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard event.type == .leftMouseDown, event.window === window,
+            event.timestamp <= now, now - event.timestamp < 5,
+            personInput(event.cgEvent) else { refuse(); return }
+        _ = focusForTyping()
+    }
     override func resignFirstResponder() -> Bool { clear(); return super.resignFirstResponder() }
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow(); clear()
@@ -201,7 +286,7 @@ final class ConsentWordField: NSTextField {
                 button.window === window else { refuse(); return }
             // Clear the word and block nested input before dispatch, but leave the field answerable if press refuses.
             clear(); dispatching = true
-            let pressed = action.press(button)
+            let pressed = action.pressTyped(button, from: self)
             dispatching = false
             if pressed { invalidate() }
             return
@@ -211,7 +296,7 @@ final class ConsentWordField: NSTextField {
             guard let letter = letter, typed.count < 12 else { refuse(); return }
             typed += letter
         }
-        stringValue = typed
+        stringValue = maskedText
     }
 }
 
@@ -730,7 +815,7 @@ func automaticCard(_ data: [String: Any], _ choices: [String]) -> AskCard? {
         let continuation = handoff.app != nil ? "Continue acquires and reads the same app fresh, including its new window. "
             : "Continue reads this tab or its owned opener again. "
         return AskCard(question: "Finish signing in or entering your code in " + target,
-            detail: "Use the app or your password manager yourself. sleight is paused. Only click Continue after the secret fields are gone. " + continuation + "Payments and submits still need their usual checks. Cancel leaves your work open. This request expires in at most four minutes.",
+            detail: "Use the app or your password manager yourself. sleight is paused. Confirm Continue only after the secret fields are gone. To use the keyboard, focus the confirmation field first. " + continuation + "Payments and submits still need their usual checks. Cancel leaves your work open. This request expires in at most four minutes.",
             host: "sleight", icon: consentIconPath(), kind: "handoff", choices: ["cancel", "continue"], diagnostics: "Session: " + handoff.session)
     }
     guard let card = appFrame(data, choices) else { return nil }
@@ -739,9 +824,26 @@ func automaticCard(_ data: [String: Any], _ choices: [String]) -> AskCard? {
         choices: ["cancel"] + choices.filter { $0 != "cancel" }, diagnostics: words.identity)
 }
 
-final class HandoffPanel: NSPanel {
-    override var canBecomeKey: Bool { false }
+final class HandoffPanel: NSPanel, ConsentWordFocusing {
+    private var wordFocusAllowed = false
+    override var canBecomeKey: Bool { wordFocusAllowed }
     override var canBecomeMain: Bool { false }
+    func focusWordField(_ field: ConsentWordField) -> Bool {
+        guard field.window === self, field.isEnabled else { return false }
+        wordFocusAllowed = true
+        guard makeFirstResponder(field) else { wordFocusAllowed = false; return false }
+        // A nonactivating panel takes keys only after the person focuses this
+        // field. Showing or reviewing the card never calls this method.
+        makeKey()
+        wordFocusAllowed = isKeyWindow
+        guard wordFocusAllowed else { _ = makeFirstResponder(nil); return false }
+        return firstResponder === field
+    }
+    override func resignKey() {
+        wordFocusAllowed = false
+        _ = makeFirstResponder(nil)
+        super.resignKey()
+    }
 }
 final class AskCardPanel: NSObject {
     let panel: NSPanel
@@ -782,6 +884,7 @@ final class AskCardPanel: NSObject {
             styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
             : NSPanel(contentRect: .zero, styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
         super.init()
+        if passive { panel.becomesKeyOnlyIfNeeded = true }
         panel.title = "sleight"; panel.titlebarAppearsTransparent = true; panel.titleVisibility = .hidden
         panel.isMovableByWindowBackground = true; panel.isOpaque = false; panel.backgroundColor = .clear
         // Keep the card visible while the accessory host is inactive.
