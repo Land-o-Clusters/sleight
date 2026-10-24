@@ -11,7 +11,7 @@ export function readExportCollection(el, limits, read) {
   const collection = node => /^(table|ul|ol)$/.test(tag(node)) || /^(table|grid|treegrid|list|listbox|log|feed)$/.test(role(node));
   const table = tag(el) === 'table' || /^(table|grid|treegrid)$/.test(role(el));
   if (!read(el, 'isConnected') || !collection(el)) throw Error('Export ref must name a table, grid or list');
-  const reasons = new Set(), rows = [], indices = [], totals = [], hidden = new WeakMap();
+  const reasons = new Set(), signals = new Set(), rows = [], indices = [], totals = [], textTotals = [], hidden = new WeakMap();
   let nodes = 0, characters = 0, redacted = false, capped = false;
   const sensitive = /password|passcode|secret|one.?time|\botp\b|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|security.?code/i;
   const children = node => Array.from(read(node, 'children') ?? []);
@@ -54,7 +54,9 @@ export function readExportCollection(el, limits, read) {
       const boxes = Array.from(read(node, 'getClientRects')?.() ?? []);
       const noBox = /^(br|wbr|col|colgroup)$/.test(tag(node)) || style.display === 'contents' ||
         style.display === 'inline' && !children(node).length && !(read(node, 'textContent') ?? '').trim();
-      const geometry = noBox || boxes.some(box => box.width > 0 && box.height > 0 && box.right + scrollX > 0 && box.bottom + scrollY > 0);
+      const positioned = /^(absolute|fixed)$/.test(style.position);
+      const geometry = noBox || boxes.some(box => box.width > 0 && box.height > 0 && box.right + scrollX > 0 && box.bottom + scrollY > 0 &&
+        (!positioned || box.left < innerWidth && box.top < innerHeight && box.right > 0 && box.bottom > 0));
       if (!geometry || Number(style.opacity) === 0 || parseFloat(style.fontSize) === 0 || boxes.length > 0 && boxes.every(box => zeroClip(style, box))) {
         yes = false; reasons.add('visually hidden text omitted');
       }
@@ -63,19 +65,42 @@ export function readExportCollection(el, limits, read) {
   };
   if (!visible(el)) throw Error('Export collection is hidden');
   const integer = value => /^\d+$/.test(value ?? '') && Number(value) <= 1000000000 ? Number(value) : undefined;
+  const bound = node => !attribute(node, 'aria-controls') || attribute(node, 'aria-controls').trim() === attribute(el, 'id');
+  // Count labels must be whole labels, outside data rows, and read only from visible text.
+  const labelText = node => {
+    let value = '', budget = 256, truncated = false;
+    const scan = (current, depth = 0) => {
+      if (--budget < 0 || depth > 16 || value.length > 160) { truncated = true; return; }
+      if (read(current, 'nodeType') === 3) { value += read(current, 'nodeValue') ?? ''; return; }
+      if (read(current, 'nodeType') !== 1 || current !== node && collection(current) || !bound(current) || !visible(current) ||
+          /^(script|style|input|textarea|select)$/.test(tag(current))) return;
+      for (const child of Array.from(read(current, 'childNodes') ?? [])) scan(child, depth + 1);
+    };
+    scan(node);
+    return truncated || value.length > 160 ? '' : value.trim().replace(/\s+/g, ' ');
+  };
+  const declaredRows = node => {
+    const label = labelText(node);
+    const match = /^showing\s+\d[\d,]*\s+(?:to|[-–])\s+\d[\d,]*\s+of\s+(\d[\d,]*)(?:\s+(?:entries|results|rows|items))?\.?$/i.exec(label) ??
+      /^(\d[\d,]*)\s+(?:results?|rows?|entries|items)(?:\s+(?:total|found))?\.?$/i.exec(label) ??
+      /^total\s*:?\s*(\d[\d,]*)\s+(?:results?|rows?|entries|items)\.?$/i.exec(label) ??
+      /^total\s+(?:results?|rows?|entries|items)\s*:?\s*(\d[\d,]*)\.?$/i.exec(label);
+    return match ? integer(match[1].replaceAll(',', '')) : undefined;
+  };
   const inspect = node => {
     if (attribute(node, 'aria-busy') === 'true' || role(node) === 'progressbar') reasons.add('collection contains a loading indicator');
-    if (role(node) === 'navigation' || tag(node) === 'nav' || /\bnext\b/i.test(attribute(node, 'rel') ?? '')) reasons.add('nearby pagination control');
+    if (/\bnext\b/i.test(attribute(node, 'rel') ?? '')) signals.add('nearby pagination control');
     const countText = children(node).length <= 16 && /^(span|p|div|nav|a|button|ul|ol)$/.test(tag(node)) ? (read(node, 'textContent') ?? '').slice(0, 160) : '';
-    if (/\bpage\s+\d+\s+(?:of|\/)\s*\d+\b/i.test((attribute(node, 'aria-label') ?? '') + ' ' + countText)) reasons.add('nearby pagination page count');
+    if (/\bpage\s+\d+\s+(?:of|\/)\s*\d+\b/i.test((attribute(node, 'aria-label') ?? '') + ' ' + countText)) signals.add('nearby pagination page count (pages, not a row total)');
     // textContent joins adjacent list items without spaces. Read each item's label for a numeric page run.
     const pageLabels = node !== el && /^(ul|ol|div|nav|p|span)$/.test(tag(node)) ? children(node).slice(0, 16).map(child => (read(child, 'textContent') ?? '').slice(0, 160).trim()) : [];
-    if (node !== el && (/^\s*\d+(?:\s+\d+){2,}(?:\s*[….]+)?\s*$/.test(countText) ||
-        pageLabels.length >= 3 && pageLabels.every(label => /^\d+$|^[….]+$/.test(label)) && pageLabels.filter(label => /^\d+$/.test(label)).length >= 3))
-      reasons.add('nearby pagination page numbers');
+    if (node !== el && (/^\s*\d+(?:\s+\d+){1,}(?:\s*[….]+)?\s*$/.test(countText) ||
+        pageLabels.length >= 2 && pageLabels.every(label => /^\d+$|^[….]+$/.test(label)) && pageLabels.filter(label => /^\d+$/.test(label)).length >= 2))
+      signals.add('nearby pagination page numbers');
     if (/^(button|a)$/.test(tag(node)) || role(node) === 'button') {
       const label = (attribute(node, 'aria-label') ?? read(node, 'textContent') ?? '').slice(0, 120).trim();
-      if (/^(?:(?:go\s+to\s+)?(?:the\s+)?(?:next|previous|older|newer|more)\b|(?:load|show|view|see|read)\s+(?:\d+\s+)?(?:more|older|newer)\b)/i.test(label)) reasons.add('unopened pagination or expansion control');
+      if (/^(?:(?:go\s+to\s+)?(?:the\s+)?(?:next|previous|older|newer)(?:\s+(?:page|posts?|items?|results?))?|more(?:\s+(?:posts?|items?|results?))?|(?:load|show|view|see|read)\s+(?:\d+\s+)?(?:more|older|newer)(?:\s+(?:posts?|items?|results?))?)\s*[»«›‹→←><]*$/i.test(label) ||
+          /^[»«›‹→←><]+$/.test(label)) signals.add('unopened pagination or expansion control');
     }
   };
   const total = integer(attribute(el, table ? 'aria-rowcount' : 'aria-setsize'));
@@ -110,7 +135,7 @@ export function readExportCollection(el, limits, read) {
       if (mask && mask !== 'none') {
         parts.push('[redacted]'); redacted = true; reasons.add('masked content redacted'); return;
       }
-      const control = /^(input|textarea|select)$/.test(tag(current)) || role(current) === 'textbox' || read(current, 'isContentEditable');
+      const control = /^(input|textarea|select)$/.test(tag(current)) || /^(textbox|combobox|searchbox|spinbutton)$/.test(role(current)) || read(current, 'isContentEditable');
       if (/^(input|textarea|select)$/.test(tag(current)) || read(current, 'isContentEditable') ||
         control && (/(?:^|\s)cc-/i.test(attribute(current, 'autocomplete') ?? '') || sensitive.test([
           attribute(current, 'type'), attribute(current, 'name'), attribute(current, 'id'), attribute(current, 'autocomplete'), attribute(current, 'aria-label')].join(' ')))) {
@@ -131,6 +156,10 @@ export function readExportCollection(el, limits, read) {
   const nonItem = node => /^(button|a|input|select|textarea|script|style|template|progress)$/.test(tag(node)) || /^(button|progressbar|status|alert)$/.test(role(node));
   visit(el, node => {
     if (node === el) return;
+    if (tag(node) === 'tfoot') {
+      const count = declaredRows(node);
+      if (count !== undefined) { textTotals.push(count); return false; }
+    }
     const row = table ? tag(node) === 'tr' || role(node) === 'row' : tag(node) === 'li' || /^(listitem|option|article)$/.test(role(node));
     if (!row || nonItem(node)) return;
     if (records.length > limits.rows) { reasons.add('row budget reached'); return false; }
@@ -165,50 +194,64 @@ export function readExportCollection(el, limits, read) {
     if (attribute(record, 'aria-setsize') === '-1' || attribute(record, 'aria-busy') === 'true') reasons.add('row total unknown or row busy');
     if (capped) break;
   }
-  const expected = totals.length ? Math.max(...totals) : undefined, rendered = rows.length + headers;
-  if (new Set(totals).size > 1) reasons.add('page declares conflicting totals');
-  if (expected !== undefined && expected > rendered) reasons.add(`${expected - rendered} rows not rendered (virtualized or paginated collection)`);
-  if (expected !== undefined && expected < rendered) reasons.add('rendered count exceeds the declared total');
   if (indices.some((value, i) => value < 1 || i > 0 && value !== indices[i - 1] + 1) || indices.length && indices[0] > 1 + headers) reasons.add('row index gaps or missing beginning');
   if (indices.length && indices.length !== rows.length) reasons.add('some row indices are missing');
-  if (indices.length && expected === undefined) reasons.add('indexed collection has no declared total');
   if (rows.some(row => row.length !== (columns.length || rows[0]?.length))) reasons.add('ragged rows have different cell counts');
-  // Scroll, pagination and content behind controls need a separate whole read; a DOM read cannot prove them complete.
+  // Nearby controls are observations. Only a declaration can establish a total.
   {
     const seen = new WeakSet();
-    const nearby = (node, depth = 0) => {
+    const nearby = (node, depth = 0, allowTotal = true) => {
       if (!node || seen.has(node)) return;
       seen.add(node);
       if (++nodes > 50000 || depth > 96) { reasons.add('DOM budget reached'); return; }
+      if (/sentinel/i.test((attribute(node, 'class') ?? '') + ' ' + (attribute(node, 'id') ?? '')))
+        signals.add('possible infinite scroll sentinel');
+      if (tag(node) === 'header' || role(node) === 'banner') return;
       if (node === el || !visible(node)) return;
       inspect(node);
-      for (const child of branches(node)) nearby(child, depth + 1);
+      // Never borrow another collection's declared total or its data labels.
+      if (collection(node)) {
+        if (!/^(ul|ol)$/.test(tag(node)) && role(node) !== 'list') return;
+        allowTotal = false;
+      } else if (allowTotal && bound(node) && /^(span|p|div|footer|caption|output)$/.test(tag(node))) {
+        const count = declaredRows(node);
+        if (count !== undefined) textTotals.push(count);
+      }
+      for (const child of branches(node)) nearby(child, depth + 1, allowTotal);
     };
     for (let node = el, depth = 0; node && depth < 96; node = parent(node), depth++) {
       const body = tag(node) === 'body';
       if (tag(node) === 'html') break;
       if (body) {
-        for (const child of branches(node)) nearby(child);
         const document = read(node, 'ownerDocument'), scroller = read(document, 'scrollingElement');
         const box = read(el, 'getBoundingClientRect')?.(), style = getComputedStyle(node), ownStyle = getComputedStyle(el);
         const tail = key => Math.max(0, parseFloat(style[key]) || 0) + Math.max(0, parseFloat(ownStyle[key]) || 0);
-        if (expected === undefined && box && ((read(scroller, 'scrollHeight') ?? 0) > Math.max(innerHeight, box.bottom + scrollY + tail('marginBottom') + (parseFloat(style.paddingBottom) || 0)) + 1 ||
+        if (box && ((read(scroller, 'scrollHeight') ?? 0) > Math.max(innerHeight, box.bottom + scrollY + tail('marginBottom') + (parseFloat(style.paddingBottom) || 0)) + 1 ||
             (read(scroller, 'scrollWidth') ?? 0) > Math.max(innerWidth, box.right + scrollX + tail('marginRight') + (parseFloat(style.paddingRight) || 0)) + 1))
-          reasons.add('possible infinite scroll beyond collection');
-        break;
+          signals.add('possible infinite scroll beyond collection');
       }
-      if (expected === undefined && ((read(node, 'scrollHeight') ?? 0) > (read(node, 'clientHeight') ?? 0) + 1 ||
-          (read(node, 'scrollWidth') ?? 0) > (read(node, 'clientWidth') ?? 0) + 1)) reasons.add('scrolling collection has no declared total');
-      const style = getComputedStyle(node);
-      const overflow = /^(auto|scroll|hidden|clip)$/.test(style.overflowX) || /^(auto|scroll|hidden|clip)$/.test(style.overflowY);
-      // Siblings at each wrapper, including the scroller's children, can hold pagination outside the collection.
-      if (node === el) for (const sibling of branches(parent(node))) nearby(sibling);
-      else for (const child of branches(node)) nearby(child);
-      if (overflow) break;
+      if ((read(node, 'scrollHeight') ?? 0) > (read(node, 'clientHeight') ?? 0) + 1 ||
+          (read(node, 'scrollWidth') ?? 0) > (read(node, 'clientWidth') ?? 0) + 1) signals.add('scrolling collection');
+      // Cross overflow wrappers. Inspect adjacent siblings at each level, never the whole document.
+      const siblings = branches(parent(node)).filter(child => !/^(script|style|template)$/.test(tag(child))), index = siblings.indexOf(node);
+      nearby(siblings[index - 1]); nearby(siblings[index + 1]);
+      if (body) break;
     }
   }
+  // ARIA row counts include the header. Text counts describe data rows.
+  const declarations = [...totals.map(count => Math.max(0, count - headers)), ...textTotals];
+  const expected = declarations.length ? Math.max(...declarations) : undefined;
+  if (new Set(declarations).size > 1) reasons.add('page declares conflicting totals');
+  if (expected === undefined) reasons.add('collection has no declared total');
+  if (expected !== undefined && expected > rows.length) reasons.add(`${expected - rows.length} rows not rendered (virtualized or paginated collection)`);
+  if (expected !== undefined && expected < rows.length) reasons.add('rendered count exceeds the declared total');
+  if (indices.length && expected === undefined) reasons.add('indexed collection has no declared total');
+  // Inspect zero-height feed sentinels even though their text is not readable.
+  for (const node of branches(el)) if (/sentinel/i.test((attribute(node, 'class') ?? '') + ' ' + (attribute(node, 'id') ?? '')))
+    signals.add('possible infinite scroll sentinel');
   if (!rows.length) reasons.add('no readable data rows');
-  return { kind: table ? 'table' : 'list', columns, rows, complete: reasons.size === 0, reasons: [...reasons], redacted };
+  return { kind: table ? 'table' : 'list', columns, rows, declaredTotal: expected,
+    complete: expected === rows.length && reasons.size === 0, reasons: [...reasons, ...signals], redacted };
 }
 
 export async function readDataExport(page, ref, { endpoint, check = () => {} } = {}) {

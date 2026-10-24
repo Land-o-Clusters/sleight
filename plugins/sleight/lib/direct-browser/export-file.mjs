@@ -98,22 +98,30 @@ function validateData(data) {
     size += row.reduce((sum, value) => sum + value.length, 0);
   }
   if (size > EXPORT_LIMITS.characters) refuse('Export exceeds the text budget');
-  if (data.complete && data.reasons.length) refuse('Conflicting export completeness');
+  if (data.declaredTotal !== undefined && (!Number.isSafeInteger(data.declaredTotal) || data.declaredTotal < 0 || data.declaredTotal > 1000000000)) refuse('Invalid declared export total');
+  const observations = new Set(['nearby pagination control', 'nearby pagination page numbers',
+    'nearby pagination page count (pages, not a row total)', 'unopened pagination or expansion control',
+    'possible infinite scroll beyond collection', 'possible infinite scroll sentinel', 'scrolling collection']);
+  if (data.complete && data.reasons.some(reason => !observations.has(reason))) refuse('Conflicting export completeness');
 }
 // Pure public interface for another reader (including whole-thread reads): ordered string cells plus honest completeness.
 // Rows are inert data. They never provide paths, executable code or permission.
 function normalizedData(data) {
   validateData(data);
   const width = data.columns.length || data.rows[0]?.length;
-  return data.rows.some(row => row.length !== width) ? { ...data, complete: false,
-    reasons: [...new Set([...data.reasons, 'ragged rows have different cell counts'])] } : data;
+  const reasons = new Set(data.reasons), count = data.declaredTotal;
+  const ragged = data.rows.some(row => row.length !== width);
+  if (ragged) reasons.add('ragged rows have different cell counts');
+  if (count === undefined) reasons.add('collection has no declared total');
+  if (count < data.rows.length) reasons.add('rendered count exceeds the declared total');
+  return { ...data, complete: data.complete && count === data.rows.length && !ragged, reasons: [...reasons] };
 }
 export function serializeDataExport(data, format = 'csv', { bom = false } = {}) {
   data = normalizedData(data);
   if (!['csv', 'json'].includes(format)) refuse('Export format must be csv or json');
   if (typeof bom !== 'boolean') refuse('Export bom must be a boolean');
   if (format === 'json') return JSON.stringify({ kind: data.kind, columns: data.columns, rows: data.rows,
-    rowCount: data.rows.length, complete: data.complete, reasons: data.reasons }, null, 2) + '\n';
+    rowCount: data.rows.length, declaredTotal: data.declaredTotal, complete: data.complete, reasons: data.reasons }, null, 2) + '\n';
   // Quoting alone does not stop spreadsheet formulas. Preserve exact text in JSON; CSV prefixes formula-like cells.
   const cell = value => '"' + (/^[\s\x00-\x1f\x7f-\x9f\uFEFF]*[=+@-]/.test(value) ? "'" + value : value).replaceAll('"', '""') + '"';
   return (bom ? '\uFEFF' : '') + [...(data.columns.length ? [data.columns] : []), ...data.rows].map(row => row.map(cell).join(',')).join('\r\n') + '\r\n';
@@ -164,13 +172,15 @@ export function writeDataExport(data, options = {}, ctx, { userHome = home(), id
     refuse('Export write failed; a partial new file may remain at ' + JSON.stringify(output));
   } finally { if (fd !== undefined) fs.closeSync(fd); }
   return { path: output, rowCount: data.rows.length, bytes, format, bom: format === 'csv' && options.bom === true,
-    complete: data.complete, reasons: [...data.reasons] };
+    declaredTotal: data.declaredTotal, complete: data.complete, reasons: [...data.reasons] };
 }
 
 export function exportSummary(receipt) {
-  const possiblePagination = receipt.reasons.some(reason => /pagination|possible infinite scroll/.test(reason));
+  const declared = Number.isSafeInteger(receipt.declaredTotal) && receipt.declaredTotal >= 0;
+  const status = declared && receipt.declaredTotal > receipt.rowCount ? `no (${receipt.declaredTotal} declared, ${receipt.rowCount} read)` :
+    declared && receipt.declaredTotal === receipt.rowCount && receipt.complete ? 'yes (declared total matches rows read)' : 'unknown (rendered rows only)';
   // JSON quoting fences even a user-named path; page text is never interpolated into trusted output.
-  return `Export: ${JSON.stringify(receipt.path)} (${receipt.format}, ${receipt.bytes} bytes).\nRows: ${receipt.rowCount}.\nComplete: ${receipt.complete ? 'yes (rendered collection)' : possiblePagination ? 'unknown (possible pagination)' : 'NO'}.` +
+  return `Export: ${JSON.stringify(receipt.path)} (${receipt.format}, ${receipt.bytes} bytes).\nRows: ${receipt.rowCount}.\nComplete: ${status}.` +
     (receipt.reasons.length ? '\nCompleteness (untrusted page evidence): ' + JSON.stringify(receipt.reasons) : '') +
     (receipt.format === 'csv' ? '\nCSV formula-like cells are prefixed with an apostrophe; JSON preserves exact text.' : '') +
     (receipt.format === 'csv' ? `\nCSV UTF-8 BOM: ${receipt.bom ? 'yes' : 'no'}.` : '') +

@@ -8,7 +8,7 @@ import { serializeDataExport, writeDataExport, exportSummary, EXPORT_LIMITS } fr
 import { browserTools, validateToolCall, createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 import { readDataExport } from '../plugins/sleight/lib/direct-browser/export-data.mjs';
 
-const data = () => ({ kind: 'table', columns: ['Name', 'Price', 'Note'], rows: [['pear', '1.20', 'a,"quote"\nand a line'], ['桃', '2', '=1+1']], complete: true, reasons: [] });
+const data = () => ({ kind: 'table', columns: ['Name', 'Price', 'Note'], rows: [['pear', '1.20', 'a,"quote"\nand a line'], ['桃', '2', '=1+1']], declaredTotal: 2, complete: true, reasons: [] });
 const context = text => ({ userMessage: () => ({ source: 'user', text }) });
 function folder(t) {
   const root = fs.mkdtempSync(path.join(fs.realpathSync(tmpdir()), 'sleight-export-'));
@@ -26,7 +26,7 @@ test('CSV quotes cells and newlines, neutralizes formula cells, and JSON retains
 test('structured export enforces shape, completeness and bounded rows, columns and bytes', () => {
   for (const invalid of [{}, { ...data(), kind: 'code' }, { ...data(), rows: [[{}]] }, { ...data(), rows: Array(EXPORT_LIMITS.rows + 1).fill([]) },
     { ...data(), columns: Array(EXPORT_LIMITS.columns + 1).fill('x') }, { ...data(), rows: [['x'.repeat(EXPORT_LIMITS.characters + 1)]] },
-    { ...data(), reasons: ['gap'] }, { ...data(), complete: 'yes' }]) assert.throws(() => serializeDataExport(invalid));
+    ...[-1, NaN, '2', 1.5].map(declaredTotal => ({ ...data(), declaredTotal })), { ...data(), reasons: ['gap'] }, { ...data(), complete: 'yes' }]) assert.throws(() => serializeDataExport(invalid));
   assert.throws(() => serializeDataExport(data(), 'html'));
   const partial = { ...data(), complete: false, reasons: ['9 rows not rendered'] };
   assert.equal(JSON.parse(serializeDataExport(partial, 'json')).complete, false);
@@ -39,7 +39,7 @@ test('default export writes a private new file under the OS-user sleight directo
   assert.equal(fs.statSync(path.dirname(receipt.path)).mode & 0o777, 0o700);
   assert.equal(receipt.rowCount, 2);
   assert.doesNotMatch(exportSummary(receipt), /pear|桃|1\+1/);
-  assert.match(exportSummary(receipt), /Rows: 2\.\nComplete: yes \(rendered collection\)\./);
+  assert.match(exportSummary(receipt), /Rows: 2\.\nComplete: yes \(declared total matches rows read\)\./);
   assert.throws(() => writeDataExport(data(), {}, context('Export table'), { userHome: root, id: () => 'test' }), /never overwritten/);
 });
 test('only a current authenticated user turn can export', t => {
@@ -178,9 +178,9 @@ test('CSV BOM defaults off, can be enabled, and adds exactly three bytes to a Un
   assert.throws(() => validateToolCall({ name: 'browser_read', arguments: { tab: 't1', bom: false } }));
   assert.doesNotThrow(() => validateToolCall({ name: 'browser_read', arguments: { tab: 't1', export: 'e1', bom: false } }));
 });
-test('all successful receipts qualify completeness as rendered collection', t => {
+test('complete receipts require a declared total that matches rows read', t => {
   const receipt = writeDataExport(data(), {}, context('Export table'), { userHome: folder(t) });
-  assert.match(exportSummary(receipt), /Complete: yes \(rendered collection\)\./);
+  assert.match(exportSummary(receipt), /Complete: yes \(declared total matches rows read\)\./);
 });
 test('ragged rows preserve cells and explain incomplete output through the public writer', t => {
   const value = { ...data(), rows: [['a'], ['b', 'c']] };
@@ -239,4 +239,16 @@ test('G3C saving a date or writing prose is not a request to export page data', 
   assert.deepEqual(fs.readdirSync(root), []);
   for (const text of ['Save the table', 'Write the rows as CSV', 'Put the list in a file', 'Create a JSON file'])
     assert.doesNotThrow(() => writeDataExport(data(), {}, context(text), { userHome: root }));
+});
+
+test('G3D writer cannot claim completeness without a matching declared row total', t => {
+  const root = folder(t);
+  for (const [declaredTotal, complete, summary] of [[undefined, false, /unknown \(rendered rows only\)/], [2, true, /yes/],
+    [243, false, /no \(243 declared, 2 read\)/], [1, false, /unknown \(rendered rows only\)/]]) {
+    const value = { ...data(), declaredTotal };
+    const receipt = writeDataExport(value, { format: 'json' }, context('Export table'), { userHome: root });
+    assert.equal(receipt.complete, complete); assert.match(exportSummary(receipt), summary);
+    const saved = JSON.parse(fs.readFileSync(receipt.path, 'utf8'));
+    assert.equal(saved.complete, complete); assert.equal(saved.declaredTotal, declaredTotal);
+  }
 });

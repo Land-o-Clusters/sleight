@@ -56,7 +56,7 @@ function parseCSV(text) {
   assert.equal(quote, false); return rows;
 }
 test('200 rows beyond the snapshot cap export exactly as CSV and JSON, with only a receipt returned', options, async t => {
-  const source = exportTableFixture(17), f = await fixture(t, source.html), ref = await refFor(f.page, 'table', 'Prices');
+  const source = exportTableFixture(17), f = await fixture(t, source.html.replace('<table ', '<table aria-rowcount="201" ')), ref = await refFor(f.page, 'table', 'Prices');
   const capped = await snapshot(f.page, { maxChars: 40000 }); acknowledgeSnapshot(f.page, capped.number);
   assert.match(capped.text, /Cut:/); assert.doesNotMatch(capped.text, /item-17-200/);
   const data = await readDataExport(f.page, ref);
@@ -74,7 +74,8 @@ test('HTML and ARIA lists preserve duplicates and page order, excluding hidden t
   const f = await fixture(t, '<ul aria-label="Items"><li>ok</li><li>ok</li><li>last<br>line<span hidden>hidden</span></li></ul>' +
     '<div role="list" aria-label="ARIA"><div role="listitem">first</div><div role="listitem">second<ul><li>nested</li></ul></div></div>');
   const list = await readDataExport(f.page, await refFor(f.page, 'list', 'Items'));
-  assert.deepEqual(list.rows, [['ok'], ['ok'], ['last\nline']]); assert.equal(list.complete, true);
+  assert.deepEqual(list.rows, [['ok'], ['ok'], ['last\nline']]); assert.equal(list.complete, false);
+  assert.match(list.reasons.join(), /no declared total/);
   const aria = await readDataExport(f.page, await refFor(f.page, 'list', 'ARIA'));
   assert.deepEqual(aria.rows, [['first'], ['second']]); assert.equal(aria.complete, false); assert.match(aria.reasons.join(), /nested/);
 });
@@ -139,7 +140,7 @@ test('bounded extraction labels text, column and row caps instead of claiming a 
 test('an observed iframe table exports in its own utility world, with no main-frame DOM fallback', options, async t => {
   const f = await fixture(t, '<iframe srcdoc="&lt;table aria-label=Child&gt;&lt;tr&gt;&lt;td&gt;child cell&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"></iframe>');
   const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Child'));
-  assert.deepEqual(data.rows, [['child cell']]); assert.equal(data.complete, true);
+  assert.deepEqual(data.rows, [['child cell']]); assert.equal(data.complete, false);
 });
 test('MAIN-world getters and page functions cannot run during a structured export', options, async t => {
   const f = await fixture(t, '<table aria-label="Hostile"><tr><td>honest text</td></tr></table><script>window.effects=[];' +
@@ -160,13 +161,13 @@ test('delivered refs are required, navigation retires refs, and export never ref
   assert.deepEqual(fs.readdirSync(f.root), []);
 });
 test('dispatcher end-to-end exports a user-named file and refuses pending dialogs without input', options, async t => {
-  const f = await fixture(t, exportTableFixture(9).html), ref = await refFor(f.page, 'table', 'Prices'), output = join(f.root, 'prices.json');
+  const f = await fixture(t, exportTableFixture(9).html.replace('<table ', '<table aria-rowcount="201" ')), ref = await refFor(f.page, 'table', 'Prices'), output = join(f.root, 'prices.json');
   const entry = { page: f.page, state: {} }, dispatcher = createToolDispatcher({
     pages: { enqueue: async (_tab, run) => run(entry) }, snapshot, runSteps: () => assert.fail('input'), fillFields: () => assert.fail('input'),
     ctx: ctx(`Export the Prices table to "${output}"`) });
   const request = { name: 'browser_read', arguments: { tab: 't1', export: ref, format: 'json', path: output } };
   const result = await dispatcher.call(request);
-  assert.equal(result.isError, false, result.text); assert.match(result.text, /Rows: 200\.\nComplete: yes \(rendered collection\)\./);
+  assert.equal(result.isError, false, result.text); assert.match(result.text, /Rows: 200\.\nComplete: yes \(declared total matches rows read\)\./);
   assert.deepEqual(gradeTableExport(fs.readFileSync(output, 'utf8'), exportTableFixture(9), result.text), { pass: true, code: 'EXPORT_EXACT' });
   entry.state.dialog = {};
   await assert.rejects(exportPageData(entry, { export: ref }, ctx('Export table')), /dialog pending/);
@@ -192,14 +193,14 @@ test('pagination beside a collection and within its nearest scroller blocks comp
   assert.deepEqual(await f.page.evaluate(() => window.effects), []);
   assert.deepEqual(f.requests, [['GET', '/']]);
 });
-test('scroll extent follows wrappers to the first overflow ancestor and does not use an unrelated outer scroller', options, async t => {
+test('scroll extent gives reasons while collections without totals remain unknown', options, async t => {
   const f = await fixture(t, '<div style="height:30px;overflow:auto"><div><ul aria-label="Wrapped">' +
     Array.from({ length: 12 }, () => '<li>row</li>').join('') + '</ul></div></div>' +
     '<div style="height:20px;overflow:auto"><div style="height:100px"><div style="overflow:auto"><ul aria-label="Contained"><li>one</li></ul></div></div></div>');
   const wrapped = await readDataExport(f.page, await refFor(f.page, 'list', 'Wrapped'));
-  assert.equal(wrapped.complete, false); assert.match(wrapped.reasons.join(), /scrolling.*no declared total/);
+  assert.equal(wrapped.complete, false); assert.match(wrapped.reasons.join(), /scrolling/); assert.match(wrapped.reasons.join(), /no declared total/);
   const contained = await readDataExport(f.page, await refFor(f.page, 'list', 'Contained'));
-  assert.equal(contained.complete, true, JSON.stringify(contained.reasons));
+  assert.equal(contained.complete, false); assert.match(contained.reasons.join(), /no declared total/);
 });
 test('zero geometry, off-canvas, opacity, clipping and zero font text are omitted with a reason', options, async t => {
   const styles = ['display:inline-block;width:0;height:0;overflow:hidden', 'position:absolute;left:-10000px',
@@ -242,7 +243,7 @@ test('ordinary rows above the current viewport stay in the export without moving
   assert.ok(before > 500);
   const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Scrolled'));
   assert.deepEqual(data.rows, Array.from({ length: 100 }, (_, i) => [`row ${i}`]));
-  assert.equal(data.complete, true, JSON.stringify(data.reasons));
+  assert.equal(data.complete, false); assert.match(data.reasons.join(), /no declared total/);
   assert.equal(await f.page.evaluate(() => scrollY), before);
 });
 test('the dispatcher shares one export budget between tabs for the current turn', options, async t => {
@@ -278,7 +279,8 @@ for (const [name, pager] of [
   const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
   assert.deepEqual(data.rows, [['only row']]); assert.equal(data.complete, false, JSON.stringify(data.reasons));
   const receipt = writeDataExport(data, { format: 'json' }, ctx('Export table'), { userHome: f.root });
-  assert.match(exportSummary(receipt), /Complete: unknown \(possible pagination\)/);
+  assert.match(exportSummary(receipt), /Complete: unknown \(rendered rows only\)/);
+  assert.match(data.reasons.join(), /pagination/);
   assert.deepEqual(await f.page.evaluate(() => window.effects), []); assert.deepEqual(f.requests, [['GET', '/']]);
 });
 test('G3C body-level pager is inspected beyond the collection wrapper', options, async t => {
@@ -295,8 +297,6 @@ test('G3C window scroll beyond the collection is possible infinite scroll', opti
   assert.equal(await f.page.evaluate(() => scrollY), before);
 });
 for (const [name, html, want] of [
-  ['absolute row below fold', '<ul aria-label="Data" style="min-height:20px"><li style="position:absolute;top:2000px">below</li></ul>', [['below']]],
-  ['absolute ancestor below fold', '<section style="position:absolute;top:2000px"><ul aria-label="Data"><li>below</li></ul></section>', [['below']]],
   ['colgroup and col', '<table aria-label="Data"><colgroup><col></colgroup><tr><td>cell</td></tr></table>', [['cell']]],
   ['wbr and empty inline', '<ul aria-label="Data"><li>first<wbr><span></span><span> </span>last</li></ul>', [['first last']]],
   ['partial clip-path', '<ul aria-label="Data"><li><span style="display:inline-block;clip-path:circle(40%)">avatar label</span></li></ul>', [['avatar label']]],
@@ -337,12 +337,102 @@ test('G3C default CSV page export has no BOM and explicit BOM adds only the UTF-
 test('G3C numeric collection rows are data, not evidence of pagination', options, async t => {
   const f = await fixture(t, '<ul aria-label="Numbers"><li>1</li><li>2</li><li>3</li></ul>');
   const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Numbers'));
-  assert.deepEqual(data.rows, [['1'], ['2'], ['3']]); assert.equal(data.complete, true, JSON.stringify(data.reasons));
+  assert.deepEqual(data.rows, [['1'], ['2'], ['3']]); assert.equal(data.complete, false);
+  assert.doesNotMatch(data.reasons.join(), /pagination/);
 });
 
-test('G3C pagination still casts doubt when the rendered page declares its own row count', options, async t => {
+test('G3D matching declared total governs completeness while pagination remains a reason', options, async t => {
   const f = await fixture(t, '<main><table aria-label="Data" aria-rowcount="1"><tr><td>only row</td></tr></table><ul><li><button>Next →</button></li></ul></main>');
   const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
-  assert.deepEqual(data.rows, [['only row']]); assert.equal(data.complete, false);
+  assert.deepEqual(data.rows, [['only row']]); assert.equal(data.complete, true);
   assert.match(data.reasons.join(), /pagination/);
+});
+
+// G3D: declared totals govern completeness; discovery signals only explain what was observed.
+for (const [name, html, count, complete, reason] of [
+  ['plain collection', oneRow, undefined, false, /no declared total/],
+  ['overflow wrapper and pager', `<section><div style="overflow:auto">${oneRow}</div><button>Next</button></section>`, undefined, false, /pagination/],
+  ['Bootstrap table-responsive', `<style>.table-responsive{overflow-x:auto}</style><section><div class="table-responsive">${oneRow}</div><ul><li><a href="#2">Next »</a></li></ul></section>`, undefined, false, /pagination/],
+  ['two-page pager', `<section>${oneRow}<ul><li><a href="#1">1</a></li><li><a href="#2">2</a></li></ul></section>`, undefined, false, /pagination page numbers/],
+  ['glyph pager', `<section>${oneRow}<div><button>‹</button><button>›</button></div></section>`, undefined, false, /pagination/],
+  ['range declaration', `<section>${oneRow}<div>Showing 1 to 10 of 243 entries</div></section>`, 243, false, /242 rows not rendered/],
+  ['matching results declaration', `<section>${oneRow}<p>1 results</p></section>`, 1, true, null],
+  ['matching ARIA total', oneRow.replace('<table ', '<table aria-rowcount="1" '), 1, true, null],
+  ['table footer count', oneRow.replace('</table>', '<tfoot><tr><td>Total: 1 rows</td></tr></tfoot></table>'), 1, true, null],
+  ['page count is not a row count', `<section>${oneRow}<p>Page 1 of 2</p></section>`, undefined, false, /pagination page count/],
+  ['unrelated header navigation', `<header><nav><a href="#next">Next.js docs</a></nav><span>1 results</span></header><main><section>${oneRow}</section></main>`, undefined, false, /no declared total/],
+  ['More actions is not a pager', `<section>${oneRow}<button>More actions</button></section>`, undefined, false, /no declared total/],
+]) test('G3D completeness: ' + name, options, async t => {
+  const f = await fixture(t, html), data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
+  assert.deepEqual(data.rows, [['only row']]);
+  assert.equal(data.declaredTotal, count); assert.equal(data.complete, complete);
+  if (reason) assert.match(data.reasons.join(), reason);
+  if (/unrelated|More actions/.test(name)) assert.doesNotMatch(data.reasons.join(), /pagination|expansion/);
+  const receipt = writeDataExport(data, { format: 'json' }, ctx('Export table'), { userHome: f.root });
+  assert.match(exportSummary(receipt), complete ? /Complete: yes/ : count > 1 ? /Complete: no \(243 declared, 1 read\)/ : /Complete: unknown \(rendered rows only\)/);
+  const saved = JSON.parse(fs.readFileSync(receipt.path, 'utf8'));
+  assert.equal(saved.complete, complete); assert.equal(saved.declaredTotal, count);
+  assert.deepEqual(f.requests, [['GET', '/']]);
+});
+test('G3D feed sentinel gives a reason without inventing a total', options, async t => {
+  const f = await fixture(t, '<div role="feed" aria-label="Feed">' + Array.from({ length: 100 }, (_, i) => `<article role="article">item ${i}</article>`).join('') +
+    '<div class="infinite-scroll-sentinel" style="height:0"></div></div>');
+  const data = await readDataExport(f.page, await refFor(f.page, 'feed', 'Feed'));
+  assert.equal(data.rows.length, 100); assert.equal(data.complete, false);
+  assert.match(data.reasons.join(), /sentinel/); assert.match(data.reasons.join(), /no declared total/);
+});
+for (const role of ['combobox', 'searchbox', 'spinbutton']) test('G3D redacts sensitive ' + role, options, async t => {
+  const f = await fixture(t, `<ul aria-label="Sensitive"><li><span role="${role}" aria-label="Card number">4111111111111111</span></li></ul>`);
+  const raw = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
+  assert.deepEqual(raw.rows, [['[redacted]']], 'the collection reader itself must redact, before snapshot scrubbing');
+  const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Sensitive'));
+  assert.deepEqual(data.rows, [['[redacted]']]); assert.doesNotMatch(JSON.stringify(data), /411111/);
+});
+test('G3D positioned text beyond the viewport is omitted', options, async t => {
+  const f = await fixture(t, '<ul aria-label="Off canvas"><li>safe<span style="position:absolute;left:9999px">off-canvas-secret</span></li></ul>');
+  const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Off canvas'));
+  assert.deepEqual(data.rows, [['safe']]); assert.match(data.reasons.join(), /visually hidden/);
+});
+test('G3D restores the viewport bound for positioned rows and ancestors below the fold', options, async t => {
+  const f = await fixture(t, '<ul aria-label="Positioned" style="min-height:20px"><li style="position:absolute;top:2000px">off canvas</li></ul>' +
+    '<section style="position:absolute;top:2000px"><ul aria-label="Ancestor"><li>off canvas</li></ul></section>');
+  const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Positioned'));
+  assert.deepEqual(data.rows, []); assert.equal(data.complete, false); assert.match(data.reasons.join(), /visually hidden/);
+  await assert.rejects(readDataExport(f.page, await refFor(f.page, 'list', 'Ancestor')), /Export read unavailable/);
+});
+test('G3D another collection cannot lend its count through its data rows', options, async t => {
+  const f = await fixture(t, `<section>${oneRow}<ul aria-label="Other"><li><span>1 results</span></li></ul></section>`);
+  const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
+  assert.equal(data.declaredTotal, undefined); assert.equal(data.complete, false);
+});
+for (const [label, extra, declaredTotal, complete] of [
+  ['Total: 1', '', undefined, false],
+  ['Total rows: 1', '', 1, true],
+  ['1 results', ' hidden', undefined, false],
+  ['2 results', '', 2, false],
+]) test('G3D count declarations: ' + label + extra, options, async t => {
+  const f = await fixture(t, `<section>${oneRow}<p${extra}>${label}</p></section>`);
+  const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
+  assert.equal(data.declaredTotal, declaredTotal); assert.equal(data.complete, complete);
+});
+test('G3D Showing 1 to 10 of 243 reports the declared and read counts', options, async t => {
+  const f = await fixture(t, '<section><table aria-label="Range">' + Array.from({ length: 10 }, (_, i) => `<tr><td>row ${i + 1}</td></tr>`).join('') +
+    '</table><div>Showing <b>1</b> to <b>10</b> of <b>243</b> entries</div></section>');
+  const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Range'));
+  assert.equal(data.rows.length, 10); assert.equal(data.declaredTotal, 243); assert.equal(data.complete, false);
+  const receipt = writeDataExport(data, {}, ctx('Export table'), { userHome: f.root });
+  assert.match(exportSummary(receipt), /Complete: no \(243 declared, 10 read\)/);
+});
+test('G3D matching list item totals and conflicting declarations remain explicit', options, async t => {
+  const f = await fixture(t, '<section><ul aria-label="Equal" aria-setsize="2"><li>first</li><li>second</li></ul></section>' +
+    `<section>${oneRow.replace('<table ', '<table aria-rowcount="1" ')}<span>2 results</span></section>`);
+  const equal = await readDataExport(f.page, await refFor(f.page, 'list', 'Equal'));
+  assert.equal(equal.complete, true); assert.equal(equal.declaredTotal, 2);
+  const conflict = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
+  assert.equal(conflict.complete, false); assert.match(conflict.reasons.join(), /conflicting totals/);
+});
+test('G3D a count explicitly controlling another collection cannot be borrowed', options, async t => {
+  const f = await fixture(t, `<section>${oneRow.replace('<table ', '<table id="selected" ')}<p aria-controls="other">1 results</p></section>`);
+  const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
+  assert.equal(data.declaredTotal, undefined); assert.equal(data.complete, false);
 });
