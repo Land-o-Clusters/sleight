@@ -3,10 +3,11 @@ const MAC_USERS = ['', 'Users', ''].join('/');
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, realpathSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createActionRunner } from '../plugins/sleight/lib/direct-browser/act.mjs';
+import { writeDataExport, EXPORT_LIMITS } from '../plugins/sleight/lib/direct-browser/export-file.mjs';
 import { check } from '../plugins/sleight/lib/direct-browser/rules.mjs';
 import { api as identity, instance, recipe } from './fixtures/electron-app.mjs';
 // The v3 context, payment, upload and dialog adversarial cases of direct-browser-v3-context.test.mjs, run on an
@@ -290,4 +291,41 @@ for (const end of ['answer', 'dialogclosed', 'navigation', 'page-close', 'docume
   assert.equal((await f.ctx.check('dialog', answer)).verdict, 'refuse');
   await f.ctx.dispose();
   for (const event of ['dialog', 'dialogclosed', 'framenavigated', 'close']) assert.equal(page.listenerCount(event), 0);
+});
+
+
+test('G3C one authenticated turn caps exports across Electron windows and window recreation', async t => {
+  const root = mkdtempSync(join(realpathSync(tmpdir()), 'g3c-electron-export-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const binding = api.createV3TurnBinding({ source: 'user', session: 'session', turn: 'export-turn', id: 'request', text: 'Export table' }, () => true);
+  const windowContext = (id, turnBinding = binding) => {
+    const app = identity.createAppBinding({ instance, window: { id, epoch: 1 }, brokerEpoch: 1, recipe,
+      authority: { id: 'grant', session: 'session', turn: null, current: () => true } });
+    const ctx = api.createV3Context({ binding: turnBinding, app });
+    t.after(() => ctx.dispose()); return ctx;
+  };
+  const first = windowContext(7), second = windowContext(8);
+  const data = { kind: 'list', columns: [], rows: [['row']], complete: true, reasons: [] };
+  for (let i = 0; i < EXPORT_LIMITS.turnFiles; i++) writeDataExport(data, {}, i % 2 ? first : second, { userHome: root });
+  assert.throws(() => writeDataExport(data, {}, first, { userHome: root }), /turn.*count/);
+  await first.dispose();
+  assert.throws(() => writeDataExport(data, {}, windowContext(9), { userHome: root }), /turn.*count/);
+  assert.equal(readdirSync(join(root, 'Library/Application Support/sleight/exports')).length, 8);
+  const next = api.createV3TurnBinding({ source: 'user', session: 'session', turn: 'next-turn', id: 'request', text: 'Export table' }, () => true);
+  assert.doesNotThrow(() => writeDataExport(data, {}, windowContext(10, next), { userHome: root }));
+});
+
+test('G3C authenticated turn byte cap is shared across Electron windows', t => {
+  const root = mkdtempSync(join(realpathSync(tmpdir()), 'g3c-electron-bytes-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const binding = api.createV3TurnBinding({ source: 'user', session: 'session', turn: 'bytes-turn', id: 'request', text: 'Export table' }, () => true);
+  const windows = [7, 8].map(id => {
+    const app = identity.createAppBinding({ instance, window: { id, epoch: 1 }, brokerEpoch: 1, recipe,
+      authority: { id: 'grant', session: 'session', turn: null, current: () => true } });
+    const ctx = api.createV3Context({ binding, app }); t.after(() => ctx.dispose()); return ctx;
+  });
+  const data = { kind: 'list', columns: [], rows: [['桃'.repeat(3900000)]], complete: true, reasons: [] };
+  writeDataExport(data, {}, windows[0], { userHome: root }); writeDataExport(data, {}, windows[1], { userHome: root });
+  assert.throws(() => writeDataExport(data, {}, windows[0], { userHome: root }), /turn.*byte/);
+  assert.equal(readdirSync(join(root, 'Library/Application Support/sleight/exports')).length, 2);
 });

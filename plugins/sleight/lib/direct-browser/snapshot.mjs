@@ -275,6 +275,18 @@ async function sessionsOf(page, read) {
   return results.filter(Boolean);
 }
 
+// Structured exports use the same native secret discovery and scrub policy as snapshots.
+export async function readSnapshotSecrets(page) {
+  const results = await sessionsOf(page, async ({ send }) => {
+    const capture = await send('DOMSnapshot.captureSnapshot', { computedStyles: [] });
+    return { secrets: sensitiveValues(capture), closed: capture.documents.some(({ nodes }) =>
+      (nodes.shadowRootType?.value ?? []).some(value => capture.strings[value] === 'closed')) };
+  });
+  const secrets = results.flatMap(result => result.secrets);
+  secrets.hasClosed = results.some(result => result.closed);
+  return secrets;
+}
+
 function closedCandidates({ strings, documents }) {
   const controls = new Set();
   let hasClosed = false, count = 0;
