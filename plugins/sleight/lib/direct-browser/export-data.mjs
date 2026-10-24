@@ -13,10 +13,17 @@ export function readExportCollection(el, limits, read) {
   if (!read(el, 'isConnected') || !collection(el)) throw Error('Export ref must name a table, grid or list');
   const reasons = new Set(), signals = new Set(), rows = [], indices = [], totals = [], textTotals = [], observedTotals = [], hidden = new WeakMap();
   let nodes = 0, characters = 0, redacted = false, capped = false;
-  const sensitive = /password|passcode|secret|one.?time|\botp\b|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|security.?code|\bcode\b/i;
+  const sensitive = /password|passcode|secret|one.?time|\botp\b|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|(?:security|verification).?code/i;
   const children = node => Array.from(read(node, 'children') ?? []);
   const branches = node => tag(node) === 'slot' ? HTMLSlotElement.prototype.assignedElements.call(node, { flatten: true }) : children(read(node, 'shadowRoot') ?? node);
   const parent = node => read(node, 'parentElement') ?? read(read(node, 'getRootNode')?.(), 'host');
+  const document = read(el, 'ownerDocument');
+  const scroller = read(document, 'scrollingElement') ?? read(document, 'documentElement');
+  const width = Math.max(innerWidth, read(scroller, 'scrollWidth') ?? 0);
+  const height = Math.max(innerHeight, read(scroller, 'scrollHeight') ?? 0);
+  // Client rects are viewport-relative. Compare them with the whole scrollable document, without scrolling it.
+  const onCanvas = box => box.width > 0 && box.height > 0 && box.left + scrollX >= -9999 && box.top + scrollY >= -9999 &&
+    box.right + scrollX > 0 && box.bottom + scrollY > 0 && box.left + scrollX < width && box.top + scrollY < height;
   const zeroClip = (style, box) => {
     const length = (value, extent) => /^-?[\d.]+(?:px|%)?$/.test(value) ? parseFloat(value) * (value.endsWith('%') ? extent / 100 : 1) : NaN;
     const rect = /^rect\((.*)\)$/.exec(style.clip)?.[1].split(/,\s*|\s+/);
@@ -54,9 +61,7 @@ export function readExportCollection(el, limits, read) {
       const boxes = Array.from(read(node, 'getClientRects')?.() ?? []);
       const noBox = /^(br|wbr|col|colgroup)$/.test(tag(node)) || style.display === 'contents' ||
         style.display === 'inline' && !children(node).length && !(read(node, 'textContent') ?? '').trim();
-      const positioned = /^(absolute|fixed|relative)$/.test(style.position) || style.transform !== 'none' || style.translate !== 'none';
-      const geometry = noBox || boxes.some(box => box.width > 0 && box.height > 0 && box.right + scrollX > 0 && box.bottom + scrollY > 0 &&
-        (!positioned || box.left < innerWidth && box.top < innerHeight && box.right > 0 && box.bottom > 0));
+      const geometry = noBox || boxes.some(onCanvas);
       if (!geometry || Number(style.opacity) === 0 || parseFloat(style.fontSize) === 0 || boxes.length > 0 && boxes.every(box => zeroClip(style, box))) {
         yes = false; reasons.add('visually hidden text omitted');
       }
@@ -84,7 +89,7 @@ export function readExportCollection(el, limits, read) {
       const range = read(read(node, 'ownerDocument'), 'createRange')();
       Range.prototype.selectNodeContents.call(range, node);
       const boxes = Array.from(Range.prototype.getClientRects.call(range)).filter(box => box.width > 0 && box.height > 0);
-      yes = boxes.length > 0 && boxes.every(box => box.left < innerWidth && box.right > 0 && box.right + scrollX > 0 && box.bottom + scrollY > 0);
+      yes = boxes.length > 0 && boxes.every(onCanvas);
     }
     if (!yes) reasons.add('visually hidden text omitted');
     return yes;
@@ -104,7 +109,7 @@ export function readExportCollection(el, limits, read) {
   };
   const declaredRows = node => {
     const label = labelText(node);
-    const match = /^showing\s+\d[\d,]*\s+(?:to|[-–])\s+\d[\d,]*\s+of\s+(\d[\d,]*)(?:\s+(?:entries|results|rows|items))?\.?$/i.exec(label) ??
+    const match = /^(?:showing\s+)?\d[\d,]*(?:\s+to\s+|\s*[-–]\s*)\d[\d,]*\s+of\s+(\d[\d,]*)(?:\s+(?:entries|results|rows|items))?\.?$/i.exec(label) ??
       /^(\d[\d,]*)\s+(?:results?|rows?|entries|items)(?:\s+(?:total|found))?\.?$/i.exec(label) ??
       /^total\s*:?\s*(\d[\d,]*)\s+(?:results?|rows?|entries|items)\.?$/i.exec(label) ??
       /^total\s+(?:results?|rows?|entries|items)\s*:?\s*(\d[\d,]*)\.?$/i.exec(label);

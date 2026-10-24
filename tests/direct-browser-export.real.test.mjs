@@ -388,17 +388,18 @@ for (const role of ['combobox', 'searchbox', 'spinbutton']) test('G3D redacts se
   const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Sensitive'));
   assert.deepEqual(data.rows, [['[redacted]']]); assert.doesNotMatch(JSON.stringify(data), /411111/);
 });
-test('G3D positioned text beyond the viewport is omitted', options, async t => {
-  const f = await fixture(t, '<ul aria-label="Off canvas"><li>safe<span style="position:absolute;left:9999px">off-canvas-secret</span></li></ul>');
+test('G3D positioned text beyond the document scroll extent is omitted', options, async t => {
+  const f = await fixture(t, '<ul aria-label="Off canvas" style="position:relative;overflow:hidden"><li>safe<span style="position:absolute;left:9999px">off-canvas-secret</span></li></ul>');
   const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Off canvas'));
   assert.deepEqual(data.rows, [['safe']]); assert.match(data.reasons.join(), /visually hidden/);
 });
-test('G3D restores the viewport bound for positioned rows and ancestors below the fold', options, async t => {
-  const f = await fixture(t, '<ul aria-label="Positioned" style="min-height:20px"><li style="position:absolute;top:2000px">off canvas</li></ul>' +
-    '<section style="position:absolute;top:2000px"><ul aria-label="Ancestor"><li>off canvas</li></ul></section>');
+test('G3F positioned rows and ancestors below the fold remain exportable', options, async t => {
+  const f = await fixture(t, '<ul aria-label="Positioned" style="min-height:20px"><li style="position:absolute;top:2000px">below fold</li></ul>' +
+    '<section style="position:absolute;top:2100px"><ul aria-label="Ancestor"><li>below fold</li></ul></section>');
   const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Positioned'));
-  assert.deepEqual(data.rows, []); assert.equal(data.complete, false); assert.match(data.reasons.join(), /visually hidden/);
-  await assert.rejects(readDataExport(f.page, await refFor(f.page, 'list', 'Ancestor')), /Export read unavailable/);
+  assert.deepEqual(data.rows, [['below fold']]); assert.equal(data.complete, false); assert.doesNotMatch(data.reasons.join(), /visually hidden/);
+  const ancestor = await readDataExport(f.page, await refFor(f.page, 'list', 'Ancestor'));
+  assert.deepEqual(ancestor.rows, [['below fold']]); assert.doesNotMatch(ancestor.reasons.join(), /visually hidden/);
 });
 test('G3D another collection cannot lend its count through its data rows', options, async t => {
   const f = await fixture(t, `<section>${oneRow}<ul aria-label="Other"><li><span>1 results</span></li></ul></section>`);
@@ -495,7 +496,7 @@ for (const [name, style] of [
   ['indent positive', 'display:inline-block;text-indent:9999px'], ['indent negative', 'display:inline-block;text-indent:-9999px'],
   ['transparent', 'color:transparent'], ['zero alpha', 'color:rgba(20,30,40,0)'],
 ]) test('G3E omits hidden text: ' + name, options, async t => {
-  const f = await fixture(t, `<ul aria-label="Data"><li>safe<span style="${style}">hidden-value</span></li></ul>`);
+  const f = await fixture(t, `<ul aria-label="Data" style="overflow:hidden"><li>safe<span style="${style}">hidden-value</span></li></ul>`);
   const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
   assert.deepEqual(data.rows, [['safe']]); assert.match(data.reasons.join(), /visually hidden/);
 });
@@ -503,7 +504,7 @@ for (const role of ['textbox', 'combobox']) for (const [name, attr, label] of [
   ['placeholder password', 'placeholder="Password"', ''],
   ['data placeholder card', 'data-placeholder="Card number"', ''],
   ['describedby cvv', 'aria-describedby="hint"', '<p id="hint">CVV</p>'],
-  ['describedby code', 'aria-describedby="hint"', '<p id="hint">Code</p>'],
+  ['describedby verification code', 'aria-describedby="hint"', '<p id="hint">Verification code</p>'],
   ['name security code', 'name="security_code"', ''],
 ]) test(`G3E redacts ${role} named by ${name}`, options, async t => {
   const f = await fixture(t, `<ul aria-label="Data"><li><span role="${role}" ${attr}>protected-value</span></li></ul>${label}`);
@@ -535,4 +536,78 @@ test('G3E transparent containers preserve opaque children and ordinary indented 
     '<li><div style="text-indent:20px">indented</div></li></ul>');
   const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
   assert.deepEqual(data.rows, [['opaque'], ['indented']]);
+});
+
+for (const [name, style] of [
+  ['relative', 'position:relative'], ['transform', 'transform:translateZ(0)'],
+  ['absolute', 'position:absolute;left:0'],
+]) for (const scrolled of [false, true]) test(`G3F all 60 ${name} rows export ${scrolled ? 'after scrolling' : 'below the fold'}`, options, async t => {
+  const rows = Array.from({ length: 60 }, (_, i) => [`row ${i + 1}`]);
+  const f = await fixture(t, `<!doctype html><style>table{position:relative;width:600px;height:${name === 'absolute' ? 3400 : 2400}px}tr{height:40px}</style>` +
+    '<table aria-label="Data" aria-rowcount="60">' + rows.map(([value], i) =>
+      `<tr style="${style};${name === 'absolute' ? `top:${1000 + i * 40}px` : ''}"><td>${value}</td></tr>`).join('') + '</table>');
+  if (scrolled) await f.page.evaluate(() => window.scrollTo(0, 1200));
+  const before = await f.page.evaluate(() => ({ x: scrollX, y: scrollY, height: innerHeight,
+    first: document.querySelector('tr').getBoundingClientRect().top, last: document.querySelector('tr:last-child').getBoundingClientRect().top }));
+  assert.ok(before.last > before.height, 'fixture has rows below the viewport');
+  if (scrolled) { assert.ok(before.y > 0); assert.ok(before.first < 0, 'fixture also has rows above the viewport'); }
+  else if (name === 'absolute') assert.ok(before.first > before.height, 'all absolute rows begin below the viewport');
+  const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
+  assert.deepEqual(data.rows, rows); assert.equal(data.complete, true); assert.doesNotMatch(data.reasons.join(), /visually hidden/);
+  for (const format of ['csv', 'json']) {
+    const receipt = writeDataExport(data, { format }, ctx('Export table'), { userHome: f.root });
+    const content = fs.readFileSync(receipt.path, 'utf8');
+    assert.deepEqual(format === 'csv' ? parseCSV(content) : JSON.parse(content).rows, rows);
+    assert.match(exportSummary(receipt), /Rows: 60\.\nComplete: yes/);
+  }
+  assert.deepEqual(await f.page.evaluate(() => ({ x: scrollX, y: scrollY })), { x: before.x, y: before.y });
+  assert.deepEqual(f.requests, [['GET', '/']]);
+});
+
+for (const [name, style] of [
+  ['relative', 'position:relative;left:2000px'], ['transform', 'transform:translateX(2000px)'],
+  ['absolute', 'position:absolute;left:2000px'],
+]) for (const scrolled of [false, true]) test(`G3F ${name} text inside the horizontal scroll extent exports ${scrolled ? 'after scrolling' : 'beyond the viewport'}`, options, async t => {
+  const f = await fixture(t, `<!doctype html><style>body{width:4000px;min-height:100px}</style><table aria-label="Data" aria-rowcount="1" style="${style}">` +
+    '<tr><td style="text-indent:20px">readable</td></tr></table>');
+  if (scrolled) await f.page.evaluate(() => window.scrollTo(2500, 0));
+  const before = await f.page.evaluate(() => ({ x: scrollX, y: scrollY, width: innerWidth,
+    left: document.querySelector('table').getBoundingClientRect().left, right: document.querySelector('table').getBoundingClientRect().right }));
+  assert.ok(scrolled ? before.x > 0 && before.right < 0 : before.left > before.width, 'fixture is outside the current viewport');
+  const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
+  assert.deepEqual(data.rows, [['readable']]); assert.equal(data.complete, true); assert.doesNotMatch(data.reasons.join(), /visually hidden/);
+  assert.deepEqual(await f.page.evaluate(() => ({ x: scrollX, y: scrollY })), { x: before.x, y: before.y });
+});
+
+for (const label of ['1-10 of 10', 'Showing 1-10 of 10', '1–10 of 10', 'Showing 1 to 10 of 10'])
+  test('G3F accepts compact range: ' + label, options, async t => {
+    const rows = Array.from({ length: 10 }, (_, i) => [`row ${i + 1}`]);
+    const f = await fixture(t, `<table><caption>${label}</caption>` + rows.map(([value]) => `<tr><td>${value}</td></tr>`).join('') + '</table>');
+    const data = await trustedLocatorRead(f.page.locator('table'), readExportCollection, EXPORT_LIMITS);
+    assert.deepEqual(data.rows, rows); assert.equal(data.declaredTotal, 10); assert.equal(data.complete, true);
+  });
+for (const label of ['1,2,3-10 of 10', '1-10,5 of 10']) test('G3F rejects malformed compact range: ' + label, options, async t => {
+  const f = await fixture(t, oneRow.replace('<tr>', `<caption>${label}</caption><tr>`));
+  const data = await trustedLocatorRead(f.page.locator('table'), readExportCollection, EXPORT_LIMITS);
+  assert.equal(data.declaredTotal, undefined); assert.equal(data.complete, false);
+});
+
+for (const role of ['textbox', 'combobox']) for (const [label, redacted] of [
+  ['Postal code', false], ['ZIP code', false], ['Product code', false], ['Code', false],
+  ['Security code', true], ['Verification code', true], ['One time code', true],
+]) test(`G3F ${role} placeholder ${label} is ${redacted ? 'redacted' : 'readable'}`, options, async t => {
+  const f = await fixture(t, `<ul><li><span role="${role}" placeholder="${label}">field-value</span></li></ul>`);
+  const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
+  assert.deepEqual(data.rows, [[redacted ? '[redacted]' : 'field-value']]); assert.equal(data.redacted, redacted);
+});
+
+for (const [name, style] of [
+  ['absolute right', 'position:absolute;left:9999px'], ['absolute below', 'position:absolute;top:9999px'],
+  ['relative right', 'position:relative;left:9999px'], ['transform below', 'transform:translateY(9999px);display:inline-block'],
+  ['far negative left', 'position:relative;left:-11000px;width:20000px;display:inline-block'],
+  ['far negative top', 'position:relative;top:-11000px;height:20000px;display:inline-block'],
+]) test('G3F off-canvas text stays hidden: ' + name, options, async t => {
+  const f = await fixture(t, `<div style="position:relative;overflow:hidden;height:100px"><ul><li>safe<span style="${style}">hidden-value</span></li></ul></div>`);
+  const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
+  assert.deepEqual(data.rows, [['safe']]); assert.match(data.reasons.join(), /visually hidden/);
 });
