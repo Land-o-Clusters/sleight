@@ -908,7 +908,7 @@ function closeDocumentSafely(app, request, validate, api) {
 function appDialogCategory(info) {
   var modal = ['AXDialog', 'AXSystemDialog'].indexOf(info.subrole) !== -1;
   if (info.document && !modal) return null;
-  var startup = /^(?:Microsoft )?(?:Word|Excel|PowerPoint|Mail)$/.test(info.title || '');
+  var startup = /^(?:Microsoft )?(?:Word|Excel|PowerPoint|Mail|Numbers)$/.test(info.title || '');
   var text = [info.title || ''].concat(modal || startup ? (info.buttons || []).concat(info.text || []) : []).join('\n');
   if (/(?:activate|activation|licen[cs][ei]|subscription|product key)/i.test(text)) return 'activation';
   if (/\b(?:sign[ -]?in|log[ -]?in)\b/i.test(text)) return 'sign-in';
@@ -1259,7 +1259,7 @@ function nativeAX(state, clock) {
         var info = { title: text(candidate, 'AXTitle'), subrole: text(candidate, 'AXSubrole'),
           document: text(candidate, 'AXDocument') };
         if (text(candidate, 'AXRole') === 'AXSheet') info.subrole = 'AXDialog';
-        if (['AXDialog', 'AXSystemDialog'].indexOf(info.subrole) !== -1 || /^(?:Microsoft )?(?:Word|Excel|PowerPoint|Mail)$/.test(info.title)) {
+        if (['AXDialog', 'AXSystemDialog'].indexOf(info.subrole) !== -1 || /^(?:Microsoft )?(?:Word|Excel|PowerPoint|Mail|Numbers)$/.test(info.title)) {
           var content = dialogContents(candidate, { children: children, text: text });
           info.buttons = content.buttons; info.text = content.text;
         }
@@ -1700,7 +1700,7 @@ function run(argv) {
   if (request.bundle === 'com.apple.Safari' && ['quit', 'recover'].indexOf(request.mode) === -1) throw new Error('Safari setup requires the profile-proven created-window helper');
   var allowed = ['com.apple.Safari', 'com.apple.Preview', 'com.apple.finder',
     'com.apple.TextEdit', 'com.apple.calculator', 'com.apple.Chess', 'com.apple.dt.Devices', 'com.apple.iphonesimulator', 'net.imput.helium',
-    'com.microsoft.Word', 'com.microsoft.Excel', 'com.microsoft.Powerpoint', 'com.apple.mail'];
+    'com.microsoft.Word', 'com.microsoft.Excel', 'com.microsoft.Powerpoint', 'com.apple.mail', 'com.apple.iWork.Numbers'];
   var webFixture = request.fixtureKind === 'web-page' && /^http:\/\/127\.0\.0\.1:[1-9]\d*\/[A-Za-z0-9_-]{1,80}\/$/.test(request.target || '');
   if (request.mode === 'recover') {
     if (allowed.indexOf(request.bundle) === -1 || request.bundle === 'com.apple.finder' || !$.AXIsProcessTrusted()) throw new Error('Invalid fixture recovery request');

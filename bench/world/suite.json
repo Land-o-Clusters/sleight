@@ -1242,6 +1242,37 @@
   ],
   "heldOut": [
     {
+      "id": "heldOut/mail-to-sheet",
+      "task": "mail-to-sheet",
+      "title": "Mail to Numbers",
+      "source": "world",
+      "runner": "bench/run.mjs --suite world --tasks mail-to-sheet --owner-present",
+      "half": "cross-app",
+      "prompt": "Read Reference, Item and Quantity from Orchard transfer note in the owned local Mail import. Paste them into A2:C2 in the Numbers fixture and export its table as UTF-8 CSV to the named run-owned path. Preserve the header, Keep row and imported mail. Leave both fixture windows open.",
+      "timeoutMs": 300000,
+      "check": "exact exported CSV cells, unchanged source CSV and unchanged imported Mail app-data snapshot",
+      "fixture": "existing retained local Mail import and native document window, private CSV files",
+      "requires": [
+        "owner present and watching Mail",
+        "Mail running with Automation and Accessibility already granted",
+        "Numbers installed with first-run setup complete",
+        "confirmed fixture ownership and cleanup"
+      ],
+      "claim": false,
+      "heldOutFor": "BT2 multi-app transfer coverage, never a claim-suite tuning task",
+      "support": {
+        "sleight": true,
+        "codex": true,
+        "cua": true,
+        "peekaboo": true,
+        "claude-cu": false,
+        "cursor-cu": false,
+        "playwright-mcp": false,
+        "chrome-devtools-mcp": false,
+        "claude-in-chrome": false
+      }
+    },
+    {
       "id": "heldOut/word-memo",
       "task": "word-memo",
       "title": "word-memo",
