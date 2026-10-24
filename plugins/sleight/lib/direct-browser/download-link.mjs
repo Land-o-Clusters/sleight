@@ -16,7 +16,13 @@ export async function downloadLink(tab, step, ctx, { download, siteCheck, allowe
   const target = { page: tab.page, state: tab.state, ref: step.ref, locator: tab.page.getByRef(step.ref), do: 'click' };
   let valid = true;
   const revoked = () => { valid = false; };
-  tab.page.on('framenavigated', revoked); tab.page.on('close', revoked);
+  const main = tab.page.mainFrame(), origin = new URL(tab.page.url()).origin;
+  const navigated = frame => { if (frame === main) revoked(); };
+  // Restrict even same-site sibling origins. The temporary target would send that origin's cookies.
+  const checkOrigin = url => {
+    if (new URL(url).origin !== origin) throw Error("download refused: open that site's page first, then request its download");
+  };
+  tab.page.on('framenavigated', navigated); tab.page.on('close', revoked);
   const current = () => valid && ctx.userMessage()?.id === message.id;
   try {
     const blocked = siteCheck?.(); if (blocked) throw Error(blocked);
@@ -25,9 +31,11 @@ export async function downloadLink(tab, step, ctx, { download, siteCheck, allowe
       throw Error('download needs a plain document link, without a payment or submit');
     const link = await trustedLocatorRead(target.locator, linkData);
     if (!link || !current()) throw Error('download needs an observed HTTP(S) link');
-    return await download({ ...link, session: message.session, message, current, allowed: url => current() && allowed?.(url) === true });
+    checkOrigin(link.url);
+    return await download({ ...link, session: message.session, message, current,
+      allowed: url => { checkOrigin(url); return current() && allowed?.(url) === true; } });
   } finally {
-    tab.page.off('framenavigated', revoked); tab.page.off('close', revoked);
+    tab.page.off('framenavigated', navigated); tab.page.off('close', revoked);
     await ctx.releaseTarget(target);
   }
 }
