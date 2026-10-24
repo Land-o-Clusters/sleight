@@ -160,10 +160,13 @@ test('existing sensitive folders, tilde paths and Finder-hidden folders refuse',
     assert.deepEqual(fs.readdirSync(directory), []);
   }
 });
-test('CSV BOM defaults on, can be disabled, and adds exactly three bytes to a Unicode fixture', t => {
+test('CSV BOM defaults off, can be enabled, and adds exactly three bytes to a Unicode fixture', t => {
   const root = folder(t), plain = serializeDataExport(data(), 'csv', { bom: false });
   const receipt = writeDataExport(data(), {}, context('Export table'), { userHome: root });
-  const bytes = fs.readFileSync(receipt.path);
+  assert.equal(fs.readFileSync(receipt.path, 'utf8'), plain);
+  assert.equal(receipt.bom, false);
+  const withBOM = writeDataExport(data(), { bom: true }, context('Export table'), { userHome: root });
+  const bytes = fs.readFileSync(withBOM.path);
   assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
   assert.equal(bytes.length, Buffer.byteLength(plain) + 3);
   assert.equal(new TextDecoder('utf-8').decode(bytes), plain);
@@ -227,4 +230,13 @@ test('budget reservations survive a post-open turn expiry, and a new turn resets
   assert.ok(fs.readdirSync(directory).every(file => fs.statSync(path.join(directory, file)).size === 0));
   turn = 'two';
   assert.doesNotThrow(() => writeDataExport(data(), {}, ctx, { userHome: root }));
+});
+
+test('G3C saving a date or writing prose is not a request to export page data', t => {
+  const root = folder(t);
+  for (const text of ['Save the date', 'Write a poem', 'Put this aside', 'Make a cabinet'])
+    assert.throws(() => writeDataExport(data(), {}, context(text), { userHome: root }), /affirmative export request/);
+  assert.deepEqual(fs.readdirSync(root), []);
+  for (const text of ['Save the table', 'Write the rows as CSV', 'Put the list in a file', 'Create a JSON file'])
+    assert.doesNotThrow(() => writeDataExport(data(), {}, context(text), { userHome: root }));
 });

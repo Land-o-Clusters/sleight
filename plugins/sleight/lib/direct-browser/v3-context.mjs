@@ -744,6 +744,7 @@ export function createV3Context({ binding, browser, app, ui, confirmPayments, no
     } catch (error) { record?.keyboardBinding?.retire?.(); throw error; }
   }
   const ctx = Object.freeze({ session: bound.message.session, turn: bound.message.turn, userMessage: ruleContext.userMessage,
+    exportTurn: binding,
     consent, files, prepareTarget: prepare, paymentTerms: target => targets.get(target) ? target.terms : undefined,
     async check(kind, target, { fieldOnly = false } = {}) {
       try {

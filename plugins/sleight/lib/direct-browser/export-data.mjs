@@ -17,6 +17,33 @@ export function readExportCollection(el, limits, read) {
   const children = node => Array.from(read(node, 'children') ?? []);
   const branches = node => tag(node) === 'slot' ? HTMLSlotElement.prototype.assignedElements.call(node, { flatten: true }) : children(read(node, 'shadowRoot') ?? node);
   const parent = node => read(node, 'parentElement') ?? read(read(node, 'getRootNode')?.(), 'host');
+  const zeroClip = (style, box) => {
+    const length = (value, extent) => /^-?[\d.]+(?:px|%)?$/.test(value) ? parseFloat(value) * (value.endsWith('%') ? extent / 100 : 1) : NaN;
+    const rect = /^rect\((.*)\)$/.exec(style.clip)?.[1].split(/,\s*|\s+/);
+    if (/^(absolute|fixed)$/.test(style.position) && rect?.length === 4) {
+      const [top, right, bottom, left] = rect.map((value, i) => value === 'auto' ? [0, box.width, box.height, 0][i] : length(value, i % 2 ? box.width : box.height));
+      if (right <= left || bottom <= top) return true;
+    }
+    const clip = style.clipPath;
+    const inset = /^inset\(([^)]*)\)$/.exec(clip)?.[1].split(/\s+round\s+/)[0].trim().split(/\s+/);
+    if (inset?.length > 0 && inset.length <= 4) {
+      const [t, r = t, b = t, l = r] = inset;
+      if (length(t, box.height) + length(b, box.height) >= box.height || length(l, box.width) + length(r, box.width) >= box.width) return true;
+    }
+    const circle = /^circle\(([^\s)]+)/.exec(clip);
+    if (circle && length(circle[1], Math.min(box.width, box.height)) === 0) return true;
+    const ellipse = /^ellipse\(([^\s]+)\s+([^\s)]+)/.exec(clip);
+    if (ellipse && (length(ellipse[1], box.width) === 0 || length(ellipse[2], box.height) === 0)) return true;
+    const polygon = /^polygon\((.*)\)$/.exec(clip)?.[1].replace(/^(?:nonzero|evenodd),\s*/, '').split(',').map(point => {
+      const [x, y] = point.trim().split(/\s+/); return [length(x, box.width), length(y, box.height)];
+    });
+    if (polygon?.length >= 3 && polygon.every(point => point.every(Number.isFinite))) {
+      const [a] = polygon, b = polygon.find(point => point[0] !== a[0] || point[1] !== a[1]) ?? a;
+      // Only collinear points prove zero area. A self-intersecting polygon can have zero signed area and still paint.
+      if (polygon.every(p => Math.abs((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])) < 0.000001)) return true;
+    }
+    return false;
+  };
   const visible = node => {
     if (!node || read(node, 'nodeType') !== 1) return true;
     if (hidden.has(node)) return hidden.get(node);
@@ -25,11 +52,10 @@ export function readExportCollection(el, limits, read) {
       style.display !== 'none' && !['hidden', 'collapse'].includes(style.visibility) && style.contentVisibility !== 'hidden' && visible(parent(node));
     if (yes) {
       const boxes = Array.from(read(node, 'getClientRects')?.() ?? []);
-      const positioned = /^(absolute|fixed)$/.test(style.position);
-      const geometry = tag(node) === 'br' || style.display === 'contents' || boxes.some(box => box.width > 0 && box.height > 0 && box.right + scrollX > 0 && box.bottom + scrollY > 0 &&
-        (!positioned || box.left < innerWidth && box.top < innerHeight));
-      if (!geometry || Number(style.opacity) === 0 || parseFloat(style.fontSize) === 0 || style.clip !== 'auto' && style.clip !== '' ||
-          style.clipPath !== 'none' && style.clipPath !== '') {
+      const noBox = /^(br|wbr|col|colgroup)$/.test(tag(node)) || style.display === 'contents' ||
+        style.display === 'inline' && !children(node).length && !(read(node, 'textContent') ?? '').trim();
+      const geometry = noBox || boxes.some(box => box.width > 0 && box.height > 0 && box.right + scrollX > 0 && box.bottom + scrollY > 0);
+      if (!geometry || Number(style.opacity) === 0 || parseFloat(style.fontSize) === 0 || boxes.length > 0 && boxes.every(box => zeroClip(style, box))) {
         yes = false; reasons.add('visually hidden text omitted');
       }
     }
@@ -40,11 +66,16 @@ export function readExportCollection(el, limits, read) {
   const inspect = node => {
     if (attribute(node, 'aria-busy') === 'true' || role(node) === 'progressbar') reasons.add('collection contains a loading indicator');
     if (role(node) === 'navigation' || tag(node) === 'nav' || /\bnext\b/i.test(attribute(node, 'rel') ?? '')) reasons.add('nearby pagination control');
-    const countText = children(node).length <= 8 && /^(span|p|div|nav|a|button)$/.test(tag(node)) ? (read(node, 'textContent') ?? '').slice(0, 160) : '';
+    const countText = children(node).length <= 16 && /^(span|p|div|nav|a|button|ul|ol)$/.test(tag(node)) ? (read(node, 'textContent') ?? '').slice(0, 160) : '';
     if (/\bpage\s+\d+\s+(?:of|\/)\s*\d+\b/i.test((attribute(node, 'aria-label') ?? '') + ' ' + countText)) reasons.add('nearby pagination page count');
+    // textContent joins adjacent list items without spaces. Read each item's label for a numeric page run.
+    const pageLabels = node !== el && /^(ul|ol|div|nav|p|span)$/.test(tag(node)) ? children(node).slice(0, 16).map(child => (read(child, 'textContent') ?? '').slice(0, 160).trim()) : [];
+    if (node !== el && (/^\s*\d+(?:\s+\d+){2,}(?:\s*[….]+)?\s*$/.test(countText) ||
+        pageLabels.length >= 3 && pageLabels.every(label => /^\d+$|^[….]+$/.test(label)) && pageLabels.filter(label => /^\d+$/.test(label)).length >= 3))
+      reasons.add('nearby pagination page numbers');
     if (/^(button|a)$/.test(tag(node)) || role(node) === 'button') {
       const label = (attribute(node, 'aria-label') ?? read(node, 'textContent') ?? '').slice(0, 120).trim();
-      if (/^(?:(?:load|show|view|see|read)\s+(?:\d+\s+)?(?:more|older|newer)\b|next(?:\s+page)?$|older\b|newer\b)/i.test(label)) reasons.add('unopened pagination or expansion control');
+      if (/^(?:(?:go\s+to\s+)?(?:the\s+)?(?:next|previous|older|newer|more)\b|(?:load|show|view|see|read)\s+(?:\d+\s+)?(?:more|older|newer)\b)/i.test(label)) reasons.add('unopened pagination or expansion control');
     }
   };
   const total = integer(attribute(el, table ? 'aria-rowcount' : 'aria-setsize'));
@@ -79,10 +110,10 @@ export function readExportCollection(el, limits, read) {
       if (mask && mask !== 'none') {
         parts.push('[redacted]'); redacted = true; reasons.add('masked content redacted'); return;
       }
-      const control = /^(input|textarea|select|button|output)$/.test(tag(current)) || /^(textbox|searchbox|combobox|spinbutton)$/.test(role(current)) || read(current, 'isContentEditable');
+      const control = /^(input|textarea|select)$/.test(tag(current)) || role(current) === 'textbox' || read(current, 'isContentEditable');
       if (/^(input|textarea|select)$/.test(tag(current)) || read(current, 'isContentEditable') ||
-        /(?:^|\s)cc-/i.test(attribute(current, 'autocomplete') ?? '') || control && sensitive.test([
-          attribute(current, 'type'), attribute(current, 'name'), attribute(current, 'id'), attribute(current, 'autocomplete'), attribute(current, 'aria-label')].join(' '))) {
+        control && (/(?:^|\s)cc-/i.test(attribute(current, 'autocomplete') ?? '') || sensitive.test([
+          attribute(current, 'type'), attribute(current, 'name'), attribute(current, 'id'), attribute(current, 'autocomplete'), attribute(current, 'aria-label')].join(' ')))) {
         parts.push('[redacted]'); redacted = true; return;
       }
       if (current !== node && collection(current)) { reasons.add('nested collection omitted'); return; }
@@ -143,18 +174,31 @@ export function readExportCollection(el, limits, read) {
   if (indices.length && expected === undefined) reasons.add('indexed collection has no declared total');
   if (rows.some(row => row.length !== (columns.length || rows[0]?.length))) reasons.add('ragged rows have different cell counts');
   // Scroll, pagination and content behind controls need a separate whole read; a DOM read cannot prove them complete.
-  if (expected === undefined) {
+  {
+    const seen = new WeakSet();
     const nearby = (node, depth = 0) => {
+      if (!node || seen.has(node)) return;
+      seen.add(node);
       if (++nodes > 50000 || depth > 96) { reasons.add('DOM budget reached'); return; }
-      if (node === el || collection(node) || !visible(node)) return;
+      if (node === el || !visible(node)) return;
       inspect(node);
       for (const child of branches(node)) nearby(child, depth + 1);
     };
     for (let node = el, depth = 0; node && depth < 96; node = parent(node), depth++) {
-      // A document's ordinary viewport is not evidence that the collection itself is virtualized.
-      if (/^(body|html)$/.test(tag(node))) break;
-      if ((read(node, 'scrollHeight') ?? 0) > (read(node, 'clientHeight') ?? 0) + 1 ||
-          (read(node, 'scrollWidth') ?? 0) > (read(node, 'clientWidth') ?? 0) + 1) reasons.add('scrolling collection has no declared total');
+      const body = tag(node) === 'body';
+      if (tag(node) === 'html') break;
+      if (body) {
+        for (const child of branches(node)) nearby(child);
+        const document = read(node, 'ownerDocument'), scroller = read(document, 'scrollingElement');
+        const box = read(el, 'getBoundingClientRect')?.(), style = getComputedStyle(node), ownStyle = getComputedStyle(el);
+        const tail = key => Math.max(0, parseFloat(style[key]) || 0) + Math.max(0, parseFloat(ownStyle[key]) || 0);
+        if (expected === undefined && box && ((read(scroller, 'scrollHeight') ?? 0) > Math.max(innerHeight, box.bottom + scrollY + tail('marginBottom') + (parseFloat(style.paddingBottom) || 0)) + 1 ||
+            (read(scroller, 'scrollWidth') ?? 0) > Math.max(innerWidth, box.right + scrollX + tail('marginRight') + (parseFloat(style.paddingRight) || 0)) + 1))
+          reasons.add('possible infinite scroll beyond collection');
+        break;
+      }
+      if (expected === undefined && ((read(node, 'scrollHeight') ?? 0) > (read(node, 'clientHeight') ?? 0) + 1 ||
+          (read(node, 'scrollWidth') ?? 0) > (read(node, 'clientWidth') ?? 0) + 1)) reasons.add('scrolling collection has no declared total');
       const style = getComputedStyle(node);
       const overflow = /^(auto|scroll|hidden|clip)$/.test(style.overflowX) || /^(auto|scroll|hidden|clip)$/.test(style.overflowY);
       // Siblings at each wrapper, including the scroller's children, can hold pagination outside the collection.

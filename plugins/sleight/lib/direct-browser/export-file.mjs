@@ -22,7 +22,8 @@ function exportRequest(message) {
   }
   const prose = request.replace(/(["']).*?\1/g, '').replace(/(?:~\/|\/)\S+/g, '');
   if (/\b(?:do not|don't|never|nothing|unless|if|except)\b/i.test(prose)) return;
-  if (/^(?:Export|Save|Write|Put)\s+\S/i.test(request)) return request;
+  if (/^Export\s+\S/i.test(request)) return request;
+  if (/^(?:Save|Write|Put)\s+(?:(?:the|this|that|my|these|those|a|an)\s+)?(?:table|list|grid|collection|data|rows|records|csv|json|spreadsheet|file)\b/i.test(request)) return request;
   if (/^(?:Create|Make)\s+\S/i.test(request) && /\b(?:csv|json|spreadsheet|file)\b/i.test(request)) return request;
 }
 function safeNamedDestination(output) {
@@ -45,9 +46,10 @@ function visibleNamedFolders(identities) {
 }
 const turnKey = message => JSON.stringify([message.source, message.session, message.turn, message.id, message.text]);
 function turnBudget(ctx, message) {
-  const key = turnKey(message), old = turns.get(ctx.userMessage);
+  const scope = ctx.exportTurn ?? ctx.userMessage;
+  const key = turnKey(message), old = turns.get(scope);
   if (old?.key === key) return old;
-  const bank = { key, files: 0, bytes: 0 }; turns.set(ctx.userMessage, bank); return bank;
+  const bank = { key, files: 0, bytes: 0 }; turns.set(scope, bank); return bank;
 }
 // These are tool arguments or authenticated user text, never names supplied by a page.
 function destination(value, userHome) {
@@ -106,7 +108,7 @@ function normalizedData(data) {
   return data.rows.some(row => row.length !== width) ? { ...data, complete: false,
     reasons: [...new Set([...data.reasons, 'ragged rows have different cell counts'])] } : data;
 }
-export function serializeDataExport(data, format = 'csv', { bom = true } = {}) {
+export function serializeDataExport(data, format = 'csv', { bom = false } = {}) {
   data = normalizedData(data);
   if (!['csv', 'json'].includes(format)) refuse('Export format must be csv or json');
   if (typeof bom !== 'boolean') refuse('Export bom must be a boolean');
@@ -161,13 +163,14 @@ export function writeDataExport(data, options = {}, ctx, { userHome = home(), id
     if (/^Export /.test(error.message)) throw error;
     refuse('Export write failed; a partial new file may remain at ' + JSON.stringify(output));
   } finally { if (fd !== undefined) fs.closeSync(fd); }
-  return { path: output, rowCount: data.rows.length, bytes, format, bom: format === 'csv' && options.bom !== false,
+  return { path: output, rowCount: data.rows.length, bytes, format, bom: format === 'csv' && options.bom === true,
     complete: data.complete, reasons: [...data.reasons] };
 }
 
 export function exportSummary(receipt) {
+  const possiblePagination = receipt.reasons.some(reason => /pagination|possible infinite scroll/.test(reason));
   // JSON quoting fences even a user-named path; page text is never interpolated into trusted output.
-  return `Export: ${JSON.stringify(receipt.path)} (${receipt.format}, ${receipt.bytes} bytes).\nRows: ${receipt.rowCount}.\nComplete: ${receipt.complete ? 'yes (rendered collection)' : 'NO'}.` +
+  return `Export: ${JSON.stringify(receipt.path)} (${receipt.format}, ${receipt.bytes} bytes).\nRows: ${receipt.rowCount}.\nComplete: ${receipt.complete ? 'yes (rendered collection)' : possiblePagination ? 'unknown (possible pagination)' : 'NO'}.` +
     (receipt.reasons.length ? '\nCompleteness (untrusted page evidence): ' + JSON.stringify(receipt.reasons) : '') +
     (receipt.format === 'csv' ? '\nCSV formula-like cells are prefixed with an apostrophe; JSON preserves exact text.' : '') +
     (receipt.format === 'csv' ? `\nCSV UTF-8 BOM: ${receipt.bom ? 'yes' : 'no'}.` : '') +

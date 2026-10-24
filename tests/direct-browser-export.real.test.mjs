@@ -217,9 +217,9 @@ test('CSS text masks redact content while product-card and secret-named row labe
     '<li><span style="-webkit-text-security:disc">masked-plaintext-987</span></li>' +
     '<li><span autocomplete="cc-number">protected-card-text</span></li><li><span role="textbox" aria-label="password">form-control-secret</span></li></ul>');
   const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Products'));
-  assert.deepEqual(data.rows, [['plain product'], ['plain note'], ['[redacted]'], ['[redacted]'], ['[redacted]']]);
+  assert.deepEqual(data.rows, [['plain product'], ['plain note'], ['[redacted]'], ['protected-card-text'], ['[redacted]']]);
   assert.equal(data.complete, false); assert.match(data.reasons.join(), /masked content redacted/);
-  assert.doesNotMatch(JSON.stringify(data), /masked-plaintext|protected-card-text|form-control-secret/);
+  assert.doesNotMatch(JSON.stringify(data), /masked-plaintext|form-control-secret/);
 });
 test('ragged table rows retain their widths and return a completeness reason', options, async t => {
   const f = await fixture(t, '<table aria-label="Ragged"><tr><th>A</th><th>B</th></tr><tr><td>one</td></tr><tr><td>two</td><td>three</td></tr></table>');
@@ -258,4 +258,91 @@ test('the dispatcher shares one export budget between tabs for the current turn'
   const capped = await dispatcher.call({ name: 'browser_read', arguments: { tab: 't2', export: ref, path: output } });
   assert.equal(capped.isError, true); assert.match(capped.text, /turn.*count/);
   assert.equal(fs.readdirSync(output).length, EXPORT_LIMITS.turnFiles);
+});
+
+// G3C: each fixture asserts rows and the public receipt, without following or pressing a pager.
+const oneRow = '<table aria-label="Data"><tr><td>only row</td></tr></table>';
+for (const [name, pager] of [
+  ['ul pager', '<ul><li><button>Next</button></li></ul>'],
+  ['ol pager', '<ol><li><a href="#2">Next</a></li></ol>'],
+  ['ARIA list pager', '<div role="list"><div role="listitem"><button>Next</button></div></div>'],
+  ...['Next »', 'Next ›', 'Next →', 'Next >', 'Previous →', 'Older posts »', 'Newer posts ›', 'More →', 'Load more >']
+    .map(label => [label, `<button>${label}</button>`]),
+  ['next aria label', '<button aria-label="Go to next page">→</button>'],
+  ['rel next', '<a rel="next" href="#2">→</a>'],
+  ['number run', '<div><a href="#1">1</a> <a href="#2">2</a> <a href="#3">3</a> …</div>'],
+  ['split number run', '<ul><li><a href="#1">1</a></li><li><a href="#2">2</a></li><li><a href="#3">3</a></li><li>…</li></ul>'],
+  ['page count', '<span>Page <b>1</b> of <b>4</b></span>'],
+]) test('G3C possible pagination: ' + name, options, async t => {
+  const f = await fixture(t, `<section>${oneRow}${pager}</section><script>window.effects=[];document.addEventListener('click',()=>effects.push('click'))</script>`);
+  const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
+  assert.deepEqual(data.rows, [['only row']]); assert.equal(data.complete, false, JSON.stringify(data.reasons));
+  const receipt = writeDataExport(data, { format: 'json' }, ctx('Export table'), { userHome: f.root });
+  assert.match(exportSummary(receipt), /Complete: unknown \(possible pagination\)/);
+  assert.deepEqual(await f.page.evaluate(() => window.effects), []); assert.deepEqual(f.requests, [['GET', '/']]);
+});
+test('G3C body-level pager is inspected beyond the collection wrapper', options, async t => {
+  const f = await fixture(t, `<main><section>${oneRow}</section></main><nav><button>Next</button></nav>`);
+  const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
+  assert.equal(data.complete, false); assert.match(data.reasons.join(), /pagination/);
+});
+test('G3C window scroll beyond the collection is possible infinite scroll', options, async t => {
+  const f = await fixture(t, `<main>${oneRow}</main><div style="height:3000px"></div>`);
+  const before = await f.page.evaluate(() => scrollY);
+  const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
+  assert.deepEqual(data.rows, [['only row']]); assert.equal(data.complete, false);
+  assert.match(data.reasons.join(), /possible infinite scroll/);
+  assert.equal(await f.page.evaluate(() => scrollY), before);
+});
+for (const [name, html, want] of [
+  ['absolute row below fold', '<ul aria-label="Data" style="min-height:20px"><li style="position:absolute;top:2000px">below</li></ul>', [['below']]],
+  ['absolute ancestor below fold', '<section style="position:absolute;top:2000px"><ul aria-label="Data"><li>below</li></ul></section>', [['below']]],
+  ['colgroup and col', '<table aria-label="Data"><colgroup><col></colgroup><tr><td>cell</td></tr></table>', [['cell']]],
+  ['wbr and empty inline', '<ul aria-label="Data"><li>first<wbr><span></span><span> </span>last</li></ul>', [['first last']]],
+  ['partial clip-path', '<ul aria-label="Data"><li><span style="display:inline-block;clip-path:circle(40%)">avatar label</span></li></ul>', [['avatar label']]],
+  ['partial clip rect', '<ul aria-label="Data"><li><span style="position:absolute;width:100px;height:20px;clip:rect(0px,50px,20px,0px)">clipped label</span></li></ul>', [['clipped label']]],
+]) test('G3C readable geometry: ' + name, options, async t => {
+  const f = await fixture(t, html), role = html.includes('<table') ? 'table' : 'list';
+  const data = await readDataExport(f.page, await refFor(f.page, role, 'Data'));
+  assert.deepEqual(data.rows, want); assert.doesNotMatch(data.reasons.join(), /visually hidden|no readable/);
+});
+for (const [name, style] of [
+  ['zero circle', 'clip-path:circle(0px)'], ['zero ellipse', 'clip-path:ellipse(0px 30px)'],
+  ['zero polygon', 'clip-path:polygon(0 0, 50% 50%, 100% 100%)'],
+]) test('G3C zero-area clipping omits text: ' + name, options, async t => {
+  const f = await fixture(t, `<ul aria-label="Data"><li>safe<span style="display:inline-block;${style}">clipped secret</span></li></ul>`);
+  const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Data'));
+  assert.deepEqual(data.rows, [['safe']]); assert.match(data.reasons.join(), /visually hidden/);
+});
+test('G3C sensitive names on buttons and ordinary elements preserve labels while form values stay redacted', options, async t => {
+  const f = await fixture(t, '<ul aria-label="Data"><li><button id="card" aria-label="Add card to cart">Add card to cart</button></li>' +
+    '<li><span autocomplete="cc-number">ordinary label</span></li><li><output id="secret">ordinary output</output></li>' +
+    '<li><input name="password" value="input-secret"></li><li><textarea name="secret">textarea-secret</textarea></li>' +
+    '<li><select name="card"><option>select-secret</option></select></li><li><span contenteditable>editor-secret</span></li>' +
+    '<li><span role="textbox" aria-label="password">textbox-secret</span></li></ul>');
+  const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Data'));
+  assert.deepEqual(data.rows, [['Add card to cart'], ['ordinary label'], ['ordinary output'], ...Array.from({ length: 5 }, () => ['[redacted]'])]);
+  assert.doesNotMatch(JSON.stringify(data), /input-secret|textarea-secret|select-secret|editor-secret|textbox-secret/);
+});
+test('G3C default CSV page export has no BOM and explicit BOM adds only the UTF-8 signature', options, async t => {
+  const f = await fixture(t, '<ul aria-label="Data"><li>桃</li><li>=1+1</li></ul>');
+  const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Data'));
+  const plain = writeDataExport(data, {}, ctx('Export table'), { userHome: f.root });
+  const marked = writeDataExport(data, { bom: true }, ctx('Export table'), { userHome: f.root });
+  assert.equal(fs.readFileSync(plain.path, 'utf8'), '"桃"\r\n"\'=1+1"\r\n');
+  assert.equal(fs.readFileSync(marked.path, 'utf8'), '\uFEFF"桃"\r\n"\'=1+1"\r\n');
+  assert.equal(marked.bytes, plain.bytes + 3); assert.equal(plain.bom, false); assert.equal(marked.bom, true);
+});
+
+test('G3C numeric collection rows are data, not evidence of pagination', options, async t => {
+  const f = await fixture(t, '<ul aria-label="Numbers"><li>1</li><li>2</li><li>3</li></ul>');
+  const data = await readDataExport(f.page, await refFor(f.page, 'list', 'Numbers'));
+  assert.deepEqual(data.rows, [['1'], ['2'], ['3']]); assert.equal(data.complete, true, JSON.stringify(data.reasons));
+});
+
+test('G3C pagination still casts doubt when the rendered page declares its own row count', options, async t => {
+  const f = await fixture(t, '<main><table aria-label="Data" aria-rowcount="1"><tr><td>only row</td></tr></table><ul><li><button>Next →</button></li></ul></main>');
+  const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
+  assert.deepEqual(data.rows, [['only row']]); assert.equal(data.complete, false);
+  assert.match(data.reasons.join(), /pagination/);
 });
