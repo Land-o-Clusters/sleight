@@ -10,6 +10,11 @@ import { readDataExport } from '../plugins/sleight/lib/direct-browser/export-dat
 
 const data = () => ({ kind: 'table', columns: ['Name', 'Price', 'Note'], rows: [['pear', '1.20', 'a,"quote"\nand a line'], ['桃', '2', '=1+1']], declaredTotal: 2, complete: true, reasons: [] });
 const context = text => ({ userMessage: () => ({ source: 'user', text }) });
+test('G3E the writer retains an unbound nearby count observation alongside a proved total', () => {
+  const result = JSON.parse(serializeDataExport({ ...data(), reasons: ['nearby count label is not tied to the collection'] }, 'json'));
+  assert.equal(result.complete, true);
+  assert.deepEqual(result.reasons, ['nearby count label is not tied to the collection']);
+});
 function folder(t) {
   const root = fs.mkdtempSync(path.join(fs.realpathSync(tmpdir()), 'sleight-export-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

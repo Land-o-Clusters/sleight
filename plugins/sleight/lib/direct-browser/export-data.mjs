@@ -11,9 +11,9 @@ export function readExportCollection(el, limits, read) {
   const collection = node => /^(table|ul|ol)$/.test(tag(node)) || /^(table|grid|treegrid|list|listbox|log|feed)$/.test(role(node));
   const table = tag(el) === 'table' || /^(table|grid|treegrid)$/.test(role(el));
   if (!read(el, 'isConnected') || !collection(el)) throw Error('Export ref must name a table, grid or list');
-  const reasons = new Set(), signals = new Set(), rows = [], indices = [], totals = [], textTotals = [], hidden = new WeakMap();
+  const reasons = new Set(), signals = new Set(), rows = [], indices = [], totals = [], textTotals = [], observedTotals = [], hidden = new WeakMap();
   let nodes = 0, characters = 0, redacted = false, capped = false;
-  const sensitive = /password|passcode|secret|one.?time|\botp\b|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|security.?code/i;
+  const sensitive = /password|passcode|secret|one.?time|\botp\b|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|security.?code|\bcode\b/i;
   const children = node => Array.from(read(node, 'children') ?? []);
   const branches = node => tag(node) === 'slot' ? HTMLSlotElement.prototype.assignedElements.call(node, { flatten: true }) : children(read(node, 'shadowRoot') ?? node);
   const parent = node => read(node, 'parentElement') ?? read(read(node, 'getRootNode')?.(), 'host');
@@ -54,7 +54,7 @@ export function readExportCollection(el, limits, read) {
       const boxes = Array.from(read(node, 'getClientRects')?.() ?? []);
       const noBox = /^(br|wbr|col|colgroup)$/.test(tag(node)) || style.display === 'contents' ||
         style.display === 'inline' && !children(node).length && !(read(node, 'textContent') ?? '').trim();
-      const positioned = /^(absolute|fixed)$/.test(style.position);
+      const positioned = /^(absolute|fixed|relative)$/.test(style.position) || style.transform !== 'none' || style.translate !== 'none';
       const geometry = noBox || boxes.some(box => box.width > 0 && box.height > 0 && box.right + scrollX > 0 && box.bottom + scrollY > 0 &&
         (!positioned || box.left < innerWidth && box.top < innerHeight && box.right > 0 && box.bottom > 0));
       if (!geometry || Number(style.opacity) === 0 || parseFloat(style.fontSize) === 0 || boxes.length > 0 && boxes.every(box => zeroClip(style, box))) {
@@ -65,13 +65,36 @@ export function readExportCollection(el, limits, read) {
   };
   if (!visible(el)) throw Error('Export collection is hidden');
   const integer = value => /^\d+$/.test(value ?? '') && Number(value) <= 1000000000 ? Number(value) : undefined;
-  const bound = node => !attribute(node, 'aria-controls') || attribute(node, 'aria-controls').trim() === attribute(el, 'id');
+  const tokens = value => (value ?? '').trim().split(/\s+/).filter(Boolean);
+  const references = (node, key) => {
+    const root = read(node, 'getRootNode')?.();
+    return tokens(attribute(node, key)).slice(0, 32).map(id => read(root, 'getElementById')?.(id)).filter(Boolean);
+  };
+  const bound = node => ['aria-controls', 'for'].every(key => !attribute(node, key) ||
+    tokens(attribute(node, key)).every(id => id === attribute(el, 'id')));
+  const linkedLabels = new Set([...references(el, 'aria-labelledby'), ...references(el, 'aria-describedby')]);
+  const tied = node => linkedLabels.has(node) || ['aria-controls', 'for'].some(key =>
+    attribute(el, 'id') && tokens(attribute(node, key)).includes(attribute(el, 'id')));
+  // Paint checks apply to text itself so an opaque child of a transparent container stays readable.
+  const readableText = node => {
+    const owner = parent(node), style = getComputedStyle(owner);
+    const transparent = value => value === 'transparent' || /^rgba\([^)]*,\s*0(?:\.0*)?\)$/.test(value) || /\/\s*0(?:%|\.0*)?\s*\)$/.test(value);
+    let yes = !transparent(style.color) && !transparent(style.webkitTextFillColor);
+    if (yes && parseFloat(style.textIndent)) {
+      const range = read(read(node, 'ownerDocument'), 'createRange')();
+      Range.prototype.selectNodeContents.call(range, node);
+      const boxes = Array.from(Range.prototype.getClientRects.call(range)).filter(box => box.width > 0 && box.height > 0);
+      yes = boxes.length > 0 && boxes.every(box => box.left < innerWidth && box.right > 0 && box.right + scrollX > 0 && box.bottom + scrollY > 0);
+    }
+    if (!yes) reasons.add('visually hidden text omitted');
+    return yes;
+  };
   // Count labels must be whole labels, outside data rows, and read only from visible text.
   const labelText = node => {
     let value = '', budget = 256, truncated = false;
     const scan = (current, depth = 0) => {
       if (--budget < 0 || depth > 16 || value.length > 160) { truncated = true; return; }
-      if (read(current, 'nodeType') === 3) { value += read(current, 'nodeValue') ?? ''; return; }
+      if (read(current, 'nodeType') === 3) { if (readableText(current)) value += read(current, 'nodeValue') ?? ''; return; }
       if (read(current, 'nodeType') !== 1 || current !== node && collection(current) || !bound(current) || !visible(current) ||
           /^(script|style|input|textarea|select)$/.test(tag(current))) return;
       for (const child of Array.from(read(current, 'childNodes') ?? [])) scan(child, depth + 1);
@@ -85,7 +108,9 @@ export function readExportCollection(el, limits, read) {
       /^(\d[\d,]*)\s+(?:results?|rows?|entries|items)(?:\s+(?:total|found))?\.?$/i.exec(label) ??
       /^total\s*:?\s*(\d[\d,]*)\s+(?:results?|rows?|entries|items)\.?$/i.exec(label) ??
       /^total\s+(?:results?|rows?|entries|items)\s*:?\s*(\d[\d,]*)\.?$/i.exec(label);
-    return match ? integer(match[1].replaceAll(',', '')) : undefined;
+    // Validate every numeral, including range endpoints, before removing separators.
+    return match && (label.match(/\d[\d,]*/g) ?? []).every(value => /^(?:\d+|\d{1,3}(?:,\d{3})+)$/.test(value))
+      ? integer(match[1].replaceAll(',', '')) : undefined;
   };
   const inspect = node => {
     if (attribute(node, 'aria-busy') === 'true' || role(node) === 'progressbar') reasons.add('collection contains a loading indicator');
@@ -122,6 +147,7 @@ export function readExportCollection(el, limits, read) {
       if (++nodes > 50000 || depth > 96) { capped = true; reasons.add('DOM budget reached'); return; }
       const type = read(current, 'nodeType');
       if (type === 3) {
+        if (!readableText(current)) return;
         const raw = read(current, 'nodeValue') ?? '', room = limits.characters - characters;
         const value = raw.slice(0, Math.max(0, room)); parts.push(value); characters += value.length;
         if (value.length < raw.length) { capped = true; reasons.add('text budget reached'); }
@@ -138,7 +164,9 @@ export function readExportCollection(el, limits, read) {
       const control = /^(input|textarea|select)$/.test(tag(current)) || /^(textbox|combobox|searchbox|spinbutton)$/.test(role(current)) || read(current, 'isContentEditable');
       if (/^(input|textarea|select)$/.test(tag(current)) || read(current, 'isContentEditable') ||
         control && (/(?:^|\s)cc-/i.test(attribute(current, 'autocomplete') ?? '') || sensitive.test([
-          attribute(current, 'type'), attribute(current, 'name'), attribute(current, 'id'), attribute(current, 'autocomplete'), attribute(current, 'aria-label')].join(' ')))) {
+          attribute(current, 'type'), attribute(current, 'name'), attribute(current, 'id'), attribute(current, 'autocomplete'), attribute(current, 'aria-label'),
+          attribute(current, 'placeholder'), attribute(current, 'data-placeholder'),
+          ...references(current, 'aria-describedby').map(node => (read(node, 'textContent') ?? '').slice(0, 1024))].join(' ')))) {
         parts.push('[redacted]'); redacted = true; return;
       }
       if (current !== node && collection(current)) { reasons.add('nested collection omitted'); return; }
@@ -156,7 +184,7 @@ export function readExportCollection(el, limits, read) {
   const nonItem = node => /^(button|a|input|select|textarea|script|style|template|progress)$/.test(tag(node)) || /^(button|progressbar|status|alert)$/.test(role(node));
   visit(el, node => {
     if (node === el) return;
-    if (tag(node) === 'tfoot') {
+    if (/^(caption|tfoot)$/.test(tag(node))) {
       const count = declaredRows(node);
       if (count !== undefined) { textTotals.push(count); return false; }
     }
@@ -175,10 +203,13 @@ export function readExportCollection(el, limits, read) {
         if (node === record) return;
         if (/^(td|th)$/.test(tag(node)) || /^(cell|gridcell|columnheader|rowheader)$/.test(role(node))) { cells.push(node); return false; }
       });
-      header = cells.length > 0 && cells.every(node => tag(node) === 'th' && attribute(node, 'scope') !== 'row' || role(node) === 'columnheader');
+      header = cells.length > 0 && (tag(parent(record)) === 'thead' ||
+        cells.every(node => tag(node) === 'th' && attribute(node, 'scope') !== 'row' || role(node) === 'columnheader'));
       if (cells.length > limits.columns) { reasons.add('column budget reached'); cells = cells.slice(0, limits.columns); }
       if (cells.some(node => ['rowspan', 'colspan', 'aria-rowspan', 'aria-colspan'].some(key => Number(attribute(node, key)) > 1))) reasons.add('spanning cells kept as single cells');
     } else cells = [record];
+    const count = integer(attribute(record, table ? 'aria-rowcount' : 'aria-setsize'));
+    if (count !== undefined) totals.push(count);
     if (rows.length >= limits.rows && !header) { reasons.add('row budget reached'); break; }
     const row = cells.map(text);
     if (header && !columns.length && !rows.length) { columns = row; headers++; continue; }
@@ -189,8 +220,6 @@ export function readExportCollection(el, limits, read) {
     const dataIndex = integer(attribute(record, 'data-index') ?? attribute(record, 'data-row-index'));
     const index = nativeIndex ?? (dataIndex === undefined ? undefined : dataIndex + 1);
     if (index !== undefined) indices.push(index);
-    const count = integer(attribute(record, table ? 'aria-rowcount' : 'aria-setsize'));
-    if (count !== undefined) totals.push(count);
     if (attribute(record, 'aria-setsize') === '-1' || attribute(record, 'aria-busy') === 'true') reasons.add('row total unknown or row busy');
     if (capped) break;
   }
@@ -200,6 +229,21 @@ export function readExportCollection(el, limits, read) {
   // Nearby controls are observations. Only a declaration can establish a total.
   {
     const seen = new WeakSet();
+    const foreignCollection = (node, depth = 0) => {
+      if (!node || node === el) return false;
+      if (++nodes > 50000 || depth > 96) { reasons.add('DOM budget reached'); return true; }
+      return collection(node) || branches(node).some(child => foreignCollection(child, depth + 1));
+    };
+    // Explicit references may live farther away than the observation neighborhood.
+    const root = read(el, 'getRootNode')?.();
+    const labels = Array.from(read(root, 'querySelectorAll')?.('[aria-controls],label[for]') ?? []);
+    for (const node of [...linkedLabels, ...labels]) {
+      if (++nodes > 50000) { reasons.add('DOM budget reached'); break; }
+      if (tied(node) && bound(node) && !collection(node)) {
+        const count = declaredRows(node);
+        if (count !== undefined) textTotals.push(count);
+      }
+    }
     const nearby = (node, depth = 0, allowTotal = true) => {
       if (!node || seen.has(node)) return;
       seen.add(node);
@@ -209,13 +253,16 @@ export function readExportCollection(el, limits, read) {
       if (tag(node) === 'header' || role(node) === 'banner') return;
       if (node === el || !visible(node)) return;
       inspect(node);
+      if (!bound(node)) allowTotal = false;
       // Never borrow another collection's declared total or its data labels.
       if (collection(node)) {
         if (!/^(ul|ol)$/.test(tag(node)) && role(node) !== 'list') return;
         allowTotal = false;
-      } else if (allowTotal && bound(node) && /^(span|p|div|footer|caption|output)$/.test(tag(node))) {
+      } else if (bound(node) && /^(span|p|div|footer|caption|output|label)$/.test(tag(node))) {
         const count = declaredRows(node);
-        if (count !== undefined) textTotals.push(count);
+        if (count !== undefined && !tied(node) && allowTotal) {
+          observedTotals.push(count); signals.add('nearby count label is not tied to the collection');
+        }
       }
       for (const child of branches(node)) nearby(child, depth + 1, allowTotal);
     };
@@ -232,26 +279,46 @@ export function readExportCollection(el, limits, read) {
       }
       if ((read(node, 'scrollHeight') ?? 0) > (read(node, 'clientHeight') ?? 0) + 1 ||
           (read(node, 'scrollWidth') ?? 0) > (read(node, 'clientWidth') ?? 0) + 1) signals.add('scrolling collection');
+      if (node !== el && bound(node) && !foreignCollection(node)) {
+        const count = declaredRows(node);
+        if (count !== undefined && !tied(node)) {
+          observedTotals.push(count); signals.add('nearby count label is not tied to the collection');
+        }
+      }
       // Cross overflow wrappers. Inspect adjacent siblings at each level, never the whole document.
       const siblings = branches(parent(node)).filter(child => !/^(script|style|template)$/.test(tag(child))), index = siblings.indexOf(node);
-      nearby(siblings[index - 1]); nearby(siblings[index + 1]);
+      const neighbors = [-2, -1, 1, 2].map(offset => siblings[index + offset]).filter(Boolean);
+      const allowTotal = !neighbors.some(node => foreignCollection(node));
+      for (const sibling of neighbors) nearby(sibling, 0, allowTotal);
       if (body) break;
     }
   }
   // ARIA row counts include the header. Text counts describe data rows.
-  const declarations = [...totals.map(count => Math.max(0, count - headers)), ...textTotals];
-  const expected = declarations.length ? Math.max(...declarations) : undefined;
+  // Hidden header rows still contribute to aria-rowcount, even when outside a thead.
+  let hiddenHeaders = 0;
+  if (table) for (const record of Array.from(read(el, 'querySelectorAll')?.('tr,[role="row"]') ?? [])) {
+    if (++nodes > 50000) { reasons.add('DOM budget reached'); break; }
+    if (visible(record) || read(record, 'closest')?.('table,[role="table"],[role="grid"],[role="treegrid"]') !== el) continue;
+    const cells = Array.from(read(record, 'querySelectorAll')?.('td,th,[role="cell"],[role="gridcell"],[role="columnheader"],[role="rowheader"]') ?? [])
+      .filter(node => read(node, 'closest')?.('tr,[role="row"]') === record);
+    if (cells.length && (tag(parent(record)) === 'thead' || cells.every(node =>
+      tag(node) === 'th' && attribute(node, 'scope') !== 'row' || role(node) === 'columnheader'))) hiddenHeaders++;
+  }
+  if (hiddenHeaders) reasons.add('hidden header rows omitted');
+  const declarations = [...totals.map(count => Math.max(0, count - headers - hiddenHeaders)), ...textTotals];
+  const counts = [...declarations, ...observedTotals.filter(count => count > rows.length)];
+  const expected = counts.length ? Math.max(...counts) : undefined;
   if (new Set(declarations).size > 1) reasons.add('page declares conflicting totals');
-  if (expected === undefined) reasons.add('collection has no declared total');
+  if (!declarations.length) reasons.add('collection has no declared total');
   if (expected !== undefined && expected > rows.length) reasons.add(`${expected - rows.length} rows not rendered (virtualized or paginated collection)`);
-  if (expected !== undefined && expected < rows.length) reasons.add('rendered count exceeds the declared total');
+  if (declarations.some(count => count < rows.length)) reasons.add('rendered count exceeds the declared total');
   if (indices.length && expected === undefined) reasons.add('indexed collection has no declared total');
   // Inspect zero-height feed sentinels even though their text is not readable.
   for (const node of branches(el)) if (/sentinel/i.test((attribute(node, 'class') ?? '') + ' ' + (attribute(node, 'id') ?? '')))
     signals.add('possible infinite scroll sentinel');
   if (!rows.length) reasons.add('no readable data rows');
   return { kind: table ? 'table' : 'list', columns, rows, declaredTotal: expected,
-    complete: expected === rows.length && reasons.size === 0, reasons: [...reasons, ...signals], redacted };
+    complete: declarations.length > 0 && expected === rows.length && reasons.size === 0, reasons: [...reasons, ...signals], redacted };
 }
 
 export async function readDataExport(page, ref, { endpoint, check = () => {} } = {}) {

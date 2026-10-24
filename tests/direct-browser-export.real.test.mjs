@@ -356,7 +356,7 @@ for (const [name, html, count, complete, reason] of [
   ['two-page pager', `<section>${oneRow}<ul><li><a href="#1">1</a></li><li><a href="#2">2</a></li></ul></section>`, undefined, false, /pagination page numbers/],
   ['glyph pager', `<section>${oneRow}<div><button>‹</button><button>›</button></div></section>`, undefined, false, /pagination/],
   ['range declaration', `<section>${oneRow}<div>Showing 1 to 10 of 243 entries</div></section>`, 243, false, /242 rows not rendered/],
-  ['matching results declaration', `<section>${oneRow}<p>1 results</p></section>`, 1, true, null],
+  ['matching results declaration', `<section>${oneRow}<p>1 results</p></section>`, undefined, false, /nearby count/],
   ['matching ARIA total', oneRow.replace('<table ', '<table aria-rowcount="1" '), 1, true, null],
   ['table footer count', oneRow.replace('</table>', '<tfoot><tr><td>Total: 1 rows</td></tr></tfoot></table>'), 1, true, null],
   ['page count is not a row count', `<section>${oneRow}<p>Page 1 of 2</p></section>`, undefined, false, /pagination page count/],
@@ -407,7 +407,7 @@ test('G3D another collection cannot lend its count through its data rows', optio
 });
 for (const [label, extra, declaredTotal, complete] of [
   ['Total: 1', '', undefined, false],
-  ['Total rows: 1', '', 1, true],
+  ['Total rows: 1', '', undefined, false],
   ['1 results', ' hidden', undefined, false],
   ['2 results', '', 2, false],
 ]) test('G3D count declarations: ' + label + extra, options, async t => {
@@ -425,7 +425,7 @@ test('G3D Showing 1 to 10 of 243 reports the declared and read counts', options,
 });
 test('G3D matching list item totals and conflicting declarations remain explicit', options, async t => {
   const f = await fixture(t, '<section><ul aria-label="Equal" aria-setsize="2"><li>first</li><li>second</li></ul></section>' +
-    `<section>${oneRow.replace('<table ', '<table aria-rowcount="1" ')}<span>2 results</span></section>`);
+    `<section>${oneRow.replace('<table ', '<table aria-rowcount="1" ')}<span aria-controls="data">2 results</span></section>`.replace('<table ', '<table id="data" '));
   const equal = await readDataExport(f.page, await refFor(f.page, 'list', 'Equal'));
   assert.equal(equal.complete, true); assert.equal(equal.declaredTotal, 2);
   const conflict = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
@@ -435,4 +435,104 @@ test('G3D a count explicitly controlling another collection cannot be borrowed',
   const f = await fixture(t, `<section>${oneRow.replace('<table ', '<table id="selected" ')}<p aria-controls="other">1 results</p></section>`);
   const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
   assert.equal(data.declaredTotal, undefined); assert.equal(data.complete, false);
+});
+
+// G3E: only collection-owned declarations can prove yes. Nearby counts can prove missing rows.
+for (const [name, html, count, status, reason] of [
+  ['matching sibling', `<section>${oneRow}<p>1 results</p></section>`, undefined, 'unknown', /nearby count/],
+  ['smaller sibling', `<section>${oneRow}<p>0 results</p></section>`, undefined, 'unknown', /nearby count/],
+  ['larger sibling', `<section>${oneRow}<p>243 results</p></section>`, 243, 'no', /242 rows not rendered/],
+  ['cart badge', `<section>${oneRow}<aside><span>1 items</span></aside></section>`, undefined, 'unknown', /nearby count/],
+  ['ancestor matching', `<main><section>${oneRow}</section><p>1 results</p></main>`, undefined, 'unknown', /nearby count/],
+  ['ancestor larger', `<main><section>${oneRow}</section><p>243 results</p></main>`, 243, 'no', /242 rows not rendered/],
+  ['ancestor text larger', `<section>243 results${oneRow}</section>`, 243, 'no', /242 rows not rendered/],
+  ['caption', oneRow.replace('<tr>', '<caption>1 results</caption><tr>'), 1, 'yes', null],
+  ['labelledby', oneRow.replace('<table ', '<table aria-labelledby="count" ') + '<p id="count">1 results</p>', 1, 'yes', null],
+  ['describedby remote', oneRow.replace('<table ', '<table aria-describedby="count" ') + '<div>gap</div><div>gap</div><div>gap</div><p id="count">1 results</p>', 1, 'yes', null],
+  ['controls', oneRow.replace('<table ', '<table id="data" ') + '<p aria-controls="data">1 results</p>', 1, 'yes', null],
+  ['for id', oneRow.replace('<table ', '<table id="data" ') + '<label for="data">1 results</label>', 1, 'yes', null],
+  ['another collection beside label', `<section>${oneRow}<p>243 results</p><table><tr><td>other</td></tr></table></section>`, undefined, 'unknown', /no declared total/],
+  ['another collection in wrapper', `<section>${oneRow}<div><p>243 results</p><ul><li>other</li></ul></div></section>`, undefined, 'unknown', /no declared total/],
+  ['explicit other for id', oneRow.replace('<table ', '<table id="data" ') + '<label for="other">243 results</label>', undefined, 'unknown', /no declared total/],
+  ['nested other control label', oneRow + '<div aria-controls="other"><span>243 results</span></div>', undefined, 'unknown', /no declared total/],
+  ['strong count and matching observation', oneRow.replace('<table ', '<table aria-rowcount="1" ') + '<p>1 results</p>', 1, 'yes', /nearby count/],
+  ['strong count and smaller observation', oneRow.replace('<table ', '<table aria-rowcount="1" ') + '<p>0 results</p>', 1, 'yes', /nearby count/],
+  ['strong count and larger observation', oneRow.replace('<table ', '<table aria-rowcount="1" ') + '<p>243 results</p>', 243, 'no', /242 rows not rendered/],
+]) test('G3E count binding: ' + name, options, async t => {
+  const f = await fixture(t, html);
+  // Read the actual utility-world reader so accessible-name changes do not select a different collection.
+  const data = await trustedLocatorRead(f.page.locator('table').first(), readExportCollection, EXPORT_LIMITS);
+  assert.deepEqual(data.rows, [['only row']]); assert.equal(data.declaredTotal, count);
+  assert.equal(data.complete, status === 'yes');
+  if (reason) assert.match(data.reasons.join(), reason);
+  const receipt = writeDataExport(data, { format: 'json' }, ctx('Export table'), { userHome: f.root });
+  assert.match(exportSummary(receipt), new RegExp('Complete: ' + status));
+  assert.equal(JSON.parse(fs.readFileSync(receipt.path)).complete, status === 'yes');
+});
+
+for (const label of ['1,2,3 results', '10,5 rows', 'Showing 1,2,3 to 10 of 243 entries', 'Showing 1 to 10,5 of 243 entries'])
+  test('G3E rejects malformed count groups: ' + label, options, async t => {
+    const f = await fixture(t, oneRow.replace('<tr>', `<caption>${label}</caption><tr>`) + `<p>${label}</p>`);
+    const data = await trustedLocatorRead(f.page.locator('table'), readExportCollection, EXPORT_LIMITS);
+    assert.equal(data.declaredTotal, undefined); assert.equal(data.complete, false);
+  });
+for (const [label, count] of [['1,243 results', 1243], ['Total rows: 1,000,000', 1000000], ['Showing 1 to 10 of 1,243 entries', 1243]])
+  test('G3E accepts grouped count: ' + label, options, async t => {
+    const f = await fixture(t, oneRow.replace('<tr>', `<caption>${label}</caption><tr>`));
+    const data = await trustedLocatorRead(f.page.locator('table'), readExportCollection, EXPORT_LIMITS);
+    assert.equal(data.declaredTotal, count); assert.equal(data.complete, false);
+  });
+for (const side of ['before', 'after']) test('G3E observes controls and totals two siblings ' + side, options, async t => {
+  const extra = '<div><p>243 results</p><button>Next</button></div>', spacer = '<div>separator</div>';
+  const f = await fixture(t, `<section>${side === 'before' ? extra + spacer + oneRow : oneRow + spacer + extra}</section>`);
+  const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
+  assert.equal(data.declaredTotal, 243); assert.equal(data.complete, false); assert.match(data.reasons.join(), /pagination/);
+});
+for (const [name, style] of [
+  ['relative positive', 'position:relative;left:9999px'], ['relative negative', 'position:relative;left:-9999px'],
+  ['transform positive', 'display:inline-block;transform:translateX(9999px)'],
+  ['transform negative', 'display:inline-block;transform:translateX(-9999px)'],
+  ['indent positive', 'display:inline-block;text-indent:9999px'], ['indent negative', 'display:inline-block;text-indent:-9999px'],
+  ['transparent', 'color:transparent'], ['zero alpha', 'color:rgba(20,30,40,0)'],
+]) test('G3E omits hidden text: ' + name, options, async t => {
+  const f = await fixture(t, `<ul aria-label="Data"><li>safe<span style="${style}">hidden-value</span></li></ul>`);
+  const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
+  assert.deepEqual(data.rows, [['safe']]); assert.match(data.reasons.join(), /visually hidden/);
+});
+for (const role of ['textbox', 'combobox']) for (const [name, attr, label] of [
+  ['placeholder password', 'placeholder="Password"', ''],
+  ['data placeholder card', 'data-placeholder="Card number"', ''],
+  ['describedby cvv', 'aria-describedby="hint"', '<p id="hint">CVV</p>'],
+  ['describedby code', 'aria-describedby="hint"', '<p id="hint">Code</p>'],
+  ['name security code', 'name="security_code"', ''],
+]) test(`G3E redacts ${role} named by ${name}`, options, async t => {
+  const f = await fixture(t, `<ul aria-label="Data"><li><span role="${role}" ${attr}>protected-value</span></li></ul>${label}`);
+  const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
+  assert.deepEqual(data.rows, [['[redacted]']]); assert.equal(data.redacted, true);
+});
+for (const [name, html, columns, rows, count, complete] of [
+  ['thead td header', '<table aria-rowcount="2"><thead><tr><td>Name</td></tr></thead><tbody><tr><td>one</td></tr></tbody></table>', ['Name'], [['one']], 1, true],
+  ['count on header row', '<table><tr aria-rowcount="2"><th>Name</th></tr><tr><td>one</td></tr></table>', ['Name'], [['one']], 1, true],
+  ['hidden header', '<table aria-rowcount="2"><thead hidden><tr><th>Name</th></tr></thead><tr><td>one</td></tr></table>', [], [['one']], 1, false],
+  ['hidden header row', '<table aria-rowcount="2"><tr hidden><th>Name</th></tr><tr><td>one</td></tr></table>', [], [['one']], 1, false],
+  ['no header', '<table aria-rowcount="1"><tr><td>one</td></tr></table>', [], [['one']], 1, true],
+]) test('G3E ARIA counts include header: ' + name, options, async t => {
+  const f = await fixture(t, html), data = await trustedLocatorRead(f.page.locator('table'), readExportCollection, EXPORT_LIMITS);
+  assert.deepEqual(data.columns, columns); assert.deepEqual(data.rows, rows);
+  assert.equal(data.declaredTotal, count); assert.equal(data.complete, complete);
+});
+
+test('G3E ten rendered rows and an unrelated matching badge never prove the whole export', options, async t => {
+  const f = await fixture(t, '<section><table aria-label="Data">' + Array.from({ length: 10 }, (_, i) => `<tr><td>row ${i}</td></tr>`).join('') +
+    '</table><p>10 results</p></section>');
+  const data = await readDataExport(f.page, await refFor(f.page, 'table', 'Data'));
+  assert.equal(data.rows.length, 10); assert.equal(data.complete, false); assert.equal(data.declaredTotal, undefined);
+  const receipt = writeDataExport(data, {}, ctx('Export table'), { userHome: f.root });
+  assert.match(exportSummary(receipt), /Complete: unknown/);
+});
+test('G3E transparent containers preserve opaque children and ordinary indented text stays readable', options, async t => {
+  const f = await fixture(t, '<ul><li><span style="color:transparent">hidden<span style="color:black">opaque</span></span></li>' +
+    '<li><div style="text-indent:20px">indented</div></li></ul>');
+  const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
+  assert.deepEqual(data.rows, [['opaque'], ['indented']]);
 });

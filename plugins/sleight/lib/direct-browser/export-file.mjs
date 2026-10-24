@@ -101,7 +101,8 @@ function validateData(data) {
   if (data.declaredTotal !== undefined && (!Number.isSafeInteger(data.declaredTotal) || data.declaredTotal < 0 || data.declaredTotal > 1000000000)) refuse('Invalid declared export total');
   const observations = new Set(['nearby pagination control', 'nearby pagination page numbers',
     'nearby pagination page count (pages, not a row total)', 'unopened pagination or expansion control',
-    'possible infinite scroll beyond collection', 'possible infinite scroll sentinel', 'scrolling collection']);
+    'possible infinite scroll beyond collection', 'possible infinite scroll sentinel', 'scrolling collection',
+    'nearby count label is not tied to the collection']);
   if (data.complete && data.reasons.some(reason => !observations.has(reason))) refuse('Conflicting export completeness');
 }
 // Pure public interface for another reader (including whole-thread reads): ordered string cells plus honest completeness.
