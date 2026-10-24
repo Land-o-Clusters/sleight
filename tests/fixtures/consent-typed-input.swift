@@ -80,8 +80,45 @@ func send(_ event: NSEvent, _ route: Route = .window, current: Bool = true) {
 func type(_ text: String, _ view: ConsentTyping, _ route: Route = .window) {
     for char in text {
         send(key(String(char), in: view.window!), route)
-        check(view.field.accessibilityValue() != view.field.stringValue || view.field.stringValue.isEmpty, "AX never returns typed letters")
+        check(view.field.stringValue.allSatisfy { $0 == "•" }, "display contains only bullets")
         check(view.field.accessibilityValue() == String(repeating: "•", count: view.field.stringValue.count), "AX exposes only masked length")
+    }
+}
+func checkMaskedText(_ field: ConsentWordField, count: Int) {
+    let mask = String(repeating: "•", count: count), full = NSRange(location: 0, length: count)
+    let caret = NSRange(location: count, length: 0)
+    check(field.stringValue == mask, "stringValue holds only the masked word")
+    check(field.attributedStringValue.string == mask, "attributed display holds only the masked word")
+    check(field.cell?.stringValue == mask, "drawing cell holds only the masked word")
+    check(field.accessibilityValue() == mask, "AXValue is masked")
+    check(field.accessibilityString(for: full) == mask, "AXStringForRange is masked")
+    check(field.accessibilityAttributedString(for: full)?.string == mask, "AXAttributedStringForRange is masked")
+    check(field.accessibilitySelectedText() == "", "AXSelectedText is empty without selection")
+    check(field.accessibilitySelectedTextRange() == caret, "AXSelectedTextRange is the masked caret")
+    check(field.accessibilityNumberOfCharacters() == count, "AXNumberOfCharacters is the masked length")
+    check(field.accessibilityVisibleCharacterRange() == full, "AXVisibleCharacterRange covers the mask")
+    for (attribute, expected) in [(NSAccessibility.Attribute.value, mask), (.selectedText, "")] {
+        check(field.accessibilityAttributeValue(attribute) as? String == expected, "legacy \(attribute.rawValue) is masked")
+    }
+    check((field.accessibilityAttributeValue(.numberOfCharacters) as? NSNumber)?.intValue == count, "legacy AXNumberOfCharacters is masked length")
+    check((field.accessibilityAttributeValue(.selectedTextRange) as? NSValue)?.rangeValue == caret, "legacy AXSelectedTextRange is masked caret")
+    check((field.accessibilityAttributeValue(.visibleCharacterRange) as? NSValue)?.rangeValue == full, "legacy AXVisibleCharacterRange covers mask")
+    for range in [full, NSRange(location: min(1, count), length: max(0, count - 1)), caret] {
+        let expected = String(repeating: "•", count: range.length), value = NSValue(range: range)
+        check(field.accessibilityString(for: range) == expected, "AX substring is masked")
+        check(field.accessibilityAttributedString(for: range)?.string == expected, "AX attributed substring is masked")
+        check(field.accessibilityAttributeValue(.stringForRange, forParameter: value) as? String == expected, "legacy AXStringForRange is masked")
+        check((field.accessibilityAttributeValue(.attributedStringForRange, forParameter: value) as? NSAttributedString)?.string == expected, "legacy AXAttributedStringForRange is masked")
+    }
+    for range in [NSRange(location: count + 1, length: 1), NSRange(location: NSNotFound, length: 1), NSRange(location: 1, length: Int.max)] {
+        check(field.accessibilityString(for: range) == nil, "invalid AX string range returns no text")
+        check(field.accessibilityAttributedString(for: range) == nil, "invalid AX attributed range returns no text")
+        check(field.accessibilityAttributeValue(.stringForRange, forParameter: NSValue(range: range)) == nil, "invalid legacy AX string range returns no text")
+        check(field.accessibilityAttributeValue(.attributedStringForRange, forParameter: NSValue(range: range)) == nil, "invalid legacy AX attributed range returns no text")
+    }
+    for parameter: Any? in [nil, "oak", NSNumber(value: 3), NSValue(point: .zero)] {
+        check(field.accessibilityAttributeValue(.stringForRange, forParameter: parameter) == nil, "malformed legacy AX string parameter returns no text")
+        check(field.accessibilityAttributeValue(.attributedStringForRange, forParameter: parameter) == nil, "malformed legacy AX attributed parameter returns no text")
     }
 }
 func mouse(_ view: ConsentTyping, trusted: Bool = true, age: Double = 0) -> NSEvent {
@@ -172,7 +209,7 @@ for (text, code, flags) in [(" ", UInt16(49), NSEvent.ModifierFlags()), ("1", 18
         send(key(text, in: keyAlert.window, code: code, flags: flags))
         check(keys.field.stringValue == before && feedback.stringValue.isEmpty, "non-letter key preserves buffer without refusal (\(code))")
     }
-    check(keys.field.stringValue == secret, "ignored keys do not alter word")
+    check(keys.field.stringValue == String(repeating: "•", count: secret.count), "ignored keys do not alter word length")
     enter(keys)
     check(keyReceipt.choices == ["Always allow"], "word with ignored keys still confirms")
     _ = keyActions
@@ -182,7 +219,7 @@ for character in ["ф", "ั"] {
     let (layoutAlert, layout, layoutActions, layoutReceipt) = modal()
     let layoutWord = word(layout, "Always allow")
     for char in layoutWord { send(key(character, in: layoutAlert.window, code: codes[char]!)) }
-    check(layout.field.stringValue == layoutWord, "non-Latin letters and combining marks use ABC physical key codes")
+    check(layout.field.stringValue == String(repeating: "•", count: layoutWord.count), "non-Latin letters and combining marks keep masked length")
     enter(layout)
     check(layoutReceipt.choices == ["Always allow"], "non-Latin layout reaches intended action")
     _ = layoutActions
@@ -192,7 +229,7 @@ for character in ["ф", "ั"] {
 let (latinAlert, latin, latinActions, latinReceipt) = modal()
 let latinWord = word(latin, "Always allow")
 for char in latinWord { send(key(String(char).uppercased(), in: latinAlert.window, code: 0, flags: [.shift, .capsLock])) }
-check(latin.field.stringValue == latinWord, "Latin layout characters and uppercase survive key-code fallback")
+check(latin.field.stringValue == String(repeating: "•", count: latinWord.count), "Latin layout characters and uppercase keep masked length")
 enter(latin)
 check(latinReceipt.choices == ["Always allow"], "Latin layout confirms its typed word")
 _ = latinActions
@@ -245,13 +282,18 @@ check(legacyValue == nil || legacyValue == String(repeating: "•", count: guard
 guarded.field.setAccessibilityValue("oak")
 check(guarded.field.stringValue.isEmpty && guardReceipt.choices.isEmpty, "AX write clears physical buffer")
 guarded.field.stringValue = word(guarded, "Always allow")
+checkMaskedText(guarded.field, count: 0)
+guarded.field.attributedStringValue = NSAttributedString(string: word(guarded, "Always allow"))
+checkMaskedText(guarded.field, count: 0)
+guarded.field.objectValue = word(guarded, "Always allow")
+checkMaskedText(guarded.field, count: 0)
 enter(guarded, .window)
 check(guardReceipt.choices.isEmpty, "display value grants no typed authority")
 type(word(guarded, "Always allow"), guarded); enter(guarded, .window, trusted: false)
 check(guardReceipt.choices.isEmpty && guarded.field.stringValue.isEmpty, "posted Return cannot confirm physical word")
 type("o", guarded)
 send(key("x", in: guardAlert.window)); send(key("\u{7f}", in: guardAlert.window, code: 51))
-check(guarded.field.stringValue == "o", "Backspace removes one physical letter")
+check(guarded.field.stringValue == "•", "Backspace removes one masked physical letter")
 send(key("\t", in: guardAlert.window, code: 48))
 check(guarded.field.stringValue.isEmpty && guardReceipt.choices.isEmpty, "Tab only navigates and clears")
 check(guardAlert.window.makeFirstResponder(guarded.field), "refocus after Tab")
@@ -345,11 +387,19 @@ for route in Route.allCases {
         type(word(view, "Continue"), view, route); enter(view, route, trusted: false)
         check(answers.isEmpty && view.field.stringValue.isEmpty, "posted Return cannot complete handoff word")
         type(word(view, "Continue"), view, route)
+        checkMaskedText(view.field, count: word(view, "Continue").count)
+        view.field.stringValue = "overwritten"
+        checkMaskedText(view.field, count: word(view, "Continue").count)
+        view.field.attributedStringValue = NSAttributedString(string: "overwritten")
+        checkMaskedText(view.field, count: word(view, "Continue").count)
+        view.field.objectValue = "overwritten"
+        checkMaskedText(view.field, count: word(view, "Continue").count)
         // A page event with the same Return never completes a card's pending word.
         send(key("\r", in: page, code: 36), route)
         check(answers.isEmpty, "foreign page Return cannot complete handoff word")
         enter(view, route, code: focus == "focused" ? 76 : 36)
         check(answers == ["continue"] && card.finished && !view.field.isEnabled, "focused physical word confirms handoff exactly once: \(route), \(focus)")
+        checkMaskedText(view.field, count: 0)
         check(!window.isVisible && !page.isVisible, "handoff and page were never ordered")
         card.close()
     }

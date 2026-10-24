@@ -139,6 +139,7 @@ final class ConsentWordField: NSTextField {
     }
     private var entries: [String: ConsentInputAction]
     private var typed = ""
+    private var maskedText: String { String(repeating: "•", count: typed.count) }
     private var dispatching = false
     private var lastTimestamp: TimeInterval = -.infinity
     private var focusObserver: NSObjectProtocol?
@@ -160,8 +161,53 @@ final class ConsentWordField: NSTextField {
     deinit { if let observer = focusObserver { NotificationCenter.default.removeObserver(observer) } }
     override var acceptsFirstResponder: Bool { isEnabled }
     override var canBecomeKeyView: Bool { isEnabled && !isHiddenOrHasHiddenAncestor }
+    // Keep plaintext out of NSTextField and its drawing cell, including programmatic value writes.
+    override var stringValue: String {
+        get { super.stringValue }
+        set { super.stringValue = maskedText }
+    }
+    override var attributedStringValue: NSAttributedString {
+        get { super.attributedStringValue }
+        set { super.stringValue = maskedText }
+    }
+    override var objectValue: Any? {
+        get { super.objectValue }
+        set { super.stringValue = maskedText }
+    }
     override func accessibilityRole() -> NSAccessibility.Role? { .textField }
-    override func accessibilityValue() -> String? { String(repeating: "•", count: typed.count) }
+    override func accessibilityValue() -> String? { maskedText }
+    override func accessibilityString(for range: NSRange) -> String? {
+        guard range.location >= 0, range.length >= 0,
+            range.location <= typed.count, range.length <= typed.count - range.location else { return nil }
+        return String(repeating: "•", count: range.length)
+    }
+    override func accessibilityAttributedString(for range: NSRange) -> NSAttributedString? {
+        guard let text = accessibilityString(for: range) else { return nil }
+        return NSAttributedString(string: text)
+    }
+    override func accessibilitySelectedText() -> String? { "" }
+    override func accessibilitySelectedTextRange() -> NSRange { NSRange(location: typed.count, length: 0) }
+    override func accessibilityNumberOfCharacters() -> Int { typed.count }
+    override func accessibilityVisibleCharacterRange() -> NSRange { NSRange(location: 0, length: typed.count) }
+    override func accessibilityAttributeValue(_ attribute: NSAccessibility.Attribute) -> Any? {
+        switch attribute {
+        case .value: return accessibilityValue()
+        case .selectedText: return accessibilitySelectedText()
+        case .selectedTextRange: return NSValue(range: accessibilitySelectedTextRange())
+        case .numberOfCharacters: return accessibilityNumberOfCharacters()
+        case .visibleCharacterRange: return NSValue(range: accessibilityVisibleCharacterRange())
+        default: return super.accessibilityAttributeValue(attribute)
+        }
+    }
+    override func accessibilityAttributeValue(_ attribute: NSAccessibility.ParameterizedAttribute, forParameter parameter: Any?) -> Any? {
+        if attribute == .stringForRange || attribute == .attributedStringForRange {
+            guard let value = parameter as? NSValue,
+                String(cString: value.objCType) == String(cString: NSValue(range: NSRange()).objCType) else { return nil }
+            let range = value.rangeValue
+            return attribute == .stringForRange ? accessibilityString(for: range) : accessibilityAttributedString(for: range)
+        }
+        return super.accessibilityAttributeValue(attribute, forParameter: parameter)
+    }
     override func isAccessibilitySelectorAllowed(_ selector: Selector) -> Bool {
         if selector == #selector(setAccessibilityValue(_:)) { return false }
         return super.isAccessibilitySelectorAllowed(selector)
@@ -250,7 +296,7 @@ final class ConsentWordField: NSTextField {
             guard let letter = letter, typed.count < 12 else { refuse(); return }
             typed += letter
         }
-        stringValue = typed
+        stringValue = maskedText
     }
 }
 

@@ -155,7 +155,7 @@ test('input hints reject auth secrets and populated unnamed fields without match
     ['<p>Enter your authentication code or PIN</p><input placeholder="Promo code" value="SAVE10"><input name="postal-code" value="90210">', true],
     ['<input name="verification-code">', false],
     ['<input name="code">', false],
-    ...['otp_code', 'sms_code', 'user_pin', 'otp-code', 'sms-code', 'user-pin', 'otpCode', 'smsCode', 'userPin'].map(name => [`<input name="${name}">`, false]),
+    ...['otp_code', 'sms_code', 'user_pin', 'otp-code', 'sms-code', 'user-pin', 'otpCode', 'smsCode', 'userPin', 'OTPCode', 'SMSCode', 'OTPcode'].map(name => [`<input name="${name}">`, false]),
     ['<input aria-label="PIN">', false],
     ['<input placeholder="Postal PIN code" value="90210">', true],
     ['<input autocomplete="one-time-code" hidden>', false],
@@ -182,7 +182,7 @@ test('code and pin hints protect pending handoff without hiding ordinary editors
   const pending = f.call('browser_tabs', { do: 'handoff', tab: f.tab, wait: true });
   await waitForCard(f);
   let cards = 1;
-  for (const name of ['code', 'pin', 'otp_code', 'sms_code', 'user_pin', 'otp-code', 'sms-code', 'user-pin', 'otpCode', 'smsCode', 'userPin']) {
+  for (const name of ['code', 'pin', 'otp_code', 'sms_code', 'user_pin', 'otp-code', 'sms-code', 'user-pin', 'otpCode', 'smsCode', 'userPin', 'OTPCode', 'SMSCode', 'OTPcode']) {
     await f.ownerPage.setContent(`<label>Account<input name="${name}" value="482913"></label><p>Echo 482913</p>`);
     const refused = await f.call('browser_read', { tab: f.tab });
     assert.equal(refused.isError, true, name);
