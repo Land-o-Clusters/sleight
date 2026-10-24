@@ -81,6 +81,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
   const inputObservers = new Map();
   const attachments = new Map(), outstanding = new Set(), collectedSessions = new Set();
   const navigationWatches = new Map();
+  const downloadStreams = new Map(); // Only response streams issued on this exact owned route, never arbitrary filesystem handles.
   let closed = false, autoAttach = false, disposal, listening = true;
   const root = upstream.sessionId;
   const live = () => { if (closed) throw Error('CDP_FILTER_CLOSED'); };
@@ -101,6 +102,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
   }
   function removeRoute(name) {
     for (const [child, route] of routes) if (route.parent === name) removeRoute(child);
+    for (const [handle, owner] of downloadStreams) if (owner === name) downloadStreams.delete(handle);
     routes.delete(name);
   }
   // Input authority can disappear before a session is physically detached.
@@ -472,7 +474,15 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
       // domains stay closed, including SystemInfo, Tethering and window APIs.
       // DOMDebugger stays closed (its breakpoints pause the page) except the one read-only listing the rules use to see whether script
       // listens on a link (closed-handle.mjs clickListeners). Without it that answer is "unavailable" and every checkout link asks.
-      if (isRoot || !(domains.has(domain) || method === 'DOMDebugger.getEventListeners')) refuse();
+      if (isRoot || !(domains.has(domain) || method === 'DOMDebugger.getEventListeners' || domain === 'IO')) refuse();
+      if (domain === 'IO') {
+        if (!['IO.read', 'IO.close'].includes(method) || downloadStreams.get(params.handle) !== route ||
+            Object.keys(params).some(key => !['handle', ...(method === 'IO.read' ? ['size'] : [])].includes(key)) ||
+            method === 'IO.read' && (!Number.isInteger(params.size) || params.size < 1 || params.size > 65536)) refuse();
+        const result = await upstream.send(method, params, route);
+        if (method === 'IO.close') downloadStreams.delete(params.handle);
+        return result;
+      }
       if (protectedPort !== undefined && domain === 'Fetch') {
         if (method === 'Fetch.enable' || method === 'Fetch.disable') {
           const ownedRoute = routes.get(route), previous = ownedRoute.fetchPatterns;
@@ -497,6 +507,12 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
           for (const listener of observers) if (bank.has(listener)) try { listener(type, dispatchedAt); } catch {}
         }, () => {});
         return result;
+      }
+      if (method === 'Fetch.takeResponseBodyAsStream') {
+        const result = await upstream.send(method, params, route);
+        live();
+        if (!routes.has(route) || !id(result?.stream)) throw Error('CDP_SESSION_NOT_OWNED');
+        downloadStreams.set(result.stream, route); return result;
       }
       return upstream.send(method, params, route);
     },

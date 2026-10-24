@@ -54,6 +54,6 @@
   "js": "9ec4a1d4a94be18503d350cf9cd3433d1adb9b6479ff5aa870df59e06574b491",
   "browserReviewOutcomes": "5c573cbc59689bbf2ba45e41b65b742c79050aa11cf002ec7d4f43a1acd80438",
   "browserClosedOutcome": "9e5f2ae21e3b53f89a2f31705de162fed1496da007e66246fdf84beb669a8698",
-  "browserToolsLegacy": "6bedd90966b0b70df17409a25e1f062276348d7b6d2915ad7d97363db4931982",
-  "browserToolsMT": "769171c29e0c87e34b72cf9bb7f43cea41c73e57ad3301b9a428ade02d4dde42"
+  "browserToolsLegacy": "6dfe38b05c158b48702a862e701bb9581dffb17bbfb4662330a5645621057d0e",
+  "browserToolsMT": "d41de812fefec147dbf5b6bd483c79b0b326b27661a0d687e9aaea4fa0cb23ed"
 }

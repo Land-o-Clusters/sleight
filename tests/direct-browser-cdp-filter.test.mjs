@@ -68,6 +68,30 @@ test('FD3 offline mailto detach repro retains ownership and can reattach the sam
   await filter.session.send('Runtime.evaluate', { expression: '0' }, second.sessionId);
   assert.equal(f.calls.some(call => call.method === 'Target.createTarget'), false);
 });
+test('download IO is limited to response streams from the same owned route', async t => {
+  const f = fixture(), original = f.session.send;
+  f.session.send = async (method, params, route) => {
+    if (method === 'Fetch.takeResponseBodyAsStream') return { stream: 'response-stream' };
+    if (method === 'IO.read') { f.calls.push({ method, params, route }); return { data: 'fixture', eof: true }; }
+    if (method === 'IO.close') return {};
+    return original(method, params, route);
+  };
+  const filter = (await factory())({ session: f.session, ownedTargets: ['owned'] }); t.after(() => filter.dispose());
+  await filter.session.send('Target.attachToTarget', { targetId: 'owned', flatten: true });
+  const send = (method, params) => filter.session.send(method, params, 's-owned');
+  await assert.rejects(send('IO.read', { handle: '/etc/passwd', size: 100 }), /CDP_COMMAND_REFUSED/);
+  assert.deepEqual(await send('Fetch.takeResponseBodyAsStream', { requestId: 'response' }), { stream: 'response-stream' });
+  assert.equal((await send('IO.read', { handle: 'response-stream', size: 65536 })).data, 'fixture');
+  for (const params of [{ handle: 'response-stream', size: 65537 }, { handle: 'response-stream', size: 10, offset: 0 }, { handle: 'response-stream' }])
+    await assert.rejects(send('IO.read', params), /CDP_COMMAND_REFUSED/);
+  await assert.rejects(filter.session.send('IO.read', { handle: 'response-stream', size: 10 }), /CDP_COMMAND_REFUSED/);
+  await assert.rejects(send('IO.resolveBlob', { objectId: 'response-stream' }), /CDP_COMMAND_REFUSED/);
+  await send('IO.close', { handle: 'response-stream' });
+  await assert.rejects(send('IO.read', { handle: 'response-stream', size: 10 }), /CDP_COMMAND_REFUSED/);
+  await send('Fetch.takeResponseBodyAsStream', { requestId: 'response2' });
+  await filter.session.send('Target.detachFromTarget', { sessionId: 's-owned' });
+  await assert.rejects(send('IO.read', { handle: 'response-stream', size: 10 }), /CDP_SESSION_NOT_OWNED/);
+});
 test('only explicitly owned targets appear in enumeration, metadata and events', async t => {
   const f = fixture(), filter = (await factory())({ session: f.session, ownedTargets: ['owned'] });
   t.after(() => filter.dispose());
