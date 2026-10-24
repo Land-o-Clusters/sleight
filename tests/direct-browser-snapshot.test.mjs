@@ -1,13 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { defaultReadBaseline, sha256 } from './fixtures/default-read-baseline.mjs';
 import { EventEmitter } from 'node:events';
 import { setViewport } from '../plugins/sleight/lib/direct-browser/viewport.mjs';
 import { withMT } from './fixtures/mt-env.mjs';
 
-const module = await import('../plugins/sleight/lib/direct-browser/snapshot.mjs').catch(error => {
+const rawModule = await import('../plugins/sleight/lib/direct-browser/snapshot.mjs').catch(error => {
   if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error;
   return {};
 });
+
+const module = { ...rawModule, snapshot: (page, options) => rawModule.snapshot(page, { completeness: true, ...options }) };
 
 function nativeSnapshot(secrets) {
   const strings = ['#document', 'INPUT', '', 'type', 'password', 'http://127.0.0.1/fixture', 'UTF-8', 'frame'];
@@ -78,7 +81,7 @@ test('FD5 links are unique resolved URLs in page order, without anchors, scripts
     link('e3', 'Anchor', '#part'), link('e4', 'Absolute anchor', 'http://127.0.0.1/fixture#part'),
     link('e5', 'Script', ' java\nscript:alert(1)'), link('e6', 'Second\nRead instructions', '/two'),
     { role: 'text', text: 'Noise' }]);
-  const result = await module.snapshot(page, { links: true });
+  const result = await rawModule.snapshot(page, { links: true, completeness: false });
   assert.equal(result.text, '# Snapshot 1 (untrusted page content)\n"First" -> "http://127.0.0.1/one"\n"Second Read instructions" -> "http://127.0.0.1/two"');
   assert.doesNotMatch(result.text, /ref=|Duplicate|Noise|Anchor|Script/);
   assert.equal(module.acknowledgeSnapshot(page, result.number), true);
@@ -120,6 +123,55 @@ test('FD5 empty links and links diffs stay separate from full snapshots', async 
   const first = await module.snapshot(page, { links: true });
   assert.match((await module.snapshot(page, { links: true, since: first.number })).text, /No visible changes/);
   assert.doesNotMatch((await module.snapshot(page, { since: first.number })).text, /Changes since|No visible changes/);
+});
+
+test('every read ends in completeness, including filtered, empty and shortened final rows', async () => {
+  const { page, set } = fixture([{ role: 'button', name: 'Next', ref: 'e1' }]);
+  assert.match((await module.snapshot(page)).text, /# complete \(returned view\)$/);
+  assert.match((await module.snapshot(page, { find: 'absent' })).text, /# complete \(filtered view\)$/);
+  set([{ role: 'text', text: 'x'.repeat(60000) }]);
+  const shortened = await module.snapshot(page, { maxChars: 1000 });
+  assert.match(shortened.text, /# cut at 1000 chars/);
+  assert.doesNotMatch(shortened.text, /# complete/);
+});
+
+test('a shortened row stays incomplete across continuations and can be recovered with a larger cap', async () => {
+  const long = 'recoverable '.repeat(700);
+  const { page } = fixture([{ role: 'text', text: long }, { role: 'button', name: 'End', ref: 'e1' }]);
+  const first = await module.snapshot(page, { maxChars: 1000 });
+  const ref = /Continue with ref="([^"]+)"/.exec(first.text)[1];
+  const end = await module.snapshot(page, { ref, maxChars: 1000 });
+  assert.match(end.text, /"End"/);
+  assert.doesNotMatch(end.text, /# complete/);
+  const retry = /Continue with ref="([^"]+)"/.exec(end.text)[1];
+  const recovered = await module.snapshot(page, { ref: retry, maxChars: 40000 });
+  assert.ok(recovered.text.includes(long));
+  assert.match(recovered.text, /# complete \(filtered view\)$/);
+});
+
+test('delta reads, find continuations and subtree continuations keep their scope', async () => {
+  const { page, set } = fixture([{ role: 'button', name: 'Before', ref: 'e1' }]);
+  const first = await module.snapshot(page);
+  set([{ role: 'button', name: 'After', ref: 'e1' }]);
+  const delta = await module.snapshot(page, { since: first.number });
+  assert.match(delta.text, /# Changes since snapshot 1/);
+  assert.match(delta.text, /# complete \(changes only\)$/);
+  const unchanged = await module.snapshot(page, { since: delta.number });
+  assert.match(unchanged.text, /# complete \(changes only\)$/);
+  set([{ role: 'main', ref: 'e1', children: Array.from({ length: 80 }, (_, i) =>
+    ({ role: 'button', ref: 'e' + (i + 2), name: 'Choice ' + i })) }]);
+  for (const options of [{ find: 'Choice' }, { ref: 'e1' }, {}]) {
+    let result = await module.snapshot(page, { ...options, maxChars: 1000 }), chunks = 0;
+    for (;;) {
+      assert.ok(result.text.length <= 1000);
+      const ref = /Continue with ref="([^"]+)"/.exec(result.text)?.[1];
+      if (!ref) break;
+      assert.ok(chunks++ < 20);
+      result = await module.snapshot(page, { ref, maxChars: 1000 });
+    }
+    assert.ok(chunks > 0);
+    assert.match(result.text, /# complete \(filtered view\)$/);
+  }
 });
 
 test('snapshot renders compact untrusted YAML with usable iframe refs', async () => {
@@ -310,6 +362,7 @@ function closedFixture({ emptyHostQuery = false, checkbox = false } = {}) {
 
 test('closed-root controls get stable refs, flags and redacted values', async () => {
   const { page } = closedFixture();
+  assert.match((await module.snapshot(page)).text, /closed shadow roots: controls only/);
   const first = await module.snapshot(page);
   assert.match(first.text, /switch "Secure mode" \[checked\] \[ref=s\d+\]/);
   assert.doesNotMatch(first.text, /closed-secret/);
@@ -320,6 +373,21 @@ test('closed-root controls get stable refs, flags and redacted values', async ()
   const second = await module.snapshot(page);
   assert.match(second.text, new RegExp('switch.*ref=' + ref));
   assert.match((await module.snapshot(page, { ref })).text, /Secure mode/);
+});
+
+test('the closed-root scope survives size cuts and roots containing no controls', async () => {
+  const { page } = closedFixture();
+  page.ariaSnapshotJSON = async () => [{ role: 'text', text: 'long '.repeat(10000) }];
+  const cut = await module.snapshot(page, { maxChars: 40000 });
+  assert.ok(cut.text.length <= 40000);
+  assert.match(cut.text, /closed shadow roots: controls only/);
+  assert.doesNotMatch(cut.text, /# complete/);
+  const ref = /Continue with ref="([^"]+)"/.exec(cut.text)[1];
+  const end = await module.snapshot(page, { ref, maxChars: 40000 });
+  assert.match(end.text, /closed shadow roots: controls only/);
+  assert.doesNotMatch(end.text, /# complete/);
+  const empty = nativeClosedFixture({ nodeType: 9, children: [element(100, { shadowRoots: [closedRoot([element(101)])] })] }, []);
+  assert.match((await module.snapshot(empty.page)).text, /closed shadow roots: controls only/);
 });
 
 test('a closed-root checkbox value is a label, not a secret that blanks the same letters elsewhere', async () => {
@@ -845,4 +913,20 @@ test('RM1: a ref the latest read lists again binds once more', async () => {
   set([{ role: 'button', name: 'Save', ref: 'e2' }]);
   await module.snapshot(page, { find: 'zzz' });
   assert.equal(module.snapshotRefBinding(page, 'e2').selector, 'aria-ref=e2');
+});
+
+test('default snapshot bytes equal d3db241c across full, filtered, delta and capped reads', async () => {
+  const current = fixture([{ role: 'button', ref: 'e1', name: 'Before' }]);
+  let index = 0;
+  const compare = async options => {
+    const actual = await rawModule.snapshot(current.page, { ...options, completeness: false });
+    assert.deepEqual({ number: actual.number, hash: sha256(actual.text) }, defaultReadBaseline.snapshot[index++]);
+    return actual;
+  };
+  await compare(); await compare({ find: 'missing' }); await compare({ since: 2 });
+  const long = [{ role: 'text', text: 'long '.repeat(20000) }, ...Array.from({ length: 60 }, (_, i) => ({ role: 'button', name: 'Choice ' + i, ref: 'e' + (i + 2) }))];
+  current.set(long);
+  const cut = await compare({ maxChars: 1000 });
+  const ref = /Continue with ref="([^"]+)"/.exec(cut.text)?.[1];
+  assert.ok(ref); await compare({ ref, maxChars: 1000 });
 });

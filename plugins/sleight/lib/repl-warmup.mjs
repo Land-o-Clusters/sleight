@@ -2,8 +2,8 @@ import { readCode } from './document-scope.mjs';
 import { selectedBrowserCode } from './browser-discovery.mjs';
 
 // outcomes: the session records action outcomes, so the guard this installs carries that code (document-scope.mjs).
-export function replSetupCode({ browserChoice, scope, token = scope, outcomes = false } = {}) {
-  const setup = readCode('void 0;', { acknowledge: true, outcomes });
+export function replSetupCode({ browserChoice, scope, token = scope, outcomes = false, completeness = false } = {}) {
+  const setup = readCode('void 0;', { acknowledge: true, outcomes, completeness });
   if (!browserChoice) return setup;
   const query = JSON.stringify({ extensionInstanceId: browserChoice.extensionInstanceId });
   return setup + '\n' + selectedBrowserCode(`{

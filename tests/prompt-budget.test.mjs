@@ -29,6 +29,11 @@ const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', i
 // Only the default skill limit grows, from 1040 to 1055; lean stays at 505 and the ratio at 0.71.
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
+test('outcome reporting guidance costs no default skill tokens', () => {
+  for (const env of [{}, { SLEIGHT_PROMPT: 'lean' }, { SLEIGHT_LEAN_CALLS: '1' }])
+    assert.doesNotMatch(skillRules(skillPath, env), /Report read completeness and unverified actions/);
+});
+
 test('opened-handle and engine-exit notices retain recovery details in lean wording', () => {
   const handle = 'handle src belongs to "file:///fixture/Source.txt"; window unconfirmed. Call select_window with {"app":"Editor","url":"file:///fixture/Source.txt"}.';
   const ended = 'Engine exited (0). Input outcome is unconfirmed; read the app again.';

@@ -1,6 +1,6 @@
 import { locateList } from './list-locate.mjs';
 
-export async function pickFromList(tab, list, text, opts = {}) {
+async function pickFromList(tab, list, text, opts = {}) {
   if (!tab?.playwright || typeof tab.cua?.scroll !== 'function') throw new Error('pickFromList needs a browser tab.');
   if (typeof text !== 'string' || !text.trim()) throw new Error('pickFromList needs nonempty option text.');
   const normalize = value => String(value).replace(/\s+/g, ' ').trim();
@@ -143,7 +143,35 @@ export async function pickFromList(tab, list, text, opts = {}) {
   }
 }
 
-export function pickFromListCode(code) {
+// Runs only in the completeness arm. Its read is metadata for reporting, never input authority.
+function withPickerCompleteness(pick, locateList) {
+  return async (tab, list, text, opts = {}) => {
+    const result = await pick(tab, list, text, opts);
+    let scope = 'row total unknown';
+    try {
+      const { loc } = await locateList(tab, list, 'pickFromList');
+      const { total, rendered } = await loc.evaluate(el => ({
+        total: el.getAttribute('aria-setsize') ?? el.getAttribute('aria-rowcount') ??
+          el.querySelector('[aria-setsize]')?.getAttribute('aria-setsize'),
+        rendered: el.querySelectorAll('[role="option"], option').length,
+      }), undefined, { timeoutMs: 1000 });
+      const count = /^\d+$/.test(total ?? '') ? Number(total) : null;
+      if (Number.isSafeInteger(count) && count >= rendered)
+        scope = (count - rendered) + ' rows not rendered (page-declared total)';
+    } catch { /* unknown collection size */ }
+    return { ...result, completeness: result.verified ? 'complete (selection readback); ' + scope
+      : scope + (result.found ? '; selection unverified' : '; search incomplete') };
+  };
+}
+
+// Keep the pre-G9 function body above unchanged so default injected calls keep their original bytes.
+export { selectedPickFromList as pickFromList };
+function selectedPickFromList(tab, list, text, opts = {}) {
+  return (process.env.SLEIGHT_COMPLETENESS === '1' ? withPickerCompleteness(pickFromList, locateList) : pickFromList)(tab, list, text, opts);
+}
+
+export function pickFromListCode(code, completeness = process.env.SLEIGHT_COMPLETENESS === '1') {
   if (!/\bsleight\s*\.\s*pickFromList\s*\(/.test(code)) return code;
-  return `globalThis.sleight ??= {}; globalThis.sleight.pickFromList = ((locateList) => (${pickFromList.toString()}))(${locateList.toString()});\n${code}`;
+  const picker = completeness ? `(${withPickerCompleteness.toString()})((${pickFromList.toString()}), locateList)` : `(${pickFromList.toString()})`;
+  return `globalThis.sleight ??= {}; globalThis.sleight.pickFromList = ((locateList) => ${picker})(${locateList.toString()});\n${code}`;
 }

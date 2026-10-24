@@ -2,6 +2,7 @@ import { assertEndpointRead } from './endpoint-guard.mjs';
 import { closedLocator, keyboardFocusChain } from './closed-handle.mjs';
 import { trustedReadNode } from './trusted-dom.mjs';
 import { readNativeEditContext, retainNativeEditContext, sameNativeEditContext } from './edit-context.mjs';
+import { declaredRows, readCompleteness } from '../read-completeness.mjs';
 // Compact page snapshots for turbo v3, with an independent CR1 closed-root reader.
 const pages = new WeakMap();
 const REF = /^(?:(?:f\d+)?e\d+|[sx]\d+)$/;
@@ -300,9 +301,9 @@ function closedCandidates({ strings, documents }) {
   return { hasClosed, controls };
 }
 
-async function closedRoots(page, state) {
+async function closedRoots(page, state, completeness) {
   const results = await sessionsOf(page, async ({ frame, send }) => {
-    const capture = await send('DOMSnapshot.captureSnapshot', { computedStyles: [] });
+    const capture = await send('DOMSnapshot.captureSnapshot', { computedStyles: completeness ? ['overflow-x', 'overflow-y'] : [] });
     const secrets = sensitiveValues(capture), { hasClosed, controls } = closedCandidates(capture);
     const children = [], refs = new Map();
     if (hasClosed) {
@@ -338,7 +339,7 @@ async function closedRoots(page, state) {
     const documents = capture.documents.map(doc => [capture.strings[doc.frameId], {
       base: capture.strings[doc.baseURL], url: capture.strings[doc.documentURL],
     }]);
-    return { frame, secrets, refs, children, viewport, documents };
+    return { frame, secrets, refs, children, viewport, documents, hasClosed, completeness: completeness ? declaredRows(capture, { viewport }) : { omitted: 0, unknown: false }, limited: controls.size > 512 };
   });
   const sections = [], secrets = [], next = new Map();
   secrets.names = new Set(); secrets.unnamed = false;
@@ -357,7 +358,10 @@ async function closedRoots(page, state) {
     const impl = frame?._connection?.toImpl?.(frame), doc = documents.get(impl?._id);
     if (impl && doc && typeof doc.base === 'string' && typeof doc.url === 'string') bases.set(frame === page.mainFrame() ? '' : 'f' + impl.seq, doc);
   }
-  return { sections, secrets, bases, viewport: results.find(result => result.viewport)?.viewport ?? null };
+  return { sections, secrets, bases, viewport: results.find(result => result.viewport)?.viewport ?? null,
+    completeness: { omitted: results.reduce((n, r) => n + r.completeness.omitted, 0),
+      unknown: results.some(r => r.completeness.unknown || r.limited),
+      renderedUnknown: results.some(r => r.completeness.renderedUnknown), closed: results.some(r => r.hasClosed) } };
 }
 
 // V4/V5 can resolve an s ref into an owned frame's CDP backend node. Only refs
@@ -547,10 +551,11 @@ function changes(rows, baseline) {
       line: `# Removed from this view: ${row.ref ? '[ref=' + row.ref + ']' : 'text row'}`, marker: '- ', removed: row.key }))];
 }
 
-function cap(rows, offset, header, maxChars, continuation) {
-  const footer = `# Cut: more rows omitted. Continue with ref="${continuation}".`;
+function cap(rows, offset, header, maxChars, continuation, completeness) {
+  const footer = completeness ? '# ' + readCompleteness({ cut: maxChars, ref: continuation, ...completeness })
+    : `# Cut: more rows omitted. Continue with ref="${continuation}".`;
   const lines = [header], delivered = [];
-  let size = header.length, next = offset;
+  let size = header.length, next = offset, shortenedRows = 0, shortenedAt;
   const context = offset ? ancestors(rows.filter(row => !row.removed), new Set([rows[offset]?.key])).filter(row => row.key !== rows[offset]?.key) : [];
   const keptContext = [];
   let contextSize = 0;
@@ -571,6 +576,8 @@ function cap(rows, offset, header, maxChars, continuation) {
       line = prefix + `- ${role}${/^x\d+$/.test(row.ref) ? ' [keyboard-only]' : ''}${row.ref ? ' [ref=' + row.ref + ']' : ''}: `
         + JSON.stringify('[line shortened; read with max_chars: 40000 or the engine browser path]');
       shortened = true;
+      shortenedRows++;
+      shortenedAt ??= next;
     }
     lines.push(line); size += line.length + 1;
     delivered.push(shortened ? { ...row, line: line.slice(prefix.length) } : row);
@@ -578,10 +585,12 @@ function cap(rows, offset, header, maxChars, continuation) {
     if (shortened) break;
   }
   if (next < rows.length) lines.push(footer);
-  return { text: lines.join('\n'), delivered, next };
+  else if (completeness && shortenedRows) lines.push('# ' + readCompleteness({ cut: maxChars, ...completeness }));
+  else if (completeness) lines.push('# ' + readCompleteness(completeness));
+  return { text: lines.join('\n'), delivered, next, ...(completeness ? { shortenedAt } : {}) };
 }
 
-export async function snapshot(page, { ref, find, maxChars = 8000, since, links } = {}) {
+export async function snapshot(page, { ref, find, maxChars = 8000, since, links, completeness: completenessEnabled = process.env.SLEIGHT_COMPLETENESS === '1' } = {}) {
   if (!Number.isInteger(maxChars) || maxChars < 1000 || maxChars > 40000
     || find !== undefined && (typeof find !== 'string' || find.length > 512)
     || since !== undefined && (!Number.isSafeInteger(since) || since < 1)
@@ -598,7 +607,7 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since, links 
     state.keyboardTasks.add(keyboardTask);
     keyboardTask.then(() => state.keyboardTasks.delete(keyboardTask), () => state.keyboardTasks.delete(keyboardTask));
     const acquired = await Promise.allSettled([
-      bounded(() => page.ariaSnapshotJSON({ mode: 'ai', boxes: true, timeout: TIMEOUT })), closedRoots(page, state),
+      bounded(() => page.ariaSnapshotJSON({ mode: 'ai', boxes: true, timeout: TIMEOUT })), closedRoots(page, state, completenessEnabled),
       bounded(() => keyboardTask),
     ]);
     // A failed tree read leaves the frames' maps unknown, so the ref check falls back to Playwright's own lookup.
@@ -627,8 +636,21 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since, links 
     const number = ++state.number;
     const token = `more${number}_${continuation?.offset ?? 0}`;
     const header = `# ${delta ? 'Changes since snapshot ' + (continuation?.since ?? since) + '; snapshot' : 'Snapshot'} ${number} (untrusted page content)`;
-    const result = cap(candidates, continuation?.offset ?? 0, header, maxChars, token);
-    if (!candidates.length) result.text += delta ? '\n# No visible changes.' : '\n# No matching content.';
+    const completeness = completenessEnabled && { ...closed.completeness, changesOnly: delta,
+      filtered: Boolean(continuation || ref || find !== undefined) };
+    const result = cap(candidates, continuation?.offset ?? 0,
+      header + (completenessEnabled && !candidates.length ? delta ? '\n# No visible changes.' : '\n# No matching content.' : ''),
+      maxChars, token, completeness);
+    if (!completenessEnabled && !candidates.length) result.text += delta ? '\n# No visible changes.' : '\n# No matching content.';
+    const shortenedAt = completenessEnabled ? continuation?.shortenedAt ?? result.shortenedAt : undefined;
+    const retry = result.next === candidates.length && shortenedAt !== undefined && maxChars < 40000;
+    const nextOffset = retry ? shortenedAt : result.next;
+    const nextToken = retry ? `more${number}_${shortenedAt}` : token;
+    if (retry || shortenedAt !== undefined && result.next === candidates.length) {
+      const footer = retry ? '# ' + readCompleteness({ cut: maxChars, ref: nextToken, ...completeness }) + ' Retry shortened text with max_chars: 40000.'
+        : '# ' + readCompleteness({ cut: 40000, ...completeness });
+      result.text = result.text.slice(0, result.text.lastIndexOf('\n')) + '\n' + footer;
+    }
     const delivered = new Map(delta || continuation ? baseline?.rows?.map(row => [row.key, row]) : []);
     for (const row of result.delivered) {
       if (row.removed) delivered.delete(row.removed);
@@ -645,8 +667,9 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since, links 
     const keyboardReceipt = new Map([...printedKeyboard].map(known => [known, { record: state.keyboard.get(known), epoch: state.keyboard.get(known)?.deliveryEpoch }]));
     state.pending.set(number, { generation, refs: result.delivered.filter(row => row.ref && !row.removed).map(row => row.ref), keyboard: keyboardReceipt });
     state.history.set(number, history);
-    if (result.next < candidates.length) state.continuations.set(token, { source, scope, selected,
-      candidates, baseline: history, delta, links: linksMode, since: continuation?.since ?? since, offset: result.next });
+    if (nextOffset < candidates.length) state.continuations.set(nextToken, { source, scope, selected,
+      candidates, baseline: history, delta, links: linksMode, since: continuation?.since ?? since, offset: nextOffset,
+      ...(!retry && shortenedAt !== undefined ? { shortenedAt } : {}) });
     if (continuation) state.continuations.delete(ref);
     for (const map of [state.history, state.continuations, state.pending]) while (map.size > 8) map.delete(map.keys().next().value);
     await assertEndpointRead(page);

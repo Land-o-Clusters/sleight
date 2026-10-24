@@ -622,3 +622,16 @@ export function sortedListShift(before, after) {
   }
   return undefined;
 }
+
+// Kept outside the default serialized picker until the completeness A/B qualifies it.
+export function withNativeCompleteness(pick) {
+  return async (...args) => {
+    const result = await pick(...args);
+    return { ...result, completeness: result.clicked ? 'complete (selection readback); row total unknown'
+      : result.found ? 'row total unknown; selection unverified' : 'row total unknown; search incomplete' };
+  };
+}
+
+export function listPickerCode(completeness = false) {
+  return completeness ? `options => (${withNativeCompleteness.toString()})((${listPicker.toString()})(options))` : listPicker.toString();
+}
