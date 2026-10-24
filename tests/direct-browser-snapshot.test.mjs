@@ -1,13 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { defaultReadBaseline, sha256 } from './fixtures/default-read-baseline.mjs';
 import { EventEmitter } from 'node:events';
 import { setViewport } from '../plugins/sleight/lib/direct-browser/viewport.mjs';
 import { withMT } from './fixtures/mt-env.mjs';
 
-const module = await import('../plugins/sleight/lib/direct-browser/snapshot.mjs').catch(error => {
+const rawModule = await import('../plugins/sleight/lib/direct-browser/snapshot.mjs').catch(error => {
   if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error;
   return {};
 });
+
+const module = { ...rawModule, snapshot: (page, options) => rawModule.snapshot(page, { completeness: true, ...options }) };
 
 function nativeSnapshot(secrets) {
   const strings = ['#document', 'INPUT', '', 'type', 'password', 'http://127.0.0.1/fixture', 'UTF-8', 'frame'];
@@ -858,4 +861,20 @@ test('RM1: a ref the latest read lists again binds once more', async () => {
   set([{ role: 'button', name: 'Save', ref: 'e2' }]);
   await module.snapshot(page, { find: 'zzz' });
   assert.equal(module.snapshotRefBinding(page, 'e2').selector, 'aria-ref=e2');
+});
+
+test('default snapshot bytes equal d3db241c across full, filtered, delta and capped reads', async () => {
+  const current = fixture([{ role: 'button', ref: 'e1', name: 'Before' }]);
+  let index = 0;
+  const compare = async options => {
+    const actual = await rawModule.snapshot(current.page, { ...options, completeness: false });
+    assert.deepEqual({ number: actual.number, hash: sha256(actual.text) }, defaultReadBaseline.snapshot[index++]);
+    return actual;
+  };
+  await compare(); await compare({ find: 'missing' }); await compare({ since: 2 });
+  const long = [{ role: 'text', text: 'long '.repeat(20000) }, ...Array.from({ length: 60 }, (_, i) => ({ role: 'button', name: 'Choice ' + i, ref: 'e' + (i + 2) }))];
+  current.set(long);
+  const cut = await compare({ maxChars: 1000 });
+  const ref = /Continue with ref="([^"]+)"/.exec(cut.text)?.[1];
+  assert.ok(ref); await compare({ ref, maxChars: 1000 });
 });

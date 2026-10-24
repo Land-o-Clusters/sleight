@@ -228,7 +228,7 @@ const TOOLS = new Set(['js', 'menu_bar', 'notifications', 'document_scope', 'dra
   'review_changes', 'select_window', 'browser_open', 'browser_act', 'browser_fill', 'browser_read', 'browser_tabs']);
 const OPS = { menu_bar: ['apps', 'open', 'choose', 'press', 'close'], notifications: ['list', 'press'], review_changes: ['list', 'review'],
   browser_tabs: ['list', 'close', 'keep', 'handoff'] };
-const ACTIONS = new Set(['click', 'doubleClick', 'rightClick', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction', 'performAction', 'paste', 'press', 'pressKey', 'typeText']);
+const ACTIONS = new Set(['click', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction', 'paste', 'pressKey', 'typeText']);
 const TURBO_STEPS = new Set(['click', 'type', 'press', 'select', 'check', 'uncheck', 'hover', 'scroll', 'drag', 'upload', 'dialog', 'wait',
   'navigate', 'back', 'forward', 'reload', 'viewport']);
 // refusalReason's categories, the guard's refusalOf kinds, and the log's own.
@@ -254,7 +254,7 @@ export function refusalReason(text = '') {
 // The engine browser path's input methods (tab handles and their locators). The guard records no per-action outcomes there
 // (the relay gives browser calls no outcome mark), so the log counts the call sites in the code: an estimate, where a loop
 // counts once and an untaken branch counts. Strings, comments and regular expression literals are left out first.
-const BROWSER_ACTIONS = /\.\s*(?:click|doubleClick|rightClick|dblclick|drag|dragTo|scroll|selectText|setValue|performSecondaryAction|performAction|paste|pressKey|typeText|fill|press|type|check|uncheck|selectOption|hover|goto|reload|goBack|goForward)\s*\(/g;
+const BROWSER_ACTIONS = /\.\s*(?:click|dblclick|drag|dragTo|scroll|selectText|setValue|performSecondaryAction|paste|pressKey|typeText|fill|press|type|check|uncheck|selectOption|hover|goto|reload|goBack|goForward)\s*\(/g;
 function codeOnly(code) {
   let out = '', last = '';
   for (let i = 0; i < code.length;) {

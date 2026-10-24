@@ -308,3 +308,23 @@ test('a direct browser call running when the engine dies is answered once', asyn
   await flush();
   assert.equal(h.replies.filter(msg => msg.id === 7).length, 1, 'the late direct result is not a second reply');
 });
+
+for (const outcomes of [false, true]) for (const completeness of [false, true]) for (const action of [false, true]) for (const proactive of [false, true])
+  test(`reconnect carries ${action ? 'action' : 'read'} tracking, outcomes=${outcomes}, completeness=${completeness}, proactive=${proactive}`, async t => {
+    const h = fixture(t, { relay: { outcomes, completeness } });
+    h.call(1, 'let app = await cua.getApp("Example")'); h.reply(1);
+    // Earlier uncertainty must belong to the old turn only.
+    h.call(2, 'await app.pressKey("Tab")'); h.reply(2, { content: [{ type: 'text', text: 'sent' }] });
+    if (proactive) h.replace();
+    h.call(3, action ? 'await app.pressKey("Return")' : 'nodeRepl.write(await app.getAXState())');
+    if (!proactive) { h.replace(); h.reply(3, pipeError); }
+    await until(() => h.engines[1]?.sent.some(msg => msg.id === 3));
+    assert.equal(h.starts, 1);
+    h.reply(3); await flush();
+    const result = h.replies.find(msg => msg.id === 3);
+    assert.ok(result && !result.result.isError);
+    const text = result.result.content.map(row => row.text).join('\n');
+    assert.equal(/# complete \(returned engine view/.test(text), completeness && !action);
+    assert.equal(/sleight turn: 1 input calls unverified/.test(text), outcomes && action);
+    assert.doesNotMatch(text, /2 input calls|pressKey Tab/);
+  });

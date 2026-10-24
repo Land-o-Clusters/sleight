@@ -1,6 +1,6 @@
 import { promptNotice } from './prompt-notice.mjs';
 import { elementWait } from './element-wait.mjs';
-import { listPicker } from './native-list-pick.mjs';
+import { listPickerCode } from './native-list-pick.mjs';
 import { settleLoading } from './loading-settle.mjs';
 import { literalElements } from './literal-elements.mjs';
 import { actionOutcome, outcomeRecord } from './action-outcomes.mjs';
@@ -534,7 +534,7 @@ async function closedLastWindow(state, record, stopMessage) {
 export function guardedCode(code, window, reason = /* notice */ 'Document scope stopped this action: window or URL changed. Read the window and ask the user with document_scope.', lease, options = {}) {
   // The lease needs a full header after the call. A read Claude made after its
   // last action already wrote one, so the guard reads again only without it.
-  const { reuseSetup, acknowledge, prompt, outcomes, kernel, dp1 = false, ...checks } = options;
+  const { reuseSetup, acknowledge, prompt, outcomes, completeness, kernel, dp1 = false, ...checks } = options;
   const ck = ((checks.ck1 ?? process.env.SLEIGHT_CK1 !== '0') ? 1 : 0) |
     ((checks.ck2 ?? process.env.SLEIGHT_CK2 !== '0') ? 2 : 0);
   delete checks.ck1; delete checks.ck2;
@@ -547,7 +547,7 @@ export function guardedCode(code, window, reason = /* notice */ 'Document scope 
   const literalOrder = checks.literalOrder ?? literalElements(code);
   // Keep the pre-DP1 tail comment only on the off path for byte parity. The DP1
   // tail omits it to keep compact calls within the existing byte budget.
-  return guardSetup({ window, reason, lease, ...checks, ...(dp1 ? { dp1: true } : {}), literalOrder: literalOrder.length ? literalOrder : undefined }, { reuseSetup, acknowledge, prompt, outcomes, kernel, dp1 }) +
+  return guardSetup({ window, reason, lease, ...checks, ...(dp1 ? { dp1: true } : {}), literalOrder: literalOrder.length ? literalOrder : undefined }, { reuseSetup, acknowledge, prompt, outcomes, completeness, kernel, dp1 }) +
     (options.browserCandidate ? '\nglobalThis.__sleightDocumentGuard.activeApp = undefined;' : '') + /* generated code */ `\n${code}
 {
   const guard = globalThis.__sleightDocumentGuard, last = await guard.settle?.() ?? (guard.activeApp && guard.reads.get(guard.activeApp));
@@ -568,7 +568,7 @@ ${dp1 ? '' : "  // The call finished, so any failed action was one it didn't awa
 }
 
 // outcomes: the session records action outcomes (SLEIGHT_OUTCOMES or SLEIGHT_ACTION_LOG); without it the guard is unchanged.
-function guardSetup(update, { reuseSetup = false, acknowledge = false, prompt, outcomes = false, kernel, dp1 = process.env.SLEIGHT_DP1 !== '0' } = {}) {
+function guardSetup(update, { reuseSetup = false, acknowledge = false, prompt, outcomes = false, completeness = false, kernel, dp1 = process.env.SLEIGHT_DP1 !== '0' } = {}) {
   const O = outcomes;
   // Notice text the guard throws or writes, in its SLEIGHT_PROMPT wording.
   const quoted = text => JSON.stringify(promptNotice(text, prompt));
@@ -810,7 +810,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
     state.noteFocus = text => { if (focusOn(text) === 'element' && captureKey(parse(text))) state.docFocus.add(captureKey(parse(text))); };
     state.noteFocus(state.prior?.text);
     const wait = ${elementWait.toString()};
-    const pickList = ${listPicker.toString()};
+    const pickList = ${listPickerCode(completeness)};
     const moneyFigures = ${moneyFigures.toString()};
     const moneyConflicts = ${moneyConflicts.toString()};
     const paymentWords = ${paymentWords.toString()};

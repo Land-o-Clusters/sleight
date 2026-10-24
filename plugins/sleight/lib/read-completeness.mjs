@@ -1,7 +1,7 @@
 // Completeness describes the returned view, never the whole document or an unseen server-side collection.
 export function readCompleteness({ cut, ref, omitted = 0, unknown = false, filtered = false, changesOnly = false, renderedUnknown = false, closed = false } = {}) {
   const tail = omitted > 0 ? `${omitted} rows not rendered (page-declared total)` + (unknown ? '; other row totals unknown' : '') : unknown ? 'row total unknown' : '';
-  const scope = changesOnly ? 'changes only' : filtered ? 'filtered view' : renderedUnknown ? 'rendered view' : 'returned view';
+  const scope = filtered ? 'filtered view' : changesOnly ? 'changes only' : renderedUnknown ? 'rendered view' : 'returned view';
   const notes = [renderedUnknown ? 'lazy/virtual rows unknown' : '', closed ? 'closed shadow roots: controls only' : ''].filter(Boolean).join('; ');
   if (cut !== undefined) return `cut at ${cut} chars; ` + (ref ? `Continue with ref="${ref}".`
     : 'shortened text exceeds the cap. Use the engine browser path for that text.') +
@@ -19,24 +19,36 @@ export function resultCompleteness(content, { filtered = false, failed = false }
   if (!native && !footer && !changes) return;
   if (failed || /(?:^| \u2014 )sleight: \d+ (?:browser tree lines|tree lines|controls|static or structural lines|structural lines|sibling rows) omitted\b/m.test(text))
     return '# incomplete read; omitted or unavailable content. Read again for missing information.';
+  if (filtered) return '# incomplete read (filtered engine view).';
   if (footer) return footer;
   if (changes)
     return '# complete (changes only; returned engine view; unseen rows unknown).';
-  return filtered ? '# incomplete read (filtered engine view).' : '# complete (returned engine view; unseen rows unknown).';
+  return '# complete (returned engine view; unseen rows unknown).';
 }
 
 // Reuse the native DOMSnapshot already acquired for redaction. MAIN-world getters cannot alter this accounting.
 // Counts remain untrusted page declarations and grant no input authority.
-export function declaredRows({ strings, documents }) {
+export function declaredRows({ strings, documents }, { viewport } = {}) {
   let omitted = 0, unknown = false, renderedUnknown = false;
-  for (const { nodes, layout } of documents) {
+  for (const { nodes, layout, viewportWidth: fallbackWidth = viewport?.width, viewportHeight: fallbackHeight = viewport?.height, scrollOffsetX = 0, scrollOffsetY = 0 } of documents) {
     const collections = new Map();
     const scrollable = new Set(nodes.isScrollable?.index ?? []);
     for (let i = 0; i < (layout?.nodeIndex?.length ?? 0); i++)
       if (layout.styles?.[i]?.some(value => /^(?:auto|scroll|overlay)$/.test(strings[value]))) scrollable.add(layout.nodeIndex[i]);
+    const boxes = new Map((layout?.nodeIndex ?? []).map((index, at) => [index, layout.bounds?.[at]]));
+    const documentIndex = nodes.nodeName.findIndex(name => /^#document$/i.test(strings[name]));
+    const documentBox = boxes.get(documentIndex);
+    const viewportWidth = documentBox?.[2] ?? fallbackWidth, viewportHeight = documentBox?.[3] ?? fallbackHeight;
     const inScrollContainer = index => {
-      for (let steps = 0; index >= 0 && steps++ < 128; index = nodes.parentIndex[index])
+      for (let steps = 0; index >= 0 && steps++ < 128; index = nodes.parentIndex[index]) {
+        if (/^(?:#document|HTML|BODY)$/i.test(strings[nodes.nodeName[index]])) break;
+        const box = boxes.get(index);
+        // Stop before the nearest viewport-sized app shell, even when it scrolls the whole page.
+        if (box && viewportWidth > 0 && viewportHeight > 0 &&
+            Math.abs(box[0] - scrollOffsetX) < 1 && Math.abs(box[1] - scrollOffsetY) < 1 &&
+            Math.abs(box[2] - viewportWidth) < 1 && Math.abs(box[3] - viewportHeight) < 1) break;
         if (scrollable.has(index)) return true;
+      }
       return false;
     };
     const rendered = layout?.nodeIndex;
@@ -49,9 +61,9 @@ export function declaredRows({ strings, documents }) {
       for (let j = 0; j < raw.length; j += 2) attrs[strings[raw[j]]] = strings[raw[j + 1]];
       const role = attrs.role, total = attrs['aria-rowcount'] ?? attrs['aria-setsize'];
       if (/^(?:grid|table|treegrid|list|listbox|tree)$/.test(role) || /^(?:UL|OL|TABLE|SELECT)$/.test(strings[nodes.nodeName[i]])) {
-        const plainList = /^(?:UL|OL)$/.test(strings[nodes.nodeName[i]]) && !role;
+        const ordinary = /^(?:UL|OL|TABLE|SELECT)$/.test(strings[nodes.nodeName[i]]) || role === 'list';
         collections.set(i, { total: number(total), declared: total !== undefined, unknown: total !== undefined && number(total) === null,
-          renderedUnknown: !plainList || inScrollContainer(i), positions: new Set(), count: 0 });
+          renderedUnknown: !ordinary || inScrollContainer(i), positions: new Set(), count: 0 });
       }
       if (!/^(?:row|option|listitem|treeitem)$/.test(role) && !/^(?:TR|OPTION|LI)$/.test(strings[nodes.nodeName[i]])) continue;
       let parent = nodes.parentIndex[i], steps = 0;
@@ -80,4 +92,19 @@ export function declaredRows({ strings, documents }) {
     }
   }
   return { omitted, unknown, ...(renderedUnknown ? { renderedUnknown: true } : {}) };
+}
+
+// The relay passes code with strings/comments masked. Only a read result's own projection narrows its scope.
+export function filteredRead(code) {
+  const read = /\.\s*(?:getAXState(?:AndScreenshot)?|getState|getApp|getTab)\s*\([^()]*\)/;
+  for (const match of code.matchAll(/\.\s*(?:slice|filter|substring)\s*\(/g)) {
+    const before = code.slice(0, match.index);
+    if (new RegExp(read.source + String.raw`\s*\)*\s*$`).test(before)) return true;
+    const receiver = /([A-Za-z_$][\w$]*)\s*$/.exec(before)?.[1];
+    if (!receiver) continue;
+    const escaped = receiver.replace(/[$]/g, '\\$&');
+    const assignments = [...before.matchAll(new RegExp(String.raw`(?<![\w$.])${escaped}\s*=\s*([^;\n]+)`, 'g'))];
+    if (assignments.length && read.test(assignments.at(-1)[1])) return true;
+  }
+  return false;
 }

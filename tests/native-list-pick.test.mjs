@@ -1,3 +1,4 @@
+import { defaultReadBaseline } from './fixtures/default-read-baseline.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
@@ -5,7 +6,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
-import { listPicker } from '../plugins/sleight/lib/native-list-pick.mjs';
+import { listPicker, withNativeCompleteness } from '../plugins/sleight/lib/native-list-pick.mjs';
 import { guardedCode, readCode, sameElement, windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 
 const window = { title: 'Book a trip', app: 'Firefox', url: null };
@@ -56,7 +57,6 @@ test('finds a target ahead with coarse page steps and clicks exactly that row', 
   const names = sortedNames(1000), model = fakeList(names, { page: 9 });
   const { run, clicks } = picker(model);
   const result = await run(names[612]);
-  assert.match(result.completeness, /row total unknown/);
   assert.equal(result.found, true); assert.equal(result.clicked, true);
   assert.deepEqual(clicks.map(line => labelOfClick(model, line)), [names[612]]);
   assert.ok(result.reads <= 24, `reads ${result.reads}`);
@@ -330,7 +330,7 @@ test('input is checked', async () => {
 });
 
 // Through the guard: every key and the click use the guarded handle.
-function guarded(model, { raw = {} } = {}) {
+function guarded(model, { raw = {}, completeness = false, outcomes = false } = {}) {
   const clicks = [], keys = [];
   // The wheel moves the list 3 rows a tick.
   const handle = { getAXState: async () => model.tree(), pressKey: async key => { keys.push(key); await model.key(key); },
@@ -338,8 +338,8 @@ function guarded(model, { raw = {} } = {}) {
     click: async number => { clicks.push(model.numbers.get(number)); model.selected = model.numbers.get(number); }, ...raw };
   const context = { cua: { getApp: async () => handle }, setTimeout, nodeRepl: { write() {} } };
   const run = code => runInNewContext(`(async () => { ${code} })()`, context);
-  return { clicks, keys, run, handle, start: () => run(readCode('await cua.getApp("Firefox");')),
-    call: code => run(guardedCode(code, window)) };
+  return { clicks, keys, run, handle, start: () => run(readCode('await cua.getApp("Firefox");', { completeness, outcomes })),
+    call: code => run(guardedCode(code, window, undefined, undefined, { completeness, outcomes })) };
 }
 
 test('app.pickFromList pages by key and clicks the row it resolved in its newest tree', async () => {
@@ -1089,3 +1089,32 @@ test('CC13 review: the time cap ends a key burst after its first key, and the re
   // 3,000 ms at 400 ms a key: the burst stops at the eighth key, not the sixteenth.
   assert.ok(model.keys.length <= 9, String(model.keys.length));
 });
+
+test('default native picker result bytes match d3db241c', async () => {
+  for (const [index, label] of [sortedNames(10)[3], 'Missing'].entries()) {
+    const a = fakeList(sortedNames(10));
+    const setup = model => ({ read: model.tree, observe() {}, press: model.key, parse: windowFromText, sameElement, expected: window,
+      sleep: async () => {}, click: async line => { model.selected = labelOfClick(model, line); } });
+    assert.equal(JSON.stringify(await listPicker(setup(a))(label)), JSON.stringify(defaultReadBaseline.nativePicker[index]));
+  }
+});
+
+test('opt-in native picker reports completeness for selection and failed searches', async () => {
+  for (const label of [sortedNames(10)[3], 'Missing']) {
+    const h = picker(fakeList(sortedNames(10)));
+    const result = await withNativeCompleteness(h.run)(label);
+    assert.match(result.completeness, result.clicked ? /complete \(selection readback\)/ : /search incomplete/);
+  }
+});
+
+for (const completeness of [false, true]) for (const outcomes of [false, true])
+  test(`serialized native picker completeness=${completeness}, outcomes=${outcomes}`, async () => {
+    const model = fakeList(sortedNames(10)), h = guarded(model, { completeness, outcomes });
+    await h.start();
+    await h.call('const app = await cua.getApp("Firefox"); globalThis.picked = await app.pickFromList(' + JSON.stringify(sortedNames(10)[3]) + ');');
+    // The generated code runs in a foreign realm, just like the engine. Read only its returned picker object.
+    const picked = await h.run('return globalThis.picked;');
+    assert.equal(picked.clicked, true);
+    assert.equal(Object.hasOwn(picked, 'completeness'), completeness);
+    if (completeness) assert.match(picked.completeness, /complete \(selection readback\)/);
+  });

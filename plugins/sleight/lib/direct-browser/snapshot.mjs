@@ -294,9 +294,9 @@ function closedCandidates({ strings, documents }) {
   return { hasClosed, controls };
 }
 
-async function closedRoots(page, state) {
+async function closedRoots(page, state, completeness) {
   const results = await sessionsOf(page, async ({ frame, send }) => {
-    const capture = await send('DOMSnapshot.captureSnapshot', { computedStyles: ['overflow-x', 'overflow-y'] });
+    const capture = await send('DOMSnapshot.captureSnapshot', { computedStyles: completeness ? ['overflow-x', 'overflow-y'] : [] });
     const secrets = sensitiveValues(capture), { hasClosed, controls } = closedCandidates(capture);
     const children = [], refs = new Map();
     if (hasClosed) {
@@ -329,7 +329,7 @@ async function closedRoots(page, state) {
         if (v?.clientWidth > 0 && v?.clientHeight > 0) viewport = { width: v.clientWidth, height: v.clientHeight };
       } catch { /* no markers without a size */ }
     }
-    return { frame, secrets, refs, children, viewport, hasClosed, completeness: declaredRows(capture), limited: controls.size > 512 };
+    return { frame, secrets, refs, children, viewport, hasClosed, completeness: completeness ? declaredRows(capture, { viewport }) : { omitted: 0, unknown: false }, limited: controls.size > 512 };
   });
   const sections = [], secrets = [], next = new Map();
   secrets.names = new Set(); secrets.unnamed = false;
@@ -511,7 +511,8 @@ function changes(rows, baseline) {
 }
 
 function cap(rows, offset, header, maxChars, continuation, completeness) {
-  const footer = '# ' + readCompleteness({ cut: maxChars, ref: continuation, ...completeness });
+  const footer = completeness ? '# ' + readCompleteness({ cut: maxChars, ref: continuation, ...completeness })
+    : `# Cut: more rows omitted. Continue with ref="${continuation}".`;
   const lines = [header], delivered = [];
   let size = header.length, next = offset, shortenedRows = 0, shortenedAt;
   const context = offset ? ancestors(rows.filter(row => !row.removed), new Set([rows[offset]?.key])).filter(row => row.key !== rows[offset]?.key) : [];
@@ -543,12 +544,12 @@ function cap(rows, offset, header, maxChars, continuation, completeness) {
     if (shortened) break;
   }
   if (next < rows.length) lines.push(footer);
-  else if (shortenedRows) lines.push('# ' + readCompleteness({ cut: maxChars, ...completeness }));
-  else lines.push('# ' + readCompleteness(completeness));
-  return { text: lines.join('\n'), delivered, next, shortenedAt };
+  else if (completeness && shortenedRows) lines.push('# ' + readCompleteness({ cut: maxChars, ...completeness }));
+  else if (completeness) lines.push('# ' + readCompleteness(completeness));
+  return { text: lines.join('\n'), delivered, next, ...(completeness ? { shortenedAt } : {}) };
 }
 
-export async function snapshot(page, { ref, find, maxChars = 8000, since } = {}) {
+export async function snapshot(page, { ref, find, maxChars = 8000, since, completeness: completenessEnabled = process.env.SLEIGHT_COMPLETENESS === '1' } = {}) {
   if (!Number.isInteger(maxChars) || maxChars < 1000 || maxChars > 40000
     || find !== undefined && (typeof find !== 'string' || find.length > 512)
     || since !== undefined && (!Number.isSafeInteger(since) || since < 1)
@@ -564,7 +565,7 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since } = {})
     state.keyboardTasks.add(keyboardTask);
     keyboardTask.then(() => state.keyboardTasks.delete(keyboardTask), () => state.keyboardTasks.delete(keyboardTask));
     const acquired = await Promise.allSettled([
-      bounded(() => page.ariaSnapshotJSON({ mode: 'ai', boxes: true, timeout: TIMEOUT })), closedRoots(page, state),
+      bounded(() => page.ariaSnapshotJSON({ mode: 'ai', boxes: true, timeout: TIMEOUT })), closedRoots(page, state, completenessEnabled),
       bounded(() => keyboardTask),
     ]);
     // A failed tree read leaves the frames' maps unknown, so the ref check falls back to Playwright's own lookup.
@@ -591,12 +592,13 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since } = {})
     const number = ++state.number;
     const token = `more${number}_${continuation?.offset ?? 0}`;
     const header = `# ${delta ? 'Changes since snapshot ' + (continuation?.since ?? since) + '; snapshot' : 'Snapshot'} ${number} (untrusted page content)`;
-    const completeness = { ...closed.completeness, changesOnly: delta,
+    const completeness = completenessEnabled && { ...closed.completeness, changesOnly: delta,
       filtered: Boolean(continuation || ref || find !== undefined) };
     const result = cap(candidates, continuation?.offset ?? 0,
-      header + (!candidates.length ? delta ? '\n# No visible changes.' : '\n# No matching content.' : ''),
+      header + (completenessEnabled && !candidates.length ? delta ? '\n# No visible changes.' : '\n# No matching content.' : ''),
       maxChars, token, completeness);
-    const shortenedAt = continuation?.shortenedAt ?? result.shortenedAt;
+    if (!completenessEnabled && !candidates.length) result.text += delta ? '\n# No visible changes.' : '\n# No matching content.';
+    const shortenedAt = completenessEnabled ? continuation?.shortenedAt ?? result.shortenedAt : undefined;
     const retry = result.next === candidates.length && shortenedAt !== undefined && maxChars < 40000;
     const nextOffset = retry ? shortenedAt : result.next;
     const nextToken = retry ? `more${number}_${shortenedAt}` : token;

@@ -8,6 +8,9 @@ import { chromium } from '../plugins/sleight/vendor/playwright-core/index.mjs';
 import { snapshot } from '../plugins/sleight/lib/direct-browser/snapshot.mjs';
 import { pickFromList } from '../plugins/sleight/lib/pick-from-list.mjs';
 
+// This suite exercises the explicit completeness arm.
+process.env.SLEIGHT_COMPLETENESS = '1';
+
 const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(row => row.name === 'chromium-headless-shell');
 const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
@@ -37,6 +40,19 @@ test('honest reads and selection on a loopback page in headless Chromium', { ski
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:' + server.address().port);
 
+  await t.test('only exact COMPLETENESS=1 changes turbo read and picker results', async () => {
+    const original = process.env.SLEIGHT_COMPLETENESS;
+    try {
+      for (const value of [undefined, '0', 'yes', '01', '1']) {
+        if (value === undefined) delete process.env.SLEIGHT_COMPLETENESS;
+        else process.env.SLEIGHT_COMPLETENESS = value;
+        const result = await snapshot(page);
+        assert.equal(/# 146 rows not rendered/.test(result.text), value === '1');
+        const picked = await pickFromList({ playwright: page, cua: { scroll: async () => { throw Error('unexpected scroll'); } } }, 'Choices', 'Beta');
+        assert.equal(Object.hasOwn(picked, 'completeness'), value === '1');
+      }
+    } finally { process.env.SLEIGHT_COMPLETENESS = original; }
+  });
   await t.test('virtual totals exclude hidden rows and name the source of the total', async () => {
     const result = await snapshot(page);
     assert.match(result.text, /# 146 rows not rendered \(page-declared total\)$/);
@@ -81,6 +97,31 @@ test('honest reads and selection on a loopback page in headless Chromium', { ski
     assert.match(result.text, /Rendered item/);
     assert.match(result.text, /# complete \(returned view\)$/);
     assert.doesNotMatch(result.text, /lazy\/virtual/);
+  });
+  await t.test('document and viewport shell scrolling do not make plain collections lazy', async () => {
+    for (const collection of ['<ul><li>Item</li></ul>', '<div role="list"><div role="listitem">Item</div></div>',
+      '<table><tr><td>Item</td></tr></table>', '<select><option>Item</option></select>']) {
+      for (const shell of [false, true]) {
+        await page.setContent('<style>html,body{margin:0}</style>' +
+          (shell ? '<main style="width:100vw;height:100vh;overflow:auto">' : '<main>') + collection +
+          '<div style="height:3000px">Tail</div></main>');
+        const result = await snapshot(page);
+        assert.doesNotMatch(result.text, /lazy\/virtual/, collection + ', shell=' + shell);
+      }
+    }
+  });
+  await t.test('a viewport shell inside an iframe stops at that frame viewport', async () => {
+    await page.setContent(`<iframe srcdoc='<style>html,body{margin:0}</style><main style="width:100vw;height:100vh;overflow:auto"><ul><li>Frame item</li></ul><div style="height:3000px">Tail</div></main>'></iframe>`);
+    await page.frameLocator('iframe').getByText('Frame item').waitFor();
+    assert.doesNotMatch((await snapshot(page)).text, /lazy\/virtual/);
+  });
+  await t.test('nested scrollers below a viewport shell still mark all collection kinds', async () => {
+    for (const collection of ['<ul><li>Item</li></ul>', '<div role="list"><div role="listitem">Item</div></div>',
+      '<table><tr><td>Item</td></tr></table>', '<select><option>Item</option></select>']) {
+      await page.setContent('<style>html,body{margin:0}</style><main style="width:100vw;height:100vh;overflow:auto">' +
+        '<div style="width:300px;height:60px;overflow:auto">' + collection + '<div style="height:300px">Tail</div></div></main>');
+      assert.match((await snapshot(page)).text, /lazy\/virtual rows unknown/, collection);
+    }
   });
   await t.test('lists inside scrolling containers retain unknown lazy-row scope', async () => {
     await page.setContent('<div style="overflow:auto;height:50px"><ul>' +

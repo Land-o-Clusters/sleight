@@ -85,7 +85,7 @@ import { guardStopMark, splitMenuActions, takeGuardStop, withoutStopTree, hasWho
   failedActionText, paletteRefusal, oneTabAdded, landingRefusal, replaceLastTree, lastHeader } from './menu-continuation.mjs';
 import { checkedStop, stopText } from './checked-stop.mjs';
 import { TurnOutcomes, unconfirmedInput } from './turn-outcomes.mjs';
-import { resultCompleteness } from './read-completeness.mjs';
+import { resultCompleteness, filteredRead } from './read-completeness.mjs';
 import { stripHandBindings } from './hand/bindings.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
 import { stripDP1Trace } from './dp1-trace.mjs';
@@ -776,6 +776,8 @@ export function createRelay({
   receiptWriter = writeReceipt,
   // One evidence line per native action; SLEIGHT_OUTCOMES=1 opts in pending native A/B.
   outcomes = false,
+  // SLEIGHT_COMPLETENESS=1 opts in independently of outcomes pending A/B.
+  completeness = false,
   // SLEIGHT_ACTION_LOG=<path> (opt-in): an ActionLog (action-outcomes.mjs) gets one JSON line per action.
   actionLog,
   idleTurnEndMs,
@@ -963,8 +965,8 @@ export function createRelay({
   }
   const frontRestore = process.env.SLEIGHT_FRONT_RESTORE === '0' ? undefined : restoreFront;
   const readHints = {};
-  // The guard carries its outcome code only in sessions that record outcomes; every install says which.
-  const outcomeSetup = outcomes || actionLog ? { outcomes: true } : {};
+  // Each guard install carries only the outcome and completeness experiments selected for this session.
+  const outcomeSetup = { ...(outcomes || actionLog ? { outcomes: true } : {}), ...(completeness ? { completeness: true } : {}) };
   let turnOutcomes = new TurnOutcomes();
   const outcomeCalls = new Map(), outcomeEnds = new Map();
   const completenessCalls = new Map();
@@ -3083,11 +3085,14 @@ export function createRelay({
     toClient(reply);
   }
 
-  function rotateTurn() {
+  function rotateTurn(carryId) {
+    const outcome = outcomeCalls.get(carryId), read = completenessCalls.get(carryId);
     releaseLeases();
     turnOutcomes = new TurnOutcomes();
     outcomeCalls.clear();
     completenessCalls.clear();
+    if (outcome) outcomeCalls.set(carryId, { ...outcome, turn: turnOutcomes });
+    if (read) completenessCalls.set(carryId, read);
     turnId = randomUUID();
     turnUsed = false;
     spaceNoted.clear();
@@ -3192,11 +3197,11 @@ export function createRelay({
     if (echo && echo[2] === echo[3]) msg.params.arguments.code = echo[1];
     journal?.request(msg);
     try { actionLog?.request(msg); } catch {}
-    if (msg.method === 'tools/call' && msg.id !== undefined) {
+    if (completeness && msg.method === 'tools/call' && msg.id !== undefined) {
       const name = msg.params?.name, code = codeOnly(msg.params?.arguments?.code ?? '');
-      const action = /\.\s*(?:click|doubleClick|rightClick|press|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|performAction|pickFromList)\s*\(/.test(code);
+      const action = /\.\s*(?:click|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|pickFromList)\s*\(/.test(code);
       if (name === 'browser_read' || name === 'js' && !action && /\.\s*(?:getAXState(?:AndScreenshot)?|getApp|getTab|getState)\s*\(/.test(code))
-        completenessCalls.set(msg.id, { requested: true, filtered: /\.\s*(?:slice|filter|substring)\s*\(/.test(code) });
+        completenessCalls.set(msg.id, { requested: true, filtered: filteredRead(code) });
     }
     if (outcomes && msg.method === 'tools/call' && msg.id !== undefined) {
       const name = msg.params?.name, args = msg.params?.arguments;
@@ -3204,7 +3209,7 @@ export function createRelay({
         /^(?:hover|open_file)$/.test(name) || name === 'menu_bar' && /^(?:open|close)$/.test(args?.op);
       if (statusOnly || /^(?:drag|replay)$/.test(name) || name === 'menu_bar' && /^(?:choose|press)$/.test(args?.op) ||
           name === 'notifications' && args?.op === 'press' ||
-          name === 'js' && /\.\s*(?:click|doubleClick|rightClick|press|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|performAction|pickFromList)\s*\(/.test(codeOnly(args?.code ?? '')))
+          name === 'js' && /\.\s*(?:click|pressKey|typeText|paste|setValue|scroll|drag|selectText|performSecondaryAction|pickFromList)\s*\(/.test(codeOnly(args?.code ?? '')))
         outcomeCalls.set(msg.id, { name, statusOnly, turn: turnOutcomes });
     }
     if (engineBrowserOpen && msg.method === 'tools/call' && msg.params?.name === 'browser_open' && msg.id !== undefined) {
@@ -4399,7 +4404,7 @@ export function createRelay({
           msg.params.arguments.code = fillFormCode(msg.params.arguments.code);
           msg.params.arguments.code = dragToCode(msg.params.arguments.code);
           msg.params.arguments.code = reorderCode(msg.params.arguments.code);
-          msg.params.arguments.code = pickFromListCode(msg.params.arguments.code);
+          msg.params.arguments.code = pickFromListCode(msg.params.arguments.code, completeness);
           if (browser) msg.params.arguments.code = browserStale.code(msg.params.arguments.code, originalCode, prompt);
           const tabCode = tabCleanupCode(browser ? backgroundLinksCode(msg.params.arguments.code) : msg.params.arguments.code);
           if (/\bcua\.createBrowserTab\s*\(|\.tabs\.new\s*\(/.test(originalCode)) tabsMayNeedCleanup = true;
@@ -5647,7 +5652,7 @@ export function createRelay({
     if (turnUsed) {
       // The call that triggered a reconnect belongs to the next turn's receipt, not the one being closed.
       const carried = carryId === undefined ? undefined : journal?.take(carryId);
-      finishReceipt(); journal?.put(carried); rotateTurn();
+      finishReceipt(); journal?.put(carried); rotateTurn(carryId);
     }
     return Promise.all(done);
   }

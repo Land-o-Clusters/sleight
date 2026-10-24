@@ -240,7 +240,7 @@ function relayHarness(t, options = {}) {
   const sent = [], received = [];
   serverIn.on('data', data => data.toString().trim().split('\n').forEach(line => sent.push(JSON.parse(line))));
   clientOut.on('data', data => data.toString().trim().split('\n').forEach(line => received.push(JSON.parse(line))));
-  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, outcomes: true,
+  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, outcomes: true, completeness: true,
     inputLease: new InputLease({ directory: mkdtempSync(join(dir, 'lease-')), holder: 'outcomes-test' }), ...options });
   t.after(() => relay.dispose());
   const flush = () => new Promise(resolve => setImmediate(resolve));
@@ -259,7 +259,7 @@ function relayHarness(t, options = {}) {
 }
 
 test('outcomes and the action log stay opt-in', () => {
-  assert.deepEqual(outcomeOptions({}), { outcomes: false, actionLog: undefined });
+  assert.deepEqual(outcomeOptions({}), { completeness: false, outcomes: false, actionLog: undefined });
   const options = outcomeOptions({ SLEIGHT_OUTCOMES: '1', SLEIGHT_ACTION_LOG: 'env.jsonl' });
   assert.equal(options.outcomes, true);
   assert.ok(options.actionLog instanceof ActionLog);
@@ -380,7 +380,7 @@ test('AX action verbs carry uncertainty and never get read completeness', async 
   const h = relayHarness(t);
   await h.call(1, 'let app = await cua.getApp("TextEdit")');
   await h.reply(1, form());
-  for (const [index, verb] of ['performAction', 'performSecondaryAction', 'doubleClick', 'rightClick', 'press'].entries()) {
+  for (const [index, verb] of ['performSecondaryAction', 'click', 'pressKey', 'paste'].entries()) {
     const id = index + 2;
     await h.call(id, `await app.${verb}(2, "AXPress"); await app.getAXState();`);
     const result = await h.reply(id, form());
@@ -760,14 +760,13 @@ test('with both switches off the guard code is the base build\'s, byte for byte'
   // PL1 changes the serialized list picker and its guard callbacks; the compact reuse payload stays the same.
   // PL1b restricts nested keyboard focus and click provenance. Substituting the original picker reproduces the PL1 pins.
   // PL1c checks direct rows and stops when focus disappears after keys. Restoring the PL1b picker reproduces its pins.
-  // G9 adds completeness fields to the serialized picker. It changes setup bytes even with outcomes disabled.
   assert.deepEqual({
     guarded: hash(guardedCode('await app.click(1);', window)),
     guardedLean: hash(guardedCode('await app.click(1);', window, undefined, undefined, { prompt: 'lean' })),
     reuse: hash(guardedCode('await app.click(1);', window, undefined, undefined, { reuseSetup: true, acknowledge: true })),
     read: hash(readCode('void 0;', { acknowledge: true })),
     repl: hash(replSetupCode()),
-  }, { guarded: '047f36a48d4b8409', guardedLean: '9c9ac3a3e0de9e90', reuse: 'b824edb3aa6dc2c4', read: '099ed16715a4dfc3', repl: '099ed16715a4dfc3' });
+  }, { guarded: '4eb66fd1db72a4ad', guardedLean: 'b5dbbfb32963d94c', reuse: 'b824edb3aa6dc2c4', read: 'd795b7dc97416130', repl: 'd795b7dc97416130' });
 });
 
 test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
@@ -783,8 +782,8 @@ test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
       repl: replSetupCode(),
     };
     assert.deepEqual(Object.fromEntries(Object.entries(codes).map(([key, code]) => [key, hash(code)])), {
-      guarded: '047f36a48d4b8409', guardedLean: '9c9ac3a3e0de9e90', reuse: 'b824edb3aa6dc2c4',
-      read: '30dfbb814e536fb2', repl: '30dfbb814e536fb2',
+      guarded: '4eb66fd1db72a4ad', guardedLean: 'b5dbbfb32963d94c', reuse: 'b824edb3aa6dc2c4',
+      read: '6eb12798b3f11f15', repl: '6eb12798b3f11f15',
     });
     for (const code of Object.values(codes)) assert.doesNotMatch(code, /closedLast|beforeRead|state\.dp1|state\.closeRead|\[sleight:dp1\]/);
   } finally {

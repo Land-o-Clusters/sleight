@@ -1,6 +1,6 @@
 import { locateList } from './list-locate.mjs';
 
-export async function pickFromList(tab, list, text, opts = {}) {
+async function pickFromList(tab, list, text, opts = {}) {
   if (!tab?.playwright || typeof tab.cua?.scroll !== 'function') throw new Error('pickFromList needs a browser tab.');
   if (typeof text !== 'string' || !text.trim()) throw new Error('pickFromList needs nonempty option text.');
   const normalize = value => String(value).replace(/\s+/g, ' ').trim();
@@ -20,12 +20,8 @@ export async function pickFromList(tab, list, text, opts = {}) {
           selected: option.selected === true || option.getAttribute('aria-selected') === 'true',
           visible: rect.width > 0 && rect.height > 0 && rect.y < bottom && rect.y + rect.height > top && rect.x < right && rect.x + rect.width > left };
       });
-      const declared = el.getAttribute('aria-setsize') ?? el.getAttribute('aria-rowcount') ??
-        el.querySelector('[aria-setsize]')?.getAttribute('aria-setsize');
-      const total = declared !== null && /^\d+$/.test(declared) ? Number(declared) : null;
       return { position: el.scrollTop, max: Math.max(0, el.scrollHeight - el.clientHeight), height: el.clientHeight,
         viewport: root.clientHeight, point: [(left + right) / 2, (top + bottom) / 2], inView: right > left && bottom > top,
-        total: Number.isSafeInteger(total) ? total : null, rendered: rows.length,
         rows: rows.filter(row => row.visible).slice(0, 200), selected: rows.filter(row => row.selected).map(row => row.text) };
     }, undefined, options);
   };
@@ -35,11 +31,8 @@ export async function pickFromList(tab, list, text, opts = {}) {
     state = await read();
   }
   const remember = () => { for (const row of state.rows) if (seen.size < 50) seen.add(row.text.slice(0, 200)); };
-  const completeness = () => Number.isSafeInteger(state.total) && Number.isSafeInteger(state.rendered) && state.total >= state.rendered
-    ? Math.max(0, state.total - state.rendered) + ' rows not rendered (page-declared total)'
-    : 'row total unknown';
   const fail = note => ({ found: false, verified: false, matched: null, selected: state.selected, position: state.position,
-    scrolls, seen: [...seen], note: 'No option clicked. ' + note, completeness: completeness() + '; search incomplete' });
+    scrolls, seen: [...seen], note: 'No option clicked. ' + note });
   const compare = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
   const order = rows => {
     if (rows.length < 2) return 0;
@@ -66,19 +59,16 @@ export async function pickFromList(tab, list, text, opts = {}) {
     catch (error) {
       return { found: true, verified: null, matched: name, selected: null, position: state.position, scrolls,
         seen: [...seen],
-        note: 'Option click failed. Input may have been sent. Read the page before retrying. ' + String(error.message),
-        completeness: completeness() + '; selection unverified' };
+        note: 'Option click failed. Input may have been sent. Read the page before retrying. ' + String(error.message) };
     }
     try {
       state = await read();
       const verified = state.selected.includes(name);
       return { found: true, verified, matched: name, selected: state.selected,
-        position: state.position, scrolls, ...(verified ? {} : { seen: [...seen], note: 'The option was clicked, but selection was not verified. Read the page before retrying.' }),
-        completeness: (verified ? 'complete (selection readback); ' : 'selection unverified; ') + completeness() };
+        position: state.position, scrolls, ...(verified ? {} : { seen: [...seen], note: 'The option was clicked, but selection was not verified. Read the page before retrying.' }) };
     } catch {
       return { found: true, verified: null, matched: name, selected: null, position: state.position, scrolls,
-        seen: [...seen], note: 'Selection readback failed after the click. Read the page before retrying.',
-        completeness: completeness() + '; selection unverified' };
+        seen: [...seen], note: 'Selection readback failed after the click. Read the page before retrying.' };
     }
   };
   const rel = text => (text === wanted || text.startsWith(wanted + ' ') ? 0 : compare(wanted, text));
@@ -153,7 +143,35 @@ export async function pickFromList(tab, list, text, opts = {}) {
   }
 }
 
-export function pickFromListCode(code) {
+// Runs only in the completeness arm. Its read is metadata for reporting, never input authority.
+function withPickerCompleteness(pick, locateList) {
+  return async (tab, list, text, opts = {}) => {
+    const result = await pick(tab, list, text, opts);
+    let scope = 'row total unknown';
+    try {
+      const { loc } = await locateList(tab, list, 'pickFromList');
+      const { total, rendered } = await loc.evaluate(el => ({
+        total: el.getAttribute('aria-setsize') ?? el.getAttribute('aria-rowcount') ??
+          el.querySelector('[aria-setsize]')?.getAttribute('aria-setsize'),
+        rendered: el.querySelectorAll('[role="option"], option').length,
+      }), undefined, { timeoutMs: 1000 });
+      const count = /^\d+$/.test(total ?? '') ? Number(total) : null;
+      if (Number.isSafeInteger(count) && count >= rendered)
+        scope = (count - rendered) + ' rows not rendered (page-declared total)';
+    } catch { /* unknown collection size */ }
+    return { ...result, completeness: result.verified ? 'complete (selection readback); ' + scope
+      : scope + (result.found ? '; selection unverified' : '; search incomplete') };
+  };
+}
+
+// Keep the pre-G9 function body above unchanged so default injected calls keep their original bytes.
+export { selectedPickFromList as pickFromList };
+function selectedPickFromList(tab, list, text, opts = {}) {
+  return (process.env.SLEIGHT_COMPLETENESS === '1' ? withPickerCompleteness(pickFromList, locateList) : pickFromList)(tab, list, text, opts);
+}
+
+export function pickFromListCode(code, completeness = process.env.SLEIGHT_COMPLETENESS === '1') {
   if (!/\bsleight\s*\.\s*pickFromList\s*\(/.test(code)) return code;
-  return `globalThis.sleight ??= {}; globalThis.sleight.pickFromList = ((locateList) => (${pickFromList.toString()}))(${locateList.toString()});\n${code}`;
+  const picker = completeness ? `(${withPickerCompleteness.toString()})((${pickFromList.toString()}), locateList)` : `(${pickFromList.toString()})`;
+  return `globalThis.sleight ??= {}; globalThis.sleight.pickFromList = ((locateList) => ${picker})(${locateList.toString()});\n${code}`;
 }

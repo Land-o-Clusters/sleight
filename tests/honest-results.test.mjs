@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { TurnOutcomes, unconfirmedInput } from '../plugins/sleight/lib/turn-outcomes.mjs';
 import { readCompleteness, declaredRows, resultCompleteness } from '../plugins/sleight/lib/read-completeness.mjs';
 import { outcomeOptions } from '../plugins/sleight/lib/launch.mjs';
@@ -20,10 +21,12 @@ test('a fully verified turn needs no summary', () => {
 
 test('all native input verbs enter the uncertainty ledger', () => {
   const turn = new TurnOutcomes();
-  const actions = ['click', 'doubleClick', 'rightClick', 'pressKey', 'typeText', 'paste', 'setValue', 'scroll', 'drag',
-    'selectText', 'performSecondaryAction', 'performAction', 'press'];
+  const actions = ['click', 'pressKey', 'typeText', 'paste', 'setValue', 'scroll', 'drag',
+    'selectText', 'performSecondaryAction'];
+  const api = readFileSync(new URL('fixtures/engine-api-26.1007.71326.ts', import.meta.url), 'utf8');
+  for (const action of actions) assert.match(api, new RegExp('\\b' + action + '\\('), action);
   turn.native({ outcomes: actions.map(a => ({ a })) });
-  assert.match(turn.text(), /13 actions, 13 unverified/);
+  assert.match(turn.text(), /9 actions, 9 unverified/);
 });
 
 test('unconfirmed tool statuses are distinct from untrusted page wording', () => {
@@ -105,7 +108,7 @@ test('engine compacted changes and unchanged deltas are changes-only reads', () 
 });
 
 test('plain lists omit the lazy-row note unless a scroll container contains them', () => {
-  const strings = ['#document', 'UL', 'LI'];
+  const strings = ['DIV', 'UL', 'LI'];
   const nodes = { nodeName: [0, 1, 2], parentIndex: [-1, 0, 1], attributes: [[], [], []] };
   assert.equal(readCompleteness(declaredRows({ strings, documents: [{ nodes }] })), 'complete (returned view)');
   nodes.isScrollable = { index: [0] };
@@ -120,4 +123,52 @@ test('page-declared row totals count distinct positions and never turn unknown t
   assert.deepEqual(declaredRows({ strings, documents: [{ nodes }] }), { omitted: 99, unknown: false });
   strings[5] = '-1';
   assert.deepEqual(declaredRows({ strings, documents: [{ nodes }] }), { omitted: 0, unknown: true });
+});
+
+test('completeness and outcomes have independent exact-value opt-ins', () => {
+  for (const value of [undefined, '0', 'yes', 'true', '01', '1']) {
+    assert.equal(outcomeOptions({ SLEIGHT_COMPLETENESS: value }).completeness, value === '1');
+    assert.equal(outcomeOptions({ SLEIGHT_COMPLETENESS: value }).outcomes, false);
+    assert.equal(outcomeOptions({ SLEIGHT_OUTCOMES: value }).completeness, false);
+  }
+});
+
+test('filtering a diff read takes precedence over changes-only scope', () => {
+  assert.equal(resultCompleteness([{ type: 'text', text: 'The following is a diff from the previous accessibility tree for Window: "Guide"\n+ \t9 button New' }], { filtered: true }),
+    '# incomplete read (filtered engine view).');
+});
+
+for (const tag of ['UL', 'OL', 'TABLE', 'SELECT', 'DIV']) {
+  test(`${tag} only gets lazy-row scope from a scroll container below the document or viewport shell`, () => {
+    const strings = ['#document', 'HTML', 'BODY', 'DIV', tag, 'role', 'list'];
+    const nodes = { nodeName: [0, 1, 2, 3, 3, 4], parentIndex: [-1, 0, 1, 2, 3, 4],
+      attributes: [[], [], [], [], [], tag === 'DIV' ? [5, 6] : []] };
+    const layout = { nodeIndex: [1, 2, 3, 4, 5], bounds: [[0,0,800,600], [0,0,800,1200], [0,0,800,600], [0,0,700,400], [0,0,500,200]] };
+    for (const scroll of [0, 1, 2, 3]) {
+      nodes.isScrollable = { index: [scroll] };
+      assert.equal(declaredRows({ strings, documents: [{ nodes, layout, viewportWidth: 800, viewportHeight: 600 }] }).renderedUnknown, undefined, 'stop at ' + scroll);
+    }
+    for (const scroll of [4, 5]) {
+      nodes.isScrollable = { index: [scroll] };
+      assert.equal(declaredRows({ strings, documents: [{ nodes, layout, viewportWidth: 800, viewportHeight: 600 }] }).renderedUnknown, true, 'nested scroll ' + scroll);
+    }
+  });
+}
+
+
+test('unsupported native API verbs are absent from outcome reporting', () => {
+  const turn = new TurnOutcomes();
+  turn.native({ outcomes: ['performAction', 'doubleClick', 'rightClick', 'press'].map(a => ({ a })) });
+  assert.equal(turn.text(), undefined);
+});
+
+
+test('offline footer cost fixtures distinguish trees, scalars and continuation scope', async () => {
+  const { footerFixtures } = await import('../bench/read-footer-cost.mjs');
+  const fixtures = footerFixtures();
+  assert.equal(fixtures.length, 17);
+  for (const name of ['getState inventory', 'boolean', 'number', 'JSON object'])
+    assert.equal(fixtures.find(row => row.name === name).addition, '');
+  assert.match(fixtures.find(row => row.name === 'engine changes').addition, /changes only/);
+  assert.match(fixtures.find(row => row.name === 'turbo filtered continuation').addition, /filtered view/);
 });

@@ -1,4 +1,4 @@
-// Offline footer measurement. Outputs fixture text and the default-path addition for a local tokenizer.
+// Offline footer measurement. Outputs fixture text and the opt-in addition for a local tokenizer.
 // No model, app, browser, transcript evaluation or authentication is involved.
 import { readFileSync } from 'node:fs';
 import { resultCompleteness, readCompleteness } from '../plugins/sleight/lib/read-completeness.mjs';
@@ -7,7 +7,7 @@ import { isMainModule } from '../plugins/sleight/lib/main-module.mjs';
 export function footerFixtures() {
   const rows = [];
   const engine = (name, before, options = {}) => {
-    const footer = resultCompleteness([{ type: 'text', text: before }], { requested: true, ...options });
+    const footer = resultCompleteness([{ type: 'text', text: before }], options);
     rows.push({ name, before, addition: footer ? '\n' + footer : '' });
   };
   for (const name of ['calculator-tree.txt', 'mdn-418-tree.txt'])

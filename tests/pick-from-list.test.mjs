@@ -1,3 +1,4 @@
+import { defaultReadBaseline, sha256 } from './fixtures/default-read-baseline.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
@@ -531,4 +532,23 @@ test('real travel.html finds MAO and airports at the start, middle and end of th
     assert.match(String(result.matched), new RegExp(`${code}$`));
     assert.ok(result.selected.some(row => row.endsWith(code)), `${index} ${name} selected ${JSON.stringify(result.selected)}`);
   }
+});
+
+test('default picker result bytes and injected helper match d3db241c', async () => {
+  const current = await import('../plugins/sleight/lib/pick-from-list.mjs');
+  for (const [index, text] of ['Beta', 'Missing'].entries()) {
+    const h = fixture(['Alpha', 'Beta', 'Gamma']);
+    assert.equal(JSON.stringify(await pickFromList(h.tab, '#list', text)), JSON.stringify(defaultReadBaseline.browserPicker[index]));
+  }
+  assert.equal(sha256(current.pickFromListCode('await sleight.pickFromList(tab, "List", "Beta")')), defaultReadBaseline.browserPickerCode);
+});
+
+for (const completeness of [false, true]) test(`serialized browser picker completeness=${completeness}`, async () => {
+  const { pickFromListCode } = await import('../plugins/sleight/lib/pick-from-list.mjs');
+  const h = fixture(['Alpha', 'Beta', 'Gamma']);
+  const context = { tab: h.tab };
+  const code = pickFromListCode('globalThis.picked = await sleight.pickFromList(tab, "#list", "Beta");', completeness);
+  await runInNewContext('(async () => {' + code + '})()', context);
+  assert.equal(context.picked.verified, true);
+  assert.equal(Object.hasOwn(context.picked, 'completeness'), completeness);
 });

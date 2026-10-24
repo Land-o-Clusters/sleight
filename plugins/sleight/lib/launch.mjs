@@ -65,13 +65,13 @@ export function receiptOptions(env = process.env) {
     redactReceiptTitles: env.SLEIGHT_RECEIPT_REDACT_TITLES !== '0' };
 }
 
-// Outcomes are opt-in with SLEIGHT_OUTCOMES=1. SLEIGHT_ACTION_LOG names a file under
+// SLEIGHT_COMPLETENESS=1 and SLEIGHT_OUTCOMES=1 are independent opt-ins. SLEIGHT_ACTION_LOG names a file under
 // ~/Library/Logs/sleight/, rotated at 5 MB with two old files kept.
 export function outcomeOptions(env = process.env, warn = message => process.stderr.write(message + '\n')) {
   const path = actionLogPath(env.SLEIGHT_ACTION_LOG);
   // A user who set a path outside the folder would otherwise believe the log is on.
   if (env.SLEIGHT_ACTION_LOG && !path) warn('sleight: SLEIGHT_ACTION_LOG takes a file name or a path under ~/Library/Logs/sleight/; this one is ignored and the action log is off.');
-  return { outcomes: env.SLEIGHT_OUTCOMES === '1', actionLog: path ? new ActionLog({ path }) : undefined };
+  return { completeness: env.SLEIGHT_COMPLETENESS === '1', outcomes: env.SLEIGHT_OUTCOMES === '1', actionLog: path ? new ActionLog({ path }) : undefined };
 }
 
 function fail(message) {

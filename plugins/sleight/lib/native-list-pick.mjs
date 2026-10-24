@@ -198,8 +198,7 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
       ...(v?.labels?.length ? { first: v.labels[0], last: v.labels.at(-1) } : {}),
       ...(near.size ? { near: [...near] } : {}), ...extra,
       note: (focusRow ? 'The focusing click went to ' + JSON.stringify(focusRow.slice(0, 60)) + '; no other row clicked. ' : 'No row clicked. ') +
-        note + (near.size ? ' Rows starting with it: ' + [...near].join('; ') + '. Pass a whole row label.' : ''),
-      completeness: 'row total unknown; search incomplete' });
+        note + (near.size ? ' Rows starting with it: ' + [...near].join('; ') + '. Pass a whole row label.' : '') });
     const sameRows = (a, b) => !!a.labels && !!b?.labels && a.labels.length === b.labels.length && a.labels.every((x, i) => x === b.labels[i]);
     const track = seen => {
       if (frameView && !sameRows(seen, frameView)) {
@@ -526,8 +525,7 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
             continue;
           }
           return { found: true, clicked: false, reason: 'click-failed', reads, keys, ...(ticks ? { ticks } : {}), label: hits[0].label,
-            note: 'The row was found but could not be clicked (' + String(error.message ?? error).split('\n')[0] + '). Input may have been sent. Read the window before retrying.',
-            completeness: 'row total unknown; selection unverified' };
+            note: 'The row was found but could not be clicked (' + String(error.message ?? error).split('\n')[0] + '). Input may have been sent. Read the window before retrying.' };
         }
         // The read after the click must show this row selected: a click on a row the list does not show reaches what is
         // drawn there (in Firefox's travel form, the Back and Next buttons sit right under the list).
@@ -535,11 +533,9 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
         const picked = after.rows?.find(isMatch);
         if (!picked || !/\((?:[^()]*, )?selected(?:, [^()]*)?\)/.test(picked.body)) {
           return { found: true, clicked: false, reason: 'click-unverified', reads, keys, ...(ticks ? { ticks } : {}), label: hits[0].label,
-            note: 'The row was clicked, but the read after it does not show it selected, so the click may have reached another control. Read the window before retrying.',
-            completeness: 'row total unknown; selection unverified' };
+            note: 'The row was clicked, but the read after it does not show it selected, so the click may have reached another control. Read the window before retrying.' };
         }
-        return { found: true, clicked: true, label: hits[0].label, reads, keys, ...(ticks ? { ticks } : {}), ...(focusRow ? { focusClick: focusRow } : {}),
-          completeness: 'complete (selection readback); row total unknown' };
+        return { found: true, clicked: true, label: hits[0].label, reads, keys, ...(ticks ? { ticks } : {}), ...(focusRow ? { focusClick: focusRow } : {}) };
       }
       const first = v.labels[0], last = v.labels.at(-1);
       if (compare(target, first) >= 0 && compare(target, last) <= 0) {
@@ -625,4 +621,17 @@ export function sortedListShift(before, after) {
     if (list.labels.every((label, i) => !i || compare(list.labels[i - 1], label) < 0)) return { number: list.number, body: list.body };
   }
   return undefined;
+}
+
+// Kept outside the default serialized picker until the completeness A/B qualifies it.
+export function withNativeCompleteness(pick) {
+  return async (...args) => {
+    const result = await pick(...args);
+    return { ...result, completeness: result.clicked ? 'complete (selection readback); row total unknown'
+      : result.found ? 'row total unknown; selection unverified' : 'row total unknown; search incomplete' };
+  };
+}
+
+export function listPickerCode(completeness = false) {
+  return completeness ? `options => (${withNativeCompleteness.toString()})((${listPicker.toString()})(options))` : listPicker.toString();
 }

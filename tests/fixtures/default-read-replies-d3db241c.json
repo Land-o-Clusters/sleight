@@ -1,0 +1,84 @@
+{
+  "source": "d3db241c76ea3cc8442ae9f96a6efebabc7fc540",
+  "algorithm": "sha256",
+  "relay": {
+    "calculator-tree.txt": "221f4653d17d53e6ec72a8f317791c65f33ac2f5d7319f88a2312fea7ed4463b",
+    "mdn-418-tree.txt": "4105db051f48c1a91910bb1f940f3de8fb4468250e2d9872758535722fce75b9",
+    "browser-0": "7bc08e40ce11d4d3917076abe3eb6a6bf4ed03093976e36fb81bac7c1e6321a4",
+    "browser-1": "bd5ebe9348d8566732a0ac30dbbde2c14668bc206d86617ab3093c2e4fefb343",
+    "inventory": "f12035e2ec1d3dea4a89d0e5c35bedfde7872a384b664f6304a9e700d150b3ac",
+    "boolean": "18d919bd2043e982804d042260429657f853f470f231b473d53250ae7b85af01",
+    "number": "a1686fc207a3db1924c970b23dc174d32f3aff3f2b0a4c812a4023378ae98444",
+    "object": "4fd373141c64d101025a5997ad65501dc0b9ab7be51ec320302da7d8bb2595d1",
+    "diff": "ddfece91b3638cf794204bd647d46f7da6cb14b4016a0e245b4ac66c44568a13",
+    "omitted": "15a786751086a14c4946ed9a228f0a31ea2bdbc22150fe09575e0d3f1bb75746"
+  },
+  "snapshot": [
+    {
+      "number": 1,
+      "hash": "6fb604de110bbf06859fc34ca5ddd6ebd48b3c65d0f734f94a0d6b96fb94c92e"
+    },
+    {
+      "number": 2,
+      "hash": "b137aa480d73b5b7760f6675a5680e819568d76f15670d6aa83c703ecff47b83"
+    },
+    {
+      "number": 3,
+      "hash": "036176163f58a8f6fa410af84e6a45375028035eed6991a536abac86d6fd2776"
+    },
+    {
+      "number": 4,
+      "hash": "95977d70354b729eb7e57cc1696bb9702c3ca3b548ad644480dbccf5d154663f"
+    },
+    {
+      "number": 5,
+      "hash": "6420a6146f44c713619df6c89cb35ed921c2827abd0d3f0a680778d37896bad7"
+    }
+  ],
+  "nativePicker": [
+    {
+      "found": true,
+      "clicked": true,
+      "label": "Port aad Airport 121",
+      "reads": 3,
+      "keys": 0
+    },
+    {
+      "found": false,
+      "clicked": false,
+      "reason": "no-progress",
+      "reads": 5,
+      "keys": 5,
+      "first": "Port aaa Airport 100",
+      "last": "Port aaj Airport 163",
+      "note": "No row clicked. The list did not move after Page_Up (the top of the list, or keys not reaching it)."
+    }
+  ],
+  "browserPicker": [
+    {
+      "found": true,
+      "verified": true,
+      "matched": "Beta",
+      "selected": [
+        "Beta"
+      ],
+      "position": 0,
+      "scrolls": 0
+    },
+    {
+      "found": false,
+      "verified": false,
+      "matched": null,
+      "selected": [],
+      "position": 0,
+      "scrolls": 0,
+      "seen": [
+        "Alpha",
+        "Beta",
+        "Gamma"
+      ],
+      "note": "No option clicked. The list ended without the requested option."
+    }
+  ],
+  "browserPickerCode": "ce17f3138e51ab42aa2314d41e51d376ef2728b8e4e9ae04985c3a6fa6f6afae"
+}
