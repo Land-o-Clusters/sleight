@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { hookAnswer } from './adversarial/fixtures/hook.mjs';
 import { createPageRegistry, backgroundClick, frameShield, popupHook, hookProof, hookOpen, hookSource, newHook } from '../plugins/sleight/lib/direct-browser/page.mjs';
 import { activationKey } from '../plugins/sleight/lib/direct-browser/act.mjs';
+import { setViewport } from '../plugins/sleight/lib/direct-browser/viewport.mjs';
 
 function fixture(options = {}) {
   const calls = [], pages = [], context = new EventEmitter();
@@ -73,6 +74,29 @@ test('FD3B native navigation reports attempts and an unexpectedly detached auxil
   await f.registry.keep(tab); next.emit('close'); await f.registry.idle();
   assert.equal(entry.cdp, next, 'release must not trigger reattachment');
   await f.registry.endTurn();
+});
+
+test('FD5 failed media restoration prevents a browser keep from releasing ownership', async () => {
+  const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/start' });
+  const entry = f.registry.tab(tab); let fail = false;
+  entry.page.emulateMedia = async () => { if (fail) throw Error('restore failed'); };
+  await setViewport(entry.page, { reduced_motion: true }); fail = true;
+  await assert.rejects(f.registry.keep(tab), /restore failed/);
+  assert.equal(f.registry.tab(tab), entry); assert.equal(entry.released, false);
+  fail = false; await f.registry.keep(tab); assert.equal(entry.released, true);
+  assert.equal((await f.registry.endTurn()).cleanedUp, true);
+});
+
+test('FD5B keep reports an unknown original size after safely clearing the override', async () => {
+  const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/start' });
+  const entry = f.registry.tab(tab);
+  entry.page.context = () => f.context;
+  entry.page.setViewportSize = async () => {};
+  await setViewport(entry.page, { width: 390, height: 844 });
+  assert.match((await f.registry.keep(tab)).viewport, /previous size unknown/);
+  assert.ok(f.calls.some(call => call[0] === 'Emulation.clearDeviceMetricsOverride'));
+  assert.equal(entry.released, true);
+  assert.equal((await f.registry.endTurn()).cleanedUp, true);
 });
 
 test('open phase events bracket allocation, attachment, adoption, readiness and navigation without page data', async () => {

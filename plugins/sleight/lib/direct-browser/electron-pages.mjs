@@ -7,6 +7,7 @@
 // awaited preparation (guard) stops the dispatch and parks the page. Nothing imports this file in the
 // installed path yet (EPV3-7 wires it beside createPageRegistry).
 import { tabHandle } from './tab-handle.mjs';
+import { restoreViewport } from './viewport.mjs';
 
 const fail = code => { throw Error(code); };
 const handoff = 'ELECTRON_NATIVE_HANDOFF: app windows open and close through the app itself, so use the app tools (its own Quit or close keeps unsaved-work review)';
@@ -150,12 +151,14 @@ export function createAppPageRegistry({ browser, filter, targets, join, fence, o
     entry.releasing = true;
     try {
       await bounded(() => entry.queue, 'app page release pending; wait before retrying');
+      const viewport = await bounded(() => restoreViewport(entry.page, { release: true }), 'app viewport restore pending; wait before retrying');
       await entry.cdp.detach().catch(() => {});
       targets.ungrant(entry.targetId);
       filter.release(entry.targetId);
       byTarget.delete(entry.targetId); kept.set(entry.targetId, entry.epoch);
       entry.released = true;
-      return { tab: id, kept: true, handoff: kind === 'handoff' };
+      return { tab: id, kept: true, handoff: kind === 'handoff',
+        ...(viewport.includes('previous size unknown') ? { viewport } : {}) };
     } finally { entry.releasing = false; }
   }
 
@@ -204,14 +207,17 @@ export function createAppPageRegistry({ browser, filter, targets, join, fence, o
         const rows = [];
         for (const entry of records.values()) {
           if (entry.revoked) { rows.push({ tab: entry.tab, kept: false, closed: true }); continue; }
+          let viewport;
           if (!entry.released) {
             try {
+              viewport = await bounded(() => restoreViewport(entry.page, { release: true }), 'app viewport restore pending');
               await entry.cdp.detach().catch(() => {});
               targets.ungrant(entry.targetId); filter.release(entry.targetId); byTarget.delete(entry.targetId);
               entry.released = true;
             } catch { rows.push({ tab: entry.tab, kept: false, closed: false, cleanupRequired: true }); continue; }
           }
-          rows.push({ tab: entry.tab, kept: true, closed: false });
+          rows.push({ tab: entry.tab, kept: true, closed: false,
+            ...(viewport?.includes('previous size unknown') ? { viewport } : {}) });
         }
         fence.release(owner); offRevoke();
         return { cleanedUp: settled && rows.every(row => row.kept || row.closed), rows };

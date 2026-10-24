@@ -7,6 +7,18 @@ import { hookSource } from '../plugins/sleight/lib/direct-browser/page.mjs';
 
 const names = ['browser_open', 'browser_read', 'browser_act', 'browser_fill', 'browser_tabs'];
 
+test('FD5B browser tools omit the unmeasured read-only annotation', () => {
+  for (const tool of browserTools()) assert.equal(tool.annotations, undefined);
+});
+
+test('FD5 media belongs only to viewport and uses bounded typed values', () => {
+  const call = step => validateToolCall({ name: 'browser_act', arguments: { tab: 't1', steps: [step] } });
+  call({ do: 'viewport', color_scheme: 'dark', reduced_motion: true });
+  call({ do: 'viewport', width: 390, height: 844, reduced_motion: false });
+  for (const step of [{ do: 'viewport', color_scheme: 'auto' }, { do: 'viewport', reduced_motion: 'reduce' },
+    { do: 'wait', color_scheme: 'dark' }, { do: 'wait', reduced_motion: false }]) assert.throws(() => call(step), /unsupported|invalid|require viewport/);
+});
+
 test('tool validation accepts only named click modifiers', () => {
   const call = step => ({ name: 'browser_act', arguments: { tab: 't1', steps: [step] } });
   for (const modifier of ['cmd', 'ctrl']) {
@@ -91,6 +103,13 @@ test('read maps ref, find and max_chars to the fixed snapshot interface', async 
   const out = await d.call({ name: 'browser_read', arguments: { tab: 't1', ref: 'e1', find: 'Save', max_chars: 1200, text: true } });
   assert.equal(out.isError, false);
   assert.deepEqual(calls[0], ['snapshot', { ref: 'e1', find: 'Save', maxChars: 1200 }]);
+});
+test('FD5 read forwards links without adding navigation authority', async () => {
+  const { dispatcher, calls } = fixture();
+  const result = await dispatcher.call({ name: 'browser_read', arguments: { tab: 't1', links: true, find: 'Report' } });
+  assert.equal(result.isError, false);
+  assert.deepEqual(calls, [['snapshot', { find: 'Report', links: true, maxChars: 8000 }]]);
+  assert.throws(() => validateToolCall({ name: 'browser_read', arguments: { tab: 't1', links: 'true' } }), /invalid type/);
 });
 test('act and fill preserve arrays, optional submit and private context', async () => {
   const { dispatcher: d, calls } = fixture();

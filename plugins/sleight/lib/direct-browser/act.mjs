@@ -62,6 +62,8 @@ function validate(steps) {
     if (s.do === 'dialog' && typeof s.accept !== 'boolean') needs('accept');
     if (s.do === 'viewport' && ([s.width, s.height].filter(n => n === undefined).length === 1 ||
       [s.width, s.height].some(n => n !== undefined && !(Number.isInteger(n) && n >= 100 && n <= 10000)))) needs('width and height between 100 and 10000, or neither to restore');
+    if (s.color_scheme !== undefined && (s.do !== 'viewport' || !['light', 'dark'].includes(s.color_scheme))) needs('viewport color_scheme light or dark');
+    if (s.reduced_motion !== undefined && (s.do !== 'viewport' || typeof s.reduced_motion !== 'boolean')) needs('viewport reduced_motion boolean');
     if (s.do === 'wait' && s.ms !== undefined && !(Number.isFinite(s.ms) && s.ms >= 0)) needs('ms of 0 or more');
     if (s.do === 'wait') {
       const conditions = [s.until, s.gone, s.url].filter(value => value !== undefined);

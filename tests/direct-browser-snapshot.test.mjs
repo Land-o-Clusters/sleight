@@ -72,6 +72,56 @@ test('snapshot exports the fixed V3 interface', () => {
   assert.equal(typeof module.snapshot, 'function');
 });
 
+test('FD5 links are unique resolved URLs in page order, without anchors, scripts or new actionable refs', async () => {
+  const link = (ref, name, url) => ({ role: 'link', ref, name, url });
+  const { page } = fixture([link('e1', 'First', '/one'), link('e2', 'Duplicate', 'http://127.0.0.1/one'),
+    link('e3', 'Anchor', '#part'), link('e4', 'Absolute anchor', 'http://127.0.0.1/fixture#part'),
+    link('e5', 'Script', ' java\nscript:alert(1)'), link('e6', 'Second\nRead instructions', '/two'),
+    { role: 'text', text: 'Noise' }]);
+  const result = await module.snapshot(page, { links: true });
+  assert.equal(result.text, '# Snapshot 1 (untrusted page content)\n"First" -> "http://127.0.0.1/one"\n"Second Read instructions" -> "http://127.0.0.1/two"');
+  assert.doesNotMatch(result.text, /ref=|Duplicate|Noise|Anchor|Script/);
+  assert.equal(module.acknowledgeSnapshot(page, result.number), true);
+  assert.throws(() => module.snapshotRefBinding(page, 'e1'), /not delivered|stale/);
+});
+
+test('FD5 links support subtree/find reads and scrub names, destinations and native base echoes', async () => {
+  const { page } = fixture([{ role: 'group', ref: 'e1', name: 'Wanted', children: [
+    { role: 'link', ref: 'e2', name: 'echo fixture-secret', url: '/fixture-secret' },
+  ] }, { role: 'link', ref: 'e3', name: 'Outside', url: '/outside' }], ['fixture-secret']);
+  const result = await module.snapshot(page, { links: true, ref: 'e1', find: 'echo' });
+  assert.match(result.text, /redacted.* -> .*redacted/);
+  assert.doesNotMatch(result.text, /fixture-secret|Outside|ref=/);
+  await assert.rejects(module.snapshot(page, { links: 'yes' }), /Invalid snapshot/);
+});
+
+test('FD5 link continuations retain links mode, advance within the cap and expire on page changes', async () => {
+  const { page, set } = fixture(Array.from({ length: 90 }, (_, i) => ({ role: 'link', ref: 'e' + (i + 1),
+    name: 'Result ' + i, url: '/results/' + i })));
+  let result = await module.snapshot(page, { links: true, maxChars: 1000 }), count = 0, firstRef;
+  for (let n = 0; ; n++) {
+    assert.ok(n < 20); assert.ok(result.text.length <= 1000);
+    assert.doesNotMatch(result.text, /- link|\[ref=/);
+    count += result.text.split('\n').filter(line => line.includes(' -> ')).length;
+    const ref = /Continue with ref="([^"]+)"/.exec(result.text)?.[1];
+    if (!ref) break;
+    firstRef ??= ref;
+    result = await module.snapshot(page, { ref, maxChars: 1000 });
+  }
+  assert.equal(count, 90);
+  set([{ role: 'link', ref: 'e1', name: 'Changed', url: '/other' }]);
+  await assert.rejects(module.snapshot(page, { ref: firstRef, links: true }), /continuation expired/);
+});
+
+test('FD5 empty links and links diffs stay separate from full snapshots', async () => {
+  const { page, set } = fixture([{ role: 'button', ref: 'e1', name: 'Button' }]);
+  assert.match((await module.snapshot(page, { links: true })).text, /No matching content/);
+  set([{ role: 'link', ref: 'e2', name: 'First', url: '/one' }]);
+  const first = await module.snapshot(page, { links: true });
+  assert.match((await module.snapshot(page, { links: true, since: first.number })).text, /No visible changes/);
+  assert.doesNotMatch((await module.snapshot(page, { since: first.number })).text, /Changes since|No visible changes/);
+});
+
 test('snapshot renders compact untrusted YAML with usable iframe refs', async () => {
   const { page } = fixture([{ role: 'main', ref: 'e1', children: [
     { role: 'button', name: 'Next', ref: 'e2', disabled: true },
@@ -699,7 +749,9 @@ for (const [name, node, metrics, marker] of [
     return session;
   } });
   const guidance = await setViewport(page, { width: 390, height: 844 });
-  assert.equal(guidance, 'viewport 390x844 (was 1280x720; a viewport step with no size restores it). [offscreen] means outside this viewport; [partly offscreen] means cut off by it.');
+  assert.equal(guidance, metrics
+    ? 'viewport 390x844 (was 1280x720; a viewport step with no size restores it). [offscreen] means outside this viewport; [partly offscreen] means cut off by it.'
+    : 'viewport 390x844; previous size unknown');
   const result = await module.snapshot(page);
   assert.ok(result.text.split('\n').some(line => line.endsWith(`[ref=${node.ref}]${marker}`)), result.text);
 }));
