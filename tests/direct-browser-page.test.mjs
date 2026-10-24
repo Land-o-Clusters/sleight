@@ -182,6 +182,41 @@ test('FD5 failed media restoration prevents a browser keep from releasing owners
   assert.equal((await f.registry.endTurn()).cleanedUp, true);
 });
 
+test('FD3C failed reattachment clears dead handles and permits keep, handoff and release', async () => {
+  for (const stage of ['attach', 'identity', 'install']) for (const kind of ['keep', 'handoff', 'waiting']) {
+    const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/start' }), entry = f.registry.tab(tab);
+    const first = entry.cdp, original = first.send.bind(first);
+    const next = Object.assign(new EventEmitter(), { detach: async () => {}, send: async (method, params) => {
+      if (stage === 'identity' || stage === 'install' && method === 'Page.addScriptToEvaluateOnNewDocument') throw Error('reattach failed');
+      return original(method, params);
+    } });
+    f.context.newCDPSession = async () => { if (stage === 'attach') throw Error('reattach failed'); return next; };
+    first.send = async () => { throw Error('dead session'); };
+    first.emit('close'); await f.registry.idle();
+    assert.equal(entry.cdp, null, stage);
+    assert.equal(entry.script, null, stage);
+    await assert.rejects(entry.checkAttachment(), /dead.*cleared/i);
+    if (kind === 'waiting') { const suspended = await f.registry.beginHandoff(tab); await suspended.finish(true); }
+    else await f.registry[kind](tab);
+    assert.equal(entry.released, true);
+    assert.equal(entry.page.closed, false);
+    assert.equal((await f.registry.endTurn()).cleanedUp, true);
+  }
+});
+
+test('FD3C a main-frame load retries failed Fetch cleanup without throwing or acting on child loads', async () => {
+  const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/start' }), entry = f.registry.tab(tab);
+  entry.state.recoveryFetchDisablePending = true; entry.state.recoveryFrameId = 'main';
+  entry.cdp.emit('Page.frameStartedLoading', { frameId: 'child' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.calls.filter(row => row[0] === 'Fetch.disable').length, 0);
+  entry.cdp.emit('Page.frameStartedLoading', { frameId: 'main' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.calls.filter(row => row[0] === 'Fetch.disable').length, 1);
+  assert.equal(entry.state.recoveryFetchDisablePending, false);
+  await f.registry.endTurn();
+});
+
 test('FD5B keep reports an unknown original size after safely clearing the override', async () => {
   const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/start' });
   const entry = f.registry.tab(tab);

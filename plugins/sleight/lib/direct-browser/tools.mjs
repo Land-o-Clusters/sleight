@@ -162,7 +162,9 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     const chooser = ended ? null : await chooserNote(entry.state);
     const nativeNavigationNo = entry.state.nativeNavigationNo ?? 0;
     const nativeNotice = nativeNavigationNo > (entry.state.nativeNavigationReported ?? 0)
-      ? 'Native app navigation or debugger detach attempted; cancellation requested. Native UI outcome unconfirmed; tell the user. Attachment checked on the same target.' : undefined;
+      ? ((entry.state.nativeDetachNo ?? 0) > (entry.state.nativeNavigationReported ?? 0)
+        ? 'Native debugger detach attempted.' : 'Native navigation attempted; cancellation requested.')
+        + ' Native UI outcome unconfirmed; tell the user. Attachment checked on the same target.' : undefined;
     const text = [...lines, ...(chooser ? [chooser.note.replace(/^a/, 'A') + '.'] : []), ...(nativeNotice ? [nativeNotice] : []), ...(body === undefined ? [] : [body]), ...(picture ? [picture.note] : [])].join('\n');
     const result = textResult(text);
     if (!ended && picture?.images) result.images = picture.images;

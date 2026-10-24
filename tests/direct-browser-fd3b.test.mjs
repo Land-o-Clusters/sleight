@@ -15,7 +15,8 @@ test('FD3B both inspectors classify native form actions and submitter overrides,
         const button = tag === 'input' ? new HTMLInputElement('input', attrs, '', form) : new HTMLButtonElement('button', attrs, 'Open', form);
         return tag === 'field' ? new HTMLInputElement('input', { type: 'text' }, '', form) : button;
       }, inspector);
-      assert.equal(element.appLink, true, inspector.name + ':' + tag + ':' + override);
+      assert.equal(element.appLink, tag !== 'field', inspector.name + ':' + tag + ':' + override);
+      assert.equal(element.nativeFormEnter, true, inspector.name + ':' + tag + ':' + override);
       const f = fixture();
       assert.equal(rules.check(f.ctx, 'press', f.target({ element, key: 'Enter' })).verdict, 'refuse');
     }

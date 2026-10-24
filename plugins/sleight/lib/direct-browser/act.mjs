@@ -120,7 +120,7 @@ export function inspectTarget(el, unused, read = (node, key) => { const value = 
     const content = read(form, 'textContent') + [...read(form, 'querySelectorAll')('input,select,textarea')].map(n => [read(n, 'value'), read(n, 'checked'), read(n, 'selectedIndex')].join(':')).join('|');
     for (let i = 0; i < content.length; i++) hash = Math.imul(hash ^ content.charCodeAt(i), 16777619);
   }
-  const appLink = (() => {
+  const nativeActivation = implicit => {
     const nativeURL = (node, href) => {
       if (!href) return false;
       try { return !/^(https?|javascript|blob|data|about):$/.test(new URL(href, read(read(node, 'ownerDocument'), 'baseURI')).protocol); }
@@ -132,13 +132,16 @@ export function inspectTarget(el, unused, read = (node, key) => { const value = 
     const isSubmitter = node => read(node, 'localName') === 'button' && !/^(button|reset)$/.test(read(node, 'type') ?? '') ||
       read(node, 'localName') === 'input' && /^(submit|image)$/.test(read(node, 'type') ?? '');
     const control = isSubmitter(el) ? el : read(el, 'closest')('button,input');
+    const explicit = control && isSubmitter(control);
+    if (!explicit && !(implicit && tag === 'input' && /^(text|search|tel|url|email|password|date|month|week|time|datetime-local|number)$/.test(read(el, 'type') ?? 'text'))) return false;
     const root = read(form, 'getRootNode')?.() ?? read(form, 'ownerDocument'), query = read(root, 'querySelectorAll');
     const candidates = query ? [...query('button,input')].filter(node => read(node, 'form') === form) : [...read(form, 'querySelectorAll')('button,input')];
     const submitter = control && isSubmitter(control) ? control : candidates.find(isSubmitter);
     const override = submitter && read(submitter, 'getAttribute')('formaction');
     return nativeURL(form, override == null ? read(form, 'getAttribute')('action') : override);
-  })();
-  return { name, accName, tag, role, appLink, kind: ['file', 'color'].includes(forwarded) ? forwarded : button ? 'button' : ['file', 'color'].includes(read(el, 'type')) ? read(el, 'type') : tag === 'select' ? 'select' : 'text', button, form: !!form, link, submit: submit || scriptButton, scriptButton, payment: payment(name) || submit && formPayment,
+  };
+  const appLink = nativeActivation(false), nativeFormEnter = nativeActivation(true);
+  return { name, accName, tag, role, appLink, nativeFormEnter, kind: ['file', 'color'].includes(forwarded) ? forwarded : button ? 'button' : ['file', 'color'].includes(read(el, 'type')) ? read(el, 'type') : tag === 'select' ? 'select' : 'text', button, form: !!form, link, submit: submit || scriptButton, scriptButton, payment: payment(name) || submit && formPayment,
     // An anchor whose only payment word is "checkout": the trusted context may drop this as the prior of a released navigation link (v3-context).
     checkoutLink: tag === 'a' && payment(name) && (name.match(/\b(?:pay|payment|purchase|buy|checkout|donate|subscribe|place order|complete order|order now|book now|upgrade|send money|charge)\b/gi) ?? []).every(word => word.toLowerCase() === 'checkout'),
     formPayment, formSignature: form ? hash : null };

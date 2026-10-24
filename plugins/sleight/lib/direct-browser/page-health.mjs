@@ -26,7 +26,11 @@ export async function probePage(tab, probeMs = 3000, current = () => true) {
   // A stuck child renderer matters too. These evaluations carry no user gesture.
   const frames = tab.page.frames?.() ?? [tab.page];
   try {
-    const results = await deadline(() => Promise.allSettled(frames.map(frame => frame.evaluate(() => 0))), probeMs);
+    const results = await deadline(() => Promise.allSettled(frames.map(async frame => {
+      if (frame.isDetached?.()) return;
+      try { await frame.evaluate(() => 0); }
+      catch (error) { if (!frame.isDetached?.()) throw error; }
+    })), probeMs);
     return results.length > 0 && results.every(result => result.status === 'fulfilled');
   } catch (error) {
     if (!error.probeTimeout) return false; // Navigation or closure is not proof of a stuck script.
@@ -88,6 +92,14 @@ export async function terminatePageScripts(tab, timeoutMs = 3000) {
   while (tab.state.actionPending && Date.now() < until) await pause(10);
   if (tab.state.actionPending) throw Error('Earlier input still pending after script termination; tab retained. Close or hand off the tab.');
 }
+export async function disableRecoveryFetch(tab, cdp = tab.cdp) {
+  tab.state.recoveryFetchDisablePending = true;
+  try {
+    // Cleanup has its own budget and cannot replace a navigation's result.
+    await deadline(() => cdp.send('Fetch.disable'), 500);
+    if (tab.cdp === cdp) tab.state.recoveryFetchDisablePending = false;
+  } catch { /* Retry at the next main-frame load, even if this session still answers. */ }
+}
 export async function recoverPage(tab, url, { siteCheck, allowCrossOrigin = false } = {}) {
   const parsed = new URL(url);
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) throw Error('HTTP(S) URL without credentials required');
@@ -102,28 +114,41 @@ export async function recoverPage(tab, url, { siteCheck, allowCrossOrigin = fals
   // Only a successful navigation clears the mark. A failed escape keeps the handle.
   // Fetch sees redirect requests too. Checking only the initial URL would let
   // a same-origin endpoint silently send recovery to an unrelated site.
+  const cdp = tab.cdp;
   let navigationGuard;
-  if (!allowCrossOrigin && tab.cdp?.on && tab.cdp?.off) {
-    const { frameTree } = await deadline(() => tab.cdp.send('Page.getFrameTree'), 3000);
+  if (cdp?.on && cdp?.off) {
+    const { frameTree } = await deadline(() => cdp.send('Page.getFrameTree'), 3000);
     if (!frameTree?.frame?.id) throw Error('Recovery navigation origin guard unavailable; tab retained');
     const frameId = frameTree.frame.id;
+    tab.state.recoveryFrameId = frameId;
+    let first = true;
     navigationGuard = event => {
       let blocked = false;
-      if (event.frameId === frameId) try { blocked = new URL(event.request.url).origin !== origin; } catch { blocked = true; }
-      tab.cdp.send(blocked ? 'Fetch.failRequest' : 'Fetch.continueRequest', {
+      try {
+        const hop = new URL(event.request.url);
+        blocked = !['http:', 'https:'].includes(hop.protocol) || !!hop.username || !!hop.password || !!siteCheck?.(hop.href);
+        if (event.frameId === frameId) {
+          const named = first && allowCrossOrigin && hop.href === parsed.href;
+          first = false;
+          blocked ||= !named && hop.origin !== origin;
+        }
+      } catch { blocked = true; }
+      cdp.send(blocked ? 'Fetch.failRequest' : 'Fetch.continueRequest', {
         requestId: event.requestId, ...(blocked ? { errorReason: 'BlockedByClient' } : {}),
       }).catch(() => {});
     };
-    tab.cdp.on('Fetch.requestPaused', navigationGuard);
+    cdp.on('Fetch.requestPaused', navigationGuard);
   }
   try {
-    if (navigationGuard) await deadline(() => tab.cdp.send('Fetch.enable', { patterns: [{ resourceType: 'Document', requestStage: 'Request' }] }), 3000);
+    if (navigationGuard) await deadline(() => cdp.send('Fetch.enable', { patterns: [{ resourceType: 'Document', requestStage: 'Request' }] }), 3000);
     await tab.page.goto(parsed.href, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    if (!allowCrossOrigin && new URL(tab.page.url()).origin !== origin) throw Error('Recovery left the stuck origin; tab retained');
+    const landed = new URL(tab.page.url());
+    if (!['http:', 'https:'].includes(landed.protocol) || landed.username || landed.password || siteCheck?.(landed.href) ||
+      landed.origin !== origin && !(allowCrossOrigin && landed.href === parsed.href)) throw Error('Recovery left the allowed destination; tab retained');
   } finally {
     if (navigationGuard) {
-      tab.cdp.off('Fetch.requestPaused', navigationGuard);
-      await deadline(() => tab.cdp.send('Fetch.disable'), 3000);
+      cdp.off('Fetch.requestPaused', navigationGuard);
+      await disableRecoveryFetch(tab, cdp);
     }
   }
   tab.state.stuck = false;
