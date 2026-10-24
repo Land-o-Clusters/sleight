@@ -301,7 +301,7 @@ test('real native EditContext acquisition and input remain bound to the delivere
         const f = await fixture(st, { initial: 'Keyboard-only model' });
         const { ref } = printedRef(await f.read());
         await assert.rejects(f.run([{ do: 'click', ref }]), error =>
-          error.notRun === true && /keyboard-only refs support only type and press/.test(error.message));
+          error.notRun === true && /keyboard-only refs support only type, paste and press/.test(error.message));
         for (const key of ['Enter', 'Space']) {
           const current = printedRef(await f.read()).ref;
           const result = await f.run([{ do: 'press', ref: current, key }]);

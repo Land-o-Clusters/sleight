@@ -17,10 +17,10 @@ for (const step of [
   { do: 'upload', ref: 'x1', paths: ['fixture.txt'] }, { do: 'navigate', ref: 'x1' },
   { do: 'drag', ref: 'x1', to: 'e2' }, { do: 'drag', ref: 'e2', to: 'x1' },
 ]) test(`keyboard-only refs refuse ${step.do} before resolving a target (${step.ref} to ${step.to ?? '-'})`, async () => {
-  await assert.rejects(fixture().run([step]), /keyboard-only refs support only type and press/);
+  await assert.rejects(fixture().run([step]), /keyboard-only refs support only type, paste and press/);
 });
 
-for (const step of [{ do: 'type', ref: 'x1', text: 'hello' }, { do: 'press', ref: 'x1', key: 'ArrowLeft' }])
+for (const step of [{ do: 'type', ref: 'x1', text: 'hello' }, { do: 'paste', ref: 'x1', text: 'hello' }, { do: 'press', ref: 'x1', key: 'ArrowLeft' }])
   test(`keyboard-only ${step.do} requires the trusted context before resolving a target`, async () => {
     const result = await fixture().run([step]);
     assert.match(result.lines[0], /not run:.*keyboard-only refs require a trusted context/);

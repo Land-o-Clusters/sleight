@@ -121,7 +121,7 @@ test('the worker names the failed startup stage and a code, never the message of
     ['connection-select', { selectConnection: async () => { throw Error('STALE_INSTANCE'); } }],
   ]) {
     const channel = new EventEmitter(); channel.connected = true; channel.send = () => {};
-    const error = await startInstalledV3Worker({ channel }, { schedule: () => undefined, tracePhase: () => {}, readConfig: () => ({}),
+    const error = await startInstalledV3Worker({ channel }, { recoverClipboard: async () => {}, schedule: () => undefined, tracePhase: () => {}, readConfig: () => ({}),
       acceptPackage: () => ({ current: () => true }), prepareHelpers: async () => ({ status: 'ready', receipt: {} }),
       createUi: () => ({ present() {}, authenticate: () => false, close() {} }), ...dependencies }).then(() => assert.fail('started'), value => value);
     assert.equal(error.stage, stage);

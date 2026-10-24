@@ -15,13 +15,13 @@ export function internalNativeKeyboardTarget(target, allowed) {
   if (allowed === true) nativeKeyboardTargets.add(target);
 }
 function nativeKeyboardInput(kind, target) {
-  return nativeKeyboardTargets.has(target) && (kind === 'type' || kind === 'press' && keyClass(target.key).kind === 'safe')
+  return nativeKeyboardTargets.has(target) && (['type', 'paste'].includes(kind) || kind === 'press' && keyClass(target.key).kind === 'safe')
     && [target.element, target.prior].filter(Boolean).every(el => el.kind === 'text' && ['textbox', 'searchbox'].includes(el.role)
       && ['payment', 'submit', 'formPayment'].every(key => el[key] === false));
 }
 const paymentPages = new WeakSet(), historyRequests = new WeakMap();
 export const paymentWords = text => /\b(?:pay|payment|purchase|buy|checkout|donate|subscribe|place order|complete order|order now|book now|upgrade|send money|charge)\b/i.test(text ?? '');
-const ordinary = new Set(['read', 'open', 'click', 'type', 'press', 'select', 'check', 'uncheck', 'hover', 'scroll', 'drag', 'upload',
+const ordinary = new Set(['read', 'open', 'click', 'type', 'paste', 'press', 'select', 'check', 'uncheck', 'hover', 'scroll', 'drag', 'upload',
   'dialog', 'wait', 'back', 'forward', 'reload', 'viewport', 'close', 'keep', 'handoff', 'Target.createTarget']);
 const text = value => typeof value === 'string' && value.trim().length > 0;
 const sameTerms = (a, b) => ['item', 'method', 'amount', 'payee', 'currency'].every(key => a?.[key] === b?.[key]);

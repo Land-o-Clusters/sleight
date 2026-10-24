@@ -56,6 +56,7 @@ import { createPaymentCard } from './payment-card.mjs';
 import { codexTurnClient } from './codex-turn.mjs';
 import { doctorVersionLine } from './version.mjs';
 import { isMainModule } from './main-module.mjs';
+import { recoverNativeClipboard } from './clipboard.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
 const SERVER_KEY = 'cua_repl';
@@ -1041,7 +1042,8 @@ export function turboState(readConfig, env = process.env) {
 export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, healthHelperFactory = createAppHealthHelper,
   directBrowser, ensureTurbo = false, shellRoute = false,
   approvalStorage = { load: loadPreapproved, live: livePreapproved, add: addPreapproved },
-  paymentCardFactory = createPaymentCard } = {}) {
+  paymentCardFactory = createPaymentCard, recoverClipboard = recoverNativeClipboard } = {}) {
+  await recoverClipboard();
   let finishStartup;
   const startupReady = new Promise(resolve => { finishStartup = resolve; });
   process.stdin.on('end', () => stop());

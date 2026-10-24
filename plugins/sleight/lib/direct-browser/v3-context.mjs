@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+import { createClipboardPasteSession, createNativeClipboardIO } from '../clipboard.mjs';
 import { randomUUID } from 'node:crypto';
 import { createHandoffWaiter } from './handoff.mjs';
 import { trustedRead, trustedReadNode, trustedHandle } from './trusted-dom.mjs';
@@ -105,6 +107,10 @@ async function focusProved(handle, focus, closed) {
   if (await trustedRead(handle, focusCheckedNode, { focus, hostsRoot: closed?.hostsRoot })) return true;
   if (closed || await hostsRootEvidence(handle) !== false) return false;
   return trustedRead(handle, focusCheckedNode, { focus, hostsRoot: false });
+}
+
+export function pasteFieldReady(el, unused, read) {
+  return read(el, 'readOnly') !== true && read(el, 'getAttribute')('aria-readonly') !== 'true';
 }
 
 export function ownDocument(el, unused, read = (node, key) => { const value = node?.[key]; return typeof value === 'function' ? value.bind(node) : value; }) { return read(el, 'ownerDocument'); }
@@ -579,7 +585,7 @@ function dialogTerms(message) {
 // app is the trusted adapter's Electron binding (createAppBinding), never tool JSON or page data. With it the
 // document identity is typed (app document or real HTTPS origin) and the app's debugger grant must stay current.
 // Without it only HTTP(S) frames pass, as before.
-export function createV3Context({ binding, browser, app, ui, confirmPayments, now = Date.now } = {}) {
+export function createV3Context({ binding, browser, app, ui, confirmPayments, clipboardIO, now = Date.now } = {}) {
   const bound = bindings.get(binding);
   if (app !== undefined && !isAppBinding(app)) throw Error('TRUSTED_TURN_REQUIRED');
   if (!bound || !(app ? app.current() && app.session === bound.message.session && (app.turn === null || app.turn === bound.message.turn) : text(browser))) throw Error('TRUSTED_TURN_REQUIRED');
@@ -587,7 +593,7 @@ export function createV3Context({ binding, browser, app, ui, confirmPayments, no
   const requested = requestedPayment(bound.message.text), documents = new Map(), targets = new WeakMap(), held = new Set();
   const watched = new Map();
   const uploads = new WeakMap(), offered = new Map(), tickets = new Map(), pending = new Map();
-  let closed = false, live, sequence = 0, dialogOwner, uploadRefusal;
+  let closed = false, live, sequence = 0, dialogOwner, uploadRefusal, pasteSession;
   const current = () => { try { return !closed && bound.current() === true && (!app || app.current()); } catch { return false; } };
   const handoff = createHandoffWaiter({ ui, current, session: bound.message.session, turn: bound.message.turn });
   // One place derives the document identity, so every later check agrees with the first.
@@ -697,10 +703,10 @@ export function createV3Context({ binding, browser, app, ui, confirmPayments, no
       }
       const closed = closedDetails(handle);
       keyboardBinding = nativeEditContextDetails(handle);
-      if (/^x\d+$/.test(target.ref) && !keyboardBinding || keyboardBinding?.keyboardOnly && !['type', 'press'].includes(target.do)) throw Error('TRUSTED_TARGET_REQUIRED');
+      if (/^x\d+$/.test(target.ref) && !keyboardBinding || keyboardBinding?.keyboardOnly && !['type', 'paste', 'press'].includes(target.do)) throw Error('TRUSTED_TARGET_REQUIRED');
       if (!keyboardBindingCurrent(keyboardBinding)) throw Error('EDIT_CONTEXT_CHANGED');
       let nativeEditor, editContext;
-      if (['type', 'press'].includes(target.do)) {
+      if (['type', 'paste', 'press'].includes(target.do)) {
         nativeEditor = await trustedRead(handle, readNativeEditContext).catch(() => ({ native: false, eligible: false }));
         if (nativeEditor.native || keyboardBinding) {
           if (!nativeEditor.native || !nativeEditor.eligible) throw Error('EDIT_CONTEXT_CHANGED');
@@ -710,7 +716,7 @@ export function createV3Context({ binding, browser, app, ui, confirmPayments, no
           if (keyboardBinding?.keyboardOnly && !await focusProved(handle, false, closed)) throw Error(focusRequired);
         }
       }
-      if ((target.do === 'press' || editContext) && !await focusProved(handle, true, closed)) throw Error(focusRequired);
+      if ((['press', 'paste'].includes(target.do) || editContext) && !await focusProved(handle, true, closed)) throw Error(focusRequired);
       const observed = await trustedRead(handle, readPaymentPage, never);
       const place = documentOf(frame, observed.origin);
       if (!current()) throw Error('TRUSTED_TARGET_REQUIRED');
@@ -730,7 +736,7 @@ export function createV3Context({ binding, browser, app, ui, confirmPayments, no
       Object.assign(target, { session: bound.message.session, turn: bound.message.turn, document: doc.id, origin: place.origin,
         sealEvidence, element, prior, locator: handle, terms: { page: observed.page, ...(never && observed.unchecked ? { unchecked: observed.unchecked } : {}), method: requested?.method },
         submit: intent(target.do ?? 'click', { ...target, element }).submit });
-      if (editContext && nativeEditor.zeroArea && (target.do === 'type' || target.do === 'press' && keyClass(target.key).kind === 'safe'))
+      if (editContext && nativeEditor.zeroArea && (['type', 'paste'].includes(target.do) || target.do === 'press' && keyClass(target.key).kind === 'safe'))
         internalNativeKeyboardTarget(target, true);
       return record;
     } catch (error) { keyboardBinding?.retire?.(); held.delete(handle); await handle.dispose().catch(() => {}); throw error; }
@@ -833,6 +839,58 @@ export function createV3Context({ binding, browser, app, ui, confirmPayments, no
         await keys.between();
       } finally { for (let i = down - 1; i >= 0; i--) await keyboard.up(names[i]); }
     },
+    async pasteTarget(target, value, guarded) {
+      // Electron has no page shield. Keep its existing native paste route.
+      if (app) throw Error('Paste in an app uses the native app.paste path.');
+      const ready = async () => {
+        const record = targets.get(target);
+        if (!current() || !record?.doc.valid || record.allowedKind !== 'paste' ||
+            !await trustedRead(record.handle, samePageDocument, record.doc.handle) ||
+            !await focusProved(record.handle, false, record.closed) || !current()) throw Error(focusRequired);
+        const el = await trustedRead(record.handle, inspectElement);
+        if (el.kind !== 'text' || el.button || el.link || el.enabled === false ||
+            !await trustedRead(record.handle, pasteFieldReady) ||
+            el.tag === 'input' && /[\r\n]/.test(value)) throw Error('Paste needs a checked text field or editor; single-line inputs cannot take line breaks.');
+        if (record.editContext) await nativeInputReady(record);
+        return record;
+      };
+      pasteSession ??= createClipboardPasteSession(clipboardIO ?? createNativeClipboardIO(fileURLToPath(new URL('../clipboard.js', import.meta.url))));
+      let record;
+      const result = await pasteSession.paste(value, async (verify, keys, begin) => {
+        const checked = async () => {
+          await verify();
+          if (!current() || !record.doc.valid || record.allowedKind !== 'paste') throw Error(focusRequired);
+        };
+        // Recheck the pinned field and focus after the native stage write,
+        // then fence generation and authority directly before Meta down.
+        await ready();
+        await checked();
+        begin?.();
+        const { keyboard } = target.page;
+        if (typeof keys?.between !== 'function') return keyboard.press('ControlOrMeta+V');
+        // Match Enter/Space: lock frames created by keydown before keyup.
+        let modifier = false, down = false;
+        try {
+          await keyboard.down('ControlOrMeta'); modifier = true;
+          await checked();
+          verify.remaining();
+          await keyboard.down('V'); down = true;
+          await keys.between({ timeoutMs: verify.remaining() });
+        } finally {
+          try { if (down) await keyboard.up('V'); }
+          finally { if (modifier) await keyboard.up('ControlOrMeta'); }
+        }
+      }, stage => guarded(async (keys, begin) => {
+        record = await ready();
+        const restored = await stage(keys, begin);
+        // Restoration precedes this read, popup settling and shield disarm.
+        if (record.editContext) await nativeInputReady(record);
+        return restored;
+      }));
+      if (!Number.isFinite(pasteSession.stagedMs)) return 'Paste not attempted; your clipboard is unchanged.';
+      const rows = value.split(/\r\n|\r|\n/);
+      return `paste sent: ${[...value].length} characters, ${rows.length} rows, up to ${Math.max(...rows.map(row => row.split('\t').length))} columns; ${result}; clipboard staged for ${pasteSession.stagedMs.toFixed(1)} ms (500 ms limit); verify the page`;
+    },
     async typeTarget(target, value, options) {
       const record = targets.get(target);
       if (typeof value !== 'string' || !current() || !record?.doc.valid || record.allowedKind !== 'type' ||
@@ -900,6 +958,7 @@ export function createV3Context({ binding, browser, app, ui, confirmPayments, no
       for (const [page, handlers] of watched) for (const [event, handler] of Object.entries(handlers)) page.off(event, handler);
       watched.clear(); tickets.clear(); pending.clear(); offered.clear();
       const receipt = fileProvider.dispose();
+      await pasteSession?.close();
       await Promise.allSettled([...held].map(handle => handle.dispose?.())); held.clear(); documents.clear();
       return receipt;
     },

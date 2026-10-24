@@ -397,6 +397,7 @@ test('input into a terminal is refused, by ref or by focus; a later step stops t
   const s = await world({ dom: { e5: terminalInShadow(), focus: terminalInShadow() }, inspect: { e5: { tag: 'textarea', kind: 'text', button: false } } });
   t.after(() => s.filter.dispose());
   await assert.rejects(s.act([{ do: 'type', ref: 'e5', text: 'ls' }]), notRun(/^ELECTRON_TERMINAL_REFUSED: /));
+  await assert.rejects(s.act([{ do: 'paste', ref: 'e5', text: 'ls' }]), notRun(/^ELECTRON_TERMINAL_REFUSED: /));
   await assert.rejects(s.act([{ do: 'press', key: 'Enter' }]), notRun(/^ELECTRON_TERMINAL_REFUSED: /));
   assert.deepEqual(s.sends, []);
   const result = await s.act([{ do: 'click', ref: 'e1' }, { do: 'type', ref: 'e5', text: 'ls' }, { do: 'click', ref: 'e2' }]);

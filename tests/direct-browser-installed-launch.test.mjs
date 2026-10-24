@@ -1,9 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prepareInstalledStartup, turboState, createInstalledBrowserBridge } from '../plugins/sleight/lib/launch.mjs';
+import { run, prepareInstalledStartup, turboState, createInstalledBrowserBridge } from '../plugins/sleight/lib/launch.mjs';
 import { createV3Frontend } from '../plugins/sleight/lib/direct-browser/worker.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { PassThrough } from 'node:stream';
+
+test('relay startup waits for clipboard recovery before constructing runtime resources', async () => {
+  const sentinel = Error('recovery remains unconfirmed'); let recovery = 0;
+  await assert.rejects(run({ recoverClipboard: async () => { recovery++; throw sentinel; },
+    healthHelperFactory: () => assert.fail('runtime must wait for recovery') }), error => error === sentinel);
+  assert.equal(recovery, 1);
+});
 
 test('ordinary installed startup stays off without an operator setting', async () => {
   const value = await prepareInstalledStartup(() => null);

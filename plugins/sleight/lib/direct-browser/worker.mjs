@@ -15,6 +15,7 @@ import { readHandConfig } from '../hand/settings.mjs';
 import { createPermissionCheck, stampUse } from '../permissions.mjs';
 import { validHostLabel } from '../host-label.mjs';
 import { isMainModule } from '../main-module.mjs';
+import { recoverNativeClipboard } from '../clipboard.mjs';
 
 const bridges = new WeakSet(), frontends = new WeakSet();
 export const isV3Bridge = value => !!value && bridges.has(value);
@@ -619,6 +620,9 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
   // Which startup step is running, so a failure can say where it stopped (unavailableFrame).
   let stage = 'config';
   try {
+    stage = 'clipboard-recovery';
+    await (dependencies.recoverClipboard ?? recoverNativeClipboard)();
+    stage = 'config';
     const config = (dependencies.readConfig ?? readInstalledConfig)();
     if (!config) throw Error('SETTING_OFF');
     stage = 'package';

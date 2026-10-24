@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { createNativeClipboardIO, createClipboardSession } from '../plugins/sleight/lib/clipboard.mjs';
+import { createNativeClipboardIO, createClipboardSession, createClipboardPasteSession } from '../plugins/sleight/lib/clipboard.mjs';
 
 function fixture(options = {}) {
   const children = [], requests = [], wire = [];
@@ -10,7 +10,7 @@ function fixture(options = {}) {
     const child = new EventEmitter();
     child.stdin = new PassThrough(); child.stdout = new PassThrough();
     child.kill = () => { child.killed = true; queueMicrotask(() => child.emit('close', null, 'SIGTERM')); };
-    child.stdin.on('data', bytes => { wire.push(bytes.toString()); requests.push(JSON.parse(bytes.toString())); });
+    child.stdin.on('data', bytes => { wire.push(bytes.toString()); const request = JSON.parse(bytes.toString()); requests.push(request); options.onRequest?.(request, child); });
     child.stdin.on('finish', () => { if (!options.holdClose) queueMicrotask(() => child.emit('close', 0)); });
     child.reply = reply => child.stdout.write(JSON.stringify(reply) + '\n');
     children.push(child); return child;
@@ -29,6 +29,49 @@ test('clipboard IO starts lazily and reuses one process across reads and writes'
   }
   await f.io.close();
   await assert.rejects(f.io({ op: 'read' }), /closed/);
+});
+
+test('paste restoration retries on a fresh helper only after timeout collection, without replaying input', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let count = 10, items = [[{ type: 'public.rtf', data: 'e1xydGYxfQ==' }]], writes = 0, sends = 0, collected = false;
+  const f = fixture({ timeoutMs: 10, onRequest(request, child) {
+    if (request.op === 'read') return child.reply({ id: request.id, ok: true, count, items });
+    assert.equal(request.op, 'write'); assert.equal(request.expectedCount, count);
+    if (++writes === 2) { count++; items = []; child.once('close', () => { collected = true; }); return; }
+    if (writes === 3) assert.equal(collected, true);
+    items = request.items;
+    child.reply({ id: request.id, ok: true, count: ++count });
+  } });
+  const io = request => ['acquire', 'release'].includes(request.op) ? undefined : f.io(request);
+  io.close = f.io.close;
+  const session = createClipboardPasteSession(io), active = session.paste('private', async () => { sends++; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes, 2); assert.equal(f.children.length, 1);
+  t.mock.timers.tick(10);
+  assert.equal(await active, 'clipboard restored');
+  assert.equal(f.children.length, 2); assert.equal(writes, 3); assert.equal(sends, 1);
+  assert.deepEqual(f.requests.filter(request => request.op === 'write').at(-1).items[0].map(rep => rep.type), ['public.rtf', 'org.nspasteboard.TransientType']);
+  await session.close();
+});
+test('every failed restore retires its helper before another write, through the fifth attempt', async () => {
+  let count = 10, items = [[{ type: 'public.rtf', data: 'e1xydGYxfQ==' }]], writes = 0, sends = 0;
+  const f = fixture({ onRequest(request, child) {
+    if (request.op === 'read') return child.reply({ id: request.id, ok: true, count, items });
+    assert.equal(request.op, 'write'); assert.equal(request.expectedCount, count);
+    ++writes; ++count;
+    if (writes > 1 && writes < 6) {
+      items = []; return child.reply({ id: request.id, ok: false, error: 'restore failed after clear', mutated: true, count });
+    }
+    items = request.items; child.reply({ id: request.id, ok: true, count });
+  } });
+  const io = request => ['acquire', 'release'].includes(request.op) ? undefined : f.io(request);
+  io.close = f.io.close; io.restart = f.io.restart;
+  const session = createClipboardPasteSession(io);
+  assert.equal(await session.paste('private', async () => { sends++; }), 'clipboard restored');
+  assert.equal(writes, 6); assert.equal(sends, 1); assert.equal(f.children.length, 5);
+  assert.equal(f.children.slice(0, -1).every(child => child.killed), true);
+  assert.deepEqual(items, [[{ type: 'public.rtf', data: 'e1xydGYxfQ==' }, { type: 'org.nspasteboard.TransientType', data: '' }]]);
+  await session.close();
 });
 
 test('clipboard replies correlate out of order and preserve mutation recovery metadata', async () => {
@@ -67,6 +110,15 @@ test('a timed out helper refuses new work until its process is collected', async
   assert.equal(f.children.length, 1); assert.equal(f.requests.length, 1);
   const closing = f.io.close();
   f.children[0].emit('close', null, 'SIGTERM'); await closing; await failure;
+});
+test('a paste request deadline replaces the default helper wait and stays off the native wire', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture({ timeoutMs: 10000 }), pending = f.io({ op: 'read', timeoutMs: 40 });
+  const failure = assert.rejects(pending, error => error.clipboardTimeout === true);
+  assert.equal(Object.hasOwn(f.requests[0], 'timeoutMs'), false);
+  t.mock.timers.tick(39); assert.notEqual(f.children[0].killed, true);
+  t.mock.timers.tick(1); await failure;
+  assert.equal(f.children[0].killed, true); await f.io.close();
 });
 test('shutdown can bound clipboard helper collection and force only that owned child', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
