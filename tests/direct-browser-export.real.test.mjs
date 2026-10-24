@@ -668,11 +668,11 @@ test('G3G positioned text within a large containing block remains readable', opt
   assert.deepEqual(data.rows, [['legitimate content']]); assert.doesNotMatch(data.reasons.join(), /visually hidden/);
 });
 
-test('G3G text within a clipping ancestor full extent exports even beyond the off-canvas threshold', options, async t => {
+test('G3H positioned text cannot enlarge a clipping ancestor to escape hidden-text detection', options, async t => {
   const f = await fixture(t, '<div style="position:relative;width:300px;height:300px;overflow:auto"><ul><li>first</li>' +
     '<li style="position:absolute;top:9999px">last</li></ul></div>');
   const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
-  assert.deepEqual(data.rows, [['first'], ['last']]); assert.doesNotMatch(data.reasons.join(), /visually hidden/);
+  assert.deepEqual(data.rows, [['first']]); assert.match(data.reasons.join(), /visually hidden/);
 });
 
 for (const attribute of ['placeholder', 'data-placeholder', 'aria-describedby'])
@@ -686,3 +686,78 @@ for (const attribute of ['placeholder', 'data-placeholder', 'aria-describedby'])
       ['value-6'], ['value-7'], ['value-8'], ['value-9'], ['value-10'], ['value-11'], ['value-12'], ['[redacted]']]);
     assert.equal(data.redacted, true);
   });
+
+for (const overflow of ['auto', 'hidden', 'scroll', 'clip']) for (const intermediate of ['none', 'list', 'table'])
+  test(`G3H omits displaced text in overflow:${overflow} with ${intermediate} containing block`, options, async t => {
+    const styles = [
+      'position:absolute;left:9999px', 'position:absolute;top:9999px',
+      'position:fixed;left:9999px', 'position:fixed;top:9999px',
+      'position:relative;left:9999px', 'position:relative;top:9999px',
+      'display:inline-block;transform:translateX(9999px)', 'display:inline-block;transform:translateY(9999px)',
+    ];
+    const text = 'safe' + styles.map((style, i) => `<span style="${style}">LEAK-${i}</span>`).join('');
+    const collection = intermediate === 'table'
+      ? `<table style="position:relative" aria-rowcount="1"><tr><td>${text}</td></tr></table>`
+      : `<ul aria-setsize="1" style="${intermediate === 'list' ? 'position:relative' : ''}"><li>${text}</li></ul>`;
+    const f = await fixture(t, `<!doctype html><div style="position:relative;margin:20px;border:9px solid;width:300px;height:300px;overflow:${overflow}">${collection}</div>`);
+    const data = await trustedLocatorRead(f.page.locator(intermediate === 'table' ? 'table' : 'ul'), readExportCollection, EXPORT_LIMITS);
+    assert.deepEqual(data.rows, [['safe']]); assert.match(data.reasons.join(), /visually hidden/);
+    assert.equal(data.declaredTotal, 1); assert.equal(data.complete, false);
+    for (const format of ['csv', 'json']) {
+      const receipt = writeDataExport(data, { format }, ctx('Export table'), { userHome: f.root });
+      assert.doesNotMatch(fs.readFileSync(receipt.path, 'utf8'), /LEAK/);
+      assert.doesNotMatch(exportSummary(receipt), /safe|LEAK/);
+    }
+    assert.deepEqual(f.requests, [['GET', '/']]);
+  });
+
+for (const kind of ['table', 'list']) for (const style of ['', 'position:relative;top:1px;left:1px', 'transform:translate(1px,1px)', 'transform:translateZ(0)'])
+  test(`G3H all 60 tall ${kind} rows export with flow style ${style || 'static'}`, options, async t => {
+    const rows = Array.from({ length: 60 }, (_, i) => [`row ${i + 1}`]);
+    const body = rows.map(([value]) => kind === 'table'
+      ? `<tr style="height:120px;${style}"><td>${value}</td></tr>` : `<li style="height:120px;${style}">${value}</li>`).join('');
+    const html = kind === 'table' ? `<table aria-rowcount="60">${body}</table>` : `<ul aria-setsize="60">${body}</ul>`;
+    const f = await fixture(t, '<!doctype html><div style="position:relative;height:300px;overflow:hidden">' + html + '</div>');
+    const data = await trustedLocatorRead(f.page.locator(kind === 'table' ? 'table' : 'ul'), readExportCollection, EXPORT_LIMITS);
+    assert.deepEqual(data.rows, rows); assert.equal(data.complete, true); assert.doesNotMatch(data.reasons.join(), /visually hidden/);
+    for (const format of ['csv', 'json']) {
+      const receipt = writeDataExport(data, { format }, ctx('Export table'), { userHome: f.root });
+      const content = fs.readFileSync(receipt.path, 'utf8');
+      assert.deepEqual(format === 'csv' ? parseCSV(content) : JSON.parse(content).rows, rows);
+    }
+  });
+
+for (const attribute of ['aria-label', 'placeholder', 'data-placeholder', 'aria-describedby'])
+  test(`G3H one-word code labels redact through ${attribute}`, options, async t => {
+    const labels = ['Authcode', 'authcode', 'AUTHCODE', 'Passcode', 'passcode'];
+    const f = await fixture(t, '<ul>' + labels.map((label, i) => `<li><span role="textbox" ${attribute}="${attribute === 'aria-describedby' ? 'hint-' + i : label}">protected-${i}</span></li>`).join('') +
+      '</ul>' + labels.map((label, i) => `<p id="hint-${i}">${label}</p>`).join(''));
+    const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
+    assert.deepEqual(data.rows, labels.map(() => ['[redacted]'])); assert.equal(data.redacted, true);
+  });
+
+for (const axis of ['left', 'top']) for (const gap of [4999, 5000])
+  test(`G3H ${axis} starts ${gap}px beyond a clipper client box`, options, async t => {
+    const f = await fixture(t, '<!doctype html><div id="clip" style="position:relative;margin:20px;border:9px solid;width:300px;height:300px;overflow:auto">' +
+      `<ul><li>safe<span id="target" style="position:absolute;${axis}:${300 + gap}px">offset text</span></li></ul></div>`);
+    const geometry = await f.page.evaluate(axis => {
+      const clip = document.querySelector('#clip'), target = document.querySelector('#target');
+      return target.getBoundingClientRect()[axis] - clip.getBoundingClientRect()[axis] -
+        (axis === 'left' ? clip.clientLeft + clip.clientWidth : clip.clientTop + clip.clientHeight);
+    }, axis);
+    assert.equal(geometry, gap);
+    const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
+    assert.deepEqual(data.rows, [[gap === 5000 ? 'safe' : 'safeoffset text']]);
+    assert.equal(data.reasons.includes('visually hidden text omitted'), gap === 5000);
+  });
+
+test('G3H scrolling to displaced text does not change its classification', options, async t => {
+  const f = await fixture(t, '<!doctype html><div id="clip" style="position:relative;width:300px;height:300px;overflow:auto">' +
+    '<ul><li>safe<span style="position:absolute;top:9999px">LEAK</span></li></ul></div>');
+  await f.page.evaluate(() => { document.querySelector('#clip').scrollTop = 9800; });
+  const before = await f.page.evaluate(() => document.querySelector('#clip').scrollTop);
+  assert.ok(before > 0);
+  const data = await trustedLocatorRead(f.page.locator('ul'), readExportCollection, EXPORT_LIMITS);
+  assert.deepEqual(data.rows, [['safe']]);
+  assert.equal(await f.page.evaluate(() => document.querySelector('#clip').scrollTop), before);
+});

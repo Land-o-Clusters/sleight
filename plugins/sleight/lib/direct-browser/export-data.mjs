@@ -13,7 +13,7 @@ export function readExportCollection(el, limits, read) {
   if (!read(el, 'isConnected') || !collection(el)) throw Error('Export ref must name a table, grid or list');
   const reasons = new Set(), signals = new Set(), rows = [], indices = [], totals = [], textTotals = [], observedTotals = [], hidden = new WeakMap();
   let nodes = 0, characters = 0, redacted = false, capped = false;
-  const sensitive = /password|passcode|secret|one.?time|\botp\b|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|(?:security|verification).?code/i;
+  const sensitive = /password|passcode|authcode|secret|one.?time|\botp\b|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|(?:security|verification).?code/i;
   const protectedLabel = value => sensitive.test(value ?? '') || /(?:^|[\W_])code(?:$|[\W_])/i.test(
     (value ?? '').replace(/\b(?:postal|zip|promo|coupon|discount|country|area)[-_\s]+code\b/gi, ''));
   const children = node => Array.from(read(node, 'children') ?? []);
@@ -48,16 +48,28 @@ export function readExportCollection(el, limits, read) {
     return box.right > extent.left && box.bottom > extent.top && box.left < extent.right && box.top < extent.bottom;
   };
   const farPositioned = (node, style, box) => {
-    if (clippingAncestor(node)) return false;
-    // ScrollWidth can be enlarged by the very text being checked. Use the containing block's
-    // layout size for extreme positioned offsets, without changing styles or reading page code.
-    if (!/^(absolute|fixed)$/.test(style.position) && style.transform === 'none' &&
+    const clip = clippingAncestor(node), outOfFlow = /^(absolute|fixed)$/.test(style.position);
+    if (clip) {
+      const offset = key => parseFloat(style[key]) || 0;
+      const matrix = style.transform !== 'none' ? new DOMMatrixReadOnly(style.transform) : null;
+      const x = (style.position === 'relative' ? offset('left') || -offset('right') : 0) + (matrix?.m41 ?? 0);
+      const y = (style.position === 'relative' ? offset('top') || -offset('bottom') : 0) + (matrix?.m42 ?? 0);
+      // Flow rows can start far down a scroller. Small offsets and identity transforms do not hide them.
+      const flowRow = /^(tr|li)$/.test(tag(node)) || /^(row|listitem|option|article)$/.test(role(node));
+      if (!outOfFlow && (x === 0 && y === 0 || flowRow && Math.abs(x) < 5000 && Math.abs(y) < 5000)) return false;
+    } else {
+      // ScrollWidth can be enlarged by the very text being checked. Use the containing block's
+      // layout size for extreme positioned offsets, without changing styles or reading page code.
+      if (!outOfFlow && style.transform === 'none' &&
         !['left', 'top', 'right', 'bottom'].some(key => Math.abs(parseFloat(style[key])) >= 5000)) return false;
-    const block = style.position === 'fixed' ? null : read(node, 'offsetParent') ?? parent(node);
+    }
+    // A positioned descendant can inflate scrollWidth/Height itself, so a clipper contributes only its client box.
+    const block = clip ?? (style.position === 'fixed' ? null : read(node, 'offsetParent') ?? parent(node));
     const origin = block && read(block, 'getBoundingClientRect')();
     const left = origin ? origin.left + read(block, 'clientLeft') - read(block, 'scrollLeft') : 0;
     const top = origin ? origin.top + read(block, 'clientTop') - read(block, 'scrollTop') : 0;
-    return box.left >= left + (block ? read(block, 'clientWidth') : innerWidth) + 5000 ||
+    return !!clip && (box.left <= left - 5000 || box.top <= top - 5000) ||
+      box.left >= left + (block ? read(block, 'clientWidth') : innerWidth) + 5000 ||
       box.top >= top + (block ? read(block, 'clientHeight') : innerHeight) + 5000;
   };
   const zeroClip = (style, box) => {
