@@ -42,6 +42,22 @@ const card = { owner: own, title: 'Allow Cursor to use TextEdit?', name: request
 const plan = () => composerPlan({ prompt: 'Edit.', paths, allowedApps: [request.bundleId], timeoutMs: 5000 });
 const temp = () => trackTemp(mkdtempSync(join(realTmp, 'sleight-ca4-test-')));
 
+test('nativeMain grades the raw Cursor answer and saves a scrubbed copy', async () => {
+  const dir = temp(), exit = process.exitCode, answer = 'Done. password: hunter2';
+  let graded;
+  try {
+    const out = await nativeMain(['--tasks', 'textedit-edit', '--runs', '1', '--owner-away', '--out', join(dir, 'results.json')], {
+      guard: () => {}, held: () => false, preflight: async () => {}, inspect: () => {}, readiness: async () => ({ authStored: true }), lock: async () => () => {},
+      run: async () => ({ is_error: false, duration_ms: 2000, agentSeconds: 2, groupClean: true, result: answer }),
+      execute: async (_task, _ctx, { drive }) => { const d = await drive('Edit.'); graded = d.out.result; return { ...d, seconds: 9, passed: true }; },
+    });
+    assert.equal(graded, answer);
+    const saved = JSON.parse(readFileSync(join(dir, 'results.json'), 'utf8')).results[0];
+    assert.doesNotMatch(JSON.stringify(saved), /hunter2/);
+    assert.doesNotMatch(JSON.stringify(out.results[0]), /hunter2/);
+  } finally { process.exitCode = exit; rmSync(dir, { recursive: true, force: true }); }
+});
+
 for (const passed of [false, true]) test(`nativeMain retains ${passed ? 'passing' : 'failed'} rows in cursor-cu score`, async () => {
   const dir = temp(), exit = process.exitCode;
   try {

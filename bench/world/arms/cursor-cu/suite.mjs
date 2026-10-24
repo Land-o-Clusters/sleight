@@ -8,6 +8,7 @@ import { armPaths, composerPlan, CURSOR_PIN, guardLive, DESKTOP_BLOCKERS } from 
 import { inspectBundle, readLoginReadiness, setupPlan } from './setup.mjs';
 import { runDesktop } from './run.mjs';
 import { DesktopDriver } from './desktop.mjs';
+import { scrubCursor } from './scrub.mjs';
 
 export function parseOptions(argv) {
   const args = {};
@@ -81,7 +82,9 @@ export async function nativeMain(argv, runtime = {}) {
             ...(/approval stop/.test(out.reason ?? '') && { approvalStop: out.reason }) };
         } });
       const inner = result.out?.duration_ms != null;
-      results.push({ ...row, ...result, arm: 'cursor-cu', outerSeconds: result.seconds, seconds: inner ? result.out.duration_ms / 1000 : result.seconds,
+      // The task check graded Cursor's raw answer inside executeRealTask. The saved row keeps a scrubbed copy.
+      const saved = result.out ? { ...result.out, result: scrubCursor(result.out.result ?? '') } : result.out;
+      results.push({ ...row, ...result, out: saved, arm: 'cursor-cu', outerSeconds: result.seconds, seconds: inner ? result.out.duration_ms / 1000 : result.seconds,
         secondsTiming: inner ? { start: 'submit', end: 'persisted-clientSettleTime', startupIncluded: false }
           : { start: 'outer-drive', end: 'task-check', startupIncluded: true },
         timingBoundary: inner ? plan.timingBoundary : 'outer drive through task check, including startup', qualificationOnly: true });
