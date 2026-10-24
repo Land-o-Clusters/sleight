@@ -42,7 +42,7 @@ export function inspectConsent(el, options = {}, read) {
       if (++visited > 20000) return;
       if (read(current, 'nodeType') === 3) { text += ' ' + read(current, 'textContent'); return; }
       if (read(current, 'nodeType') === 1) {
-        if (current !== node && boundary(current) || !visible(current) || /^(?:script|style|template)$/.test(read(current, 'localName'))) return;
+        if (current !== node && boundary(current) || !visible(current) || /^(?:a|script|style|template)$/.test(read(current, 'localName')) || attr(current, 'role') === 'link') return;
         if (read(current, 'localName') === 'input') text += ' ' + visibleText(current);
       }
       for (const child of read(current, 'childNodes') ?? []) visit(child);
