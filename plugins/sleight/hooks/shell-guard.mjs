@@ -10,14 +10,178 @@ const python = /^python(?:\d+(?:\.\d+)*)?$/;
 const interpreter = /^(?:python(?:\d+(?:\.\d+)*)?|node(?:js)?|perl|ruby|osascript|swift)$/;
 const base = word => word.split('/').at(-1);
 
-// Inspect literal source only. No escape decoding, imports, files or execution.
-// File APIs named open and quoted launcher words alone are ordinary data.
-function launcherPayloadDenied(payload) {
+// Tokenize literal source, without executing it or reading imported code. Keep
+// strings atomic so parentheses and process names in data cannot create calls.
+function payloadTokens(source, language) {
+  const tokens = [];
+  for (let i = 0; i < source.length;) {
+    const start = i, c = source[i];
+    if (/\s/.test(c)) { i++; continue; }
+    if (c === '#' || ['node', 'nodejs', 'swift'].includes(language) && source.startsWith('//', i)) {
+      while (i < source.length && source[i] !== '\n') i++;
+      continue;
+    }
+    if (source.startsWith('/*', i)) {
+      const end = source.indexOf('*/', i + 2);
+      i = end < 0 ? source.length : end + 2; continue;
+    }
+    const commandQuote = language === 'perl' && /^qx\b\s*([^\w\s])/.exec(source.slice(i)) ||
+      language === 'ruby' && /^%x\s*([^\w\s])/.exec(source.slice(i));
+    if (commandQuote) {
+      const open = commandQuote[1], close = { '(': ')', '[': ']', '{': '}', '<': '>' }[open] ?? open;
+      i += commandQuote[0].length;
+      const content = i;
+      let nesting = 1;
+      for (; i < source.length; i++) {
+        if (source[i] === '\\') { i++; continue; }
+        if (source[i] === close && --nesting === 0) break;
+        if (open !== close && source[i] === open) nesting++;
+      }
+      tokens.push({ value: source.slice(content, i), quote: 'command', start, end: Math.min(source.length, i + 1) });
+      i = Math.min(source.length, i + 1); continue;
+    }
+    if ('"\'`'.includes(c)) {
+      const quote = c !== '`' && source.startsWith(c.repeat(3), i) ? c.repeat(3) : c;
+      i += quote.length;
+      const content = i;
+      while (i < source.length && !source.startsWith(quote, i)) {
+        if (source[i] === '\\') i++;
+        i++;
+      }
+      const value = source.slice(content, i);
+      i = Math.min(source.length, i + quote.length);
+      tokens.push({ value, quote, start, end: i }); continue;
+    }
+    const word = /^[A-Za-z_$][\w$]*/.exec(source.slice(i))?.[0];
+    i += word?.length ?? 1;
+    tokens.push({ text: word ?? c, start, end: i });
+  }
+  return tokens;
+}
+
+// Within a process argument, commands may start after a shell operator or
+// behind env / sh -c. This is still a literal check, not shell evaluation.
+function launcherStringDenied(command, depth = 0) {
+  if (depth > 12) return false;
+  const launcher = /^(?:open|osascript|xdg-open|x-www-browser)$/i;
+  // An escaped quote around a shell -c body still delimits a literal command.
+  const parsed = lex(command.replace(/\\(["'])/g, '$1'), false, false);
+  return segments(parsed.tokens).some(({ words }) => {
+    let i = 0;
+    while (/^[A-Za-z_]\w*=/.test(words[i] ?? '')) i++;
+    let name = base(words[i++] ?? '');
+    while (name === 'env') {
+      while (i < words.length) {
+        if (['-u', '--unset', '-C', '--chdir'].includes(words[i])) { i += 2; continue; }
+        if (['-S', '--split-string'].includes(words[i])) return launcherStringDenied(words.slice(i + 1).join(' '), depth + 1);
+        if (words[i].startsWith('--split-string=')) return launcherStringDenied(words[i].slice(15), depth + 1);
+        if (words[i].startsWith('-') || /^[A-Za-z_]\w*=/.test(words[i])) { i++; continue; }
+        break;
+      }
+      name = base(words[i++] ?? '');
+    }
+    if (launcher.test(name)) return true;
+    if (!shell.test(name)) return false;
+    for (; i < words.length; i++) {
+      const option = /^-[^-]*?c(.*)$/s.exec(words[i]);
+      if (option) return launcherStringDenied(option[1] || words[i + 1] || '', depth + 1);
+    }
+    return false;
+  });
+}
+
+function launcherPayloadDenied(payload, language = '') {
   if (/\b(?:webbrowser|NSWorkspace|LSOpen\w*|NSAppleScript)\b|\bosascript\s+-e\b/i.test(payload)) return true;
-  const launcher = command => /^(?:\/[^\s]*\/)?(?:open|osascript|xdg-open|x-www-browser)(?=$|[\s;&|<>])/i.test(command.trimStart());
-  const calls = /\b(?:os\s*\.\s*system|subprocess\s*\.\s*\w+|popen|exec|spawn|execSync|system)\s*(?:\(\s*)?(?:\[\s*)?(["'])((?:\\[\s\S]|(?!\1)[^\\])*)\1/g;
-  return [...payload.matchAll(calls)].some(match => launcher(match[2])) ||
-    [...payload.matchAll(/`([^`]*)`/g)].some(match => launcher(match[1]));
+  const tokens = payloadTokens(payload, language), pairs = new Map(), stack = [];
+  const text = i => tokens[i]?.text;
+  for (let i = 0; i < tokens.length; i++) {
+    if (['(', '[', '{'].includes(text(i))) stack.push(i);
+    else if ([')', ']', '}'].includes(text(i)) && text(stack.at(-1)) === { ')': '(', ']': '[', '}': '{' }[text(i)]) {
+      const start = stack.pop(); pairs.set(start, i);
+    }
+  }
+  const boundary = i => i >= tokens.length || text(i) === ';' ||
+    i > 0 && payload.slice(tokens[i - 1].end, tokens[i].start).includes('\n');
+  const endOf = start => {
+    let i = start;
+    for (; i < tokens.length && (i === start || !boundary(i)); i++) {
+      if (pairs.has(i)) i = pairs.get(i);
+    }
+    return i;
+  };
+  const methods = /^(?:popen|exec|execSync|execFile|execFileSync|spawn|spawnSync|fork|system)$/;
+  const member = (module, method) => /^[A-Za-z_]\w*$/.test(method ?? '') && (module === 'subprocess' || module === 'Open3' ||
+    module === 'os' && /^(?:system|popen|exec\w*|spawn\w*)$/.test(method) ||
+    module === 'asyncio' && /^create_subprocess_/.test(method));
+  const modules = new Map(['os', 'subprocess', 'asyncio', 'Open3'].map(name => [name, name]));
+  const functions = new Set(), bindings = new Map();
+  const childProcess = value => /^(?:node:)?child_process$/.test(value ?? '');
+  // Recognize Python import aliases and Node destructuring / named imports.
+  for (let i = 0; i < tokens.length; i++) {
+    if (text(i) === 'import' && text(i - 2) === 'from' && modules.has(text(i - 1))) {
+      const module = modules.get(text(i - 1));
+      for (let j = i + 1, end = endOf(i + 1); j < end; j++) {
+        if (member(module, text(j))) {
+          functions.add(text(j + 1) === 'as' ? text(j + 2) : text(j));
+          if (text(j + 1) === 'as') j += 2;
+        }
+      }
+    } else if (text(i) === 'import') {
+      for (let j = i + 1, end = endOf(i + 1); j < end; j++) {
+        if (modules.has(text(j)) && text(j + 1) === 'as') modules.set(text(j + 2), modules.get(text(j)));
+      }
+    }
+    if (text(i) !== '{' || !pairs.has(i)) continue;
+    const end = pairs.get(i);
+    const nodeImport = text(end + 1) === 'from' && childProcess(tokens[end + 2]?.value) ||
+      text(end + 1) === '=' && text(end + 2) === 'require' && childProcess(tokens[end + 4]?.value);
+    if (nodeImport) for (let j = i + 1; j < end; j++) {
+      const method = text(j) ?? tokens[j].value;
+      if (methods.test(method)) {
+        const next = text(j + 1) === ']' ? j + 2 : j + 1;
+        functions.add([':', 'as'].includes(text(next)) ? text(next + 1) : method);
+        if ([':', 'as'].includes(text(next))) j = next + 1;
+      }
+    }
+  }
+  const inspect = (start, end) => {
+    for (let i = start; i < end; i++) {
+      if (tokens[i]?.value !== undefined ? launcherStringDenied(tokens[i].value) : bindings.get(text(i))) return true;
+    }
+    return false;
+  };
+  for (let i = 0; i < tokens.length; i++) {
+    const name = text(i);
+    if (/^[A-Za-z_$][\w$]*$/.test(name ?? '') && text(i - 1) !== '.' && text(i + 1) === '=' && text(i + 2) !== '=') {
+      const start = i + 2;
+      const prefixed = /^[frbu]+$/i.test(text(start) ?? '') && tokens[start + 1]?.value !== undefined;
+      let end = pairs.has(start) ? pairs.get(start) + 1 : start + (prefixed ? 2 : 1);
+      if (python.test(language) && text(end) === ',') end = endOf(start);
+      const literal = ['[', '('].includes(text(start)) || tokens[start]?.value !== undefined || prefixed || boundary(end);
+      // Snapshot references before rebinding, so a later assignment cannot
+      // rewrite a list already passed to another variable. Opaque values clear it.
+      bindings.set(name, literal && inspect(start, end));
+    }
+    if (name === 'require' && text(i + 1) === '(' && tokens[i + 2]?.value === 'open') return true;
+    if ((tokens[i]?.quote === 'command' || tokens[i]?.quote === '`' && ['ruby', 'perl'].includes(language)) &&
+      launcherStringDenied(tokens[i].value)) return true;
+    const method = tokens[i]?.value !== undefined && text(i - 1) === '[' && text(i + 1) === ']'
+      ? tokens[i].value : name;
+    const call = methods.test(method) || functions.has(name) ||
+      text(i - 1) === '.' && member(modules.get(text(i - 2)), name);
+    const property = ['launchPath', 'executableURL'].includes(name) && text(i - 1) === '.' && text(i + 1) === '=';
+    const pipeOpen = language === 'perl' && name === 'open' && text(i - 1) !== '.';
+    if (!call && !property && !pipeOpen) continue;
+    let start = text(i + 1) === ']' ? i + 2 : i + 1;
+    if (property) start++;
+    const commandStyle = ['ruby', 'perl'].includes(language) && !boundary(start) &&
+      (tokens[start]?.value !== undefined || /^[A-Za-z_$]/.test(text(start) ?? '') || text(start) === '[');
+    if (!property && text(start) !== '(' && !commandStyle) continue;
+    const end = pairs.get(start) ?? endOf(start);
+    if (pipeOpen && !tokens.slice(start, end).some(token => token.value?.includes('|'))) continue;
+    if (inspect(start, end)) return true;
+  }
+  return false;
 }
 
 function lookupLauncher(body, depth) {
@@ -205,7 +369,7 @@ function deniedCommand(words, depth, stdinSource, heredocs = [], consumerOnly = 
     const attached = option.startsWith('--command=') ? option.slice(10) : /^-[^-]*?c(.*)$/s.exec(option)?.[1];
     return source(attached || args[at + 1] || '', depth + 1, heredocs);
   }
-  if (consumerOnly) return consumerOnly !== 'shell' && interpreter.test(name);
+  if (consumerOnly) return consumerOnly !== 'shell' && interpreter.test(name) && (consumerOnly === 'language' ? name : true);
   if (guiLauncher.test(name) || name === 'gio' && args[0] === 'open') return true;
   const browser = headlessBrowser.test(name);
   if (browser || /\.app\/Contents\/MacOS\//i.test(words[0])) {
@@ -216,7 +380,7 @@ function deniedCommand(words, depth, stdinSource, heredocs = [], consumerOnly = 
       (flags.some(arg => /^--headless(?:=(?:new|old|true))?$/.test(arg)) || args.length === 1 && ['--version', '--help'].includes(args[0])));
   }
   if (interpreter.test(name)) {
-    const stdinDenied = () => Boolean(stdinSource || heredocs.some(doc => launcherPayloadDenied(doc.body)));
+    const stdinDenied = () => Boolean(stdinSource || heredocs.some(doc => launcherPayloadDenied(doc.body, name)));
     for (let i = 0; i < args.length; i++) {
       if (args[i] === '--') return (!args[i + 1] || args[i + 1] === '-') && stdinDenied();
       if ((python.test(name) ? ['-W', '-X'] : name === 'node' ? ['-r', '--require', '--import'] : []).includes(args[i])) { i++; continue; }
@@ -225,13 +389,13 @@ function deniedCommand(words, depth, stdinSource, heredocs = [], consumerOnly = 
       if (option) {
         const payload = option[2] || args[i + 1] || '';
         if (option[1] === 'm') return payload === 'webbrowser';
-        if (launcherPayloadDenied(payload)) return true;
+        if (launcherPayloadDenied(payload, name)) return true;
         if (!option[2]) i++;
         continue; // Perl and Ruby allow multiple -e payloads.
       }
       if (args[i] === '--eval' || args[i].startsWith('--eval=')) {
         const payload = args[i] === '--eval' ? args[++i] ?? '' : args[i].slice(7);
-        if (launcherPayloadDenied(payload)) return true;
+        if (launcherPayloadDenied(payload, name)) return true;
         continue;
       }
       if (args[i] === '-') return stdinDenied();
@@ -284,13 +448,14 @@ function scanParsed(parsed, depth, inheritedHeredocs, allowData) {
       [...inheritedHeredocs, ...redirects.filter(redirect => redirect.body !== undefined)])) return true;
     if (!deniedCommand(words, depth, false, [], true)) return false;
     const shellInput = deniedCommand(words, depth, false, [], 'shell');
+    const language = deniedCommand(words, depth, false, [], 'language');
     // Retain the actual pipe boundaries. Lists and separate commands do not
     // feed a later shell, while every earlier stage of one pipeline can.
     for (let j = i - 1; j >= 0 && ['|', '|&'].includes(commands[j].after); j--) {
       const producer = commands[j];
-      if (streamInputDenied({ tokens: producer.words.map(text => ({ text })), substitutions: [] }, depth, shellInput) ||
+      if (streamInputDenied({ tokens: producer.words.map(text => ({ text })), substitutions: [] }, depth, shellInput, language) ||
         producer.redirects.some(redir => redir.body !== undefined &&
-          (shellInput && deniedSource(redir.body, depth + 1, [], false) || launcherPayloadDenied(redir.body)))) return true;
+          (shellInput && deniedSource(redir.body, depth + 1, [], false) || launcherPayloadDenied(redir.body, language)))) return true;
     }
     return false;
   });
@@ -298,12 +463,12 @@ function scanParsed(parsed, depth, inheritedHeredocs, allowData) {
 
 // Here-strings and process substitutions may produce code for another command
 // in the pipeline. Inspect their literal words too, including echo/printf data.
-function streamInputDenied(parsed, depth, shellInput = true) {
+function streamInputDenied(parsed, depth, shellInput = true, language = '') {
   if (depth > 12) return true;
   const words = parsed.tokens.filter(token => token.text !== undefined).map(token => token.text);
-  return words.some((word, i) => launcherPayloadDenied(word) || shellInput &&
+  return words.some((word, i) => launcherPayloadDenied(word, language) || shellInput &&
     (deniedCommand(words.slice(i), depth + 1, false) || /\s/.test(word) && deniedSource(word, depth + 1, [], false))) ||
-    parsed.substitutions.some(sub => streamInputDenied(lex(sub.body, false, false), depth + 1, shellInput));
+    parsed.substitutions.some(sub => streamInputDenied(lex(sub.body, false, false), depth + 1, shellInput, language));
 }
 
 function deniedSource(source, depth = 0, inheritedHeredocs = [], allowData = true) {
@@ -340,7 +505,14 @@ function deniedSource(source, depth = 0, inheritedHeredocs = [], allowData = tru
       if (!doc.quoted && lex(doc.body, true, false).substitutions.some(sub => deniedSource(sub.body, depth + 1))) return true;
     }
   }
-  if (consumer && /<<<|[<>]\(/.test(source) && streamInputDenied(lex(source, false, false), depth, shellConsumer)) return true;
+  if (consumer && /<<<|[<>]\(/.test(source)) {
+    const input = lex(source, false, false);
+    if (shellConsumer && streamInputDenied(input, depth, true)) return true;
+    if (commands.some(({ words }) => {
+      const language = deniedCommand(words, depth, false, [], 'language');
+      return language && streamInputDenied(input, depth, false, language);
+    })) return true;
+  }
   return false;
 }
 

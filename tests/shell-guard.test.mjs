@@ -100,7 +100,6 @@ for (const [interpreter, flag, payload] of [
   ['python3', '-c', 'print("x-www-browser")'],
   ['python3', '-c', 'print("/usr/bin/open")'],
   ['python3', '-c', 'import os; os.system("echo open")'],
-  ['python3', '-c', 'import subprocess; subprocess.run(["cat", "open"])'],
   ['python3', '-c', 'import subprocess; subprocess.run(["opener", "f"])'],
   ['ruby', '-e', 'File.open("f", "w") { |f| f.write("hello") }'],
   ['ruby', '-e', 'puts "open"'],
@@ -112,7 +111,6 @@ for (const [interpreter, flag, payload] of [
   ['node', '-e', "ws.on('open', () => {})"],
   ['node', '-e', 'open(url)'],
   ['node', '-e', 'console.log("open the file")'],
-  ['node', '-e', 'require("child_process").spawn("node", ["open"])'],
   ['node', '-e', 'require("child_process").execSync("echo /usr/bin/open")'],
 ]) {
   for (const command of [
@@ -548,4 +546,112 @@ test('captured heredoc data cannot swallow a command after its exact closing bou
       assert.equal(denied(command + '\nopen x'), true, command);
     }
   }
+});
+
+// FD4F: only the guard sees these strings. No fixture program runs.
+const fd4fPayloads = [
+  ['python3', 'import subprocess as sp; sp.run(["open", "f"])'],
+  ['python3', 'from subprocess import run; run(["open", "f"])'],
+  ['python3', 'from subprocess import run as launch; launch(args=["open", "f"])'],
+  ['python3', 'import subprocess; subprocess.run(args=["/usr/bin/open", "f"])'],
+  ['python3', 'import subprocess; argv = ["open", "f"]; subprocess.run(argv)'],
+  ['python3', 'import subprocess; argv = ("open", "f"); subprocess.run(args=argv)'],
+  ['python3', 'import subprocess; argv = "cat", "open"; subprocess.run(argv)'],
+  ['python3', 'import subprocess; argv = ["sh", "-c", "open f"]; subprocess.run(argv)'],
+  ['python3', 'import subprocess; argv = ["cat", "open"]; subprocess.run(argv)'],
+  ['python3', 'import subprocess; argv = ["open", "f"]; saved = argv; argv = ["cat", "f"]; subprocess.run(saved)'],
+  ['python3', 'import subprocess; argv = ["open", "f"]; argv = argv; subprocess.run(argv)'],
+  ['python3', 'import subprocess; subprocess.run(["cat", "open"])'],
+  ['python3', 'import subprocess; subprocess.run(["env", "osascript", "script.scpt"])'],
+  ['python3', 'import os as platform; platform.system("open f")'],
+  ['python3', 'from os import popen as launch; launch("open f")'],
+  ['python3', 'import asyncio; asyncio.create_subprocess_exec("open", "f")'],
+  ['python3', 'import asyncio as aio; aio.create_subprocess_shell("cd /tmp && open f")'],
+  ['python3', 'from asyncio import create_subprocess_exec as launch; launch("open", "f")'],
+  ...['execv', 'execve', 'execvp', 'execvpe', 'execl', 'execle', 'execlp', 'execlpe',
+    'spawnv', 'spawnve', 'spawnvp', 'spawnvpe', 'spawnl', 'spawnle', 'spawnlp', 'spawnlpe'].map(method =>
+    ['python3', `import os; os.${method}(os.P_NOWAIT, "/usr/bin/open", ["open", "f"])`]),
+  ...['run', 'call', 'check_call', 'check_output', 'Popen', 'getoutput', 'getstatusoutput'].map(method =>
+    ['python3', `import subprocess; subprocess.${method}(args=["open", "f"])`]),
+  ...['f', 'r', 'b', 'u', 'fr', 'rf', 'br', 'rb', 'F', 'R', 'B', 'U'].map(prefix =>
+    ['python3', `import os; os.system(${prefix}"open f")`]),
+  ['python3', 'import os; os.system("""cd /tmp && open f""")'],
+  ['python3', "import subprocess; subprocess.run(args=(r'''/usr/bin/open''', 'f'))"],
+  ...['exec', 'execSync', 'execFile', 'execFileSync', 'spawn', 'spawnSync', 'fork'].flatMap(method => [
+    ['node', `require("child_process").${method}("open", ["f"])`],
+    ['node', `require("node:child_process")["${method}"]("open", ["f"])`],
+    ['node', `const { ${method}: launch } = require("node:child_process"); launch("open", ["f"])`],
+    ['node', `const { ${method} } = require("child_process"); ${method}("open", ["f"])`],
+  ]),
+  ['node', 'const cp = require("child_process"); cp["execFile"]("/usr/bin/open", ["f"])'],
+  ['node', 'const { "spawn": launch } = require("child_process"); launch("open", ["f"])'],
+  ['node', 'const { ["spawn"]: launch } = require("child_process"); launch("open", ["f"])'],
+  ['node', 'import { spawn as launch } from "node:child_process"; launch("open", ["f"])'],
+  ['node', 'import * as cp from "node:child_process"; cp.spawn("open", ["f"])'],
+  ['node', 'const cp = require("child_process"); cp.execSync(`cd /tmp && open f`)'],
+  ['node', 'const cp = require("child_process"); const argv = ["open"]; cp.spawn("env", argv)'],
+  ['node', 'require("child_process").spawn("node", ["open"])'],
+  ['node', 'require("open")("f")'], ['node', 'const launch = require("open"); launch("f")'],
+  ['node', 'const text = `open the door`; require("child_process").spawn("open", ["f"])'],
+  ['ruby', 'Open3.capture2("open", "f")'], ['ruby', 'Open3.capture3 "cd /tmp && open f"'],
+  ['ruby', 'Open3.popen3("sh", "-c", "open f")'],
+  ['ruby', '%x(open f)'], ['ruby', '%x(cd /tmp && open f)'],
+  ['ruby', '`cd /tmp && /usr/bin/open f`'], ['perl', '`cd /tmp && open f`'],
+  ['perl', 'qx(open f)'], ['perl', 'qx(cd /tmp && osascript script.scpt)'],
+  ['perl', 'qx/open f/'], ['perl', 'qx{cd /tmp && open f}'], ['perl', 'qx"open f"'],
+  ['perl', 'open(my $fh, "open f |")'], ['perl', 'open(my $fh, "| open f")'],
+  ['perl', 'open(my $fh, "-|", "open", "f")'],
+  ['perl', 'open my $fh, "|-", "/usr/bin/open", "f";'],
+  ['swift', 'import Foundation; let p = Process(); p.launchPath = "/usr/bin/open"; p.launch()'],
+  ['swift', 'import Foundation; let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/open"); try p.run()'],
+  ...[';', '&&', '||', '|'].map(op => ['python3', `import os; os.system("cd /tmp ${op} open f")`]),
+  ...['sh -c open f', "sh -c 'open f'", 'bash -lc "open f"', 'env open f',
+    'env LANG=C /usr/bin/open f', 'env -u BROWSER osascript script.scpt'].map(command =>
+    ['python3', `import os; os.system(${JSON.stringify(command)})`]),
+];
+for (const [interpreter, payload] of fd4fPayloads) {
+  const flag = interpreter === 'python3' ? '-c' : '-e';
+  for (const command of [
+    `${interpreter} ${flag} ${quotePayload(payload)}`,
+    `${interpreter} <<'FD4F'\n${payload}\nFD4F`,
+    `printf '%s' ${quotePayload(payload)} | ${interpreter}`,
+  ]) test(`fd4f process argument refuses: ${JSON.stringify(command)}`, () => assert.equal(denied(command), true));
+}
+
+for (const [interpreter, payload] of [
+  ['node', 'const text = `open the door`'],
+  ['node', 'console.log(`open the file`)'],
+  ['node', 'const text = `cd /tmp && open f`'],
+  ['node', 'console.log(`open f (not a call)`)'],
+  ['node', 'require("fs").open(`open the file`, "r", () => {})'],
+  ['node', 'const cp = require("child_process"); cp.execSync("echo open")'],
+  ['node', 'const spawn = "open the file"; console.log(spawn)'],
+  ['node', 'const options = { exec: "open", spawn: "open" }; console.log(options)'],
+  ['python3', 'import subprocess; method = subprocess.run; print("open")'],
+  ['python3', 'import os; method = os.system; print("open")'],
+  ['python3', 'import subprocess; argv = ["open", "f"]; argv = make_args(); subprocess.run(argv)'],
+  ['python3', 'import subprocess; argv = ["open", "f"]; print(argv)'],
+  ['python3', 'import subprocess; subprocess.run(["cat", "opener"])'],
+  ['python3', 'import subprocess; subprocess.run(["cat", "f"]); print("open")'],
+  ['python3', 'import subprocess; subprocess.run(["cat", "f"]); open("open", "w")'],
+  ['python3', 'import subprocess; argv = ["open", "f"]; argv = ["cat", "f"]; subprocess.run(argv)'],
+  ['python3', 'print("subprocess.run(open)")'],
+  ['python3', 'qx("open")'],
+  ['python3', 'open(r"open", "w"); Path("f").open()'],
+  ['ruby', 'File.open("open", "w") { |f| f.write("open") }'],
+  ['perl', 'open(my $fh, "<", "open")'],
+  ['perl', 'open my $fh, "<", "open";'],
+]) {
+  for (const command of [
+    `${interpreter} ${interpreter === 'python3' ? '-c' : '-e'} ${quotePayload(payload)}`,
+    `${interpreter} <<'FD4F'\n${payload}\nFD4F`,
+    `printf '%s' ${quotePayload(payload)} | ${interpreter}`,
+    `${interpreter} <<< ${quotePayload(payload)}`,
+    `${interpreter} < <(printf '%s' ${quotePayload(payload)})`,
+  ]) test(`fd4f file IO and template data pass: ${JSON.stringify(command)}`, () => assert.equal(denied(command), false));
+}
+
+test('fd4f repeated literal references stay bounded without expanding the program data', () => {
+  const source = 'import subprocess; argv = ["cat"]; ' + 'argv = [argv, argv]; '.repeat(19) + 'subprocess.run(argv)';
+  assert.equal(denied(`python3 -c ${quotePayload(source)}`), false);
 });
