@@ -56,11 +56,12 @@ test('BF1 jobs do not expose private keys in logs and reject cross-origin or mal
 
 test('BF1 graders require page/action evidence and exact answers rather than narration or wrong answers', async () => {
   const { createJobFixture, gradeJob } = await load();
-  const evidence = fixture => ({ kind: fixture.kind, views: [''], events: {
+  const light = { kind: 'media', width: 1200, height: 900, scheme: 'light', reduced: false };
+  const evidence = fixture => ({ kind: fixture.kind, views: [''], ...(fixture.kind === 'job-kanban' ? { kanban: fixture.expected } : {}), events: {
     'job-canvas': [],
     'job-kanban': [{ kind: 'drag', card: fixture.expected.card, from: 'Queue', to: 'Review', points: 6 }],
     'job-phone': [{ kind: 'media', width: 390, height: 844, scheme: 'light', reduced: false }],
-    'job-dark': [{ kind: 'media', width: 1200, height: 900, scheme: 'dark', reduced: false }],
+    'job-dark': [light, { ...light, scheme: 'dark' }, light],
     'job-motion': [{ kind: 'motion', phases: fixture.expected.phases, reduced: false }],
   }[fixture.kind] });
   for (const kind of kinds) {
@@ -157,10 +158,11 @@ test('BF1 gives each arm the same generated job data within a repetition', async
   const dir = mkdtempSync(join(tmpdir(), 'bf1-paired-jobs-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const seen = [];
-  await runFixtureClaims({ outRoot: dir, kinds: ['job-canvas', 'job-motion'], arms: ['sleight-turbo', 'fowlbrowser'], runs: 2,
+  const pairedKinds = ['job-canvas', 'job-motion', 'job-dark', 'job-phone'];
+  await runFixtureClaims({ outRoot: dir, kinds: pairedKinds, arms: ['sleight-turbo', 'fowlbrowser'], runs: 2,
     serve: async () => () => {}, run: async ({ fixture }) => { seen.push(structuredClone(fixture.expected)); return 0; } });
-  for (const offset of [0, 4]) {
-    assert.deepEqual(seen[offset], seen[offset + 2], 'canvas input must match across the two arms');
-    assert.deepEqual(seen[offset + 1], seen[offset + 3], 'motion input must match across the two arms');
+  for (const offset of [0, 8]) {
+    for (let index = 0; index < pairedKinds.length; index++)
+      assert.deepEqual(seen[offset + index], seen[offset + index + 4], `${pairedKinds[index]} input must match across the two arms`);
   }
 });

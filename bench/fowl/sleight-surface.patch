@@ -1,5 +1,5 @@
 diff --git a/tools/rounds.mjs b/tools/rounds.mjs
-index 0ca0919..5d472c9 100644
+index 0ca0919..a682bdd 100644
 --- a/tools/rounds.mjs
 +++ b/tools/rounds.mjs
 @@ -1,6 +1,7 @@
@@ -494,7 +494,8 @@ index 0ca0919..5d472c9 100644
    if (anySurface('devtools')) setting('devtools');
    if (tasks.some((t) => t.takeover)) setting('guiDriver');
    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
-+  const verified = args.world ? verifyWorldAgents(tasks, { surfaceOf, dir: path.resolve(args.out || `/tmp/fb-rounds/${stamp}`) }) : new Set();
++  const out = path.resolve(args.out || fs.mkdtempSync(path.join(os.tmpdir(), `fb-rounds-${stamp}-`)));
++  const verified = args.world ? verifyWorldAgents(tasks, { surfaceOf, dir: out }) : new Set();
    const graded = tasks.flatMap((t) => [t.grade, t.site?.log].filter(Boolean)).map((u) => new URL(u));
    if (args.remote) await openRemote(args.remote, { owner: args['remote-owner'] || 'fb-rounds', ports: [...new Set(graded.map((u) => u.port))], stamp, held: args['remote-held'], surface });
 -  const codex = anySurface('codex') ? (remote ? await loadRemoteCodex(args) : loadCodex(args)) : null;
@@ -508,7 +509,7 @@ index 0ca0919..5d472c9 100644
    const model = modelOf({});
    const effort = args.effort || 'medium';
    const mcpRoot = args.mcp === 'installed' ? path.join(os.homedir(), 'Library/Application Support/FowlBrowser') : ROOT;
-   const out = path.resolve(args.out || fs.mkdtempSync(path.join(os.tmpdir(), `fb-rounds-${stamp}-`)));
+-  const out = path.resolve(args.out || fs.mkdtempSync(path.join(os.tmpdir(), `fb-rounds-${stamp}-`)));
 +  for (const task of tasks) if (BROWSER_ARMS.includes(surfaceOf(task))) agentSetup({ task, surface: surfaceOf(task), dir: path.join(out, task.name), mcpRoot,
 +    settings: path.join(out, 'settings.json'), model: modelOf(task), effort, remote, world: args.world, chromeFiles });
    fs.mkdirSync(out, { recursive: true });
