@@ -1,5 +1,5 @@
 // Bounded, action-sampled GIFs. Only already-masked RGBA pixels reach this writer.
-import { closeSync, constants, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, realpathSync, writeSync } from 'node:fs';
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, rmdirSync, unlinkSync, writeSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { join, parse, relative } from 'node:path';
 
@@ -43,7 +43,7 @@ export function gifFrame({ width, height, data }, canvas = RECORDING_LIMITS) {
 }
 
 // Fixed user-home destination, never HOME, a tool path, a page title or a session string.
-export function recordingFile({ home = userInfo().homedir, uid = process.getuid() } = {}) {
+function recordingDirectory({ home = userInfo().homedir, uid = process.getuid() } = {}) {
   let folder = parse(home).root;
   for (const name of [...relative(folder, home).split('/'), 'Library', 'Application Support', 'sleight', 'recordings']) {
     folder = join(folder, name);
@@ -52,6 +52,31 @@ export function recordingFile({ home = userInfo().homedir, uid = process.getuid(
     if (!stat.isDirectory() || stat.isSymbolicLink() || realpathSync(folder) !== folder || stat.mode & 0o022 ||
         ![uid, 0].includes(stat.uid)) throw Error('RECORDING_DESTINATION_UNSAFE');
   }
+  return folder;
+}
+
+// Only ordinary, owned, private banks with the single expected file are eligible. Never follow a link.
+function pruneDirectory(folder, uid = process.getuid(), now = Date.now()) {
+  for (const name of readdirSync(folder)) {
+    if (!/^turn-[A-Za-z0-9]+$/.test(name)) continue;
+    const dir = join(folder, name), path = join(dir, 'actions.gif');
+    try {
+      const bank = lstatSync(dir);
+      if (!bank.isDirectory() || bank.isSymbolicLink() || bank.uid !== uid || bank.mode & 0o077 ||
+          now - bank.mtimeMs <= 30 * 86400000 || realpathSync(dir) !== dir) continue;
+      const names = readdirSync(dir);
+      if (names.length !== 1 || names[0] !== 'actions.gif') continue;
+      const file = lstatSync(path);
+      if (!file.isFile() || file.isSymbolicLink() || file.uid !== uid || file.mode & 0o077 || file.nlink !== 1 ||
+          now - file.mtimeMs <= 30 * 86400000) continue;
+      unlinkSync(path); rmdirSync(dir);
+    } catch { /* A changed bank or failed prune must not remove any other entry. */ }
+  }
+}
+
+export function recordingFile(options = {}) {
+  const folder = recordingDirectory(options);
+  pruneDirectory(folder, options.uid);
   const dir = mkdtempSync(join(folder, 'turn-'));
   const path = join(dir, 'actions.gif');
   const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
@@ -60,12 +85,24 @@ export function recordingFile({ home = userInfo().homedir, uid = process.getuid(
 
 export function createTurnRecording({ current, capture, createFile = recordingFile, limits = RECORDING_LIMITS } = {}) {
   if (typeof current !== 'function' || typeof capture !== 'function') throw Error('RECORDING_AUTHORITY_REQUIRED');
-  let ended = false, frames = 0, skipped = 0, file, bytes = 0, failed = false, limited = false, resumeUnconfirmed = false, queue = Promise.resolve();
+  let ended = false, frames = 0, skipped = 0, file, fileIdentity, bytes = 0, failed = false, limited = false, resumeUnconfirmed = false, queue = Promise.resolve();
+  const costs = [], reasons = new Set();
+  if (createFile === recordingFile) try { pruneDirectory(recordingDirectory()); } catch { failed = true; }
   const valid = () => { try { return !ended && current() === true; } catch { return false; } };
   const close = () => { if (file?.fd !== undefined) { closeSync(file.fd); file.fd = undefined; } };
-  const note = () => `Recording: ${frames ? `${file.path} (${frames} frames${skipped ? ', ' + skipped + ' skipped' : ''}${limited ? ', cap reached' : ''}${failed ? ', stopped' : ''}).`
-    : failed ? 'unavailable; no frames saved.' : limited ? 'cap reached; no frames saved.' : ended ? 'no frames saved.'
-      : `armed for this turn${skipped ? ' (' + skipped + ' skipped)' : ''}.`}${resumeUnconfirmed ? ' Page script resumption is unconfirmed; check the tab before continuing.' : ''}`;
+  const displayPath = path => path.startsWith(userInfo().homedir + '/') ? '~/' + path.slice(userInfo().homedir.length + 1) : path;
+  const warning = () => resumeUnconfirmed ? 'Page script resumption is unconfirmed; check the tab before continuing.' : '';
+  const note = () => `Recording: ${frames ? `${displayPath(file.path)} (${frames} frames${skipped ? ', ' + skipped + ' skipped' : ''}${limited ? ', cap reached' : ''}${failed ? ', stopped' : ''}).`
+    : failed ? 'unavailable; no frames saved.' : limited ? 'cap reached; no frames saved.' : ended ? `no frames saved${skipped ? ' (' + skipped + ' skipped)' : ''}.`
+      : `armed for this turn${skipped ? ' (' + skipped + ' skipped)' : ''}.`}${reasons.size ? ' Skipped: ' + [...reasons].join(', ') + '.' : ''}${warning() ? ' ' + warning() : ''}` +
+      (costs.length ? ' Pixel processing per frame (decode/mask + quantise ms): ' + costs.map(([decode, quantise]) => `${decode.toFixed(1)}+${quantise.toFixed(1)}`).join(', ') + '.' : '');
+  const skip = error => {
+    skipped++;
+    const reason = { RECORDING_MOTION_UNAVAILABLE: 'animation', RECORDING_SCROLL_UNSETTLED: 'scroll settling', RECORDING_TREE_LIMIT: 'tree size',
+      RECORDING_IMAGE_LIMIT: 'image size', RECORDING_VIEWPORT_LIMIT: 'viewport size', RECORDING_OPAQUE_TREE: 'shadow tree',
+      RECORDING_TARGET_UNAVAILABLE: 'target unavailable', RECORDING_TIMEOUT: 'timeout' }[error?.message];
+    reasons.add(reason ?? 'capture unavailable');
+  };
   return Object.freeze({
     capture(entry) {
       if (!valid() || failed || limited) return Promise.resolve(resumeUnconfirmed ? { stop: true } : undefined);
@@ -73,26 +110,45 @@ export function createTurnRecording({ current, capture, createFile = recordingFi
         if (!valid() || failed || limited) return;
         if (frames >= limits.frames) { limited = true; close(); return; }
         // Pending input and dialogs must never gain another browser operation.
-        if (entry.state?.dialog || entry.state?.actionPending || entry.page?.isClosed?.()) { skipped++; return; }
+        if (entry.state?.dialog || entry.state?.actionPending || entry.page?.isClosed?.()) { skip(); return; }
         try {
-          const image = await capture(entry, valid);
+          let image;
+          try { image = await capture(entry, valid); }
+          catch (error) {
+            if (error?.message === 'RECORDING_RESUME_UNCONFIRMED') throw error;
+            skip(error); return;
+          }
           if (!valid()) return;
-          const frame = gifFrame(image, limits), header = frames ? Buffer.alloc(0) : gifHeader(limits.width, limits.height);
+          const start = performance.now(), frame = gifFrame(image, limits), quantiseMs = performance.now() - start;
+          const header = frames ? Buffer.alloc(0) : gifHeader(limits.width, limits.height);
           if (bytes + header.length + frame.length + 1 > limits.bytes) { limited = true; close(); return; }
           file ??= createFile();
+          fileIdentity ??= lstatSync(file.path);
           if (!valid()) { close(); return; }
           if (fstatSync(file.fd).size !== bytes) throw Error('RECORDING_FILE_CHANGED');
           const block = Buffer.concat([header, frame, Buffer.from([0x3b])]);
           let at = 0, position = frames ? bytes - 1 : 0;
-          while (at < block.length) at += writeSync(file.fd, block, at, block.length - at, position + at);
+          while (at < block.length) {
+            const written = writeSync(file.fd, block, at, block.length - at, position + at);
+            if (written <= 0) throw Error('RECORDING_WRITE_FAILED');
+            at += written;
+          }
           bytes = position + block.length; frames++;
+          costs.push([Number.isFinite(image.decodeMaskMs) ? image.decodeMaskMs : 0, quantiseMs]);
           if (frames >= limits.frames) { limited = true; close(); }
-        } catch (error) { failed = true; resumeUnconfirmed = error?.message === 'RECORDING_RESUME_UNCONFIRMED'; try { close(); } catch {} }
+        } catch (error) {
+          failed = true; resumeUnconfirmed = error?.message === 'RECORDING_RESUME_UNCONFIRMED'; try { close(); } catch {}
+          if (!frames && fileIdentity?.isFile()) try {
+            const now = lstatSync(file.path);
+            if (now.isFile() && now.ino === fileIdentity.ino && now.dev === fileIdentity.dev && now.nlink === 1) unlinkSync(file.path);
+          } catch {}
+        }
       });
       queue = task.catch(() => { failed = true; });
       return queue.then(() => resumeUnconfirmed ? { stop: true } : undefined);
     },
     note,
+    warning,
     blocked: () => resumeUnconfirmed,
     end() { ended = true; return queue.finally(() => { try { close(); } catch {} }); },
   });

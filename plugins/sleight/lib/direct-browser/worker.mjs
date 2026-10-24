@@ -374,6 +374,7 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
         return (dependencies.extractPdf ?? extractPdf)(built.receipt, path, cursor, { signal });
       }) });
   }
+  let recordingStarted = false, recordingReported = false;
   const runtime = createToolDispatcher({ browser, pages, snapshot, ctx, endpoint, sites: dependencies.sites, onSite: dependencies.onSite,
     pdf,
     tracePhase: dependencies.tracePhase, ...(recording ? { onAction: recording.capture } : {}),
@@ -391,12 +392,22 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
       let notified = false;
       pdfBuilding = () => { if (!notified) { notified = true; control?.pdfBuilding?.(); } };
       try {
-        if (recording?.blocked() && !['browser_read', 'browser_tabs'].includes(request?.name))
-          return { text: recording.note() + ' Nothing was sent.', isError: true };
-        const result = await runtime.call(request, control);
-        if (!recording && !permitted()) return result;
-        const noted = { ...result, text: result.text + '\n' + (recording?.note() ?? 'Recording: unavailable for app windows; no frames saved.') };
-        originals.set(noted, { result, text: noted.text, isError: noted.isError }); return noted;
+      if (recording?.blocked() && !['browser_read', 'browser_tabs'].includes(request?.name))
+        return { text: recording.warning() + ' Nothing was sent.', isError: true };
+      const result = await runtime.call(request);
+      if (!recording && !permitted()) return result;
+      const notes = [];
+      if (!recordingStarted) {
+        recordingStarted = true;
+        notes.push(recording ? 'Recording this turn: fields, frames, objects, canvases and videos are masked. Whole forms and containers identified by checkout/payment/2FA/security wording are masked, including their text and images, SVGs and backgrounds. Other text and images are not checked for secrets. Saved path follows at turn end.'
+          : 'Recording: unavailable for app windows; no frames saved.');
+      }
+      if (recording?.warning()) notes.push(recording.warning());
+      if (!notes.length) return result;
+      const noted = { ...result, text: result.text + '
+' + notes.join('
+') };
+      originals.set(noted, { result, text: noted.text, isError: noted.isError }); return noted;
       } finally { pdfBuilding = undefined; }
     }, delivered(result) {
       const original = originals.get(result); originals.delete(result);
@@ -406,6 +417,7 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
     async end() { const recordingEnded = recording?.end(); const cleanup = ctx.dispose(); const previous = await runtime.end();
       await recordingEnded;
       const receipt = { ...previous, cleanup: [...previous.cleanup] };
+      if (recording && !recordingReported) { recordingReported = true; receipt.recording = recording.note(); }
       if ((await cleanup).retained) receipt.cleanup.push({ resource: 'uploads', status: 'retained', code: 'CLEANUP_UNPROVED' });
       return receipt;
     },
@@ -536,21 +548,23 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
     if (resource.collecting) return resource.collecting;
     resource.collecting = (async () => {
       const cleanup = [];
+      let recording;
       if (resource.runtime) {
         const turn = await resource.runtime.end().catch(unproved);
         cleanup.push(...turn.cleanup.filter(row => row.resource !== 'owned-tabs'));
+        recording = turn.recording;
       }
       let tabs = true;
       try { if (resource.pages) tabs = (await resource.pages.endTurn()).cleanedUp === true; } catch { tabs = false; }
       if (!tabs) {
         cleanup.push(retained('owned-tabs'));
-        if (!terminalLoss) return { revoked: true, cleanup };
+        if (!terminalLoss) return { revoked: true, cleanup, ...(recording ? { recording } : {}) };
       }
       let detached = true;
       try { if (resource.filter) detached = await resource.filter.dispose() === true; } catch { detached = false; }
       if (!detached) {
         cleanup.push(retained('cdp-filter'));
-        if (!terminalLoss) return { revoked: true, cleanup };
+        if (!terminalLoss) return { revoked: true, cleanup, ...(recording ? { recording } : {}) };
       }
       try { await resource.browser?.close(); } catch { cleanup.push(retained('playwright-connection')); }
       try { await resource.listener?.close(); } catch { cleanup.push(retained('cdp-listener')); }
@@ -562,7 +576,7 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
         if (!cleanup.length) appConnected = false;
       }
       if (!cleanup.length) resources.delete(resource);
-      return { revoked: true, cleanup };
+      return { revoked: true, cleanup, ...(recording ? { recording } : {}) };
     })().finally(() => { resource.collecting = undefined; });
     return resource.collecting;
   }

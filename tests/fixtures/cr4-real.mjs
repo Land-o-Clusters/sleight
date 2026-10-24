@@ -18,7 +18,7 @@ const executablePath = process.platform === 'darwin'
 export const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'real-page qualification belongs to sleight-arch host runner'
   : !existsSync(executablePath) ? 'pinned Chromium headless shell is unavailable' : false;
 
-export async function fixture(t, html, routes = {}, { observeTabs = false } = {}) {
+export async function fixture(t, html, routes = {}, { observeTabs = false, smoothScrolling = false } = {}) {
   const sockets = new Set(), requests = [];
   const profile = trackTemp(mkdtempSync(join(realpathSync(tmpdir()), 'sleight-cr4-')));
   let context, registry;
@@ -44,6 +44,7 @@ export async function fixture(t, html, routes = {}, { observeTabs = false } = {}
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const args = ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'];
+  if (smoothScrolling) args.push('--enable-smooth-scrolling');
   if (observeTabs) {
     // Only this disposable browser loads the read-only observer. Chrome's tab
     // active bit distinguishes background disposition even in headless mode,
@@ -65,6 +66,8 @@ export async function fixture(t, html, routes = {}, { observeTabs = false } = {}
   registry = createPageRegistry({ browser, session, context, timeoutMs: 10000, popupWaitMs: 5000 });
   const { tab } = await registry.openTab({ url: 'http://127.0.0.1:' + server.address().port + '/start' });
   const entry = registry.tab(tab);
+  // Activate only this disposable headless target for compositor gesture tests.
+  if (smoothScrolling) await entry.page.bringToFront();
   return { registry, context, entry, requests, sentinel, before, session, tabState: observeTabs ? tabState : undefined };
 }
 

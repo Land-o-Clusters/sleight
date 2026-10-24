@@ -44,7 +44,7 @@ export function pdfFileAllowed(binding, path) {
 // Quoted text, negations, page content and tool arguments never opt in.
 export function recordingPermission(binding) {
   const bound = bindings.get(binding);
-  const requested = !!bound && /^Record this turn\.(?:\r?\n|$)/.test(bound.message.text);
+  const requested = !!bound && /^Record this turn\.(?:\s|$)/.test(bound.message.text);
   return () => { try { return requested && bound.current() === true; } catch { return false; } };
 }
 
