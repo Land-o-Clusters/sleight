@@ -134,3 +134,19 @@ test('engine finds the decline outside a nested Accept cookies group in the same
   const before = header + '\n\t\t2 dialog\n\t\t\t3 group\n\t\t\t\t4 button Accept cookies\n\t\t\t5 button Reject all';
   assert.match(engineConsent('click', [4], before)?.why, /Reject all/);
 });
+
+// Review g11-engine-read: keys act on current focus, so a wall that appeared after the last read is read fresh.
+test('engine reads fresh before Return when the last tree showed no wall', async () => {
+  let current = cleared;
+  const sent = [];
+  const raw = { getAXState: async () => current, pressKey: async key => { sent.push(key); },
+    typeText: async text => { sent.push(text); current = tree() + '\nThe focused UI element is 4 button Accept all'; } };
+  const context = { cua: { getApp: async () => raw }, nodeRepl: { write() {} } };
+  const run = source => runInNewContext(`(async () => { ${source} })()`, context);
+  await run(readCode('await cua.getApp("Browser");'));
+  let error;
+  // A page script raises the wall and focuses Accept after the typing, inside the same call.
+  try { await run(guardedCode('await app.typeText("x"); await app.pressKey("Return");', windowFromText(cleared), 'Stopped.')); } catch (caught) { error = caught; }
+  assert.match(error?.message ?? '', /Cookie acceptance blocked/);
+  assert.deepEqual(sent, ['x']);
+});

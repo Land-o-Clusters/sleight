@@ -1612,9 +1612,14 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           if (consentInput && !nativeTab) {
             const newest = text ?? priorText ?? state.callTrees.get(proxy) ?? lastTree;
             if (typeof newest === 'string') consent = engineConsent(name, args, newest);
-            // The engine numbers targets from the tree the model last saw, so that tree decides. Only a wall it shows
-            // gets a fresh read to confirm, so ordinary clicks in browsers cost no extra read.
-            if (text === undefined && (consent?.blocked || consent?.decline) && /^\\t*\\d+ (?:HTML content|dialog|sheet|alert|region)\\b/im.test(newest)) {
+            // A numbered target is resolved against the tree the model last saw, so that tree decides, and ordinary
+            // numbered clicks in browsers pay no extra read. Keys act on current focus, and points, labels and handles
+            // resolve now, so those (and any wall the last tree shows) get a fresh read.
+            const keyedActivation = name === 'pressKey' && /(?:^|\\+)(?:enter|return|numpadenter|space| |\\r|\\n)$/i.test(String(args[0])) ||
+              name === 'typeText' && /^(?: |\\n|\\r\\n?)$/.test(String(args[0]));
+            const numbered = !/^(?:pressKey|typeText|paste)$/.test(name) && Number.isInteger(args[0]);
+            if (text === undefined && typeof newest === 'string' && (consent?.blocked || consent?.decline || keyedActivation || !numbered && !/^(?:pressKey|typeText|paste)$/.test(name)) &&
+                /^\\t*\\d+ (?:HTML content|dialog|sheet|alert|region)\\b/im.test(newest)) {
               text = await timedRead(raw, 'consent');
               consent = typeof text === 'string' ? engineConsent(name, args, text) : { blocked: true, why: 'the page could not be read again to check its cookie wall.' };
             }
