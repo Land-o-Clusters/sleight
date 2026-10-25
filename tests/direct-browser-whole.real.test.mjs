@@ -45,7 +45,10 @@ for(const kind of ['a','b','c','d','e','f','g','h'])test('whole real fixture '+k
       if(process.env.LR1_DEBUG)console.log({fixture:variant,requests:h.requests,events:f.events,dom:await page.evaluate(()=>({busy:document.getElementById('box').getAttribute('aria-busy'),text:document.getElementById('loading').textContent,top:document.getElementById('box').scrollTop})),text:read.text});
       if(['a','b','c','d','g'].includes(variant)){
         assert.match(read.text,/Complete: yes\./,label);assert.deepEqual(got,f.expected,label);
-        if(variant==='a'){assert.match(read.text,/Clicks: 0\./);assert.ok(Number(/Seconds: (\d+\.\d{2})/.exec(read.text)[1])<25,label);}
+        if(variant==='a'){assert.match(read.text,/Clicks: 0\./);
+          // The fixture paces its own loading. Unchanged code read it in 24.39 to 25.52 s in front and 25.04 to 25.46 s behind a
+          // foreground tab at load 3 to 5 (2026-10-25, p143 and the lr1d branch alike), so 27 s catches a real slowdown.
+          assert.ok(Number(/Seconds: (\d+\.\d{2})/.exec(read.text)[1])<27,label);}
       }else{
         assert.match(read.text,/Complete: NO\./,label);
         if(variant==='e'){assert.ok(f.events.some(e=>e.type==='load'));assert.ok(Number(/Items read: (\d+)/.exec(read.text)[1])>15);assert.match(read.text,/cap/);assert.ok(got.length<=55);assert.ok(Number(/Seconds: (\d+\.\d{2})/.exec(read.text)[1])<=8);}

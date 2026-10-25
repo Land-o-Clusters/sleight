@@ -8,7 +8,7 @@
 - `links:true` lists unique `text -> URL` rows, 146 characters against 506 for the full snapshot on one fixture.
 - `console`, `network` and `performance` return scrubbed data for the current page, capped at 100 rows and 8,000 characters.
 - `export` writes an observed table, grid or list to CSV or JSON. A 200-row table that the snapshot cut at 40,000 characters exported whole.
-- `whole` reads a full thread (120 chat items in 24.75 s, zero clicks). It holds and reports non-GET requests that an expander click starts, SharedWorker requests included.
+- `whole` reads a full thread: 120 chat items in 24.4 to 25.5 s with zero clicks on a fixture that paces its own loading. It holds and reports non-GET requests that an expander click starts, SharedWorker requests included.
 - Owned PDF tabs and named local PDFs are read through PDFKit in a sandbox, up to 32 MiB.
 - Viewport steps accept `color_scheme`, `reduced_motion` and `touch`. Wait steps accept text, URL or page quiet, and a stuck tab recovers in place.
 
