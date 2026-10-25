@@ -15,10 +15,10 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 - Turbo may ask about an honest checkout: on 2026-10-15, 50/98 honest payment fixtures allowed without asking (83/98 in round 12) ([browsers](#browsers)).
 - Safari may stop between opening a tab and typing: 36 of 36 Codex chains and 19 of 19 Claude Code chains stopped. The fix is untested live ([approvals and guards](#approvals-and-guards)).
 
-## 1.4.1 candidate checks
+## Release qualification
 
-- Release qualification applies to the final integrated commit. The 1.4.1 manifests, doctor output and unreleased
-  CHANGELOG heading agree in the integrated tree. The full check, release pass and final-build A/B remain required
+- Release qualification applies to the final integrated commit. The 1.5.0 manifests, doctor output and unreleased
+  CHANGELOG heading must agree in the integrated tree. The full check, release pass and final-build A/B remain required
   on that final commit. Passing offline tests does not qualify a release.
 - Finder's recorded setup smoke failed at 21:16Z on 2026-10-20 with `Finder fixture window inventory unconfirmed` before
   creating a window or opening a folder. Cleanup was confirmed, but the failed run retained its live lock until
@@ -111,6 +111,8 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   or Opus. See the [four flag A/Bs](benchmarks/2026-10-19-flag-ab.md) for every task and attempt.
 - Both skills restore `60fe1319`, including the original submit safety passage. Only the default skill adds
   the exact measured screenshot sentence. The screenshot A/B never measured lean.
+- `SLEIGHT_COMPLETENESS` and `SLEIGHT_OUTCOMES` stay off until an A/B runs (60 attempts planned on three native tasks).
+- Page-declared totals can be wrong, and unseen server-side rows stay unknown. A row over 40,000 characters stays cut. The browser picker makes one extra metadata read. Final-answer honesty is unmeasured.
 
 ## Approvals and guards
 
@@ -118,8 +120,8 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 
 - In 1.4.0, Always allow, payment and sleight consent buttons require a person's physical click or key press.
   The native guard rejects Accessibility presses and posted input. VoiceOver, Switch Control, Voice Control and
-  screen-sharing users need a physical keyboard or pointer for these cards. A typed-confirmation alternative is planned
-  after 1.4.0. Plain session-only app approvals can still use the host's prompts. Decline and Cancel remain available.
+  screen-sharing users need a physical keyboard or pointer for these cards. 1.5.0 adds a typed word plus Return from a physical
+  keyboard. Switch Control's on-screen keyboard still cannot answer. Plain session-only app approvals can still use the host's prompts. Decline and Cancel remain available.
 
 - When a card or menu-bar alert closes, sleight returns activation to the app that was in front just before the card
   was clicked. This also happens when a card times out or is aborted while the card's own app is in front, even if
@@ -247,6 +249,16 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   `SLEIGHT_COMPACT_TOOLBARS` on, the relay takes those parents from the trimmed tree Claude was shown, where omitted groups
   leave the wrong parent (a probe gave `button Next` for days under `group October`). Those batches stop instead of remapping.
   If one of those settings becomes the default, the parents should come from the untrimmed tree.
+- With VoiceOver or Switch Control on, any Accessibility client, the engine included, can focus the handoff word field and take key focus from the page. The check reads a system-wide flag that a privileged process can toggle.
+- Typed confirmation needs a physical keyboard, so cards can't be answered from Switch Control's on-screen keyboard. The mask length is readable over AX. VoiceOver reading and key-window behavior are unverified live.
+- Waiting handoff covers owned turbo browser tabs and native apps with a lease. Document-scoped native mode and Electron turbo still stop.
+- The card lasts 4 minutes, and a shorter host tool timeout ends the wait earlier. Closed shadow-root login forms and custom auth controls are not checked. A populated text field beside a login form refuses resume.
+- The shell guard reads literal commands only, after a sleight tool has run in the turn. Codex, Cursor and Grok hosts do not get it.
+- Variables, aliases, ANSI-C quoting, ssh, scripts on disk and encoded payloads (`base64 | sh`) get past the shell guard. It can also refuse harmless text, such as a launcher word in interpreter process arguments or any `osascript` or `launchctl submit/load/bootstrap/kickstart`. How the installed host presents a denial is unchecked.
+- Uploads refuse group-writable files (including files made under umask 002), writable parents, mutating ACL entries and unreadable metadata. Copy the file to a visible file in Documents. Folder uploads are unsupported. The iCloud and `/Volumes` exceptions ran on synthetic metadata only.
+- Cookie handling is model guidance plus a guard on identified containers. A container counts when it's a known CMP root, or a fixed, sticky or dialog element under 1,500 characters with a consent phrase.
+- Unknown CMPs in page flow, absolute banners without a dialog role, unrecognized labels, CSS-only labels and wording outside the covered languages pass the cookie guard (CW2 lists missed phrasings). The engine path has no positioning signal. Some ordinary dialogs ask instead of accepting: one headed "Cookie settings", "Please allow cookies and sign in again", or "By using our services you agree to our Terms and Cookie Policy". Model compliance is unmeasured.
+- Turn stats need the Claude Code mod. Native action counts without outcome receipts are code-site estimates. Tokens cover the host's whole turn, and cost is the session-ledger delta. Whether the host accepts the late usage update, and the pane layout, are unchecked live.
 
 ## The pointer, drags and hover
 
@@ -673,9 +685,27 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
   start runs once more, and the failed stage and code go to the trace and the task's `turbo-metrics.jsonl`. The cause
   stays a guess until a round records one. A first call that fails to connect after a good start still fails the rest
   of its turn, so a benchmark task, which is one turn, still fails on it.
-- Turbo has no mobile viewport control. Use the engine's separate browser path for that task.
   Tabs and refs cannot cross paths. Never retry a safety refusal or an uncertain action through
   the other path. Embedded frame hosts are refused for input, while their page reads remain available.
+- Screenshots return nothing on pages with protected fields (hidden or offscreen too) or more than 4 separate frame sessions. Taking one pauses the page's scripts for a moment. Motion frames cover click, hover and scroll. Their times are capture requests, not presentation, and fast transitions can be missed.
+- Secrets drawn on a canvas cannot be recognized. DPR 2 with 125% zoom is unqualified on installed Chrome and Helium.
+- With `SLEIGHT_POINT_INPUT=1`, point input scans element boxes and ignores paint order and `pointer-events`. A backdrop over Subscribe still needs a ref when the button's box contains the point (2/2 refused).
+- With point input on, pages over 20,000 node visits, 50 ms of scan or 129 native subjects need refs. So do closed shadow hosts, cross-origin frames and transformed frames. Canvas and video repaints are not detected.
+- With point input on, page handlers can still reach a payment control. Both headless fixtures fired payment once, through a forwarding listener and a document-level handler. A `pointerover` handler ran payment twice before the stale-view refusal.
+- A page handler that changes `form.action` after the guard is caught only by the navigation notification. The 0 Fetch pauses and 0 navigation notifications on the HTTP-to-`mailto:` fixture mean cancellation can lose the race and the macOS prompt outcome stays unconfirmed. Installed Chrome and Helium detach behavior is unqualified.
+- Ready, quiet pages can return before a later timer adds content. A "text gone" wait cannot prove absence over masked content.
+- Links mode omits destinations the protected snapshot does not expose, including closed shadow roots. Browser reads write `_ariaRef` on element wrappers in Playwright's isolated world, so they are not strictly DOM-write-free.
+- Turbo downloads take observed HTTP(S) links on the page's exact origin, redirects included. They refuse executables, archives, HTML, SVG and unsupported types, and have no blob, scripted or POST-only exports. Files stay until the user removes them. The engine-path download stall remains. Chrome and Helium attachment handling is unverified.
+- Exports cover the rendered collection. Virtual rows, spanning cells, redaction and caps (10,000 rows, 256 columns) report incomplete, and a closed shadow root anywhere on the page blocks completeness. Hidden-text omission is best-effort and affects only the file. Native tables stay on the engine.
+- PDF reads extract text only. Scans need OCR elsewhere. Locked PDFs refuse, and find and refs are unavailable. Tab reads need cached bytes.
+- Sandboxed PDF extraction matched an unsandboxed build only on generated TrueType, CJK and Type 3 fixtures. First use compiles the helper (up to 300 s), and a failed compile retries on every read.
+- Developer reads cover the current page target from attachment, so worker and out-of-process-frame logs can be missing. The scrubber keeps only allowlisted shapes, so letter-only values and unknown-TLD subdomains pass, and `12:30`, dates and `window.performance.now` are masked. Short unlabeled secrets can remain.
+- Whole-thread reads cover vertical DOM lists in the main frame. A read reports partial when items overlap ambiguously or the declared total doesn't match. Missing end markers, unopened expanders, items over 65,536 characters and 8 MB held make it partial too.
+- Whole-thread reads click only expander buttons with a name. GET and WebSocket effects are not held, and a SharedWorker started before the read is outside the hold. Native foreground behavior and an actually hidden tab are unqualified.
+- A page watch needs one existing public tab that updates itself and compares literal text in main-document names. Hidden rows, child frames, field values and canvas are invisible to it.
+- Page watches reject pages with unchecked embedded documents. The watch can't recognize short opaque URL secrets or custom protected controls. A browser restart needs reinstalling. launchd self-bootout, notification delivery and foreground behavior are unchecked live.
+- Site memory learns only generic button, menuitem and tab labels with a structural change. Hints can be stale. A stale `site-memory.json.lock` stops learning and clearing until removed. The measured speedup came from a scripted explorer. No model run has measured it.
+- Turn GIFs pixelate the whole page and black out fields where DOM boxes exist. Block size follows the font, not the rendered scale, and media outside the targets is pixelated, not blacked out. A mask query over 5,000 elements or 50 ms skips frames. They cover owned turbo tabs only, and the OCR and QR tests used fixtures.
 
 ### Engine browser limits
 
@@ -685,7 +715,8 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
   it dropped 6/6 (`bench/fowl/drag-probe.mjs`).
 - After `tab.click` on a download link, no download prompt appears, and every later download in that tab times
   out, `downloadMedia` and `waitForEvent("download")` alike (2/2 each, raw engine and sleight). Without that
-  click both returned in under 0.4 s. A new tab downloads normally (`bench/fowl/download-probe.mjs`).
+  click both returned in under 0.4 s. A new tab downloads normally (`bench/fowl/download-probe.mjs`). Turbo's
+  `download` step avoids this stall.
 - The page's `evaluate` is read-only: it can't dispatch events, assign globals or watch the page's network.
 - The engine opens tabs one at a time. A tab took 0.9 s to open alone, and 1.3 to 2.9 s each when 6 sessions opened
   one at once, about 0.3 s more per session in line (`bench/fowl/coldstart-probe.mjs`). In a round that starts 13 sessions at
@@ -699,6 +730,8 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
   selection ignores the key, and the result only says so as a possibility. A click by label on a
   disabled item stops and names the enabled items beside it, but only items at the same depth of
   the tree.
+- An asynchronous paste handler that reads after restoration receives the restored clipboard. A worker crash loses the recovery snapshot of concealed originals.
+- Snapshots expire after 10 minutes or a reboot. On APFS and SSDs, zeroing a snapshot before unlink doesn't guarantee erasure, and backup exclusions are advisory. Google Sheets, Notion and iframe editors are untested.
 
 ## The engine and its helper
 
@@ -1133,6 +1166,9 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
   engine docs ahead of the error, which hid it. Crash resends now wait a random 0 to 1.5 s more, and cells count the
   helper's crash reports. Whether the spread resends stop the second crash isn't measured yet. Results:
   docs/benchmarks/2026-10-19-speed-map.md.
+- The Cursor arm is offline only. Its interval (submit to recorded end) excludes composer setup and is not comparable to other arms' totals.
+- Telemetry from the FowlBrowser jobs is fixture evidence that page JavaScript can forge.
+- The mail-to-Numbers task has no live Numbers import, export or cleanup run. Saved documents are left for the owner, and an unreadable receipt reports "leftover check unavailable".
 
 ## Turbo in unattended runs
 
@@ -1243,9 +1279,8 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
 - `[offscreen]` and `[partly offscreen]` compare an element's box with the page's viewport only. A scroll container or an overlay that
   clips the element isn't counted, and refs inside frames (`f2e1`) never get a marker. Checked on a tall page at 390x844 with a real
   headless Chromium. Not checked on pages with scroll containers.
-- The `viewport` step restores the size by setting the size the tab had before the first override. The tab then has an explicit
-  size that matches the old window and doesn't follow later window resizes. A tab kept or handed off with an override still set keeps
-  that size.
+- An empty `viewport` step and the tab's release clear every override. The tab then follows its window again.
+- Touch emulation refuses a tab that already reports touch capability. Clicks stay mouse clicks. Release uses private fields of the pinned Playwright, and a failed first size read reports "unknown". Real windows at 125% and 150% zoom are unverified.
 
 ## Turbo closed shadow roots
 

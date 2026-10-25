@@ -1,5 +1,48 @@
 # Changelog
 
+## 1.5.0 (unreleased)
+
+### Turbo reads
+
+- `browser_read` can return a viewport JPEG (at most 1,000 px), and `browser_act` can return 2 to 4 motion frames (480 px). Pages with protected fields return no pixels.
+- `links:true` lists unique `text -> URL` rows, 146 characters against 506 for the full snapshot on one fixture.
+- `console`, `network` and `performance` return scrubbed data for the current page, capped at 100 rows and 8,000 characters.
+- `export` writes an observed table, grid or list to CSV or JSON. A 200-row table that the snapshot cut at 40,000 characters exported whole.
+- `whole` reads a full thread (120 chat items in 24.75 s, zero clicks). It holds and reports non-GET requests that an expander click starts, SharedWorker requests included.
+- Owned PDF tabs and named local PDFs are read through PDFKit in a sandbox, up to 32 MiB.
+- Viewport steps accept `color_scheme`, `reduced_motion` and `touch`. Wait steps accept text, URL or page quiet, and a stuck tab recovers in place.
+
+### Turbo actions and guards
+
+- `paste` sends text or a TSV block to an observed ref and restores the clipboard.
+- `download` saves an observed same-origin link, up to 3 per message at 32 MiB each and 128 MiB per session.
+- Turbo refuses app links and native form destinations, and reports page-initiated native navigation.
+- Cookie walls default to Reject or necessary-only. Turbo and the engine path refuse an accepting label in an identified wall, and a wall with no reject option stops and asks.
+- With `SLEIGHT_POINT_INPUT=1`, click, hover and drag accept viewport points from a fresh read. It's off by default, and guarded controls always need refs.
+- A Claude Code hook blocks shell launches that could take focus after a sleight call (`SLEIGHT_SHELL_GUARD=0` opts out). Uploads refuse hidden, Library and system paths and files over 40 MiB.
+- The browser tool catalog is 6,390 characters, against 4,310 in 1.4.2.
+
+### Sign-in and approvals
+
+- Handoff with `wait:true` pauses up to 4 minutes and returns a fresh read after Continue. `app_handoff` resumes a native app's new window.
+- Protected cards accept a typed word and Return from a physical keyboard.
+
+### Records and memory
+
+- `/sleight stats` and the pane show the last turn's duration, calls, text and host tokens.
+- `Record this turn.` saves a GIF of the turn with the page pixelated and fields blacked out (30 frames, 12 MiB).
+- `sleight-mcp watch` checks a public page without a model and notifies on change.
+- With the action log on, turbo remembers generic controls per origin: 3 calls and 1,362 ms on a scripted second run, against 5 and 3,560 ms.
+- `SLEIGHT_COMPLETENESS=1` and `SLEIGHT_OUTCOMES=1` add read-scope and unverified-effect notes.
+
+### Benchmark and harness
+
+- FowlBrowser pin 6a12d60 with five local jobs, an offline Cursor arm, a mail-to-Numbers task and `--agent-seconds` scoring.
+
+### Not qualified
+
+- None of these has run on installed Chrome or Helium.
+
 ## 1.4.2 (2026-10-22)
 
 - sleight starts when its plugin folder is reached through a symlink, such as a symlinked `~/.claude`. Before, the
