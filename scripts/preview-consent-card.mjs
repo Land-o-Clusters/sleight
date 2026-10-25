@@ -16,7 +16,7 @@ export function previewConsentCards(directory) {
   });
   const fixture = readFileSync(new URL('../tests/fixtures/consent-card-layout.swift', import.meta.url), 'utf8');
   const path = join(directory, 'main.swift'), binary = join(directory, 'preview');
-  writeFileSync(path, 'import AppKit\nimport Foundation\nimport CoreFoundation\nimport QuartzCore\nimport ObjectiveC\nimport Darwin\nimport os.log\n' + blocks.join('\n') + '\n' + fixture);
+  writeFileSync(path, 'import AppKit\nimport Foundation\nimport CoreFoundation\nimport QuartzCore\nimport Carbon.HIToolbox\nimport ObjectiveC\nimport Darwin\nimport os.log\n' + blocks.join('\n') + '\n' + fixture);
   const build = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(directory, 'module-cache'), path, '-o', binary], { encoding: 'utf8', timeout: 120000 });
   if (build.status !== 0) throw new Error(`Compile failed (${build.status}): ${build.stderr}`);
   // This child never calls show/review, activates an app, or sends an approval. Collect its exit before returning.
