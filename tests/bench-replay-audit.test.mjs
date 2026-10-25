@@ -39,7 +39,12 @@ const expected = {
 for (const id of ['DP1', 'DP2', 'DP7', 'CK2', 'CK3', 'MC1', 'MS1', 'LB1']) {
   const spec = loadCheck(id), source = spec.source.replace(/^~/, homedir());
   test(`retained recording feedback audit ${id}`, { skip: !existsSync(source) && 'Retained benchmark recording is not installed' }, async t => {
-    const recording = loadRecording(source, spec);
+    let recording;
+    try { recording = loadRecording(source, spec); } catch (error) {
+      // macOS sweeps the temp evidence folder that holds native transcripts (DP7's was gone after the 2026-10-25 reboot).
+      if (/^Transcript missing in /.test(error.message)) return t.skip('Retained transcript was swept from the temp folder');
+      throw error;
+    }
     const result = await auditRecording(recording);
     t.diagnostic(JSON.stringify({ spec: id, transcriptSHA256: recording.transcriptSHA256, ...result }));
     assert.deepEqual([result.planned, result.fed, result.verdict, result.reason], expected[id]);
