@@ -5,6 +5,11 @@ import Darwin
 
 func fail(_ text: String) -> Never { fputs(text + "\n", stderr); exit(1) }
 let args = Array(CommandLine.arguments.dropFirst())
+// Read-only check the runner makes before showing any card, so a missing grant fails before the person starts.
+if args == ["access"] {
+    print(CGPreflightPostEventAccess() ? "true" : "false")
+    exit(0)
+}
 if args == ["voiceover"] {
     print(NSWorkspace.shared.isVoiceOverEnabled ? "true" : "false")
     exit(0)

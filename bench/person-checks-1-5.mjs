@@ -278,10 +278,16 @@ export async function main(args = process.argv.slice(2)) {
   const abort = () => controller.abort(Error('PERSON_CHECK_INTERRUPTED'));
   process.on('SIGINT', abort); process.on('SIGTERM', abort);
   let binaries, retain = false;
-  const compile = () => { binaries = compileOnly(directory); return binaries; };
+  const compile = () => {
+    binaries = compileOnly(directory);
+    // Review pc1: check post-event access before the first card, not after the person finished check 1.
+    const access = invoke(['access']);
+    if (access.status !== 0 || access.stdout.trim() !== 'true') throw Error('POST_EVENT_ACCESS_REQUIRED: the posted-input checks need post-event access for the process running this script. No permission was requested and no card was shown.');
+    return binaries;
+  };
   const invoke = args => spawnSync(binaries.poster, args, { encoding: 'utf8', timeout: 10000 });
   try {
-    if (options.compileOnly) { compile(); console.log('production host with receipts and poster compiled; neither launched'); return 0; }
+    if (options.compileOnly) { binaries = compileOnly(directory); console.log('production host with receipts and poster compiled; neither launched'); return 0; }
     console.error('Fixture cards only. Allow about 10 minutes. No real sign-in, app approval or payment. Ctrl-C stops the pass.');
     const result = await runLive({ compile, signal: controller.signal,
       open: () => openHost({ binaries, directory }),
