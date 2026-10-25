@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { maskRecordingPixels } from '../plugins/sleight/lib/direct-browser/recording.mjs';
-import { PNG, recognize, savedGrade } from './fixtures/recording-grade.mjs';
+import { PNG, recognize, savedGrade, gradeSkip } from './fixtures/recording-grade.mjs';
 
-test('blank layout and annotations can produce OCR glyphs without source text', { timeout: 180000 }, async t => {
+test('blank layout and annotations can produce OCR glyphs without source text', { skip: gradeSkip(), timeout: 180000 }, async t => {
   const width = 1280, height = 720, data = Buffer.alloc(width * height * 4, 255);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const inside = x >= 160 && x < 800 && y >= 160 && y < 400;

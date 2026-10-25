@@ -57,6 +57,11 @@ export function differences(frame, reference, box) {
   return count;
 }
 export const inset = (box, n = 4) => ({ x: box.x + n, y: box.y + n, width: box.width - 2 * n, height: box.height - 2 * n });
+// OCR uses macOS Vision and the GIF checks use Pillow; skip where either is missing (Linux CI, clean Macs).
+export function gradeSkip() {
+  if (process.platform !== 'darwin') return 'macOS Vision OCR required';
+  return spawnSync('python3', ['-c', 'import PIL'], { encoding: 'utf8' }).status === 0 ? false : 'python3 Pillow required';
+}
 export async function rawFrame(page) { return PNG.sync.read(await page.screenshot({ type: 'png', scale: 'css', caret: 'hide' })); }
 export async function record(f, handle, t) {
   // A deadline skips one sampled frame in production. Privacy assertions need
@@ -123,6 +128,9 @@ image.crop((math.ceil(box['x']*s)+left,math.ceil(box['y']*s)+top,math.floor((box
     t.diagnostic(`${label}: OCR ${ocr.text.length}, whole-image QR ${qr.qr.length}`);
     assert.deepEqual(qr.qr, [], label + ': zero decodable QR');
     if (ocr.text.length) t.diagnostic(label + ': ' + JSON.stringify(ocr.regions));
-    assert.deepEqual(ocr.text, [], label + ': zero OCR text');
+    // Acceptance (sleight-arch, 2026-10-24): nothing private is recovered. Pixel blocks can make OCR emit short noise
+    // glyphs, so a run of 4 or more letters or digits in the OCR output is the failure, whatever the fixture text was.
+    const recovered = ocr.text.flatMap(text => String(text).match(/[\p{L}\p{N}@.]{4,}/gu) ?? []);
+    assert.deepEqual(recovered, [], label + ': no recovered text (4+ characters)');
   }
 }
