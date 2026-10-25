@@ -150,9 +150,11 @@ function jpeg(width, height, color = 0) {
   return { type: 'image', mimeType: 'image/jpeg', data: bytes.toString('base64') };
 }
 
-test('screenshot grade rejects DPR-1 pixels for a Retina fixture and checks both capped dimensions', async () => {
+// Turbo may capture at CSS scale or device scale; both are the whole viewport (sleight-arch, after review lc1b).
+test('screenshot grade accepts CSS or device scale and rejects crops, checking both capped dimensions', async () => {
   for (const [css, dpr, pixels, passes] of [
-    [[320, 240], 2, [320, 240], false], [[320, 240], 2, [640, 480], true],
+    [[320, 240], 2, [320, 240], true], [[320, 240], 2, [640, 480], true], [[320, 240], 2, [480, 360], false],
+    [[320, 240], 2, [320, 200], false],
     [[800, 600], 2, [1000, 750], true], [[600, 800], 2, [750, 1000], true],
     [[800, 600], 2, [1000, 600], false], [[321, 241], 1.25, [401, 301], true],
   ]) {

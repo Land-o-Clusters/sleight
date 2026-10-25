@@ -90,15 +90,22 @@ export async function runCheck(id, runtime) {
     requireValue(captured.images?.length === 1, 'Screenshot returned no pixels');
     const size = jpegSize(captured.images[0].data);
     requireValue(size.width > 0 && size.height > 0 && Math.max(size.width, size.height) <= 1000, 'Screenshot pixel bounds failed');
-    const scale = Math.min(1, 1000 / Math.max(metrics.width * metrics.dpr, metrics.height * metrics.dpr));
-    requireValue(['width', 'height'].every(key => {
-      const expected = metrics[key] * metrics.dpr * scale;
-      return expected > 0 && Math.abs(size[key] - expected) <= Math.max(2, expected * 0.02);
-    }), `Screenshot pixel size does not match CSS size times DPR within the 1000 px cap: ${JSON.stringify({ pixels: size, css: metrics, scale })}`);
+    // Turbo may capture at CSS scale or at device scale (CDP can multiply by the display's DPR). Either is the whole
+    // viewport; anything else (a wrong region, a crop, a stale size) fails. The result records which one it was.
+    const matches = factor => {
+      const scale = Math.min(1, 1000 / Math.max(metrics.width * factor, metrics.height * factor));
+      return ['width', 'height'].every(key => {
+        const expected = metrics[key] * factor * scale;
+        return expected > 0 && Math.abs(size[key] - expected) <= Math.max(2, expected * 0.02);
+      });
+    };
+    const captureScale = matches(metrics.dpr) ? 'device' : matches(1) ? 'css' : undefined;
+    measured.captureScale = captureScale;
+    requireValue(captureScale, `Screenshot pixel size matches neither CSS size nor CSS size times DPR within the 1000 px cap: ${JSON.stringify({ pixels: size, css: metrics })}`);
     const protectedTab = await open(runtime, '/protected');
     const protectedRead = await read(runtime, protectedTab.tab, { screenshot: true });
     requireValue(!protectedRead.images?.length && /Screenshot skipped.*protected/i.test(text(protectedRead)), 'Protected-field page returned pixels or no protected-field refusal');
-    return { dpr: metrics.dpr, cssSize: { width: metrics.width, height: metrics.height }, pixels: size, protectedPixels: 0,
+    return { dpr: metrics.dpr, cssSize: { width: metrics.width, height: metrics.height }, pixels: size, captureScale, protectedPixels: 0,
       zoom125: { status: 'skip', reason: 'Turbo exposes no page zoom operation. No browser shortcut or raw CDP zoom is substituted.' } };
   }
   if (id === 'motion-frames') {
