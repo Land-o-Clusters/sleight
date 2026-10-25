@@ -9,7 +9,7 @@ import { browserTools, validateToolCall, createToolDispatcher } from './tools.mj
 import { validImages } from './screenshot.mjs';
 import { MOTION_SIDE } from './motion.mjs';
 import { HANDOFF_WAIT_MS } from './handoff.mjs';
-import { createV3TurnBinding, createV3Context } from './v3-context.mjs';
+import { createV3TurnBinding, createV3Context, recordingPermission } from './v3-context.mjs';
 import { browserApplicationName } from './browsers.mjs';
 import { readHandConfig } from '../hand/settings.mjs';
 import { createPermissionCheck, stampUse } from '../permissions.mjs';
@@ -347,6 +347,14 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
     import('./act.mjs'), import('./fill.mjs'), import('./rules.mjs'),
   ]);
   const ctx = (dependencies.createContext ?? createV3Context)({ binding, browser, ui });
+  const permitted = recordingPermission(binding);
+  let recording;
+  if (permitted() && dependencies.recordingSupported !== false) {
+    const [{ createTurnRecording }, { captureRecordingFrame }] = await Promise.all([import('../turn-recording.mjs'), import('./recording.mjs')]);
+    recording = createTurnRecording({ current: permitted, capture: (entry, target) => captureRecordingFrame(entry,
+      { pages, current: permitted, endpoint, sites: dependencies.sites, target }), ...dependencies.recording });
+  }
+  const originals = new WeakMap();
   let pdf, pdfBuilding;
   if (dependencies.pdfInventory || dependencies.pdfExtract) {
     const [{ createPdfReader }, { pdfFileAllowed }] = await Promise.all([import('./pdf.mjs'), import('./v3-context.mjs')]);
@@ -366,9 +374,10 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
         return (dependencies.extractPdf ?? extractPdf)(built.receipt, path, cursor, { signal });
       }) });
   }
+  let recordingStarted = false, recordingReported = false;
   const runtime = createToolDispatcher({ browser, pages, snapshot, ctx, endpoint, sites: dependencies.sites, onSite: dependencies.onSite,
     pdf,
-    tracePhase: dependencies.tracePhase,
+    tracePhase: dependencies.tracePhase, ...(recording ? { onAction: recording.capture } : {}),
     runSteps: dependencies.runSteps ?? runSteps, fillFields: dependencies.fillFields ?? fillFields,
     deliverSnapshot(state, capture) {
       if (capture.state !== state || !Number.isSafeInteger(capture.number) || capture.number < 1 ||
@@ -382,10 +391,29 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
   return Object.freeze({ async call(request, control) {
       let notified = false;
       pdfBuilding = () => { if (!notified) { notified = true; control?.pdfBuilding?.(); } };
-      try { return await runtime.call(request, control); } finally { pdfBuilding = undefined; }
-    }, delivered: runtime.delivered,
-    async end() { const cleanup = ctx.dispose(); const previous = await runtime.end();
+      try {
+        const result = await runtime.call(request, control);
+        if (!recording && !permitted()) return result;
+        const notes = [];
+        if (!recordingStarted) {
+          recordingStarted = true;
+          notes.push(recording ? 'Recording this turn: frames are pixelated everywhere; the outline shows where the action landed. Blocks are at least 32 CSS px and scale with visible fonts and viewport size. Fields and editable controls are black; targeted frames, canvases, images, SVGs and videos are black. DOM reads have a 5,000-element field cap and 50 ms budget; exceeding either skips frames. GIF caps: 30 frames, 640 by 480 pixels, 12 MiB. The pointer and target outline are drawn on top. Saved path follows at turn end.'
+            : 'Recording: unavailable for app windows; no frames saved.');
+        }
+        if (recording?.warning()) notes.push(recording.warning());
+        if (!notes.length) return result;
+        const noted = { ...result, text: result.text + '\n' + notes.join('\n') };
+        originals.set(noted, { result, text: noted.text, isError: noted.isError }); return noted;
+      } finally { pdfBuilding = undefined; }
+    }, delivered(result) {
+      const original = originals.get(result); originals.delete(result);
+      if (!original) return runtime.delivered(result);
+      return result.text === original.text && result.isError === original.isError && runtime.delivered(original.result);
+    },
+    async end() { const recordingEnded = recording?.end(); const cleanup = ctx.dispose(); const previous = await runtime.end();
+      await recordingEnded;
       const receipt = { ...previous, cleanup: [...previous.cleanup] };
+      if (recording && !recordingReported) { recordingReported = true; receipt.recording = recording.note(); }
       if ((await cleanup).retained) receipt.cleanup.push({ resource: 'uploads', status: 'retained', code: 'CLEANUP_UNPROVED' });
       return receipt;
     },
@@ -396,7 +424,7 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
  * acknowledgment and the fenced runners. The installed worker and the EPV3-8 harness both compose an app turn here. */
 export function createAppTurnRuntime({ surface, binding, browser, ui, sites, onSite, createRuntime } = {}) {
   return (createRuntime ?? createV3TurnRuntime)({ binding, browser, pages: surface.pages, snapshot: surface.snapshot, ui, endpoint: undefined,
-    dependencies: { createContext: () => surface.context, runSteps: surface.runSteps, fillFields: surface.fillFields, acknowledgeSnapshot: surface.acknowledgeSnapshot, sites, onSite } });
+    dependencies: { createContext: () => surface.context, runSteps: surface.runSteps, fillFields: surface.fillFields, acknowledgeSnapshot: surface.acknowledgeSnapshot, sites, onSite, recordingSupported: false } });
 }
 
 // Only an inherited fork channel reaches this entry. MCP calls carry tool JSON,
@@ -516,21 +544,23 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
     if (resource.collecting) return resource.collecting;
     resource.collecting = (async () => {
       const cleanup = [];
+      let recording;
       if (resource.runtime) {
         const turn = await resource.runtime.end().catch(unproved);
         cleanup.push(...turn.cleanup.filter(row => row.resource !== 'owned-tabs'));
+        recording = turn.recording;
       }
       let tabs = true;
       try { if (resource.pages) tabs = (await resource.pages.endTurn()).cleanedUp === true; } catch { tabs = false; }
       if (!tabs) {
         cleanup.push(retained('owned-tabs'));
-        if (!terminalLoss) return { revoked: true, cleanup };
+        if (!terminalLoss) return { revoked: true, cleanup, ...(recording ? { recording } : {}) };
       }
       let detached = true;
       try { if (resource.filter) detached = await resource.filter.dispose() === true; } catch { detached = false; }
       if (!detached) {
         cleanup.push(retained('cdp-filter'));
-        if (!terminalLoss) return { revoked: true, cleanup };
+        if (!terminalLoss) return { revoked: true, cleanup, ...(recording ? { recording } : {}) };
       }
       try { await resource.browser?.close(); } catch { cleanup.push(retained('playwright-connection')); }
       try { await resource.listener?.close(); } catch { cleanup.push(retained('cdp-listener')); }
@@ -542,7 +572,7 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
         if (!cleanup.length) appConnected = false;
       }
       if (!cleanup.length) resources.delete(resource);
-      return { revoked: true, cleanup };
+      return { revoked: true, cleanup, ...(recording ? { recording } : {}) };
     })().finally(() => { resource.collecting = undefined; });
     return resource.collecting;
   }

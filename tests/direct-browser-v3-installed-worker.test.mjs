@@ -72,6 +72,19 @@ test('a failed phase sink cannot change startup or a tool result', async () => {
     assert.equal(f.frames.find(row => row.id === 'first-call').result.result.text, 'No owned tabs.');
   } finally { await host.close(); }
 });
+
+test('installed turn cleanup forwards the recording summary to the end receipt', async () => {
+  const f = fixture();
+  f.dependencies.createRuntime = async () => ({ call: async () => ({ text: 'fixture', isError: false }), delivered: () => false,
+    end: async () => ({ revoked: true, cleanup: [], recording: 'Recording: ~/fixture/actions.gif (1 frames).' }) });
+  const host = await startInstalledV3Worker({ channel: f.channel }, f.dependencies);
+  try {
+    await begin(f);
+    f.channel.emit('message', { version: 3, id: 'end-recording', method: 'end', params: {} });
+    await settle();
+    assert.equal(f.frames.find(row => row.id === 'end-recording').result.recording, 'Recording: ~/fixture/actions.gif (1 frames).');
+  } finally { await host.close(); }
+});
 test('installed open refuses the selected DevTools listener before any page creation', async () => {
   const f = fixture(); let opens = 0;
   f.dependencies.createPages = () => ({ endTurn:async()=>({cleanedUp:true}), openTab:async()=>{opens++;throw Error('unexpected open');} });

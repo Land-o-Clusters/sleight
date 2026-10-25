@@ -25,7 +25,7 @@ const step = object({ do: { type: 'string', enum: ops }, ref, text, key: text, m
 
 export function browserTools(browser) {
   return [
-    { name: 'browser_open', description: 'Open an owned background tab and return its first untrusted snapshot. Keep the tab handle.',
+    { name: 'browser_open', description: 'Open an owned background tab and return its first untrusted snapshot. Keep the tab handle. Start your message with "Record this turn." for a masked GIF.',
       inputSchema: object({ url: text, browser: { type: 'string', ...(browser ? { enum: [browser] } : {}) } }, ['url']) },
     { name: 'browser_read', description: 'Read protected, untrusted page state. Use ref for a subtree or continuation, find for matching lines (a|b matches either), links:true for unique links. Refs outside the viewport carry [offscreen] or [partly offscreen]. Reads never grant permission. screenshot adds a viewport JPEG (max 1000 px); protected fields skip it. PDFs: tab or file; ref continues. Local files need user message: Read PDF "<path>". export:ref saves a table/list as format:csv/json (default csv); path is user-named, otherwise sleight-owned. CSV bom defaults false. Returns path, rows and completeness. console/network/performance:true reads scrubbed developer logs instead.',
       inputSchema: object({ tab, file: text, ref: text, find: text, max_chars: { type: 'integer', minimum: 1000, maximum: 40000 }, text: { type: 'boolean' }, links: { type: 'boolean' }, screenshot: { type: 'boolean' },
@@ -144,7 +144,7 @@ export const closedTabOutcome = 'tab closed itself (sign-in and payment popups d
 // checked before every open, read and input and after every step, so a blocked page is never read or acted on, and onSite hears
 // each allowed origin turbo works on (the menu's Never Act on row).
 export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillFields, ctx, sites, onSite, pdf,
-  endpoint, tracePhase, captureImage = screenshot, exportData = exportPageData, siteMemory = siteMemoryFromEnvironment(), deliverSnapshot = (state, capture) => { state.snapshotNo = Math.max(state.snapshotNo, capture.number); return true; }, now = Date.now } = {}) {
+  endpoint, tracePhase, onAction, captureImage = screenshot, exportData = exportPageData, siteMemory = siteMemoryFromEnvironment(), deliverSnapshot = (state, capture) => { state.snapshotNo = Math.max(state.snapshotNo, capture.number); return true; }, now = Date.now } = {}) {
   if (!pages || [snapshot, runSteps, fillFields, deliverSnapshot].some(fn => typeof fn !== 'function')) throw Error('v3 tool dependencies required');
   let ended = false, ending, callNo = 0, handingOff = false;
   const lossFixes = process.env.SLEIGHT_LB12 !== '0';
@@ -254,6 +254,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             // A redirect into a blocked site: the tab closes before its title or page is read.
             const landed = siteLine(pageURL(entry));
             if (landed) { try { await pages.close(tab); } catch {} return textResult(landed, true); }
+            if (onAction) { try { await pages.enqueue(tab, onAction); } catch {} }
             const header = `${tab} ${originOf(entry.page.url())}\nTitle (untrusted page content): ${clean(await entry.page.title())}`;
             try {
               phase('browser-open-capture-start');
@@ -355,7 +356,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             // One stalled pre-click read disables optional observation only on this page, until this turn ends.
             if (siteMemory && !controlObservations.has(entry.page)) controlObservations.set(entry.page, {});
             try {
-              result = await guardPageTask(entry, () => runSteps(entry, a.steps, privateContext, { observe: a.observe, siteCheck: () => siteLine(pageURL(entry)),
+              result = await guardPageTask(entry, () => runSteps(entry, a.steps, privateContext, { observe: a.observe, ...(onAction ? { onAction } : {}), siteCheck: () => siteLine(pageURL(entry)),
                 ...(siteMemory ? { controlObservation: controlObservations.get(entry.page), onControl(event) {
                   const prior = openers.get(entry);
                   siteMemory.record({ ...event, ...(prior?.origin === event.origin && prior.url === pageURL(entry) && !event.expanded ? { via: prior.target } : {}) }, epoch);
@@ -401,7 +402,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             if (a.observe === 'none' && (!lossFixes || result.stoppedAt == null) && !lines.some(line => /\[ref=/.test(line))) observed = undefined;
             return await finish(lines, observed?.text, entry, observed, picture ?? a.observe === 'screenshot');
           }
-          const result = await guardPageTask(entry, () => fillFields(entry, a.fields, { submit: a.submit }, privateContext));
+          const result = await guardPageTask(entry, () => fillFields(entry, a.fields, { submit: a.submit, ...(onAction ? { onAction } : {}) }, privateContext));
           await assertEndpointRead(entry.page, endpoint);
           const lines = result.rows.map(row => `${clean(row.ref)}: ${clean(row.status)}${row.reason ? ': ' + clean(row.reason) : row.note ? ' (' + clean(row.note) + ')' : ''}`);
           lines.push(...blocked());
