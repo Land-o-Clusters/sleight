@@ -39,9 +39,11 @@
 
 - FowlBrowser pin 6a12d60 with five local jobs, an offline Cursor arm, a mail-to-Numbers task and `--agent-seconds` scoring.
 
-### Not qualified
+### Checked live
 
-- None of these has run on installed Chrome or Helium.
+- Live checks in installed Chrome 155 and Helium (2026-10-25) passed 12 of 14 features in each browser after three fixes
+  the first run found: the viewport reset, PDF tab reads and a redirect to `mailto:` that opened Mail. A page watch tick and
+  turn stats weren't checked live.
 
 ## 1.4.2 (2026-10-22)
 
