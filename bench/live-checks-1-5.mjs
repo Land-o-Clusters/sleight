@@ -209,5 +209,7 @@ export async function main(argv = process.argv.slice(2)) {
   } finally { process.removeListener('SIGINT', abort); process.removeListener('SIGTERM', abort); }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  await main().catch(error => { console.error(error.message); process.exitCode = 1; });
+  // No top-level await: the runtime module imports OwnedTools from this file, and a dynamic import of it while this module
+  // is still evaluating would wait on itself forever (exit 13, 2026-10-25).
+  main().catch(error => { console.error(error.message); process.exitCode = 1; });
 }

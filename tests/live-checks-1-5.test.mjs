@@ -192,20 +192,22 @@ test('repo-local native reader skips missing, denied, malformed or timed-out rea
     async () => { throw Object.assign(Error('denied'), { code: 'EACCES' }); },
     async () => { throw Object.assign(Error('timeout'), { code: 'ETIMEDOUT' }); },
     async () => ({ stdout: 'not JSON' }), async () => ({ stdout: '{}' })]) {
-    const reader = createNativeReader({ cacheRoot: tmpdir(), execute });
+    const reader = createNativeReader({ cacheRoot: tmpdir(), execute, compile: async () => '/fixture/reader' });
     assert.match((await reader('frontmost')).skipReason, /native reader unavailable/);
     assert.match((await reader('windows', 42)).skipReason, /native reader unavailable/);
   }
   const calls = [];
-  const reader = createNativeReader({ cacheRoot: tmpdir(), execute: async (command, args) => {
+  // The reader is compiled once and each read executes the binary (the swift interpreter took over 15 s cold).
+  const reader = createNativeReader({ cacheRoot: tmpdir(), compile: async () => '/fixture/reader', execute: async (command, args) => {
     calls.push({ command, args });
     return { stdout: JSON.stringify({ pid: 42, isMail: false, mailWindows: [] }) };
   } });
   assert.equal((await reader('frontmost')).pid, 42);
-  assert.equal(calls[0].command, '/usr/bin/swift');
-  assert.equal(calls[0].args.at(-2), fileURLToPath(new URL('../bench/live-checks-1-5-native.swift', import.meta.url)));
+  assert.deepEqual(calls[0], { command: '/fixture/reader', args: ['frontmost'] });
+  const failedCompile = createNativeReader({ cacheRoot: tmpdir(), compile: async () => { throw Error('swiftc failed'); }, execute: async () => assert.fail('no exec') });
+  assert.match((await failedCompile('frontmost')).skipReason, /native reader unavailable/);
   const controller = new AbortController(); controller.abort(Error('cancelled'));
-  await assert.rejects(createNativeReader({ cacheRoot: tmpdir(), signal: controller.signal,
+  await assert.rejects(createNativeReader({ cacheRoot: tmpdir(), signal: controller.signal, compile: async () => '/fixture/reader',
     execute: async () => { throw Error('aborted'); } })('frontmost'), /cancelled/);
 });
 
