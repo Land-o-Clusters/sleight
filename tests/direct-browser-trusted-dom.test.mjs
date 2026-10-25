@@ -26,6 +26,15 @@ test('unavailable or non-utility execution refuses without a MAIN-world fallback
   for (const handle of [{}, { _connection: { toImpl: () => ({ _frame: { utilityContext: async () => ({ world: 'main' }) } }) } }])
     await assert.rejects(api.trustedRead(handle, el => el.form), /TRUSTED_DOM_REQUIRED/);
 });
+test('trusted handles pass stack coordinates only to the utility world', async () => {
+  const point = { x: 70, y: 50 }, result = {}, node = { _frame: { utilityContext: async () => ({
+    world: 'utility', evaluateExpressionHandle(source, options, args) {
+      assert.deepEqual(args, [node, point]); assert.equal(options.isFunction, true); return result;
+    }, evaluateExpression() {},
+  }) } };
+  const handle = { _connection: { toImpl: () => node } };
+  assert.equal(await api.trustedHandle(handle, (el, point) => [el, point], point), result);
+});
 test('all context authority readers and action risk/fingerprints use the trusted boundary', () => {
   const base = new URL('../plugins/sleight/lib/direct-browser/', import.meta.url);
   const context = readFileSync(new URL('v3-context.mjs', base), 'utf8');

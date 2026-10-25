@@ -98,6 +98,7 @@ export function inspectElement(el, unused, read = (node, key) => { const value =
   state.formPayment = !!form && Array.from(read(form, 'querySelectorAll')('input,button,iframe')).some(node => {
     const attrs = ['name', 'id', 'autocomplete', 'title', 'aria-label'].map(key => get(node, key)).join(' ');
     if (/\bcc-|card|cvv|cvc/i.test(attrs)) return true;
+    // Any cross-origin frame in a form may hold hosted payment fields (default path unchanged by fd2f).
     if (read(node, 'localName') === 'iframe') { try { return new URL(get(node, 'src'), location.href).origin !== location.origin; } catch { return true; } }
     return (read(node, 'localName') === 'button' || ['submit', 'image'].includes(inputType(node))) && payment(words(node));
   });

@@ -3,6 +3,7 @@ import { closedLocator, keyboardFocusChain } from './closed-handle.mjs';
 import { trustedReadNode } from './trusted-dom.mjs';
 import { readNativeEditContext, retainNativeEditContext, sameNativeEditContext } from './edit-context.mjs';
 import { declaredRows, readCompleteness } from '../read-completeness.mjs';
+import { capturePointView, invalidatePointView, acknowledgePointView } from './points.mjs';
 // Compact page snapshots for turbo v3, with an independent CR1 closed-root reader.
 const pages = new WeakMap();
 const REF = /^(?:(?:f\d+)?e\d+|[sx]\d+)$/;
@@ -433,6 +434,7 @@ export function acknowledgeSnapshot(page, number) {
   const state = pages.get(page), record = state?.pending.get(number);
   if (!record || record.generation !== state.generation) return false;
   state.pending.delete(number);
+  if (number === state.number) acknowledgePointView(page, record.pointView);
   for (const ref of record.refs) {
     if (/^x\d+$/.test(ref)) {
       const current = state.keyboard.get(ref), printed = record.keyboard?.get(ref);
@@ -441,6 +443,14 @@ export function acknowledgeSnapshot(page, number) {
     else if (!/^s\d+$/.test(ref)) state.deliveredRefs.add(ref);
   }
   return true;
+}
+// Point outcomes may repeat only a name the protected snapshot already printed.
+// An input value or a new page-authored name never becomes a trusted outcome.
+export function observedPointName(page, name) {
+  const state = pages.get(page);
+  if (typeof name !== 'string' || !name || name.length > 80) return '';
+  const quoted = JSON.stringify(name);
+  return state?.history.get(state.number)?.rows.some(row => row.line.includes(quoted)) ? name : '';
 }
 export function snapshotRefBinding(page, ref) {
   const state = pages.get(page), record = state?.refBank.get(ref);
@@ -630,8 +640,10 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since, links,
   assertKeyboardSettled(state);
   if (state.busy) throw Error('Snapshot read in progress; try browser_read again.');
   state.busy = true;
+  invalidatePointView(page);
   const keyboardEpoch = ++state.keyboardEpoch, generation = state.generation, url = page.url();
   try {
+    const pointBefore = await bounded(() => capturePointView(page)).catch(() => null);
     const keyboardTask = keyboardEditors(page, state, generation, keyboardEpoch);
     state.keyboardTasks.add(keyboardTask);
     keyboardTask.then(() => state.keyboardTasks.delete(keyboardTask), () => state.keyboardTasks.delete(keyboardTask));
@@ -664,7 +676,11 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since, links,
     const candidates = continuation?.candidates ?? (delta ? changes(selected, baseline.rows) : selected);
     const number = ++state.number;
     const token = `more${number}_${continuation?.offset ?? 0}`;
-    const header = `# ${delta ? 'Changes since snapshot ' + (continuation?.since ?? since) + '; snapshot' : 'Snapshot'} ${number} (untrusted page content)`;
+    const pointAfter = pointBefore && await bounded(() => capturePointView(page)).catch(() => null);
+    const pointView = pointAfter?.signature === pointBefore?.signature ? pointAfter : null;
+    const viewport = pointView && JSON.parse(pointView.records[0].stamp);
+    const header = `# ${delta ? 'Changes since snapshot ' + (continuation?.since ?? since) + '; snapshot' : 'Snapshot'} ${number} (untrusted page content)`
+      + (viewport ? `\n# Viewport ${viewport.width}x${viewport.height} CSS px; view=${pointView.signature}` : '');
     const wholeHint = wholeReadHint(tree);
     const completeness = completenessEnabled && { ...closed.completeness, changesOnly: delta,
       filtered: Boolean(continuation || ref || find !== undefined) };
@@ -695,7 +711,7 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since, links,
       record.deliveryEpoch++; state.deliveredKeyboard.delete(known);
     }
     const keyboardReceipt = new Map([...printedKeyboard].map(known => [known, { record: state.keyboard.get(known), epoch: state.keyboard.get(known)?.deliveryEpoch }]));
-    state.pending.set(number, { generation, refs: result.delivered.filter(row => row.ref && !row.removed).map(row => row.ref), keyboard: keyboardReceipt });
+    state.pending.set(number, { generation, refs: result.delivered.filter(row => row.ref && !row.removed).map(row => row.ref), keyboard: keyboardReceipt, pointView });
     state.history.set(number, history);
     if (nextOffset < candidates.length) state.continuations.set(nextToken, { source, scope, selected,
       candidates, baseline: history, delta, links: linksMode, since: continuation?.since ?? since, offset: nextOffset,
@@ -703,7 +719,7 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since, links,
     if (continuation) state.continuations.delete(ref);
     for (const map of [state.history, state.continuations, state.pending]) while (map.size > 8) map.delete(map.keys().next().value);
     await assertEndpointRead(page);
-    return { text: result.text, number };
+    return { text: result.text, number, ...(pointView ? { viewSignature: pointView.signature } : {}) };
   } catch (error) {
     retireKeyboard(state);
     state.deliveredClosed.clear();

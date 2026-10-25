@@ -12,6 +12,7 @@ import { receiveDownload } from './download-response.mjs';
 import { createDownloadStore } from './downloads.mjs';
 import { handoffReadReady, handoffMessages } from './handoff.mjs';
 import { createDeveloperRead } from './developer-read.mjs';
+import { releasePointView } from './points.mjs';
 
 // Preserve recovery advice when the dispatcher hides an uncertain operation's details.
 const capabilityError = message => Object.assign(Error(message), { capability: true });
@@ -1238,7 +1239,7 @@ export function popupHook(options) {
   };
   // An unreadable chain leaves the element itself as the anchor, as on a page where the natives are absent (the unit fakes).
   const armAnchor = element => { try { return anchorOf(element); } catch { return element; } };
-  const pointerType = type => type === 'pointerdown' || type === 'mousedown' || type === 'pointerup' || type === 'mouseup' || type === 'click' || type === 'auxclick' || type === 'dblclick' || type === 'contextmenu';
+  const pointerType = type => type === 'pointerdown' || type === 'mousedown' || type === 'pointerup' || type === 'mouseup' || type === 'click' || type === 'auxclick' || type === 'dblclick' || type === 'contextmenu' || type === 'drop';
   const keyType = (type, paste = false) => type === 'keydown' || type === 'keypress' || type === 'keyup' || type === 'submit' || paste && (type === 'paste' || type === 'beforeinput');
   const interactiveBetween = (path, at, forwarded) => {
     for (let i = 0; i < at; i++) if (path[i] !== forwarded && shieldIsElement(path[i]) && matchesNode(path[i], interactive)) return true;
@@ -1273,6 +1274,14 @@ export function popupHook(options) {
     if (!connected(element)) return 'target left the page';
     if (arm?.modifier && refusesModifier(element)) return changedReason;
     const path = pathOf(event);
+    // A point drag seals both non-activating endpoints. Releases may reach the
+    // source through pointer capture or the destination through hit testing.
+    // Neither route permits an interactive child substituted during the drag.
+    if (shield.drag && (type === 'pointerup' || type === 'mouseup' || type === 'drop')) {
+      const end = shield.drag, at = pathIndex(path, end.element);
+      if (at >= 0 && !interactiveBetween(path, at, null))
+        return connected(end.element) && describe(end.element) === end.signature ? undefined : changedReason;
+    }
     if (keys && type === 'submit') {
       // The submit event names the button that submitted; it must be the one that was sealed (null when no button).
       if (!(form && pathIndex(path, form) >= 0) || submitterOfEvent(event) !== submitter) return elsewhereReason;
@@ -1309,6 +1318,8 @@ export function popupHook(options) {
     try {
       const type = typeOf(event);
       if (!(pointerType(type) || current.keys && keyType(type, current.paste))) return;
+      // A drag is never a click, including Chromium's click after mouseup.
+      if (current.drag && (type === 'click' || type === 'auxclick' || type === 'dblclick')) { stopNow(event); cancel(event); return; }
       if (current.violation && current.violation !== RELEASED) bad = current.violation;
       else if (now() >= current.until) bad = lateReason;
       // A frame locked for a key (not the checked one): a key landing there is denied, and a key release is reported on its own.
@@ -1333,7 +1344,7 @@ export function popupHook(options) {
     try { stopNow(event); } catch { /* The prevent below still cancels the default. */ }
     try { cancel(event); } catch { /* Nothing further can be done to this event. */ }
   };
-  const guarded = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'auxclick', 'dblclick', 'contextmenu', 'keydown', 'keypress', 'keyup', 'paste', 'beforeinput', 'submit'];
+  const guarded = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'auxclick', 'dblclick', 'contextmenu', 'drop', 'keydown', 'keypress', 'keyup', 'paste', 'beforeinput', 'submit'];
   // Three ways a window loses its listeners while the hook stays. document.open() (and a document.write that opens implicitly)
   // erases every one, so they are added by a function that can run again: add is idempotent for the same callback, and a re-add
   // lands before any listener the page registers afterwards. A script-created frame whose first navigation is same-origin reuses
@@ -1470,7 +1481,7 @@ export function popupHook(options) {
   };
   const impl = {
     // See the key-shield API above. Any throw here reaches the caller as a rejected call, which reads as "page changed".
-    guard(element, token, capMs, { keys = false, press = false, paste = false, mc1 = false } = {}) {
+    guard(element, token, capMs, { keys = false, press = false, paste = false, mc1 = false, drag } = {}) {
       if (retired.has(token) || !isFinite(capMs) || capMs <= 0 || !shieldIsElement(element) || !connected(element)) return false;
       const withKeys = keys === true, activation = press === true, control = shieldControlOf(element), form = withKeys || activation ? control?.form ?? null : null;
       const forwarded = forwardedOf(element), areas = areasOf(element);
@@ -1480,6 +1491,10 @@ export function popupHook(options) {
       shield = holdShield({ token, element, anchor: anchorOf(element), forwarded, areas, keys: withKeys, activation, form, submitter: form ? submitterOf(form) : null,
         paste: paste === true, parts, signature: sealed(element, forwarded, areas, withKeys), routing: withKeys ? routed(element, forwarded, areas) : undefined, down: false,
         until, landed: false, passed: false, reports: !activation && !swallowsInput(element) }, capMs);
+      if (drag) {
+        if (!shieldIsElement(drag) || !connected(drag) || anchorOf(drag) !== drag) { dropShield(shield); shield = undefined; return false; }
+        shield.drag = { element: drag, signature: describe(drag), digest: digest(drag) };
+      }
       if (mc1 && !withKeys && !activation) {
         shield.mc1 = true;
         shield.geometry = geometryOf(element);
@@ -1552,7 +1567,8 @@ export function popupHook(options) {
       if (!bad && !install()) bad = changedReason;
       if (!bad) {
         const parts = current.parts, given = evidence?.areas;
-        let same = evidence?.element === parts[0] && (evidence?.forwarded ?? '') === parts[1] && given?.length === parts.length - 2;
+        let same = evidence?.element === parts[0] && (evidence?.forwarded ?? '') === parts[1] && given?.length === parts.length - 2
+          && (!current.drag || evidence?.drag === current.drag.digest);
         for (let i = 0; same && i < given.length; i++) same = given[i] === parts[i + 2];
         if (!same) bad = changedReason;
       }
@@ -2179,7 +2195,7 @@ export function frameShield(page, owner, { hook, token, capMs, timeoutMs = 1000,
 // `between` lets the key be sent in two halves so the frames the key's handler created can be locked before it is released. The
 // outcome of a veto then says the key may have activated and must not be resent.
 export async function backgroundClick(tab, locator, click, options = {}) {
-  if (process.env.SLEIGHT_MC1 === '0' || options.press || options.keys)
+  if (process.env.SLEIGHT_MC1 === '0' || options.press || options.keys || options.point)
     return backgroundClickOnce(tab, locator, click, options);
   const pinned = typeof locator.ownerFrame !== 'function' && typeof locator.elementHandle === 'function'
     ? await locator.elementHandle({ timeout: options.timeoutMs ?? 1000 }) : undefined;
@@ -2195,7 +2211,7 @@ export async function backgroundClick(tab, locator, click, options = {}) {
   } finally { await pinned?.dispose().catch(() => {}); }
 }
 
-async function backgroundClickOnce(tab, locator, click = options => locator.click({ ...options, timeout: timeoutMs }), { timeoutMs = 1000, press = false, keys = false, paste = false, mc1 = false, retried = false, recover = true, modifier } = {}) {
+async function backgroundClickOnce(tab, locator, click = options => locator.click({ ...options, timeout: timeoutMs }), { timeoutMs = 1000, press = false, keys = false, paste = false, mc1 = false, retried = false, recover = true, modifier, point, dragTo } = {}) {
   const token = randomUUID(), hook = hookOf(tab), { key } = hook;
   let frame = tab.page, completed = false, others;
   // Concludes the owner frame's shield and releases every other frame; each runs even if the other throws. A key concludes the
@@ -2229,13 +2245,13 @@ async function backgroundClickOnce(tab, locator, click = options => locator.clic
   try {
     let prepared;
     try {
-      prepared = hookOpen(hook, await deadline(() => locator.evaluate((element, { key, prepare, reveal, token, capMs, press, modifier }) => {
+      prepared = hookOpen(hook, await deadline(() => locator.evaluate((element, { key, prepare, reveal, token, capMs, press, modifier, point }) => {
         const hook = window[key];
         if (!hook) throw Error('background popup hook unavailable; use the engine browser path');
         const result = hook.prepare(prepare, element, token, capMs, press, modifier);
-        hook.reveal(reveal, element);
+        if (!point) hook.reveal(reveal, element);
         return result;
-      }, { key, prepare: hookProof(hook, 'prepare'), reveal: hookProof(hook, 'reveal'), token, capMs: timeoutMs + 1000, press, modifier }, { timeout: timeoutMs }), timeoutMs));
+      }, { key, prepare: hookProof(hook, 'prepare'), reveal: hookProof(hook, 'reveal'), token, capMs: timeoutMs + 1000, press, modifier, point: !!point }, { timeout: timeoutMs }), timeoutMs));
     } catch (error) {
       // The one refusal the hook states itself: name it, so the model is not sent to the engine path for a focus it can move.
       failure = /document focus is inside a frame/.test(error?.message)
@@ -2257,17 +2273,18 @@ async function backgroundClickOnce(tab, locator, click = options => locator.clic
     // gets no move; the seal still covers it.
     if (typeof locator.boundingBox === 'function' && tab.page.mouse) {
       const box = await locator.boundingBox({ timeout: timeoutMs });
-      if (box) await tab.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      if (point) await tab.page.mouse.move(point.x, point.y);
+      else if (box) await tab.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     }
     try {
       // The shield outlives the click timeout: a click delayed by a busy page is still checked, and one that
       // arrives after this cap is cancelled. The other frames are armed in the same step. Enter in a field makes the
       // browser click the form's default button: for a press that click is the press working.
-      const [armed, othersArmed] = await Promise.all([deadline(() => locator.evaluate(async (element, { key, settle, guard, token, capMs, press, keys, paste, mc1 }) => {
+      const [armed, othersArmed] = await Promise.all([deadline(() => locator.evaluate(async (element, { key, settle, guard, token, capMs, press, keys, paste, mc1, drag }) => {
         const hook = window[key];
         await hook.settle(settle);
-        return hook.guard(guard, element, token, capMs, { press, keys, paste, ...(mc1 ? { mc1: true } : {}) });
-      }, { key, settle: hookProof(hook, 'settle'), guard: hookProof(hook, 'guard'), token, capMs: timeoutMs + 4000, press: !!press, keys: keys === true, paste: paste === true, ...(mc1 ? { mc1: true } : {}) }, { timeout: timeoutMs }), timeoutMs), others.arm()]);
+        return hook.guard(guard, element, token, capMs, { press, keys, paste, ...(mc1 ? { mc1: true } : {}), ...(drag ? { drag } : {}) });
+      }, { key, settle: hookProof(hook, 'settle'), guard: hookProof(hook, 'guard'), token, capMs: timeoutMs + 4000, press: !!press, keys: keys === true, paste: paste === true, ...(mc1 ? { mc1: true } : {}), ...(dragTo ? { drag: dragTo } : {}) }, { timeout: timeoutMs }), timeoutMs), others.arm()]);
       if (hookOpen(hook, armed) !== true) throw capabilityError('click guard unavailable; use the engine browser path');
       if (!othersArmed) throw others.unarmable ? capabilityError('background popup hook unavailable; use the engine browser path') : capabilityError('frame unavailable; use the engine browser path');
     } catch (error) {
@@ -2276,7 +2293,8 @@ async function backgroundClickOnce(tab, locator, click = options => locator.clic
       throw hookFailed(error) ? failure = capabilityError(hookUnavailable) : (keys ? capabilityError(keyGuardUnavailable) : Error(changedMidClick));
     }
     const checkpoint = tab.popupCheckpoint?.();
-    tab.background = modified; // Read by the result: a popup after an unmodified click probably took the foreground.
+    const background = modified && !dragTo; // Drags send no modifier, so script windows stay held by the hook.
+    tab.background = background;
     let result;
     try {
       result = await click({ ...(modified ? { modifiers: ['ControlOrMeta'] } : {}), ...(keys && tab.cdp?.on ? { between: others.between } : {}) }, verify);
@@ -2312,7 +2330,7 @@ async function backgroundClickOnce(tab, locator, click = options => locator.clic
         await tab.openChild(request.url, { target: request.target, rel: request.rel });
       }
     }
-    await tab.settlePopups?.(checkpoint, { background: modified });
+    await tab.settlePopups?.(checkpoint, { background });
     completed = result?.closed !== true && !tab.closed && !tab.page.isClosed?.();
     return result;
   } catch (error) {
@@ -2646,6 +2664,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
   };
   const removeHook = async entry => {
     entry.frameNavigationWatch?.remove(); entry.frameNavigationWatch = null;
+    await releasePointView(entry.page);
     if (entry.script) {
       await entry.cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: entry.script }); entry.script = null;
     }
