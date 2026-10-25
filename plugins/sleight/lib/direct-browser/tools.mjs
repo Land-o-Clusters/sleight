@@ -9,6 +9,7 @@ import { waitForThinPage } from './waits.mjs';
 import { isV3Context } from './v3-context.mjs';
 import { handoffMessages } from './handoff.mjs';
 import { siteMemoryFromEnvironment } from '../site-memory.mjs';
+import { validatePointStep, pointInputEnabled } from './points.mjs';
 // v3's five eagerly advertised tools. No generic JavaScript or authority fields.
 const object = (properties, required) => ({ type: 'object', properties, required, additionalProperties: false });
 const text = { type: 'string', maxLength: 65536 };
@@ -17,13 +18,21 @@ const tab = { type: 'string', pattern: '^t[A-Za-z0-9_-]{1,64}$' };
 const strings = { type: 'array', maxItems: 100, items: text };
 const exportPageData = async (...args) => (await import('./export-data.mjs')).exportPageData(...args);
 const ops = 'click type paste press select check uncheck hover scroll drag upload download dialog wait back forward reload viewport navigate'.split(' ');
+const coordinate = { type: 'integer', minimum: 0, maximum: 10000 };
 const step = object({ do: { type: 'string', enum: ops }, ref, text, key: text, modifier: { type: 'string', enum: ['cmd', 'ctrl'] },
-  values: { type: ['string', 'array'], items: text, maxItems: 100 }, to: ref, until: text, gone: text, url: text,
+  values: { type: ['string', 'array'], items: text, maxItems: 100 }, x: coordinate, y: coordinate, view: { type: 'string', pattern: '^[a-f0-9]{16}$' },
+  to: { ...ref, type: ['string', 'object'], properties: { x: coordinate, y: coordinate }, required: ['x', 'y'], additionalProperties: false }, until: text, gone: text, url: text,
   ms: { type: 'number', minimum: 0 }, dx: { type: 'number' }, dy: { type: 'number' }, accept: { type: 'boolean' }, paths: strings,
   width: { type: 'integer', minimum: 1, maximum: 10000 }, height: { type: 'integer', minimum: 1, maximum: 10000 },
   color_scheme: { type: 'string', enum: ['light', 'dark'] }, reduced_motion: { type: 'boolean' }, touch: { type: 'boolean' } }, ['do']);
 
 export function browserTools(browser) {
+  const pointStep = structuredClone(step);
+  if (!pointInputEnabled()) {
+    for (const key of ['x', 'y', 'view']) delete pointStep.properties[key];
+    pointStep.properties.to = ref;
+  }
+  const pointDescription = pointInputEnabled() ? ' Points use latest read view: click/hover x,y; drag adds to:{x,y}, viewport CSS pixels.' : '';
   return [
     { name: 'browser_open', description: 'Open an owned background tab and return its first untrusted snapshot. Keep the tab handle.',
       inputSchema: object({ url: text, browser: { type: 'string', ...(browser ? { enum: [browser] } : {}) } }, ['url']) },
@@ -32,9 +41,9 @@ export function browserTools(browser) {
         export: ref, format: { type: 'string', enum: ['csv', 'json'] }, path: text, bom: { type: 'boolean' },
         console: { type: 'boolean' }, network: { type: 'boolean' }, performance: { type: 'boolean' } }, []) },
     { name: 'browser_act', description: (process.env.SLEIGHT_MT !== '0'
-      ? 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. A step that navigates, opens a tab, raises a dialog, loads or closes the page, or reaches the settle cap ends the batch (later steps read "not reached"), so put one such step last. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. paste(ref,text) inserts nonempty TSV/editor text in browsers, restoring the clipboard. Electron refuses paste. viewport: width/height, color_scheme:light/dark, reduced_motion:boolean, touch:boolean for user-asked tests; empty resets all. touch emulates a touch layout; clicks stay mouse clicks. scroll with until:text finds a row in a long list. navigate with a link ref follows it.'
-      : 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. Stops at boundaries or failure. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl. paste(ref,text) inserts nonempty TSV/editor text in browsers, restoring the clipboard. Electron refuses paste. viewport: width/height, color_scheme:light/dark, reduced_motion:boolean, touch:boolean for user-asked tests; empty resets all. touch emulates a touch layout; clicks stay mouse clicks. scroll with until:text finds a row in a long list. navigate with a link ref follows it.') + ' wait takes until:text, gone:text or url:substring; no condition settles. navigate with url recovers a stuck tab.' + ' observe:screenshot adds the protected viewport image. frames (2-4, max 480 px) requires a user motion request and one click/hover/scroll. frame_ms defaults to 100.' + ' download with a link ref saves a requested document and returns path, bytes and type; never opens it.',
-      inputSchema: object({ tab, steps: { type: 'array', minItems: 1, maxItems: 12, items: step }, observe: { type: 'string', enum: ['diff', 'full', 'none', 'screenshot'] },
+      ? 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. A step that navigates, opens a tab, raises a dialog, loads or closes the page, or reaches the settle cap ends the batch (later steps read "not reached"), so put one such step last. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl.' + pointDescription + ' paste(ref,text) inserts nonempty TSV/editor text in browsers, restoring the clipboard. Electron refuses paste. viewport: width/height, color_scheme:light/dark, reduced_motion:boolean, touch:boolean for user-asked tests; empty resets all. touch emulates a touch layout; clicks stay mouse clicks. scroll with until:text finds a row in a long list. navigate with a link ref follows it.'
+      : 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. Stops at boundaries or failure. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl.' + pointDescription + ' paste(ref,text) inserts nonempty TSV/editor text in browsers, restoring the clipboard. Electron refuses paste. viewport: width/height, color_scheme:light/dark, reduced_motion:boolean, touch:boolean for user-asked tests; empty resets all. touch emulates a touch layout; clicks stay mouse clicks. scroll with until:text finds a row in a long list. navigate with a link ref follows it.') + ' wait takes until:text, gone:text or url:substring; no condition settles. navigate with url recovers a stuck tab.' + ' observe:screenshot adds the protected viewport image. frames (2-4, max 480 px) requires a user motion request and one click/hover/scroll. frame_ms defaults to 100.' + ' download with a link ref saves a requested document and returns path, bytes and type; never opens it.',
+      inputSchema: object({ tab, steps: { type: 'array', minItems: 1, maxItems: 12, items: pointStep }, observe: { type: 'string', enum: ['diff', 'full', 'none', 'screenshot'] },
         frames: { type: 'integer', minimum: 2, maximum: 4 }, frame_ms: { type: 'integer', minimum: 50, maximum: 1000 } }, ['tab', 'steps']) },
     { name: 'browser_fill', description: (process.env.SLEIGHT_MT !== '0'
       ? "Fill up to 60 observed fields in one call: text or a number for a textbox; true or false for a checkbox, switch or the radio option to choose; a number for a slider; the option text for a select or combobox, even in a long or virtual list; all row names in the wanted order for a drag-reorderable list. For a multi-select, an array sets exactly those option texts; [] clears all. submit is an observed ref, only when the user asked for that submit. Returns each field's status and the page diff."
@@ -85,6 +94,10 @@ export function validateToolCall(input, browser) {
   if (!request || Object.keys(request).some(key => !['name', 'arguments'].includes(key))) throw Error('tool request required');
   const tool = browserTools(browser).find(t => t.name === request.name);
   if (!tool) throw Error('unknown browser tool');
+  // Name the opt-in before the default schema rejects coordinate-only fields.
+  if (request.name === 'browser_act' && !pointInputEnabled() && Array.isArray(request.arguments?.steps)) {
+    for (const item of request.arguments.steps) if (item && typeof item === 'object') validatePointStep(item);
+  }
   validate(request.arguments, tool.inputSchema);
   if (request.name === 'browser_read' && (Number(request.arguments.tab !== undefined) + Number(request.arguments.file !== undefined) !== 1))
     throw Error('browser_read needs exactly one of tab or file');
@@ -93,6 +106,7 @@ export function validateToolCall(input, browser) {
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw Error('HTTP(S) URL without credentials required');
   }
   for (const item of request.arguments.steps ?? []) {
+    const point = validatePointStep(item);
     if (item.do !== 'viewport' && (item.color_scheme !== undefined || item.reduced_motion !== undefined)) throw Error('media fields require viewport');
     if (item.touch !== undefined && (item.do !== 'viewport' || typeof item.touch !== 'boolean')) throw Error('touch must be boolean on viewport');
     if (item.modifier !== undefined && item.do !== 'click') throw Error('modifier is only supported for click');
@@ -107,7 +121,7 @@ export function validateToolCall(input, browser) {
       if (conditions.length > 1 || conditions.some(value => !value.trim() || value.length > 500) || conditions.length && item.ref !== undefined)
         throw Error('wait takes one nonempty until, gone or url condition, without ref');
     }
-    const needs = ['click', 'type', 'paste', 'select', 'check', 'uncheck', 'hover', 'drag', 'upload', 'download'].includes(item.do) ? ['ref'] : [];
+    const needs = !point && ['click', 'type', 'paste', 'select', 'check', 'uncheck', 'hover', 'drag', 'upload', 'download'].includes(item.do) ? ['ref'] : [];
     const fields = { type: ['text'], paste: ['text'], press: ['key'], select: ['values'], drag: ['to'], upload: ['paths'], dialog: ['accept'] };
     for (const key of [...needs, ...(fields[item.do] ?? [])]) if (item[key] === undefined) throw Error(`${item.do} needs ${key}`);
     if (item.do === 'paste' && !item.text.length) throw Error('paste needs nonempty text');

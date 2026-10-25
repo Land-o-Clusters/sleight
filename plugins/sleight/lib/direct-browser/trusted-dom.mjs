@@ -74,9 +74,9 @@ export async function trustedReadNode(node, reader, arg) {
   return utility.evaluateExpression(expression(reader), { isFunction: true }, [node, arg]);
 }
 
-export async function trustedHandle(handle, reader) {
+export async function trustedHandle(handle, reader, arg) {
   const { node, utility } = await utilityFor(handle);
-  return utility.evaluateExpressionHandle(expression(reader), { isFunction: true }, [node, undefined]);
+  return utility.evaluateExpressionHandle(expression(reader), { isFunction: true }, [node, arg]);
 }
 
 export async function trustedLocatorRead(locator, reader, arg) {

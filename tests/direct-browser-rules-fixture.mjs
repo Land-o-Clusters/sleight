@@ -21,7 +21,7 @@ export function fixture(payment) {
 // A small DOM fake for the pure, closure-free locator inspector. No engine APIs.
 export function classify(build, inspector = rules.inspectElement) {
   assert.equal(typeof rules.inspectElement, 'function');
-  const ctx = {};
+  const ctx = { URL };
   runInNewContext(`
     class Element {
       constructor(tag, attrs = {}, text = '', parent = null) { this.localName = tag; this.attrs = attrs; this.text = text; this.parent = parent; this.children = []; parent?.children.push(this); this.isConnected = true; this.ownerDocument = { baseURI: 'https://fixture.invalid/' }; }

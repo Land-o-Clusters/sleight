@@ -359,3 +359,15 @@ test('a pressed key the safe list does not know is refused before any input', as
   const result = await f.ctx.check('press', f.target({ key: 'Execute', ref: 'e1' }));
   assert.equal(result.verdict, 'refuse'); assert.match(result.message, /Unsupported key/); await f.ctx.dispose();
 });
+
+for (const [src, expected] of [
+  ['/help', false], ['https://example.invalid/help', false], ['https://js.stripe.com/frame', true],
+  ['https://www.paypal.com/frame', true], ['https://stripe.com.evil.invalid/frame', false], ['https://evilstripe.com/frame', false],
+]) test('FD2E final payment classification requires a provider iframe origin: ' + src, async () => {
+  const { classify } = await import('./direct-browser-rules-fixture.mjs');
+  const element = classify(({ Element, HTMLInputElement }) => {
+    const form = new Element('form'); new Element('iframe', { src }, '', form);
+    return new HTMLInputElement('input', {}, '', form);
+  });
+  assert.equal(element.formPayment, expected);
+});

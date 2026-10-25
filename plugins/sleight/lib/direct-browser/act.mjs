@@ -1,6 +1,8 @@
 // Independent implementation informed by FowlBrowser (MIT), pinned 8b68924:
 // request-before-input watching and short Playwright actionability timeouts.
 // No upstream source copied. All browser input stays on the owned Playwright page.
+import { inspectTarget } from './target-info.mjs';
+export { inspectTarget } from './target-info.mjs';
 import { stageUserUploads } from './files.mjs';
 import { isV3Context } from './v3-context.mjs';
 import { intent, deferRefund, refundableName, lineBreakRefusal } from './rules.mjs';
@@ -8,12 +10,13 @@ import { observeActivity } from './activity.mjs';
 import { trustedLocatorRead } from './trusted-dom.mjs';
 import { endpointURL, endpointBlock } from './endpoint-guard.mjs';
 import { setViewport } from './viewport.mjs';
-import { snapshotAcquisitionPending } from './snapshot.mjs';
+import { snapshotAcquisitionPending, observedPointName } from './snapshot.mjs';
 import { originOf, pathOf, guardChooser } from './output-hygiene.mjs';
 import { assertPageResponsive, ensurePageResponsive, probePage } from './page-health.mjs';
 import { waitForPage, waitForThinPage } from './waits.mjs';
 import { downloadLink } from './download-link.mjs';
 import { prepareControlRecipe } from './control-recipes.mjs';
+import { hasPoint, validatePointStep, resolvePoint, assertPointTarget, assertPointNotProtected, assertDragSurface, pointKind, pointDragSteps } from './points.mjs';
 const OPS = new Set('click type paste press select check uncheck hover scroll drag upload download dialog wait back forward reload viewport navigate'.split(' '));
 const REF_OPS = new Set('click type paste select check uncheck hover drag upload download'.split(' '));
 const WAIT_CAP = 5000, SCROLL_CAP = 10000, navigateNeeds = 'the ref of an http(s) link (browser_open takes a url); to press other elements use click';
@@ -54,14 +57,15 @@ function validate(steps) {
       throw Error('click modifier must be cmd or ctrl');
     if (s.touch !== undefined && (s.do !== 'viewport' || typeof s.touch !== 'boolean')) throw Error('touch must be boolean on viewport');
     const needs = name => { throw Error(s.do + ' needs ' + name); };
-    if (REF_OPS.has(s.do) && !refOf(s.ref)) needs('ref');
+    const point = validatePointStep(s);
+    if (REF_OPS.has(s.do) && !point && !refOf(s.ref)) needs('ref');
     if (s.do === 'navigate' && !refOf(s.ref)) needs(navigateNeeds);
     if (s.ref !== undefined && !refOf(s.ref)) needs('a valid ref');
     if (['type', 'paste'].includes(s.do) && (typeof s.text !== 'string' || s.text.length > 65536)) needs('text');
     if (s.do === 'paste' && !s.text.length) needs('nonempty text');
     if (s.do === 'press' && (typeof s.key !== 'string' || !s.key || s.key.length > 100)) needs('key');
     if (s.do === 'select' && (!Array.isArray(s.values) || !s.values.length || s.values.some(v => typeof v !== 'string'))) needs('values');
-    if (s.do === 'drag' && !refOf(s.to)) needs('to');
+    if (s.do === 'drag' && !point && !refOf(s.to)) needs('to');
     if (s.do === 'upload' && (!Array.isArray(s.paths) || !s.paths.length || s.paths.some(p => typeof p !== 'string' || !p))) needs('paths');
     if (s.do === 'dialog' && typeof s.accept !== 'boolean') needs('accept');
     if (s.do === 'viewport' && ([s.width, s.height].filter(n => n === undefined).length === 1 ||
@@ -79,83 +83,6 @@ function validate(steps) {
       if ([s.dx, s.dy].some(n => n !== undefined && !Number.isFinite(n))) needs('finite dx and dy (beyond 10000 is clamped to it); give until the row text to find a row in a long list');
     }
   }
-}
-
-// Only risk classification and a comparison fingerprint cross this boundary.
-// Form values never enter an outcome line or a snapshot through this reader.
-export function inspectTarget(el, unused, read = (node, key) => { const value = node?.[key]; return typeof value === 'function' ? value.bind(node) : value; }) {
-  const words = node => [read(node, 'getAttribute')('aria-label'), read(node, 'textContent'), read(node, 'getAttribute')('value')].filter(Boolean).join(' ');
-  const payment = text => /\b(?:pay|payment|purchase|buy|checkout|donate|subscribe|place order|complete order|order now|book now|upgrade|send money|charge)\b/i.test(text);
-  // Form ownership stops at a shadow root, but a control in one still acts for the form around its host. Climb host by host.
-  const enclosing = (node, selector) => {
-    for (let at = node; at;) {
-      const found = read(at, 'closest')(selector);
-      if (found) return found;
-      const root = read(at, 'getRootNode')?.();
-      at = root && read(root, 'nodeType') === 11 ? read(root, 'host') : null;
-    }
-    return null;
-  };
-  const labelControl = (() => {
-    if (typeof HTMLLabelElement === 'undefined') return null;
-    const label = read(el, 'closest')('label');
-    if (!label) return null;
-    const interactive = 'a[*|href],audio[controls],button,details,embed,iframe,img[usemap],input:not([type="hidden"]),label,select,textarea,video[controls]';
-    for (let at = el; at && at !== label; at = read(at, 'parentElement')) if (read(at, 'matches')(interactive)) return null;
-    return read(label, 'control');
-  })();
-  const activation = labelControl || el;
-  const formOf = () => {
-    const owner = read(activation, 'form');
-    if (owner) return owner;
-    if (owner === undefined) return enclosing(el, 'form');
-    const root = read(el, 'getRootNode')?.();
-    return root && read(root, 'nodeType') === 11 ? enclosing(read(root, 'host'), 'form') : owner;
-  };
-  const form = formOf(), tag = read(el, 'localName'), role = read(el, 'getAttribute')('role'), name = words(el).trim().slice(0, 100);
-  const accName = (read(el, 'getAttribute')('aria-labelledby') ? '' : (read(el, 'getAttribute')('aria-label') || read(el, 'textContent') || read(el, 'getAttribute')('value') || read(el, 'getAttribute')('alt') || read(el, 'getAttribute')('title') || '')).replace(/\s+/g, ' ').trim().slice(0, 100);
-  const button = tag === 'button' || tag === 'input' && /^(?:button|submit|image)$/.test(read(el, 'type')) || role === 'button';
-  // A label click forwards to its control, so a label for a file or color input opens the native picker like the input does.
-  const forwarded = (() => { try { const label = typeof HTMLLabelElement === 'undefined' ? null : Element.prototype.closest.call(el, 'label'), control = label && Object.getOwnPropertyDescriptor(HTMLLabelElement.prototype, 'control').get.call(label);
-    return control instanceof HTMLInputElement ? Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'type').get.call(control).toLowerCase() : ''; } catch { return ''; } })();
-  const formPayment = !!form && [...read(form, 'querySelectorAll')('input,button,iframe')].some(node =>
-    /^cc-/i.test(read(node, 'getAttribute')('autocomplete') ?? '') || /(?:card|cc[-_ ]?(?:number|csc)|cvv|cvc)/i.test(read(node, 'id') + ' ' + read(node, 'getAttribute')('name')) ||
-    read(node, 'localName') === 'iframe' || (read(node, 'localName') === 'button' || read(node, 'type') === 'submit') && payment(words(node)));
-  // navigate follows only a plain http(s) link; any other scheme, or an element with no href, is a click's job.
-  const link = (() => { try { if (tag !== 'a' && tag !== 'area') return false; const href = read(el, 'getAttribute')('href'); if (href == null) return false;
-    const url = new URL(href, read(read(el, 'ownerDocument'), 'baseURI')); return /^https?:$/.test(url.protocol) && !url.username && !url.password; } catch { return false; } })();
-  const submit = !!(button && (read(el, 'type') === 'submit' && form || /\b(?:save|submit|send|confirm|book|pay|place order|finish|complete)\b/i.test(name) || payment(name)));
-  const scriptButton = !submit && !!(button && form && formPayment && read(el, 'type') !== 'reset');
-  let hash = 2166136261;
-  if (form) {
-    const content = read(form, 'textContent') + [...read(form, 'querySelectorAll')('input,select,textarea')].map(n => [read(n, 'value'), read(n, 'checked'), read(n, 'selectedIndex')].join(':')).join('|');
-    for (let i = 0; i < content.length; i++) hash = Math.imul(hash ^ content.charCodeAt(i), 16777619);
-  }
-  const nativeActivation = implicit => {
-    const nativeURL = (node, href) => {
-      if (!href) return false;
-      try { return !/^(https?|javascript|blob|data|about):$/.test(new URL(href, read(read(node, 'ownerDocument'), 'baseURI')).protocol); }
-      catch { return true; }
-    };
-    const anchor = ['a', 'area'].includes(tag) ? el : read(el, 'closest')('a,area[href]');
-    if (anchor && nativeURL(anchor, read(anchor, 'getAttribute')('href') || read(anchor, 'getAttributeNS')?.('http://www.w3.org/1999/xlink', 'href'))) return true;
-    if (!form) return false;
-    const isSubmitter = node => read(node, 'localName') === 'button' && !/^(button|reset)$/.test(read(node, 'type') ?? '') ||
-      read(node, 'localName') === 'input' && /^(submit|image)$/.test(read(node, 'type') ?? '');
-    const control = isSubmitter(activation) ? activation : read(activation, 'closest')('button,input');
-    const explicit = control && isSubmitter(control);
-    if (!explicit && !(implicit && tag === 'input' && /^(text|search|tel|url|email|password|date|month|week|time|datetime-local|number|checkbox|radio|range)$/.test(read(el, 'type') ?? 'text'))) return false;
-    const root = read(form, 'getRootNode')?.() ?? read(form, 'ownerDocument'), query = read(root, 'querySelectorAll');
-    const candidates = query ? [...query('button,input')].filter(node => read(node, 'form') === form) : [...read(form, 'querySelectorAll')('button,input')];
-    const submitter = control && isSubmitter(control) ? control : candidates.find(isSubmitter);
-    const override = submitter && read(submitter, 'getAttribute')('formaction');
-    return nativeURL(form, override == null ? read(form, 'getAttribute')('action') : override);
-  };
-  const appLink = nativeActivation(false), nativeFormEnter = nativeActivation(true);
-  return { name, accName, tag, role, appLink, nativeFormEnter, kind: ['file', 'color'].includes(forwarded) ? forwarded : button ? 'button' : ['file', 'color'].includes(read(el, 'type')) ? read(el, 'type') : tag === 'select' ? 'select' : 'text', button, form: !!form, link, submit: submit || scriptButton, scriptButton, payment: payment(name) || submit && formPayment,
-    // An anchor whose only payment word is "checkout": the trusted context may drop this as the prior of a released navigation link (v3-context).
-    checkoutLink: tag === 'a' && payment(name) && (name.match(/\b(?:pay|payment|purchase|buy|checkout|donate|subscribe|place order|complete order|order now|book now|upgrade|send money|charge)\b/gi) ?? []).every(word => word.toLowerCase() === 'checkout'),
-    formPayment, formSignature: form ? hash : null };
 }
 
 // Visible dialogs, alerts and status panels, as a count and a text fingerprint. A submit that opens one of
@@ -291,8 +218,21 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     try {
     for (let index = 0; index < steps.length; index++) {
       // navigate on a link is that link's click, so every click rule, guard and popup rule applies unchanged.
-      const named = steps[index], step = named.do === 'navigate' ? { ...named, do: 'click' } : named, label = `${index + 1} ${named.do}${step.ref ? ' ' + step.ref : ''}`;
+      const named = steps[index], step = named.do === 'navigate' ? { ...named, do: 'click' } : named, point = hasPoint(step);
+      let label = `${index + 1} ${named.do}${step.ref ? ' ' + step.ref : ''}`;
+      const pointCache = {};
+      let pointHandle, endpoint, endHandle;
       let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false, controlRecipe, controlObserved = false;
+      let pointsReleased = false;
+      const releasePoints = async () => {
+        if (!point || pointsReleased) return;
+        pointsReleased = true;
+        if (isV3Context(ctx)) {
+          if (target) await ctx.releaseTarget(target);
+          if (endpoint) await ctx.releaseTarget(endpoint);
+        }
+        await pointHandle?.dispose().catch(() => {}); await endHandle?.dispose().catch(() => {});
+      };
       try {
         await ensurePageResponsive(tab);
         if (state.dialog && step.do !== 'dialog') throw Error('a page dialog is waiting; answer it with the dialog operation');
@@ -304,9 +244,24 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           lines.push(label + ': saved ' + JSON.stringify(file)); stoppedAt = index + 1; break;
         }
         if (/^x\d+$/.test(step.ref) && !isV3Context(ctx)) throw Error('keyboard-only refs require a trusted context');
-        locator = step.ref ? page.getByRef(step.ref) : step.do === 'press' ? page.locator(':focus') : null;
+        locator = point ? pointHandle = await resolvePoint(page, step, pointCache) : step.ref ? page.getByRef(step.ref) : step.do === 'press' ? page.locator(':focus') : null;
         if (step.do === 'press' && !step.ref && !await locator.count()) locator = page.locator('body');
         let info = locator ? await trustedLocatorRead(locator, inspectTarget) : {};
+        if (point) {
+          label += ` at ${step.x},${step.y} (${pointKind(info)})`;
+          const name = observedPointName(page, info.accName);
+          if (name) label += ' (name, untrusted page content: ' + JSON.stringify(name) + ')';
+          await assertPointNotProtected(locator);
+          if (step.do === 'drag') {
+            assertDragSurface(info);
+            endHandle = await resolvePoint(page, { ...step.to, view: step.view }, pointCache);
+            const endInfo = await trustedLocatorRead(endHandle, inspectTarget);
+            label += ` to ${step.to.x},${step.to.y} (${pointKind(endInfo)})`;
+            await assertPointNotProtected(endHandle); assertDragSurface(endInfo);
+            if (await locator.ownerFrame() !== await endHandle.ownerFrame()) throw Error('Point drag endpoints must share a frame; use refs.');
+            endpoint = { ...endInfo, element: endInfo, page, locator: endHandle, state, do: 'drag' };
+          }
+        }
         if (named !== step && info.link !== true) throw Error('navigate needs ' + navigateNeeds);
         // Chrome treats text inserted into a single-line input as implicit submission when it is a lone line break, so a line
         // break typed there is an Enter press that skipped the submit checks. Pressing Enter is the one way to send it.
@@ -321,6 +276,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           assertPageResponsive(tab);
           const refused = siteCheck?.();
           if (refused) throw Error(refused);
+          if (point) { await assertPointTarget(page, step, locator, pointCache); await assertPointNotProtected(locator); }
           const verdict = trusted ? await ctx.check(step.do, target) : await check(ctx, step.do, target);
           // The trusted check refreshes the target, including when seal verification vetoes the click.
           // Recovery reads this decision after the callback, never the earlier inspectTarget result.
@@ -330,6 +286,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           const message = ruleMessage(verdict);
           if (message) throw Error(message);
           if (trusted && target.locator) locator = target.locator;
+          if (point && step.do === 'drag') assertDragSurface(target.element);
           if (trusted) submits = intent(step.do, target).submit && step.do !== 'dialog';
           if (submits) {
             submit = { startedAt: now(), snapshotNo: state.snapshotNo ?? 0 };
@@ -357,7 +314,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         const begin = () => {
           assertPageResponsive(tab);
           started = true;
-          if (hand) try { hand.step({ op: named.do, page, locator, ref: step.ref, text: step.text, to: step.do === 'drag' ? page.getByRef(step.to) : undefined }); } catch {}
+          if (hand && !point) try { hand.step({ op: named.do, page, locator, ref: step.ref, text: step.text, to: step.do === 'drag' ? page.getByRef(step.to) : undefined }); } catch {}
         };
         const perform = async () => {
           if (step.do === 'click') {
@@ -366,15 +323,23 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
             return backgroundClick(tab, locator, async (extra, verifySeal) => {
             // A control under its own label (a visually hidden radio) is clicked at the point placeClear proved is that label, as
             // check does: in the 2026-10-16 gate rounds a click on one came back "covered" 5 to 6 times per form-checkout run.
-            const aim = await aimedAt(locator);
+            const aim = point ? {} : await aimedAt(locator);
             // The rules read the element inside gate(); the page confirms those words are the ones it sealed.
             if (trusted) { target.verifySeal = verifySeal; await gate(); ctx.beginInput(target); }
             // Chromium on macOS turns native Control+left into a context click.
             // Carry Control on Meta there; the sealed hook exposes ctrlKey to the page.
             const physical = step.modifier === 'ctrl' && process.platform === 'darwin' ? 'Meta' : clickModifiers[step.modifier];
             const modifiers = step.modifier === undefined ? {} : { modifiers: [...new Set([...(extra.modifiers ?? []), physical])] };
+            if (point) {
+              // Page.mouse is Chromium's virtual pointer, never the macOS pointer.
+              await assertPointTarget(page, step, locator, pointCache);
+              for (const modifier of modifiers.modifiers ?? extra.modifiers ?? []) await page.keyboard.down(modifier);
+              try { begin(); return await page.mouse.click(step.x, step.y); }
+              finally { for (const modifier of (modifiers.modifiers ?? extra.modifiers ?? []).toReversed()) await page.keyboard.up(modifier); }
+            }
             begin(); return locator.click({ ...options, ...extra, ...aim, ...modifiers });
           }, { recover: () => recoverClick, onRetry: () => { clickRetry = '; waited for the page to settle and retried the click once'; },
+            ...(point ? { point: { x: step.x, y: step.y }, recover: false } : {}),
             ...(step.modifier === undefined ? {} : { modifier: clickModifiers[step.modifier] }) });
           }
           if (step.do === 'paste') {
@@ -397,7 +362,26 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
             if (extra.modifiers) await page.keyboard.down('ControlOrMeta');
             return pressKey(extra);
           }, { press: activation, keys: trusted });
+          if (point && step.do === 'drag') return backgroundClick(tab, locator, async (extra, verifySeal) => {
+            if (trusted) { await gate(); const message = ruleMessage(await ctx.check('drag', endpoint)); if (message) throw Error(message); }
+            else { const message = ruleMessage(await check(ctx, 'drag', endpoint)); if (message) throw Error(message); }
+            assertDragSurface(target.element); assertDragSurface(endpoint.element);
+            await assertPointTarget(page, step, locator, pointCache); await assertPointTarget(page, { ...step.to, view: step.view }, endpoint.locator, pointCache);
+            await assertPointNotProtected(endpoint.locator);
+            if (trusted && await verifySeal({ ...target.sealEvidence, drag: endpoint.sealEvidence.element }) !== true)
+              throw Error('page changed during the click; read again');
+            let down = false;
+            try {
+              begin(); await page.mouse.down(); down = true;
+              const count = pointDragSteps(step, step.to);
+              for (let i = 1; i <= count; i++) await page.mouse.move(step.x + (step.to.x - step.x) * i / count, step.y + (step.to.y - step.y) * i / count);
+            } finally { if (down) await page.mouse.up(); }
+          }, { point: { x: step.x, y: step.y }, dragTo: endHandle, recover: false });
           if (trusted && step.do !== 'upload') { await gate(); ctx.beginInput(target); }
+          if (point && step.do === 'hover') {
+            await assertPointTarget(page, step, locator, pointCache);
+            begin(); return page.mouse.move(step.x, step.y);
+          }
           begin();
           if (step.do === 'type') return trusted ? ctx.typeTarget(target, step.text, options) : locator.fill(step.text, options);
           if (step.do === 'press') return pressKey();
@@ -453,9 +437,9 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         // never resent, and finishes after a later explicit dialog action.
         const releaseInput = ownInput(state, step.do === 'dialog' ? state.dialog : undefined);
         inputPending = true;
-        const performed = perform().finally(() => {
+        const performed = perform().finally(async () => {
           inputPending = false; releaseInput();
-          if (stepFinished) armed.stop();
+          if (stepFinished) { armed.stop(); await releasePoints(); }
         });
         const result = await bounded(Promise.race([performed, armed.dialogReady]), actionTimeoutMs);
         let formChanged = false, overlayShown = false;
@@ -534,7 +518,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         }
         const popupTab = tab.popups?.slice(popupFrom).find(row => row.tab && !row.blocked)?.tab, navPath = boundary?.kind === 'navigation' ? pathOf(page.url()) : '';
         // A tab the page opened during a click without the background modifier is probably in the foreground.
-        const clicked = ['click', 'press'].includes(step.do);
+        const clicked = ['click', 'press'].includes(step.do) || point && step.do === 'drag';
         const foregroundTabs = clicked ? (await tab.takeForeground?.() ?? 0) + (boundary?.kind === 'popup' && tab.background === false
           && tab.pageOpened?.(boundary.popup) === true ? 1 : 0)
           + (boundary?.kind === 'popup' && tab.background === true && tab.popupIsBackground?.(boundary.popup) === false ? 1 : 0) : 0;
@@ -579,6 +563,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         if (started && submit && state.submitUnconfirmed === submit) submit.settledAt = now();
         let detail = step.do === 'upload' && started ? 'upload did not finish; inspect the control before retrying' : String(error.message);
         for (const value of [step.text, ...step.values ?? [], ...step.paths ?? []]) if (typeof value === 'string' && value) detail = detail.replaceAll(value, '[redacted]');
+        if (point) detail = detail.split(/[\r\n]/, 1)[0];
         detail = clean(detail);
         if (/intercepts pointer events/i.test(error.message)) detail = 'covered by another element; dismiss the cover first'; // Playwright's message quotes the page's own markup
         if (/intercepts pointer events/i.test(error.message) && locator) {
@@ -610,6 +595,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         if (!inputPending && armed !== carry) armed?.stop();
         try { await staging?.cleanup?.(); } catch { lines.push('Upload staging cleanup unavailable.'); }
         if (isV3Context(ctx) && target && !inputPending) await ctx.releaseTarget(target);
+        if (!inputPending) await releasePoints();
       }
     }
     if (stoppedAt !== null) for (let i = stoppedAt; i < steps.length; i++) lines.push(`${i + 1} ${steps[i].do}: not reached`);
