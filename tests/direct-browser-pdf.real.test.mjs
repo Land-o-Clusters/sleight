@@ -23,13 +23,18 @@ const executablePath = join(homedir(), 'Library/Caches/ms-playwright', `chromium
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'requires opt-in headless Chromium fixture harness'
   : process.platform !== 'darwin' || !existsSync(executablePath) ? 'requires macOS PDFKit and pinned headless Chromium' : false;
 
-test('owned headless PDF tab returns page 3 through PDFKit without refetching; HTML and site guards retain their paths', {
+test('owned headless PDFs use cached bytes or a same-origin fallback through PDFKit; HTML and site guards retain their paths', {
   skip, timeout: 360000,
 }, async t => {
   const root = trackTemp(await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-real-')));
-  const fixture = pdfTotalFixture({ cents: 73142 }), hits = [], sockets = new Set();
+  const fixture = pdfTotalFixture({ cents: 73142 }), hits = [], invoiceCookies = [], sockets = new Set();
+  let refetchReply;
   const server = createServer((request, response) => {
     hits.push(request.url);
+    if (request.url === '/invoice') {
+      invoiceCookies.push(request.headers.cookie);
+      if (refetchReply) { refetchReply(request, response); return; }
+    }
     if (request.url === '/many') {
       const pdf = textPdf(Array.from({ length: 20 }, (_, i) => 'Continuation page ' + (i + 1) + ': ' + 'invoice terms '.repeat(25)));
       response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': pdf.length }); response.end(pdf);
@@ -56,6 +61,8 @@ test('owned headless PDF tab returns page 3 through PDFKit without refetching; H
   // Full Chromium in headless mode supports its PDF viewer; headless-shell downloads PDFs instead.
   const context = await chromium.launchPersistentContext(join(root, 'profile'), { headless: true, executablePath });
   browser = context.browser();
+  t.diagnostic('Pinned headless PDF fixture: Chromium ' + browser.version());
+  await context.addCookies([{ name: 'pdf_session', value: 'fixture', url: origin, httpOnly: true, sameSite: 'Strict' }]);
   const pages = createPageRegistry({ browser, session: await browser.newBrowserCDPSession() });
   dispatcher = createToolDispatcher({ browser: 'bfixture', pages, pdf, snapshot,
     sites: () => blocked ? 'Blocked fixture site.' : undefined, runSteps() {}, fillFields() {} });
@@ -78,6 +85,38 @@ test('owned headless PDF tab returns page 3 through PDFKit without refetching; H
   const read = await call('browser_read', { tab, max_chars: 1000 });
   assert.match(read.text, /Page 3\/3/); assert.equal(fixture.grade('Page 3: USD 731.42'), true);
   assert.equal(hits.filter(url => url === '/invoice').length, firstHits, 'read uses loaded bytes');
+  // Installed PDF extension viewers can omit the main resource from the page
+  // cache. Keep the real document and browser networking, failing only that API.
+  let pdfCdp;
+  await pages.enqueue(tab, async entry => {
+    const cdp = pdfCdp = entry.cdp;
+    entry.cdp = { send(method, params) {
+      if (method === 'Page.getResourceContent') throw Error('No resource with given URL found');
+      return cdp.send(method, params);
+    } };
+  });
+  try {
+    const uncached = await call('browser_read', { tab });
+    assert.match(uncached.text, /Page 3\/3: "Final invoice total: USD 731.42\."/);
+    assert.equal(hits.filter(url => url === '/invoice').length, firstHits + 1, 'cache miss refetches only the current PDF');
+    assert.match(invoiceCookies.at(-1), /pdf_session=fixture/, 'refetch uses the tab network context');
+    for (const host of ['127.0.0.1', 'localhost']) {
+      refetchReply = (_request, response) => {
+        response.writeHead(302, { Location: `http://${host}:${server.address().port}/forbidden-refetch` }); response.end();
+      };
+      const refused = await dispatcher.call({ name: 'browser_read', arguments: { tab } });
+      assert.equal(refused.isError, true); assert.match(refused.text, /PDF bytes are unavailable/);
+      assert.equal(hits.includes('/forbidden-refetch'), false, 'same-origin and cross-origin redirects are never followed');
+    }
+    refetchReply = (_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'application/pdf' });
+      response.write(Buffer.alloc(32 * 1024 * 1024 + 1)); response.end();
+    };
+    const overflow = await dispatcher.call({ name: 'browser_read', arguments: { tab } });
+    assert.equal(overflow.isError, true); assert.match(overflow.text, /32 MiB/);
+    refetchReply = undefined;
+    assert.match((await call('browser_read', { tab })).text, /Final invoice total: USD 731.42/);
+  } finally { refetchReply = undefined; await pages.enqueue(tab, async entry => { entry.cdp = pdfCdp; }); }
   const type3 = await call('browser_open', { url: origin + '/type3' });
   assert.match(type3.text, /Page 1\/1: "ABC"/);
   const empty = await call('browser_open', { url: origin + '/empty' });

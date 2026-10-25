@@ -6,6 +6,7 @@ import { tmpdir, userInfo } from 'node:os';
 import { assertUploadLocation, assertUploadOwnership, checkUploadMetadata, uploadRefusals } from './upload-paths.mjs';
 
 const MAX_BYTES = 32 * 1024 * 1024;
+const UNAVAILABLE = 'PDF bytes are unavailable from this tab; use a user-named PDF file.';
 const MORE = /^pdf_[a-f0-9]{24}$/;
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const pdfBytes = bytes => {
@@ -100,11 +101,44 @@ function render(result, maxChars, token) {
   return { text: lines.join('\n'), next };
 }
 
+// Serialized into a fresh isolated world of the main PDF document. Its network
+// context supplies credentials; neither viewer scripts nor host fetch do so.
+async function refetchPdf(url, limit) {
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 8000);
+  let reader;
+  try {
+    const target = new URL(url);
+    if (location.href !== url || location.origin !== target.origin || !['http:', 'https:'].includes(target.protocol)) return {};
+    target.hash = '';
+    const response = await fetch(target.href, { mode: 'same-origin', credentials: 'same-origin', redirect: 'error',
+      cache: 'no-store', signal: controller.signal });
+    if (!response.ok || response.url !== target.href || response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/pdf') return {};
+    if (Number(response.headers.get('content-length')) > limit) return { tooLarge: true };
+    reader = response.body.getReader();
+    let length = 0, binary = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > limit) return { tooLarge: true };
+      for (let offset = 0; offset < value.length; offset += 32768)
+        binary += String.fromCharCode(...value.subarray(offset, offset + 32768));
+    }
+    return { content: btoa(binary), base64Encoded: true };
+  } catch { return {}; }
+  finally {
+    controller.abort();
+    clearTimeout(timer);
+    try { await reader?.cancel(); } catch { /* The response may already be closed. */ }
+  }
+}
+
 // Each instance belongs to one trusted turn. Cursors bind bytes and document identity, never page-supplied paths.
 export function createPdfReader({ extract, authorizeFile = () => false } = {}) {
   if (typeof extract !== 'function') throw Error('PDF helper required.');
   const continuations = new Map(), tasks = new Set(), directories = new Set();
   const controller = new AbortController();
+  const worldName = 'sleight-pdf-' + randomBytes(12).toString('hex');
   let ended = false;
   const current = () => { if (ended) throw Error('PDF read turn ended.'); };
   const track = action => {
@@ -144,7 +178,7 @@ export function createPdfReader({ extract, authorizeFile = () => false } = {}) {
     }); },
     tab(entry, options = {}) { return track(async () => {
       current();
-      // Native browser metadata only. No code runs in the PDF viewer or in a page world.
+      // Identify the main PDF through native metadata before obtaining any bytes.
       const session = entry.cdp ?? await entry.page.context().newCDPSession(entry.page), owned = !entry.cdp;
       try {
         const send = async (method, params) => {
@@ -172,7 +206,22 @@ export function createPdfReader({ extract, authorizeFile = () => false } = {}) {
         await send('Page.enable');
         let resource;
         try { resource = await send('Page.getResourceContent', { frameId: frame.id, url: frame.url }); }
-        catch { throw Error('PDF bytes are unavailable from this tab; use a user-named PDF file.'); }
+        catch {
+          current();
+          try {
+            // Installed extension viewers need not retain Page's resource cache.
+            // Never follow a redirect, fetch from Node, or inspect a browser profile.
+            const { executionContextId } = await send('Page.createIsolatedWorld', { frameId: frame.id, worldName, grantUniveralAccess: false });
+            current();
+            if (!Number.isSafeInteger(executionContextId) || executionContextId <= 0) throw Error(UNAVAILABLE);
+            const result = await send('Runtime.callFunctionOn', { functionDeclaration: refetchPdf.toString(), executionContextId,
+              arguments: [{ value: frame.url }, { value: MAX_BYTES }], awaitPromise: true, returnByValue: true, userGesture: false });
+            resource = result.exceptionDetails ? undefined : result.result?.value;
+          } catch { throw Error(UNAVAILABLE); }
+          current();
+          if (resource?.tooLarge) throw Error('PDF exceeds the 32 MiB read limit.');
+          if (typeof resource?.content !== 'string') throw Error(UNAVAILABLE);
+        }
         if (typeof resource.content !== 'string' || resource.content.length > Math.ceil(MAX_BYTES * 4 / 3) + 4)
           throw Error('PDF exceeds the 32 MiB read limit.');
         const bytes = Buffer.from(resource.content, resource.base64Encoded ? 'base64' : 'utf8');
