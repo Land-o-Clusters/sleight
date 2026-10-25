@@ -1,3 +1,4 @@
+import { createRemoteApprovals } from './remote-approvals.mjs';
 import { requestedSubmitRules } from './requested-submit.mjs';
 // Starts the computer-use MCP server that ships with the ChatGPT desktop app.
 //
@@ -739,7 +740,7 @@ export function runScript(script, request, options = {}) {
   // Base64 PNGs from ordinary app windows can exceed execFile's 1 MiB default.
   // The ghost hand stops waiting for locate.js after 2 s; a stalled AX app must not leave osascripts running.
   const execOptions = { timeout: script === 'open-file-window.js' ? 1000 : script === 'hand/locate.js' ? 2500 : cleanup ? 3000 :
-    script === 'stuck-escape.js' ? 5000 : 30000,
+    script === 'remote-approvals.js' ? (request.operation === 'catalog' ? 30000 : 1500) : script === 'stuck-escape.js' ? 5000 : 30000,
     ...(script === 'hover.js' ? { maxBuffer: 16 * 1024 * 1024 } : {}) };
   if (script === 'drag.js') request = { ...request, deadline: Date.now() + execOptions.timeout,
     dp7: process.env.SLEIGHT_DP7 !== '0', dp2: process.env.SLEIGHT_DP2 !== '0', trace: !!process.env.SLEIGHT_TRACE };
@@ -1163,6 +1164,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   relay = createRelay({
     directBrowser, turboUnavailable: prepared.turboUnavailable,
     directHost: prepared.directHost,
+    remoteApprovals: createRemoteApprovals({ run: runScript }),
     startupCache: createStartupCache({ identity: startupIdentity(activeServer, join(LIB, '..')) }),
     browserChoice: browserSelection.choice,
     backendChanged: () => browserSelection.changed(),
@@ -1394,7 +1396,7 @@ if (isMainModule(import.meta.url)) {
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   } else if (process.argv[2] === 'turbo-state') {
     const { readInstalledConfig } = await import('./direct-browser/installed-config.mjs');
-    process.stdout.write(JSON.stringify(turboState(readInstalledConfig)) + '\n');
+    process.stdout.write(JSON.stringify({ ...turboState(readInstalledConfig), presence: await runScript('remote-approvals.js', { operation: 'presence' }) }) + '\n');
   } else if (process.argv[2] === 'permissions') {
     try { process.exitCode = (await import('./permissions-command.mjs')).permissionsCommand(process.argv.slice(3), { out: text => process.stdout.write(text) }); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }

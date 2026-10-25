@@ -420,3 +420,15 @@ for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned i
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);
 }));
+
+// Remote context is absent on the ordinary path and inventoried as a conditional per-turn addition.
+test('remote approval context has its own measured conditional budget', { skip }, () => {
+  const report = budget.budget({});
+  assert.equal(report.conditional.remoteApprovals.ordinary.characters, 0);
+  assert.equal(report.conditional.remoteApprovals.upfront.text, 'sleight: Ask the user to reply: allow Mail, Word');
+  assert.equal(report.conditional.remoteApprovals.upfront.characters, 48);
+  assert.equal(report.conditional.remoteApprovals.upfront.lines, 1);
+  assert.ok(report.conditional.remoteApprovals.refusal.characters < 100);
+  assert.match(report.conditional.remoteApprovals.physical.text, /needs the user at the Mac/);
+  assert.ok(report.conditional.remoteApprovals.physical.characters < 100);
+});
