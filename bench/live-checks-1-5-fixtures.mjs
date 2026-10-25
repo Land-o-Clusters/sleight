@@ -6,7 +6,11 @@ import { createWholeFixture, wholeHandler } from './fowl/site/whole-thread.mjs';
 
 export const pdfBytes = type3Pdf();
 export function fixtureHTML(path) {
-  if (path === '/motion') return depthPage('hover', 'lc1', '/depth/', undefined);
+  if (path === '/motion') return depthPage('hover', 'lc1', '/depth/', undefined) + `<style>
+    @keyframes lc1-motion { from { background-color: rgb(255,0,0); transform: translateX(0); }
+      to { background-color: rgb(0,0,255); transform: translateX(80px); } }
+    #actions-Orchid:hover #menu-Orchid { display: inline-block; animation: lc1-motion 1s linear infinite alternate; }
+    </style>`;
   const metrics = `<p id="metrics"></p><script>
     const metrics=()=>{const value='Metrics width='+innerWidth+' height='+innerHeight+' dpr='+devicePixelRatio+
       ' dark='+matchMedia('(prefers-color-scheme: dark)').matches+' reduced='+matchMedia('(prefers-reduced-motion: reduce)').matches+' touch='+navigator.maxTouchPoints;

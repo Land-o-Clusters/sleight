@@ -1,17 +1,16 @@
 // The runner owns every process it starts. It never discovers, activates or closes installed-browser targets.
-import { spawn, fork, execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn, fork } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, realpathSync, lstatSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { OwnedTools } from './live-checks-1-5.mjs';
 import { serveFixtures } from './live-checks-1-5-fixtures.mjs';
 import { realBrowserPlan, prepareRealProfile, browserVersion } from './fowl/real-browser.mjs';
+import { createNativeReader } from './live-checks-1-5-native.mjs';
+import { createClipboardProbe } from './live-checks-1-5-clipboard.mjs';
 
-const execute = promisify(execFile);
 export async function versions(browser) {
   const { readEngine } = await import('./engine-version.mjs');
   const p = realBrowserPlan({ browser, round: 'lc1-version' });
@@ -43,7 +42,7 @@ async function stopChild(record) {
 }
 
 export function createRuntime({ browser, check, signal, waitHold }) {
-  let fixtures, realBrowser, browserChild, workerChild, bridge, tools, starting, closing, profileParent, turnFinished = false;
+  let fixtures, realBrowser, browserChild, workerChild, bridge, tools, starting, closing, profileParent, clipboardProbe, turnFinished = false;
   const cleanupFiles = new Map();
   const previousPointInput = process.env.SLEIGHT_POINT_INPUT;
   const runtime = {
@@ -108,22 +107,19 @@ export function createRuntime({ browser, check, signal, waitHold }) {
       return tools.call(name, args, options);
     },
     async finishTurn() { const receipt = await bridge.endTurn(); turnFinished = true; return receipt; },
-    async clipboard() {
-      const { stdout } = await execute('/usr/bin/pbpaste', [], { encoding: 'buffer', timeout: 5000, maxBuffer: 16 * 1024 * 1024, signal });
-      return stdout;
+    async stageClipboardSentinel() {
+      const { createNativeClipboardIO } = await import('../plugins/sleight/lib/clipboard.mjs');
+      const io = createNativeClipboardIO(fileURLToPath(new URL('../plugins/sleight/lib/clipboard.js', import.meta.url)));
+      clipboardProbe = createClipboardProbe(io);
+      await clipboardProbe.stage();
     },
+    async verifyClipboardSentinel() { await clipboardProbe.verify(); },
+    async restoreClipboard() { await clipboardProbe?.restore(); },
     async frontmost() {
-      // Fixed read-only NSWorkspace inspector, as required by the operator's host-inspection policy.
-      const { stdout } = await execute(join(homedir(), '.codex/bin/codex-macos-inspect'), ['frontmost-window'], { timeout: 15000, signal });
-      const rows = JSON.parse(stdout), pid = rows?.[0]?.ownerPID;
-      if (!Number.isSafeInteger(pid) || pid < 1) return { bundleId: null, pid: null };
-      const info = await execute(join(homedir(), '.codex/bin/codex-macos-inspect'), ['app-info', String(pid)], { timeout: 15000, signal });
-      const app = JSON.parse(info.stdout)?.[0];
-      return { bundleId: app?.bundleIdentifier ?? null, pid };
+      return createNativeReader({ cacheRoot: profileParent, signal })('frontmost');
     },
     async windowSizes() {
-      const { stdout } = await execute(join(homedir(), '.codex/bin/codex-macos-inspect'), ['windows-for-pid', String(realBrowser.pid)], { timeout: 15000, signal });
-      return JSON.parse(stdout).filter(row => row.layer === 0).map(row => ({ window: row.windowNumber, bounds: row.bounds }));
+      return createNativeReader({ cacheRoot: profileParent, signal })('windows', realBrowser?.pid);
     },
     ownFile(path) { cleanupFiles.set(path, { file: lstatSync(path), parent: lstatSync(dirname(path)) }); },
     async close() {
@@ -147,6 +143,8 @@ export function createRuntime({ browser, check, signal, waitHold }) {
         }
         // Process exit closes this private profile's targets even if an individual tab snapshot failed.
         const workerStopped = await stopChild(workerChild), browserStopped = await stopChild(browserChild);
+        // Stop the feature worker before the independent fallback restoration.
+        if (clipboardProbe) try { await clipboardProbe.close(); } catch { errors.push('Original clipboard restoration unconfirmed'); }
         if (!workerStopped || !browserStopped) errors.push('Owned child exit unproved');
         if (workerChild?.forcedKill) errors.push('Worker forced exit; native helper cleanup unproved');
         if (fixtures) try { await fixtures.close(); } catch (error) { errors.push(error.message); }

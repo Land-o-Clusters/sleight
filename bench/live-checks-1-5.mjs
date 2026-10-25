@@ -5,6 +5,7 @@ import { homedir, userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { scrubText } from './release-pass.mjs';
 
 const specs = [
   ['screenshot', 60, 15], ['motion-frames', 60, 15], ['points', 60, 20], ['mailto-detach', 60, 20],
@@ -91,16 +92,26 @@ export class OwnedTools {
   }
 }
 
-export function scrub(value) {
-  const home = homedir(), name = userInfo().username;
-  const walk = v => typeof v === 'string' ? v.replaceAll(home, '~').replaceAll(name, '[user]')
-    : Array.isArray(v) ? v.map(walk) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)])) : v;
+let publicationOwnerNames = [];
+export function scrub(value, { home = homedir(), names = publicationOwnerNames } = {}) {
+  const aliases = [userInfo().username, ...names].flatMap(name => [name, ...name.split(/[\s._-]+/u)]).filter(Boolean);
+  const clean = text => scrubText(text, home, aliases);
+  const walk = v => typeof v === 'string' ? clean(v)
+    : Array.isArray(v) ? v.map(walk) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [clean(k), walk(x)])) : v;
   return walk(value);
 }
-export async function publishReport(report, { root = fileURLToPath(new URL('../docs/benchmarks', import.meta.url)), stamp = Date.now() + '-' + process.pid } = {}) {
+export async function publishReport(report, { root = fileURLToPath(new URL('../docs/benchmarks', import.meta.url)), stamp = Date.now() + '-' + process.pid, names } = {}) {
+  // Match the release pass: resolve the owner's full name only when publishing, never during a dry run.
+  if (!names) {
+    const { execFileSync } = await import('node:child_process');
+    const fullName = execFileSync('/usr/bin/id', ['-F'], { encoding: 'utf8', timeout: 5000 }).trim();
+    if (!fullName) throw Error('Owner name lookup unavailable; refusing publication');
+    names = [fullName];
+  }
+  publicationOwnerNames = names;
   mkdirSync(root, { recursive: true });
   const file = join(root, `${report.started.slice(0, 10)}-live-checks-1-5-${report.browser}-${stamp}.json`);
-  writeFileSync(file, JSON.stringify(scrub(report), null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+  writeFileSync(file, JSON.stringify(scrub(report, { names }), null, 2) + '\n', { flag: 'wx', mode: 0o600 });
   return file;
 }
 
@@ -128,7 +139,12 @@ export async function runLiveChecks(options, dependencies = {}) {
   try {
     await waitHold({ signal: dependencies.signal });
     const acquire = dependencies.acquireLock ?? (await import('./live-lock.mjs')).acquireLiveLock;
-    unlock = await acquire(undefined, { signal: dependencies.signal });
+    const lockController = new AbortController(), lockWaitMs = dependencies.lockWaitMs ?? 300000;
+    const timer = setTimeout(() => lockController.abort(Error('LIVE_LOCK_WAIT_CAP_' + lockWaitMs + 'ms')), lockWaitMs);
+    try {
+      unlock = await acquire(undefined, { wait: true, interval: 15000,
+        signal: dependencies.signal ? AbortSignal.any([dependencies.signal, lockController.signal]) : lockController.signal });
+    } finally { clearTimeout(timer); }
     await waitHold({ signal: dependencies.signal });
     const versions = dependencies.versions ?? (await import('./live-checks-1-5-runtime.mjs')).versions;
     Object.assign(report, await versions(options.browser));

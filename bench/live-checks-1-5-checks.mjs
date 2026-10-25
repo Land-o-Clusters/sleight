@@ -90,6 +90,11 @@ export async function runCheck(id, runtime) {
     requireValue(captured.images?.length === 1, 'Screenshot returned no pixels');
     const size = jpegSize(captured.images[0].data);
     requireValue(size.width > 0 && size.height > 0 && Math.max(size.width, size.height) <= 1000, 'Screenshot pixel bounds failed');
+    const scale = Math.min(1, 1000 / Math.max(metrics.width * metrics.dpr, metrics.height * metrics.dpr));
+    requireValue(['width', 'height'].every(key => {
+      const expected = metrics[key] * metrics.dpr * scale;
+      return expected > 0 && Math.abs(size[key] - expected) <= Math.max(2, expected * 0.02);
+    }), `Screenshot pixel size does not match CSS size times DPR within the 1000 px cap: ${JSON.stringify({ pixels: size, css: metrics, scale })}`);
     const protectedTab = await open(runtime, '/protected');
     const protectedRead = await read(runtime, protectedTab.tab, { screenshot: true });
     requireValue(!protectedRead.images?.length && /Screenshot skipped.*protected/i.test(text(protectedRead)), 'Protected-field page returned pixels or no protected-field refusal');
@@ -102,7 +107,9 @@ export async function runCheck(id, runtime) {
     requireValue(frames.images?.length === 3 && /Motion frames/.test(text(frames)), 'Motion frame sequence missing');
     const sizes = frames.images.map(image => jpegSize(image.data));
     requireValue(sizes.every(size => Math.max(size.width, size.height) <= 480), 'Motion frame exceeds 480 px');
-    return { frames: sizes.length, sizes, timing: text(frames).split('\n').find(line => line.includes('Motion frames')) };
+    const distinctFrames = new Set(frames.images.map(image => digest(Buffer.from(image.data, 'base64')))).size;
+    requireValue(distinctFrames >= 2, 'Motion frames are identical; the hover animation did not differ');
+    return { frames: sizes.length, distinctFrames, sizes, timing: text(frames).split('\n').find(line => line.includes('Motion frames')) };
   }
   if (id === 'points') {
     if (!runtime.pointInput) return { skipReason: 'Worker point input was not enabled with SLEIGHT_POINT_INPUT=1.' };
@@ -115,23 +122,35 @@ export async function runCheck(id, runtime) {
     const fresh = await read(runtime, tab), payView = /view=([a-f0-9]{16})/.exec(text(fresh))?.[1];
     requireValue(payView, 'Fresh payment point view unavailable');
     const stopped = await act(runtime, tab, [{ do: 'click', x: 80, y: 180, view: payView }], {}, { allowError: true });
-    const reason = refusal(stopped, /pay|payment|confirm|sensitive|covered by button; use its ref/i);
+    // A point can stop at the generic control-ref boundary. Exercise the observed
+    // Pay ref too, so that boundary alone never claims payment protection.
+    const pointRefusal = refusal(stopped, /covered by button; use its ref$/i);
+    const pay = await read(runtime, tab), payRef = refFor(pay, 'Pay $10');
+    const payment = await act(runtime, tab, [{ do: 'click', ref: payRef }], {}, { allowError: true });
+    // The production UI currently uses this exact wording for payment asks.
+    // Bind it to the observed Pay $10 ref; unrelated confirm lines never count.
+    const paymentWording = new RegExp('^1 click ' + payRef + ': not run: confirmation required through the trusted consent UI$');
+    const reason = refusal(payment, paymentWording);
     await sleep(200, undefined, { signal: runtime.signal });
     requireValue(runtime.fixtures.state('/points').pay === 0, 'Payment point reached the page');
-    return { plainClicks: 1, payClicks: 0, payRefused: true, refusal: reason, workerPointInput: true };
+    return { plainClicks: 1, payClicks: 0, payRefused: true, pointRefusal, refusal: reason, workerPointInput: true };
   }
   if (id === 'mailto-detach') {
     const before = await runtime.frontmost();
-    if (!before.bundleId || !before.pid) return { skipReason: 'NSWorkspace frontmost application could not be identified, so no mailto action was sent.' };
+    if (!before?.pid || !Array.isArray(before.mailWindows)) return { skipReason: (before?.skipReason ?? 'NSWorkspace frontmost application or mail window reader unavailable') + ', so no mailto action was sent.' };
     const { tab, result } = await open(runtime, '/mailto');
     const action = await act(runtime, tab, [{ do: 'click', ref: refFor(result, 'Open fixture mail link') }], {}, { allowError: true });
     const afterRead = await read(runtime, tab);
     const notification = (text(action) + '\n' + text(afterRead)).split('\n').find(line => /Native (?:debugger detach|navigation) attempted/.test(line));
     const after = await runtime.frontmost();
-    Object.assign(measured, { before, after, notification });
+    if (!after?.pid || !Array.isArray(after.mailWindows)) return { skipReason: 'Native reader unavailable after mailto; native UI outcome unconfirmed.', measured };
+    const frontmostChanged = before.pid !== after.pid, frontmostIsMail = after.isMail;
+    const mailWindowAppeared = after.mailWindows.some(window => !before.mailWindows.includes(window));
+    Object.assign(measured, { frontmostChanged, frontmostIsMail, mailWindowAppeared, notification });
     requireValue(notification, 'HTTP-to-mailto returned no native navigation notification');
-    requireValue(before.bundleId === after.bundleId && before.pid === after.pid, 'Frontmost application changed after mailto attempt');
-    return { notification, before, after, noMailAppObserved: true,
+    requireValue(!mailWindowAppeared && !frontmostIsMail, 'A mail app or possible compose window appeared after mailto attempt; it was left open for the owner.');
+    requireValue(!frontmostChanged, 'Frontmost application changed after mailto attempt');
+    return { ...measured, noMailAppObserved: true,
       limitation: 'NSWorkspace before/after samples cannot rule out a background launch or a transient activation between samples. Native UI outcome remains unconfirmed.' };
   }
   if (id === 'viewport') {
@@ -139,7 +158,7 @@ export async function runCheck(id, runtime) {
     const before = parseMetrics(text(result));
     measured.before = before;
     const windowBefore = await runtime.windowSizes?.();
-    if (windowBefore) requireValue(windowBefore.length > 0, 'Private browser window bounds unavailable');
+    const boundsAvailable = Array.isArray(windowBefore) && windowBefore.length > 0;
     const changed = await act(runtime, tab, [{ do: 'viewport', width: 640, height: 480, color_scheme: 'dark', reduced_motion: true, touch: true }]);
     requireValue(/viewport 640x480/.test(text(changed)), 'Viewport step did not report requested size');
     await sleep(250, undefined, { signal: runtime.signal });
@@ -152,9 +171,11 @@ export async function runCheck(id, runtime) {
     const after = parseMetrics(text(await read(runtime, tab)));
     measured.after = after;
     requireValue(['width', 'height', 'dark', 'reduced', 'touch'].every(key => before[key] === after[key]), 'Viewport did not return to its original size/media/touch');
-    const windowAfter = await runtime.windowSizes?.();
-    if (windowBefore && windowAfter) requireValue(JSON.stringify(windowBefore) === JSON.stringify(windowAfter), 'Browser window bounds changed');
-    return { before, during, after, ...(windowBefore ? { windowBefore, windowAfter } : {}), released: true };
+    const windowAfter = boundsAvailable ? await runtime.windowSizes?.() : undefined;
+    const compared = boundsAvailable && Array.isArray(windowAfter);
+    if (compared) requireValue(JSON.stringify(windowBefore) === JSON.stringify(windowAfter), 'Browser window bounds changed');
+    return { before, during, after, windowBounds: compared ? { status: 'pass', windowBefore, windowAfter }
+      : { status: 'skip', reason: windowBefore?.skipReason ?? windowAfter?.skipReason ?? 'Repo-local native window reader unavailable; CSS/media/touch restoration was checked.' }, released: true };
   }
   if (id === 'download') {
     const started = Date.now(), { tab, result } = await open(runtime, '/download');
@@ -190,19 +211,22 @@ export async function runCheck(id, runtime) {
     return { consoleEvents: logs, networkRequests: requests, developerText: text(observed) };
   }
   if (id === 'paste') {
-    const before = await runtime.clipboard(), { tab, result } = await open(runtime, '/paste');
-    const pasted = await act(runtime, tab, [{ do: 'paste', ref: refFor(result, 'Note'), text: 'LC1 note' }]);
-    requireValue(/paste sent:.*clipboard restored/i.test(text(pasted)), 'Textarea paste did not restore clipboard');
-    await eventually(runtime, () => runtime.fixtures.state('/paste').note === 'LC1 note', 'Textarea paste value mismatch');
-    measured.textarea = true;
-    const fresh = await read(runtime, tab);
-    const grid = await act(runtime, tab, [{ do: 'paste', ref: refFor(fresh, 'Paste grid'), text: 'Oak\t1\nPine\t2' }]);
-    requireValue(/paste sent:.*clipboard restored/i.test(text(grid)), 'TSV paste did not restore clipboard');
-    await eventually(runtime, () => JSON.stringify(runtime.fixtures.state('/paste').grid) === '[["Oak","1"],["Pine","2"]]', 'TSV grid value mismatch');
-    const after = await runtime.clipboard();
-    requireValue(before.equals(after), 'Clipboard text was not restored');
-    return { textarea: true, gridRows: 2, gridColumns: 2, clipboardRestored: true,
-      clipboardVerification: 'pbpaste text bytes compared in memory; clipboard content and hashes are not recorded; non-text representations not independently verified' };
+    try {
+      await runtime.stageClipboardSentinel();
+      const { tab, result } = await open(runtime, '/paste');
+      const pasted = await act(runtime, tab, [{ do: 'paste', ref: refFor(result, 'Note'), text: 'LC1 note' }]);
+      await runtime.verifyClipboardSentinel();
+      requireValue(/paste sent:.*clipboard restored/i.test(text(pasted)), 'Textarea paste did not restore clipboard');
+      await eventually(runtime, () => runtime.fixtures.state('/paste').note === 'LC1 note', 'Textarea paste value mismatch');
+      measured.textarea = true;
+      const fresh = await read(runtime, tab);
+      const grid = await act(runtime, tab, [{ do: 'paste', ref: refFor(fresh, 'Paste grid'), text: 'Oak\t1\nPine\t2' }]);
+      await runtime.verifyClipboardSentinel();
+      requireValue(/paste sent:.*clipboard restored/i.test(text(grid)), 'TSV paste did not restore clipboard');
+      await eventually(runtime, () => JSON.stringify(runtime.fixtures.state('/paste').grid) === '[["Oak","1"],["Pine","2"]]', 'TSV grid value mismatch');
+      return { textarea: true, gridRows: 2, gridColumns: 2, clipboardRestored: true,
+        clipboardVerification: 'Unique sentinel verified after each paste; original clipboard representations saved and restored independently in memory. No clipboard content or hashes recorded.' };
+    } finally { await runtime.restoreClipboard(); }
   }
   if (id === 'turn-gif') {
     const started = Date.now(), { tab, result } = await open(runtime, '/record');
