@@ -118,10 +118,11 @@ test('G10B a refused combined step leaves the real size and media unchanged', { 
 });
 
 for (const failed of ['size', 'touch']) test(`G10B a real reset restores the other override when ${failed} fails`, { skip, timeout: 30000 }, async t => {
-  const f = await fixture(t, html), page = f.entry.page, newSession = f.context.newCDPSession.bind(f.context);
-  const resize = page.setViewportSize.bind(page);
+  const f = await fixture(t, html, {}, { nativeViewport: true }), page = f.entry.page, newSession = f.context.newCDPSession.bind(f.context);
+  const owner = page._connection.toImpl(page).delegate._mainFrameSession._client, sendOwner = owner.send.bind(owner);
   let fail = false;
-  page.setViewportSize = size => fail && failed === 'size' ? Promise.reject(Error('size reset refused')) : resize(size);
+  owner.send = (method, params) => fail && failed === 'size' && method === 'Emulation.clearDeviceMetricsOverride'
+    ? Promise.reject(Error('size reset refused')) : sendOwner(method, params);
   f.context.newCDPSession = async target => {
     const session = await newSession(target), send = session.send.bind(session);
     session.send = (method, params) => fail && failed === 'touch' && method === 'Emulation.setTouchEmulationEnabled' && !params.enabled
@@ -131,7 +132,7 @@ for (const failed of ['size', 'touch']) test(`G10B a real reset restores the oth
   await setViewport(page, { width: 390, height: 844, touch: true });
   fail = true;
   await assert.rejects(setViewport(page, {}), new RegExp(failed + ' reset refused'));
-  assert.equal(await page.evaluate(() => innerWidth), failed === 'size' ? 390 : 1280);
+  await page.waitForFunction(width => innerWidth === width, failed === 'size' ? 390 : 1280, { polling: 20, timeout: 2000 });
   assert.equal((await capabilities(page)).points, failed === 'touch' ? 1 : 0);
   fail = false;
   await setViewport(page, {});

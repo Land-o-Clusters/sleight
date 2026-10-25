@@ -60,9 +60,10 @@ export function setTouch(page, enabled) {
 export async function restoreTouch(page) {
   const state = overrides.get(page);
   if (!state) return;
-  return queued(state, async ({ session, points }) => {
+  return queued(state, async ({ session }) => {
     if (overrides.get(page) !== state) return;
-    await apply(session, points);
+    await session.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+    await session.send('Emulation.setEmitTouchEventsForMouse', { enabled: false });
     try { await session.detach(); }
     finally {
       overrides.delete(page);

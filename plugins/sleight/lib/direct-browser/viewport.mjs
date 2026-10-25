@@ -1,6 +1,5 @@
 import { setTouch, restoreTouch } from './touch.mjs';
-// The viewport step of browser_act: set a size and report the old one, or give the original back.
-// The original size and media stay private to this page until reset or release.
+// Reset and release remove emulation so the tab follows its current window and system preferences.
 const original = new WeakMap();
 
 async function innerSize(page) {
@@ -32,33 +31,34 @@ async function cssSize(page, size) {
 
 async function restoreSizeAndMedia(page, { release = false } = {}) {
   const saved = original.get(page);
-  if (!saved || saved.reset && !release) return 'viewport unchanged: no size was set on this tab';
-  if (release) {
+  if (!saved) return 'viewport unchanged: no size was set on this tab';
+  // Emulation belongs to the session that installed it, not a fresh CDP session.
+  const impl = page._connection?.toImpl?.(page);
+  const owner = impl?.delegate?._mainFrameSession?._client;
+  const session = owner ?? await page.context().newCDPSession(page);
+  try {
     if (Object.hasOwn(saved, 'size')) {
-      // CDP emulation belongs to the session that installed it. A separate session cannot clear Playwright's override.
-      const impl = page._connection?.toImpl?.(page);
-      const owner = impl?.delegate?._mainFrameSession?._client;
-      const session = owner ?? await page.context().newCDPSession(page);
-      try { await session.send('Emulation.clearDeviceMetricsOverride'); }
-      finally { if (!owner) await session.detach().catch(() => {}); }
-      // The pinned Playwright also caches emulation for future renderer sessions and size requests.
+      await session.send('Emulation.clearDeviceMetricsOverride');
+      // Forget the pinned Playwright's cache too, including its same-size fast path.
       impl?._setEmulatedSize?.(undefined);
       if (impl?.delegate?._mainFrameSession) impl.delegate._mainFrameSession._metricsOverride = undefined;
       page._viewportSize = null;
     }
-    const cleared = Object.fromEntries(Object.keys(saved.media).map(key => [key, null]));
-    if (Object.keys(cleared).length) await page.emulateMedia(cleared);
+    if (saved.media) {
+      const clearMedia = client => client.send('Emulation.setEmulatedMedia', { media: '', features: [] });
+      if (impl?.delegate?._forAllFrameSessions)
+        await impl.delegate._forAllFrameSessions(frame => clearMedia(frame._client));
+      else await clearMedia(session);
+      // Undefined falls back to Playwright's light/no-preference defaults on a new renderer.
+      if (impl) impl._emulatedMedia = { media: 'no-override', colorScheme: 'no-override',
+        reducedMotion: 'no-override', forcedColors: 'no-override', contrast: 'no-override' };
+    }
     original.delete(page);
-    return 'viewport overrides cleared' + (saved.size === null ? '; previous size unknown' : '')
-      + (Object.keys(cleared).length ? '; media cleared' : '');
-  }
-  if (saved.size === null) throw Error('viewport previous size unknown; release the tab to clear its size override');
-  if (saved.size) await cssSize(page, saved.size);
-  if (Object.keys(saved.media).length) await page.emulateMedia(saved.media);
-  // A reset uses fixed emulation too. Retain the touched fields until ownership release clears them.
-  saved.reset = true;
-  return (saved.size ? `viewport restored to ${saved.size.width}x${saved.size.height}` : 'viewport restored')
-    + (Object.keys(saved.media).length ? '; media restored' : '');
+    const measured = !release && Object.hasOwn(saved, 'size') ? await innerSize(page) : null;
+    return (release ? 'viewport overrides cleared' : measured
+      ? `viewport restored to ${measured.width}x${measured.height}` : 'viewport restored')
+      + (saved.size === null ? '; previous size unknown' : '') + (saved.media ? '; media cleared' : '');
+  } finally { if (!owner) await session.detach().catch(() => {}); }
 }
 
 export async function restoreViewport(page, options) {
@@ -80,8 +80,7 @@ export async function setViewport(page, { width, height, color_scheme, reduced_m
   const touchNote = touch === undefined ? null : await setTouch(page, touch);
   const before = width === undefined ? null : await innerSize(page);
   let saved = original.get(page);
-  if (!saved) { saved = { media: {} }; original.set(page, saved); }
-  saved.reset = false;
+  if (!saved) { saved = { media: false }; original.set(page, saved); }
   // null records a failed first read. A later read is already resized and cannot replace the baseline.
   if (width !== undefined && !Object.hasOwn(saved, 'size')) saved.size = before;
   let sizeNote;
@@ -94,8 +93,7 @@ export async function setViewport(page, { width, height, color_scheme, reduced_m
       : '; previous size unknown');
   }
   if (Object.keys(media).length) {
-    const prior = page._connection?.toImpl?.(page)?.emulatedMedia?.() ?? {};
-    for (const key of Object.keys(media)) if (!Object.hasOwn(saved.media, key)) saved.media[key] = prior[key] === 'no-override' ? null : prior[key] ?? null;
+    saved.media = true;
     await page.emulateMedia(media);
   }
   return [sizeNote, color_scheme === undefined ? null : 'color_scheme ' + color_scheme,

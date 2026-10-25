@@ -18,6 +18,11 @@ function fixture(points = 0) {
     async send(method, params) {
       calls.push([method, params]);
       if (method === 'Page.getLayoutMetrics') return { cssLayoutViewport: { clientWidth: size.width, clientHeight: size.height } };
+      if (method === 'Emulation.clearDeviceMetricsOverride') {
+        if (sizeFails) throw Error('size refused');
+        size = { width: 1280, height: 720 }; return {};
+      }
+      if (method === 'Emulation.setEmitTouchEventsForMouse') { assert.deepEqual(params, { enabled: false }); return {}; }
       if (method === 'Page.getFrameTree') return { frameTree: { frame: { id: 'main' } } };
       if (method === 'Page.createIsolatedWorld') return { executionContextId: 7 };
       if (method === 'Runtime.evaluate') {
@@ -47,6 +52,8 @@ test('touch changes and restores the original capability, keeping the session un
   assert.equal(await restoreTouch(f.page), 'touch restored');
   assert.equal(f.points(), 0);
   assert.equal(f.detached(), 1);
+  assert.deepEqual(f.calls.slice(-2), [['Emulation.setTouchEmulationEnabled', { enabled: false }],
+    ['Emulation.setEmitTouchEventsForMouse', { enabled: false }]]);
   assert.equal(await restoreTouch(f.page), undefined);
   assert.equal(f.calls.filter(([method]) => method === 'Page.createIsolatedWorld').length, 1);
 });

@@ -18,7 +18,7 @@ const executablePath = process.platform === 'darwin'
 export const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'real-page qualification belongs to sleight-arch host runner'
   : !existsSync(executablePath) ? 'pinned Chromium headless shell is unavailable' : false;
 
-export async function fixture(t, html, routes = {}, { observeTabs = false, smoothScrolling = false, deviceScaleFactor } = {}) {
+export async function fixture(t, html, routes = {}, { observeTabs = false, smoothScrolling = false, deviceScaleFactor, nativeViewport = false } = {}) {
   const sockets = new Set(), requests = [];
   const profile = trackTemp(mkdtempSync(join(realpathSync(tmpdir()), 'sleight-cr4-')));
   let context, registry;
@@ -46,6 +46,7 @@ export async function fixture(t, html, routes = {}, { observeTabs = false, smoot
   const args = ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'];
   if (smoothScrolling) args.push('--enable-smooth-scrolling');
   if (deviceScaleFactor !== undefined) args.push('--force-device-scale-factor=' + deviceScaleFactor);
+  if (nativeViewport) args.push('--window-size=1280,807');
   if (observeTabs) {
     // Only this disposable browser loads the read-only observer. Chrome's tab
     // active bit distinguishes background disposition even in headless mode,
@@ -57,6 +58,7 @@ export async function fixture(t, html, routes = {}, { observeTabs = false, smoot
     args.push('--disable-extensions-except=' + extension, '--load-extension=' + extension);
   }
   context = await inprocess.playwright.chromium.launchPersistentContext(profile, { headless: true, executablePath, args,
+    ...(nativeViewport ? { viewport: null } : {}),
     ...(deviceScaleFactor === undefined ? {} : { deviceScaleFactor }),
     ...(observeTabs ? { channel: 'chromium', ignoreDefaultArgs: ['--disable-extensions'] } : {}) });
   const worker = observeTabs ? context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker', { timeout: 5000 }) : undefined;

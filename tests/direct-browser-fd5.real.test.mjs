@@ -20,7 +20,7 @@ const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'needs the opt-in headless DOM harness'
   : !existsSync(executablePath) ? 'pinned Chromium headless shell unavailable' : false;
 
-async function fixture(t, html, routes = {}) {
+async function fixture(t, html, routes = {}, { fullChrome = false } = {}) {
   const sockets = new Set(), requests = [];
   const server = createServer((request, response) => {
     requests.push(request.url);
@@ -40,7 +40,12 @@ async function fixture(t, html, routes = {}) {
     assert.equal(existsSync(profile), false);
     t.diagnostic('cleanup: owned headless browser closed, private profile removed, fixture server and sockets closed');
   });
-  context = await chromium.launchPersistentContext(profile, { headless: true, executablePath, viewport: null });
+  const executable = fullChrome ? process.platform === 'darwin'
+    ? join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision, 'chrome-mac-' + process.arch,
+      'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')
+    : join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision, 'chrome-linux64/chrome') : executablePath;
+  context = await chromium.launchPersistentContext(profile, { headless: true, executablePath: executable, viewport: null,
+    ...(fullChrome ? { colorScheme: null, reducedMotion: null } : {}) });
   const browser = context.browser(), page = context.pages()[0];
   const origin = 'http://127.0.0.1:' + server.address().port;
   await page.goto(origin + '/fixture');
@@ -93,7 +98,9 @@ const mediaState = page => page.evaluate(() => ({ width: innerWidth, height: inn
   dark: matchMedia('(prefers-color-scheme: dark)').matches, reduce: matchMedia('(prefers-reduced-motion: reduce)').matches }));
 
 test('FD5 real media works with and without a size, stays per tab and resets in child frames', { skip }, async t => {
-  const { page, context, origin } = await fixture(t, '<iframe src="/frame"></iframe>', { '/frame': '<p>Child</p>' });
+  // Full Chrome has a native window to follow when metrics are cleared. The headless shell
+  // keeps the last emulated widget dimensions until Browser.setWindowBounds is called.
+  const { page, context, origin } = await fixture(t, '<iframe src="/frame"></iframe>', { '/frame': '<p>Child</p>' }, { fullChrome: true });
   await page.frames()[1].waitForLoadState();
   const other = await context.newPage(); await other.goto(origin + '/other');
   const before = await mediaState(page), otherBefore = await mediaState(other);
@@ -106,6 +113,9 @@ test('FD5 real media works with and without a size, stays per tab and resets in 
   await setViewport(page, { reduced_motion: true });
   assert.deepEqual(await mediaState(page), { width: 390, height: 844, dark: false, reduce: true });
   await restoreViewport(page);
+  await page.waitForFunction(({ width, height, dark, reduce }) => innerWidth === width && innerHeight === height
+    && matchMedia('(prefers-color-scheme: dark)').matches === dark
+    && matchMedia('(prefers-reduced-motion: reduce)').matches === reduce, before, { polling: 20, timeout: 2000 });
   assert.deepEqual(await mediaState(page), before);
   assert.equal(await page.frames()[1].evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches), before.reduce);
 });
