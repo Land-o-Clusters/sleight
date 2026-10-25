@@ -102,7 +102,8 @@ for (const mode of ['exit', 'initialize-error', 'exit-call']) for (const duringC
   await h.update();
   const failed = await (pending ?? h.call(2, 'let app = await cua.getApp("Example")'));
   assert.equal(failed.result.isError, true);
-  assert.match(texts(failed), /engine.*(exited|initialization)|fixture initialization failed/i);
+  // Under load the replacement's exit can surface first as EPIPE on the resend (full check at load ~10, 2026-10-25).
+  assert.match(texts(failed), /engine.*(exited|initialization)|fixture initialization failed|engine reconnection failed: write EPIPE/i);
   const stillFailed = await h.call(3, 'let app = await cua.getApp("Example")');
   assert.equal(stillFailed.result.isError, true);
   assert.doesNotMatch(texts(stillFailed), /session is closing/);
