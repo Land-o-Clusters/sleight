@@ -45,8 +45,8 @@ for (const mode of ['1', '0']) for (const enabled of [false, true])
     if (enabled) process.env.SLEIGHT_POINT_INPUT = '1'; else delete process.env.SLEIGHT_POINT_INPUT;
     const json = JSON.stringify(browserTools('bfixture'));
     const pins = mode === '0'
-      ? { off: ['3f214f845e1b2c1ba396e3dc16f2aeb2b18cf846ebf55eb31dd74b62417fb9d5', 6014], on: ['5c7a37e6c8e7fb5f457eb19b7209309ed459a644eb08db3f62b10a4e4e18e59b', 6433] }
-      : { off: ['7fceadbea12b0ab08899c3eb4b0d98f293a81bbd78d2d9107ed37b0a6ad12837', 6296], on: ['14e99d95ad7893fa7e7e9da8385ff7682f3b6c2339a403fd2f1cda97c3a48f59', 6715] };
+      ? { off: ['9a9fd74f723977fd642128c4a16e8eba265fe98dfdf071d8ab57690ac529c6f0', 6108], on: ['0d457de97ed1d2fde4f3081ade29e5f8261846f8ed7255fef39b29d6247ce973', 6527] }
+      : { off: ['bc144801d94745e8dad227560d2d9faf2aa48b79f80bcfd3ed75168996a72cdf', 6390], on: ['e2cfd4326ad56beab2e6be2589321769f268357dd94252156619fcf8ae77d396', 6809] };
     const [hash, length] = pins[enabled ? 'on' : 'off'];
     assert.equal(json.length, length);
     assert.equal(createHash('sha256').update(json).digest('hex'), hash);

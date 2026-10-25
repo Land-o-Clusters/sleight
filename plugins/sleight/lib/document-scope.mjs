@@ -6,6 +6,7 @@ import { literalElements } from './literal-elements.mjs';
 import { actionOutcome, outcomeRecord } from './action-outcomes.mjs';
 import { moneyFigures, moneyConflicts } from './payment-figures.mjs';
 import { enginePayment, paymentAction } from './payment-gate.mjs';
+import { policyLinkText, resetsCookies, cookieWording, consentManager, declinesCookies, acceptsCookies, engineConsent } from './consent-wall.mjs';
 import { paymentWords, refundableName } from './direct-browser/rules.mjs';
 import { tabChromeRefusal, tabProbeRefusal } from './tab-probe.mjs';
 import { verifyWindowIdentity } from './window-identity.mjs';
@@ -823,6 +824,13 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
     const paymentWords = ${paymentWords.toString()};
     const refundableName = ${refundableName.toString()};
     const paymentAction = ${paymentAction.toString()};
+    const resetsCookies = ${resetsCookies.toString()};
+    const policyLinkText = ${policyLinkText.toString()};
+    const cookieWording = ${cookieWording.toString()};
+    const consentManager = ${consentManager.toString()};
+    const declinesCookies = ${declinesCookies.toString()};
+    const acceptsCookies = ${acceptsCookies.toString()};
+    const engineConsent = ${engineConsent.toString()};
     const enginePayment = ${enginePayment.toString()};
     const checkNative = () => { if (state.nativeDenied) throw new Error(state.nativeDenied); };
     // After Return, Enter, Tab, Escape or Space, typeText or paste goes ahead without the settled tree
@@ -1597,6 +1605,24 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
             }
             payGate(text);
           }
+          // The relay can enforce only what the engine exposes. Numbered and
+          // resolved named targets share this gate, independent of payments.
+          let consent;
+          const consentInput = /^(?:click|doubleClick|rightClick|press|pressKey|typeText|paste|performAction|performSecondaryAction|setValue|check|uncheck)$/.test(name);
+          if (consentInput && !nativeTab) {
+            const newest = text ?? priorText ?? state.callTrees.get(proxy) ?? lastTree;
+            if (text === undefined && typeof newest === 'string' && /^\\t*\\d+ (?:HTML content|dialog|sheet|alert|region)\\b/im.test(newest)) text = await timedRead(raw, 'consent');
+            if (typeof (text ?? newest) === 'string') consent = engineConsent(name, args, text ?? newest);
+            // Refusals belong to the observed app and window, never an alias
+            // handle. Reclassify each target; this record is not an input fence.
+            const consentKey = JSON.stringify([observed?.app, observed?.title]);
+            state.consentStops ??= new Map();
+            if (consent?.blocked) {
+              state.consentStops.set(consentKey, consent.why);
+              throw stop("Cookie acceptance blocked: " + state.consentStops.get(consentKey));
+            }
+            state.consentStops.delete(consentKey);
+          }
           await checkLease();
           if (nativeTab && (state.touches !== tabTouches || Date.now() < nativeTab.sampledEnd ||
               Date.now() - nativeTab.sampledEnd > state.tabProbe.freshMs)) {
@@ -1650,6 +1676,11 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           // Input went out before the engine answered, so a rejected action may have acted.
           let result;
           try { result = await ${O ? 'state.runOutcome(attempt, () => value.apply(raw, args))' : 'value.apply(raw, args)'}; } catch (error) {
+            if (consent?.decline) {
+              state.unknown.push(shown);
+              nodeRepl.write('sleight: Decline unverified: the decline action did not finish.\\n');
+              throw error;
+            }
             let fresh, resent = false;
             const keep = () => {
               nodeRepl.write(${JSON.stringify(GUARD_MARK)} + fresh + ${JSON.stringify(GUARD_END)});
@@ -1701,6 +1732,9 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
                 // The resend's element is in the fresh tree, so the payment gate decides on that tree (a stale "Add gift
                 // wrap" resent as "Pay now" went through ungated, review of X5). The refusal sent nothing, so a stop here is
                 // a payment stop, not a refusal, and a spend the refused attempt recorded doesn't count.
+                const retryConsent = engineConsent(name, args, fresh);
+                if (retryConsent?.blocked) throw stop("Cookie acceptance blocked: " + retryConsent.why, fresh);
+                consent = retryConsent;
                 if (state.payment && paymentAction(name, args)) {
                   attempt.text = fresh;
                   attempt.refused = false;${O ? ' attempt.sent = false;' : ''}
@@ -1734,6 +1768,14 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           previous.done = Date.now();
           if (editable) previous.completed = true;${O ? '\n          ' + 'attempt.completed = true;' : ''}
           state.completedActions++;
+          if (consent?.decline) {
+            let after;
+            try { after = await timedRead(raw, 'after-consent'); } catch {}
+            const unverified = engineConsent(name, args, after, consent)?.blocked;
+            if (typeof after === 'string') state.reads.set(proxy, { text: after, emitted: false, version: state.actionVersion });
+            nodeRepl.write(unverified ? 'sleight: Decline unverified: cookie wall closure was not observed.\\n'
+              : 'sleight: Decline confirmed: declined non-essential cookies; cookie wall closed.\\n');
+          }
           if (literal !== undefined) {
             const at = state.pendingLiterals.indexOf(literal);
             if (at !== -1) state.pendingLiterals.splice(at, 1);

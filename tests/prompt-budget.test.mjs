@@ -25,8 +25,9 @@ const firstRule = 'execute exactly one of the API calls shown below, optionally 
 const hash = text => createHash('sha256').update(text).digest('hex');
 const baseline = JSON.parse(readFileSync(new URL('fixtures/prompt-default.json', import.meta.url)));
 const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', import.meta.url);
-// Measured 15-word sentence: docs/benchmarks/2026-10-19-flag-ab.md, -34.2 s, SE 22.7 s.
-// Only the default skill limit grows, from 1040 to 1055; lean stays at 505 and the ratio at 0.71.
+// G11B shortens the eager cookie rule and counts conditional guard notices.
+// p143 plus the cookie rule: default 1062 words, lean 517 words.
+const leanRatio = 31742 / 44482;
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
 test('outcome reporting guidance costs no default skill tokens', () => {
@@ -141,7 +142,7 @@ test('lean calls teach persistent handles and action endings only under the expe
       assert.match(selected, /Keep the app handle across calls/);
       assert.match(selected, /End on the action/);
     } else assert.equal(selected, normal, 'the lean skill has no native call guidance to replace');
-    assert.ok(selected.split(/\s+/).length <= (prompt === 'lean' ? 505 : 1055));
+    assert.ok(selected.split(/\s+/).length <= (prompt === 'lean' ? 519 : 1066));
     assert.equal(skillRules(skillPath, { SLEIGHT_PROMPT: prompt, SLEIGHT_LEAN_CALLS: '0' }), normal);
   }
 });
@@ -174,7 +175,7 @@ test('the default skill explains masked field reads without claiming a fill succ
 });
 
 test('both skill variants explain browser routing and script input within their word budgets', () => {
-  for (const [env, limit] of [[{}, 1055], [{ SLEIGHT_PROMPT: 'lean' }, 505]]) {
+  for (const [env, limit] of [[{}, 1066], [{ SLEIGHT_PROMPT: 'lean' }, 519]]) {
     const skill = skillRules(skillPath, env);
     assert.match(skill, /[Ww]eb pages.*tab handle, never `getApp`/);
     assert.match(skill, /[Tt]op-level `await`, no `return`/);
@@ -325,7 +326,7 @@ test('the offline budget command measures all sources and stays about 30 percent
   assert.ok(report.rows.some(row => row.source === 'relay notices'));
   assert.ok(report.rows.some(row => row.source === 'tool descriptions'));
   assert.ok(report.rows.some(row => row.source === 'shared notices'));
-  assert.ok(report.total.lean.characters <= report.total.default.characters * 0.71, JSON.stringify(report.total));
+  assert.ok(report.total.lean.characters <= report.total.default.characters * leanRatio, JSON.stringify(report.total));
 });
 
 test('the delivered default js prompt stays pinned within Claude Code’s description budget', () => {
@@ -394,7 +395,7 @@ test('AO prompt inventory counts browser_open and first-call guidance only under
     const js = r => r.rows.find(row => row.source === 'js rewrite')[variant].characters;
     assert.equal(js(on) - js(off), 83);
   }
-  assert.ok(on.total.lean.characters <= on.total.default.characters * 0.71, JSON.stringify(on.total));
+  assert.ok(on.total.lean.characters <= on.total.default.characters * leanRatio, JSON.stringify(on.total));
 });
 
 import { withMT } from './fixtures/mt-env.mjs';
@@ -408,7 +409,14 @@ for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned i
   // each lane measured its own increment; G10B adds 68 characters for touch schema and guidance.
   // G13E opt-in discovery adds 64 catalog characters (62 description characters).
   // Release trim: the 65536 string limit is validate()'s default, so the catalog drops it (-252 in each mode).
-  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6014 : 6296);
+  // G11F's cookie sentence adds 94 catalog characters in each mode.
+  assert.equal(tools.find(tool => tool.name === 'browser_act').description.length, mode === '0' ? 1034 : 1183);
+  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6108 : 6390);
+  const descriptions = tools.map(tool => tool.description).join('\n');
+  for (const prompt of [undefined, 'lean']) {
+    const combined = skillRules(skillPath, { SLEIGHT_PROMPT: prompt }).length + descriptions.length;
+    assert.equal(combined, (prompt === 'lean' ? 6270 : 9897) - (mode === '0' ? 280 : 0));
+  }
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);
 }));

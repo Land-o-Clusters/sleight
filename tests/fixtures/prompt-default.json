@@ -1,10 +1,11 @@
 {
-  "skill": "c8f645e94efd38827423ca2819e1ba5e14e04946030ce9113eb4be2043ddf69b",
+  "skill": "f42832edd95ce6513f0ac3f126e6508421c1ffe93dec46950249549061ed4044",
   "tools": "c1b796e8a8b2a155cadd5e5ae0463d12d5f90ad8147698050352bc95dde8b40b",
   "batch": "aab9c612b29e726dcacf915b1c565dfc65ae3c455bc7561a3f1ea2d3733d4406",
   "merge": "5bd0464e07e16924b32d03a806ec8a6f47c2ed254026b394cbaa26b5c3e8a32d",
-  "notices": "f903c1c3015a67c0b54c7a1b55fe950c1003a4dadd7a470db75138507d77bacc",
+  "notices": "f5ddc733d3ac2e276e63d4e1a4eee23000176d03575ad50825b37f08cf0e56d3",
   "skillSafety": [
+    "Cookies: use only one-click Reject/necessary-only that declines all optional cookies, or ask.",
     "Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes\nit. If an app isn't approved, ask the user, or stop when a headless run refuses it.",
     "- Sign-in: turbo browser tabs `handoff wait:true` or native `app_handoff`, otherwise stop. Never request passwords/codes. Updates/permissions/first-run: stop.",
     "- An approval the user declined, a lease another session holds (the refusal names it and the seconds\n  left), or a refused settings window: stop and tell the user. Don't retry around it.",
@@ -54,7 +55,7 @@
   "js": "9ec4a1d4a94be18503d350cf9cd3433d1adb9b6479ff5aa870df59e06574b491",
   "browserReviewOutcomes": "5c573cbc59689bbf2ba45e41b65b742c79050aa11cf002ec7d4f43a1acd80438",
   "browserClosedOutcome": "9e5f2ae21e3b53f89a2f31705de162fed1496da007e66246fdf84beb669a8698",
-  "browserToolsLegacy": "3f214f845e1b2c1ba396e3dc16f2aeb2b18cf846ebf55eb31dd74b62417fb9d5",
-  "browserToolsMT": "7fceadbea12b0ab08899c3eb4b0d98f293a81bbd78d2d9107ed37b0a6ad12837",
+  "browserToolsLegacy": "9a9fd74f723977fd642128c4a16e8eba265fe98dfdf071d8ab57690ac529c6f0",
+  "browserToolsMT": "bc144801d94745e8dad227560d2d9faf2aa48b79f80bcfd3ed75168996a72cdf",
   "browserHandoffOutcomes": "d99b28cc1fb0fa080bae67acd03d6001b190fd21819848c48897a1ac9bb5c6d2"
 }
