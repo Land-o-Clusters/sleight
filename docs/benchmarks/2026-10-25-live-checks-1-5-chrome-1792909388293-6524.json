@@ -1,0 +1,165 @@
+{
+  "schema": 1,
+  "started": "2026-10-25T06:22:32.881Z",
+  "browser": "chrome",
+  "ownerAway": true,
+  "dryRun": false,
+  "browserVersion": "155.0.8059.85",
+  "engineVersion": {
+    "version": "26.1021.31345",
+    "source": "codex-plugin-cache",
+    "at": "2026-10-25T06:22:32.928Z",
+    "chatgptApp": "26.1021.31345",
+    "chatgptBuild": "21828"
+  },
+  "checks": [
+    {
+      "id": "screenshot",
+      "status": "fail",
+      "ms": 35360,
+      "capMs": 60000,
+      "measured": {
+        "dpr": 2,
+        "cssSize": {
+          "width": 1512,
+          "height": 862
+        },
+        "pixels": {
+          "width": 1000,
+          "height": 570
+        },
+        "captureScale": "device",
+        "protectedPixels": 0,
+        "zoom125": {
+          "status": "skip",
+          "reason": "Turbo exposes no page zoom operation. No browser shortcut or raw CDP zoom is substituted."
+        }
+      },
+      "cleanup": {
+        "cleanedUp": false,
+        "workerStopped": false,
+        "browserStopped": true,
+        "privateProfileRemoved": false,
+        "notes": [
+          "Owned child exit unproved",
+          "Worker forced exit; native helper cleanup unproved"
+        ]
+      },
+      "reason": "Cleanup unproved"
+    },
+    {
+      "id": "motion-frames",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "Previous cleanup is unproved; no further browser work."
+    },
+    {
+      "id": "points",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "Previous cleanup is unproved; no further browser work."
+    },
+    {
+      "id": "mailto-detach",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "Previous cleanup is unproved; no further browser work."
+    },
+    {
+      "id": "viewport",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "Previous cleanup is unproved; no further browser work."
+    },
+    {
+      "id": "download",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "Previous cleanup is unproved; no further browser work."
+    },
+    {
+      "id": "pdf",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 300000,
+      "measured": {},
+      "reason": "Previous cleanup is unproved; no further browser work."
+    },
+    {
+      "id": "developer-reads",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "Previous cleanup is unproved; no further browser work."
+    },
+    {
+      "id": "paste",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 90000,
+      "measured": {},
+      "reason": "Previous cleanup is unproved; no further browser work."
+    },
+    {
+      "id": "turn-gif",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 90000,
+      "measured": {},
+      "reason": "Previous cleanup is unproved; no further browser work."
+    },
+    {
+      "id": "watch-tick",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "Previous cleanup is unproved; no further browser work."
+    },
+    {
+      "id": "turn-stats",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 10000,
+      "measured": {},
+      "reason": "Previous cleanup is unproved; no further browser work."
+    },
+    {
+      "id": "whole-thread",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 90000,
+      "measured": {},
+      "reason": "Previous cleanup is unproved; no further browser work."
+    },
+    {
+      "id": "cookie-wall",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "Previous cleanup is unproved; no further browser work."
+    }
+  ],
+  "cleanup": false,
+  "lockRetained": true,
+  "finished": "2026-10-25T06:23:08.293Z",
+  "counts": {
+    "pass": 0,
+    "fail": 1,
+    "skip": 13
+  },
+  "completed": false,
+  "passed": false
+}

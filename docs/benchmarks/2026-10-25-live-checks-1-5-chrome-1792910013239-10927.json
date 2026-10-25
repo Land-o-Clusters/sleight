@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "started": "2026-10-25T06:33:30.199Z",
+  "browser": "chrome",
+  "ownerAway": true,
+  "dryRun": false,
+  "browserVersion": "155.0.8059.85",
+  "engineVersion": {
+    "version": "26.1021.31345",
+    "source": "codex-plugin-cache",
+    "at": "2026-10-25T06:33:30.248Z",
+    "chatgptApp": "26.1021.31345",
+    "chatgptBuild": "21828"
+  },
+  "checks": [
+    {
+      "id": "mailto-detach",
+      "status": "fail",
+      "ms": 2985,
+      "capMs": 60000,
+      "measured": {
+        "frontmostChanged": true,
+        "frontmostIsMail": true,
+        "mailWindowAppeared": true
+      },
+      "reason": "HTTP-to-mailto returned no native navigation notification",
+      "cleanup": {
+        "cleanedUp": true,
+        "workerStopped": true,
+        "browserStopped": true,
+        "privateProfileRemoved": true
+      }
+    }
+  ],
+  "cleanup": true,
+  "lockReleased": true,
+  "finished": "2026-10-25T06:33:33.239Z",
+  "counts": {
+    "pass": 0,
+    "fail": 1,
+    "skip": 0
+  },
+  "completed": true,
+  "passed": false
+}

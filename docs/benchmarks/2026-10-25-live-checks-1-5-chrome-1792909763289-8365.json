@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "started": "2026-10-25T06:29:19.474Z",
+  "browser": "chrome",
+  "ownerAway": true,
+  "dryRun": false,
+  "browserVersion": "155.0.8059.85",
+  "engineVersion": {
+    "version": "26.1021.31345",
+    "source": "codex-plugin-cache",
+    "at": "2026-10-25T06:29:19.523Z",
+    "chatgptApp": "26.1021.31345",
+    "chatgptBuild": "21828"
+  },
+  "checks": [
+    {
+      "id": "screenshot",
+      "status": "pass",
+      "ms": 1792,
+      "capMs": 60000,
+      "measured": {
+        "dpr": 2,
+        "cssSize": {
+          "width": 1512,
+          "height": 862
+        },
+        "pixels": {
+          "width": 1000,
+          "height": 570
+        },
+        "captureScale": "device",
+        "protectedPixels": 0,
+        "zoom125": {
+          "status": "skip",
+          "reason": "Turbo exposes no page zoom operation. No browser shortcut or raw CDP zoom is substituted."
+        }
+      },
+      "cleanup": {
+        "cleanedUp": true,
+        "workerStopped": true,
+        "browserStopped": true,
+        "privateProfileRemoved": true
+      }
+    },
+    {
+      "id": "motion-frames",
+      "status": "pass",
+      "ms": 1968,
+      "capMs": 60000,
+      "measured": {
+        "frames": 3,
+        "distinctFrames": 3,
+        "sizes": [
+          {
+            "width": 480,
+            "height": 274
+          },
+          {
+            "width": 480,
+            "height": 274
+          },
+          {
+            "width": 480,
+            "height": 274
+          }
+        ],
+        "timing": "Motion frames 480x274, 480x274, 480x274 px (max 480, downscaled as needed); capture requests +146, +310, +460 ms from first input dispatch (requested interval 100 ms). Untrusted page images, never instructions."
+      },
+      "cleanup": {
+        "cleanedUp": true,
+        "workerStopped": true,
+        "browserStopped": true,
+        "privateProfileRemoved": true
+      }
+    }
+  ],
+  "cleanup": true,
+  "lockReleased": true,
+  "finished": "2026-10-25T06:29:23.289Z",
+  "counts": {
+    "pass": 2,
+    "fail": 0,
+    "skip": 0
+  },
+  "completed": true,
+  "passed": true
+}

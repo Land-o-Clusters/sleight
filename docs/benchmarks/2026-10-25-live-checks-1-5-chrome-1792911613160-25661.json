@@ -1,0 +1,201 @@
+{
+  "schema": 1,
+  "started": "2026-10-25T06:59:41.661Z",
+  "browser": "chrome",
+  "ownerAway": true,
+  "dryRun": false,
+  "browserVersion": "155.0.8059.85",
+  "engineVersion": {
+    "version": "26.1021.31345",
+    "source": "codex-plugin-cache",
+    "at": "2026-10-25T06:59:41.714Z",
+    "chatgptApp": "26.1021.31345",
+    "chatgptBuild": "21828"
+  },
+  "checks": [
+    {
+      "id": "viewport",
+      "status": "pass",
+      "ms": 2872,
+      "capMs": 60000,
+      "measured": {
+        "before": {
+          "width": 1512,
+          "height": 862,
+          "dpr": 2,
+          "dark": true,
+          "reduced": false,
+          "touch": 0
+        },
+        "during": {
+          "width": 640,
+          "height": 480,
+          "dpr": 1,
+          "dark": true,
+          "reduced": true,
+          "touch": 1
+        },
+        "after": {
+          "width": 1512,
+          "height": 862,
+          "dpr": 2,
+          "dark": true,
+          "reduced": false,
+          "touch": 0
+        },
+        "windowBounds": {
+          "status": "pass",
+          "windowBefore": [
+            {
+              "bounds": {
+                "Height": 949,
+                "Width": 1512,
+                "X": 0,
+                "Y": 33
+              },
+              "window": 8008
+            },
+            {
+              "bounds": {
+                "Height": 139,
+                "Width": 1350,
+                "X": 99,
+                "Y": 58
+              },
+              "window": 8009
+            },
+            {
+              "bounds": {
+                "Height": 138,
+                "Width": 1350,
+                "X": 99,
+                "Y": 58
+              },
+              "window": 8010
+            },
+            {
+              "bounds": {
+                "Height": 1,
+                "Width": 1,
+                "X": 0,
+                "Y": 0
+              },
+              "window": 8011
+            },
+            {
+              "bounds": {
+                "Height": 1,
+                "Width": 1,
+                "X": 0,
+                "Y": 0
+              },
+              "window": 8012
+            }
+          ],
+          "windowAfter": [
+            {
+              "bounds": {
+                "Height": 949,
+                "Width": 1512,
+                "X": 0,
+                "Y": 33
+              },
+              "window": 8008
+            },
+            {
+              "bounds": {
+                "Height": 139,
+                "Width": 1350,
+                "X": 99,
+                "Y": 58
+              },
+              "window": 8009
+            },
+            {
+              "bounds": {
+                "Height": 138,
+                "Width": 1350,
+                "X": 99,
+                "Y": 58
+              },
+              "window": 8010
+            },
+            {
+              "bounds": {
+                "Height": 1,
+                "Width": 1,
+                "X": 0,
+                "Y": 0
+              },
+              "window": 8011
+            },
+            {
+              "bounds": {
+                "Height": 1,
+                "Width": 1,
+                "X": 0,
+                "Y": 0
+              },
+              "window": 8012
+            }
+          ]
+        },
+        "released": true
+      },
+      "cleanup": {
+        "cleanedUp": true,
+        "workerStopped": true,
+        "browserStopped": true,
+        "privateProfileRemoved": true
+      }
+    },
+    {
+      "id": "pdf",
+      "status": "pass",
+      "ms": 26866,
+      "capMs": 300000,
+      "measured": {
+        "pages": 1,
+        "expectedText": "ABC",
+        "readCharacters": 77,
+        "sandboxedHelper": true
+      },
+      "cleanup": {
+        "cleanedUp": true,
+        "workerStopped": true,
+        "browserStopped": true,
+        "privateProfileRemoved": true
+      }
+    },
+    {
+      "id": "mailto-detach",
+      "status": "pass",
+      "ms": 1701,
+      "capMs": 60000,
+      "measured": {
+        "frontmostChanged": false,
+        "frontmostIsMail": false,
+        "mailWindowAppeared": false,
+        "notification": "Native navigation attempted; cancellation requested. Native UI outcome unconfirmed; tell the user. Attachment checked on the same target.",
+        "noMailAppObserved": true,
+        "limitation": "NSWorkspace before/after samples cannot rule out a background launch or a transient activation between samples. Native UI outcome remains unconfirmed."
+      },
+      "cleanup": {
+        "cleanedUp": true,
+        "workerStopped": true,
+        "browserStopped": true,
+        "privateProfileRemoved": true
+      }
+    }
+  ],
+  "cleanup": true,
+  "lockReleased": true,
+  "finished": "2026-10-25T07:00:13.160Z",
+  "counts": {
+    "pass": 3,
+    "fail": 0,
+    "skip": 0
+  },
+  "completed": true,
+  "passed": true
+}

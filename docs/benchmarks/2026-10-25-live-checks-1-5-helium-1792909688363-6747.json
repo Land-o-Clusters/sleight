@@ -1,0 +1,133 @@
+{
+  "schema": 1,
+  "started": "2026-10-25T06:23:08.356Z",
+  "browser": "helium",
+  "ownerAway": true,
+  "dryRun": false,
+  "browserVersion": null,
+  "engineVersion": null,
+  "checks": [
+    {
+      "id": "screenshot",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    },
+    {
+      "id": "motion-frames",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    },
+    {
+      "id": "points",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    },
+    {
+      "id": "mailto-detach",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    },
+    {
+      "id": "viewport",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    },
+    {
+      "id": "download",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    },
+    {
+      "id": "pdf",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 300000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    },
+    {
+      "id": "developer-reads",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    },
+    {
+      "id": "paste",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 90000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    },
+    {
+      "id": "turn-gif",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 90000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    },
+    {
+      "id": "watch-tick",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    },
+    {
+      "id": "turn-stats",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 10000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    },
+    {
+      "id": "whole-thread",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 90000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    },
+    {
+      "id": "cookie-wall",
+      "status": "skip",
+      "ms": 0,
+      "capMs": 60000,
+      "measured": {},
+      "reason": "The operation was aborted"
+    }
+  ],
+  "cleanup": true,
+  "error": "The operation was aborted",
+  "finished": "2026-10-25T06:28:08.363Z",
+  "counts": {
+    "pass": 0,
+    "fail": 0,
+    "skip": 14
+  },
+  "completed": false,
+  "passed": false
+}
