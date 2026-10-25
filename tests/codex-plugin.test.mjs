@@ -346,7 +346,8 @@ test('stop and resume, the user\'s own controls, work on every host; only a turb
     h.client({ id: 2, method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_stop: true } } }); await tick();
     assert.notEqual(h.toClient.find(m => m.id === 2)?.result?.content?.[0]?.text, 'Trusted turn binding unavailable.', `stop with mod ${mod}`);
     h.client({ id: 3, method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_turbo: { event: 'bootstrap' } } } }); await tick();
-    assert.equal(h.toClient.find(m => m.id === 3).result.isError, true, 'no turbo bridge here, and none binds without the mod');
+    // Since RA1 the mod's host gets the envelope without a turbo bridge, for typed app approvals. Codex never does.
+    assert.equal(h.toClient.find(m => m.id === 3).result.isError, !mod, 'no host without the mod gets the private envelope');
   }
 });
 

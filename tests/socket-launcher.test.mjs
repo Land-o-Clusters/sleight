@@ -29,7 +29,7 @@ for (const stop of ['idle', 'SIGTERM', 'turbo']) test(stop === 'turbo'
       env: { ...process.env, HOME: bank, CODEX_HOME: codexHome, SLEIGHT_TEST_ENGINE_LOG: log, SLEIGHT_TRACE: traces,
         SLEIGHT_HAND: '0', SLEIGHT_SURFACES: 'computer', SLEIGHT_WARM_REPL: '0', SLEIGHT_WARM_ENGINE: '0',
         SLEIGHT_CHANGE_REVIEW: '0', SLEIGHT_SKILL: 'none', SLEIGHT_TURBO: '1', SLEIGHT_CONFIRM_PAYMENTS: 'never',
-        SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_TEST_CONFIRM: '1' },
+        SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_TEST_CONFIRM: '1', SLEIGHT_REMOTE_APPROVALS: '0' },
     }),
   });
   await callSocket({ tool: 'js', args: { code: 'let app = await cua.getApp("Firefox")' } }, { directory });
@@ -71,7 +71,7 @@ for (const kind of ['app', 'action']) for (const mode of ['allow', 'cancel', 'un
       env: { ...process.env, HOME: bank, CODEX_HOME: codexHome, SLEIGHT_TEST_ENGINE_LOG: log,
         SLEIGHT_HAND: '0', SLEIGHT_SURFACES: 'computer', SLEIGHT_WARM_REPL: '0', SLEIGHT_WARM_ENGINE: '0',
         SLEIGHT_CHANGE_REVIEW: '0', SLEIGHT_SKILL: 'none', SLEIGHT_TURBO: '0',
-        SLEIGHT_TEST_CARD_MODE: mode, SLEIGHT_TEST_CARD_KIND: kind },
+        SLEIGHT_TEST_CARD_MODE: mode, SLEIGHT_TEST_CARD_KIND: kind, SLEIGHT_REMOTE_APPROVALS: '0' },
     }) });
   let output = '', finished = false, noticed;
   const notice = new Promise(resolve => { noticed = resolve; });

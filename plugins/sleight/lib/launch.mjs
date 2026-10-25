@@ -1164,7 +1164,8 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   relay = createRelay({
     directBrowser, turboUnavailable: prepared.turboUnavailable,
     directHost: prepared.directHost,
-    remoteApprovals: createRemoteApprovals({ run: runScript }),
+    // SLEIGHT_REMOTE_APPROVALS=0 keeps every card waiting at the Mac, as in 1.4.2 (tests and the A/B switch).
+    remoteApprovals: process.env.SLEIGHT_REMOTE_APPROVALS === '0' ? undefined : createRemoteApprovals({ run: runScript }),
     startupCache: createStartupCache({ identity: startupIdentity(activeServer, join(LIB, '..')) }),
     browserChoice: browserSelection.choice,
     backendChanged: () => browserSelection.changed(),

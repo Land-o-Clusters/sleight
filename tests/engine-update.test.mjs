@@ -22,7 +22,7 @@ async function fixture(t, mode = 'ok', initial = {}) {
   await configure('1.0', initial);
   const child = spawn(process.execPath, [fileURLToPath(new URL('fixtures/restart-launcher.mjs', import.meta.url)), join(bank, 'leases')], {
     stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CODEX_HOME: codexHome, SLEIGHT_TEST_ENGINE_LOG: log,
-      SLEIGHT_WARM_REPL: '0', SLEIGHT_SURFACES: 'computer', SLEIGHT_CHANGE_REVIEW: '0', SLEIGHT_APPROVAL_PROMPT: 'client' },
+      SLEIGHT_WARM_REPL: '0', SLEIGHT_SURFACES: 'computer', SLEIGHT_CHANGE_REVIEW: '0', SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_REMOTE_APPROVALS: '0' },
   });
   const closed = new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
   t.after(async () => { child.stdin.end(); await closed; await rm(bank, { recursive: true, force: true }); });
@@ -163,7 +163,7 @@ test('a first start that cannot spawn is fatal with the spawn error, as before',
   await writeFile(join(root, '.mcp.json'), JSON.stringify({ mcpServers: { cua_repl: { command: tmpdir(), args: [fileURLToPath(import.meta.url)] } } }));
   const child = spawn(process.execPath, [fileURLToPath(new URL('fixtures/restart-launcher.mjs', import.meta.url)), join(bank, 'leases')], {
     stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CODEX_HOME: join(bank, 'codex'), SLEIGHT_TEST_ENGINE_LOG: join(bank, 'log'),
-      SLEIGHT_WARM_REPL: '0', SLEIGHT_SURFACES: 'computer' } });
+      SLEIGHT_WARM_REPL: '0', SLEIGHT_SURFACES: 'computer', SLEIGHT_REMOTE_APPROVALS: '0' } });
   let stderr = '';
   child.stderr.on('data', data => stderr += data);
   const { code } = await new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));

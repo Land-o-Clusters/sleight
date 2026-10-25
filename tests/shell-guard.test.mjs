@@ -348,6 +348,8 @@ function installedGuard({ disabled = false, refuseWrite = false } = {}) {
       if (args.sleight_turbo?.event === 'bootstrap') return { content: [{ type: 'text', text: JSON.stringify({ sleightTurbo: {
         version: 1, session: 'fixture', nonce: 'a'.repeat(64) } }) }] };
       if (args.hook_event_name) ended++;
+      // Since RA1 the relay answers a begin frame with whether it bound a turbo turn.
+      if (args.sleight_turbo?.event === 'begin') return { content: [{ type: 'text', text: JSON.stringify({ sleightRemote: { turboBound: true } }) }] };
       return { content: [] };
     } }, ui: { status() {}, log() {}, toast() {}, panes: async () => [] } };
   const next = event => { passed++; return event; };

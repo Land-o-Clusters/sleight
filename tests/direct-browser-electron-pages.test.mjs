@@ -55,15 +55,27 @@ async function world({ targets: initial, windows, owner = 'session-a', fence, ex
   return { m, f, w, targets, join, filter, pw, pages };
 }
 
+// VP1 clears media over CDP (Emulation.setEmulatedMedia with empty values), not through emulateMedia.
+function mediaClears(entry, calls, failing = () => false) {
+  entry.page.context = () => ({ newCDPSession: async () => ({ detach: async () => {}, send: async (method, params) => {
+    if (method === 'Emulation.setEmulatedMedia') {
+      if (failing()) throw Error('restore failed');
+      assert.equal(entry.released, false); calls.push([method, params]);
+    }
+    return {};
+  } }) });
+}
+
 for (const release of ['keep', 'handoff', 'endTurn']) test(`FD5 app ${release} restores media before releasing the renderer`, async t => {
   const s = await world({ targets: [page('a')], windows: [nativeWindow(11, rect(0, 0))] }); t.after(() => s.filter.dispose());
   await s.pages.seed();
   const [{ tab }] = await s.pages.list(), entry = s.pages.tab(tab), calls = [];
   entry.page.emulateMedia = async media => { calls.push(media); assert.equal(entry.released, false); };
+  mediaClears(entry, calls);
   await setViewport(entry.page, { color_scheme: 'dark', reduced_motion: true });
   if (release === 'endTurn') assert.equal((await s.pages.endTurn()).cleanedUp, true);
   else { await s.pages[release](tab); await s.pages.endTurn(); }
-  assert.deepEqual(calls, [{ colorScheme: 'dark', reducedMotion: 'reduce' }, { colorScheme: null, reducedMotion: null }]);
+  assert.deepEqual(calls, [{ colorScheme: 'dark', reducedMotion: 'reduce' }, ['Emulation.setEmulatedMedia', { media: '', features: [] }]]);
   assert.equal(entry.released, true); assert.deepEqual(s.pw.closes, []);
 });
 
@@ -71,7 +83,8 @@ test('FD5 a failed app media restore keeps ownership and can retry release', asy
   const s = await world({ targets: [page('a')], windows: [nativeWindow(11, rect(0, 0))] }); t.after(() => s.filter.dispose());
   await s.pages.seed();
   const [{ tab }] = await s.pages.list(), entry = s.pages.tab(tab); let fail = false;
-  entry.page.emulateMedia = async () => { if (fail) throw Error('restore failed'); };
+  entry.page.emulateMedia = async () => {};
+  mediaClears(entry, [], () => fail);
   await setViewport(entry.page, { color_scheme: 'dark' }); fail = true;
   await assert.rejects(s.pages.keep(tab), /restore failed/);
   assert.equal(s.pages.tab(tab), entry); assert.equal(entry.released, false);
@@ -79,7 +92,7 @@ test('FD5 a failed app media restore keeps ownership and can retry release', asy
   await s.pages.endTurn();
 });
 
-for (const release of ['keep', 'handoff', 'endTurn']) test(`FD5B app ${release} clears metrics after reset and clears inherited media`, async t => {
+for (const release of ['keep', 'handoff', 'endTurn']) test(`FD5B app ${release} after a reset releases with no override left`, async t => {
   const s = await world({ targets: [page('a')], windows: [nativeWindow(11, rect(0, 0))] }); t.after(() => s.filter.dispose());
   await s.pages.seed();
   const [{ tab }] = await s.pages.list(), entry = s.pages.tab(tab), calls = [];
@@ -92,10 +105,12 @@ for (const release of ['keep', 'handoff', 'endTurn']) test(`FD5B app ${release} 
   entry.page.emulateMedia = async media => { calls.push(media); assert.equal(entry.released, false); };
   await setViewport(entry.page, { width: 390, height: 844, color_scheme: 'dark', reduced_motion: true });
   await restoreViewport(entry.page);
+  for (const method of ['Emulation.clearDeviceMetricsOverride', 'Emulation.setEmulatedMedia']) assert.ok(calls.includes(method), method);
   calls.length = 0;
   if (release === 'endTurn') assert.equal((await s.pages.endTurn()).cleanedUp, true);
   else await s.pages[release](tab);
-  assert.deepEqual(calls, ['Emulation.clearDeviceMetricsOverride', { colorScheme: null, reducedMotion: null }]);
+  // Since VP1 a reset already removes every override, so release has nothing left to clear.
+  assert.deepEqual(calls, []);
   assert.equal(entry.released, true); assert.deepEqual(s.pw.closes, []);
   await s.pages.endTurn();
 });

@@ -62,7 +62,7 @@ test('launcher stays connected across stop and lazily initializes a new engine w
   const log = join(bank, 'engines.jsonl');
   const child = spawn(process.execPath, [fileURLToPath(new URL('fixtures/restart-launcher.mjs', import.meta.url)), join(bank, 'leases')],
     { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CODEX_HOME: codexHome, SLEIGHT_TEST_ENGINE_LOG: log,
-      SLEIGHT_SURFACES: 'computer', SLEIGHT_CHANGE_REVIEW: '0', SLEIGHT_APPROVAL_PROMPT: 'client' } });
+      SLEIGHT_SURFACES: 'computer', SLEIGHT_CHANGE_REVIEW: '0', SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_REMOTE_APPROVALS: '0' } });
   const closed = new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
   t.after(async () => { child.stdin.end(); await closed; await rm(bank, { recursive: true, force: true }); });
   let approvals = 0, stderr = '';
