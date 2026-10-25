@@ -1010,7 +1010,9 @@ export function createRelay({
     .concat(documentMode ? [DOCUMENT_TOOL, ...(localTools?.tools ?? []).filter(t => t.name === 'select_window')] : (localTools?.tools ?? []), changeReview ? [REVIEW_TOOL] : [], flowRules ? [FLOW_TOOL] : [],
       (modHost() || codexTurbo()) && directBrowser ? directBrowser.tools().map(t => engineBrowserOpen ? widenTurboOpen(t, directBrowser.browser) : t)
         : engineBrowserOpen && !documentMode ? [engineOpenTool(prompt)] : [],
-      codexTurbo() ? [structuredClone(TURN_START)] : [], [structuredClone(NATIVE_HANDOFF_TOOL)])
+      codexTurbo() ? [structuredClone(TURN_START)] : [],
+      // app_handoff refuses document-scoped surfaces, so document mode doesn't advertise it.
+      documentMode ? [] : [structuredClone(NATIVE_HANDOFF_TOOL)])
     // Claude Code defers MCP tools behind a search, which cost a turn before the first call, and
     // again before the first drag (3/3 textedit-drag runs, 2026-10-08). sleight's descriptions
     // are short, so all but the internal turn_ended load up front, local tools included.

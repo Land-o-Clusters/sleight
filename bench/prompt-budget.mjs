@@ -5,6 +5,7 @@ import { PassThrough } from 'node:stream';
 import ts from 'typescript';
 import { skillRules, localToolDefinitions } from '../plugins/sleight/lib/launch.mjs';
 import { batchingDescription, createRelay, promptNotice, promptTool } from '../plugins/sleight/lib/relay.mjs';
+import { NATIVE_HANDOFF_TOOL } from '../plugins/sleight/lib/native-handoff.mjs';
 import { FLOW_TOOL } from '../plugins/sleight/lib/flow-rules.mjs';
 import { engineBrowserOpen, engineOpenTool, withBrowserOpenFirst } from '../plugins/sleight/lib/engine-browser-open.mjs';
 
@@ -22,7 +23,9 @@ function tools(prompt) {
     clientIn.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) + '\n');
     serverOut.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { tools: [{ name: 'turn_ended' }] } }) + '\n');
     // Document mode hides some local tools, so inventory both surfaces once.
-    return [...localToolDefinitions({ SLEIGHT_PROMPT: prompt }), ...result.result.tools.filter(t => !['select_window'].includes(t.name)), promptTool(FLOW_TOOL, prompt)];
+    return [...localToolDefinitions({ SLEIGHT_PROMPT: prompt }), ...result.result.tools.filter(t => !['select_window'].includes(t.name)), promptTool(FLOW_TOOL, prompt),
+      // Document mode doesn't advertise app_handoff, so count it from its definition.
+      promptTool(NATIVE_HANDOFF_TOOL, prompt)];
   } finally {
     relay.dispose();
     for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy();

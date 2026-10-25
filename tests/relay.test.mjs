@@ -938,7 +938,7 @@ test('hides js_add_node_module_dir and marks turn_ended internal in tools/list',
   h.fromServer({ jsonrpc: '2.0', id: 'list', result: { tools: [{ name: 'js' }, { name: 'js_reset' }, { name: 'turn_ended', _meta: { ui: { visibility: [] } } }, { name: 'js_add_node_module_dir' }] } });
   await tick();
   const tools = h.toClient[0].result.tools;
-  assert.deepEqual(tools.map(t => t.name), ['js', 'js_reset', 'turn_ended', 'review_changes']);
+  assert.deepEqual(tools.map(t => t.name), ['js', 'js_reset', 'turn_ended', 'review_changes', 'app_handoff']);
   assert.match(tools[2].description, /Internal to sleight/);
   assert.equal(tools[2]._meta, undefined);
 });
@@ -1366,7 +1366,7 @@ test('lists local tools after the server tools', async () => {
   await tick();
   h.fromServer({ jsonrpc: '2.0', id: 'list', result: { tools: [{ name: 'js' }] } });
   await tick();
-  assert.deepEqual(h.toClient[0].result.tools.map(t => t.name), ['js', 'menu_bar', 'review_changes']);
+  assert.deepEqual(h.toClient[0].result.tools.map(t => t.name), ['js', 'menu_bar', 'review_changes', 'app_handoff']);
 });
 
 test('answers a local tool call itself and never forwards it', async () => {
@@ -1624,7 +1624,7 @@ test('change review can be disabled: no snapshot, no window guard, no review too
   assert.ok(h.toServer.some(m => m.id === 3), 'a changed window does not stop the next action');
   h.fromClient({ jsonrpc: '2.0', id: 4, method: 'tools/list' });
   h.fromServer({ jsonrpc: '2.0', id: 4, result: { tools: [{ name: 'js' }] } });
-  assert.deepEqual(h.toClient.find(m => m.id === 4).result.tools.map(t => t.name), ['js']);
+  assert.deepEqual(h.toClient.find(m => m.id === 4).result.tools.map(t => t.name), ['js', 'app_handoff']);
   assert.equal(h.relay.snapshotDirectory, undefined);
 });
 
