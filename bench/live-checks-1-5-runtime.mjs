@@ -18,12 +18,14 @@ export async function versions(browser) {
 }
 
 function observeChild(child) {
-  let closed = false;
+  let closed = false, exitCode;
   const done = new Promise(resolve => {
     child.once('error', () => {});
+    // 'exit' means the process is gone. 'close' also waits for its stdio, which a helper it started may still hold.
+    child.once('exit', code => { exitCode = code; closed = true; resolve(); });
     child.once('close', () => { closed = true; resolve(); });
   });
-  return { child, done, get closed() { return closed; } };
+  return { child, done, get closed() { return closed; }, get exitCode() { return exitCode; } };
 }
 async function waitChild(record, ms) {
   let timer;
@@ -147,6 +149,7 @@ export function createRuntime({ browser, check, signal, waitHold }) {
         if (clipboardProbe) try { await clipboardProbe.close(); } catch { errors.push('Original clipboard restoration unconfirmed'); }
         if (!workerStopped || !browserStopped) errors.push('Owned child exit unproved');
         if (workerChild?.forcedKill) errors.push('Worker forced exit; native helper cleanup unproved');
+        if (workerChild?.exitCode === 3) errors.push('Worker host close timed out; native helper cleanup unproved');
         if (fixtures) try { await fixtures.close(); } catch (error) { errors.push(error.message); }
         for (const [path, identity] of cleanupFiles) try {
           if (existsSync(path)) {
@@ -160,7 +163,7 @@ export function createRuntime({ browser, check, signal, waitHold }) {
             try { rmdirSync(dirname(path)); } catch (error) { if (!['ENOTEMPTY', 'ENOENT'].includes(error.code)) throw error; }
           }
         } catch (error) { if (error.code !== 'ENOENT') errors.push(error.message); }
-        if (browserStopped && workerStopped && !workerChild?.forcedKill && profileParent) try { rmSync(profileParent, { recursive: true }); } catch (error) { errors.push(error.message); }
+        if (browserStopped && workerStopped && !workerChild?.forcedKill && workerChild?.exitCode !== 3 && profileParent) try { rmSync(profileParent, { recursive: true }); } catch (error) { errors.push(error.message); }
         if (previousPointInput === undefined) delete process.env.SLEIGHT_POINT_INPUT;
         else process.env.SLEIGHT_POINT_INPUT = previousPointInput;
         // A private browser's confirmed exit is stronger cleanup evidence than a failed per-tab receipt.

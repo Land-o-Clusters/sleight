@@ -5,9 +5,16 @@ import { prepareNativeHelpers, preparePdfHelper } from '../plugins/sleight/lib/d
 if (!process.send || !process.env.SLEIGHT_TURBO_REAL_BROWSER) throw Error('LC1_PARENT_REQUIRED');
 const controller = new AbortController();
 let host;
+let stopping = false;
 const stop = () => {
+  if (stopping) return;
+  stopping = true;
   controller.abort(Error('LC1_WORKER_STOPPED'));
-  host?.close().catch(() => {}).finally(() => { if (process.connected) process.disconnect(); });
+  // Close the host, then leave: a lingering handle must not keep this worker alive past the runner's 5 s wait.
+  // Exit code 3 tells the runner the host didn't finish closing, so its native helper cleanup is unproved.
+  const leave = code => { if (process.connected) process.disconnect(); setTimeout(() => process.exit(code), 200).unref(); };
+  const deadline = setTimeout(() => leave(3), 3000); deadline.unref();
+  (host ? host.close() : Promise.resolve()).then(() => 0, () => 3).then(code => { clearTimeout(deadline); leave(code); });
 };
 process.once('disconnect', stop);
 process.once('SIGTERM', stop);
