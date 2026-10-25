@@ -26,6 +26,7 @@
 
 - Handoff with `wait:true` pauses up to 4 minutes and returns a fresh read after Continue. `app_handoff` resumes a native app's new window.
 - Protected cards accept a typed word and Return from a physical keyboard.
+- Away from the Mac (a phone prompt, a locked screen or 120 s without input), an app card ends the waiting call at once with what to type. A first line `allow <app>` in the user's own prompt approves that app's low-risk cards for the session, and a bare yes grants nothing.
 
 ### Records and memory
 

@@ -180,6 +180,11 @@ asked again, remove the app from "Always allow" in ChatGPT's computer-use settin
 To get asked on every action instead, set `SLEIGHT_APPROVAL_SCOPE=once` in Claude Code's environment.
 The `env` block of `~/.claude/settings.json` works.
 
+Away from the Mac (a prompt from the phone, a locked screen or 120 s without input), an app card ends the
+waiting call at once and says what to type. A first line `allow <app>` in your own prompt approves that
+app's low-risk cards for the session. `SLEIGHT_REMOTE_APPROVALS=0` keeps every card waiting at the Mac
+instead, as in 1.4.2.
+
 Set `SLEIGHT_APPROVAL_SCOPE=document` to approve a document or window for the session instead.
 First call `js` with only `let app = await cua.getApp("TextEdit")`, then call `document_scope`:
 the prompt specifies the observed window
