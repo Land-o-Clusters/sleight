@@ -8,23 +8,32 @@ export function resetsCookies(text) {
 // Link or button text that only points at a policy or settings page (the cookie policy, cookie settings, privacy
 // policy, terms) names no consent. Any other link text stays part of the sentence around it.
 export function policyLinkText(text) {
-  return /^(?:(?:our |the )?(?:cookie|privacy|data|cookies) (?:policy|policies|settings|preferences|notice|statement)|(?:privacy|cookie) center|terms(?: (?:of (?:use|service)|and conditions))?|learn more|more info(?:rmation)?|manage (?:cookies|preferences|settings)|customi[sz]e|settings|preferences)$/iu
+  const page = '(?:(?:our |the )?(?:cookie|privacy|data|cookies) (?:policy|policies|settings|preferences|notice|statement)|(?:privacy|cookie) center|terms(?: (?:of (?:use|service)|and conditions))?|learn more|more info(?:rmation)?|manage (?:cookies|preferences|settings)|customi[sz]e|settings|preferences)';
+  return new RegExp('^(?:(?:read|view|see|visit|open) (?:our |the )?)?' + page + '(?: (?:and|&) ' + page + ')*[.!]?$', 'iu')
     .test(String(text ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim());
 }
 
 export function cookieWording(text) {
+  const phrase = /(?<![\p{L}\p{N}])(?:we (?:and our partners )?use (?:(?:essential|necessary|optional|strictly necessary|non-essential) )?cookies|(?:this|our) (?:web)?(?:site|app|page|platform) (?:uses|stores) cookies|cookies are used on this site|storing of cookies|(?:agree|consent) to (?:our|the) use of cookies|cookies on your device|by (?:continuing|using|browsing|staying on|visiting|navigating)\b(?:(?!terms|privacy|service|conditions|account)[^.!?;])*\bcookies?(?:(?!terms|privacy|service|conditions|account)[^.!?;])*$|cookie (?:policy|settings|preferences|notice|consent)|accept(?: all)? cookies|consent to cookies|(?:diese (?:website|webseite) (?:verwendet|nutzt|benutzt)|wir (?:verwenden|nutzen|benutzen)) (?:cookies|kekse)|(?:cookie|cookies)[ -](?:einstellungen|richtlinie)|(?:nous utilisons|(?:ce|notre) site(?: web)? utilise) (?:des )?cookies|(?:politique|paramètres|préférences) (?:de |des |en matière de )?cookies|(?:usamos|utilizamos|(?:este|nuestro) sitio(?: web)? (?:usa|utiliza)) (?:cookies|galletas)|(?:política|configuración|preferencias) de cookies|(?:utilizziamo|(?:questo|il nostro) sito(?: web)? (?:usa|utilizza)) (?:i )?cookie|(?:impostazioni|preferenze) (?:dei )?cookie|(?:usamos|utilizamos|(?:este|nosso) site (?:usa|utiliza)) (?:cookies|biscoitos)|(?:política|configurações|preferências) de cookies|(?:wij gebruiken|deze website gebruikt) cookies|cookie[ -]?(?:instellingen|voorkeuren|beleid)|(?:używamy|ta strona używa) (?:plików )?cookie|(?:ustawienia|preferencje) (?:plików )?cookie|çerez(?:ler)? kullanıyoruz|çerez (?:ayarları|tercihleri|politikası)|(?:vi|denna webbplats) använder (?:kakor|cookies)|(?:inställningar|policy) för kakor|käytämme evästeitä|eväste(?:asetukset|käytännöt)|sütiket használunk|süti(?:beállítások|szabályzat))(?![\p{L}\p{N}])|クッキー(?:を使用|の設定|のポリシー|の同意)|(?:我们|我們)使用\s*(?:cookies?|饼干|餅乾)|(?:cookies?|饼干|餅乾)(?:政策|设置|設定|偏好)|쿠키(?:를 사용| 설정| 정책| 동의)/iu;
   const observed = String(text ?? '').normalize('NFKC').replace(/\s+/g, ' ');
   // Reset/clear confirmations change existing settings, not consent to a wall.
   const resetting = resetsCookies(observed);
   // A policy in an account/checkout agreement supplies no cookie consent.
   // Keep independent consent sentences in the same container observable.
-  const words = observed.split(/[.!?;]+/u).filter(sentence =>
-    // An agreement sentence that itself names cookie use ("you agree to our use of cookies") stays consent wording.
-    /\b(?:use of cookies|cookies on (?:your|this) (?:device|computer|browser)|(?:use|uses|store|stores|place|places|set|sets) cookies)\b/iu.test(sentence) ||
-    !/\b(?:agree(?:s|d)? to|accept(?:s|ed)? (?:our|the|these))\b.*\b(?:terms|polic(?:y|ies)|agreement)\b|\bby (?:continuing|signing up|registering|using)\b.*\bagree\b/iu.test(sentence))
+  const words = observed.split(/[.!?;]+/u).filter(sentence => {
+    const agreement = /\b(?:agree(?:s|d)? to|accept(?:s|ed)? (?:our|the|these))\b.*\b(?:terms|polic(?:y|ies)|agreement)\b|\bby (?:continuing|signing up|registering|using)\b.*\bagree\b/iu.test(sentence);
+    if (!agreement) return true;
+    // An account or checkout agreement (terms, privacy, service, conditions, account) is never cookie consent, even
+    // when it mentions cookies. A browsing agreement that names cookies ("By continuing you agree to our Cookie
+    // Policy", "...to our use of cookies") is.
+    if (/\b(?:terms|privacy|service|conditions|account)\b/iu.test(sentence)) return false;
+    return phrase.test(sentence.replace(/\bcookie (?:policy|policies|settings|preferences|notice|statement)\b/giu, '')) ||
+      /\b(?:use of cookies|cookies on (?:your|this) (?:device|computer|browser)|(?:use|uses|store|stores|place|places|set|sets) cookies)\b/iu.test(sentence) ||
+      /\bby (?:continuing|using|browsing|staying on|visiting|navigating)\b.*\bcookies?\b/iu.test(sentence);
+  })
     .map(sentence => resetting ? sentence.replace(/\bcookie (?:policy|settings|preferences|notice|consent)\b/giu, '') : sentence).join('. ');
   // Whole consent phrases keep cookie recipes, games and settings usable.
-  return /(?<![\p{L}\p{N}])(?:we (?:and our partners )?use (?:(?:essential|necessary|optional|strictly necessary|non-essential) )?cookies|(?:this|our) (?:web)?site (?:uses|stores) cookies|uses? cookies|cookies are used on this site|storing of cookies|our use of cookies|cookies on your device|cookie (?:policy|settings|preferences|notice|consent)|accept(?: all)? cookies|consent to cookies|(?:diese (?:website|webseite) (?:verwendet|nutzt|benutzt)|wir (?:verwenden|nutzen|benutzen)) (?:cookies|kekse)|(?:cookie|cookies)[ -](?:einstellungen|richtlinie)|(?:nous utilisons|(?:ce|notre) site(?: web)? utilise) (?:des )?cookies|(?:politique|paramètres|préférences) (?:de |des |en matière de )?cookies|(?:usamos|utilizamos|(?:este|nuestro) sitio(?: web)? (?:usa|utiliza)) (?:cookies|galletas)|(?:política|configuración|preferencias) de cookies|(?:utilizziamo|(?:questo|il nostro) sito(?: web)? (?:usa|utilizza)) (?:i )?cookie|(?:impostazioni|preferenze) (?:dei )?cookie|(?:usamos|utilizamos|(?:este|nosso) site (?:usa|utiliza)) (?:cookies|biscoitos)|(?:política|configurações|preferências) de cookies|(?:wij gebruiken|deze website gebruikt) cookies|cookie[ -]?(?:instellingen|voorkeuren|beleid)|(?:używamy|ta strona używa) (?:plików )?cookie|(?:ustawienia|preferencje) (?:plików )?cookie|çerez(?:ler)? kullanıyoruz|çerez (?:ayarları|tercihleri|politikası)|(?:vi|denna webbplats) använder (?:kakor|cookies)|(?:inställningar|policy) för kakor|käytämme evästeitä|eväste(?:asetukset|käytännöt)|sütiket használunk|süti(?:beállítások|szabályzat))(?![\p{L}\p{N}])|クッキー(?:を使用|の設定|のポリシー|の同意)|(?:我们|我們)使用\s*(?:cookies?|饼干|餅乾)|(?:cookies?|饼干|餅乾)(?:政策|设置|設定|偏好)|쿠키(?:를 사용| 설정| 정책| 동의)/iu.test(words);
+  return phrase.test(words);
 }
 
 export function consentManager(text) {

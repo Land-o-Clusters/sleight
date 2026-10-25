@@ -34,6 +34,12 @@ for (const phrase of [...phrases, 'You agree to our Cookie Policy. We use cookie
   assert.match(await f.act('Continue'), /accepting cookies is blocked/);
   assert.equal(await f.entry.page.locator('body').getAttribute('data-hit'), null);
 });
+// Security review of 828b76ac: a settings control beside "Accept all" marks a consent wall even with generic wording.
+test('turbo blocks Accept all beside a Cookie settings button', { skip, timeout: 30000 }, async t => {
+  const f = await setup(t, html('style="position:fixed"', 'We value your privacy. <button type="button">Cookie settings</button>', 'Accept all'));
+  await assert.rejects(checkConsent(f.entry.page.getByRole('button', { name: 'Accept all' }), 'click', f.entry.state), /accepting cookies is blocked/);
+  assert.equal(await f.entry.page.locator('body').getAttribute('data-hit'), null);
+});
 for (const root of roots) test(`turbo CMP root blocks: ${root}`, { skip, timeout: 30000 }, async t => {
   const frame = root.startsWith('sp_message_iframe');
   const f = await setup(t, frame ? `<iframe name="${root}" src="/frame"></iframe>` : html(`id="${root}"`, 'Your privacy'), { '/frame': html('', 'Your privacy') });

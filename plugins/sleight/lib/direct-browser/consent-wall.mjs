@@ -98,7 +98,11 @@ export function inspectConsent(el, options = {}, read) {
     if (!dialog && !/^(?:fixed|sticky)$/.test(style(node)?.position)) return;
     if (visibleText(node).replace(/\s+/g, ' ').trim().length >= 1500) return;
     const text = words(node);
-    if (text === null || text.length >= 1500 || !cookieWording(text)) return;
+    // A "Cookie settings" control beside an "Accept all" control is a consent wall even when its other wording is generic.
+    const controls = descendants(node).filter(control).map(item => visibleText(item).replace(/\s+/g, ' ').trim());
+    const settingsBesideAcceptAll = controls.some(label => /\bcookie (?:settings|preferences)\b/iu.test(label)) &&
+      controls.some(label => /^(?:accept|allow) all(?: cookies)?$/iu.test(label));
+    if (text === null || text.length >= 1500 || !cookieWording(text) && !settingsBesideAcceptAll) return;
     return { node, ask: !!(cmp || dialog) };
   };
   if (options.after) return { closed: !visible(el) };
