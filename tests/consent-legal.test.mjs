@@ -58,3 +58,10 @@ test('CMP reset instructions cannot hide a cookie-use sentence', () => {
   const before = tree('\t\t\t3 text We use cookies. You can remove cookies in your browser.', 'Continue', 'dialog, ID: onetrust-pc-sdk');
   assert.equal(engineConsent('click', [4], before)?.blocked, true);
 });
+// Review g11g: the engine path matches turbo's rule that a cookie settings control beside Accept all marks a wall.
+for (const settings of ['link Cookie settings', 'button Cookies settings', 'button Manage cookies']) test(`engine blocks Accept all beside ${settings}`, () => {
+  assert.equal(engineConsent('click', [4], tree(`\t\t\t3 text We value your privacy\n\t\t\t5 ${settings}`, 'Accept all'))?.blocked, true);
+});
+test('engine permits Accept all without a cookie settings control', () => {
+  assert.equal(engineConsent('click', [4], tree('\t\t\t3 text We value your privacy\n\t\t\t5 button Learn more', 'Accept all')), undefined);
+});

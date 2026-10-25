@@ -14,7 +14,7 @@ export function policyLinkText(text) {
 }
 
 export function cookieWording(text) {
-  const phrase = /(?<![\p{L}\p{N}])(?:we (?:and our partners )?use (?:(?:essential|necessary|optional|strictly necessary|non-essential) )?cookies|(?:this|our) (?:web)?(?:site|app|page|platform) (?:uses|stores) cookies|uses? cookies|cookies are used on this site|storing of cookies|use of cookies|cookies on your device|by (?:continuing|using|browsing|staying on|visiting|navigating)\b(?:(?!terms|privacy|service|conditions|account)[^.!?;])*\bcookies?(?:(?!terms|privacy|service|conditions|account)[^.!?;])*$|cookie (?:policy|settings|preferences|notice|consent)|accept(?: all)? cookies|consent to cookies|(?:diese (?:website|webseite) (?:verwendet|nutzt|benutzt)|wir (?:verwenden|nutzen|benutzen)) (?:cookies|kekse)|(?:cookie|cookies)[ -](?:einstellungen|richtlinie)|(?:nous utilisons|(?:ce|notre) site(?: web)? utilise) (?:des )?cookies|(?:politique|paramètres|préférences) (?:de |des |en matière de )?cookies|(?:usamos|utilizamos|(?:este|nuestro) sitio(?: web)? (?:usa|utiliza)) (?:cookies|galletas)|(?:política|configuración|preferencias) de cookies|(?:utilizziamo|(?:questo|il nostro) sito(?: web)? (?:usa|utilizza)) (?:i )?cookie|(?:impostazioni|preferenze) (?:dei )?cookie|(?:usamos|utilizamos|(?:este|nosso) site (?:usa|utiliza)) (?:cookies|biscoitos)|(?:política|configurações|preferências) de cookies|(?:wij gebruiken|deze website gebruikt) cookies|cookie[ -]?(?:instellingen|voorkeuren|beleid)|(?:używamy|ta strona używa) (?:plików )?cookie|(?:ustawienia|preferencje) (?:plików )?cookie|çerez(?:ler)? kullanıyoruz|çerez (?:ayarları|tercihleri|politikası)|(?:vi|denna webbplats) använder (?:kakor|cookies)|(?:inställningar|policy) för kakor|käytämme evästeitä|eväste(?:asetukset|käytännöt)|sütiket használunk|süti(?:beállítások|szabályzat))(?![\p{L}\p{N}])|クッキー(?:を使用|の設定|のポリシー|の同意)|(?:我们|我們)使用\s*(?:cookies?|饼干|餅乾)|(?:cookies?|饼干|餅乾)(?:政策|设置|設定|偏好)|쿠키(?:를 사용| 설정| 정책| 동의)/iu;
+  const phrase = /(?<![\p{L}\p{N}])(?:we (?:and our partners )?use (?:(?:essential|necessary|optional|strictly necessary|non-essential) )?cookies|(?:we|(?:this|our) (?:web)?(?:site|app|page|platform)) (?:uses?|stores?|utili[sz]es?|(?:are|is) using|places?|sets?) (?:[\p{L}-]+ ){0,3}cookies|uses? cookies|cookies (?:are placed|help us)|cookies are used on this site|storing of cookies|use of cookies|cookies on your device|by (?:continuing|using|browsing|staying on|visiting|navigating)\b(?:(?!terms|privacy|service|conditions|account)[^.!?;])*\bcookies?(?:(?!terms|privacy|service|conditions|account)[^.!?;])*(?=[.!?;]|$)|cookie (?:policy|settings|preferences|notice|consent)|(?:accept|allow)(?: all| our| the)? cookies|consent to cookies|(?:diese (?:website|webseite) (?:verwendet|nutzt|benutzt)|wir (?:verwenden|nutzen|benutzen)) (?:cookies|kekse)|(?:cookie|cookies)[ -](?:einstellungen|richtlinie)|(?:nous utilisons|(?:ce|notre) site(?: web)? utilise) (?:des )?cookies|(?:politique|paramètres|préférences) (?:de |des |en matière de )?cookies|(?:usamos|utilizamos|(?:este|nuestro) sitio(?: web)? (?:usa|utiliza)) (?:cookies|galletas)|(?:política|configuración|preferencias) de cookies|(?:utilizziamo|(?:questo|il nostro) sito(?: web)? (?:usa|utilizza)) (?:i )?cookie|(?:impostazioni|preferenze) (?:dei )?cookie|(?:usamos|utilizamos|(?:este|nosso) site (?:usa|utiliza)) (?:cookies|biscoitos)|(?:política|configurações|preferências) de cookies|(?:wij gebruiken|deze website gebruikt) cookies|cookie[ -]?(?:instellingen|voorkeuren|beleid)|(?:używamy|ta strona używa) (?:plików )?cookie|(?:ustawienia|preferencje) (?:plików )?cookie|çerez(?:ler)? kullanıyoruz|çerez (?:ayarları|tercihleri|politikası)|(?:vi|denna webbplats) använder (?:kakor|cookies)|(?:inställningar|policy) för kakor|käytämme evästeitä|eväste(?:asetukset|käytännöt)|sütiket használunk|süti(?:beállítások|szabályzat))(?![\p{L}\p{N}])|クッキー(?:を使用|の設定|のポリシー|の同意)|(?:我们|我們)使用\s*(?:cookies?|饼干|餅乾)|(?:cookies?|饼干|餅乾)(?:政策|设置|設定|偏好)|쿠키(?:를 사용| 설정| 정책| 동의)/iu;
   const observed = String(text ?? '').normalize('NFKC').replace(/\s+/g, ' ');
   // Reset/clear confirmations change existing settings, not consent to a wall.
   const resetting = resetsCookies(observed);
@@ -30,6 +30,11 @@ export function cookieWording(text) {
       .replace(/\bcookies? (?:preferences |settings )?(?:policy|policies|settings|preferences|notice|statement)\b/giu, '')
       .replace(/\b(?:explains?|describes?|sets? out|details?) how we use cookies\b/giu, '');
     if (/\bcookies?\b/iu.test(rest)) return true;
+    // "By using this site you agree to our Terms and Cookie Policy" is a browsing agreement, so it counts even beside
+    // terms or privacy. A bare "By continuing" (a sign-up's Continue) or a sign-up, account or order sentence does not.
+    if (/\bby (?:continuing (?:to (?:browse|use|visit|navigate)|on)|using|browsing|staying on|visiting|navigating)\b/iu.test(sentence) &&
+      /\bcookies?\b/iu.test(sentence) &&
+      !/\b(?:sign(?:ing)? up|regist(?:er|ering|ration)|creat(?:e|ing) (?:an |your )?account|order|checkout|check out|purchas(?:e|ing)|subscri(?:be|bing|ption))\b/iu.test(sentence)) return true;
     // An account or checkout agreement (terms, privacy, service, conditions, account) that names cookies only as a
     // policy is not cookie consent. A browsing agreement ("By continuing you agree to our Cookie Policy") is.
     if (/\b(?:terms|privacy|service|conditions|account)\b/iu.test(sentence)) return false;
@@ -106,7 +111,11 @@ export function engineConsent(name, args, text, after = false) {
     if (cmp) return { row, ask: true };
     const fullText = rows.filter(other => under(other, row)).map(other => other.words).join(' ').replace(/\s+/g, ' ').trim();
     if (fullText.length >= 1500) return;
-    if (words.length >= 1500 || !cookieWording(words)) return;
+    // A cookie settings control beside an Accept all control marks a wall even when the other wording is generic.
+    const labels = rows.filter(other => scopedUnder(other, row) && /^(?:button|link)\b/.test(other.body)).map(other => String(other.name).replace(/\s+/g, ' ').trim());
+    const settingsBesideAccept = labels.some(label => /\bcookies? (?:settings|preferences|choices)\b|^manage cookies$/iu.test(label)) &&
+      labels.some(label => /^(?:accept|allow)(?: all)?(?: cookies)?$/iu.test(label));
+    if (words.length >= 1500 || !cookieWording(words) && !settingsBesideAccept) return;
     return { row, ask: cmp || dialog };
   };
   const contextual = row => {

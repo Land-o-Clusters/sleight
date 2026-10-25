@@ -100,8 +100,8 @@ export function inspectConsent(el, options = {}, read) {
     const text = words(node);
     // A "Cookie settings" control beside an "Accept all" control is a consent wall even when its other wording is generic.
     const controls = descendants(node).filter(control).map(item => visibleText(item).replace(/\s+/g, ' ').trim());
-    const settingsBesideAcceptAll = controls.some(label => /\bcookie (?:settings|preferences)\b/iu.test(label)) &&
-      controls.some(label => /^(?:accept|allow) all(?: cookies)?$/iu.test(label));
+    const settingsBesideAcceptAll = controls.some(label => /\bcookies? (?:settings|preferences|choices)\b|^manage cookies$/iu.test(label)) &&
+      controls.some(label => /^(?:accept|allow)(?: all)?(?: cookies)?$/iu.test(label));
     if (text === null || text.length >= 1500 || !cookieWording(text) && !settingsBesideAcceptAll) return;
     return { node, ask: !!(cmp || dialog) };
   };
