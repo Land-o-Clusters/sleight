@@ -2874,7 +2874,21 @@ export function createRelay({
     if (present) {
       if (nativeCard) askUser(msg, auditFailed || !plain);
       else if (clientCanElicit === false) toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } });
-      else { if (plain && key !== undefined) approvalRequests.set(msg.id, { key, generation }); toClient(msg); }
+      else {
+        if (plain && key !== undefined) {
+          approvalRequests.set(msg.id, { key, generation });
+          // The present user's card keeps the "Always" choice the ordinary card path offers.
+          const always = grokClient ? undefined : alwaysChoice(msg);
+          if (always) {
+            alwaysOffered.set(msg.id, always);
+            const schema = msg.params.requestedSchema ?? { type: 'object', properties: {} };
+            msg.params.requestedSchema = { ...schema, properties: { ...schema.properties,
+              remember: { type: 'string', title: 'Remember this choice', enum: ['This session', 'Always'], default: 'This session',
+                description: 'Always adds the app to your pre-approved list (sleight-mcp allow remove takes it off).' } } };
+          }
+        }
+        toClient(msg);
+      }
       return;
     }
     identity = appIdentity(app);
