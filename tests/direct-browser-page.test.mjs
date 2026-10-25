@@ -207,7 +207,14 @@ test('developer capture follows only the verified replacement session after deta
 test('FD5 failed media restoration prevents a browser keep from releasing ownership', async () => {
   const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/start' });
   const entry = f.registry.tab(tab); let fail = false;
-  entry.page.emulateMedia = async () => { if (fail) throw Error('restore failed'); };
+  // VP1 clears media over CDP, so the failure comes from that call.
+  entry.page.emulateMedia = async () => {};
+  entry.page.context = () => f.context;
+  const send = entry.page.cdp.send.bind(entry.page.cdp);
+  entry.page.cdp.send = async (method, params) => {
+    if (fail && method === 'Emulation.setEmulatedMedia') throw Error('restore failed');
+    return send(method, params);
+  };
   await setViewport(entry.page, { reduced_motion: true }); fail = true;
   await assert.rejects(f.registry.keep(tab), /restore failed/);
   assert.equal(f.registry.tab(tab), entry); assert.equal(entry.released, false);
