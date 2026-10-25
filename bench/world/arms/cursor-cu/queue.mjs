@@ -10,7 +10,8 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 const HERE = fileURLToPath(import.meta.url);
 const W = join(homedir(), 'Projects/sleight-wt');
-export const ROOT = join(W, 'cq1');
+// The release build's own harness, frozen during the sitting (one build for every queue).
+export const ROOT = join(W, 'p143');
 export const OUT = join(W, 'race-1017/cursor150');
 export const NATIVE = 'calculator-click,calculator-menu,textedit-save,textedit-drag,finder-move,preview-read,textedit-calculator,word-edit,excel-edit,vscode-edit,textedit-edit,finder-rename,finder-create-folder,textedit-two-windows,textedit-window-drag,textedit-replace-save,textedit-insert-line,word-memo,word-brief,textedit-notes-table,cc-list-native';
 export const CHROME = 'form-travel,form-settings,form-checkout,form-settings-helium,shipping-link,size-guide,demoid,mobile,handoff,inject-order,inject-mail,wikipedia,mdn';
