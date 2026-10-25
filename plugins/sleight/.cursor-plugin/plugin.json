@@ -1,7 +1,7 @@
 {
   "name": "sleight",
   "displayName": "sleight",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "Unofficial: lets Cursor's agent drive macOS apps in the background through the computer-use engine bundled with the ChatGPT desktop app, without taking over your cursor.",
   "author": {
     "name": "Land o' Clusters"

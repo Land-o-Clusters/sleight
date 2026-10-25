@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "sleight",
-      "version": "1.4.2",
+      "version": "1.5.0",
       "source": "./plugins/sleight",
       "description": "Drive macOS apps in the background without taking over your cursor."
     }
