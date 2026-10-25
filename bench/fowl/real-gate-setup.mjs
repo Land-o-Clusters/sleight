@@ -124,7 +124,8 @@ export function realAgentSetup({ task, surface, dir, realBrowser, armHome, dryRu
   if (isCodexSurface(surface)) return codexBrowserSetup({ dir, prompt, realBrowser, surface });
   // The sleight-in-Codex arms build the sleight / sleight-turbo arm for this browser, then run it under Codex.
   const kind = sleightKind(surface, realBrowser.browser);
-  const env =Object.fromEntries(['HOME', 'USER', 'PATH', 'TMPDIR', 'LANG', 'TERM'].flatMap(key =>
+  // SLEIGHT_REMOTE_APPROVALS=0 (the 1.5.0 A/B): approve.mjs stands in for the person at the Mac.
+  const env =Object.fromEntries(['HOME', 'USER', 'PATH', 'TMPDIR', 'LANG', 'TERM', 'SLEIGHT_REMOTE_APPROVALS'].flatMap(key =>
     typeof process.env[key] === 'string' ? [[key, process.env[key]]] : []));
   const engine = kind === 'sleight';
   const as3WindowPrompt = engine && process.env.SLEIGHT_BROWSER_CORE === '1' && process.env.AS3_WINDOW_PROMPT === '1';
