@@ -716,3 +716,18 @@ test("PG3 review: a stopped Enter on a listed option that goes ahead on the mess
   assert.equal(field?.allowed, 'message');
   assert.equal(field.payment, true, 'Enter in a field beside card fields still counts');
 });
+
+for (const presence of [{ idleSeconds: 999, locked: false }, { idleSeconds: 0, locked: true }]) test(`away native payment returns immediately, card stays and only physical input permits a retry: ${JSON.stringify(presence)}`, async t => {
+  let answer, asks = 0;
+  const f = relayFixture(t, { ask: () => { asks++; return new Promise(r => { answer = r; }); }, close() {} }, {
+    remoteApprovals: { presence: async () => presence, catalog: async () => ({ apps: [] }) },
+  });
+  f.call('act', 'await app.click(88)'); f.stop('act'); await f.settle();
+  assert.equal(asks, 1);
+  assert.match(f.received.find(m => m.id === 'act')?.result.content[0].text ?? '', /needs the user at the Mac/);
+  answer('once'); await f.settle();
+  assert.equal(f.received.filter(m => m.id === 'act').length, 1);
+  f.call('reread', 'let app = await cua.getApp("Firefox")'); f.reply('reread', beforePay); await f.settle();
+  f.call('again', 'await app.click(88)'); await f.settle();
+  assert.deepEqual(f.update('again').payment.allow, { site, shown: '$268.00', control: payNow });
+});

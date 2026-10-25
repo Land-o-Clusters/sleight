@@ -429,4 +429,6 @@ test('remote approval context has its own measured conditional budget', { skip }
   assert.equal(report.conditional.remoteApprovals.upfront.characters, 48);
   assert.equal(report.conditional.remoteApprovals.upfront.lines, 1);
   assert.ok(report.conditional.remoteApprovals.refusal.characters < 100);
+  assert.match(report.conditional.remoteApprovals.physical.text, /needs the user at the Mac/);
+  assert.ok(report.conditional.remoteApprovals.physical.characters < 100);
 });

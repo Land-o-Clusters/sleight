@@ -1,7 +1,8 @@
 // Read-only CoreGraphics, Foundation and LaunchServices metadata. No AX API, event tap, Apple event or permission request.
 function readPresence(api) {
-  var session = api.session();
-  return { idleSeconds: api.idle(), locked: !session || session.kCGSSessionOnConsoleKey !== true ||
+  var session = api.session(), idle = api.idle();
+  if (!session || !isFinite(idle) || idle < 0) return {};
+  return { idleSeconds: idle, locked: session.kCGSSessionOnConsoleKey !== true ||
     session.kCGSessionLoginDoneKey !== true || session.CGSSessionScreenIsLocked === true || session.CGSSessionScreenIsLocked === 1 };
 }
 function readCatalog(api) {

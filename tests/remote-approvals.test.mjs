@@ -13,9 +13,9 @@ const apps = [
 ];
 for (const [text, expected] of [
   ['allow TextEdit', ['com.apple.TextEdit']], ['ALLOW textedit.app', ['com.apple.TextEdit']],
-  ['Please continue.\nallow TextEdit, Mail and Word', ['com.apple.TextEdit', 'com.apple.mail', 'com.microsoft.Word']],
+  ['Please continue.\nallow TextEdit, Mail and Word', []],
   ['allow Mail and Microsoft Word', ['com.apple.mail', 'com.microsoft.Word']],
-  ['allow TextEdit\nallow Mail', ['com.apple.TextEdit', 'com.apple.mail']],
+  ['allow TextEdit\nallow Mail', ['com.apple.TextEdit']],
   ...['yes', 'ok', 'allow', 'allow me to explain', 'Please allow Mail', 'disallow Mail', 'allow Missing',
     'allow Mail, Missing', 'allow Duplicate', 'allow Mail to send it', 'allow com.apple.mail',
     'allow Mail and', 'allow Mail,', '> allow Mail', 'allow Mail\u0000'].map(text => [text, []]),
@@ -24,14 +24,14 @@ for (const [text, expected] of [
 for (const [state, origin, expected] of [
   [{ idleSeconds: 0, locked: false }, 'composer', true], [{ idleSeconds: 119.99, locked: false }, undefined, true],
   [{ idleSeconds: 120, locked: false }, 'composer', false], [{ idleSeconds: 0, locked: true }, 'composer', false],
-  [{ idleSeconds: 0, locked: false }, 'bridge', false], [{}, undefined, false],
-  [{ idleSeconds: -1, locked: false }, undefined, false], [{ idleSeconds: Infinity, locked: false }, undefined, false],
+  [{ idleSeconds: 0, locked: false }, 'bridge', false], [{}, undefined, true],
+  [{ idleSeconds: -1, locked: false }, undefined, true], [{ idleSeconds: Infinity, locked: false }, undefined, true],
 ]) test(`presence ${JSON.stringify(state)} ${origin}`, () => assert.equal(isPresent(state, origin), expected));
 
 test('prediction uses installed names and current default handlers, dedupes and drops grants', () => {
   const catalog = { apps, defaults: { 'mailto:': 'com.apple.mail', '.docx': 'com.microsoft.Word', 'https:': 'com.apple.TextEdit' } };
   assert.deepEqual(predictApps('write a note in TextEdit and email it to me', catalog), apps.slice(0, 2));
-  assert.deepEqual(predictApps('send a Word document over the web', catalog).map(a => a.id), ['com.microsoft.Word', 'com.apple.mail', 'com.apple.TextEdit']);
+  assert.deepEqual(predictApps('send a Word document over the web', catalog).map(a => a.id), ['com.microsoft.Word']);
   assert.deepEqual(predictApps('TextEditor, mailing lists and watermelon', catalog), []);
   assert.equal(upfrontAsk(apps.slice(0, 2)), 'sleight: Ask the user to reply: allow TextEdit, Mail');
   assert.equal(upfrontAsk([]), undefined);
@@ -47,7 +47,7 @@ function harness(t, options = {}) {
     remoteApprovals: { presence: async () => ({ idleSeconds: 0, locked: false }), catalog: async () => ({ apps, defaults: { 'mailto:': 'com.apple.mail' } }) },
     stderr: { write: text => logs.push(text) }, ...options });
   t.after(() => { relay.dispose(); streams.forEach(s => s.destroy()); });
-  return { client, server, logs, call: msg => clientIn.write(JSON.stringify(msg) + '\n'), engine: msg => serverOut.write(JSON.stringify(msg) + '\n') };
+  return { client, server, logs, close: () => relay.close(), call: msg => clientIn.write(JSON.stringify(msg) + '\n'), engine: msg => serverOut.write(JSON.stringify(msg) + '\n') };
 }
 const tick = () => new Promise(r => setImmediate(r));
 const card = (id, app = 'com.apple.TextEdit', extra = {}) => ({ id, method: 'elicitation/create', params: {
@@ -186,19 +186,20 @@ test('away refusal preserves an unrelated concurrent call and its result', async
   assert.match(JSON.stringify(h.client.find(m => m.id === 11)), /Calculator result/);
 });
 
-for (const [text, key] of [['email it', 'mailto:'], ['send the note', 'mailto:'], ['make a docx document', '.docx'],
-  ['make a spreadsheet', '.xlsx'], ['make slides', '.pptx'], ['add a meeting', '.ics'], ['visit the web', 'https:']]) {
+for (const [text, key] of [['email it', 'mailto:'], ['mail to Sally', 'mailto:'], ['make a .docx document', '.docx'],
+  ['make a spreadsheet', '.xlsx'], ['make slides', '.pptx'], ['schedule a meeting', '.ics']]) {
   test(`prediction follows the Mac default for ${key}: ${text}`, () => {
     assert.deepEqual(predictApps(text, { apps, defaults: { [key]: 'com.apple.mail' } }).map(a => a.id), ['com.apple.mail']);
   });
 }
 
-test('presence metadata errors fail fast and do not turn into grants', async t => {
+test('presence metadata errors preserve the waiting card outside bridge', async t => {
   const h = harness(t, { remoteApprovals: { presence: async () => { throw Error('metadata failed'); }, catalog: async () => ({ apps, defaults: {} }) } });
   h.call({ id: 10, method: 'tools/call', params: { name: 'js', arguments: { code: 'await cua.getApp("TextEdit")' } } });
   h.engine(card('unknown')); await tick();
-  assert.equal(h.server.find(m => m.id === 'unknown').result.action, 'decline');
-  assert.equal(h.client.find(m => m.id === 10).result.isError, true);
+  assert.equal(h.server.some(m => m.id === 'unknown'), false);
+  assert.equal(h.client.some(m => m.id === 10), false);
+  assert.ok(h.client.some(m => m.id === 'unknown' && m.method === 'elicitation/create'));
 });
 
 test('app session grants disappear with the relay session', async t => {
@@ -234,4 +235,154 @@ test('a failed list audit does not fall back to a remembered card', async t => {
   listed = true;
   h.engine(card('audit-failed')); await tick();
   assert.equal(asks, 2, 'the person must be asked after a list audit failure');
+});
+
+for (const text of ['update the release notes and preview the page', 'send me the summary', 'fix the web build']) {
+  test(`common words predict no apps: ${text}`, () => {
+    const catalog = { apps: [...apps, { id: 'notes', name: 'Notes' }, { id: 'preview', name: 'Preview' }], defaults: { 'mailto:': 'com.apple.mail', 'https:': 'com.apple.TextEdit' } };
+    assert.deepEqual(predictApps(text, catalog), []);
+  });
+}
+for (const [text, expected] of [
+  ['send an email to sally', ['com.apple.mail']],
+  ['create this word doc and email it to sally', ['com.apple.mail', 'com.microsoft.Word']],
+  ['open TextEdit', ['com.apple.TextEdit']], ['use the TextEdit app', ['com.apple.TextEdit']],
+  ['write with TextEdit', ['com.apple.TextEdit']], ['write using TextEdit', ['com.apple.TextEdit']],
+  ['TextEdit release notes', []], ['Mail the summary', []], ['a calendar and a meeting', []],
+]) test(`app context: ${text}`, () => assert.deepEqual(predictApps(text, { apps, defaults: { 'mailto:': 'com.apple.mail', '.docx': 'com.microsoft.Word' } }).map(a => a.id), expected));
+
+for (const [id, name] of [['com.apple.Terminal', 'Terminal'], ['com.googlecode.iterm2', 'iTerm2'], ['com.openai.codex', 'ChatGPT']]) {
+  test(`typed grants never answer forbidden app ${name}`, async t => {
+    let asks = 0;
+    const h = harness(t, { engineForbiddenTargets: true, ask: async () => { asks++; return 'decline'; },
+      remoteApprovals: { catalog: async () => ({ apps: [{ id, name }] }), presence: async () => ({ idleSeconds: 0, locked: false }) } });
+    await user(h, `allow ${name}`, 'composer'); h.engine(card('danger', id)); await tick();
+    assert.equal(asks, 1); assert.equal(h.server.find(m => m.id === 'danger').result.action, 'decline');
+  });
+}
+for (const risk of ['medium', 'high', 'unknown']) test(`typed grant does not cover ${risk} risk`, async t => {
+  let asks = 0;
+  const h = harness(t, { ask: async () => { asks++; return 'decline'; } }); await user(h, 'allow TextEdit', 'composer');
+  const c = card('risk'); c.params._meta.riskLevel = risk; h.engine(c); await tick();
+  assert.equal(asks, 1); assert.equal(h.server.find(m => m.id === 'risk').result.action, 'decline');
+});
+
+test('no elicitation support cancels with a JSON-RPC envelope', async t => {
+  const h = harness(t);
+  h.call({ id: 'init', method: 'initialize', params: { capabilities: {} } });
+  h.engine(card('no-elicit')); await tick();
+  assert.deepEqual(h.server.find(m => m.id === 'no-elicit'), { jsonrpc: '2.0', id: 'no-elicit', result: { action: 'cancel' } });
+});
+
+for (const kind of ['payment', 'action', 'consent', 'always-only']) test(`away ${kind} returns at once and retains a physical card`, async t => {
+  let decide, asks = 0;
+  const h = harness(t, { ask: () => { asks++; return new Promise(r => { decide = r; }); } });
+  await user(h, 'allow TextEdit');
+  h.call({ id: 10, method: 'tools/call', params: { name: 'js', arguments: { code: 'await cua.getApp("TextEdit")' } } });
+  const c = card('protected-away');
+  if (kind === 'always-only') c.params._meta.persist = ['always']; else c.params.message = `${kind}: confirm?`;
+  h.engine(c); await tick(); await tick();
+  assert.equal(asks, 1); assert.equal(h.server.find(m => m.id === c.id)?.jsonrpc, '2.0');
+  assert.equal(h.server.find(m => m.id === c.id)?.result.action, 'decline');
+  assert.match(h.client.find(m => m.id === 10)?.result.content[0].text ?? '', /needs the user at the Mac/);
+  assert.doesNotMatch(h.client.find(m => m.id === 10)?.result.content[0].text ?? '', /reply: allow/);
+  decide('accept'); await tick();
+  assert.equal(h.server.filter(m => m.id === c.id).length, 1);
+  h.engine(card('retry-protected', undefined, { message: 'action: confirm?' })); await tick();
+  assert.equal(h.server.find(m => m.id === 'retry-protected')?.result.action, 'decline', 'late action never grants a retry');
+});
+
+test('catalog starts once, survives a slow first wait and retries pending typed text on the next card', async t => {
+  let finish, scans = 0;
+  const h = harness(t, { ask: async () => 'decline', remoteApprovals: {
+    presence: async () => ({ idleSeconds: 0, locked: false }),
+    catalog: () => { scans++; return new Promise(r => { finish = r; }); },
+  } });
+  await tick(); assert.equal(scans, 1, 'background startup');
+  await user(h, 'allow TextEdit', 'composer');
+  await new Promise(r => setTimeout(r, 1550));
+  h.engine(card('cold')); await new Promise(r => setTimeout(r, 1550));
+  assert.equal(h.server.find(m => m.id === 'cold')?.result.action, 'decline');
+  finish({ apps, defaults: {} }); await tick();
+  h.engine(card('warm')); await tick();
+  assert.equal(scans, 1); assert.equal(h.server.find(m => m.id === 'warm')?.result.action, 'accept');
+});
+
+test('revoke by display name removes a typed bundle grant', async t => {
+  let removed, asks = 0;
+  const h = harness(t, { preapproved: { allows: () => false, list: () => [], onRemoved: fn => { removed = fn; } }, ask: async () => { asks++; return 'decline'; } });
+  await user(h, 'allow TextEdit', 'composer'); removed(['TextEdit']); h.engine(card('revoked')); await tick();
+  assert.equal(asks, 1); assert.equal(h.server.find(m => m.id === 'revoked').result.action, 'decline');
+});
+
+for (const physical of [true, false]) test(`away local consent returns with a physical notice, panel=${physical}`, async t => {
+  let finish, asked = 0;
+  const h = harness(t, { ask: physical ? () => { asked++; return new Promise(r => { finish = r; }); } : undefined,
+    remoteApprovals: { presence: async () => ({ idleSeconds: 999, locked: false }), catalog: async () => ({ apps }) },
+    localTools: { tools: [{ name: 'fixture_consent', inputSchema: { type: 'object' } }], call: async (_name, _args, approve) => {
+      const allowed = await approve(['fixture'], 'Confirm this action?', { once: true });
+      return { content: [{ type: 'text', text: allowed ? 'sent' : 'declined' }] };
+    } },
+  });
+  h.call({ id: 10, method: 'tools/call', params: { name: 'fixture_consent', arguments: {} } });
+  await tick(); await tick();
+  assert.match(h.client.find(m => m.id === 10)?.result.content[0].text ?? '', /needs the user at the Mac/);
+  if (physical) { assert.equal(asked, 1); finish('accept'); }
+  else {
+    const form = h.client.find(m => m.method === 'elicitation/create'); assert.ok(form);
+    h.call({ id: form.id, result: { action: 'accept' } });
+  }
+  await tick(); assert.equal(h.client.filter(m => m.id === 10).length, 1);
+});
+
+test('an unknown connector card also releases its waiting call while away and keeps its original form', async t => {
+  const h = harness(t); await user(h, 'Read nothing');
+  h.call({ id: 10, method: 'tools/call', params: { name: 'js', arguments: { code: '1' } } });
+  const c = card('external', undefined, { message: 'Confirm purchase', requestedSchema: { type: 'object', properties: { note: { type: 'string' } } } });
+  c.params._meta.connector_id = 'other'; h.engine(c); await tick();
+  assert.match(h.client.find(m => m.id === 10)?.result.content[0].text ?? '', /needs the user at the Mac/);
+  assert.equal(h.server.find(m => m.id === 'external')?.result.action, 'decline');
+  assert.deepEqual(h.client.find(m => m.method === 'elicitation/create')?.params.requestedSchema, c.params.requestedSchema);
+});
+
+test('a retained app card does not block a later away local confirmation', async t => {
+  let asks = 0;
+  const h = harness(t, { ask: () => { asks++; return new Promise(() => {}); },
+    remoteApprovals: { presence: async () => ({ idleSeconds: 999, locked: false }), catalog: async () => ({ apps }) },
+    localTools: { tools: [{ name: 'fixture_consent' }], call: async (_name, _args, approve) => ({ content: [{ type: 'text', text: String(await approve(['fixture'], 'Confirm?', { once: true })) }] }) },
+  });
+  h.engine(card('unanswered')); await tick();
+  h.call({ id: 10, method: 'tools/call', params: { name: 'fixture_consent', arguments: {} } }); await tick(); await tick();
+  assert.equal(asks, 2); assert.match(h.client.find(m => m.id === 10)?.result.content[0].text ?? '', /needs the user at the Mac/);
+});
+
+for (const risk of ['medium', 'high', undefined]) test(`away nondefault risk asks for physical input, risk=${risk}`, async t => {
+  const h = harness(t); await user(h, 'allow TextEdit');
+  h.call({ id: 10, method: 'tools/call', params: { name: 'js', arguments: { code: 'await cua.getApp("TextEdit")' } } });
+  const c = card('higher'); c.params._meta.riskLevel = risk; h.engine(c); await tick();
+  assert.match(h.client.find(m => m.id === 10)?.result.content[0].text ?? '', /needs the user at the Mac/);
+  assert.doesNotMatch(h.client.find(m => m.id === 10)?.result.content[0].text ?? '', /reply: allow/);
+});
+
+test('typed approvals do not answer a card with the engine dangerous warning', async t => {
+  let asked = 0;
+  const h = harness(t, { ask: async () => { asked++; return 'decline'; } }); await user(h, 'allow TextEdit', 'composer');
+  h.engine(card('warning', undefined, { message: 'Allow Computer Use to use "com.apple.TextEdit"? This app could be dangerous.' }));
+  await tick(); assert.equal(asked, 1); assert.equal(h.server.find(m => m.id === 'warning').result.action, 'decline');
+});
+
+for (const stage of ['catalog', 'presence']) test(`cancel during ${stage} keeps a JSON-RPC envelope`, async t => {
+  let finish;
+  const h = harness(t, { remoteApprovals: {
+    catalog: stage === 'catalog' ? () => new Promise(r => { finish = r; }) : async () => ({ apps }),
+    presence: stage === 'presence' ? () => new Promise(r => { finish = r; }) : async () => ({ idleSeconds: 0, locked: false }),
+  } });
+  if (stage === 'catalog') {
+    // Begin is allowed to time out while the shared scan remains alive.
+    await user(h, 'allow TextEdit'); await new Promise(r => setTimeout(r, 1550));
+  }
+  h.engine(card('cancelled')); await tick();
+  await h.close();
+  finish(stage === 'catalog' ? { apps } : { idleSeconds: 0, locked: false }); await tick(); await tick();
+  assert.deepEqual(h.server.find(m => m.id === 'cancelled'), { jsonrpc: '2.0', id: 'cancelled', result: { action: 'cancel' } });
 });

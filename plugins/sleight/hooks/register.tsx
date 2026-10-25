@@ -47,6 +47,7 @@ let usedThisTurn = false
 // A genuine turbo prompt needs an end fence even if no sleight tool runs.
 // Binding that prompt alone must not activate the shell guard.
 let turboTurnBound = false
+let remoteTurnBound = false
 let turnRunning = false
 let actions = 0
 let lastApp: string | undefined
@@ -76,30 +77,43 @@ async function beginTurboTurn($: any, text: string, origin: 'composer' | 'bridge
   const running = turboPending.then(async () => {
     try {
       let enabled = false
+      let present = origin !== 'bridge'
       try {
         const state = await $.process.run([`${$.plugin.root}/bin/sleight-mcp`, 'turbo-state'])
-        if (state.exitCode === 0 && state.isStdoutTruncated !== true && typeof state.stdout === 'string' && state.stdout.length <= 4096)
-          enabled = JSON.parse(state.stdout)?.enabled === true
+        if (state.exitCode === 0 && state.isStdoutTruncated !== true && typeof state.stdout === 'string' && state.stdout.length <= 4096) {
+          const data = JSON.parse(state.stdout)
+          enabled = data?.enabled === true
+          const p = data?.presence
+          if (origin !== 'bridge' && typeof p?.locked === 'boolean' && Number.isFinite(p.idleSeconds) && p.idleSeconds >= 0)
+            present = !p.locked && p.idleSeconds < 120
+        }
       } catch { /* User text still reaches the relay when turbo is unavailable. */ }
-      if (!turboEnvelope) {
-        const response = await call($, 'turn_ended', { sleight_turbo: { event: 'bootstrap' } })
-        if (response.isError || response.content?.length !== 1 || response.content[0]?.type !== 'text' ||
-            typeof response.content[0].text !== 'string' || response.content[0].text.length > 4096) return
-        const data = JSON.parse(response.content[0].text)
-        const envelope = data?.sleightTurbo
-        if (!data || Object.keys(data).length !== 1 || !envelope || Object.keys(envelope).length !== 3 || envelope.version !== 1 ||
-            typeof envelope.session !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(envelope.session) ||
-            typeof envelope.nonce !== 'string' || !/^[a-f0-9]{64}$/.test(envelope.nonce)) return
-        turboEnvelope = { version: 1, session: envelope.session, nonce: envelope.nonce }
+      if (!enabled && present && !/^[ \t]*allow\b/i.test(text)) return
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (!turboEnvelope) {
+          const response = await call($, 'turn_ended', { sleight_turbo: { event: 'bootstrap' } })
+          if (response.isError || response.content?.length !== 1 || response.content[0]?.type !== 'text' ||
+              typeof response.content[0].text !== 'string' || response.content[0].text.length > 4096) return
+          const data = JSON.parse(response.content[0].text)
+          const envelope = data?.sleightTurbo
+          if (!data || Object.keys(data).length !== 1 || !envelope || Object.keys(envelope).length !== 3 || envelope.version !== 1 ||
+              typeof envelope.session !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(envelope.session) ||
+              typeof envelope.nonce !== 'string' || !/^[a-f0-9]{64}$/.test(envelope.nonce)) return
+          turboEnvelope = { version: 1, session: envelope.session, nonce: envelope.nonce }
+        }
+        let response
+        try { response = await call($, 'turn_ended', { sleight_turbo: { ...turboEnvelope, event: 'begin', turn, text, origin, turbo: enabled } }) }
+        catch { turboEnvelope = undefined; continue }
+        if (response.isError) { turboEnvelope = undefined; continue }
+        if (origin === 'bridge') remoteTurnBound = true
+        try {
+          const remote = JSON.parse(response.content?.[0]?.text ?? '')?.sleightRemote
+          if (remote?.turboBound === true) turboTurnBound = true
+          if (typeof remote?.context === 'string' && remote.context.length <= 4096 &&
+              /^sleight: Ask the user to reply: allow [^\r\n]+$/.test(remote.context)) context = remote.context
+        } catch { /* A missing context line changes no authority. */ }
+        break
       }
-      const response = await call($, 'turn_ended', { sleight_turbo: { ...turboEnvelope, event: 'begin', turn, text, origin, turbo: enabled } })
-      if (response.isError) return
-      try {
-        const remote = JSON.parse(response.content?.[0]?.text ?? '')?.sleightRemote
-        if (remote?.turboBound === true) turboTurnBound = true
-        if (typeof remote?.context === 'string' && remote.context.length <= 4096 &&
-            /^sleight: Ask the user to reply: allow [^\r\n]+$/.test(remote.context)) context = remote.context
-      } catch { /* A missing context line changes no authority. */ }
     } catch { turboEnvelope = undefined }
   })
   turboPending = running
@@ -339,6 +353,7 @@ export const register: Register = on => {
     .catch(($, e, next) => ((next.error?.kind as string | undefined) === 're-entry' ? ownCallVerdict(e, next.origin) : undefined) ?? next(e))
   on('session.start', async ($, e, next) => {
     turboEnvelope = undefined
+    remoteTurnBound = false
     await $.command.register({
       name: 'sleight',
       description: 'Open the sleight pane; show turn stats, replay, record, or stop computer use',
@@ -469,9 +484,10 @@ export const register: Register = on => {
       if (e.agentId === undefined) {
         turnRunning = false
         // Stats ownership cannot gate engine cleanup, including mid-turn mod loads.
-        const needsEnd = usedThisTurn || turboTurnBound
+        const needsEnd = usedThisTurn || turboTurnBound || remoteTurnBound
         usedThisTurn = false
         turboTurnBound = false
+        remoteTurnBound = false
         const owner = statsTurn?.id === e.turnId ? statsTurn : undefined
         if (owner) statsTurn = undefined
         if (needsEnd || owner?.used) {
@@ -508,6 +524,7 @@ export const register: Register = on => {
       await update($, stopped, () => true)
       usedThisTurn = false
       turboTurnBound = false
+      remoteTurnBound = false
       const receipt = await stopEngineTurn($)
       $.ui.status('sleight · stopped')
       // The interrupted call usually ends Claude's turn at once (desktop app, 2026-10-11), so Esc

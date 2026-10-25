@@ -1,4 +1,4 @@
-import { upfrontAsk, remoteApprovalNotice } from '../plugins/sleight/lib/remote-approvals.mjs';
+import { upfrontAsk, remoteApprovalNotice, physicalApprovalNotice } from '../plugins/sleight/lib/remote-approvals.mjs';
 // Offline inventory of sleight's prompt sources. No engine or host helper is started.
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -193,7 +193,7 @@ export function budget(env = process.env) {
   const total = Object.fromEntries(variants.map(variant => [variant, { characters: rows.reduce((sum, row) => sum + row[variant].characters, 0), lines: rows.reduce((sum, row) => sum + row[variant].lines, 0) }]));
   const upfront = upfrontAsk([{ name: 'Mail' }, { name: 'Word' }]), refusal = remoteApprovalNotice('TextEdit');
   const conditional = { remoteApprovals: { ordinary: size(''),
-    upfront: { text: upfront, ...size(upfront) }, refusal: { text: refusal, ...size(refusal) } } };
+    upfront: { text: upfront, ...size(upfront) }, refusal: { text: refusal, ...size(refusal) }, physical: { text: physicalApprovalNotice, ...size(physicalApprovalNotice) } } };
   return { rows, total, conditional, reductionPercent: 100 * (1 - total.lean.characters / total.default.characters), details };
 }
 
@@ -204,7 +204,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.log('Source\tDefault chars\tDefault lines\tLean chars\tLean lines');
     for (const row of [...report.rows, { source: 'total', ...report.total }]) console.log([row.source, row.default.characters, row.default.lines, row.lean.characters, row.lean.lines].join('\t'));
     console.log(`Reduction: ${report.reductionPercent.toFixed(2)}%`);
-    console.log(`Conditional remote approvals: ordinary ${report.conditional.remoteApprovals.ordinary.characters} chars; upfront ${report.conditional.remoteApprovals.upfront.characters}; refusal ${report.conditional.remoteApprovals.refusal.characters} (app names vary).`);
+    console.log(`Conditional remote approvals: ordinary ${report.conditional.remoteApprovals.ordinary.characters} chars; upfront ${report.conditional.remoteApprovals.upfront.characters}; refusal ${report.conditional.remoteApprovals.refusal.characters}; physical ${report.conditional.remoteApprovals.physical.characters} (app names vary).`);
     if (process.argv.includes('--details')) for (const variant of variantsForDetails(report)) console.log(variant);
   }
 }

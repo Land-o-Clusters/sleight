@@ -44,7 +44,7 @@ describe('sleight mod', () => {
       (e.args.sleight_turbo as { event?: string })?.event === 'bootstrap' ? { sleightTurbo: turboEnvelope }
         : { sleightRemote: { turboBound: false, context: 'sleight: Ask the user to reply: allow TextEdit, Mail' } }) }] } }) as never)
     on('prompt.submit', async (_$, e) => ({ text: e.text, context: e.context }))
-    const result = await $.prompt.submit({ ...genuinePrompt('write a note in TextEdit and email it to me') as object, context: ['prior'] } as never)
+    const result = await $.prompt.submit({ ...genuinePrompt('write a note in TextEdit and email it to me', 'bridge') as object, context: ['prior'] } as never)
     expect(result.context).toEqual(['prior', 'sleight: Ask the user to reply: allow TextEdit, Mail'])
     expect(JSON.stringify(result)).not.toContain(turboEnvelope.nonce)
   })
@@ -106,7 +106,7 @@ describe('sleight mod', () => {
     expect(frames.filter(frame => frame.hook_event_name === 'Stop').length).toBe(turboBound ? 1 : 0)
   })
 
-  test('a failed begin keeps the envelope for a new genuine turn and cannot expose its response as context', async ($, on) => {
+  test('a failed begin reboots and retries the same genuine turn without exposing response context', async ($, on) => {
     const frames: Record<string, unknown>[] = []
     let count = 0
     on('process.run', async () => ({ value: { exitCode: 0, stdout: '{"enabled":false}', stderr: '' } }) as never)
@@ -119,7 +119,71 @@ describe('sleight mod', () => {
     })
     on('prompt.submit', async (_$, e) => ({ text: e.text, context: e.context }))
     for (const text of ['allow TextEdit', 'allow Mail']) expect((await $.prompt.submit(genuinePrompt(text))).context).toBeUndefined()
-    expect(frames.filter(frame => (frame.sleight_turbo as { event?: string })?.event === 'bootstrap').length).toBe(1)
+    expect(frames.filter(frame => (frame.sleight_turbo as { event?: string })?.event === 'bootstrap').length).toBe(2)
+    expect(frames.length).toBe(5)
+  })
+
+  for (const failure of ['isError', 'transport']) test(`relay restart reboots on the first ${failure} failure and retries the original text`, async ($, on) => {
+    const frames: Record<string, unknown>[] = []
+    let restarted = false
+    const replacement = { ...turboEnvelope, session: 'replacement-session', nonce: 'b'.repeat(64) }
+    on('process.run', async () => ({ value: { exitCode: 0, stdout: '{"enabled":false}', stderr: '' } }) as never)
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async (_$, e) => {
+      const frame = e.args.sleight_turbo as Record<string, unknown>
+      frames.push(frame)
+      if (frame.event === 'bootstrap') return { value: { content: [{ type: 'text', text: JSON.stringify({ sleightTurbo: restarted ? replacement : turboEnvelope }) }] } } as never
+      if (frame.text === 'allow Mail' && frame.session !== replacement.session) {
+        restarted = true
+        if (failure === 'transport') throw Error('relay replaced')
+        return { value: { isError: true, content: [] } } as never
+      }
+      return { value: { content: [{ type: 'text', text: '{"sleightRemote":{"turboBound":false}}' }] } } as never
+    })
+    on('prompt.submit', async (_$, e) => ({ text: e.text, context: e.context }))
+    await $.prompt.submit(genuinePrompt('allow TextEdit'))
+    expect((await $.prompt.submit(genuinePrompt('allow Mail'))).context).toBeUndefined()
+    expect(frames.map(frame => frame.event)).toEqual(['bootstrap', 'begin', 'begin', 'bootstrap', 'begin'])
+    expect(frames[2]!.text).toBe('allow Mail'); expect(frames[4]!.text).toBe('allow Mail')
+    expect(frames[2]!.turn).toBe(frames[4]!.turn)
+    expect(frames[4]!.nonce).toBe(replacement.nonce)
+  })
+
+  for (const [origin, presence, calls] of [
+    ['composer', { idleSeconds: 0, locked: false }, 0],
+    ['composer', { idleSeconds: 121, locked: false }, 2],
+    ['composer', undefined, 0], ['bridge', undefined, 2],
+  ] as const) test(`turbo off ordinary prompt relay count: ${origin} ${JSON.stringify(presence)}`, async ($, on) => {
+    const frames: unknown[] = []
+    on('process.run', async () => ({ value: { exitCode: 0, stdout: JSON.stringify({ enabled: false, presence }), stderr: '' } }) as never)
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async (_$, e) => {
+      frames.push(e.args)
+      return { value: { content: [{ type: 'text', text: JSON.stringify(
+        (e.args.sleight_turbo as { event?: string })?.event === 'bootstrap' ? { sleightTurbo: turboEnvelope } : { sleightRemote: { turboBound: false } }) }] } } as never
+    })
+    on('prompt.submit', async (_$, e) => ({ text: e.text }))
+    await $.prompt.submit(genuinePrompt('explain the release notes', origin))
+    expect(frames.length).toBe(calls)
+  })
+
+  test('a no-tool bridge turn clears remote origin before the next present composer prompt', async ($, on) => {
+    const frames: Record<string, unknown>[] = []
+    on('process.run', async () => ({ value: { exitCode: 0, stdout: '{"enabled":false,"presence":{"idleSeconds":0,"locked":false}}', stderr: '' } }) as never)
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async (_$, e) => {
+      frames.push(e.args)
+      return { value: { content: [{ type: 'text', text: JSON.stringify(
+        (e.args.sleight_turbo as { event?: string })?.event === 'bootstrap' ? { sleightTurbo: turboEnvelope } : { sleightRemote: { turboBound: false } }) }] } } as never
+    })
+    on('prompt.submit', async (_$, e) => ({ text: e.text }))
+    on('turn.start', async (_$, e) => ({ turnId: e.turnId }) as never)
+    on('turn.complete', async () => ({ text: '' }) as never)
+    await $.prompt.submit(genuinePrompt('explain this', 'bridge'))
+    await $.turn.start({ turnId: 'bridge-no-tools' } as never)
+    await $.turn.complete({ turnId: 'bridge-no-tools', answer: '', durationMs: 1, isAborted: false, reason: 'answer' } as never)
+    expect(frames.filter(frame => frame.hook_event_name === 'Stop').length).toBe(1)
+    await $.prompt.submit(genuinePrompt('explain more'))
     expect(frames.length).toBe(3)
   })
 
