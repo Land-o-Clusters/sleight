@@ -122,7 +122,8 @@ process.on('SIGTERM', () => controller.abort(new Error('run interrupted')));
 const armOption = option('arm', 'sleight');
 // The world suite runs its Claude arms on the owner's account login by default (LAWS, 2026-10-15): each arm
 // has its own isolated config dir and its own login, checked before any task. --auth api stays available.
-const authMode = option('auth', world ? 'login' : 'auto');
+// All testing runs on the owner's account login (LAWS, 2026-10-15). The API key needs an explicit --auth api or auto.
+const authMode = option('auth', 'login');
 // X3 is a short native validation pass, with the switch only in this bank's MCP descriptor.
 const analyticsBank = option('analytics-config', undefined);
 if (process.argv.includes('--analytics-config') && (!analyticsBank || analyticsBank.startsWith('--'))) throw new Error('--analytics-config needs a prepared bank');

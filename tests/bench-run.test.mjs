@@ -498,7 +498,9 @@ test('world defaults to the account login and keeps the API path behind --auth a
   const modeOf = result => result.calls.find(call => Array.isArray(call) && call[0] === 'auth mode')?.[1];
   assert.equal(modeOf(await runner({ suite: 'world', arm: 'sleight', auth: LOGIN, extraArgs: ['--owner-away'] })), 'login');
   assert.equal(modeOf(await runner({ suite: 'world', arm: 'sleight', extraArgs: ['--owner-away', '--auth', 'api'] })), 'api');
-  assert.equal(modeOf(await runner({ suite: 'default', arm: 'sleight' })), 'auto');
+  // Every suite defaults to the login since an import of run.mjs started an API-key pass (2026-10-25).
+  assert.equal(modeOf(await runner({ suite: 'default', arm: 'sleight' })), 'login');
+  assert.equal(modeOf(await runner({ suite: 'default', arm: 'sleight', extraArgs: ['--auth', 'auto'] })), 'auto');
 });
 
 test('world login checks every Claude arm against its own isolated config and skips Codex', async () => {
