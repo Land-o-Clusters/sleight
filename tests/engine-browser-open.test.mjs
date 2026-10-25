@@ -185,7 +185,10 @@ async function listed(t, options) {
 
 test('relay: the flag adds browser_open to the tool list; without it the list is unchanged', async t => {
   const on = await listed(t), off = await listed(t, { engineBrowserOpen: false });
-  assert.deepEqual(on.find(tool => tool.name === 'browser_open').inputSchema, ENGINE_OPEN_TOOL.inputSchema);
+  // Under the mod host the relay admits its private sleight_stats object (turn stats); the rest is the tool's own schema.
+  const { sleight_stats: stats, ...properties } = on.find(tool => tool.name === 'browser_open').inputSchema.properties;
+  if (stats !== undefined) assert.deepEqual(stats, { type: 'object' });
+  assert.deepEqual({ ...on.find(tool => tool.name === 'browser_open').inputSchema, properties }, ENGINE_OPEN_TOOL.inputSchema);
   assert.equal(off.some(tool => tool.name === 'browser_open'), false);
   assert.deepEqual(on.filter(tool => tool.name !== 'browser_open').map(tool => tool.name === 'js' ? { ...tool, description: tool.description.replace(' For a web page in a named browser, call browser_open first; it returns the window.', '') } : tool), off);
   const lean = await listed(t, { prompt: 'lean' });
