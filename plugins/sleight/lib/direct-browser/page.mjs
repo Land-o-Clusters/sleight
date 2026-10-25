@@ -2573,8 +2573,9 @@ export function createPageRegistry({ browser, session, context = browser?.contex
       cancel().catch(() => {});
     };
     if (frames?.watchNavigations) {
-      entry.frameNavigationWatch?.remove();
+      const previous = entry.frameNavigationWatch;
       entry.frameNavigationWatch = await frames.watchNavigations(entry.targetId, nativeNavigation);
+      await previous?.remove();
     }
     if (entry.nativeSession !== cdp) {
       entry.nativeSession = cdp;
@@ -2663,7 +2664,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     }
   };
   const removeHook = async entry => {
-    entry.frameNavigationWatch?.remove(); entry.frameNavigationWatch = null;
+    await entry.frameNavigationWatch?.remove(); entry.frameNavigationWatch = null;
     await releasePointView(entry.page);
     if (entry.script) {
       await entry.cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: entry.script }); entry.script = null;

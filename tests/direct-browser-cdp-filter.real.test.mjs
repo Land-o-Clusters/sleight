@@ -132,6 +132,6 @@ test('real Chromium over filtered CDP hides foreign tabs, owns background create
   await child.evaluate(() => { location.href = 'zoommtg://fixture.invalid'; });
   while (!navigations.length && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 50));
   assert.deepEqual(navigations, ['zoommtg://fixture.invalid']);
-  watcher.remove();
+  await watcher.remove();
   t.diagnostic('owned out-of-process iframe native navigation reported and cancellation requested');
 });

@@ -537,9 +537,127 @@ test('FD3B native navigation observation includes owned out-of-process frames, n
   for (const sessionId of ['foreign', 'frame']) f.emit({ method: 'Page.frameRequestedNavigation', sessionId, params: { frameId: 'child', url: 'zoommtg://fixture.invalid' } });
   assert.deepEqual(seen, ['zoommtg://fixture.invalid']);
   assert.ok(f.calls.some(row => row.method === 'Page.stopLoading' && row.route === 'frame'));
-  watch.remove();
+  await watch.remove();
   f.emit({ method: 'Page.frameRequestedNavigation', sessionId: 'frame', params: { url: 'mailto:fixture@example.invalid' } });
   assert.equal(seen.length, 1);
+});
+
+test('MT1 native redirect responses fail before callers see them, without a renderer navigation event', async t => {
+  const f = fixture(), filter = (await factory())({ session: f.session, ownedTargets: ['owned'], protectedPort: 9222 });
+  t.after(() => filter.dispose());
+  await filter.session.send('Target.attachToTarget', { targetId: 'owned', flatten: true });
+  const notices = [], events = [];
+  filter.session.on('event', event => events.push(event));
+  const watch = await filter.frames.watchNavigations('owned', (event, cancel) => { notices.push(event.url); cancel().catch(() => {}); });
+  await filter.session.send('Fetch.enable', { patterns: [{ urlPattern: '*', resourceType: 'Document', requestStage: 'Response' }] }, 's-owned');
+  const destinations = ['mailto:fixture@example.invalid', 'MaIlTo:fixture@example.invalid', 'tel:123', 'zoommtg://fixture.invalid',
+    'data:text/html,fixture', 'javascript:void(0)', 'about:blank', 'blob:https://fixture.invalid/id', 'http://['];
+  for (const [index, location] of destinations.entries()) {
+    f.emit({ method: 'Fetch.requestPaused', sessionId: 's-owned', params: { requestId: 'native-' + index, resourceType: 'Document',
+      responseStatusCode: [301, 302, 303, 307, 308][index % 5], responseHeaders: [{ name: 'lOcAtIoN', value: location }],
+      request: { url: 'https://fixture.invalid/redirect' } } });
+  }
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(notices.length, destinations.length);
+  assert.equal(events.some(event => event.method === 'Fetch.requestPaused'), false, 'caller cannot continue a blocked response');
+  assert.deepEqual(f.calls.filter(row => row.params.requestId?.startsWith('native-')).map(row => row.method), Array(destinations.length).fill('Fetch.failRequest'));
+  assert.ok(f.calls.filter(row => row.method === 'Fetch.failRequest').every(row => row.params.errorReason === 'BlockedByClient'));
+  assert.equal(f.calls.some(row => row.method === 'Page.stopLoading'), false, 'the veto uses the paused response, without a notification race');
+  await watch.remove();
+});
+
+test('MT1 watch preserves client Fetch patterns and permits HTTP redirects, subresources and non-redirect responses', async t => {
+  const f = fixture(), filter = (await factory())({ session: f.session, ownedTargets: ['owned'] });
+  t.after(() => filter.dispose());
+  await filter.session.send('Target.attachToTarget', { targetId: 'owned', flatten: true });
+  const watch = await filter.frames.watchNavigations('owned', () => assert.fail('web response reported as native'));
+  const responsePattern = { urlPattern: '*', resourceType: 'Document', requestStage: 'Response' };
+  assert.deepEqual(f.calls.at(-1).params.patterns, [responsePattern]);
+  const client = [{ urlPattern: 'https://fixture.invalid/*.js', resourceType: 'Script', requestStage: 'Response' }];
+  await filter.session.send('Fetch.enable', { patterns: client }, 's-owned');
+  assert.deepEqual(f.calls.at(-1).params.patterns, [...client, responsePattern]);
+  await filter.session.send('Fetch.disable', {}, 's-owned');
+  assert.deepEqual(f.calls.at(-1).params.patterns, [responsePattern]);
+  const responses = [
+    { location: '/next' }, { location: '//web.invalid/next' }, { location: 'https://web.invalid/next' },
+    { location: 'http://web.invalid/next' }, { location: '' }, { location: 'mailto:fixture@example.invalid', responseStatusCode: 200 },
+    { location: 'mailto:fixture@example.invalid', resourceType: 'Script' }, { responseErrorReason: 'Failed' },
+  ];
+  for (const [index, { location, ...extra }] of responses.entries()) f.emit({ method: 'Fetch.requestPaused', sessionId: 's-owned',
+    params: { requestId: 'safe-' + index, request: { url: 'https://fixture.invalid/redirect' }, responseStatusCode: 302,
+      resourceType: 'Document', responseHeaders: location === undefined ? [] : [{ name: 'Location', value: location }], ...extra } });
+  assert.deepEqual(f.calls.filter(row => row.params.requestId?.startsWith('safe-')).map(row => row.method), Array(responses.length).fill('Fetch.continueRequest'));
+  await filter.session.send('Fetch.enable', { patterns: client }, 's-owned');
+  await watch.remove();
+  assert.deepEqual(f.calls.at(-1).params.patterns, client, 'release restores the client patterns');
+  await filter.session.send('Fetch.disable', {}, 's-owned');
+  assert.equal(f.calls.at(-1).method, 'Fetch.disable', 'last watch and caller release leave no Fetch guard');
+});
+
+test('MT1 response veto follows owned iframe descendants and ignores foreign and worker routes', async t => {
+  const f = fixture(), filter = (await factory())({ session: f.session, ownedTargets: ['owned'], protectedPort: 9222 });
+  t.after(() => filter.dispose());
+  await filter.session.send('Target.attachToTarget', { targetId: 'owned', flatten: true });
+  const notices = [], watch = await filter.frames.watchNavigations('owned', event => notices.push(event.url));
+  for (const [name, type, parent] of [['child', 'iframe', 's-owned'], ['nested', 'iframe', 'child'], ['worker', 'worker', 's-owned']]) {
+    f.emit({ method: 'Target.attachedToTarget', sessionId: parent, params: { sessionId: name, targetInfo: { targetId: name, type }, waitingForDebugger: true } });
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  for (const name of ['child', 'nested']) {
+    const commands = f.calls.filter(row => row.route === name);
+    assert.ok(commands.find(row => row.method === 'Fetch.enable').params.patterns.some(pattern => pattern.requestStage === 'Response'));
+    assert.ok(commands.findIndex(row => row.method === 'Fetch.enable') < commands.findIndex(row => row.method === 'Runtime.runIfWaitingForDebugger'));
+  }
+  for (const sessionId of ['s-owned', 'child', 'nested', 'foreign', 'worker']) f.emit({ method: 'Fetch.requestPaused', sessionId,
+    params: { requestId: sessionId, request: { url: 'http://fixture.invalid/start' }, resourceType: 'Document', responseStatusCode: 302,
+      responseHeaders: [{ name: 'location', value: 'mailto:fixture@example.invalid' }] } });
+  assert.deepEqual(notices, Array(3).fill('mailto:fixture@example.invalid'));
+  assert.deepEqual(f.calls.filter(row => row.method === 'Fetch.failRequest').map(row => row.route), ['s-owned', 'child', 'nested']);
+  await watch.remove();
+  for (const name of ['s-owned', 'child', 'nested']) assert.deepEqual(f.calls.filter(row => row.route === name && row.method === 'Fetch.enable').at(-1).params.patterns,
+    [{ urlPattern: '*://*:9222/*', requestStage: 'Request' }]);
+});
+
+test('MT1 a veto failure never continues the redirect or lends it to a caller', async t => {
+  const f = fixture(), original = f.session.send;
+  f.session.send = async (method, params, route) => {
+    const result = await original(method, params, route);
+    if (method === 'Fetch.failRequest') throw Error('fixture veto failed');
+    return result;
+  };
+  const filter = (await factory())({ session: f.session, ownedTargets: ['owned'] });
+  t.after(() => filter.dispose());
+  await filter.session.send('Target.attachToTarget', { targetId: 'owned', flatten: true });
+  const notices = [], watch = await filter.frames.watchNavigations('owned', (event, cancel) => {
+    notices.push(event.url); cancel().catch(() => {});
+  });
+  const events = []; filter.session.on('event', event => events.push(event));
+  f.emit({ method: 'Fetch.requestPaused', sessionId: 's-owned', params: { requestId: 'failed-veto', resourceType: 'Document',
+    request: { url: 'https://fixture.invalid/redirect' }, responseStatusCode: 302, responseHeaders: [{ name: 'Location', value: 'mailto:fixture@example.invalid' }] } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(notices.length, 1);
+  assert.equal(events.some(event => event.method === 'Fetch.requestPaused'), false);
+  assert.deepEqual(f.calls.filter(row => row.params.requestId === 'failed-veto').map(row => row.method), ['Fetch.failRequest']);
+  await watch.remove();
+});
+
+test('MT1 a new iframe whose response fence fails stays paused for owned cleanup', async t => {
+  const f = fixture(), original = f.session.send;
+  f.session.send = async (method, params, route) => {
+    if (method === 'Fetch.enable' && route === 'unfenced-child') throw Error('fixture response fence refused');
+    return original(method, params, route);
+  };
+  const filter = (await factory())({ session: f.session, ownedTargets: ['owned'] });
+  t.after(() => filter.dispose());
+  await filter.session.send('Target.attachToTarget', { targetId: 'owned', flatten: true });
+  const watch = await filter.frames.watchNavigations('owned', () => assert.fail('no navigation attempted'));
+  f.emit({ method: 'Target.attachedToTarget', sessionId: 's-owned', params: { sessionId: 'unfenced-child',
+    targetInfo: { targetId: 'unfenced-child', type: 'iframe' }, waitingForDebugger: true } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.calls.some(row => row.route === 'unfenced-child' && row.method === 'Runtime.runIfWaitingForDebugger'), false);
+  assert.equal(f.calls.some(row => row.method === 'Target.detachFromTarget' && row.params.sessionId === 'unfenced-child'), false);
+  assert.deepEqual(filter.frames.sessions('owned'), []);
+  await watch.remove();
 });
 
 test('endpoint navigation evidence belongs to the exact page target', async t => {

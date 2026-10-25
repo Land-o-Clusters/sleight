@@ -21,6 +21,7 @@ export async function fixture(t, html, { message = 'Inspect the animation after 
   assert.ok(existsSync(executablePath), 'pinned headless Chromium must be installed');
   const profile = mkdtempSync(join(realpathSync(tmpdir()), 'sleight-fd1-'));
   const server = createServer((request, response) => {
+    if (typeof routes[request.url] === 'function') return routes[request.url](request, response);
     response.setHeader('Content-Type', 'text/html'); response.end(routes[request.url] ?? html);
   });
   let context, socket, browser, filter, registry, runtime, current = true;
@@ -49,9 +50,11 @@ export async function fixture(t, html, { message = 'Inspect the animation after 
   const { ws } = createRequire(import.meta.url)('../../plugins/sleight/vendor/playwright-core/lib/utilsBundle.js');
   socket = new ws(endpoint);
   await new Promise((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
-  const pending = new Map(), listeners = new Set(), wire = []; let serial = 0;
+  const pending = new Map(), listeners = new Set(), wire = [], navigations = [], responses = []; let serial = 0;
   socket.on('message', bytes => {
     const frame = JSON.parse(bytes.toString());
+    if (frame.method === 'Page.frameRequestedNavigation') navigations.push(frame.params.url);
+    if (frame.method === 'Fetch.requestPaused' && frame.params.responseStatusCode !== undefined) responses.push(frame.params);
     if (!frame.id) { for (const listener of listeners) listener(frame); return; }
     const wait = pending.get(frame.id); pending.delete(frame.id);
     if (frame.error) wait?.reject(Error(frame.error.message)); else wait?.resolve(frame.result);
@@ -59,7 +62,7 @@ export async function fixture(t, html, { message = 'Inspect the animation after 
   socket.on('close', () => { for (const wait of pending.values()) wait.reject(Error('fixture closed')); pending.clear(); });
   const upstream = { sessionId: 'root', on: (_name, fn) => listeners.add(fn), off: (_name, fn) => listeners.delete(fn),
     send(method, params = {}, route = 'root') {
-      wire.push({ method, route, type: params.type }); const id = ++serial;
+      wire.push({ method, route, type: params.type, requestId: params.requestId }); const id = ++serial;
       return new Promise((resolve, reject) => {
         pending.set(id, { resolve, reject });
         socket.send(JSON.stringify({ id, method, params, ...(route === 'root' ? {} : { sessionId: route }) }));
@@ -79,5 +82,5 @@ export async function fixture(t, html, { message = 'Inspect the animation after 
     if (!result.isError) runtime.delivered(result);
     return result;
   };
-  return { entry, tab, call, wire, sentinel, registry, context };
+  return { entry, tab, call, wire, sentinel, registry, context, navigations, responses };
 }

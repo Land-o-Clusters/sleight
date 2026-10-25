@@ -85,8 +85,11 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
   // A frame's Fetch interception also covers its dedicated workers. Chromium
   // routes worker Fetch events through the parent frame, not the worker session.
   const wholeChild = route => !route.private && route.type==='iframe';
+  const navigationRoute = route => !route.private && ['page', 'iframe'].includes(route.type);
+  const redirectPatterns = [{ urlPattern: '*', resourceType: 'Document', requestStage: 'Response' }];
   const requestPatterns = (route, holding = wholeRequestGuards.has(route.owner)) => [
-    ...(route.fetchPatterns ?? []), ...(holding && wholeChild(route) ? [{urlPattern:'*',requestStage:'Request'}] : []), ...guardPatterns];
+    ...(route.fetchPatterns ?? []), ...(holding && wholeChild(route) ? [{urlPattern:'*',requestStage:'Request'}] : []),
+    ...(navigationRoute(route) && navigationWatches.has(route.owner) ? redirectPatterns : []), ...guardPatterns];
   const downloadStreams = new Map(); // Only response streams issued on this exact owned route, never arbitrary filesystem handles.
   let closed = false, autoAttach = false, disposal, listening = true;
   const root = upstream.sessionId;
@@ -181,8 +184,28 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
         whole.tasks.add(task);task.finally(()=>whole.tasks.delete(task));return;
       }
     }
-    if (parent && protectedPort !== undefined && frame.method === 'Fetch.requestPaused') {
-      const protectedRequest = protectedUrl(params.request?.url);
+    if (parent && frame.method === 'Fetch.requestPaused') {
+      // External-protocol redirects never become Fetch requests for the new
+      // scheme, and Chrome can hand them to the OS without a Page navigation
+      // event. Veto the HTTP response while Chrome still holds it paused.
+      const watches = navigationRoute(parent) && navigationWatches.get(parent.owner);
+      let nativeRedirect;
+      if (watches && params.resourceType === 'Document' && params.responseStatusCode >= 300 && params.responseStatusCode < 400) {
+        for (const header of params.responseHeaders ?? []) if (header.name.toLowerCase() === 'location') {
+          try {
+            const destination = new URL(header.value, params.request.url);
+            if (!['http:', 'https:'].includes(destination.protocol)) nativeRedirect = destination.href;
+          } catch { nativeRedirect = ''; } // An unreadable destination fails closed too.
+          if (nativeRedirect !== undefined) break;
+        }
+      }
+      if (nativeRedirect !== undefined) {
+        const blocked = upstream.send('Fetch.failRequest', { requestId: params.requestId, errorReason: 'BlockedByClient' }, frame.sessionId);
+        blocked.catch(() => {}); // A failed veto stays paused; never continue it.
+        for (const listener of watches) try { listener({ url: nativeRedirect }, () => blocked); } catch {}
+        return; // No caller can continue a redirect the guard has refused.
+      }
+      const protectedRequest = protectedPort !== undefined && protectedUrl(params.request?.url);
       if (protectedRequest && params.resourceType === 'Document') endpointTargets.add(parent.owner);
       if (protectedRequest || !(parent.fetchPatterns ?? []).some(pattern => fetchMatch(pattern, params))) {
         upstream.send(protectedRequest ? 'Fetch.failRequest' : 'Fetch.continueRequest',
@@ -220,7 +243,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
       attachments.get(params.sessionId).private = route.private;
       routes.set(params.sessionId, route);
       frame = routed(frame, virtualParent);
-      if (protectedPort !== undefined || wholeRequestGuards.has(route.owner)) {
+      if (protectedPort !== undefined || wholeRequestGuards.has(route.owner) || navigationWatches.has(route.owner)) {
         route.ready = (async () => {
           // One burst, then wait for the answers. Commands on a session run in the order sent, so the port guard, the child
           // auto-attach, the caller's scripts (frames.addScript: in place before the frame's first script runs, which Playwright's
@@ -243,18 +266,21 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
             ...(route.type === 'iframe' && navigationWatches.get(route.owner)?.size ? [upstream.send('Page.enable', {}, params.sessionId)] : []),
             ...(route.autoAttached ? [upstream.send('Target.setAutoAttach', autoAttachParams, params.sessionId)] : []),
             ...(route.type === 'iframe' ? installScripts(params.sessionId, route) : [])];
-          const resume = params.waitingForDebugger && !whole ? upstream.send('Runtime.runIfWaitingForDebugger', {}, params.sessionId) : undefined;
+          const guardedNavigation = navigationRoute(route) && navigationWatches.has(route.owner);
+          // A response fence must succeed before page scripts can navigate.
+          const resume = params.waitingForDebugger && !whole && !guardedNavigation ? upstream.send('Runtime.runIfWaitingForDebugger', {}, params.sessionId) : undefined;
           resume?.catch(() => {});
           await Promise.all(sends);
           if (closed || routes.get(params.sessionId) !== route) return;
           if (!route.private) emit(frame);
-          if(whole&&params.waitingForDebugger)await upstream.send('Runtime.runIfWaitingForDebugger',{},params.sessionId);
+          if((whole||guardedNavigation)&&params.waitingForDebugger)await upstream.send('Runtime.runIfWaitingForDebugger',{},params.sessionId);
           else await resume;
           route.live = true;
         })();
         route.ready.catch(() => {
           const whole=wholeChild(route)&&wholeRequestGuards.get(route.owner);
           if(whole){whole.failed('request guard unavailable');return;} // Keep an unguarded child paused until tab cleanup.
+          if (route.type === 'iframe' && navigationWatches.has(route.owner)) return; // Never resume an iframe without its redirect fence.
           removeRoute(params.sessionId);detach(params.sessionId).catch(()=>{});
         });
         return;
@@ -337,9 +363,18 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
       if (typeof listener !== 'function') throw Error('CDP_FRAME_WATCH_REQUIRED');
       const bank = navigationWatches.get(owner) ?? new Set();
       bank.add(listener); navigationWatches.set(owner, bank);
-      const remove = () => { bank.delete(listener); if (!bank.size && navigationWatches.get(owner) === bank) navigationWatches.delete(owner); };
-      try { await Promise.all(frameRoutes(owner).map(([name]) => upstream.send('Page.enable', {}, name))); }
-      catch (error) { remove(); throw error; }
+      const update = () => Promise.all([...routes].filter(([, route]) => route.owner === owner && navigationRoute(route)).map(async ([name, route]) => {
+        const patterns = requestPatterns(route);
+        await upstream.send(patterns.length ? 'Fetch.enable' : 'Fetch.disable', patterns.length ? { patterns } : {}, name);
+      }));
+      const remove = () => {
+        bank.delete(listener);
+        if (!bank.size && navigationWatches.get(owner) === bank) navigationWatches.delete(owner);
+        return update();
+      };
+      try {
+        await Promise.all([update(), ...frameRoutes(owner).map(([name]) => upstream.send('Page.enable', {}, name))]);
+      } catch (error) { await remove().catch(() => {}); throw error; }
       return Object.freeze({ remove });
     },
     // The running iframe sessions of an owned page, at any depth: the frames in other processes.
@@ -550,15 +585,16 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
         if (method === 'IO.close') downloadStreams.delete(params.handle);
         return result;
       }
-      if (protectedPort !== undefined && domain === 'Fetch') {
+      if (domain === 'Fetch') {
         if (method === 'Fetch.enable' || method === 'Fetch.disable') {
           const ownedRoute = routes.get(route), previous = ownedRoute.fetchPatterns;
           const patterns = method === 'Fetch.disable' ? [] : params.patterns?.length ? params.patterns : [{ urlPattern: '*' }];
           ownedRoute.fetchPatterns = patterns;
-          try { return await upstream.send('Fetch.enable', { ...(method === 'Fetch.enable' ? params : {}), patterns: requestPatterns(ownedRoute) }, route); }
+          const combined = requestPatterns(ownedRoute);
+          try { return await upstream.send(combined.length ? 'Fetch.enable' : 'Fetch.disable', combined.length ? { ...(method === 'Fetch.enable' ? params : {}), patterns: combined } : {}, route); }
           catch (error) { if (ownedRoute.fetchPatterns === patterns) ownedRoute.fetchPatterns = previous; throw error; }
         }
-        if (['Fetch.continueRequest','Fetch.continueResponse'].includes(method) && params.url && protectedUrl(params.url)) refuse();
+        if (protectedPort !== undefined && ['Fetch.continueRequest','Fetch.continueResponse'].includes(method) && params.url && protectedUrl(params.url)) refuse();
       }
       // Playwright normally evaluates with userGesture:true. Reads and guard
       // evaluations must never lend that activation to timers or chooser APIs.
