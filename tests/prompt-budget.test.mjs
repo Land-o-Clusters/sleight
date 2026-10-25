@@ -401,11 +401,9 @@ import { withMT } from './fixtures/mt-env.mjs';
 for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned inside existing budgets, switch=${mode}`, async () => withMT(mode, async () => {
   const tools = browserTools('bfixture');
   assert.equal(hash(JSON.stringify(tools)), mode === '0' ? baseline.browserToolsLegacy : baseline.browserToolsMT);
-  // p143 integration (fd1b screenshots/motion, fd3b waits, fd5b links/viewport, g2b download, g1b handoff, g4b PDF):
-  // +363 characters for g3g export (path, format, bom, completeness receipt).
-  // G12F paste adds 119 catalog characters in each mode (111 description, 8 enum).
-  // each lane measured its own increment; G10B adds 68 characters for touch schema and guidance.
-  assert.equal(JSON.stringify(tools).length, mode === '0' ? 5792 : 6074);
+  // LR1D retains p143's paste and developer reads; whole adds 410 catalog characters.
+  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6202 : 6484);
+  assert.equal(tools.length, 5);
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);
 }));

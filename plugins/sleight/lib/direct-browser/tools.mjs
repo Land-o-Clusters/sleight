@@ -130,7 +130,7 @@ export function validateToolCall(input, browser) {
   if (request.name === 'browser_read') {
     const a = request.arguments;
     if(a.whole!==undefined)validateWholeOptions(a.whole);
-    if (a.whole !== undefined && ['file', 'export', 'format', 'path', 'bom', 'links', 'screenshot', 'find', 'text', 'max_chars'].some(key => a[key] !== undefined))
+    if (a.whole !== undefined && ['file', 'export', 'format', 'path', 'bom', 'links', 'screenshot', 'find', 'text', 'max_chars', 'console', 'network', 'performance'].some(key => a[key] !== undefined))
       throw Error('whole takes its own read options; use a tab and optional ref only');
     if (a.export !== undefined && ['ref', 'find', 'max_chars', 'text', 'links', 'screenshot', 'file'].some(key => a[key] !== undefined)) throw Error('Export takes its own ref and returns a file; omit other read options');
     if (a.export === undefined && (a.format !== undefined || a.path !== undefined || a.bom !== undefined)) throw Error('format, path and bom need export');

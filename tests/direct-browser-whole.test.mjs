@@ -132,7 +132,7 @@ test('held text stops at 8 MB of UTF-8 across merges, including edited rows',()=
 });
 
 test('whole reads reject competing p143 read modes instead of silently choosing one',()=>{
- for(const extra of [{file:'/tmp/fixture.pdf'},{export:'e1'},{links:true},{screenshot:true},{find:'needle'},{text:true},{max_chars:1000}])
+ for(const extra of [{file:'/tmp/fixture.pdf'},{export:'e1'},{links:true},{screenshot:true},{find:'needle'},{text:true},{max_chars:1000},{console:true},{network:true},{performance:true}])
   assert.throws(()=>validateToolCall({name:'browser_read',arguments:{...(extra.file?{}:{tab:'t1'}),...extra,whole:{}}}),/whole/);
  assert.doesNotThrow(()=>validateToolCall({name:'browser_read',arguments:{tab:'t1',ref:'e1',whole:{find:'needle'}}}));
 });
