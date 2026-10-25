@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { archiveOldRuns } from '../bench/run-archive.mjs';
 import * as archiveTools from '../bench/run-archive.mjs';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
+import { loadRecording } from '../bench/replay/recording.mjs';
 
 test('old run folders move to the archive with their traces; recent runs and other files stay', t => {
   const root = registerTemp(t, mkdtempSync(join(tmpdir(), 'bench-archive-')));
@@ -23,31 +24,53 @@ test('old run folders move to the archive with their traces; recent runs and oth
 
 test('retention removes only old unreferenced images, keeping traces, results, links and recent runs', t => {
   const root = registerTemp(t, mkdtempSync(join(tmpdir(), 'bench-retention-')));
-  const docs = join(root, 'docs'), bank = join(root, 'archive'), evidence = join(root, 'sleight-real-evidence');
+  const docs = join(root, 'docs'), bank = join(root, 'archive'), evidence = join(root, 'home/Library/Caches/sleight-bench/evidence');
+  const legacy = join(root, 'sleight-real-evidence');
   mkdirSync(docs); writeFileSync(join(docs, 'study.md'), 'bench/results/2026-09-01T10-00-00-000Z.json');
   const exclusions = join(root, 'exclusions.json'); writeFileSync(exclusions, '{"files":[{"prefix":"2026-09-02T10-00"}]}');
   const add = (base, stamp) => {
     const dir = join(base, stamp, 'arm'); mkdirSync(dir, { recursive: true });
-    for (const name of ['screen.png', 'other.JPG', 'trace.jsonl', 'result.json', 'saved.txt']) writeFileSync(join(dir, name), name);
+    for (const name of ['screen.png', 'other.JPG', 'trace.jsonl', 'transcript.jsonl', 'result.json', 'saved.txt']) writeFileSync(join(dir, name), name);
     return dir;
   };
   const old = add(bank, '2026-09-03T10-00-00-000Z');
   const held = add(bank, '2026-09-04T10-00-00-000Z');
   const cited = add(bank, '2026-09-01T10-00-00-000Z'), excluded = add(bank, '2026-09-02T10-00-00-000Z');
   const recent = add(bank, '2026-10-17T10-00-00-000Z'), real = add(evidence, '2026-09-03T10-00-00-000Z');
+  const oldLegacy = add(legacy, '2026-09-03T10-00-00-000Z');
+  const recentEvidence = add(evidence, '2026-10-17T10-00-00-000Z');
+  const citedEvidence = add(evidence, '2026-09-01T10-00-00-000Z');
   const outside = join(root, 'outside'); mkdirSync(outside); writeFileSync(join(outside, 'screen.png'), 'keep');
   symlinkSync(outside, join(old, 'linked')); symlinkSync(outside, join(bank, '2026-08-01T10-00-00-000Z'));
-  const options = { roots: [bank, evidence], docsDir: docs, exclusionsFile: exclusions, now: Date.parse('2026-10-17T12:00:00Z'), held: new Set([join(held, 'trace.jsonl')]), log() {} };
+  const options = { roots: [bank, evidence, legacy], docsDir: docs, exclusionsFile: exclusions, now: Date.parse('2026-10-17T12:00:00Z'), held: new Set([join(held, 'trace.jsonl')]), log() {} };
   assert.equal(typeof archiveTools.pruneRunImages, 'function', 'image retention is missing');
   const dry = archiveTools.pruneRunImages({ ...options, dryRun: true });
-  assert.equal(dry.planned.length, 4); assert.equal(existsSync(join(old, 'screen.png')), true);
+  assert.equal(dry.planned.length, 6); assert.equal(existsSync(join(old, 'screen.png')), true);
   const result = archiveTools.pruneRunImages(options);
-  assert.equal(result.removed.length, 4); assert.ok(result.freedBytes > 0);
-  for (const dir of [old, real]) {
+  assert.equal(result.removed.length, 6); assert.equal(result.freedBytes, 3 * Buffer.byteLength('screen.pngother.JPG'));
+  for (const dir of [old, real, oldLegacy]) {
     assert.equal(existsSync(join(dir, 'screen.png')), false); assert.equal(existsSync(join(dir, 'other.JPG')), false);
-    for (const name of ['trace.jsonl', 'result.json', 'saved.txt']) assert.equal(existsSync(join(dir, name)), true);
+    for (const name of ['trace.jsonl', 'transcript.jsonl', 'result.json', 'saved.txt']) assert.equal(existsSync(join(dir, name)), true);
   }
-  for (const dir of [held, cited, excluded, recent, outside]) assert.equal(existsSync(join(dir, 'screen.png')), true);
+  for (const dir of [held, cited, excluded, recent, recentEvidence, citedEvidence, outside]) assert.equal(existsSync(join(dir, 'screen.png')), true);
+});
+
+test('archiving fixture runs after six hours leaves durable transcripts discoverable', t => {
+  const root = registerTemp(t, mkdtempSync(join(tmpdir(), 'bench-evidence-archive-')));
+  const previous = process.env.BENCH_ARM_HOME; process.env.BENCH_ARM_HOME = join(root, 'home/Library/Caches/sleight-bench');
+  t.after(() => { if (previous === undefined) delete process.env.BENCH_ARM_HOME; else process.env.BENCH_ARM_HOME = previous; });
+  const stamp = '2026-10-25T01-00-00-000Z', leaf = 'sleight-textedit-window-drag-1';
+  const bench = join(root, 'temp/sleight-bench'), run = join(bench, stamp), archive = join(process.env.BENCH_ARM_HOME, 'runs-archive');
+  mkdirSync(join(run, leaf), { recursive: true }); writeFileSync(join(run, leaf, 'Source.txt'), 'fixture');
+  const evidence = join(process.env.BENCH_ARM_HOME, 'evidence', stamp, leaf); mkdirSync(evidence, { recursive: true });
+  const transcript = readFileSync(new URL('./fixtures/replay/claude.jsonl', import.meta.url), 'utf8');
+  writeFileSync(join(evidence, 'transcript.jsonl'), transcript);
+  const file = join(root, 'results.json'); writeFileSync(file, JSON.stringify({ stamp, results: [{ arm: 'sleight', task: 'textedit-window-drag', run: 1 }] }));
+  const now = Date.now(); utimesSync(run, new Date(now - 6 * 3600 * 1000 - 1), new Date(now - 6 * 3600 * 1000 - 1));
+  assert.deepEqual(archiveOldRuns(bench, archive, { now }), [stamp]);
+  assert.ok(existsSync(join(archive, stamp, leaf, 'Source.txt')));
+  assert.equal(loadRecording(file).folder, evidence);
+  assert.equal(readFileSync(loadRecording(file).transcript, 'utf8'), transcript);
 });
 
 test('retention refuses deletion when reference files cannot be read', t => {

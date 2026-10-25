@@ -2,7 +2,7 @@
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync, realpathSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync, realpathSync, symlinkSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -245,6 +245,38 @@ test('load results selects one row and requires retained transcript evidence', (
     assert.equal(loadRecording(file, { task: 'textedit-window-drag', run: 1, evidence }).calls.length, 2);
     assert.throws(() => loadRecording(file, { task: 'textedit-window-drag', run: 1, evidence: dir }), /Transcript missing/);
   } finally { rmSync(dir, { recursive: true }); }
+});
+
+for (const override of [false, true]) test(`native recordings prefer durable evidence, then legacy temp evidence (arm home override: ${override})`, t => {
+  const root = mkdtempSync(join(tmpdir(), 'replay-evidence-'));
+  const previous = Object.fromEntries(['HOME', 'TMPDIR', 'BENCH_ARM_HOME'].map(key => [key, process.env[key]]));
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+    rmSync(root, { recursive: true, force: true });
+  });
+  const home = join(root, 'home'), temp = join(root, 'temp'), alias = join(root, 'temp-alias');
+  mkdirSync(temp); symlinkSync(temp, alias);
+  process.env.HOME = home; process.env.TMPDIR = alias;
+  const armHome = override ? join(root, 'custom-arms') : join(home, 'Library', 'Caches', 'sleight-bench');
+  if (override) process.env.BENCH_ARM_HOME = armHome; else delete process.env.BENCH_ARM_HOME;
+  const stamp = '2026-10-25T12-00-00-000Z', task = 'textedit-window-drag', leaf = `sleight-${task}-1`;
+  const durable = join(armHome, 'evidence', stamp, leaf), legacy = join(alias, 'sleight-real-evidence', stamp, leaf);
+  for (const dir of [durable, legacy]) { mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'transcript.jsonl'), fixture('claude')); }
+  const file = join(root, 'results.json');
+  writeFileSync(file, JSON.stringify({ stamp, results: [{ arm: 'sleight', task, run: 1 }] }));
+  assert.equal(loadRecording(file).folder, durable);
+  // A partial durable folder must not hide an old recording.
+  rmSync(join(durable, 'transcript.jsonl'));
+  assert.equal(loadRecording(file).folder, legacy);
+  assert.equal(loadRecording(file, { evidence: realpathSync(legacy) }).calls.length, 2);
+  rmSync(join(legacy, 'transcript.jsonl'));
+  assert.throws(() => loadRecording(file), error => {
+    assert.match(error.message, /^Transcript missing in /);
+    for (const dir of [durable, legacy, join(realpathSync(temp), 'sleight-real-evidence', stamp, leaf)]) assert.ok(error.message.includes(dir), error.message);
+    return true;
+  });
 });
 
 test('race results files resolve their task folder and Codex JSON argument strings', () => {

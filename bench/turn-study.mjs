@@ -1,8 +1,9 @@
 // Offline only. No transcript code is evaluated and no process is launched.
 import { readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve, sep } from 'node:path';
-import { homedir, tmpdir } from 'node:os';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { evidenceRoots, tempRoots } from './evidence.mjs';
 
 export const RULES = Object.freeze({
   'spilled-result': 'Claude Code persisted-output wrapper naming a tool-results file; charged to the producing call.',
@@ -227,7 +228,7 @@ export function main(argv) {
   if ((options.since && time(options.since) === null) || (options.until && time(options.until) === null)) throw new Error('Invalid time range.');
   if (options.until && options.since && time(options.until) <= time(options.since)) throw new Error('Empty time range.');
   if (!options.resultDirs.length) options.resultDirs.push('bench/results', 'docs/benchmarks');
-  if (!options.scratch.length) options.scratch.push(join(tmpdir(), 'sleight-bench'), join(tmpdir(), 'sleight-real-evidence'));
+  if (!options.scratch.length) options.scratch.push(...evidenceRoots(), ...tempRoots().map(base => join(base, 'sleight-bench')));
   const diagnostics = { malformedLines: 0, invalidResultFiles: 0 };
   const resultFiles = options.results ? [options.results] : [...new Set(options.resultDirs.flatMap(d => filesUnder(d, '.json')))];
   const candidates = loadRuns(resultFiles, options.scratch, diagnostics), runs = [], used = new Set();

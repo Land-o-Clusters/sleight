@@ -3,8 +3,13 @@ const MAC_USERS = ['', 'Users', ''].join('/');
 // H6, the ghost hand cost pass: the ps sampler, the trace reader, the side-by-side comparison and the pass against fakes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { parsePs, isHandHost, isWindowServer, createCostSampler, summarize } from '../bench/hand/cost-sampler.mjs';
 import { schedule, runArgs, resultsPath, traceStats, traceDirs, compareSides, reportMarkdown, runSide, runCostPass, parseArgs, BUDGET, CLAIM_TASKS } from '../bench/hand/cost-pass.mjs';
+import * as costPass from '../bench/hand/cost-pass.mjs';
 
 const WS = '/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon';
 const HOST = `${MAC_USERS}x/Library/Caches/sleight/turbo-host/abc/consent-host --hand --capture=hidden --menu`;
@@ -74,9 +79,31 @@ test('the schedule alternates which side runs first by round and task, each side
   assert.deepEqual(runArgs({ task: 'textedit-save', model: 'claude-haiku-5-5', effort: 'high' }),
     ['bench/run.mjs', '--suite', 'world', '--arm', 'sleight', '--tasks', 'textedit-save', '--runs', '1', '--model', 'claude-haiku-5-5', '--effort', 'high', '--owner-away']);
   assert.equal(resultsPath('x\n\nresults: /r/bench/results/2026-10-19T12-00-00-000Z.json\n'), '/r/bench/results/2026-10-19T12-00-00-000Z.json');
-  assert.deepEqual(traceDirs('S', 'calculator-click', 1, ['/tmp']), ['/tmp/sleight-real-evidence/S/sleight-calculator-click-1', '/tmp/sleight-bench/S/sleight-calculator-click-1']);
+  const base = join(tmpdir(), 'trace-paths'), armHome = join(base, 'arms');
+  assert.deepEqual(traceDirs('S', 'calculator-click', 1, [base], armHome), [join(armHome, 'evidence/S/sleight-calculator-click-1'),
+    join(base, 'sleight-real-evidence/S/sleight-calculator-click-1'), join(base, 'sleight-bench/S/sleight-calculator-click-1')]);
   assert.throws(() => parseArgs(['--rounds', '0']), /from 1 to 10/);
   assert.deepEqual(parseArgs([]).tasks, CLAIM_TASKS);
+});
+
+test('trace lookup reads durable evidence first and retains both temp spellings for old traces', t => {
+  const root = registerTemp(t, mkdtempSync(join(tmpdir(), 'hand-trace-'))), armHome = join(root, 'arms');
+  const temp = join(root, 'temp'), alias = join(root, 'alias'); mkdirSync(temp); symlinkSync(temp, alias);
+  const previous = process.env.TMPDIR; process.env.TMPDIR = alias;
+  t.after(() => { if (previous === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = previous; });
+  const dirs = traceDirs('S', 'calculator-click', 1, undefined, armHome);
+  assert.deepEqual(dirs, [join(armHome, 'evidence/S/sleight-calculator-click-1'),
+    join(alias, 'sleight-real-evidence/S/sleight-calculator-click-1'), join(realpathSync(temp), 'sleight-real-evidence/S/sleight-calculator-click-1'),
+    join(alias, 'sleight-bench/S/sleight-calculator-click-1'), join(realpathSync(temp), 'sleight-bench/S/sleight-calculator-click-1')]);
+  for (const [index, dir] of [dirs[0], dirs[1]].entries()) {
+    mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'trace-1.jsonl'), String(index));
+  }
+  assert.equal(readFileSync(join(dirs[0], 'trace-1.jsonl'), 'utf8'), '0');
+  assert.equal(readFileSync(join(dirs[2], 'trace-1.jsonl'), 'utf8'), '1');
+  assert.equal(typeof costPass.readTraceLines, 'function');
+  assert.deepEqual(costPass.readTraceLines(dirs), ['0']);
+  rmSync(join(dirs[0], 'trace-1.jsonl'));
+  assert.deepEqual(costPass.readTraceLines(dirs), ['1'], 'temp aliases must not double-count the same trace');
 });
 
 const entry = (side, { hostCpuS = 0.05, elapsedS = 10, ws = 3, peak = 9, rss = 42, hosts = side === 'on' ? 1 : 0, tool = [500, 600], drift = [], passed = true } = {}) => ({

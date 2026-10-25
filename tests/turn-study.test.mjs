@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -129,6 +129,29 @@ test('CLI selects a result file, writes JSON and a ranked table, omitting transc
   assert.equal(out.status, 0, out.stderr);
   assert.equal(out.stdout.includes('private owner'), false);
   assert.equal(out.stdout.includes('1 transcripts'), true);
+});
+
+test('default trace search prefers durable evidence and falls back to legacy evidence', t => {
+  const root = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-study-evidence-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const home = join(root, 'home'), temp = join(root, 'temp'), alias = join(root, 'alias'), projects = join(root, 'projects');
+  mkdirSync(temp); symlinkSync(temp, alias); mkdirSync(join(projects, 'p'), { recursive: true });
+  const armHome = join(home, 'Library/Caches/sleight-bench'), stamp = '2026-10-10T00-00-00-000Z', leaf = 'sleight-textedit-save-1';
+  const durable = join(armHome, 'evidence', stamp, leaf), legacy = join(temp, 'sleight-real-evidence', stamp, leaf);
+  for (const dir of [durable, legacy]) mkdirSync(dir, { recursive: true });
+  const code = 'await app.getAXState()', trace = code => JSON.stringify({ t: at(2000), direction: 'call-received', msg: { params: { name: 'js', code } } });
+  writeFileSync(join(durable, 'trace-1.jsonl'), trace(code)); writeFileSync(join(legacy, 'trace-1.jsonl'), trace('wrong old code'));
+  writeFileSync(join(projects, 'p/session.jsonl'), pair(code).map(JSON.stringify).join('\n'));
+  const results = join(root, 'results.json'); writeFileSync(results, JSON.stringify({ stamp, results: [{ arm: 'sleight', task: 'textedit-save', run: 1 }] }));
+  const env = { ...process.env, HOME: home, TMPDIR: alias, BENCH_ARM_HOME: armHome };
+  const read = () => {
+    const output = join(root, 'out.json');
+    const result = spawnSync(process.execPath, ['bench/turn-study.mjs', '--results', results, '--projects', projects, '--json', output], { env, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr); return JSON.parse(readFileSync(output, 'utf8'));
+  };
+  assert.equal(read().runs[0].match, 'trace');
+  rmSync(join(durable, 'trace-1.jsonl')); writeFileSync(join(legacy, 'trace-1.jsonl'), trace(code));
+  assert.equal(read().runs[0].match, 'trace');
 });
 
 test('save waits and menu clicks accept the engine string and numeric argument forms', () => {

@@ -26,8 +26,21 @@ import { codexSleightRunConfig, assertOnlyServers } from '../bench/codex-sleight
 import { codexExecPlan } from '../bench/codex-arm.mjs';
 import { engineSpan } from '../bench/engine-version.mjs';
 import { benchHand } from '../bench/hand/bench-hand.mjs';
+import { evidenceRoots } from '../bench/evidence.mjs';
 const parserSkip = packageSkip('typescript');
 const { dragMethodAudit } = parserSkip ? {} : await import('../bench/world/method-check.mjs');
+
+test('native driver and image retention use the durable benchmark evidence home', async () => {
+  const armHome = join(tmpdir(), 'bench-durable-home');
+  const result = await runner({ suite: 'world', arm: 'sleight', drive: true, base: { BENCH_ARM_HOME: armHome }, extraArgs: ['--owner-away'] });
+  assert.equal(result.error, undefined);
+  assert.equal(result.driverOptions.length, 3);
+  for (const options of result.driverOptions) assert.ok(options.evidenceDir.startsWith(join(armHome, 'evidence') + '/'), options.evidenceDir);
+  const retention = result.calls.find(call => call[0] === 'image retention')[1];
+  assert.ok(retention.roots.includes(join(armHome, 'evidence')));
+  assert.ok(retention.roots.includes(join(armHome, 'runs-archive')));
+  assert.ok(retention.roots.some(root => root.endsWith('/sleight-real-evidence')));
+});
 
 test('Mail-to-sheet footprint and window watching cover both apps for Claude and Codex', async () => {
   const task = getTasks('world').find(task => task.id === 'mail-to-sheet');
@@ -147,7 +160,7 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
     DEFAULT_CAP_USD: 200, runCost: out => out?.total_cost_usd, archiveOldRuns: () => [], benchAuth: options => { calls.push(['auth mode', options.mode]); return auth; }, addSpend: usd => { calls.push(['spend', usd]); return spend(usd); },
     CONFIG_DIR: '/isolated/claude',
     sweepTemp: options => calls.push(['temp sweep', options]),
-    pruneRunImages: options => calls.push(['image retention', options]),
+    pruneRunImages: options => calls.push(['image retention', options]), evidenceRoots,
     beginPassHygiene: async () => {
       calls.push('window baseline');
       const handle = { get hygieneError() { return hygieneTracking; }, betweenTasks: async () => { calls.push('hygiene boundary'); if (hygieneBoundaryError) throw new Error(hygieneBoundaryError); }, trackLaunch: async (apps, operation) => { calls.push(['tracked setup', apps]); return operation(); }, finish: async options => { calls.push(['window hygiene', options]); return hygieneResult; } };

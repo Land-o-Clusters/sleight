@@ -51,6 +51,7 @@ import { assertPrivateClaudePolicy } from './private-policy.mjs';
 import { CONFIG_DIR, LEDGER_FILE, DEFAULT_CAP_USD, addSpend, benchAuth, runCost } from './api-auth.mjs';
 import { assertLogin, assertEngineSockets, quote } from './preflight.mjs';
 import { archiveOldRuns, pruneRunImages } from './run-archive.mjs';
+import { evidenceRoots } from './evidence.mjs';
 import { sweepTemp } from '../scripts/temp-sweep.mjs';
 import { beginPassHygiene } from './pass-hygiene.mjs';
 import { prepareGenericArm, acceptGenericCatalog, genericSettings } from './plugin-arm.mjs';
@@ -664,7 +665,7 @@ if (!controller.signal.aborted && !isDryRun && armNames.some(name => !ARMS[name]
   catch (error) { recordHygieneError(error); windowHygiene = error.receiptsOnly; }
   sweepTemp({ dryRun: hygieneDryRun });
   if (!hygieneDryRun) for (const base of new Set([tmpdir(), realpathSync(tmpdir())])) archiveOldRuns(join(base, 'sleight-bench'), join(ARM_HOME, 'runs-archive'));
-  pruneRunImages({ roots: [join(ARM_HOME, 'runs-archive'), ...new Set([tmpdir(), realpathSync(tmpdir())])].map((base, i) => i === 0 ? base : join(base, 'sleight-real-evidence')),
+  pruneRunImages({ roots: [join(ARM_HOME, 'runs-archive'), ...evidenceRoots({ armHome: ARM_HOME })],
     docsDir: join(ROOT, 'docs', 'benchmarks'), exclusionsFile: join(ROOT, 'bench', 'claim-exclusions.json'), dryRun: hygieneDryRun });
   // Codex can't answer app prompts headless, so the engine's "Always allow" list holds exactly the
   // benchmark apps for the pass, then goes back to what it was (exit handler below).
@@ -720,7 +721,7 @@ pass: for (let run = 1; run <= runs; run++) {
         if (task.privateMail) assertPrivateClaudePolicy();
         if (task.privateMail) ctx.privateTask = task;
         realContexts.push(ctx);
-        const evidenceDir = task.privateMail || task.noScreenshot ? undefined : join(tmpdir(), 'sleight-real-evidence', stamp, `${armName}-${task.id}-${run}`);
+        const evidenceDir = task.privateMail || task.noScreenshot ? undefined : join(ARM_HOME, 'evidence', stamp, `${armName}-${task.id}-${run}`);
         if (evidenceDir) mkdirSync(evidenceDir, { recursive: true, mode: 0o700 });
         const codexHome = ARMS[armName].codex ? codexRunHome(ARMS[armName], armName, task, run, { dir, evidenceDir }) : {};
         if (!codexHome) break pass;

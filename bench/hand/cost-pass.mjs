@@ -12,11 +12,12 @@
 // added at its busiest second; host RSS under 50 MB; tool-time medians unchanged, which this pass reads as the per-call
 // median within 10% or 20 ms of the off side (a threshold proposed here, not an owner ruling). Beat drift is reported.
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCostSampler, summarize } from './cost-sampler.mjs';
+import { evidenceRoots, tempRoots } from '../evidence.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export const CLAIM_TASKS = ['calculator-click', 'textedit-save', 'textedit-drag'];
@@ -58,9 +59,10 @@ export function traceStats(lines) {
   return { calls: toolMs.length, toolMs, hand };
 }
 
-/** Where a run's trace files are: the real-fixture evidence folder and the run folder, under both spellings of the temp dir. */
-export function traceDirs(stamp, task, run = 1, temps = [...new Set([tmpdir(), (() => { try { return realpathSync(tmpdir()); } catch { return tmpdir(); } })()])]) {
-  return temps.flatMap(base => ['sleight-real-evidence', 'sleight-bench'].map(kind => join(base, kind, stamp, `sleight-${task}-${run}`)));
+/** Durable evidence first, then legacy evidence and run folders under both temp spellings. */
+export function traceDirs(stamp, task, run = 1, temps = tempRoots(), armHome) {
+  return [...evidenceRoots({ armHome, temps }), ...temps.map(base => join(base, 'sleight-bench'))]
+    .map(base => join(base, stamp, `sleight-${task}-${run}`));
 }
 
 const median = values => {
@@ -179,14 +181,15 @@ export async function runCostPass(deps, { tasks = CLAIM_TASKS, rounds = 3, model
   return entries;
 }
 
-function readTraceLines(dirs) {
-  const lines = [];
+export function readTraceLines(dirs) {
   for (const dir of dirs) {
     let files = [];
     try { files = readdirSync(dir).filter(f => /^trace-\d+\.jsonl$/.test(f)); } catch { continue; }
+    const lines = [];
     for (const f of files) lines.push(...readFileSync(join(dir, f), 'utf8').split('\n').filter(Boolean));
+    if (lines.length) return lines;
   }
-  return lines;
+  return [];
 }
 
 export function parseArgs(argv) {

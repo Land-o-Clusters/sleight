@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { evidenceRoots } from '../evidence.mjs';
 
 export function toolAddress(name, server) {
   if (server) {
@@ -58,7 +58,7 @@ export function parseRecording(source) {
 const json = file => JSON.parse(readFileSync(file, 'utf8'));
 export function loadRecording(input, { task, arm, run, evidence } = {}) {
   input = resolve(input);
-  let row, metadata, folder, transcript;
+  let row, metadata, folder, folders, transcript;
   if (input.endsWith('.json')) {
     metadata = json(input);
     const rows = Array.isArray(metadata) ? metadata : metadata.results ?? (metadata.task ? [metadata] : undefined);
@@ -70,15 +70,17 @@ export function loadRecording(input, { task, arm, run, evidence } = {}) {
     else if (typeof row.task === 'object') folder = basename(input) === 'run.json' ? dirname(input) : join(dirname(input), row.task.name);
     else {
       if (!metadata.stamp) throw Error('Native results need a stamp or --evidence');
-      folder = join(tmpdir(), 'sleight-real-evidence', metadata.stamp, `${row.arm}-${row.task}-${row.run}`);
+      folders = evidenceRoots().map(base => join(base, metadata.stamp, `${row.arm}-${row.task}-${row.run}`));
     }
   } else {
     folder = input.endsWith('.jsonl') ? dirname(input) : input;
     row = existsSync(join(folder, 'run.json')) ? json(join(folder, 'run.json')) : undefined;
     metadata = row;
   }
-  transcript = [join(folder, 'events.jsonl'), join(folder, 'transcript.jsonl')].find(existsSync);
-  if (!transcript) throw Error(`Transcript missing in ${folder}; native transcripts were written by bench/driver.mjs to sleight-real-evidence, and may have been swept`);
+  folders ??= [folder];
+  transcript = folders.flatMap(dir => [join(dir, 'events.jsonl'), join(dir, 'transcript.jsonl')]).find(existsSync);
+  if (!transcript) throw Error(`Transcript missing in ${folders.join('; ')}; native transcripts are written by bench/driver.mjs to the benchmark home's evidence folder, with legacy temp recordings in sleight-real-evidence`);
+  folder = dirname(transcript);
   const source = readFileSync(transcript, 'utf8'), calls = parseRecording(source);
   const race = typeof row?.task === 'object';
   const browserFile = join(dirname(folder), 'browser.json');

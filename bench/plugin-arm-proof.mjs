@@ -1,12 +1,13 @@
 // Owned proof, evidence filtering and publication. Installs nothing.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runOwned } from './preapproved-process.mjs';
 import { filterPluginEvidence } from './plugin-evidence.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
+import { evidenceRoots } from './evidence.mjs';
 
 const mode = process.argv[2];
 if (!['plugin-dry', 'mcp-dry', 'mcp-live', 'sanitize', 'filter-rate-limits', 'audit'].includes(mode)) throw new Error('unknown proof operation');
@@ -85,10 +86,13 @@ const path = /results: (.+)\s*$/.exec(result.stdout)?.[1]?.trim().replace(/^~(?=
 const raw = path && existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
 const traces = readdirSync(trace).filter(file => file.endsWith('.jsonl')).map(file => ({ file, text: readFileSync(join(trace, file), 'utf8') }));
 const transcripts = [];
-const taskEvidence = raw && join(tmpdir(), 'sleight-real-evidence', raw.stamp);
-if (taskEvidence && existsSync(taskEvidence)) for (const directory of readdirSync(taskEvidence)) {
-  const path = join(taskEvidence, directory, 'transcript.jsonl');
-  if (existsSync(path)) transcripts.push({ directory, text: readFileSync(path, 'utf8') });
+for (const base of raw ? evidenceRoots({ armHome: env.BENCH_ARM_HOME }) : []) {
+  const taskEvidence = join(base, raw.stamp);
+  if (!existsSync(taskEvidence)) continue;
+  for (const directory of readdirSync(taskEvidence)) {
+    const path = join(taskEvidence, directory, 'transcript.jsonl');
+    if (!transcripts.some(row => row.directory === directory) && existsSync(path)) transcripts.push({ directory, text: readFileSync(path, 'utf8') });
+  }
 }
 const output = join(evidenceDir, `${stamp}-plugin-arm-${mode}.json`);
 publish(output, { mode, sourceCommit, command: ['node', ...args], ...result, raw, traces, transcripts });

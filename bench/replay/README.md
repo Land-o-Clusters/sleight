@@ -37,7 +37,7 @@ node bench/replay/run.mjs ~/Projects/sleight-wt/race-1017/safari-sleight-b10-r3/
 node bench/replay/run.mjs RESULTS.json --task textedit-window-drag --arm sleight --run 1 --evidence RETAINED_TASK_FOLDER --plan
 ```
 
-Native `bench/run.mjs` runs save transcripts through `bench/driver.mjs` as `$TMPDIR/sleight-real-evidence/<stamp>/<arm>-<task>-<run>/transcript.jsonl`. Results rows usually do not contain that path. The loader derives it from the results stamp. `--evidence` names a retained copy if the original has been swept. Multiple matching rows require `--arm` and `--run`.
+Native `bench/run.mjs` runs save transcripts through `bench/driver.mjs` as `~/Library/Caches/sleight-bench/evidence/<stamp>/<arm>-<task>-<run>/transcript.jsonl` (`BENCH_ARM_HOME` overrides `~/Library/Caches/sleight-bench`). Results rows usually do not contain that path. The loader derives it from the results stamp, looking in the durable evidence folder first, then `$TMPDIR/sleight-real-evidence` and its realpath for older recordings. `--evidence` names a retained copy. Multiple matching rows require `--arm` and `--run`.
 
 ## Fixture and approval boundaries
 
