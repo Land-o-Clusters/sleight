@@ -1,4 +1,4 @@
-import { resetsCookies, cookieWording, consentManager, declinesCookies, acceptsCookies } from '../consent-wall.mjs';
+import { policyLinkText, resetsCookies, cookieWording, consentManager, declinesCookies, acceptsCookies } from '../consent-wall.mjs';
 import { trustedLocatorRead, trustedRead, trustedReadNode, trustedHandle } from './trusted-dom.mjs';
 
 export const consentDecision = "Cookie acceptance blocked";
@@ -42,7 +42,11 @@ export function inspectConsent(el, options = {}, read) {
       if (++visited > 20000) return;
       if (read(current, 'nodeType') === 3) { text += ' ' + read(current, 'textContent'); return; }
       if (read(current, 'nodeType') === 1) {
-        if (current !== node && boundary(current) || !visible(current) || /^(?:a|script|style|template)$/.test(read(current, 'localName')) || attr(current, 'role') === 'link') return;
+        if (current !== node && boundary(current) || !visible(current) || /^(?:script|style|template)$/.test(read(current, 'localName'))) return;
+        // A link or button that only names a policy or settings page supplies no consent wording; a link inside a
+        // consent sentence ("We use <a>cookies</a>") still does.
+        if ((read(current, 'localName') === 'a' || /^(?:link|button)$/.test(attr(current, 'role') ?? '') || read(current, 'localName') === 'button') &&
+          policyLinkText(read(current, 'textContent'))) return;
         if (read(current, 'localName') === 'input') text += ' ' + visibleText(current);
       }
       for (const child of read(current, 'childNodes') ?? []) visit(child);
@@ -125,7 +129,7 @@ export function inspectConsent(el, options = {}, read) {
     !read(node, 'disabled') && attr(node, 'aria-disabled') !== 'true' && declining(node));
   return { blocked: accept, wall: true, decline, ask: context.ask, reject: reject ? labels(reject).find(declinesCookies) : undefined };
 }
-inspectConsent.helpers = [resetsCookies, cookieWording, consentManager, declinesCookies, acceptsCookies];
+inspectConsent.helpers = [policyLinkText, resetsCookies, cookieWording, consentManager, declinesCookies, acceptsCookies];
 
 function consentContainer(el, options, read) { return inspectConsent(el, { ...options, container: true }, read); }
 consentContainer.helpers = [inspectConsent, ...inspectConsent.helpers];

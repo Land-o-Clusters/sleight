@@ -11,6 +11,7 @@ for (const [title, words, label] of [...ordinary,
   ['policy link', '<a href="#">Cookie policy</a>', 'Continue'],
   ['ARIA link', '<span role="link"><span>Cookie settings</span></span>', 'Yes'],
   ['linked agreement', 'You agree to <a href="#">Terms</a>, <a href="#">Privacy</a> and <a href="#">Cookie Policy</a>', 'Continue'],
+  ['settings button', '<button type="button">Cookie settings</button>', 'Continue'],
 ]) test(`turbo permits ${title}`, { skip, timeout: 30000 }, async t => {
   const f = await setup(t, html('role="dialog" style="position:fixed"', words, label));
   const target = f.entry.page.getByRole('button', { name: label, exact: true });
@@ -23,7 +24,11 @@ for (const [title, words, label] of [...ordinary,
     assert.equal(await f.entry.page.locator('body').getAttribute('data-hit'), null);
   } else assert.equal(await f.entry.page.locator('body').getAttribute('data-hit'), 'yes', result);
 });
-for (const phrase of [...phrases, 'You agree to our Cookie Policy. We use cookies.']) test(`turbo common phrase blocks: ${phrase}`, { skip, timeout: 30000 }, async t => {
+for (const phrase of [...phrases, 'You agree to our Cookie Policy. We use cookies.',
+  // g11f review: a link inside the consent sentence and implied-consent sentences still name cookie use.
+  'We use <a href="#">cookies</a> to improve your experience.',
+  'By using this website, you agree to our use of cookies as described in our <a href="#">Cookie Policy</a>.',
+  'By continuing to browse you agree to our use of cookies.']) test(`turbo common phrase blocks: ${phrase}`, { skip, timeout: 30000 }, async t => {
   const f = await setup(t, html('style="position:fixed"', phrase));
   await assert.rejects(checkConsent(f.entry.page.getByRole('button'), 'click', f.entry.state), /accepting cookies is blocked/);
   assert.match(await f.act('Continue'), /accepting cookies is blocked/);
