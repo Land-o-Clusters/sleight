@@ -386,3 +386,49 @@ for (const stage of ['catalog', 'presence']) test(`cancel during ${stage} keeps 
   finish(stage === 'catalog' ? { apps } : { idleSeconds: 0, locked: false }); await tick(); await tick();
   assert.deepEqual(h.server.find(m => m.id === 'cancelled'), { jsonrpc: '2.0', id: 'cancelled', result: { action: 'cancel' } });
 });
+
+test('prediction ignores file names, lowercase prose and implied words without an app action', () => {
+  const more = [...apps, { id: 'com.apple.Notes', name: 'Notes', names: ['Notes'] }, { id: 'com.apple.Preview', name: 'Preview', names: ['Preview'] },
+    { id: 'com.apple.MobileSMS', name: 'Messages', names: ['Messages'] }, { id: 'com.apple.Numbers', name: 'Numbers', names: ['Numbers'] },
+    { id: 'com.apple.Keynote', name: 'Keynote', names: ['Keynote'] }];
+  const catalog = { apps: more, defaults: { 'mailto:': 'com.apple.mail', '.xlsx': 'com.apple.Numbers', '.pptx': 'com.apple.Keynote' } };
+  for (const text of ['fix the bug in Messages.tsx', 'open Notes.md and fix the typo', 'using Mail.swift as a guide',
+    'see this in preview mode', 'write that in notes', 'check in mail whether it arrived', 'email validation regex',
+    'fix e-mail address parsing', 'the open spreadsheet parser', 'review the deck of cards logic', 'summarize the presentation layer',
+    'this slides component', 'update the release notes and preview the page', 'send me the summary', 'fix the web build'])
+    assert.deepEqual(predictApps(text, catalog), [], text);
+  for (const [text, ids] of [['open Notes and add a line', ['com.apple.Notes']], ['show it in Preview.', ['com.apple.Preview']],
+    ['make a spreadsheet of the totals', ['com.apple.Numbers']], ['send an email to the team', ['com.apple.mail']],
+    ['create a presentation from the notes', ['com.apple.Keynote']], ['open TextEdit.app', ['com.apple.TextEdit']]])
+    assert.deepEqual(predictApps(text, catalog).map(a => a.id), ids, text);
+});
+
+const settle = () => new Promise(r => setTimeout(r, 20));
+test('approval scope once: a repeat card asks again', async t => {
+  const h = harness(t, { approvalScope: 'once' });
+  h.engine(card('c1')); await settle();
+  const first = h.client.find(m => m.method === 'elicitation/create');
+  h.call({ jsonrpc: '2.0', id: first.id, result: { action: 'accept', content: {} } }); await settle();
+  h.engine(card('c2')); await settle();
+  assert.equal(h.client.filter(m => m.method === 'elicitation/create').length, 2, 'the second card is asked, not remembered');
+});
+for (const scope of ['once', 'document']) test(`approval scope ${scope}: typed text grants nothing and no up-front ask`, async t => {
+  const away = harness(t, { approvalScope: scope, ask: () => new Promise(() => {}),
+    remoteApprovals: { presence: async () => ({ idleSeconds: 999, locked: false }), catalog: async () => ({ apps, defaults: { 'mailto:': 'com.apple.mail' } }) } });
+  await user(away, 'allow TextEdit\nwrite a note in TextEdit and email it to me'); await settle();
+  const begin = away.client.find(m => m.id === 1);
+  assert.doesNotMatch(JSON.stringify(begin), /Ask the user to reply/, 'no up-front ask outside session scope');
+  away.engine(card('c3')); await settle();
+  assert.equal(away.server.find(m => m.id === 'c3').result.action, 'decline', 'typed text is a session grant only');
+});
+
+test('a second away card never sends a second reply for an already refused call', async t => {
+  const h = harness(t, { ask: () => new Promise(() => {}),
+    remoteApprovals: { presence: async () => ({ idleSeconds: 999, locked: false }), catalog: async () => ({ apps, defaults: {} }) } });
+  h.call({ id: 11, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("TextEdit")' } } });
+  await settle();
+  h.engine(card('c1')); await settle();
+  h.engine(card('c2', 'com.apple.Safari')); await settle();
+  const replies = h.client.filter(m => m.id === 11);
+  assert.equal(replies.length, 1); assert.match(replies[0].result.content[0].text, /TextEdit/);
+});

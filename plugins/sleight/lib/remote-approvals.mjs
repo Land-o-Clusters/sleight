@@ -28,8 +28,11 @@ export function isPresent(state, origin) {
   return !state.locked && state.idleSeconds < 120;
 }
 const implied = [
-  ['mailto:', /\b(?:e-?mail|mail to\s+\S+)\b/i], ['.docx', /\.docx\b|\bWord doc(?:ument)?\b/i],
-  ['.xlsx', /\.xlsx\b|\b(?:spreadsheet|workbook)\b/i], ['.pptx', /\.pptx\b|\b(?:slides|deck|presentation)\b/i],
+  // Explicit phrases only: "email validation" or "the deck of cards logic" names no app.
+  ['mailto:', /\b(?:e-?mail (?:it|this|that|them|me|him|her|us)\b|send (?:an |the |a )?e-?mail\b|e-?mail to\s+\S|mail (?:it |this |that )?to\s+\S)/i],
+  ['.docx', /\.docx\b|\bWord doc(?:ument)?\b/i],
+  ['.xlsx', /\.xlsx\b|\b(?:create|make|build|start|open|fill|edit|update)\s+(?:a|an|the|my|this|new|some)\s+(?:new\s+)?(?:spreadsheet|workbook)\b|\bin (?:a|the|my) (?:spreadsheet|workbook)\b/i],
+  ['.pptx', /\.pptx\b|\b(?:create|make|build|start|open|edit|update)\s+(?:(?:a|an|the|my|this|new|some)\s+(?:new\s+)?(?:slides|slide deck|deck|presentation)|slides)\b/i],
   ['.ics', /\.ics\b|\b(?:calendar invite|meeting invite|schedule a meeting)\b/i],
 ];
 export function predictApps(text, catalog = {}) {
@@ -37,7 +40,9 @@ export function predictApps(text, catalog = {}) {
   const escaped = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const inContext = name => {
     const n = escaped(name.replace(/\.app$/i, ''));
-    return new RegExp(`(?:\\b(?:in|with|using|open|app)\\s+${n}(?:\\.app)?(?![\\p{L}\\p{N}_])|(?<![\\p{L}\\p{N}_])${n}(?:\\.app)?\\s+app\\b)`, 'iu').test(text);
+    // The name must match its own case ("in notes" is prose) and not be a file name (Messages.tsx).
+    const after = '(?:\\.app)?(?![\\p{L}\\p{N}_])(?!\\.[\\p{L}\\p{N}])';
+    return new RegExp(`(?:(?<![\\p{L}\\p{N}_])(?:[Ii]n|[Ww]ith|[Uu]sing|[Oo]pen|[Aa]pp)\\s+${n}${after}|(?<![\\p{L}\\p{N}_])${n}${after}\\s+[Aa]pp\\b)`, 'u').test(text);
   };
   for (const app of apps) if (names(app).some(n => inContext(n) && resolveApp(n, apps)?.id === app.id)) found.set(app.id, app);
   for (const [key, pattern] of implied) if (pattern.test(text)) {

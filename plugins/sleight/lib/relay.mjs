@@ -2851,34 +2851,37 @@ export function createRelay({
 
   async function remoteAppCard(msg) {
     const generation = stopGeneration;
-    const app = msg.params?._meta?.tool_params?.app, key = approvalKey(msg);
-    const plain = plainCard(msg) && key !== undefined;
+    // Only the session scope remembers answers. 'once' and 'document' ask on every card.
+    const app = msg.params?._meta?.tool_params?.app, appKey = approvalKey(msg);
+    const key = approvalScope === 'session' ? appKey : undefined;
+    const plain = plainCard(msg) && appKey !== undefined;
     const nativeCard = ask && (isAppApproval(msg) || msg.params?._meta?.connector_id === 'browser-use' || panelOnly);
     // Cards without pending typed text never wait on a catalog scan.
     if (plain && pendingTyped.size) { await waitCatalog(); applyTyped(); }
     if (disposed || closing || generation !== stopGeneration) { toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } }); return; }
     let identity = appIdentity(app);
-    const typedEligible = plain && !forbiddenTargetWarning(app) && !forbiddenTargetWarning(identity?.id) &&
+    const typedEligible = plain && key !== undefined && !forbiddenTargetWarning(app) && !forbiddenTargetWarning(identity?.id) &&
       !/could be dangerous/i.test(msg.params?.message ?? '') && msg.params?._meta?.riskLevel === 'low';
     const typed = typedEligible && identity && typedApps.has(JSON.stringify([identity.id, msg.params._meta.riskLevel]));
     let listed = false, auditFailed = false;
     try { listed = plain && userListGrant(app, msg.params._meta.riskLevel, 'engine', [...running].filter(id => !localRunning.has(id))); } catch { auditFailed = true; }
-    if (typed || plain && !auditFailed && (approved.has(key) || listed)) {
+    if (typed || plain && !auditFailed && (key !== undefined && approved.has(key) || listed)) {
       if (typed) { trace('answered-by-typed-session', { app }); stderr.write(`sleight: answered ${app} from its typed session approval.\n`); }
-      toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'accept', content: {}, ...(typed || approved.has(key) ? { _meta: { persist: 'session' } } : {}) } }); return;
+      toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'accept', content: {}, ...(typed || key !== undefined && approved.has(key) ? { _meta: { persist: 'session' } } : {}) } }); return;
     }
     const present = await remotePresent();
     if (disposed || closing || generation !== stopGeneration) { toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } }); return; }
     if (present) {
       if (nativeCard) askUser(msg, auditFailed || !plain);
       else if (clientCanElicit === false) toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } });
-      else { if (plain) approvalRequests.set(msg.id, { key, generation }); toClient(msg); }
+      else { if (plain && key !== undefined) approvalRequests.set(msg.id, { key, generation }); toClient(msg); }
       return;
     }
     identity = appIdentity(app);
     const label = identity?.name ?? app;
     // The engine's card carries no parent RPC id. Match the relay's own acquisition/handle metadata when calls overlap.
-    const pending = [...engineCalls].filter(id => running.has(id) && !localRunning.has(id) && !internalRequests.has(id));
+    // A call refused by an earlier card already has its one reply.
+    const pending = [...engineCalls].filter(id => running.has(id) && !localRunning.has(id) && !internalRequests.has(id) && !remoteRefusedCalls.has(id));
     const named = pending.filter(id => {
       const plan = helperReads.get(id) ?? helperPlan(jsCalls.get(id));
       return [plan?.key, ...(plan?.keys ?? [])].filter(Boolean).some(k =>
@@ -2894,14 +2897,14 @@ export function createRelay({
     trace('remote-approval-required', { app });
     if (nativeCard) {
       // Identical pending app cards share one physical panel. Keep its late answer within this stop generation.
-      const cardKey = plain ? key : JSON.stringify(['physical', msg.id]);
+      const cardKey = plain && key !== undefined ? key : JSON.stringify(['physical', msg.id]);
       if (!awayCards.has(cardKey)) {
         awayCards.set(cardKey, true);
         queueDecision(async () => {
           try {
             const always = plain ? alwaysChoice(msg) : undefined;
             const action = await ask(msg.params.message, plain, panelOnly ? { app, appApproval: plain } : always ? { always: true } : undefined);
-            if (!plain || generation !== stopGeneration || disposed || closing) return;
+            if (!plain || key === undefined || generation !== stopGeneration || disposed || closing) return;
             if (action === 'always' && always) { rememberAlways(always); approved.add(key); }
             else if (action === 'accept') approved.add(key);
           } finally { awayCards.delete(cardKey); }
@@ -2918,7 +2921,7 @@ export function createRelay({
       }
       elicitations.set(id, answer => {
         elicitations.delete(id);
-        if (plain && generation === stopGeneration && !disposed && !closing && answer.result?.action === 'accept') {
+        if (plain && key !== undefined && generation === stopGeneration && !disposed && !closing && answer.result?.action === 'accept') {
           if (always && !reviewerAnswer(answer.result) && answer.result.content?.remember === 'Always') rememberAlways(always);
           approved.add(key);
         }
@@ -3442,7 +3445,8 @@ export function createRelay({
         const alreadyApproved = app => typedApps.has(typedKey(app.id)) || [...approved].some(key => {
           try { return appIdentity(JSON.parse(key)[0])?.id === app.id; } catch { return false; }
         }) || (() => { try { return preapproved?.list?.().some(name => appIdentity(name)?.id === app.id); } catch { return false; } })();
-        const context = !present ? upfrontAsk(predictApps(frame.text, remoteCatalog).filter(app => !forbiddenTargetWarning(app.id) && !alreadyApproved(app))) : undefined;
+        // Typed grants are session approvals, so other scopes get no up-front ask.
+        const context = !present && approvalScope === 'session' ? upfrontAsk(predictApps(frame.text, remoteCatalog).filter(app => !forbiddenTargetWarning(app.id) && !alreadyApproved(app))) : undefined;
         let turboBound = false;
         if (frame.turbo && directHost) {
           const { origin: _origin, turbo: _turbo, ...binding } = frame;
