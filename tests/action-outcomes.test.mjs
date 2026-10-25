@@ -790,7 +790,7 @@ test('with both switches off the guard code is the base build\'s, byte for byte'
     reuse: hash(guardedCode('await app.click(1);', window, undefined, undefined, { reuseSetup: true, acknowledge: true })),
     read: hash(readCode('void 0;', { acknowledge: true })),
     repl: hash(replSetupCode()),
-  }, { guarded: '4eb66fd1db72a4ad', guardedLean: 'b5dbbfb32963d94c', reuse: 'b824edb3aa6dc2c4', read: 'd795b7dc97416130', repl: 'd795b7dc97416130' });
+  }, { guarded: '751a62c111975e75', guardedLean: '8626c78f6a770e81', reuse: 'b824edb3aa6dc2c4', read: '1255b183f4d360c3', repl: '1255b183f4d360c3' });
 });
 
 test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
@@ -806,8 +806,8 @@ test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
       repl: replSetupCode(),
     };
     assert.deepEqual(Object.fromEntries(Object.entries(codes).map(([key, code]) => [key, hash(code)])), {
-      guarded: '4eb66fd1db72a4ad', guardedLean: 'b5dbbfb32963d94c', reuse: 'b824edb3aa6dc2c4',
-      read: '6eb12798b3f11f15', repl: '6eb12798b3f11f15',
+      guarded: '751a62c111975e75', guardedLean: '8626c78f6a770e81', reuse: 'b824edb3aa6dc2c4',
+      read: '84e6754aacb8bdd7', repl: '84e6754aacb8bdd7',
     });
     for (const code of Object.values(codes)) assert.doesNotMatch(code, /closedLast|beforeRead|state\.dp1|state\.closeRead|\[sleight:dp1\]/);
   } finally {

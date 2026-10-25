@@ -38,6 +38,8 @@ function fixture(t, { classification = () => ({}), text = 'Select overnight deli
       const result = { ...element, ...classification(prepares) };
       inspections.push(result); return result;
     }
+    // G11F: the cookie-wall read finds no consent container on this fixture.
+    if (fn.name === 'inspectConsent') return undefined;
     if (fn.name === 'inspectTarget') {
       const info = f.run(`(${fn})(fixture.radio)`);
       assert.equal(info.submit, false); assert.equal(info.payment, false);

@@ -32,6 +32,7 @@ function fixture(text = payText(terms), options = {}) {
       if (fn.name === 'focusCheckedNode') return f.focusOk;
       if (fn.name === 'samePageDocument') return arg === document;
       if (fn.name === 'ownDocument') return document;
+      if (fn.name === 'inspectConsent') return undefined; // G11F: no cookie wall on this fixture
       if (fn.name === 'inspectTarget') return { ...element, name: 'Continue', payment, formPayment: payment };
       if (fn.name === 'inspectElement') return { ...element, payment, formPayment: payment };
       if (fn.name === 'forwardInfo') return { label: false, areas: [] };

@@ -1611,8 +1611,13 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           const consentInput = /^(?:click|doubleClick|rightClick|press|pressKey|typeText|paste|performAction|performSecondaryAction|setValue|check|uncheck)$/.test(name);
           if (consentInput && !nativeTab) {
             const newest = text ?? priorText ?? state.callTrees.get(proxy) ?? lastTree;
-            if (text === undefined && typeof newest === 'string' && /^\\t*\\d+ (?:HTML content|dialog|sheet|alert|region)\\b/im.test(newest)) text = await timedRead(raw, 'consent');
-            if (typeof (text ?? newest) === 'string') consent = engineConsent(name, args, text ?? newest);
+            if (typeof newest === 'string') consent = engineConsent(name, args, newest);
+            // The engine numbers targets from the tree the model last saw, so that tree decides. Only a wall it shows
+            // gets a fresh read to confirm, so ordinary clicks in browsers cost no extra read.
+            if (text === undefined && (consent?.blocked || consent?.decline) && /^\\t*\\d+ (?:HTML content|dialog|sheet|alert|region)\\b/im.test(newest)) {
+              text = await timedRead(raw, 'consent');
+              consent = typeof text === 'string' ? engineConsent(name, args, text) : { blocked: true, why: 'the page could not be read again to check its cookie wall.' };
+            }
             // Refusals belong to the observed app and window, never an alias
             // handle. Reclassify each target; this record is not an input fence.
             const consentKey = JSON.stringify([observed?.app, observed?.title]);
