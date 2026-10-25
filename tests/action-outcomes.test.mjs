@@ -574,7 +574,8 @@ test('turbo steps are logged by origin with their outcome category, never page t
     [8, 'http://localhost:5414', 'press', 'e38', 'not run', 'earlier step stopped'],
     [9, 'http://localhost:5414', 'fill', 'e45', 'ok', 'set'],
   ]);
-  assert.doesNotMatch(readFileSync(path, 'utf8'), /p07|token|Private|done|"37"|:37/);
+  // The process id is the test runner's own and can start with 37.
+  assert.doesNotMatch(readFileSync(path, 'utf8').replace(/"pid":\d+/g, '"pid":0'), /p07|token|Private|done|"37"|:37/);
 });
 
 test('keyboard-only turbo refs retain per-step outcomes without typed content', () => {
