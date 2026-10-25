@@ -13,7 +13,8 @@ import { readWhole, validateWholeOptions } from './whole.mjs';
 import { validatePointStep, pointInputEnabled } from './points.mjs';
 // v3's five eagerly advertised tools. No generic JavaScript or authority fields.
 const object = (properties, required) => ({ type: 'object', properties, required, additionalProperties: false });
-const text = { type: 'string', maxLength: 65536 };
+// validate() caps every string at 65536 characters, so the catalog leaves that limit out.
+const text = { type: 'string' };
 const ref = { type: 'string', pattern: '^(?:(?:f[0-9]+)?e[0-9]+|[sx][0-9]+)$' };
 const tab = { type: 'string', pattern: '^t[A-Za-z0-9_-]{1,64}$' };
 const strings = { type: 'array', maxItems: 100, items: text };
@@ -53,7 +54,7 @@ export function browserTools(browser) {
       ? "Fill up to 60 observed fields in one call: text or a number for a textbox; true or false for a checkbox, switch or the radio option to choose; a number for a slider; the option text for a select or combobox, even in a long or virtual list; all row names in the wanted order for a drag-reorderable list. For a multi-select, an array sets exactly those option texts; [] clears all. submit is an observed ref, only when the user asked for that submit. Returns each field's status and the page diff."
       : 'Fill 1 to 60 observed fields. Values are text, boolean, number or string array. A select, listbox or combobox takes the option text, even in a long or virtual list. For a multi-select, an array sets exactly those option texts; [] clears all. A drag-reorderable list takes all its row names in the wanted order. Optional submit is an observed ref. Returns each field status, submit outcome and diff.'),
       inputSchema: object({ tab, fields: { type: 'array', minItems: 1, maxItems: 60, items: object({ ref,
-        value: { type: ['string', 'boolean', 'number', 'array'], items: text, maxItems: 100, maxLength: 65536 } }, ['ref', 'value']) }, submit: ref }, ['tab', 'fields']) },
+        value: { type: ['string', 'boolean', 'number', 'array'], items: text, maxItems: 100 } }, ['ref', 'value']) }, submit: ref }, ['tab', 'fields']) },
     { name: 'browser_tabs', description: (process.env.SLEIGHT_MT !== '0'
       ? 'List, close, keep or hand off owned tabs. For sign-in or a code, handoff wait:true waits for the user\'s Continue click and reads fresh. Never request secrets. Hand off a payment the user did not ask for.'
       : 'List, close, keep or hand off owned tabs. handoff wait:true waits for the user\'s Continue click, then reads fresh. Never request secrets. Never acquire engine-path tabs.'),

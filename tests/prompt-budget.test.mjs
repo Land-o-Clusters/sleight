@@ -407,7 +407,8 @@ for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned i
   // Point input is opt-in and adds no catalog characters by default.
   // each lane measured its own increment; G10B adds 68 characters for touch schema and guidance.
   // G13E opt-in discovery adds 64 catalog characters (62 description characters).
-  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6266 : 6548);
+  // Release trim: the 65536 string limit is validate()'s default, so the catalog drops it (-252 in each mode).
+  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6014 : 6296);
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);
 }));

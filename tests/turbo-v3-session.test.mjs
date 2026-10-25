@@ -151,7 +151,7 @@ test('runner setup selects all five v3 tools, private task, metrics and v3 guida
   assert.equal(setup.mcpServers['sleight-turbo'].env.SLEIGHT_TURBO_TASK, task.prompt);
   assert.equal(setup.mcpServers['sleight-turbo'].env.SLEIGHT_TURBO_METRICS, `${MAC_TMP}/fixture-task/turbo-metrics.jsonl`);
   assert.equal(setup.mcpServers['plugin:sleight:computer'].env.SLEIGHT_SURFACES, 'browser,computer');
-  assert.match(setup.promptPrefix, /Act takes 1 to 12 `steps`/);
+  assert.match(setup.promptPrefix, /A batch stops at a boundary or failed step/);
   assert.match(setup.promptPrefix, /Never translate refs or handles between paths/);
   assert.equal(setup.metadata.turboVersion, 3);
 });
