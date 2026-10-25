@@ -81,6 +81,12 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
   const inputObservers = new Map();
   const attachments = new Map(), outstanding = new Set(), collectedSessions = new Set();
   const navigationWatches = new Map();
+  const wholeRequestGuards = new Map();
+  // A frame's Fetch interception also covers its dedicated workers. Chromium
+  // routes worker Fetch events through the parent frame, not the worker session.
+  const wholeChild = route => !route.private && route.type==='iframe';
+  const requestPatterns = (route, holding = wholeRequestGuards.has(route.owner)) => [
+    ...(route.fetchPatterns ?? []), ...(holding && wholeChild(route) ? [{urlPattern:'*',requestStage:'Request'}] : []), ...guardPatterns];
   const downloadStreams = new Map(); // Only response streams issued on this exact owned route, never arbitrary filesystem handles.
   let closed = false, autoAttach = false, disposal, listening = true;
   const root = upstream.sessionId;
@@ -133,6 +139,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
     owned.delete(target);
     inputObservers.delete(target);
     navigationWatches.delete(target);
+    wholeRequestGuards.delete(target);
     for (const [name, route] of routes) if (route.target === target || route.owner === target) removeRoute(name);
   }
   function event(frame) {
@@ -158,6 +165,21 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
         listener(params, () => routes.get(frame.sessionId) === parent && owned.has(parent.owner)
           ? upstream.send('Page.stopLoading', {}, frame.sessionId) : Promise.resolve());
       } catch { /* Observers cannot change event routing. */ }
+    }
+    const whole = parent && wholeChild(parent) && wholeRequestGuards.get(parent.owner);
+    if (whole && frame.method === 'Network.requestWillBeSent') {
+      if(whole.requests.size>=2048)whole.requests.delete(whole.requests.keys().next().value);
+      whole.requests.set(frame.sessionId+':'+params.requestId,params.wallTime*1000);
+    }
+    if (whole && ['Network.loadingFinished','Network.loadingFailed'].includes(frame.method)) whole.requests.delete(frame.sessionId+':'+params.requestId);
+    if (whole && frame.method === 'Fetch.requestPaused' && !protectedUrl(params.request?.url)) {
+      const after=whole.after(),native=whole.requests.get(frame.sessionId+':'+params.networkId),at=Number.isFinite(native)?native:Date.now();
+      const method=params.request?.method,preflight=method==='OPTIONS'&&Object.entries(params.request.headers??{}).some(([name,value])=>name.toLowerCase()==='access-control-request-method'&&String(value).toUpperCase()==='GET');
+      if(after!==undefined&&at>=after&&method!=='GET'&&!preflight){
+        const task=upstream.send('Fetch.failRequest',{requestId:params.requestId,errorReason:'BlockedByClient'},frame.sessionId)
+          .then(()=>{whole.held(method,params.request.url);if(params.resourceType==='Document')whole.failed('navigation');},()=>whole.failed('request guard unavailable'));
+        whole.tasks.add(task);task.finally(()=>whole.tasks.delete(task));return;
+      }
     }
     if (parent && protectedPort !== undefined && frame.method === 'Fetch.requestPaused') {
       const protectedRequest = protectedUrl(params.request?.url);
@@ -198,7 +220,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
       attachments.get(params.sessionId).private = route.private;
       routes.set(params.sessionId, route);
       frame = routed(frame, virtualParent);
-      if (protectedPort !== undefined) {
+      if (protectedPort !== undefined || wholeRequestGuards.has(route.owner)) {
         route.ready = (async () => {
           // One burst, then wait for the answers. Commands on a session run in the order sent, so the port guard, the child
           // auto-attach, the caller's scripts (frames.addScript: in place before the frame's first script runs, which Playwright's
@@ -213,19 +235,28 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
           // snapshot read, the registry's handle) only when its caller asks, and a repeat from a caller is answered without
           // sending (see Target.setAutoAttach below). A frame or worker session gets it here, so its children are caught at once.
           route.autoAttached = !(route.type === 'page' && [...routes.values()].some(other => other !== route && other.target === route.target && other.autoAttached));
-          const sends = [upstream.send('Fetch.enable', { patterns: guardPatterns }, params.sessionId),
+          const whole=wholeChild(route)&&wholeRequestGuards.get(route.owner);
+          if(whole)whole.targets.add(params.sessionId);
+          const sends = [upstream.send('Fetch.enable', { patterns: requestPatterns(route) }, params.sessionId),
+            ...(whole?[upstream.send('Network.enable',{},params.sessionId),
+              upstream.send('Network.setBypassServiceWorker',{bypass:true},params.sessionId)]:[]),
             ...(route.type === 'iframe' && navigationWatches.get(route.owner)?.size ? [upstream.send('Page.enable', {}, params.sessionId)] : []),
             ...(route.autoAttached ? [upstream.send('Target.setAutoAttach', autoAttachParams, params.sessionId)] : []),
             ...(route.type === 'iframe' ? installScripts(params.sessionId, route) : [])];
-          const resume = params.waitingForDebugger ? upstream.send('Runtime.runIfWaitingForDebugger', {}, params.sessionId) : undefined;
+          const resume = params.waitingForDebugger && !whole ? upstream.send('Runtime.runIfWaitingForDebugger', {}, params.sessionId) : undefined;
           resume?.catch(() => {});
           await Promise.all(sends);
           if (closed || routes.get(params.sessionId) !== route) return;
           if (!route.private) emit(frame);
-          await resume;
+          if(whole&&params.waitingForDebugger)await upstream.send('Runtime.runIfWaitingForDebugger',{},params.sessionId);
+          else await resume;
           route.live = true;
         })();
-        route.ready.catch(() => { removeRoute(params.sessionId); detach(params.sessionId).catch(() => {}); });
+        route.ready.catch(() => {
+          const whole=wholeChild(route)&&wholeRequestGuards.get(route.owner);
+          if(whole){whole.failed('request guard unavailable');return;} // Keep an unguarded child paused until tab cleanup.
+          removeRoute(params.sessionId);detach(params.sessionId).catch(()=>{});
+        });
         return;
       }
     } else if (frame.method.startsWith('Target.')) {
@@ -257,6 +288,42 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
   // Private routes are the read-only sessions attach() hands out for an owned page's iframes; they carry no hook and are never counted.
   const frameRoutes = owner => [...routes].filter(([, route]) => route.type === 'iframe' && route.owner === owner && !route.private);
   const frames = Object.freeze({
+    // Guard only descendants whose ownership this filter proved. New targets get
+    // interception and iframe SW bypass before their first script is resumed.
+    async guardWholeRequests(owner, {after,held,failed}) {
+      live();checkTarget(owner);
+      if(!owned.has(owner)||wholeRequestGuards.has(owner)||[after,held,failed].some(fn=>typeof fn!=='function'))throw Error('CDP_WHOLE_GUARD_REQUIRED');
+      const whole={after,held,failed,requests:new Map(),tasks:new Set(),targets:new Set()};wholeRequestGuards.set(owner,whole);
+      const children=()=>[...routes].filter(([,route])=>route.owner===owner&&wholeChild(route));
+      let removing;
+      const remove=()=>removing??=(async()=>{
+        for(;;){
+          const names=[...whole.targets];whole.targets.clear();
+          await Promise.all(names.map(async name=>{
+            const route=routes.get(name);if(!route||route.owner!==owner||!wholeChild(route))return;
+            await route.ready?.catch(error=>{if(routes.get(name)===route)throw error;});
+            if(routes.get(name)!==route)return;
+            const patterns=requestPatterns(route,false);
+            await upstream.send(patterns.length?'Fetch.enable':'Fetch.disable',patterns.length?{patterns}:{},name);
+            await upstream.send('Network.setBypassServiceWorker',{bypass:false},name);
+          }));
+          await Promise.allSettled([...whole.tasks]);
+          if(!whole.targets.size)break;
+        }
+        if(wholeRequestGuards.get(owner)===whole)wholeRequestGuards.delete(owner);
+      })();
+      try{
+        await Promise.all(children().map(async([name,route])=>{
+          whole.targets.add(name);
+          await route.ready?.catch(error=>{if(routes.get(name)===route)throw error;});
+          if(routes.get(name)!==route)return;
+          await Promise.all([upstream.send('Network.enable',{},name),
+            upstream.send('Fetch.enable',{patterns:requestPatterns(route)},name),
+            upstream.send('Network.setBypassServiceWorker',{bypass:true},name)]);
+        }));
+      }catch(error){await remove().catch(()=>{});throw error;}
+      return Object.freeze({remove});
+    },
     // Fixed input metadata only, for an opt-in motion capture on this owned tab.
     // No key text, coordinates, values or authority cross this observer.
     observeInput(owner, listener) {
@@ -488,7 +555,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
           const ownedRoute = routes.get(route), previous = ownedRoute.fetchPatterns;
           const patterns = method === 'Fetch.disable' ? [] : params.patterns?.length ? params.patterns : [{ urlPattern: '*' }];
           ownedRoute.fetchPatterns = patterns;
-          try { return await upstream.send('Fetch.enable', { ...(method === 'Fetch.enable' ? params : {}), patterns: [...patterns, ...guardPatterns] }, route); }
+          try { return await upstream.send('Fetch.enable', { ...(method === 'Fetch.enable' ? params : {}), patterns: requestPatterns(ownedRoute) }, route); }
           catch (error) { if (ownedRoute.fetchPatterns === patterns) ownedRoute.fetchPatterns = previous; throw error; }
         }
         if (['Fetch.continueRequest','Fetch.continueResponse'].includes(method) && params.url && protectedUrl(params.url)) refuse();
@@ -574,7 +641,7 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
   function dispose() {
     if (disposal) return disposal;
     if (!closed) {
-      closed = true; listeners.clear(); inputObservers.clear(); navigationWatches.clear();
+      closed = true; listeners.clear(); inputObservers.clear(); navigationWatches.clear(); wholeRequestGuards.clear();
       routes.clear(); owned.clear(); browserRoutes.clear();
       finishEvents();
     }

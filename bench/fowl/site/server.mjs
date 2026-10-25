@@ -3,6 +3,8 @@
 import { createServer } from 'node:http';
 import { INVOICE_ID, INVOICE_TOTAL, NOTE, ROSTER, SITE_PORT } from '../data.mjs';
 import { ccBase, ccHandler, ccKinds, createCCFixture } from './cc-held-out.mjs';
+import { wholeHandler } from './whole-thread.mjs';
+import { wholeRaceFixtures, wholeRaceLog, wholeRaceKinds } from '../whole-thread.mjs';
 
 export { INVOICE_TOTAL, NOTE, ROSTER, SITE_PORT };
 
@@ -71,7 +73,7 @@ export function logLines(events) {
     .filter((x) => x !== undefined && x !== '').join(' '));
 }
 
-export function createHandler({ downloadName = 'invoice.pdf', ccFixtures } = {}) {
+export function createHandler({ downloadName = 'invoice.pdf', ccFixtures, wholeFixtures = wholeRaceFixtures() } = {}) {
   if (!/^invoice(?:-[a-zA-Z0-9-]+)?\.pdf$/.test(downloadName)) throw new Error('invalid download name');
   const tags = new Map();
   const stateOf = (tag) => {
@@ -82,6 +84,14 @@ export function createHandler({ downloadName = 'invoice.pdf', ccFixtures } = {})
   const heldOut = ccFixtures ?? ccKinds.map(kind => createCCFixture(kind, { nonce: 'held-out' }));
   async function handle(req, res) {
     const url = new URL(req.url, 'http://127.0.0.1');
+    if (url.pathname.startsWith('/whole/') || url.pathname.startsWith('/whole-race/')) {
+      if (!/^127\.0\.0\.1:\d{1,5}$/.test(req.headers.host ?? '') || req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return res.writeHead(403).end();
+      const race = /^\/whole-race\/([-\w]+)\/api\/log$/.exec(url.pathname);
+      if (race && wholeRaceKinds[race[1]] && req.method === 'GET') return res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(wholeRaceLog(wholeFixtures, race[1])));
+      const fixture = wholeFixtures.find(f => url.pathname.startsWith('/whole/' + f.nonce + '/'));
+      if (!fixture) return res.writeHead(404).end();
+      return wholeHandler(fixture, req, res);
+    }
     if (url.pathname.startsWith('/held-out/')) {
       const fixture = heldOut.find(row => url.pathname.startsWith(ccBase(row)));
       if (!fixture || !/^127\.0\.0\.1:\d{1,5}$/.test(req.headers.host ?? '')) return res.writeHead(404).end();
@@ -125,8 +135,8 @@ export function createHandler({ downloadName = 'invoice.pdf', ccFixtures } = {})
   return handle;
 }
 
-export function startServer({ port = SITE_PORT, downloadName, ccFixtures } = {}) {
-  const handle = createHandler({ downloadName, ccFixtures });
+export function startServer({ port = SITE_PORT, downloadName, ccFixtures, wholeFixtures } = {}) {
+  const handle = createHandler({ downloadName, ccFixtures, wholeFixtures });
   return new Promise((resolve, reject) => {
     const server = createServer((req, res) => handle(req, res).catch(() => res.writeHead(500).end()));
     server.listen(port, '127.0.0.1', () => {

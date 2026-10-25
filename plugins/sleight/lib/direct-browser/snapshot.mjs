@@ -10,6 +10,11 @@ const MORE = /^more\d+_\d+$/;
 export const SENSITIVE = /password|passcode|secret|one.?time|(?:^|[\W_])otp(?=$|[\W_])|\bcc[-_ ]|card|expiry|expiration|cvv|cvc|security.?code/i;
 // Extra plain code/PIN hints belong to the handoff readiness check. Pending
 // handoff refuses reads entirely, including any echoed code values.
+export function wholeReadHint(tree) {
+  return tree.some(node => node && typeof node === 'object' &&
+    (/^(log|feed)$/.test(node.role) || node.posinset !== undefined || node.rowindex !== undefined || wholeReadHint(node.children ?? [])))
+    ? '# Scrolling thread: browser_read with whole:{} collects all items.' : '';
+}
 const TIMEOUT = 3000;
 const scalarRole = role => /^(textbox|searchbox|combobox)$/.test(role);
 const normalized = value => String(value ?? '').replace(/[\u200b\u00ad]/g, '').trim().replace(/\s+/g, ' ');
@@ -238,6 +243,16 @@ export const screenshotHasProtectedFields = capture => sensitiveValues(capture).
 const SHORT_SECRET = 4, WORD_SECRET = 8;
 const SPACED_LETTERS = /^[\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{M}]+$/u;
 const escapeRegExp = text => text.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+// Whole reads use the same native-value masking as ordinary snapshots. Capture all
+// frame secrets before returning any innerText, including echoes outside a field.
+export async function protectWholeRows(page, rows) {
+  if (page.frames().length > 32) throw Error('whole DOM frame budget');
+  // A capture includes all in-process children. Only out-of-process frames
+  // have a separate renderer session that needs another native capture.
+  const captures = await sessionsOf(page, ({send}) => send('DOMSnapshot.captureSnapshot', {computedStyles: []}));
+  const secrets = captures.filter(Boolean).flatMap(sensitiveValues);
+  return rows.map(row => ({ ...row, text: scrub(row.text, secrets) }));
+}
 export function scrub(value, secrets) {
   let text = String(value ?? '');
   const forms = [...new Set(secrets.flatMap(secret => [secret, normalized(secret)]).filter(Boolean))]
@@ -650,10 +665,11 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since, links,
     const number = ++state.number;
     const token = `more${number}_${continuation?.offset ?? 0}`;
     const header = `# ${delta ? 'Changes since snapshot ' + (continuation?.since ?? since) + '; snapshot' : 'Snapshot'} ${number} (untrusted page content)`;
+    const wholeHint = wholeReadHint(tree);
     const completeness = completenessEnabled && { ...closed.completeness, changesOnly: delta,
       filtered: Boolean(continuation || ref || find !== undefined) };
     const result = cap(candidates, continuation?.offset ?? 0,
-      header + (completenessEnabled && !candidates.length ? delta ? '\n# No visible changes.' : '\n# No matching content.' : ''),
+      header + (wholeHint ? '\n' + wholeHint : '') + (completenessEnabled && !candidates.length ? delta ? '\n# No visible changes.' : '\n# No matching content.' : ''),
       maxChars, token, completeness);
     if (!completenessEnabled && !candidates.length) result.text += delta ? '\n# No visible changes.' : '\n# No matching content.';
     const shortenedAt = completenessEnabled ? continuation?.shortenedAt ?? result.shortenedAt : undefined;

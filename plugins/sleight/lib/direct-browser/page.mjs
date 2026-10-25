@@ -47,6 +47,18 @@ export function popupHook(options) {
     Window, Uint8Array, Uint32Array, setTimeout, clearTimeout, navigator } = globalThis;
   const { defineProperty, getOwnPropertyDescriptor: getOwn, freeze } = Object, isFinite = Number.isFinite, stringify = JSON.stringify;
   const uncurry = Function.prototype.bind.bind(Function.prototype.call);
+  // Whole-thread expansion never authorizes a popup, dialog, submit or history change.
+  let wholeUntil = 0, wholeToken, wholeBlocked = [], wholeShared = 0, wholeSubmit = 0, wholeRequestSubmit = 0;
+  const wholeNow = Date.now.bind(Date);
+  const wholeJoin = uncurry(Array.prototype.join);
+  const wholeNavigation = window.navigation;
+  const wholeNavigate = event => {
+    if (!wholeBlock('navigation')) return;
+    nativePrevent.call(event); stopNow(event);
+  };
+  if (wholeNavigation) EventTarget.prototype.addEventListener.call(wholeNavigation, 'navigate', wholeNavigate);
+  const wholeActive = () => wholeNow() < wholeUntil;
+  const wholeBlock = kind => { if (!wholeActive()) return false; if (wholeBlocked.length < 100) wholeBlocked[wholeBlocked.length] = kind; return true; };
   const randomValues = globalThis.crypto?.getRandomValues?.bind(globalThis.crypto), nativeRandom = Math.random;
   // The secret arrives as an array of 16 to 64 byte values written into the install source (hookSource builds it), so
   // nothing here converts a string in the page. It is copied once, now, into a typed array nothing outside this closure
@@ -247,6 +259,34 @@ export function popupHook(options) {
   // Install before page script in every hooked document, including child realms.
   // off() restores only wrappers still owned by this hook, for keep and handoff.
   const NativeDOMException = globalThis.DOMException;
+  const NativeSharedWorker = globalThis.SharedWorker, NativeProxy = globalThis.Proxy, nativeConstruct = globalThis.Reflect.construct;
+  // Shared workers are not tab descendants in Chromium's Target auto-attach
+  // tree. Refuse construction while this tab is being read instead of claiming
+  // their independent network target is covered by the tab's Fetch guard.
+  if (typeof NativeSharedWorker === 'function') {
+    const guarded = new NativeProxy(NativeSharedWorker, { construct(target, args, newTarget) {
+      let refused = false;
+      if (wholeActive()) { wholeShared++; refused = true; }
+      else {
+        // A newly created same-origin frame can see its ancestor's active guard
+        // before the controller sees the frame. Cross-origin frames are armed
+        // through their private CDP routes before their scripts resume.
+        let parent = window;
+        for (let depth = 0; depth < 64; depth++) {
+          try {
+            if (parent === parent.parent) break;
+            parent = parent.parent;
+            const proof = proofFor('wholeWorker');
+            if (openAnswer('wholeWorker', proof, parent[key]?.wholeWorker(proof)) === 't') { refused = true; break; }
+          } catch { break; }
+        }
+      }
+      if (refused) throw NativeDOMException ? new NativeDOMException('SharedWorker creation is held during a whole read.', 'NotAllowedError') : Error('SharedWorker creation held');
+      return nativeConstruct(target, args, newTarget);
+    } });
+    replace(globalThis, 'SharedWorker', { configurable: true, writable: true, value: guarded });
+    replace(NativeSharedWorker.prototype, 'constructor', { configurable: true, writable: true, value: guarded });
+  }
   const refuseNativeUI = () => { throw NativeDOMException ? new NativeDOMException('Native UI is blocked while sleight owns this tab; tell the user.', 'NotAllowedError') : Error('Native UI is blocked'); };
   const blockNative = (object, name) => {
     if (!object) return;
@@ -418,6 +458,7 @@ export function popupHook(options) {
     if (!hooked(opened)) coverInitialDocument(opened);
   };
   const open = { open(url, target, features) {
+    if (wholeBlock('new tab')) return null;
     // Explicit selection modifiers never authorize a page handler to open a window.
     if (live() && arm.modifier) { held++; if (shield?.token === arm.token) shield.violation ??= changedReason; return null; }
     if (/^_(self|parent|top)$/i.test(String(target))) return nativeOpen.apply(this, arguments);
@@ -428,6 +469,20 @@ export function popupHook(options) {
     return opened;
   } }.open;
   replace(window, 'open', { configurable: true, writable: true, value: open });
+  for (const name of ['alert', 'confirm', 'prompt']) {
+    const original = window[name];
+    replace(window, name, { configurable: true, writable: true, value() {
+      if (wholeBlock('dialog')) return undefined;
+      return original.apply(this, arguments);
+    } });
+  }
+  for (const name of ['pushState', 'replaceState', 'go', 'back', 'forward']) {
+    const original = globalThis.History?.prototype?.[name];
+    if (typeof original === 'function') replace(globalThis.History.prototype, name, { configurable: true, writable: true, value() {
+      if (wholeBlock('navigation')) return;
+      return original.apply(this, arguments);
+    } });
+  }
   const keyEvent = event => {
     if (!live() || !event.isTrusted || !['Control', 'Meta'].includes(event.key)) return;
     if (event.key === arm.modifier) { if (event.type === 'keydown' && !arm.clicked) arm.masking = true; return; }
@@ -632,6 +687,7 @@ export function popupHook(options) {
   const hold = (constructor, name, holds, track) => {
     const native = constructor?.prototype?.[name];
     if (typeof native === 'function') replace(constructor.prototype, name, { configurable: true, writable: true, value() {
+      if ((name === 'submit' || name === 'requestSubmit') && wholeBlock('submit')) { if (name === 'submit') wholeSubmit++; else wholeRequestSubmit++; return; }
       if (!dead && name === 'click' && opensNativeControl(this)) return refuseNativeUI();
       if (!dead && (name === 'submit' || name === 'requestSubmit') && nativeFormAction(this, arguments[0])) return refuseNativeUI();
       if (active() || !holds.apply(this, arguments)) return scriptStarted(track?.apply(this, arguments), [], () => native.apply(this, arguments));
@@ -841,6 +897,7 @@ export function popupHook(options) {
     engage(event, arm.link);
   };
   const submitted = event => {
+    if (wholeBlock('submit')) { nativePrevent.call(event); stopNow(event); return; }
     if (scripted?.form) try {
       const path = composedPath.call(event);
       for (let i = 0; i < path.length; i++) if (path[i] === scripted.form) { pushEvent(scripted.events, event); break; }
@@ -1682,6 +1739,7 @@ export function popupHook(options) {
       return out;
     },
     off() {
+      if (wholeNavigation) remove.call(wholeNavigation, 'navigate', wholeNavigate);
       dead = true;
       if (arm) finish(arm.token);
       remove.call(window, 'keydown', keyEvent, true);
@@ -1800,6 +1858,17 @@ export function popupHook(options) {
     visit(window, selfPeer, impl.info(), 0);
   };
   const api = {
+    whole: (proof, token, capMs) => seal('whole', proof, () => {
+      if (capMs === 0) { if (token !== wholeToken) return false; wholeUntil = 0; wholeToken = undefined; return true; }
+      if (wholeActive() && token === wholeToken) return true;
+      if (!wholeNavigation || wholeActive() || typeof token !== 'string' || !isFinite(capMs) || capMs <= 0 || capMs > 125000) return false;
+      wholeUntil = wholeNow() + capMs; wholeToken = token; wholeBlocked = []; wholeShared = wholeSubmit = wholeRequestSubmit = 0; return true;
+    }, booleanText),
+    wholeWorker: proof => seal('wholeWorker', proof, () => { if (!wholeActive()) return false; wholeShared++; return true; }, booleanText),
+    wholeTake: proof => seal('wholeTake', proof, () => {
+      const value = wholeJoin(wholeBlocked, ', ') + '\n' + wholeShared + '\n' + wholeSubmit + '\n' + wholeRequestSubmit;
+      wholeBlocked = []; wholeShared = wholeSubmit = wholeRequestSubmit = 0; return value;
+    }, stringText),
     guard: (proof, element, token, capMs, options) => seal('guard', proof, () => impl.guard(element, token, capMs, options), booleanText),
     reveal: (proof, element) => seal('reveal', proof, () => impl.reveal(element), nothing),
     settle: proof => { const nonce = verify('settle', proof); return new Promise(resolve => impl.settle(() => resolve(sign('settle', nonce, 'u')))); },
@@ -2627,6 +2696,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     if (frames) entry.frames = { sessions: () => frames.sessions(entry.targetId), addScript: source => frames.addScript(entry.targetId, source),
       evaluate: (name, expression) => frames.evaluate(entry.targetId, name, expression) };
     if (typeof frames?.observeInput === 'function') entry.observeInput = listener => frames.observeInput(entry.targetId, listener);
+    if (typeof frames?.guardWholeRequests === 'function') entry.guardWholeRequests = callbacks => frames.guardWholeRequests(entry.targetId, callbacks);
     entry.openChild = (url, { target = '', rel = '' } = {}) => {
       // Never resolve a page-supplied name against arbitrary browser targets.
       // Only this registry's allocations can acquire or reuse a link name.

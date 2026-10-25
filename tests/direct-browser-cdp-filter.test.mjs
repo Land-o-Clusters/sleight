@@ -37,6 +37,60 @@ function fixture() {
     } };
   return { session, calls, emit, targets, listeners };
 }
+test('whole child guard scopes interception, keeps caller/endpoint patterns and releases',async t=>{
+ const f=fixture(),filter=(await factory())({session:f.session,ownedTargets:['owned'],protectedPort:9222});t.after(()=>filter.dispose());
+ await filter.session.send('Target.attachToTarget',{targetId:'owned',flatten:true});
+ const attach=name=>f.emit({method:'Target.attachedToTarget',sessionId:'s-owned',params:{sessionId:name,targetInfo:{targetId:name,type:'iframe'},waitingForDebugger:true}});
+ const tick=()=>new Promise(r=>setImmediate(r));attach('old');await tick();
+ let click;const held=[],failed=[],callbacks={after:()=>click,held:(...args)=>held.push(args),failed:reason=>failed.push(reason)};
+ await assert.rejects(filter.frames.guardWholeRequests('foreign',callbacks),/NOT_OWNED/);
+ const guard=await filter.frames.guardWholeRequests('owned',callbacks);
+ await assert.rejects(filter.frames.guardWholeRequests('owned',callbacks),/GUARD_REQUIRED/);
+ attach('new');await tick();
+ const commands=f.calls.filter(c=>c.route==='new').map(c=>c.method);
+ assert.ok(commands.indexOf('Network.setBypassServiceWorker')<commands.indexOf('Runtime.runIfWaitingForDebugger'));
+ assert.ok(commands.indexOf('Fetch.enable')<commands.indexOf('Runtime.runIfWaitingForDebugger'));
+ const paused=(requestId,method,route='old',headers={})=>f.emit({method:'Fetch.requestPaused',sessionId:route,params:{requestId,networkId:requestId,resourceType:'Fetch',request:{method,url:'https://fixture.invalid/private-path?secret',headers}}});
+ paused('before','POST');await tick();assert.equal(held.length,0);
+ click=Date.now();paused('post','POST');paused('get','GET');paused('preflight','OPTIONS','new',{'access-control-request-method':'GET'});paused('plain-options','OPTIONS','new');paused('foreign','DELETE','foreign-session');await tick();
+ assert.deepEqual(held.map(row=>row[0]),['POST','OPTIONS']);assert.deepEqual(failed,[]);
+ const caller=[{urlPattern:'https://fixture.invalid/caller',requestStage:'Request'}];
+ await filter.session.send('Fetch.enable',{patterns:caller},'old');await guard.remove();
+ const last=f.calls.filter(c=>c.method==='Fetch.enable'&&c.route==='old').at(-1);
+ assert.deepEqual(last.params.patterns,[...caller,{urlPattern:'*://*:9222/*',requestStage:'Request'}]);
+ assert.ok(f.calls.some(c=>c.route==='old'&&c.method==='Network.setBypassServiceWorker'&&c.params.bypass===false));
+ paused('released','POST');await tick();assert.equal(held.length,2);
+ assert.equal(f.calls.some(c=>c.route==='foreign-session'),false);
+});
+test('whole child guard failure keeps a new child paused and reports the failed fence',async t=>{
+ const f=fixture(),send=f.session.send;
+ f.session.send=async(method,params,route)=>{if(method==='Fetch.enable'&&route==='failed-frame')throw Error('fixture guard failure');return send(method,params,route);};
+ const filter=(await factory())({session:f.session,ownedTargets:['owned'],protectedPort:9222});t.after(()=>filter.dispose());
+ await filter.session.send('Target.attachToTarget',{targetId:'owned',flatten:true});
+ const failures=[],guard=await filter.frames.guardWholeRequests('owned',{after:()=>Date.now()-100,held:()=>assert.fail('no request was held'),failed:reason=>failures.push(reason)});
+ f.emit({method:'Target.attachedToTarget',sessionId:'s-owned',params:{sessionId:'failed-frame',targetInfo:{targetId:'failed-frame',type:'iframe'},waitingForDebugger:true}});
+ await new Promise(r=>setImmediate(r));
+ assert.deepEqual(failures,['request guard unavailable']);
+ assert.equal(f.calls.some(c=>c.route==='failed-frame'&&c.method==='Runtime.runIfWaitingForDebugger'),false);
+ assert.equal(f.calls.some(c=>c.method==='Target.detachFromTarget'&&c.params.sessionId==='failed-frame'),false);
+ await assert.rejects(guard.remove(),/fixture guard failure/);
+});
+test('whole guard collects a child attached while its close is restoring another child',async t=>{
+ const f=fixture(),send=f.session.send;let duringClose=false;
+ const filter=(await factory())({session:f.session,ownedTargets:['owned'],protectedPort:9222});t.after(()=>filter.dispose());
+ await filter.session.send('Target.attachToTarget',{targetId:'owned',flatten:true});
+ const attach=name=>f.emit({method:'Target.attachedToTarget',sessionId:'s-owned',params:{sessionId:name,targetInfo:{targetId:name,type:'iframe'},waitingForDebugger:true}});
+ attach('old');await new Promise(r=>setImmediate(r));
+ const guard=await filter.frames.guardWholeRequests('owned',{after:()=>Date.now()-100,held:()=>{},failed:()=>assert.fail('fence failure')});
+ f.session.send=async(method,params,route)=>{
+  if(!duringClose&&route==='old'&&method==='Fetch.enable'&&params.patterns.length===1){duringClose=true;attach('late');}
+  return send(method,params,route);
+ };
+ await guard.remove();
+ assert.equal(duringClose,true);
+ assert.ok(f.calls.some(c=>c.route==='late'&&c.method==='Network.setBypassServiceWorker'&&c.params.bypass===false),'late frame bypass must be restored before close returns');
+ assert.deepEqual(f.calls.filter(c=>c.route==='late'&&c.method==='Fetch.enable').at(-1).params.patterns,[{urlPattern:'*://*:9222/*',requestStage:'Request'}]);
+});
 test('FD3 page and child evaluations strip synthetic user gestures at the owned CDP boundary', async t => {
   const f = fixture(), filter = (await factory())({ session: f.session, ownedTargets: ['owned'] });
   t.after(() => filter.dispose());

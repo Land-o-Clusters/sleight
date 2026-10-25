@@ -10,7 +10,7 @@ import { withMT } from './fixtures/mt-env.mjs';
 for (const mode of [undefined, '0']) test(`G10B touch layout guidance has a measured description budget, switch=${mode}`, async () => withMT(mode, async () => {
   const tools = browserTools('bfixture'), act = tools.find(tool => tool.name === 'browser_act');
   assert.equal(act.description.length, mode === '0' ? 940 : 1089);
-  assert.equal(tools.map(tool => tool.description).join('\n').length, mode === '0' ? 2310 : 2590);
+  assert.equal(tools.map(tool => tool.description).join('\n').length, mode === '0' ? 2363 : 2643);
   assert.match(act.description, /paste\(ref,text\).*Electron refuses paste/);
   assert.match(act.description, /touch emulates a touch layout; clicks stay mouse clicks/);
   assert.match(act.description, /empty resets all/);
@@ -37,10 +37,10 @@ function descriptions(value, path) {
   return Object.entries(value).flatMap(([key, item]) => key === 'description' ? [[path, item]] : descriptions(item, `${path}.${key}`));
 }
 
-test('PDF discovery adds 84 description characters while preserving the read cap and permission boundary', () => {
+test('PDF and whole-thread discovery preserve the read cap and permission boundary within the measured budget', () => {
   const tool = browserTools('bfixture').find(tool => tool.name === 'browser_read');
-  // 303 on codex/g4b; +102 from fd5b links and fd1b screenshot in the p143 merge.
-  assert.equal(tool.description.length, 647);
+  // Whole guidance adds 53 characters to the current p143 read description.
+  assert.equal(tool.description.length, 700);
   assert.match(tool.description, /Reads never grant permission/);
   assert.match(tool.description, /PDFs: tab or file; ref continues/);
   assert.match(tool.description, /user message: Read PDF "<path>"/);

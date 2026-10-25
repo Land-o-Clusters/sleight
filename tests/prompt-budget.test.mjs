@@ -406,7 +406,7 @@ for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned i
   // G12F paste adds 119 catalog characters in each mode (111 description, 8 enum).
   // each lane measured its own increment; G10B adds 68 characters for touch schema and guidance.
   // G13E opt-in discovery adds 64 catalog characters (62 description characters).
-  assert.equal(JSON.stringify(tools).length, mode === '0' ? 5856 : 6138);
+  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6266 : 6548);
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);
 }));

@@ -27,6 +27,7 @@ import { runDesktop as runCursorDesktop } from '../world/arms/cursor-cu/run.mjs'
 import { DesktopDriver as CursorDesktopDriver } from '../world/arms/cursor-cu/desktop.mjs';
 import { armPaths, guardLive as guardCursorLive } from '../world/arms/cursor-cu/contract.mjs';
 import { inspectBundle as inspectCursorBundle, readLoginReadiness as cursorReadiness } from '../world/arms/cursor-cu/setup.mjs';
+import { startServer as startWholeSite } from './site/server.mjs';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const runCursorPlan = (plan, options) => runCursorDesktop(plan, { driver: new CursorDesktopDriver(), ...options });
@@ -130,13 +131,17 @@ async function freePort(port) {
     probe.listen(port, '127.0.0.1', () => probe.close(resolve));
   });
 }
-export async function startGateSites(mcpRoot) {
+export async function startGateSites(mcpRoot, { wholeThread = false, wholeOnly = false } = {}) {
+  if (wholeOnly) return startWholeSite();
   for (const port of [5413, 5414, 5420, 5421]) await freePort(port);
   const shop = await import(pathToFileURL(join(mcpRoot, 'test/demo/server.mjs')));
   const a = await startGateForms(join(mcpRoot, 'test/forms'));
   let b;
   try { b = shop.startServer(); } catch (error) { await a.close(); throw error; }
-  return { close: async () => { await Promise.all([a.close(), b.close()]); } };
+  let c;
+  try { if (wholeThread) c = await startWholeSite(); }
+  catch (error) { await Promise.all([a.close(), b.close()]); throw error; }
+  return { close: async () => { await Promise.all([a.close(), b.close(), c?.close()]); } };
 }
 const getJson = async url => {
   if (!url) return null;
@@ -352,7 +357,7 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
     // An offline test that injects admission never touches the Mac's approvals or daemons unless it injects prep too.
     armPrep = await (runtime.prepareArms || (runtime.admit ? async () => ({ receipt: {}, release: async () => {} }) : prepareRoundArms))(plan);
     writeFileSync(join(plan.out, 'arm-prep.json'), JSON.stringify(armPrep.receipt, null, 2));
-    sites = await (runtime.startSites || startGateSites)(mcpRoot);
+    sites = await (runtime.startSites || startGateSites)(mcpRoot, { wholeThread: plan.arms.some(arm => arm.task.wholeThread), wholeOnly: plan.arms.every(arm => arm.task.wholeThread) });
     browser = await (runtime.launchBrowser || launchRealBrowser)(plan.browser).catch(error => {
       if (error.message === 'BENCH_BROWSER_CLEANUP_UNPROVED') cleanupProven = false;
       if (error.browserReceipt || error.ownerCheck) writeFileSync(join(plan.out, 'browser.json'), JSON.stringify(error.browserReceipt || { ...plan.browser, ownerCheck: error.ownerCheck }, null, 2));
