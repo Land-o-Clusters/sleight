@@ -40,7 +40,7 @@ for (const size of [96, 128, 200]) test(`${size} px visible text scales pixelati
   if (original) assert.equal(recognize(t, gif).text.some(text => /4242/.test(text)), false, 'saved GIF does not recover the fixture digits');
 });
 
-for (const moduleSize of [16, 24, 32]) test(`QR with ${moduleSize} px modules loses its payload`, { skip, timeout: 90000 }, async t => {
+for (const moduleSize of [4, 8, 12, 16, 20, 24, 32]) test(`QR with ${moduleSize} px modules loses its payload`, { skip, timeout: 90000 }, async t => {
   const tool = imageGrader(t);
   if (!tool) return t.skip('Core Image QR fixture generator requires macOS');
   const path = join(tool.dir, 'qr.png');

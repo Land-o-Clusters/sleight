@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createTurnRecording } from '../plugins/sleight/lib/turn-recording.mjs';
 import { fixture, skip } from './fixtures/cr4-real.mjs';
-import { unreadable } from './fixtures/recording-grade.mjs';
+import { gradeUnreadable } from './fixtures/recording-grade.mjs';
 import { captureRecordingFrame } from '../plugins/sleight/lib/direct-browser/recording.mjs';
 
 const require = createRequire(import.meta.url);
@@ -51,8 +51,7 @@ assert recovered==0,('saved GIF differs from masked reference',recovered)
 `, path, JSON.stringify([frame.width, frame.height, box])], { input: expected, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   t.diagnostic(`saved GIF: ${result.stdout.trim()} pixels differ from the masked reference`);
-  unreadable(t, PNG.sync.write(frame), 'masked PNG', frame, box);
-  unreadable(t, readFileSync(path), 'saved GIF', frame, box);
+  gradeUnreadable(t, frame, readFileSync(path), box);
 }
 const qr = '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="white"/>' +
   Array.from({ length: 64 * 64 }, (_, i) => (i * 17 + Math.floor(i / 64) * 7) % 11 < 5 ? `<rect x="${i % 64 * 2}" y="${Math.floor(i / 64) * 2}" width="2" height="2"/>` : '').join('') + '</svg>';

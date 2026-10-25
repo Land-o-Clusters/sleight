@@ -392,18 +392,18 @@ export async function createV3TurnRuntime({ binding, browser, pages, snapshot, u
       let notified = false;
       pdfBuilding = () => { if (!notified) { notified = true; control?.pdfBuilding?.(); } };
       try {
-      const result = await runtime.call(request, control);
-      if (!recording && !permitted()) return result;
-      const notes = [];
-      if (!recordingStarted) {
-        recordingStarted = true;
-        notes.push(recording ? 'Recording this turn: frames are pixelated everywhere; the outline shows where the action landed. Blocks are at least 32 CSS px and scale with visible fonts and viewport size. Fields and editable controls are black; targeted frames, canvases, images, SVGs and videos are black. DOM reads have a 5,000-element field cap and 50 ms budget; exceeding either skips frames. GIF caps: 30 frames, 640 by 480 pixels, 12 MiB. The pointer and target outline are drawn on top. Saved path follows at turn end.'
-          : 'Recording: unavailable for app windows; no frames saved.');
-      }
-      if (recording?.warning()) notes.push(recording.warning());
-      if (!notes.length) return result;
-      const noted = { ...result, text: result.text + '\n' + notes.join('\n') };
-      originals.set(noted, { result, text: noted.text, isError: noted.isError }); return noted;
+        const result = await runtime.call(request, control);
+        if (!recording && !permitted()) return result;
+        const notes = [];
+        if (!recordingStarted) {
+          recordingStarted = true;
+          notes.push(recording ? 'Recording this turn: frames are pixelated everywhere; the outline shows where the action landed. Blocks are at least 32 CSS px and scale with visible fonts and viewport size. Fields and editable controls are black; targeted frames, canvases, images, SVGs and videos are black. DOM reads have a 5,000-element field cap and 50 ms budget; exceeding either skips frames. GIF caps: 30 frames, 640 by 480 pixels, 12 MiB. The pointer and target outline are drawn on top. Saved path follows at turn end.'
+            : 'Recording: unavailable for app windows; no frames saved.');
+        }
+        if (recording?.warning()) notes.push(recording.warning());
+        if (!notes.length) return result;
+        const noted = { ...result, text: result.text + '\n' + notes.join('\n') };
+        originals.set(noted, { result, text: noted.text, isError: noted.isError }); return noted;
       } finally { pdfBuilding = undefined; }
     }, delivered(result) {
       const original = originals.get(result); originals.delete(result);

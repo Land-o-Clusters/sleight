@@ -91,14 +91,22 @@ assert count==0,('unmasked GIF pixels',count)
   assert.equal(result.status, 0, result.stderr);
   t.diagnostic(`saved GIF: ${result.stdout.trim()} differing pixels`);
   const gif = readFileSync(path);
-  unreadable(t, PNG.sync.write(frame), 'masked PNG', frame, box);
-  unreadable(t, gif, 'saved GIF', frame, box);
+  gradeUnreadable(t, frame, gif, box);
   return gif;
+}
+
+export function gradeUnreadable(t, frame, gif, box) {
+  const errors = [];
+  for (const [bytes, label] of [[PNG.sync.write(frame), 'masked PNG'], [gif, 'saved GIF']]) {
+    try { unreadable(t, bytes, label, frame, box); } catch (error) { errors.push(error); }
+  }
+  if (errors.length) throw new AggregateError(errors, 'OCR/QR grading failed');
 }
 
 // Grade the fixture's content region. Synthetic outlines can look like letters
 // to OCR, so the same inset used for pixel comparison excludes those annotations.
 export function unreadable(t, bytes, label, frame, box) {
+  const original = bytes;
   if (box) {
     const cropped = spawnSync('python3', ['-c', `from PIL import Image
 import sys,json,io,math
@@ -110,11 +118,11 @@ image.crop((math.ceil(box['x']*s)+left,math.ceil(box['y']*s)+top,math.floor((box
     assert.equal(cropped.status, 0, cropped.stderr.toString());
     bytes = cropped.stdout;
   }
-  const ocr = recognize(t, bytes), qr = recognize(t, bytes, 'decode-qr');
+  const ocr = recognize(t, bytes), qr = recognize(t, original, 'decode-qr');
   if (ocr) {
+    t.diagnostic(`${label}: OCR ${ocr.text.length}, whole-image QR ${qr.qr.length}`);
+    assert.deepEqual(qr.qr, [], label + ': zero decodable QR');
     if (ocr.text.length) t.diagnostic(label + ': ' + JSON.stringify(ocr.regions));
     assert.deepEqual(ocr.text, [], label + ': zero OCR text');
-    assert.deepEqual(qr.qr, [], label + ': zero decodable QR');
-    t.diagnostic(label + ': OCR 0, QR 0');
   }
 }
