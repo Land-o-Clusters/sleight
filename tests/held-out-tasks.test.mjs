@@ -150,7 +150,9 @@ test('held out: the world suite runs them only by name, as rows outside the clai
   assert.equal(selectSuiteTasks(world).some(t => t.heldOut), false, 'a pass without --tasks leaves them out');
   assert.deepEqual(selectSuiteTasks(world, ['word-memo']).map(t => t.id), ['word-memo']);
   const ccTasks = JSON.parse(readFileSync(new URL('../bench/world/tasks/cc-held-out.json', import.meta.url)));
-  assert.deepEqual(suite.heldOut.map(row => row.task), [...heldOut.HELD_OUT_TASKS, ...ccTasks.map(row => row.task)]);
+  // BT2 added mail-to-sheet, and LR1 added its three long-thread tasks.
+  assert.deepEqual(suite.heldOut.map(row => row.task), ['mail-to-sheet', ...heldOut.HELD_OUT_TASKS, ...ccTasks.map(row => row.task),
+    'dm-first-message', 'mail-first-invoice', 'endless-feed-honesty']);
   for (const row of suite.heldOut) {
     assert.equal(row.claim, false);
     assert.equal((await resolveTask(row.id)).id, row.task);
