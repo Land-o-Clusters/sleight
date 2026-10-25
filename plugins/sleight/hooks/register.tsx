@@ -69,21 +69,18 @@ let turboEnvelope: TurboEnvelope | undefined
 let turboSequence = 0
 let turboPending = Promise.resolve()
 
-async function beginTurboTurn($: any, text: string) {
+async function beginTurboTurn($: any, text: string, origin: 'composer' | 'bridge'): Promise<string | undefined> {
   if (turboSequence >= Number.MAX_SAFE_INTEGER) return
   const turn = `turbo-${++turboSequence}`
+  let context: string | undefined
   const running = turboPending.then(async () => {
-    let contactingHost = false
     try {
-      const state = await $.process.run([`${$.plugin.root}/bin/sleight-mcp`, 'turbo-state'])
-      if (state.exitCode !== 0 || state.isStdoutTruncated === true || typeof state.stdout !== 'string' ||
-          state.stdout.length > 4096) return
-      const enabled = JSON.parse(state.stdout)?.enabled
-      if (enabled !== true) {
-        if (enabled === false) turboEnvelope = undefined
-        return
-      }
-      contactingHost = true
+      let enabled = false
+      try {
+        const state = await $.process.run([`${$.plugin.root}/bin/sleight-mcp`, 'turbo-state'])
+        if (state.exitCode === 0 && state.isStdoutTruncated !== true && typeof state.stdout === 'string' && state.stdout.length <= 4096)
+          enabled = JSON.parse(state.stdout)?.enabled === true
+      } catch { /* User text still reaches the relay when turbo is unavailable. */ }
       if (!turboEnvelope) {
         const response = await call($, 'turn_ended', { sleight_turbo: { event: 'bootstrap' } })
         if (response.isError || response.content?.length !== 1 || response.content[0]?.type !== 'text' ||
@@ -95,16 +92,19 @@ async function beginTurboTurn($: any, text: string) {
             typeof envelope.nonce !== 'string' || !/^[a-f0-9]{64}$/.test(envelope.nonce)) return
         turboEnvelope = { version: 1, session: envelope.session, nonce: envelope.nonce }
       }
-      const response = await call($, 'turn_ended', { sleight_turbo: { ...turboEnvelope, event: 'begin', turn, text } })
-      // A declined or unavailable begin grants no authority. The bootstrap is
-      // one-use, so keep its validated envelope for a fresh genuine user turn.
-      if (!response.isError) turboTurnBound = true
-    } catch { if (contactingHost) turboEnvelope = undefined }
+      const response = await call($, 'turn_ended', { sleight_turbo: { ...turboEnvelope, event: 'begin', turn, text, origin, turbo: enabled } })
+      if (response.isError) return
+      try {
+        const remote = JSON.parse(response.content?.[0]?.text ?? '')?.sleightRemote
+        if (remote?.turboBound === true) turboTurnBound = true
+        if (typeof remote?.context === 'string' && remote.context.length <= 4096 &&
+            /^sleight: Ask the user to reply: allow [^\r\n]+$/.test(remote.context)) context = remote.context
+      } catch { /* A missing context line changes no authority. */ }
+    } catch { turboEnvelope = undefined }
   })
-  // Serialize genuine submissions so simultaneous user turns cannot create
-  // competing bootstrap envelopes. Failure never changes ordinary prompting.
   turboPending = running
   await running
+  return context
 }
 
 const now = () => new Date().toTimeString().slice(0, 8)
@@ -357,8 +357,9 @@ export const register: Register = on => {
       await call($, 'turn_ended', { sleight_resume: true }).catch(() => undefined)
     }
     await update($, stopped, () => false)
-    if ((e.origin?.kind === 'composer' || e.origin?.kind === 'bridge') &&
-        (e as { agentId?: string }).agentId === undefined) await beginTurboTurn($, e.text)
+    const approvalNote = (e.origin?.kind === 'composer' || e.origin?.kind === 'bridge') &&
+        (e as { agentId?: string }).agentId === undefined ? await beginTurboTurn($, e.text, e.origin.kind) : undefined
+    if (approvalNote) e = { ...e, context: [...(e.context ?? []), approvalNote] }
     if (snapshottedApps.size === 0) return next(e)
     const apps = [...snapshottedApps].join(', ')
     snapshottedApps.clear()

@@ -1,3 +1,4 @@
+import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, resolveApp } from './remote-approvals.mjs';
 // A stdio relay between Claude Code and the computer-use server.
 //
 // The server scopes app approvals and cleanup to a Codex session and turn,
@@ -56,7 +57,7 @@
 //
 // `trace`, when given, receives every message as it passes, for debugging.
 
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Script } from 'node:vm';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isV3Frontend, isV3Bridge, failure as turboFailure } from './direct-browser/worker.mjs';
@@ -721,6 +722,7 @@ export function createRelay({
   directBrowser,
   turboUnavailable,
   directHost,
+  remoteApprovals,
   // Whether sleight's mod runs in this host (Claude Code). Only the mod can call turn_ended for the model, end a turn
   // after a used one only, and bind a turbo turn to the user's message. Elsewhere (Codex, Cursor) turn_ended stays hidden
   // from the model as the engine marks it, turbo's tools are left out, and a turn sleight sat out ends here.
@@ -916,6 +918,18 @@ export function createRelay({
   if (directBrowser !== undefined && !isV3Frontend(directBrowser)) throw Error('TRUSTED_ROUTE_REQUIRED');
   if (directHost !== undefined && !(isV3Bridge(directHost) && isV3Frontend(directBrowser))) throw Error('TRUSTED_ROUTE_REQUIRED');
   let installedBootstrapped = false;
+  const remoteEnvelope = directHost?.bootstrapEnvelope() ?? { version: 1, session: randomUUID(), nonce: randomBytes(32).toString('hex') };
+  const remoteTurns = new Set(), typedApps = new Set(), remoteRefusedCalls = new Set(), remoteUnboundNotices = new Map(), awayCards = new Map();
+  let promptOrigin;
+  let remoteCatalog = { apps: [], defaults: {} };
+  const remoteRead = async operation => {
+    let timer;
+    try { return await Promise.race([Promise.resolve().then(() => remoteApprovals?.[operation]?.()),
+      new Promise(resolve => { timer = setTimeout(resolve, 1500); timer.unref?.(); })]); }
+    catch { return undefined; } finally { clearTimeout(timer); }
+  };
+  const appIdentity = app => remoteCatalog.apps?.find(a => a.id === app) ?? resolveApp(app, remoteCatalog.apps);
+
   let clientHost; // the menu bar's host line, from initialize's clientInfo (host-label.mjs)
   let grokClient = false;
   const originalModHost = modHost;
@@ -1156,14 +1170,14 @@ export function createRelay({
     for (const key of [...approved]) {
       try { const parts = JSON.parse(key); if (apps.includes(parts[0]) || parts[0] === 'sleight' && apps.includes(parts[2])) approved.delete(key); } catch {}
     }
-    for (const app of apps) listApproved.delete(app);
+    for (const app of apps) { listApproved.delete(app); typedApps.delete(app); }
   });
   // Bundle ids of apps the engine approved this session (session cards and the pre-approved list), for turbo's begin
   // frame. Turbo still needs the operator's per-app opt-in and its own debugger card before it touches an app.
   // The pre-approved list counts from the session's start, before the engine asks about the app. It comes last, so a
   // long list never pushes this session's cards past the 64-id cap.
   function turboApps() {
-    const ids = new Set(listApproved);
+    const ids = new Set([...listApproved, ...typedApps]);
     for (const key of approved) {
       try { const parts = JSON.parse(key); if (parts.length === 2 && parts[0] !== 'sleight') ids.add(parts[0]); } catch {}
     }
@@ -2519,11 +2533,12 @@ export function createRelay({
     if (!hasFullTree(after) || later?.app !== window.app || later.title !== window.title || size(after) <= count) return;
     msg.result.content = [...dropAcquisitionTree(msg.result.content, reply.result.content, undefined, compactReacquire), ...reply.result.content];
   }
-  const toClient = (msg, afterWrite) => {
+  const toClient = (msg, afterWrite, remoteNotice = false) => {
     // An approval prompt's time comes off the action log's call times (the engine's prompts and sleight's own).
     if (msg.method === 'elicitation/create' && msg.id !== undefined) recordAction('waitStart', 'c:' + msg.id);
     // Every call's reply ends it, by whatever path: its parent lease pin ends too.
     if (msg.method === undefined && msg.id !== undefined) releasePin(msg.id);
+    if (msg.method === undefined && !remoteNotice && remoteRefusedCalls.delete(msg.id)) return;
     if (msg.method === undefined && stoppedClients.has(msg.id)) return;
     const directEnding = msg.method === undefined && directTurnEnds.get(msg.id);
     if (directEnding?.pending) { directEnding.replies.push(msg); return; }
@@ -2791,6 +2806,77 @@ export function createRelay({
     });
     asking = answer.catch(() => 'cancel');
     return answer;
+  }
+
+  async function remoteAppCard(msg) {
+    const generation = stopGeneration;
+    const app = msg.params._meta.tool_params.app, key = approvalKey(msg);
+    // Read only app metadata when the mod has not supplied a catalog (all other hosts).
+    if (!appIdentity(app)) {
+      const catalog = await remoteRead('catalog');
+      if (Array.isArray(catalog?.apps)) remoteCatalog = catalog;
+    }
+    if (disposed || closing || generation !== stopGeneration) { toServer({ id: msg.id, result: { action: 'cancel' } }); return; }
+    const identity = appIdentity(app), label = identity?.name ?? app;
+    const typed = identity && typedApps.has(identity.id);
+    let listed = false, auditFailed = false;
+    try { listed = userListGrant(app, msg.params._meta.riskLevel, 'engine', [...running].filter(id => !localRunning.has(id))); } catch { auditFailed = true; }
+    if (typed || !auditFailed && (approved.has(key) || listed)) {
+      if (typed) { trace('answered-by-typed-session', { app }); stderr.write(`sleight: answered ${app} from its typed session approval.\n`); }
+      toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'accept', content: {}, ...(typed || approved.has(key) ? { _meta: { persist: 'session' } } : {}) } }); return;
+    }
+    const present = isPresent(await remoteRead('presence'), promptOrigin);
+    if (disposed || closing || generation !== stopGeneration) { toServer({ id: msg.id, result: { action: 'cancel' } }); return; }
+    if (present) {
+      if (ask) askUser(msg, auditFailed);
+      else if (clientCanElicit === false) toServer({ id: msg.id, result: { action: 'cancel' } });
+      else { approvalRequests.set(msg.id, { key, generation }); toClient(msg); }
+      return;
+    }
+    // The engine's card carries no parent RPC id. Match the relay's own acquisition/handle metadata when calls overlap.
+    const pending = [...engineCalls].filter(id => running.has(id) && !localRunning.has(id) && !internalRequests.has(id));
+    const named = pending.filter(id => {
+      const plan = helperReads.get(id) ?? helperPlan(jsCalls.get(id));
+      return [plan?.key, ...(plan?.keys ?? [])].filter(Boolean).some(k =>
+        k === helperSelector(JSON.stringify(app)) || identity && appIdentity(k)?.id === identity.id);
+    });
+    const targets = named.length ? named : pending.length === 1 ? pending : [];
+    const notice = remoteApprovalNotice(label);
+    for (const id of targets) remoteRefusedCalls.add(id);
+    // Unknown dynamic selectors with overlapping calls use the engine's declined reply to identify the refused parent.
+    if (!targets.length) for (const id of pending) remoteUnboundNotices.set(id, notice);
+    toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'decline' } });
+    for (const id of targets) toClient({ jsonrpc: '2.0', id, result: { isError: true, content: [{ type: 'text', text: notice }] } }, undefined, true);
+    trace('remote-approval-required', { app });
+    if (ask) {
+      // Identical pending app cards share one physical panel. Keep its late answer within this stop generation.
+      if (!awayCards.has(key)) {
+        const pending = queueDecision(async () => {
+          const always = alwaysChoice(msg);
+          const action = await ask(msg.params.message, true, panelOnly ? { app, appApproval: true } : always ? { always: true } : undefined);
+          if (generation !== stopGeneration || disposed || closing) return;
+          if (action === 'always' && always) { rememberAlways(always); approved.add(key); }
+          else if (action === 'accept') approved.add(key);
+        }).catch(() => {}).finally(() => awayCards.delete(key));
+        awayCards.set(key, pending);
+      }
+    } else if (clientCanElicit !== false) {
+      const id = `sleight-elicit-away-${nextElicitId++}`, always = grokClient ? undefined : alwaysChoice(msg);
+      if (always) {
+        const schema = msg.params.requestedSchema ?? { type: 'object', properties: {} };
+        msg.params.requestedSchema = { ...schema, properties: { ...schema.properties,
+          remember: { type: 'string', title: 'Remember this choice', enum: ['This session', 'Always'], default: 'This session',
+            description: 'Always adds the app to your pre-approved list (sleight-mcp allow remove takes it off).' } } };
+      }
+      elicitations.set(id, answer => {
+        elicitations.delete(id);
+        if (generation === stopGeneration && !disposed && !closing && answer.result?.action === 'accept') {
+          if (always && !reviewerAnswer(answer.result) && answer.result.content?.remember === 'Always') rememberAlways(always);
+          approved.add(key);
+        }
+      });
+      toClient({ ...msg, id });
+    }
   }
 
   function askUser(msg, ignoreMemory = false) {
@@ -3269,20 +3355,55 @@ export function createRelay({
       };
       const refuse = () => reply({ isError: true, content: [{ type: 'text', text: 'Trusted turn binding unavailable.' }] });
       // Without the mod nothing stops the model from calling turn_ended, so no host but the mod's binds a turbo turn.
-      if (!directHost || !modHost() || disposed || msg.id === undefined || Object.keys(msg.params.arguments).length !== 1) { refuse(); return; }
+      if (!modHost() || disposed || msg.id === undefined || Object.keys(msg.params.arguments).length !== 1) { refuse(); return; }
       const frame = msg.params.arguments.sleight_turbo;
       if (frame && Object.keys(frame).length === 1 && frame.event === 'bootstrap' && !installedBootstrapped) {
         installedBootstrapped = true;
-        reply({ isError: false, content: [{ type: 'text', text: JSON.stringify({ sleightTurbo: directHost.bootstrapEnvelope() }) }] }); return;
+        reply({ isError: false, content: [{ type: 'text', text: JSON.stringify({ sleightTurbo: remoteEnvelope }) }] }); return;
       }
       if (!installedBootstrapped || frame?.event !== 'begin') { refuse(); return; }
-      // bind refuses a frame without this session's envelope before it resolves, so only the user's own message is kept, and
-      // a frame it refuses leaves the payment state as it was.
-      directHost.bind(frame, turboApps(), clientHost).then(available => {
-        paymentMessages.set(frame.text);
-        if (available) { resumeRequested = true; resumeAfterStop(); }
-        reply({ isError: !available, content: [] });
-      }).catch(refuse);
+      if (!Object.hasOwn(frame, 'origin')) {
+        // Older mods retain their turbo-only contract, without typed app authority.
+        if (!directHost) { refuse(); return; }
+        directHost.bind(frame, turboApps(), clientHost).then(available => {
+          paymentMessages.set(frame.text);
+          if (available) { resumeRequested = true; resumeAfterStop(); }
+          reply({ isError: !available, content: [] });
+        }).catch(refuse);
+        return;
+      }
+      const keys = ['version', 'session', 'nonce', 'event', 'turn', 'text', 'origin', 'turbo'];
+      if (Object.keys(frame).length !== keys.length || !keys.every(k => Object.hasOwn(frame, k)) ||
+          frame.version !== remoteEnvelope.version || frame.session !== remoteEnvelope.session || frame.nonce !== remoteEnvelope.nonce ||
+          !['composer', 'bridge'].includes(frame.origin) || typeof frame.turbo !== 'boolean' ||
+          typeof frame.turn !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(frame.turn) || remoteTurns.has(frame.turn) ||
+          remoteTurns.size >= 10000 || typeof frame.text !== 'string' || Buffer.byteLength(frame.text) > 65536) { refuse(); return; }
+      remoteTurns.add(frame.turn);
+      const generation = stopGeneration;
+      (async () => {
+        promptOrigin = frame.origin;
+        const present = isPresent(await remoteRead('presence'), promptOrigin);
+        if (!present || /^allow\s/im.test(frame.text)) {
+          const catalog = await remoteRead('catalog');
+          if (Array.isArray(catalog?.apps)) remoteCatalog = catalog;
+        }
+        if (disposed || closing || generation !== stopGeneration) { refuse(); return; }
+        for (const app of parseTypedApps(frame.text, remoteCatalog.apps)) {
+          typedApps.add(app);
+          stderr.write(`sleight: typed session approval for ${app}.\n`);
+        }
+        const alreadyApproved = app => typedApps.has(app.id) || [...approved].some(key => {
+          try { return appIdentity(JSON.parse(key)[0])?.id === app.id; } catch { return false; }
+        }) || (() => { try { return preapproved?.list?.().some(name => appIdentity(name)?.id === app.id); } catch { return false; } })();
+        const context = !present ? upfrontAsk(predictApps(frame.text, remoteCatalog).filter(app => !alreadyApproved(app))) : undefined;
+        let turboBound = false;
+        if (frame.turbo && directHost) {
+          const { origin: _origin, turbo: _turbo, ...binding } = frame;
+          try { turboBound = await directHost.bind(binding, turboApps(), clientHost); paymentMessages.set(frame.text); } catch {}
+          if (turboBound) { resumeRequested = true; resumeAfterStop(); }
+        }
+        reply({ isError: false, content: [{ type: 'text', text: JSON.stringify({ sleightRemote: { turboBound, ...(context ? { context } : {}) } }) }] });
+      })().catch(refuse);
       return;
     }
     if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && msg.params.arguments?.sleight_stop === true) startup?.cancel();
@@ -4704,7 +4825,12 @@ export function createRelay({
       clientOut.write(line + '\n');
       return;
     }
-    if (msg.method === undefined) engineCalls.delete(msg.id);
+    if (msg.method === undefined) {
+      engineCalls.delete(msg.id);
+      const unbound = remoteUnboundNotices.get(msg.id); remoteUnboundNotices.delete(msg.id);
+      if (unbound && (msg.error || msg.result?.isError) && /approv|declin|cancel|denied|permission/i.test(JSON.stringify(msg.error ?? msg.result)))
+        promptFailures.set(msg.id, unbound);
+    }
     // Only the id: with to-server and to-client it splits engine time from the relay's own.
     if (msg.method !== undefined && msg.id !== undefined) {
       const id = engineEpoch ? `sleight-engine-${engineEpoch}-${nextEngineRequest++}` : msg.id;
@@ -5532,6 +5658,7 @@ export function createRelay({
       }
       hand?.result(msg.id, !!(msg.error || msg.result?.isError)); reportPreapprovals(msg); finishedCall(msg.id);
     }
+    if (remoteApprovals && isAppApproval(msg) && !shellAppCards.has(msg)) shellAppCards.set(msg, plainAppCard(msg));
     if (engineForbiddenTargets && isAppApproval(msg)) {
       const warning = forbiddenTargetWarning(msg.params?._meta?.tool_params?.app);
       if (warning && msg.params) msg.params.message = `${msg.params.message ?? 'Allow Computer Use?'} ${warning}`;
@@ -5553,6 +5680,9 @@ export function createRelay({
         try { allowed ||= userListGrant(app, msg.params?._meta?.riskLevel, 'engine', [...diagnostic.map(([id]) => id), ...lateDiagnosticControls.keys()]); } catch { allowed = false; }
         toServer({ jsonrpc: '2.0', id: msg.id, result: { action: allowed ? 'accept' : 'decline', ...(allowed ? { content: {} } : {}) } });
         return;
+      }
+      if (remoteApprovals && plainCard(msg) && approvalKey(msg) !== undefined) {
+        remoteAppCard(msg); return;
       }
       let granted;
       try {
@@ -5828,6 +5958,7 @@ export function createRelay({
     // A Stop starts a fresh engine and turn, even after a failed update reconnect.
     updatePending = false;
     stopGeneration++;
+    remoteRefusedCalls.clear(); remoteUnboundNotices.clear();
     cancelFrontCalls();
     invalidateDiagnostics();
     resumeRequested = false;
@@ -5968,6 +6099,7 @@ export function createRelay({
     nativeHandoff?.cancel?.();
     // Split reads have no pendingClients entry. Invalidate their continuations before settling either parent or child.
     stopGeneration++;
+    remoteRefusedCalls.clear(); remoteUnboundNotices.clear();
     clearTimeout(idleTimer);
     // Failure replies also call finishedCall. Remove renewal keys before any reply or callback can finish a call.
     stopHeartbeat(); leaseCalls.clear(); openedWindowLeases.clear();

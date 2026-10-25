@@ -1,3 +1,4 @@
+import { createRemoteApprovals } from './remote-approvals.mjs';
 import { requestedSubmitRules } from './requested-submit.mjs';
 // Starts the computer-use MCP server that ships with the ChatGPT desktop app.
 //
@@ -739,7 +740,7 @@ export function runScript(script, request, options = {}) {
   // Base64 PNGs from ordinary app windows can exceed execFile's 1 MiB default.
   // The ghost hand stops waiting for locate.js after 2 s; a stalled AX app must not leave osascripts running.
   const execOptions = { timeout: script === 'open-file-window.js' ? 1000 : script === 'hand/locate.js' ? 2500 : cleanup ? 3000 :
-    script === 'stuck-escape.js' ? 5000 : 30000,
+    script === 'remote-approvals.js' ? 1500 : script === 'stuck-escape.js' ? 5000 : 30000,
     ...(script === 'hover.js' ? { maxBuffer: 16 * 1024 * 1024 } : {}) };
   if (script === 'drag.js') request = { ...request, deadline: Date.now() + execOptions.timeout,
     dp7: process.env.SLEIGHT_DP7 !== '0', dp2: process.env.SLEIGHT_DP2 !== '0', trace: !!process.env.SLEIGHT_TRACE };
@@ -1163,6 +1164,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   relay = createRelay({
     directBrowser, turboUnavailable: prepared.turboUnavailable,
     directHost: prepared.directHost,
+    remoteApprovals: createRemoteApprovals({ run: runScript }),
     startupCache: createStartupCache({ identity: startupIdentity(activeServer, join(LIB, '..')) }),
     browserChoice: browserSelection.choice,
     backendChanged: () => browserSelection.changed(),
