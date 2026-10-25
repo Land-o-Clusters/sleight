@@ -11,8 +11,11 @@ export const ordinary = [
 ];
 export const phrases = [
   'This website uses cookies', 'Our website uses cookies', 'This site stores cookies', 'Our site uses cookies',
-  'This app uses cookies', 'Accept all cookies', 'By clicking Accept All Cookies, you agree to the storing of cookies',
+  'Uses cookies', 'Use cookies', 'This app uses cookies', 'Accept all cookies', 'By clicking Accept All Cookies, you agree to the storing of cookies',
   'Cookie notice', 'Cookie consent', 'By continuing you agree to our cookie policy', 'By using this site, you agree to the storing of cookies on your device', 'We and our partners use cookies', 'Cookies are used on this site',
+  'By clicking Accept, you agree to the storing of cookies on your device and our Privacy Policy',
+  'By using our service you agree to our use of cookies', 'You accept our Terms and our use of cookies',
+  'This site uses cookies to keep you signed in',
   'Deze website gebruikt cookies', 'Diese Website verwendet Cookies', 'Diese Webseite nutzt Cookies',
   'Ce site utilise des cookies', 'Este sitio web utiliza cookies', 'Questo sito utilizza cookie',
   'Este site utiliza cookies', 'Ta strona używa plików cookie', 'Denna webbplats använder kakor',
