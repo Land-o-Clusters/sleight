@@ -1,13 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, readdirSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { NATIVE, CHROME, readSteps, invocation, cleanEnv, completed, runQueue, execute, admission } from '../bench/world/arms/cursor-cu/queue.mjs';
 import { parseOptions, nativePlan } from '../bench/world/arms/cursor-cu/suite.mjs';
 import { probePlan, runProbe } from '../bench/world/arms/cursor-cu/probe.mjs';
 
-const temp = () => mkdtempSync('/private/tmp/sleight-cq1-test-');
+const temp = () => realpathSync(trackTemp(mkdtempSync(join(tmpdir(), 'sleight-cq1-test-'))));
 const save = (file, value) => writeFileSync(file, JSON.stringify(value));
 const stepsText = () => '# ID KIND TASKS\nprobe probe -\n' + [1, 2, 3].map(i => `native-r${i} native ${NATIVE}\nchrome-r${i} chrome ${CHROME}\n`).join('');
 function fixture() {
