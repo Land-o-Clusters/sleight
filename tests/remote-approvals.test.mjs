@@ -432,3 +432,14 @@ test('a second away card never sends a second reply for an already refused call'
   const replies = h.client.filter(m => m.id === 11);
   assert.equal(replies.length, 1); assert.match(replies[0].result.content[0].text, /TextEdit/);
 });
+
+test('a present client card still offers Always, and choosing it writes the pre-approved list', async t => {
+  const written = [];
+  const h = harness(t, { alwaysAllow: (app, riskLevel) => written.push([app, riskLevel]) });
+  h.engine(card('c1')); await settle();
+  const el = h.client.find(m => m.method === 'elicitation/create');
+  assert.deepEqual(el.params.requestedSchema.properties.remember.enum, ['This session', 'Always']);
+  h.call({ jsonrpc: '2.0', id: el.id, result: { action: 'accept', content: { remember: 'Always' } } }); await settle();
+  assert.deepEqual(written, [['com.apple.TextEdit', 'low']]);
+  assert.equal(h.server.find(m => m.id === 'c1').result.action, 'accept');
+});
