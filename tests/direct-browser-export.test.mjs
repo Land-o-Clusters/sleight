@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -16,7 +17,7 @@ test('G3E the writer retains an unbound nearby count observation alongside a pro
   assert.deepEqual(result.reasons, ['nearby count label is not tied to the collection']);
 });
 function folder(t) {
-  const root = fs.mkdtempSync(path.join(fs.realpathSync(tmpdir()), 'sleight-export-'));
+  const root = trackTemp(fs.mkdtempSync(path.join(fs.realpathSync(tmpdir()), 'sleight-export-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }

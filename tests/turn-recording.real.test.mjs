@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, openSync, rmSync } from 'node:fs';
@@ -39,7 +40,7 @@ function gifChecks(box, width = 1280, height = 720) {
 
 test('compositor scrolling skips safely and a settled action records masked fields', { skip, timeout: 30000 }, async t => {
   const f = await fixture(t, `<style>body{margin:0}#scroller{height:600px;width:600px;overflow:auto;scroll-behavior:smooth}#content{position:relative;height:3000px}input{position:absolute;left:20px;top:650px;width:240px;height:50px;background:red;border:0}</style><div id=scroller role=region aria-label="Scroll area"><div id=content><input type=password value=secret><p>Scroll fixture</p></div></div>`, {}, { smoothScrolling: true });
-  const dir = mkdtempSync(join(tmpdir(), 'sleight-g13-scroll-')), path = join(dir, 'actions.gif');
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-g13-scroll-'))), path = join(dir, 'actions.gif');
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const runtime = await createV3TurnRuntime({ binding: createV3TurnBinding({ source: 'user', session: 'g13', turn: 'scroll', id: 'user', text: 'Record this turn.\nScroll down.' }, () => true),
     browser: 'bfixture', pages: f.registry, snapshot, dependencies: { acknowledgeSnapshot,
@@ -67,7 +68,7 @@ test('compositor scrolling skips safely and a settled action records masked fiel
 
 test('compositor wheel motion during capture never saves drifting password pixels', { skip, timeout: 30000 }, async t => {
   const f = await fixture(t, '<!doctype html><style>html{scroll-behavior:smooth}body{margin:0;height:3000px}input{position:absolute;left:20px;top:650px;width:240px;height:50px;border:0;background:red;color:red}</style><input type=password value=secret>', {}, { smoothScrolling: true });
-  const dir = mkdtempSync(join(tmpdir(), 'sleight-g13-document-scroll-')), path = join(dir, 'actions.gif');
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-g13-document-scroll-'))), path = join(dir, 'actions.gif');
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   // Delay only the real pixel read, after Playwright would have placed any overlay masks.
   // This lets the compositor advance without changing or replacing the screenshot bytes.
@@ -136,7 +137,7 @@ test('top-layer payment fields remain masked', { skip, timeout: 30000 }, async t
 
 test('production turn grades field pixels in every saved GIF frame, including late fields and typing', { skip, timeout: 30000 }, async t => {
   const f = await fixture(t, `<style>body{margin:0}#marker{height:40px;background:#00ff00}input{position:absolute;left:40px;width:240px;height:40px;border:0;background:red;color:red}#name{top:80px}#city{top:150px}#late{top:220px}button{position:absolute;top:280px}</style><div id=marker>Public marker</div><label>Name<input id=name></label><label>City<input id=city></label><button type=button onclick="this.insertAdjacentHTML('afterend','<label>Late<input id=late></label>')">Next</button>`);
-  const dir = mkdtempSync(join(tmpdir(), 'sleight-g13-real-')), path = join(dir, 'actions.gif');
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-g13-real-'))), path = join(dir, 'actions.gif');
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   let current = true;
   const binding = createV3TurnBinding({ source: 'user', session: 'g13', turn: 'one', id: 'user', text: 'Record this turn.\nFill Name and City, then click Next.' }, () => current);
@@ -173,7 +174,7 @@ test('production turn grades field pixels in every saved GIF frame, including la
 
 test('animation, never-act site, screenshot timeout and tree or viewport caps skip only their frame', { skip, timeout: 30000 }, async t => {
   const f = await fixture(t, '<input type=password value=secret><div id=spinner></div>');
-  const dir = mkdtempSync(join(tmpdir(), 'sleight-g13-skips-')), path = join(dir, 'actions.gif');
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-g13-skips-'))), path = join(dir, 'actions.gif');
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const recording = createTurnRecording({ current: () => true,
     capture: () => captureRecordingFrame(f.entry, { pages: f.registry, current: () => true, sites: url => url.includes('never-act') }),

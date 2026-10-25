@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer as createTLSServer } from 'node:https';
@@ -55,7 +56,7 @@ test('FD3D real named recovery allows a fragment and same-origin redirect paths'
 });
 test('FD3D real named recovery allows HTTP upgrade and www variants without external requests', { skip, timeout: 60000 }, async t => {
   const f = await fixture(t, content), page = f.entry.page;
-  const certDir = mkdtempSync(join(tmpdir(), 'sleight-fd3d-tls-'));
+  const certDir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-fd3d-tls-')));
   t.after(() => rmSync(certDir, { recursive: true, force: true }));
   execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(certDir, 'key.pem'),
     '-out', join(certDir, 'cert.pem'), '-days', '1', '-subj', '/CN=localhost'], { stdio: 'ignore' });

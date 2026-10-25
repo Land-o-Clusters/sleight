@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -33,7 +34,7 @@ async function fixture(t, html, { routes = {}, dpr = 1, width = 1440, height = 9
   if (nativeDpr) {
     // Headless Chrome for Testing reads real browser zoom from its private profile.
     // No device-metrics override, CSS zoom, page getter or keyboard shortcut stands in for it.
-    profile = mkdtempSync('/tmp/sleight-fd1b-zoom-');
+    profile = trackTemp(mkdtempSync('/tmp/sleight-fd1b-zoom-'));
     mkdirSync(join(profile, 'Default'));
     writeFileSync(join(profile, 'Default/Preferences'), JSON.stringify({ partition: { default_zoom_level: { x: Math.log(zoom) / Math.log(1.2) } } }));
     const fullExecutable = join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision,

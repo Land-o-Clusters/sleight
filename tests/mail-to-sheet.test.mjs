@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -13,7 +14,7 @@ import { suite, resolveTask, planSuite } from '../bench/world/suite.mjs';
 import { benchmarkDecision } from '../bench/approve.mjs';
 
 function context(t, nonce = 'bt2test') {
-  const dir = mkdtempSync(join(tmpdir(), 'sleight-bt2-'));
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-bt2-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return { dir, nonce, ownerPresent: true };
 }

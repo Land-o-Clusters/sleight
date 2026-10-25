@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -22,7 +23,7 @@ const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'needs the headless DOM
 // throwaway loopback browser. Its fixed dummy secrets never enter a tool call.
 async function fixture(t) {
   const { chromium } = await import(new URL('index.mjs', vendor));
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-signin-resume-'))), cards = [], authenticated = new WeakSet(), captures = [], drainCounts = [];
+  const root = realpathSync(trackTemp(mkdtempSync(join(tmpdir(), 'sleight-signin-resume-')))), cards = [], authenticated = new WeakSet(), captures = [], drainCounts = [];
   let context, selected, filter, listener, browser, registry, runtime, active = true, submissions = 0;
   const server = createServer((request, response) => {
     response.setHeader('content-type', 'text/html');

@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
@@ -12,7 +13,7 @@ import { captureRecordingFrame, maskRecordingPixels } from '../plugins/sleight/l
 const image = (r = 255, g = 0, b = 0) => ({ width: 2, height: 2, data: Buffer.from(Array.from({ length: 4 }, () => [r, g, b, 255]).flat()) });
 const limits = { width: 4, height: 4, frames: 3, bytes: 4096 };
 function bank(t) {
-  const folder = mkdtempSync(join(tmpdir(), 'sleight-g13-'));
+  const folder = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-g13-')));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   const path = join(folder, 'actions.gif'); let allocations = 0;
   return { path, get allocations() { return allocations; }, createFile() { allocations++; return { path, fd: openSync(path, 'wx', 0o600) }; } };
@@ -110,7 +111,7 @@ test('fixed destination validation refuses a world-writable ancestry', t => {
 });
 
 test('fixed destination writes private unique banks and refuses symlinked parents', t => {
-  const home = mkdtempSync(join(process.cwd(), '.g13-home-'));
+  const home = trackTemp(mkdtempSync(join(process.cwd(), '.g13-home-')));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const first = recordingFile({ home }), second = recordingFile({ home });
   closeSync(first.fd); closeSync(second.fd);
@@ -193,7 +194,7 @@ for (const stop of ['end', 'revoke']) test(`${stop} between create and first wri
 test('a recording inside the system home reports a tilde path and per-frame processing times', async t => {
   const home = userInfo().homedir;
   if (!process.cwd().startsWith(home + '/')) return t.skip('checkout is outside the system home');
-  const folder = mkdtempSync(join(process.cwd(), '.g13-note-')), path = join(folder, 'actions.gif');
+  const folder = trackTemp(mkdtempSync(join(process.cwd(), '.g13-note-'))), path = join(folder, 'actions.gif');
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   const recorder = createTurnRecording({ current: () => true, capture: async () => ({ ...image(), decodeMaskMs: 1.25 }), limits,
     createFile: () => ({ path, fd: openSync(path, 'wx', 0o600) }) });
@@ -215,7 +216,7 @@ test('an attach that resolves after its deadline is detached without freezing sc
 });
 
 test('pruning starts asynchronously after the first frame and keeps fresh or linked banks', async t => {
-  const home = mkdtempSync(join(process.cwd(), '.g13-home-'));
+  const home = trackTemp(mkdtempSync(join(process.cwd(), '.g13-home-')));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const old = recordingFile({ home }), fresh = recordingFile({ home });
   closeSync(old.fd); closeSync(fresh.fd);

@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -24,7 +25,7 @@ async function build(root, name, source) {
 test('sandboxed PDFKit extracts embedded subset TrueType, CJK CID and Type 3 fonts as the unconstrained baseline does', {
   skip: process.platform !== 'darwin', timeout: 900000,
 }, async t => {
-  const root = await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-fonts-'));
+  const root = trackTemp(await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-fonts-')));
   t.after(() => rm(root, { recursive: true, force: true }));
   const generator = await build(root, 'generator', await readFile(new URL('./fixtures/pdf-fonts.swift', import.meta.url)));
   const embedded = join(root, 'embedded.pdf');

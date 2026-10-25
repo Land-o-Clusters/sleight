@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -31,7 +32,7 @@ async function fixture(t, html, routes = {}) {
     await new Promise(resolve => server.close(resolve));
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const profile = mkdtempSync('/tmp/sleight-fd5-');
+  const profile = trackTemp(mkdtempSync('/tmp/sleight-fd5-'));
   let context;
   t.after(async () => {
     try { await context?.close(); }

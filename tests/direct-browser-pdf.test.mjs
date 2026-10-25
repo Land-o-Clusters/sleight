@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -11,7 +12,7 @@ import { createToolDispatcher, validateToolCall } from '../plugins/sleight/lib/d
 import { textPdf } from '../bench/pdf-fixture.mjs';
 
 let root;
-before(async () => { root = await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-test-')); });
+before(async () => { root = trackTemp(await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-test-'))); });
 after(async () => { await rm(root, { recursive: true, force: true }); });
 const request = args => ({ name: 'browser_read', arguments: args });
 const nextRef = result => /ref="(pdf_[a-f0-9]+)"/.exec(result.text)?.[1];
@@ -33,7 +34,7 @@ function tabFixture({ mime = 'application/pdf', bytes = textPdf(['fixture']), ur
 }
 
 test('read schema requires exactly one source and accepts bounded PDF continuations', () => {
-  for (const args of [{ tab: 't1' }, { file: '/private/tmp/fixture.pdf', ref: 'pdf_' + 'a'.repeat(24), max_chars: 1000 }])
+  for (const args of [{ tab: 't1' }, { file: join(tmpdir(), 'fixture.pdf'), ref: 'pdf_' + 'a'.repeat(24), max_chars: 1000 }])
     assert.deepEqual(validateToolCall(request(args)), request(args));
   for (const args of [{}, { tab: 't1', file: '/a.pdf' }, { file: '/a.pdf', max_chars: 999 }, { file: '/a.pdf', max_chars: 40001 }])
     assert.throws(() => validateToolCall(request(args)));
@@ -41,7 +42,7 @@ test('read schema requires exactly one source and accepts bounded PDF continuati
 test('only a live authenticated exact Read PDF request authorizes a local file', () => {
   let current = true;
   const binding = text => createV3TurnBinding({ source: 'user', session: 'session', turn: 'turn', id: 'message', text }, () => current);
-  const path = '/private/tmp/statement.pdf', allowed = binding(`Read PDF "${path}". What is the total?`);
+  const path = join(tmpdir(), 'statement.pdf'), allowed = binding(`Read PDF "${path}". What is the total?`);
   assert.equal(pdfFileAllowed(allowed, path), true);
   assert.equal(pdfFileAllowed(binding(`Please summarize the PDF "${path}"`), path), true);
   assert.equal(pdfFileAllowed(allowed, path + '.other'), false);

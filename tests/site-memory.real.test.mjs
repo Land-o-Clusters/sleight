@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, realpathSync, readFileSync, rmSync } from 'node:fs';
@@ -16,7 +17,7 @@ import { check, deliverSnapshot } from '../plugins/sleight/lib/direct-browser/ru
 import { siteMemoryTask, gradeSiteMemoryTask } from '../bench/site-memory-fixture.mjs';
 
 function memory(t) {
-  const home = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-recipe-real-')));
+  const home = realpathSync(trackTemp(mkdtempSync(join(tmpdir(), 'sleight-recipe-real-'))));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const path = join(logRoot(home), 'actions.jsonl'), log = new ActionLog({ path, root: logRoot(home), home, names: [] });
   return { home, path, log, store: new SiteMemory({ home, log }) };

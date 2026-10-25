@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
@@ -16,7 +17,7 @@ async function fixture(t, options = {}) {
   const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
   const outbound = [], received = [], cards = [], dismissed = [], authenticated = new WeakSet();
   for (const [stream, rows] of [[clientOut, received], [serverIn, outbound]]) stream.on('data', bytes => rows.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
-  const directory = mkdtempSync(join(tmpdir(), 'sleight-native-handoff-'));
+  const directory = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-native-handoff-')));
   const inputLease = new InputLease({ directory, holder: 'handoff fixture' });
   const ui = { authenticate: event => authenticated.delete(event), dismiss: id => dismissed.push(id), close() {},
     present(id, data, choices, deliver, options) { cards.push({ id, data, choices, deliver, options }); } };

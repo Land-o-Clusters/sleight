@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, realpathSync, rmSync, readdirSync, readFileSync, mkdirSync, symlinkSync, statSync, existsSync, writeFileSync, utimesSync, chmodSync } from 'node:fs';
@@ -11,7 +12,7 @@ import { createDownloadStore, downloadRequest, downloadName } from '../plugins/s
 import { validateToolCall } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 
 function fixture(t, options) {
-  const home = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-download-test-')));
+  const home = realpathSync(trackTemp(mkdtempSync(join(tmpdir(), 'sleight-download-test-'))));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const store = createDownloadStore({ home, ...options });
   const save = (body = Buffer.from('date,total\n2026-10-24,42\n'), extra = {}, headers = {}) => store.save({ session: 'one',

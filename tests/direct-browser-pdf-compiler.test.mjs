@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -15,7 +16,7 @@ const delay = ms => new Promise(resolve => realSetTimeout(resolve, ms));
 for (const reason of ['abort', 'deadline', 'stdout', 'stderr']) test(`compiler ${reason} collects its process group, including a child holding pipes, before releasing the bank`, {
   skip: process.platform !== 'darwin', timeout: 15000,
 }, async t => {
-  const root = await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-compiler-'));
+  const root = trackTemp(await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-compiler-')));
   let ready;
   t.after(async () => {
     // A failing regression must also let the fake child's bounded lifetime end.
@@ -70,7 +71,7 @@ for (const reason of ['abort', 'deadline', 'stdout', 'stderr']) test(`compiler $
 for (const reason of ['exit', 'spawn-error']) test(`compiler ${reason} returns a diagnostic and releases the bank without a launch receipt`, {
   skip: process.platform !== 'darwin', timeout: 5000,
 }, async t => {
-  const root = await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-compiler-'));
+  const root = trackTemp(await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-compiler-')));
   t.after(() => rm(root, { recursive: true, force: true }));
   const original = childProcess.spawn, fake = fileURLToPath(new URL('./fixtures/fake-pdf-compiler.mjs', import.meta.url));
   childProcess.spawn = (command, args, options) => command === '/usr/bin/xcrun'

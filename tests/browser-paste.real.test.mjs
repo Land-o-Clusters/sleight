@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -41,7 +42,7 @@ document.addEventListener('paste', e => {
 async function fixture(t, { outside = false, cancel = false, onStage, readError, between, restoreFails = false, skipStage = false, failRestores = 0, translated = false,
   persist = false, originalMarker } = {}) {
   assert.ok(existsSync(executablePath), 'pinned headless shell must be installed');
-  const profile = mkdtempSync(join(realpathSync(tmpdir()), 'sleight-g12-dom-'));
+  const profile = trackTemp(mkdtempSync(join(realpathSync(tmpdir()), 'sleight-g12-dom-')));
   const sockets = new Set(), requests = [];
   let browserContext, registry, ctx, active = true;
   const server = createServer((req, res) => { requests.push({ method: req.method, url: req.url }); res.setHeader('Content-Type', 'text/html'); res.end(html); });

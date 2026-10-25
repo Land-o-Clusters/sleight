@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 async function load() {
   const module = await import('../bench/world/job-fixtures.mjs').catch(error => {
@@ -137,7 +139,7 @@ test('BF1 jobs can plan the real Chrome or Helium race while leaving launch and 
   for (const realBrowser of ['chrome', 'helium']) {
     const options = fixtureOptions(['--kinds', kinds.join(','), '--arm', 'sleight-turbo,fowlbrowser', '--real-browser', realBrowser, '--dry-run']);
     assert.equal(options.realBrowser, realBrowser);
-    const plan = await runFixtureClaims({ ...options, outRoot: '/private/tmp/bf1-real-plan', run: () => assert.fail('no live run'), serve: () => assert.fail('no server') });
+    const plan = await runFixtureClaims({ ...options, outRoot: join(tmpdir(), 'bf1-real-plan'), run: () => assert.fail('no live run'), serve: () => assert.fail('no server') });
     assert.equal(plan.rows.length, 10);
     for (const row of plan.rows) {
       assert.equal(row.args[row.args.indexOf('--real-browser') + 1], realBrowser);

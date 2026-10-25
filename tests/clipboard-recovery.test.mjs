@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, realpathSync, rmSync, readdirSync, readFileSync, writeFileSync, statSync, chmodSync, symlinkSync, linkSync, openSync, ftruncateSync, closeSync } from 'node:fs';
@@ -14,7 +15,7 @@ const moduleURL = new URL('../plugins/sleight/lib/clipboard-recovery.mjs', impor
 const snapshots = directory => readdirSync(directory).filter(name => name.startsWith('snapshot-'));
 async function fixture(t) {
   const api = await import(moduleURL);
-  const root = mkdtempSync(join(realpathSync(tmpdir()), 'sleight-recovery-'));
+  const root = trackTemp(mkdtempSync(join(realpathSync(tmpdir()), 'sleight-recovery-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const directory = join(root, 'clipboard'), store = api.createClipboardSnapshotStore({ directory,
     bootSession: () => 'fixture-boot', excludeFromBackup: () => {} });

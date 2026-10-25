@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -32,7 +33,7 @@ async function fixture(t, html) {
   t.after(() => browser.close());
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:' + server.address().port);
-  const root = fs.mkdtempSync(join(fs.realpathSync(tmpdir()), 'sleight-export-real-'));
+  const root = trackTemp(fs.mkdtempSync(join(fs.realpathSync(tmpdir()), 'sleight-export-real-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return { page, browser, root, requests };
 }

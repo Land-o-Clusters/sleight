@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -25,7 +26,7 @@ const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'requires opt-in headle
 test('owned headless PDF tab returns page 3 through PDFKit without refetching; HTML and site guards retain their paths', {
   skip, timeout: 360000,
 }, async t => {
-  const root = await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-real-'));
+  const root = trackTemp(await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-real-')));
   const fixture = pdfTotalFixture({ cents: 73142 }), hits = [], sockets = new Set();
   const server = createServer((request, response) => {
     hits.push(request.url);

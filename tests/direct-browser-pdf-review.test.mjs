@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -15,7 +16,7 @@ import { preparePdfHelper, extractPdf } from '../plugins/sleight/lib/direct-brow
 
 const extracted = { pageCount: 1, pages: [{ page: 1, offset: 0, text: 'fixture' }], next: null };
 async function fixture(t) {
-  const root = await fs.mkdtemp(join(await fs.realpath(tmpdir()), 'sleight-pdf-review-'));
+  const root = trackTemp(await fs.mkdtemp(join(await fs.realpath(tmpdir()), 'sleight-pdf-review-')));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const path = join(root, 'document.pdf'); await fs.writeFile(path, textPdf(['fixture']), { mode: 0o600 });
   return { root, path };

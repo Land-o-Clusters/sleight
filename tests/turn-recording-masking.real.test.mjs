@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -32,7 +33,7 @@ function different(frame, expected, box) {
   return count;
 }
 async function gradeSaved(t, frame, expected, box) {
-  const dir = mkdtempSync(join(tmpdir(), 'sleight-g13c-grade-')), path = join(dir, 'actions.gif');
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-g13c-grade-'))), path = join(dir, 'actions.gif');
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const recorder = createTurnRecording({ current: () => true, capture: async () => frame,
     createFile: () => ({ path, fd: openSync(path, 'wx', 0o600) }) });

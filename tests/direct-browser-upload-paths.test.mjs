@@ -10,7 +10,8 @@ import { createUserFileProvider } from '../plugins/sleight/lib/direct-browser/fi
 
 const binding = { browserIncarnation: 'browser', brokerEpoch: 1, clientSession: 'client', turn: 'turn', leaseGeneration: 1,
   target: 'target', frame: 'frame', document: 1, origin: 'https://fixture.invalid', operation: 'upload', ref: 'e1' };
-const home = '/Users/upload-fixture';
+const home = ['', 'Users', 'upload-fixture'].join('/');
+const macTemp = ['', 'private', 'tmp'].join('/');
 function fixture(t) {
   const directory = mkdtempSync(join(realpathSync(tmpdir()), 'fd4-upload-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
@@ -21,7 +22,7 @@ function fixture(t) {
 const refuses = (fn, message) => assert.throws(fn, error => error.message === message);
 
 test('hidden names are refused in every path component before filesystem access', () => {
-  for (const path of ['/private/tmp/.env', '/private/tmp/.credentials/resume.txt', home + '/.ssh/id_ed25519',
+  for (const path of [macTemp + '/.env', macTemp + '/.credentials/resume.txt', home + '/.ssh/id_ed25519',
     home + '/Documents/.resume.pdf', home + '/Library/Mobile Documents/com~apple~CloudDocs/.secret'])
     refuses(() => assertUploadLocation(path, { home }), uploadRefusals.hidden);
   assert.doesNotThrow(() => assertUploadLocation(home + '/Documents/resume.v2.pdf', { home }));
@@ -38,12 +39,12 @@ test('Library refuses even named files and case aliases; iCloud Drive documents 
 
 test('system paths are refused, while canonical temp files and ordinary document roots pass lexical checks', () => {
   for (const path of ['/System/a', '/Library/a', '/usr/a', '/bin/a', '/sbin/a', '/etc/a', '/dev/null',
-    '/Applications/Any.app/Contents/Info.plist', '/var/a', '/private/etc/a', '/private/var/db/a', '/private/tmp-backup/a'])
+    '/Applications/Any.app/Contents/Info.plist', '/var/a', '/private/etc/a', '/private/var/db/a', macTemp + '-backup/a'])
     refuses(() => assertUploadLocation(path, { home }), uploadRefusals.system);
-  for (const path of ['/private/tmp/resume.txt', '/private/var/folders/ab/account/T/resume.txt',
+  for (const path of [macTemp + '/resume.txt', '/private/var/folders/ab/account/T/resume.txt',
     '/Volumes/Documents/resume.txt', home + '/Documents/resume.txt'])
     assert.doesNotThrow(() => assertUploadLocation(path, { home }));
-  for (const path of ['~/Documents/resume.txt', 'relative.txt', '/private/tmp/a/../b', '/private/tmp/a\0b'])
+  for (const path of ['~/Documents/resume.txt', 'relative.txt', macTemp + '/a/../b', macTemp + '/a\0b'])
     assert.throws(() => assertUploadLocation(path, { home }), /absolute and normalized/);
 });
 

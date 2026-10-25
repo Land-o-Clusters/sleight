@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -39,7 +40,7 @@ test('a trusted PDF build extends only its exact call; the next call retains the
 });
 
 test('the runtime signals a real compiler stage once, and cached extraction does not extend later reads', async () => {
-  const root = await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-worker-')), path = join(root, 'invoice.pdf');
+  const root = trackTemp(await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-worker-'))), path = join(root, 'invoice.pdf');
   await writeFile(path, textPdf(['Total'])); let builds = 0, signals = 0;
   const binding = createV3TurnBinding({ source: 'user', session: 'session', turn: 'turn', id: 'message', text: `Read PDF "${path}"` }, () => true);
   const runtime = await createV3TurnRuntime({ binding, browser: 'bfixture', pages: { endTurn: async () => ({ cleanedUp: true }) }, snapshot() {},
@@ -55,7 +56,7 @@ test('the runtime signals a real compiler stage once, and cached extraction does
 
 for (const failure of ['rejected', 'unavailable']) {
   test(`${failure === 'unavailable' ? 'an' : 'a'} ${failure} PDF preparation allows the next read in the same turn to retry and cache success`, async t => {
-    const root = await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-retry-')), path = join(root, 'invoice.pdf');
+    const root = trackTemp(await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-retry-'))), path = join(root, 'invoice.pdf');
     t.after(() => rm(root, { recursive: true, force: true }));
     await writeFile(path, textPdf(['Retry total'])); let builds = 0;
     const binding = createV3TurnBinding({ source: 'user', session: 's', turn: 't', id: 'm', text: `Read PDF "${path}"` }, () => true);

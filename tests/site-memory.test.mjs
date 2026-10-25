@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, realpathSync, readFileSync, writeFileSync, mkdirSync, chmodSync, symlinkSync, linkSync, existsSync, readdirSync, rmSync, utimesSync } from 'node:fs';
@@ -12,7 +13,7 @@ import { prepareControlRecipe } from '../plugins/sleight/lib/direct-browser/cont
 import * as api from '../plugins/sleight/lib/site-memory.mjs';
 
 function fixture(t) {
-  const home = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-memory-')));
+  const home = realpathSync(trackTemp(mkdtempSync(join(tmpdir(), 'sleight-memory-'))));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const root = logRoot(home), path = join(root, 'actions.jsonl');
   const log = new ActionLog({ path, root, home, names: [] });

@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -12,7 +13,7 @@ import { textPdf } from '../bench/pdf-fixture.mjs';
 // Instrument the PDFDocument construction boundary, leaving the helper's real
 // startup restrictions in place. No production test switches or host privileges.
 async function probeHelper(t, probe, { lowMemoryLimit = false } = {}) {
-  const root = await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-sandbox-'));
+  const root = trackTemp(await mkdtemp(join(await realpath(tmpdir()), 'sleight-pdf-sandbox-')));
   t.after(() => rm(root, { recursive: true, force: true }));
   const filename = join(root, 'pdf-host.swift');
   let source = await readFile(new URL('../plugins/sleight/lib/direct-browser/native/pdf-host.swift', import.meta.url), 'utf8');

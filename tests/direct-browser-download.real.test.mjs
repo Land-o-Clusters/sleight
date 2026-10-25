@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 // Loopback pages and disposable headless Chromium only. No engine, owner browser or app UI.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -23,7 +24,7 @@ const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
 async function fixture(t, message = 'Download the statement.', options = {}) {
   assert.ok(existsSync(executable), 'pinned headless Chromium must be installed');
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-download-real-'))), requests = [], losses = [];
+  const root = realpathSync(trackTemp(mkdtempSync(join(tmpdir(), 'sleight-download-real-')))), requests = [], losses = [];
   let origin, context, selected, filter, listener, browser, registry, runtime, active = true, releaseBody, bodyStarted;
   const transferStarted = new Promise(resolve => { bodyStarted = resolve; });
   const server = createServer((request, response) => {

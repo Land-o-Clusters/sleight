@@ -1,3 +1,4 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, realpathSync, rmSync, readdirSync, readFileSync, writeFileSync, mkdirSync,
@@ -16,7 +17,7 @@ const transient = { type: 'org.nspasteboard.TransientType', data: '' };
 const staged = [[{ type: 'public.utf8-plain-text', data: Buffer.from('staged fixture').toString('base64') }, transient]];
 const snapshotNames = directory => readdirSync(directory).filter(name => name.startsWith('snapshot-'));
 function fixture(t, options = {}) {
-  const root = mkdtempSync(join(realpathSync(tmpdir()), 'sleight-snapshot-policy-'));
+  const root = trackTemp(mkdtempSync(join(realpathSync(tmpdir()), 'sleight-snapshot-policy-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const directory = join(root, 'clipboard'), protection = [], notices = [];
   let time = 1800000000000, boot = 'fixture-boot', board = { count: 1, items: structuredClone(staged) }, writes = 0, held = false;
