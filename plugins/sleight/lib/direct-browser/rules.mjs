@@ -98,8 +98,8 @@ export function inspectElement(el, unused, read = (node, key) => { const value =
   state.formPayment = !!form && Array.from(read(form, 'querySelectorAll')('input,button,iframe')).some(node => {
     const attrs = ['name', 'id', 'autocomplete', 'title', 'aria-label'].map(key => get(node, key)).join(' ');
     if (/\bcc-|card|cvv|cvc/i.test(attrs)) return true;
-    if (read(node, 'localName') === 'iframe') { try { const url = new URL(get(node, 'src'), location.href);
-      return /^https?:$/.test(url.protocol) && /(?:^|\.)(?:stripe\.com|paypal\.com|paypalobjects\.com|braintreegateway\.com|braintree-api\.com|adyen\.com|checkout\.com|squareup\.com|squareupsandbox\.com)$/.test(url.hostname); } catch { return false; } }
+    // Any cross-origin frame in a form may hold hosted payment fields (default path unchanged by fd2f).
+    if (read(node, 'localName') === 'iframe') { try { return new URL(get(node, 'src'), location.href).origin !== location.origin; } catch { return true; } }
     return (read(node, 'localName') === 'button' || ['submit', 'image'].includes(inputType(node))) && payment(words(node));
   });
   // A candidate for navigation, not yet one: a plain http(s) link whose only payment word is "checkout". The element keeps its payment

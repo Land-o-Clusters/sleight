@@ -728,9 +728,10 @@ for (const mode of [undefined, '0']) test(`MT2 confirmation still refuses every 
 }));
 
 for (const [src, expected] of [
-  ['/help', false], ['https://example.invalid/help', false], ['https://js.stripe.com/frame', true],
-  ['https://www.paypal.com/frame', true], ['https://stripe.com.evil.invalid/frame', false], ['https://evilstripe.com/frame', false],
-]) test('FD2E iframe form classification uses a payment-provider origin: ' + src, () => {
+  // Default path (sleight-arch, fd2f review): any frame in a form may hold hosted payment fields.
+  ['/help', true], ['https://example.invalid/help', true], ['https://js.stripe.com/frame', true],
+  ['https://www.paypal.com/frame', true], ['https://stripe.com.evil.invalid/frame', true], ['https://evilstripe.com/frame', true],
+]) test('iframe in a form marks it a payment form: ' + src, () => {
   const frame = { localName: 'iframe', ownerDocument: { baseURI: 'https://shop.invalid/' }, getAttribute: key => key === 'src' ? src : null };
   const form = { textContent: '', getAttribute: () => null, querySelectorAll: selector => selector === 'input,button,iframe' ? [frame] : [] };
   const node = { localName: 'input', type: 'text', textContent: '', form, getAttribute: () => null, getRootNode: () => null, closest: () => null };

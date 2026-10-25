@@ -36,12 +36,8 @@ export function inspectTarget(el, unused, read = (node, key) => { const value = 
   const forwarded = (() => { try { const label = typeof HTMLLabelElement === 'undefined' ? null : Element.prototype.closest.call(el, 'label'), control = label && Object.getOwnPropertyDescriptor(HTMLLabelElement.prototype, 'control').get.call(label);
     return control instanceof HTMLInputElement ? Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'type').get.call(control).toLowerCase() : ''; } catch { return ''; } })();
   const formPayment = !!form && [...read(form, 'querySelectorAll')('input,button,iframe')].some(node => {
-    if (read(node, 'localName') === 'iframe') {
-      try {
-        const url = new URL(read(node, 'getAttribute')('src') ?? '', read(read(node, 'ownerDocument'), 'baseURI'));
-        return /^https?:$/.test(url.protocol) && /(?:^|\.)(?:stripe\.com|paypal\.com|paypalobjects\.com|braintreegateway\.com|braintree-api\.com|adyen\.com|checkout\.com|squareup\.com|squareupsandbox\.com)$/.test(url.hostname);
-      } catch { return false; }
-    }
+    // Any frame in a form may hold hosted payment fields (default path unchanged by fd2f).
+    if (read(node, 'localName') === 'iframe') return true;
     return /^cc-/i.test(read(node, 'getAttribute')('autocomplete') ?? '') || /(?:card|cc[-_ ]?(?:number|csc)|cvv|cvc)/i.test(read(node, 'id') + ' ' + read(node, 'getAttribute')('name')) ||
       (read(node, 'localName') === 'button' || read(node, 'type') === 'submit') && payment(words(node));
   });
