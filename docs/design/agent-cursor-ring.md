@@ -151,14 +151,19 @@ the adapter's `size`. The extra sheet loads only when an entry uses it.
 
 The host itself never passes character art to ImageIO. It starts a child of its own binary, `consent-host --decode-sheet
 W H png|webp`, with the checked file as stdin, a pipe as stdout, `/dev/null` as stderr and no other descriptor
-(`POSIX_SPAWN_CLOEXEC_DEFAULT` keeps the consent channel out). The child decodes built-in 1x1 PNG and WebP images,
-sets hard limits of 2 s of CPU and 8 descriptors, enters a deny-default sandbox, and only then reads the file. It
+(`POSIX_SPAWN_CLOEXEC_DEFAULT` keeps the consent channel out). The child starts with an empty signal mask and default
+signal actions. It first decodes built-in 1x1 PNG and WebP images. Then it sets hard limits of 8 descriptors and 2 s of
+CPU and enters a deny-default sandbox. Only after that does it read the file. It
 decodes one image (an APNG's two refuse) at the validated size into sRGB premultiplied RGBA and writes the bytes. On
 macOS 27 `sandbox_init` kills the process when given `kSBXProfilePureComputation` by name. The child passes the same
 rule as SBPL, `(version 1)(deny default)`. Without the warm-up, ImageIO crashed inside that sandbox. macOS 27 refuses
 `RLIMIT_AS`, `RLIMIT_DATA` and `RLIMIT_RSS` at any value (EINVAL), so the child has no memory limit beyond the parent's
-deadline. The parent reads exactly W*H*4 bytes within 2 s, then gives the child 0.5 s to exit before SIGKILL. A
-timeout, a crash, a short read or a refusal exit means no character. A refused limit or sandbox has its own reason,
+deadline. The parent reads exactly W*H*4 bytes within 2 s, then gives the child 0.5 s to exit before SIGKILL. That
+deadline and reap are the real bound. The CPU limit is a second line for a buggy decoder: macOS only sends SIGXCPU at
+it, which compromised code can ignore. A test with the deadline lengthened to 8 s sees a spinning child end at about
+2.1 s. The host keeps the live children's pids and kills them from `atexit` and on SIGTERM and SIGHUP, so a host that
+exits mid-load leaves none. A host killed with SIGKILL still orphans its child, since macOS has no parent-death signal.
+A timeout, a crash, a short read or a refusal exit means no character. A refused limit or sandbox has its own reason,
 `sandbox`, apart from a crash (`child`). The parent wraps the bytes in a `CGImage` without a
 copy and checks at least 50 visible pixels and under 95 percent fully opaque pixels in every used cell. Chroma fringe
 in a used cell and ink in an unused cell of a referenced row are warnings. The host knows resolved columns, not each

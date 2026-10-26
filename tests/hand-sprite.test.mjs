@@ -311,6 +311,32 @@ test('the live hand host reports each load on its stdout with exactly the client
   assert.deepEqual(second, { hand: 'character', nonce, id: bad.id, loaded: false, reason: 'pixels', warnings: [] });
 });
 
+test('the CPU limit ends a spinning child on its own, before a lengthened deadline', options, t => {
+  build(t);
+  const started = performance.now();
+  const r = good(t, [character(), act()], [], { SLEIGHT_CURSOR_DECODE_FAULT: 'spin', SLEIGHT_CURSOR_DECODE_DEADLINE: '8' });
+  const ms = performance.now() - started;
+  // SIGXCPU at 2 s of CPU gives `child`; the 8 s deadline would have given `timeout`.
+  assert.deepEqual([loaded(r).loaded, loaded(r).reason], [false, 'child']); assert.ok(ms >= 1800 && ms < 7000, `${ms} ms`);
+});
+
+test('a live host that exits mid-load leaves no decode child, on EOF or SIGTERM', options, async t => {
+  const children = () => spawnSync('/bin/ps', ['-axo', 'pid=,command='], { encoding: 'utf8' }).stdout.split('\n')
+    .filter(l => l.includes(build(t) + ' --decode-sheet'));
+  for (const [fault, end] of [['hang', 'eof'], ['closehang', 'eof'], ['hang', 'SIGTERM'], ['hang', 'SIGHUP']]) {
+    const host = spawn(build(t), ['--hand', '--cursor-style=sprite'], { env: testEnv({ SLEIGHT_CURSOR_DECODE_FAULT: fault }), stdio: ['pipe', 'pipe', 'ignore'] });
+    const closed = new Promise(resolve => host.on('close', (code, signal) => resolve({ code, signal })));
+    host.stdin.write(JSON.stringify(character()) + '\n');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    assert.equal(children().length, 1, `${fault}/${end}: the child is running mid-load`);
+    if (end === 'eof') host.stdin.end(); else host.kill(end);
+    const exit = await closed;
+    if (end !== 'eof') assert.equal(exit.signal, end, 'the host still dies of the signal');
+    await new Promise(resolve => setTimeout(resolve, 3500));
+    assert.deepEqual(children(), [], `${fault}/${end}: no decode child 3.5 s after the host exits`);
+  }
+});
+
 test('--check-character runs the same checks and reports the reason', options, t => {
   const check = frame => spawnSync(build(t), ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8', env: testEnv() });
   const f = character(), ok = check(f);
