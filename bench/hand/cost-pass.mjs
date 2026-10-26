@@ -13,8 +13,9 @@
 // VC7 (the agent cursor): --cursor-style ring|seam|sprite runs the on side with SLEIGHT_CURSOR_STYLE set and the capture mode
 // fixed (SLEIGHT_HAND_CAPTURE=hidden, or --capture visible), and the sampler checks every on-side host was started with that
 // style. The speed verdict (speedRule) uses passed runs only, at least 4 a side per task, for wall time per run and each
-// run's median tool time per call. A task is "no slowdown" when the mean difference is at most 5% of the off side, or when
-// the 95% interval of the difference holds 0 and its half-width is at most 10%; anything else is inconclusive or slower.
+// run's median tool time per call. A task is "no slowdown" when the mean difference is at most 5% of the off side with a
+// 95% half-width of at most 15%, or when the 95% interval of the difference holds 0 and its half-width is at most 10%;
+// anything else is inconclusive or slower. The verdict line names the widest half-width.
 // Exit 0 only for a budget within and a measured "no slowdown"; 1 for any other finished verdict; 5 when a run errored
 // (resume reruns it); 4 when the owner came back; 130 on a signal. --out DIR with a saved cost-pass.json of the same
 // settings resumes. --stop-on-owner checks at each round's first run, after a 15 s gap with no runs (owner-watch.mjs).
@@ -227,11 +228,12 @@ const T975 = [12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.
   2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042];
 export const t975 = df => !(df >= 1) ? T975[0] : df <= 30 ? T975[Math.floor(df) - 1] : df <= 60 ? 2.0 : df <= 120 ? 1.98 : 1.96;
 export const MIN_PASSED = 4;
-export const SPEED_RULE = Object.freeze({ meanPct: 5, halfWidthPct: 10, minPassed: MIN_PASSED });
+export const SPEED_RULE = Object.freeze({ meanPct: 5, meanHalfWidthPct: 15, halfWidthPct: 10, minPassed: MIN_PASSED });
 
 /** The speed rule (sleight-arch, VC7HR) for one figure of one task. on and off: per-run values of passed runs only. At least
  *  minPassed a side, else not-measured. The difference is on minus off with a Welch 95% interval. no-slowdown: the mean
- *  difference is at most 5% of the off side, or the interval holds 0 and its half-width is at most 10% of the off side.
+ *  difference is at most 5% of the off side with a half-width of at most 15% (VC7HR2: a 5% estimate whose interval reaches
+ *  +30% is no evidence), or the interval holds 0 and its half-width is at most 10% of the off side.
  *  slower: the interval lies above 0 and the difference is over 5%. Anything else is inconclusive. */
 export function speedRule(on, off, rule = SPEED_RULE) {
   const n = [on.length, off.length];
@@ -241,7 +243,7 @@ export function speedRule(on, off, rule = SPEED_RULE) {
   const df = se > 0 ? (vOn + vOff) ** 2 / (vOn ** 2 / (on.length - 1) + vOff ** 2 / (off.length - 1)) : on.length + off.length - 2;
   const half = t975(df) * se, ci = [diff - half, diff + half];
   const pct = value => mOff > 0 ? value / mOff * 100 : Infinity;
-  const state = pct(diff) <= rule.meanPct || (ci[0] <= 0 && ci[1] >= 0 && pct(half) <= rule.halfWidthPct) ? 'no-slowdown'
+  const state = (pct(diff) <= rule.meanPct && pct(half) <= rule.meanHalfWidthPct) || (ci[0] <= 0 && ci[1] >= 0 && pct(half) <= rule.halfWidthPct) ? 'no-slowdown'
     : ci[0] > 0 ? 'slower' : 'inconclusive';
   return { state, n, onMean: mOn, offMean: mOff, diff, ci, half, diffPct: pct(diff), halfPct: pct(half), df };
 }
@@ -271,12 +273,16 @@ export function perTask(entries, rule = SPEED_RULE) {
 export function speedVerdict(rows, { cursorStyle = 'the hand' } = {}) {
   if (!rows.length) return { state: 'not-measured', slowdown: null, line: 'Speed verdict: not measured (no tasks)' };
   const by = state => rows.filter(r => r.state === state).map(r => r.task);
+  // The widest 95% half-width over every measured figure, so the line never reads surer than the data.
+  const widths = rows.flatMap(r => [r.wall, r.tool].filter(f => Number.isFinite(f.halfPct)).map(f => ({ task: r.task, pct: f.halfPct })));
+  const widest = widths.length ? widths.reduce((a, b) => b.pct > a.pct ? b : a) : undefined;
+  const width = widest ? `; widest 95% interval +/-${Math.round(widest.pct * 10) / 10}% (${widest.task})` : '';
   if (by('no-slowdown').length === rows.length) {
-    return { state: 'no-slowdown', slowdown: false, line: `Speed verdict: no slowdown with ${cursorStyle} on (${rows.length} tasks, each within 5% or a 95% interval holding 0 inside 10%)` };
+    return { state: 'no-slowdown', slowdown: false, widestHalfPct: widest?.pct, line: `Speed verdict: no slowdown with ${cursorStyle} on (${rows.length} tasks, each within 5% with a half-width under 15%, or a 95% interval holding 0 inside 10%)${width}` };
   }
-  if (by('slower').length) return { state: 'slower', slowdown: true, line: `Speed verdict: slower with ${cursorStyle} on in ${by('slower').join(', ')}` };
+  if (by('slower').length) return { state: 'slower', slowdown: true, widestHalfPct: widest?.pct, line: `Speed verdict: slower with ${cursorStyle} on in ${by('slower').join(', ')}${width}` };
   const parts = [['inconclusive', by('inconclusive')], ['not measured', by('not-measured')]].filter(([, t]) => t.length).map(([w, t]) => `${w}: ${t.join(', ')}`);
-  return { state: 'inconclusive', slowdown: null, line: `Speed verdict: inconclusive with ${cursorStyle} on (${parts.join('; ')})` };
+  return { state: 'inconclusive', slowdown: null, widestHalfPct: widest?.pct, line: `Speed verdict: inconclusive with ${cursorStyle} on (${parts.join('; ')})${width}` };
 }
 
 const fmt = (value, digits) => value === null || value === undefined || !Number.isFinite(value) ? 'none' : String(Math.round(value * 10 ** digits) / 10 ** digits);

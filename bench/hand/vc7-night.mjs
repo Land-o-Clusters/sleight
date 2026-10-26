@@ -11,21 +11,24 @@
 // 1 with a "VC7 RESULT:" line in that attempt's log. A build failure, a timeout, a thrown error or a crash is "failed",
 // retried once after 60 s, and rerun on the next launch; a done step never reruns. --fresh starts a new folder.
 //
-// Before each attempt it waits while /tmp/sleight-hold exists, and up to 20 min while /tmp/sleight-live.lock does (then it
-// skips the step with that reason; it never creates or removes either). Then 15 s with no input of its own, and the HID
+// Before each attempt it waits up to 30 min while /tmp/sleight-hold exists and up to 20 min while /tmp/sleight-live.lock
+// does, then skips the step with that reason. It never creates either and removes the lock only when a step's process
+// tree it killed left it (newer than the attempt, every process of the tree dead). Then 15 s with no input of its own, and the HID
 // idle time: input inside that gap is the owner (owner-watch.mjs). During a step it polls the hold (a new hold interrupts the
 // step, which reruns after it) and the real pointer once a second (a pointer that moves and stays away, or in a check that
 // makes no input any HID input, is the owner), and enforces a timeout of twice the step's estimate. Owner back: the step is
 // interrupted and the night stops with STOPPED-owner. Steps run as children of this runner, never in a new session (Terminal
-// keeps the Screen Recording grant), with host CLAUDE* variables dropped and a throwaway CLAUDE_CONFIG_DIR. caffeinate
-// -dims holds the display and the Mac awake for the runner's life. After every step and on any exit it quits a TextEdit a
-// step started (quit, the fixture's Don't Save, SIGTERM, SIGKILL, by the launched pid only), kills processes started from this
-// run's bin/, and removes this night's temp folders. summary.md lists every step.
+// keeps the Screen Recording grant), with host CLAUDE* variables dropped, a throwaway CLAUDE_CONFIG_DIR and (all but the A/B)
+// a TMPDIR under the night's folder. caffeinate -dims holds the display and the Mac awake for the runner's life (-ims while
+// a hold is waited out). After every step and on any exit it quits a TextEdit a step started, and any TextEdit or
+// Calculator the step launched (quit, then SIGTERM, then SIGKILL, by the launched pid and its launch time only; no System
+// Events), kills processes started from this run's bin/, and empties only the night's own temp folders. summary.md lists
+// every step and every fixture that needed a signal.
 // Exit 0: every step measured; 1: a step did not; 4: stopped for the owner; 129, 130 or 143: a signal.
 import { spawn, execFile, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { appendFileSync, closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -38,11 +41,12 @@ export const NIGHT = join(homedir(), 'Projects/sleight-wt/ledger/vc/night');
 export const BUSY_RETRIES = 3;
 export const FAILED_RETRIES = 1;
 export const LOCK_WAIT_MS = 20 * 60000;
+export const HOLD_WAIT_MS = 30 * 60000;
 export const KILL_GRACE_MS = 60000;
 export const TARGET_MIN = 90;
-// Temp folders the checks make; a SIGKILL leaves them behind. Removed by exact prefix, owned by this user, made this night.
-export const TEMP_PREFIXES = Object.freeze([[tmpdir(), ['sleight-h5-', 'sleight-vc7-engine-', 'sleight-vc7-cost-', 'sleight-vc7-record-']],
-  ['/private/tmp', ['sleight-vc7-characters-']]]);
+// The apps the checks and the A/B's tasks launch. One a step started (a new pid, launched after the attempt began) is quit
+// in the sweep, as receipts' fixtures are.
+export const FIXTURE_BUNDLES = Object.freeze(['com.apple.TextEdit', 'com.apple.calculator']);
 
 /** The steps in order. est: minutes, from H5 (32 s a run, 2026-10-19) and H6 (18 runs in 7.3 min) plus setup. input: the
  *  step itself makes input (engine clicks and keys, the A/B's arms), so only the pointer can show the owner during it. */
@@ -88,9 +92,22 @@ export function outcome(rc, { signal, measured = false, reason } = {}) {
 }
 
 /** The child environment: no host CLAUDE* variable, a throwaway config, no auto-update and no hub, as the A/B queue runs. */
-export function childEnv(env, configDir) {
+export function childEnv(env, configDir, { tmp, charactersBase } = {}) {
   const clean = Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith('CLAUDE')));
-  return { ...clean, CLAUDE_CONFIG_DIR: configDir, DISABLE_AUTOUPDATER: '1', SLEIGHT_NO_HUB: '1', SLEIGHT_REMOTE_APPROVALS: '0' };
+  return { ...clean, CLAUDE_CONFIG_DIR: configDir, DISABLE_AUTOUPDATER: '1', SLEIGHT_NO_HUB: '1', SLEIGHT_REMOTE_APPROVALS: '0',
+    ...(tmp ? { TMPDIR: tmp } : {}), ...(charactersBase ? { VC7_CHARACTERS_BASE: charactersBase } : {}) };
+}
+
+/** Whether the runner may remove the live lock after it killed a step's tree: the lock is newer than the attempt (the
+ *  step made it) and every process of the tree is dead (nothing can still be using it). The runner never removes it otherwise. */
+export function orphanedLock({ lockMtimeMs, attemptStartMs, alive }) {
+  return Number.isFinite(lockMtimeMs) && lockMtimeMs >= attemptStartMs && Array.isArray(alive) && alive.every(a => a === false);
+}
+
+/** Apps a step launched: pids of FIXTURE_BUNDLES running after the attempt that were not running before it.
+ *  before and after: { [bundle]: [pid] }. */
+export function launchedApps(before, after) {
+  return Object.entries(after).flatMap(([bundle, pids]) => pids.filter(pid => !(before[bundle] ?? []).includes(pid)).map(pid => ({ bundle, pid })));
 }
 
 /** Processes started from this run's binaries (the bin folder), from `ps -A -o pid=,command=`: hosts, recorders, samplers. */
@@ -116,11 +133,6 @@ export function descendants(psText, root) {
   return out;
 }
 
-/** The temp folders to remove: an exact prefix, this user's, made at or after sinceMs. entries: [{ dir, name, uid, mtimeMs, isDir }]. */
-export function tempLeftovers(entries, { prefixes, uid, sinceMs }) {
-  return entries.filter(e => e.isDir && e.uid === uid && e.mtimeMs >= sinceMs && (prefixes.find(([dir]) => dir === e.dir)?.[1] ?? []).some(p => e.name.startsWith(p)));
-}
-
 /** The last "VC7 RESULT:" line of a step's log, or undefined. */
 export const resultLine = text => [...String(text).matchAll(/^VC7 RESULT: (.+)$/gm)].at(-1)?.[1];
 
@@ -133,6 +145,10 @@ export function summaryMarkdown(state, markers, steps, { stoppedFor } = {}) {
     `Checkout ${tilde(state.root)} at ${state.head.slice(0, 12)}, output ${tilde(state.out)}, started ${state.startedAt} (UTC).`,
     ...(stoppedFor ? ['', `Stopped: ${stoppedFor}. Rerun the same command to resume.`] : []), '',
     '| Check | Step | Status | Exit | Minutes | Result |', '|---|---|---|---|---|---|', ...rows, '',
+    ...(() => {
+      const forced = steps.flatMap(step => (markers[step.id]?.cleanup ?? []).filter(note => /SIGTERM|SIGKILL|survived/.test(note)).map(note => `- ${step.id}: ${note}`));
+      return forced.length ? ['Fixture cleanup that needed a signal (a quit did not end the app):', ...forced, ''] : [];
+    })(),
     `Reports: each step's folder under ${tilde(state.out)}, and its log as <step>.log.`, ''].join('\n');
 }
 
@@ -164,11 +180,11 @@ async function dryRun(opts) {
   console.log(`  output ${tilde(out)}${saved ? ' (resuming the saved run)' : ''}; state ${tilde(statePath)}`);
   console.log(`  estimate ${estimate(steps)} min of steps plus about ${overheadMin(steps)} min of quiet gaps (target under ${TARGET_MIN}); waits for ${HOLD} and ${LOCK} add to it`);
   console.log(`  /usr/bin/caffeinate -dims -w <runner pid> for the runner's life`);
-  console.log(`  before each step: wait while ${HOLD} exists, and up to ${LOCK_WAIT_MS / 60000} min while ${LOCK} does (then skip the step); ${QUIET_GAP_MS / 1000} s with no input, then ioreg HIDIdleTime: input in that gap stops the night (exit 4)`);
-  console.log(`  during each step: ${tilde(join(bin, 'capture-helper'))} watch-input 1000 (pointer moved and stayed away, or HID input in a step that makes none: stop); the hold polled every 5 s (interrupt, rerun after it); a timeout of twice the estimate (SIGINT, then SIGKILL of its process tree after ${KILL_GRACE_MS / 1000} s)`);
-  console.log(`  each step: a child of this runner (no new session), env without CLAUDE*, CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX), DISABLE_AUTOUPDATER=1 SLEIGHT_NO_HUB=1 SLEIGHT_REMOTE_APPROVALS=0`);
+  console.log(`  before each step: wait up to ${HOLD_WAIT_MS / 60000} min while ${HOLD} exists (caffeinate -ims, the display may sleep) and up to ${LOCK_WAIT_MS / 60000} min while ${LOCK} does, then skip the step; ${QUIET_GAP_MS / 1000} s with no input, then ioreg HIDIdleTime: input in that gap stops the night (exit 4)`);
+  console.log(`  during each step: ${tilde(join(bin, 'capture-helper'))} watch-input 1000 (pointer moved and stayed away, or HID input in a step that makes none: stop); the hold polled every 5 s (interrupt, rerun after it); a timeout of twice the estimate (SIGINT, then SIGKILL of its process tree after ${KILL_GRACE_MS / 1000} s, then rmdir ${LOCK} only if it is newer than the attempt and the tree is dead)`);
+  console.log(`  each step: a child of this runner (no new session), env without CLAUDE*, CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX), DISABLE_AUTOUPDATER=1 SLEIGHT_NO_HUB=1 SLEIGHT_REMOTE_APPROVALS=0, TMPDIR=${tilde(join(out, 'tmp'))}/<step>-XXXXXX (not the A/B), VC7_CHARACTERS_BASE=/private/tmp/sleight-vc7-night-XXXXXX`);
   console.log(`  done only with exit 0 or 1 and a "VC7 RESULT:" line; a failed step retries once after 60 s and reruns on resume`);
-  console.log(`  after each step and on exit: quit a TextEdit a step started (quit, its Don't Save, SIGTERM, SIGKILL by the launched pid), kill processes started from ${tilde(bin)}/, remove this night's temp folders`);
+  console.log(`  after each step and on exit: quit a TextEdit a step started and any TextEdit or Calculator it launched (quit, SIGTERM, SIGKILL, by the launched pid and launch time; no System Events), kill processes started from ${tilde(bin)}/, empty only the night's tmp/ and characters folder`);
   for (const step of steps) {
     const marker = saved && existsSync(join(out, 'markers', `${step.id}.json`)) ? json(join(out, 'markers', `${step.id}.json`)) : undefined;
     const skip = marker?.done ? `  [done: ${marker.status}, skipped on resume]` : '';
@@ -207,8 +223,12 @@ async function main(argv) {
     atomic(statePath, JSON.stringify(state, null, 2) + '\n');
   }
   const launchedAt = Date.now();
-  const out = state.out, bin = join(out, 'bin'), markersDir = join(out, 'markers');
+  const out = state.out, bin = join(out, 'bin'), markersDir = join(out, 'markers'), tmpRoot = join(out, 'tmp');
   mkdirSync(markersDir, { recursive: true });
+  mkdirSync(tmpRoot, { recursive: true, mode: 0o700 });
+  // The synthetic character must live under /private/tmp (the host's test override), so the night makes one folder there
+  // for every step's character root and removes only that folder.
+  const charactersBase = mkdtempSync('/private/tmp/sleight-vc7-night-');
   const runnerLog = join(out, 'runner.log');
   // A closed Terminal window takes stdout away; runner.log keeps the record.
   process.stdout.on('error', () => {});
@@ -218,11 +238,22 @@ async function main(argv) {
   for (const step of steps) if (existsSync(join(markersDir, `${step.id}.json`))) markers[step.id] = json(join(markersDir, `${step.id}.json`));
   const live = await import('../compat/live.mjs');
   const { quitFixture } = await import('./vc7-live.mjs');
+  const running = async () => Object.fromEntries(await Promise.all(FIXTURE_BUNDLES.map(async bundle => {
+    try { const st = await live.appState(bundle); return [bundle, st.running ? st.pids ?? [] : []]; } catch { return [bundle, []]; }
+  })));
   const watch = createOwnerWatch();
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   let child, interrupted = false, stoppedFor, ending;
-  const caffeinate = spawn('/usr/bin/caffeinate', ['-dims', '-w', String(process.pid)], { stdio: 'ignore' });
-  caffeinate.on('error', error => log(`caffeinate: ${error.message}`));
+  // caffeinate for the runner's life: -dims while checks run, -ims (the display may sleep) while a hold is waited out.
+  let caffeinate, caffeinateMode;
+  const awake = mode => {
+    if (mode === caffeinateMode) return;
+    try { caffeinate?.kill(); } catch {}
+    caffeinateMode = mode;
+    caffeinate = spawn('/usr/bin/caffeinate', [mode, '-w', String(process.pid)], { stdio: 'ignore' });
+    caffeinate.on('error', error => log(`caffeinate: ${error.message}`));
+  };
+  awake('-dims');
   for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143], ['SIGHUP', 129]]) process.on(signal, () => {
     if (interrupted) return;
     interrupted = code;
@@ -233,40 +264,62 @@ async function main(argv) {
   });
 
   const ps = async args => (await execute('/bin/ps', args, { maxBuffer: 16 << 20 }).catch(() => ({ stdout: '' }))).stdout;
-  const sweep = async () => {
+  // notes: what the cleanup had to do, for the step's marker and the summary.
+  const sweep = async ({ launched = [], attemptStartMs } = {}) => {
+    const notes = [];
+    const quit = async (label, target) => {
+      try {
+        const how = await quitFixture(target, { live, log: line => log(`cleanup ${label}: ${tilde(line)}`) });
+        if (how !== 'gone') { notes.push(`${label} ${target.pid}: ${how}`); log(`cleanup: ${label} ${target.pid}: ${how}`); }
+        return true;
+      } catch (error) { notes.push(`${label} ${target.pid}: ${error.message}`); log(`cleanup: ${label}: ${tilde(error.message)}`); return false; }
+    };
     for (const step of steps) {
       const receipt = join(out, `${step.id}.fixture.json`);
       if (!existsSync(receipt)) continue;
-      try {
-        const { pid } = json(receipt);
-        const how = await quitFixture({ bundle: TEXTEDIT, pid }, { live, log: line => log(`cleanup ${step.id}: ${tilde(line)}`) });
-        if (how !== 'gone') log(`cleanup: the fixture TextEdit ${pid} left by ${step.id}: ${how}`);
-        rmSync(receipt, { force: true });
-      } catch (error) { log(`cleanup: ${step.id}'s TextEdit: ${tilde(error.message)}`); }
+      let pid, startedAt;
+      try { ({ pid, startedAt } = json(receipt)); } catch { rmSync(receipt, { force: true }); continue; }
+      if (await quit(`fixture TextEdit of ${step.id}`, { bundle: TEXTEDIT, pid, startedAfterMs: Date.parse(startedAt) })) rmSync(receipt, { force: true });
     }
+    // Apps the step launched itself (the A/B's TextEdit or Calculator), by pid and launch time. Never after an owner stop:
+    // an app the owner opened then can't be told from the step's.
+    if (!stoppedFor) for (const app of launched) await quit(`${app.bundle} launched by the step`, { ...app, startedAfterMs: attemptStartMs });
     for (const stray of strays(await ps(['-A', '-o', 'pid=,command=']), bin)) {
       try { process.kill(stray.pid, stray.command === 'capture-recorder' ? 'SIGTERM' : 'SIGKILL'); log(`cleanup: stopped ${stray.command} ${stray.pid}`); } catch {}
     }
-    const entries = [];
-    for (const [dir] of TEMP_PREFIXES) {
+    // Only the night's own temp folders: each step's TMPDIR under tmp/, and the characters folder under /private/tmp.
+    for (const dir of [tmpRoot, charactersBase]) {
       let names = [];
       try { names = readdirSync(dir); } catch { continue; }
-      for (const name of names) {
-        try { const st = lstatSync(join(dir, name)); entries.push({ dir, name, uid: st.uid, mtimeMs: st.mtimeMs, isDir: st.isDirectory() }); } catch {}
-      }
+      for (const name of names) { try { rmSync(join(dir, name), { recursive: true, force: true }); } catch {} }
     }
-    for (const e of tempLeftovers(entries, { prefixes: TEMP_PREFIXES, uid: process.getuid(), sinceMs: Math.min(launchedAt, Date.parse(state.startedAt) || launchedAt) - 60000 })) {
-      try { rmSync(join(e.dir, e.name), { recursive: true, force: true }); log(`cleanup: removed ${tilde(join(e.dir, e.name))}`); } catch {}
-    }
+    return notes;
   };
   const killTree = async (pid, signal) => {
-    for (const p of [...descendants(await ps(['-A', '-o', 'pid=,ppid=']), pid)].reverse()) { try { process.kill(p, signal); } catch {} }
+    const tree = descendants(await ps(['-A', '-o', 'pid=,ppid=']), pid);
+    for (const p of [...tree].reverse()) { try { process.kill(p, signal); } catch {} }
     try { process.kill(pid, signal); } catch {}
+    return [pid, ...tree];
+  };
+  const alive = pid => { try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; } };
+  // After a tree kill the step's underLiveLock never ran its release. The runner removes that lock only when it is newer
+  // than the attempt and every process of the tree is dead (rmdir, never rm -r).
+  const releaseOrphanedLock = async (tree, attemptStartMs) => {
+    for (let i = 0; i < 50 && tree.some(alive); i++) await sleep(100);
+    let lockMtimeMs;
+    try { lockMtimeMs = lstatSync(LOCK).mtimeMs; } catch { return; }
+    if (orphanedLock({ lockMtimeMs, attemptStartMs, alive: tree.map(alive) })) {
+      try { rmdirSync(LOCK); log(`removed ${LOCK}, left by the step's killed process tree`); } catch (error) { log(`${LOCK}: ${error.message}`); }
+    } else log(`${LOCK} stays: it is older than the attempt or a process of the tree is alive`);
   };
 
   // One attempt: the child, the pointer and hold watch, and the timeout. Resolves { rc, signal, reason, measured }.
-  const runStep = async step => {
+  const runStep = async (step, attemptStartMs) => {
     const cfg = mkdtempSync('/tmp/lane-claude-');
+    // Every check but the A/B gets its own TMPDIR under the night's folder. The A/B keeps the default one, as every
+    // earlier A/B did: run.mjs keys its fixture, trace and evidence folders to it (bench/evidence.mjs tempRoots).
+    const tmp = step.id === 'speed-ab' ? undefined : mkdtempSync(join(tmpRoot, `${step.id}-`));
+    let treeKill;
     const logPath = join(out, `${step.id}.log`);
     const fd = openSync(logPath, 'a');
     const offset = statSync(logPath).size;
@@ -275,13 +328,13 @@ async function main(argv) {
       writeFileSync(fd, `\n# ${new Date().toISOString()} node ${step.script} ${step.args.join(' ')}\n`);
       const result = await new Promise(done => {
         let reason;
-        child = spawn(process.execPath, [join(ROOT, step.script), ...step.args], { cwd: ROOT, env: childEnv(process.env, cfg), stdio: ['ignore', fd, fd] });
+        child = spawn(process.execPath, [join(ROOT, step.script), ...step.args], { cwd: ROOT, env: childEnv(process.env, cfg, { tmp, charactersBase }), stdio: ['ignore', fd, fd] });
         const end = why => {
           if (reason || !child) return;
           reason = why;
           log(`${step.id}: ${why === 'owner' ? stoppedFor : why === 'hold' ? `${HOLD} appeared` : why}; sending SIGINT`);
           try { child.kill('SIGINT'); } catch {}
-          grace = setTimeout(() => { log(`${step.id}: still running ${KILL_GRACE_MS / 1000} s after SIGINT; SIGKILL to its process tree`); if (child) killTree(child.pid, 'SIGKILL'); }, KILL_GRACE_MS);
+          grace = setTimeout(() => { log(`${step.id}: still running ${KILL_GRACE_MS / 1000} s after SIGINT; SIGKILL to its process tree`); if (child) treeKill = killTree(child.pid, 'SIGKILL'); }, KILL_GRACE_MS);
         };
         ending = end;
         child.once('error', error => { child = undefined; done({ rc: 127, error: error.message }); });
@@ -304,6 +357,7 @@ async function main(argv) {
           input.on('error', () => {});
         }
       });
+      if (treeKill) await releaseOrphanedLock(await treeKill, attemptStartMs);
       const text = readFileSync(logPath, 'utf8').slice(offset);
       return { ...result, measured: Boolean(resultLine(text)), result: resultLine(text) ?? /^VC7 INCOMPLETE: (.+)$/m.exec(text)?.[1] };
     } finally {
@@ -335,18 +389,26 @@ async function main(argv) {
     return { rc: 0, measured: true, result: 'built' };
   };
 
-  // Waits out a hold (as long as it lasts) and the live lock (up to LOCK_WAIT_MS). Returns a reason to skip, or undefined.
+  // Waits out a hold (up to HOLD_WAIT_MS, with the display allowed to sleep) and the live lock (up to LOCK_WAIT_MS).
+  // Returns a reason to skip the step, or undefined.
   const waitClear = async () => {
     let lockSince, holdSince, said = 0;
-    while (!interrupted) {
-      const hold = existsSync(HOLD), lock = existsSync(LOCK);
-      if (!hold && !lock) { if (holdSince || lockSince) watch.quiet(); return undefined; }
-      if (hold) { holdSince ??= Date.now(); lockSince = undefined; }
-      else { lockSince ??= Date.now(); if (Date.now() - lockSince > LOCK_WAIT_MS) return `${LOCK} held for ${LOCK_WAIT_MS / 60000} min`; }
-      if (Date.now() - said > 600000) { said = Date.now(); log(`waiting: ${hold ? HOLD : LOCK} exists`); }
-      await sleep(10000);
-    }
-    return 'interrupted';
+    try {
+      while (!interrupted) {
+        const hold = existsSync(HOLD), lock = existsSync(LOCK);
+        if (!hold && !lock) { if (holdSince || lockSince) watch.quiet(); return undefined; }
+        if (hold) {
+          holdSince ??= Date.now(); lockSince = undefined; awake('-ims');
+          if (Date.now() - holdSince > HOLD_WAIT_MS) return `${HOLD} held for ${HOLD_WAIT_MS / 60000} min`;
+        } else {
+          lockSince ??= Date.now(); awake('-dims');
+          if (Date.now() - lockSince > LOCK_WAIT_MS) return `${LOCK} held for ${LOCK_WAIT_MS / 60000} min`;
+        }
+        if (Date.now() - said > 600000) { said = Date.now(); log(`waiting: ${hold ? HOLD : LOCK} exists (${Math.round((Date.now() - (hold ? holdSince : lockSince)) / 60000)} min so far)`); }
+        await sleep(10000);
+      }
+      return 'interrupted';
+    } finally { awake('-dims'); }
   };
 
   log(`VC7 night run at ${head.slice(0, 12)} into ${tilde(out)}; estimate ${estimate(steps)} min plus ${overheadMin(steps)} min of gaps`);
@@ -354,7 +416,7 @@ async function main(argv) {
     for (const step of steps) {
       if (interrupted || stoppedFor) break;
       if (markers[step.id]?.done) { log(`skip ${step.id} (${markers[step.id].status})`); continue; }
-      let attempt = 0, busy = 0, failures = 0, meaning, result, started;
+      let attempt = 0, busy = 0, failures = 0, meaning, result, started, cleanup = [];
       while (!interrupted && !stoppedFor) {
         const skip = await waitClear();
         if (skip === 'interrupted') break;
@@ -362,13 +424,14 @@ async function main(argv) {
         const back = await watch.gapCheck();
         if (back.back) { stoppedFor = ownerWords(back); break; }
         attempt++; started = Date.now();
+        const before = step.internal ? {} : await running();
         log(`start ${step.id}${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
-        try { result = step.internal ? await build() : await runStep(step); }
+        try { result = step.internal ? await build() : await runStep(step, started); }
         catch (error) { result = { rc: 1, measured: false, result: String(error.message).slice(0, 200) }; log(`${step.id}: ${tilde(error.message)}`); }
         if (interrupted && !result.reason) result.reason = 'interrupted';
         meaning = outcome(result.rc, result);
         watch.quiet();
-        await sweep();
+        cleanup = await sweep({ launched: step.internal ? [] : launchedApps(before, await running()), attemptStartMs: started });
         if (meaning.hold) { log(`${step.id}: rerun after the hold`); continue; }
         if (meaning.retry && ++busy <= BUSY_RETRIES) { log(`${step.id} found the Mac busy; waiting 30 s`); await sleep(30000); continue; }
         if (meaning.failed && !step.internal && ++failures <= FAILED_RETRIES && !interrupted) {
@@ -378,7 +441,7 @@ async function main(argv) {
       }
       if (!meaning) break;
       markers[step.id] = { rc: result.rc ?? null, ...(result.signal ? { signal: result.signal } : {}), status: meaning.status, done: meaning.done,
-        minutes: started ? Math.round((Date.now() - started) / 6000) / 10 : 0, endedAt: new Date().toISOString(), ...(result.result ? { result: result.result } : {}) };
+        minutes: started ? Math.round((Date.now() - started) / 6000) / 10 : 0, endedAt: new Date().toISOString(), ...(result.result ? { result: result.result } : {}), ...(cleanup.length ? { cleanup } : {}) };
       atomic(join(markersDir, `${step.id}.json`), JSON.stringify(markers[step.id], null, 2) + '\n');
       log(`end ${step.id}: ${meaning.status}${result.result ? `: ${result.result}` : ''}`);
       if (step.internal && !meaning.done) { log('the build failed; no check can run'); break; }
@@ -387,6 +450,7 @@ async function main(argv) {
   } finally {
     if (child) await killTree(child.pid, 'SIGKILL');
     await sweep().catch(error => log(`cleanup: ${tilde(error.message)}`));
+    try { rmSync(charactersBase, { recursive: true, force: true }); } catch {}
     if (stoppedFor) { writeFileSync(join(out, 'STOPPED-owner'), stoppedFor + '\n'); log(`stopped: ${stoppedFor}`); }
     writeFileSync(join(out, 'summary.md'), summaryMarkdown(state, markers, steps, { stoppedFor }));
     log(`summary: ${tilde(join(out, 'summary.md'))}`);

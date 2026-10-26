@@ -91,8 +91,10 @@ export function cellInk(sheet, cell = CELL) {
   return cells;
 }
 
-/** Writes the root (0700), the character folder (0700) and sheet.png (0600). root must be a new folder under /private/tmp. */
-export function installSyntheticCharacter({ base = '/private/tmp', id = SYNTHETIC_ID } = {}) {
+/** Writes the root (0700), the character folder (0700) and sheet.png (0600). root is a new folder under /private/tmp. */
+// VC7_CHARACTERS_BASE: the night runner's own folder under /private/tmp, which its sweep removes.
+export function installSyntheticCharacter({ base = process.env.VC7_CHARACTERS_BASE || '/private/tmp', id = SYNTHETIC_ID } = {}) {
+  if (base !== '/private/tmp' && !base.startsWith('/private/tmp/')) throw new Error('the characters base must be under /private/tmp');
   const root = realpathSync(mkdtempSync(join(base, 'sleight-vc7-characters-')));
   if (!root.startsWith('/private/tmp/')) throw new Error('the characters root must be under /private/tmp (the host\'s test override)');
   chmodSync(root, 0o700);

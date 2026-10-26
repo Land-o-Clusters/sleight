@@ -92,11 +92,11 @@ export async function openTextEditFixture({ helper, live, work, cleanups, receip
   const doc = join(work, name);
   writeFileSync(doc, text ?? Array.from({ length: 40 }, (_, i) => `sleight agent cursor check, line ${i + 1}. The quick brown fox jumps over the lazy dog.`).join('\n') + '\n');
   let launched;
+  const startedAt = new Date().toISOString();
   cleanups.push(async () => {
     if (!launched) { const state = await live.appState(TEXTEDIT); if (state.pids?.length === 1) launched = { pid: state.pids[0] }; }
-    if (launched) await quitFixture({ bundle: TEXTEDIT, pid: launched.pid }, { live });
+    if (launched) await quitFixture({ bundle: TEXTEDIT, pid: launched.pid, startedAfterMs: Date.parse(startedAt) }, { live });
   });
-  const startedAt = new Date().toISOString();
   await execute('/usr/bin/open', ['-g', '-a', 'TextEdit', doc, ...DOCUMENT_LAUNCH], { timeout: 15000 });
   for (let i = 0; i < 100 && !launched; i++) {
     const state = await live.appState(TEXTEDIT);
@@ -115,37 +115,35 @@ export async function openTextEditFixture({ helper, live, work, cleanups, receip
   return { target, doc, launched };
 }
 
-// The fixture's own save sheet, answered through System Events by the launched pid only, as bench/tasks.mjs quitChess does.
-export const dontSaveScript = pid => {
-  if (!Number.isSafeInteger(pid) || pid < 2) throw new Error('a launched pid');
-  return `tell application "System Events"
-  set p to first process whose unix id is ${pid}
-  repeat with w in windows of p
-    try
-      repeat with b in buttons of sheet 1 of w
-        if name of b is in {"Don’t Save", "Don't Save"} then click b
-      end repeat
-    end try
-  end repeat
-end tell`;
-};
 const isAlive = pid => { try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; } };
+/** A process's start time in ms from ps lstart, or undefined when it is gone. */
+export async function processStartMs(pid, run = execute) {
+  try {
+    const { stdout } = await run('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], { env: { ...process.env, LC_ALL: 'C' }, timeout: 5000 });
+    const ms = Date.parse(String(stdout).trim());
+    return Number.isFinite(ms) ? ms : undefined;
+  } catch { return undefined; }
+}
 
-/** Quits the fixture app this run launched, escalating: quit; the fixture's Don't Save, then quit; SIGTERM; SIGKILL. Every
- *  signal goes to the launched pid only, and only while the app's one running process is that pid. Returns how it ended. */
-export async function quitFixture({ bundle, pid }, { live, run = execute, kill = (p, s) => process.kill(p, s), alive = isAlive,
-  sleep = ms => new Promise(r => setTimeout(r, ms)), log = () => {} } = {}) {
-  const ours = async () => { const state = await live.appState(bundle); return state.running && state.pids?.length === 1 && state.pids[0] === pid; };
+/** Quits a fixture app this run launched, escalating: quit (NSRunningApplication terminate, no Apple event), then SIGTERM,
+ *  then SIGKILL. No System Events step: an Automation prompt would sit on screen until morning (sleight-arch, VC7HR2).
+ *  Every signal goes to the launched pid only, and only while the app's one running process is that pid and, given
+ *  startedAfterMs, it started no earlier than 5 s before it (a reused pid is never touched). Returns how it ended. */
+export async function quitFixture({ bundle, pid, startedAfterMs }, { live, kill = (p, s) => process.kill(p, s), alive = isAlive,
+  started = processStartMs, sleep = ms => new Promise(r => setTimeout(r, ms)), log = () => {} } = {}) {
+  const ours = async () => {
+    const state = await live.appState(bundle);
+    if (!(state.running && state.pids?.length === 1 && state.pids[0] === pid)) return false;
+    if (Number.isFinite(startedAfterMs)) { const at = await started(pid); if (!(at >= startedAfterMs - 5000)) return false; }
+    return true;
+  };
   if (!(await ours())) return 'gone';
   try { await live.quitApp(bundle, { pid }); return 'quit'; } catch (error) { log(`quit: ${error.message}`); }
-  if (!(await ours())) return 'gone';
-  try { await run('/usr/bin/osascript', ['-e', dontSaveScript(pid)], { timeout: 15000 }); } catch (error) { log(`Don't Save: ${String(error.message).split('\n')[0]}`); }
-  try { await live.quitApp(bundle, { pid }); return "quit after Don't Save"; } catch (error) { log(`quit: ${error.message}`); }
-  for (const [signal, waitMs] of [['SIGTERM', 3000], ['SIGKILL', 2000]]) {
+  for (const [signal, waitMs] of [['SIGTERM', 5000], ['SIGKILL', 2000]]) {
     if (!(await ours())) return 'gone';
     try { kill(pid, signal); } catch {}
     for (let i = 0; i < waitMs / 100 && alive(pid); i++) await sleep(100);
-    if (!alive(pid)) return signal === 'SIGTERM' ? 'terminated' : 'killed';
+    if (!alive(pid)) return signal === 'SIGTERM' ? 'terminated (SIGTERM)' : 'killed (SIGKILL)';
   }
   throw new Error(`${bundle} ${pid} survived SIGKILL`);
 }

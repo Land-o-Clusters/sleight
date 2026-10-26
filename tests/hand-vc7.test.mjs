@@ -14,14 +14,14 @@ import { macCommandSkip } from './requirements.mjs';
 import { cursorColoured, colourRule, handColoured, compareFrames, classify } from '../bench/hand/pixels.mjs';
 import { crc32, encodePng, syntheticSheet, cellInk, characterWire, installSyntheticCharacter, characterEnv, CELL, SYNTHETIC_ID } from '../bench/hand/synthetic-character.mjs';
 import { cursorWire, autoSequence, playSequence, KINDS } from '../bench/hand/cursor-sequence.mjs';
-import { ownerBack, createOwnerWatch, ownerWords, createInputDetector, parseInputLine, QUIET_GAP_MS } from '../bench/hand/owner-watch.mjs';
+import { ownerBack, createOwnerWatch, ownerWords, createInputDetector, parseInputLine, QUIET_GAP_MS, MOVED_SAMPLES } from '../bench/hand/owner-watch.mjs';
 import { parseWatch, callSightings, baselineWindows, timingStats, engineDecision, pickElements, sequenceCalls, COORDINATE } from '../bench/hand/engine-cursor.mjs';
 import { phases, phaseFigures, costVerdict, rssBudget, parseArgs as costArgs, SETTLE_MS } from '../bench/hand/cursor-cost.mjs';
 import { recordPlan, panelWindow, asideName, parseArgs as recordArgs } from '../bench/hand/cursor-record.mjs';
 import { perTask, speedVerdict, speedRule, t975, perTaskMarkdown, runSide, runCostPass, compareSides, parseArgs as passArgs, resumeKey, dryRunPlan as passPlan } from '../bench/hand/cost-pass.mjs';
 import { hostStyle } from '../bench/hand/cost-sampler.mjs';
-import { nightSteps, estimate, overheadMin, timeoutMs, outcome, childEnv, strays, descendants, tempLeftovers, resultLine, summaryMarkdown, parseArgs as nightArgs, TARGET_MIN } from '../bench/hand/vc7-night.mjs';
-import { hostArgs, commonArgs, liveRefusal, compileArgs, playRect, quitFixture, dontSaveScript } from '../bench/hand/vc7-live.mjs';
+import { nightSteps, estimate, overheadMin, timeoutMs, outcome, childEnv, strays, descendants, orphanedLock, launchedApps, resultLine, HOLD_WAIT_MS, LOCK_WAIT_MS, summaryMarkdown, parseArgs as nightArgs, TARGET_MIN } from '../bench/hand/vc7-night.mjs';
+import { hostArgs, commonArgs, liveRefusal, compileArgs, playRect, quitFixture } from '../bench/hand/vc7-live.mjs';
 import { handWire, runCaptureTest, underLiveLock } from '../bench/hand/h5-capture.mjs';
 import { EventEmitter } from 'node:events';
 
@@ -192,12 +192,14 @@ test('during a step: a pointer that moves and stays away is the owner; a short e
   assert.equal(detect(s(1000, 100, 100, 0.1)), undefined);
   assert.equal(detect(s(2000, 400, 300, 0.1)), undefined, 'one sample away');
   assert.equal(detect(s(3000, 100, 100, 0.1)), undefined, 'a drag fallback restores the pointer');
-  assert.equal(detect(s(4000, 400, 300, 0)), undefined);
-  assert.equal(detect(s(5000, 410, 300, 0)), undefined);
-  const hit = detect(s(6000, 410, 300, 0));
+  for (const t of [4000, 5000, 6000]) assert.equal(detect(s(t, 400, 300, 0)), undefined, 'a drag fallback of up to 3 s');
+  assert.equal(detect(s(7000, 100, 100, 0)), undefined, 'restored');
+  for (const t of [8000, 9000, 10000, 11000]) assert.equal(detect(s(t, 410, 300, 0)), undefined);
+  const hit = detect(s(12000, 410, 300, 0));
   assert.equal(hit.back, true);
-  assert.match(hit.reason, /pointer moved from 100,100 to 410,300 and stayed 3 s/);
-  assert.equal(detect(s(7000, 100, 100, 0)), hit, 'fires once');
+  assert.match(hit.reason, /pointer moved from 100,100 to 410,300 and stayed 5 s/);
+  assert.equal(detect(s(13000, 100, 100, 0)), hit, 'fires once');
+  assert.equal(MOVED_SAMPLES, 5);
   detect = createInputDetector({ harnessInput: true, quietSinceMs: 0 });
   for (let t = 1000; t < 20000; t += 1000) assert.equal(detect(s(t, 50, 50, 0.2)), undefined, 'engine input in an input step is ignored');
   detect = createInputDetector({ harnessInput: false, quietSinceMs: 0 });
@@ -330,6 +332,10 @@ test('speed rule: passed runs only, 4 a side, within 5% or a 95% interval holdin
   const narrow = speedRule([10.6, 10.9, 10.3, 10.6, 10.6], [9.5, 10.8, 9.2, 10.6, 9.9]);
   assert.equal(narrow.state, 'no-slowdown');
   assert.ok(narrow.diffPct > 5 && narrow.ci[0] < 0 && narrow.halfPct <= 10);
+  // Within 5% but with the H6 textedit-drag spread: the interval reaches far past +15%, so inconclusive (VC7HR2).
+  const offDrag = [23, 26, 28, 31, 37], noisy = speedRule(offDrag.map(v => v + 1.2), offDrag);
+  assert.ok(noisy.diffPct < 5 && noisy.halfPct > 15);
+  assert.equal(noisy.state, 'inconclusive');
   // Faster is never a slowdown.
   assert.equal(speedRule([8, 8, 8, 8], [10, 10, 10, 10]).state, 'no-slowdown');
 });
@@ -343,6 +349,8 @@ test('speed A/B verdict: failed runs are dropped, a task needs 4 passed a side, 
   const ok = speedVerdict(rows, { cursorStyle: 'ring' });
   assert.deepEqual([ok.state, ok.slowdown], ['no-slowdown', false]);
   assert.match(ok.line, /^Speed verdict: no slowdown with ring on \(2 tasks/);
+  assert.match(ok.line, /; widest 95% interval \+\/-\d+(\.\d)?% \([ab]\)$/);
+  assert.ok(ok.widestHalfPct > 0);
   assert.match(perTaskMarkdown(rows, ok), /\| a \| 5\/5 \/ 5\/5 \| \+0\.04 s \(0\.4%\), 95% \[/);
   // A failed run (passed false) is not timed: two failures on a side leave 3 passed, so the task is not measured.
   const failing = [...fine.filter(e => !(e.task === 'a' && e.side === 'on')), ...runsOf('a', 'on', [10, 10, 30, 31, 10]).map((e, i) => i >= 2 && i <= 3 ? { ...e, passed: false } : e)];
@@ -439,17 +447,19 @@ test('night runner: steps, timeouts, outcomes (measured only with a result line)
     '13 /o/binary/consent-host', ' 14 /o/bin/capture-helper watch-engine 50 30'].join('\n');
   assert.deepEqual(strays(ps, '/o/bin'), [{ pid: 10, command: 'consent-host' }, { pid: 11, command: 'capture-recorder' }, { pid: 14, command: 'capture-helper' }]);
   assert.deepEqual(descendants(['  1 0', '100 1', '101 100', '102 101', '103 100', '200 1'].join('\n'), 100), [101, 103, 102]);
-  const dirs = [
-    { dir: '/t', name: 'sleight-h5-abc', uid: 501, mtimeMs: 2000, isDir: true },
-    { dir: '/t', name: 'sleight-h5-old', uid: 501, mtimeMs: 500, isDir: true },
-    { dir: '/t', name: 'sleight-h5-root', uid: 0, mtimeMs: 2000, isDir: true },
-    { dir: '/t', name: 'sleight-h5x', uid: 501, mtimeMs: 2000, isDir: true },
-    { dir: '/t', name: 'sleight-vc7-characters-1', uid: 501, mtimeMs: 2000, isDir: true },
-    { dir: '/p', name: 'sleight-vc7-characters-1', uid: 501, mtimeMs: 2000, isDir: true },
-    { dir: '/p', name: 'sleight-vc7-characters-f', uid: 501, mtimeMs: 2000, isDir: false },
-  ];
-  assert.deepEqual(tempLeftovers(dirs, { prefixes: [['/t', ['sleight-h5-']], ['/p', ['sleight-vc7-characters-']]], uid: 501, sinceMs: 1000 }).map(e => `${e.dir}/${e.name}`),
-    ['/t/sleight-h5-abc', '/p/sleight-vc7-characters-1']);
+  assert.deepEqual(childEnv({ PATH: '/bin' }, '/c', { tmp: '/o/tmp/capture-ring-1', charactersBase: '/private/tmp/sleight-vc7-night-1' }),
+    { PATH: '/bin', CLAUDE_CONFIG_DIR: '/c', DISABLE_AUTOUPDATER: '1', SLEIGHT_NO_HUB: '1', SLEIGHT_REMOTE_APPROVALS: '0', TMPDIR: '/o/tmp/capture-ring-1', VC7_CHARACTERS_BASE: '/private/tmp/sleight-vc7-night-1' });
+  assert.equal(orphanedLock({ lockMtimeMs: 2000, attemptStartMs: 1000, alive: [false, false] }), true);
+  assert.equal(orphanedLock({ lockMtimeMs: 500, attemptStartMs: 1000, alive: [false] }), false, 'a lock older than the attempt is someone else\'s');
+  assert.equal(orphanedLock({ lockMtimeMs: 2000, attemptStartMs: 1000, alive: [false, true] }), false, 'a live process may still hold it');
+  assert.equal(orphanedLock({ lockMtimeMs: undefined, attemptStartMs: 1000, alive: [] }), false);
+  assert.deepEqual(launchedApps({ 'com.apple.TextEdit': [5], 'com.apple.calculator': [] }, { 'com.apple.TextEdit': [5, 9], 'com.apple.calculator': [12] }),
+    [{ bundle: 'com.apple.TextEdit', pid: 9 }, { bundle: 'com.apple.calculator', pid: 12 }]);
+  assert.deepEqual([HOLD_WAIT_MS, LOCK_WAIT_MS], [30 * 60000, 20 * 60000]);
+  const forced = summaryMarkdown({ root: '/r', head: 'abcdef1234567890', out: '/o', startedAt: 'T' },
+    { 'capture-ring': { status: 'passed', rc: 0, minutes: 2, cleanup: ['fixture TextEdit of capture-ring 42: quit', 'fixture TextEdit of capture-ring 43: terminated (SIGTERM)'] } }, steps);
+  assert.match(forced, /needed a signal[^\n]*\n- capture-ring: fixture TextEdit of capture-ring 43: terminated \(SIGTERM\)/);
+  assert.doesNotMatch(forced, /capture-ring 42: quit/);
   assert.equal(resultLine('x\nVC7 RESULT: one\nVC7 RESULT: two\n'), 'two');
   assert.equal(resultLine('VC7 INCOMPLETE: nope'), undefined);
   const md = summaryMarkdown({ root: '/r', head: 'abcdef1234567890', out: '/o', startedAt: 'T' }, { build: { status: 'passed', rc: 0, minutes: 1.5 } }, steps, { stoppedFor: 'the owner is back' });
@@ -460,39 +470,38 @@ test('night runner: steps, timeouts, outcomes (measured only with a result line)
   assert.throws(() => nightArgs(['--go']), /unknown option/);
   assert.throws(() => nightArgs(['x']), /unexpected argument/);
   const source = readFileSync(join(root, 'bench/hand/vc7-night.mjs'), 'utf8');
-  assert.match(source, /spawn\('\/usr\/bin\/caffeinate', \['-dims', '-w', String\(process\.pid\)\]/);
+  assert.match(source, /spawn\('\/usr\/bin\/caffeinate', \[mode, '-w', String\(process\.pid\)\]/);
+  assert.match(source, /awake\('-ims'\)/); assert.match(source, /awake\('-dims'\)/); assert.match(source, /rmdirSync\(LOCK\)/); assert.doesNotMatch(source, /rmSync\(LOCK/);
   assert.match(source, /\['SIGINT', 130\], \['SIGTERM', 143\], \['SIGHUP', 129\]/);
   assert.doesNotMatch(source, /detached: true|pkill/);
 });
 
-test('fixture quit escalates: quit, the fixture\'s Don\'t Save, SIGTERM, SIGKILL, by the launched pid only', async () => {
+test('fixture quit escalates: quit, SIGTERM, SIGKILL, by the launched pid and launch time only, with no System Events', async () => {
   const calls = [];
-  const make = ({ quits = [], dies = 'never', running = () => true } = {}) => {
+  const make = ({ quits = [], dies = 'never', startedMs = 10000 } = {}) => {
     let quit = 0, alive = true;
     return {
-      live: { appState: async () => ({ running: alive && running(), pids: alive ? [42] : [] }),
+      live: { appState: async () => ({ running: alive, pids: alive ? [42] : [] }),
         quitApp: async (bundle, { pid }) => { calls.push(`quit ${pid}`); if (quits[quit++]) { alive = false; return; } throw new Error('quit unconfirmed'); } },
-      run: async (cmd, args) => { calls.push(`osascript ${/unix id is 42/.test(args[1]) && /Don’t Save/.test(args[1]) ? 'dont-save 42' : '?'}`); },
       kill: (pid, signal) => { calls.push(`${signal} ${pid}`); if (signal === dies || dies === 'SIGTERM' && signal === 'SIGKILL') alive = false; },
-      alive: () => alive, sleep: async () => {},
+      alive: () => alive, sleep: async () => {}, started: async () => startedMs,
     };
   };
   assert.equal(await quitFixture({ bundle: 'b', pid: 42 }, make({ quits: [true] })), 'quit');
   calls.length = 0;
-  assert.equal(await quitFixture({ bundle: 'b', pid: 42 }, make({ quits: [false, true] })), "quit after Don't Save");
-  assert.deepEqual(calls, ['quit 42', 'osascript dont-save 42', 'quit 42']);
+  assert.equal(await quitFixture({ bundle: 'b', pid: 42, startedAfterMs: 9000 }, make({ dies: 'SIGTERM' })), 'terminated (SIGTERM)');
+  assert.deepEqual(calls, ['quit 42', 'SIGTERM 42']);
   calls.length = 0;
-  assert.equal(await quitFixture({ bundle: 'b', pid: 42 }, make({ dies: 'SIGTERM' })), 'terminated');
-  assert.deepEqual(calls, ['quit 42', 'osascript dont-save 42', 'quit 42', 'SIGTERM 42']);
-  calls.length = 0;
-  assert.equal(await quitFixture({ bundle: 'b', pid: 42 }, make({ dies: 'SIGKILL' })), 'killed');
-  assert.deepEqual(calls.slice(-2), ['SIGTERM 42', 'SIGKILL 42']);
+  assert.equal(await quitFixture({ bundle: 'b', pid: 42 }, make({ dies: 'SIGKILL' })), 'killed (SIGKILL)');
+  assert.deepEqual(calls, ['quit 42', 'SIGTERM 42', 'SIGKILL 42']);
   calls.length = 0;
   const other = make();
   other.live.appState = async () => ({ running: true, pids: [77] });
   assert.equal(await quitFixture({ bundle: 'b', pid: 42 }, other), 'gone', 'another process is never signalled');
+  assert.equal(await quitFixture({ bundle: 'b', pid: 42, startedAfterMs: 60000 }, make({ startedMs: 10000 })), 'gone', 'a pid that started before the launch is a reused pid');
   assert.deepEqual(calls, []);
-  assert.throws(() => dontSaveScript(1), /launched pid/);
+  const source = readFileSync(join(root, 'bench/hand/vc7-live.mjs'), 'utf8');
+  assert.doesNotMatch(source, /application "System Events"|osascript', \['-e'/);
   assert.equal(asideName('/r/record-ring', p => p === '/r/record-ring.partial-1'), '/r/record-ring.partial-2');
 });
 

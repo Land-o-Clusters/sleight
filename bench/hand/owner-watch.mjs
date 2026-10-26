@@ -13,7 +13,7 @@ import { idleSeconds as readIdle } from '../compat/live.mjs';
 
 export const SLACK_S = 5;
 export const QUIET_GAP_MS = 15000;
-export const MOVED_SAMPLES = 3;
+export const MOVED_SAMPLES = 5;
 
 /** { back, idleS, quietS, unknown? }. unknown: the idle time could not be read, which never stops a run on its own. */
 export function ownerBack({ idleS, quietSinceMs, nowMs, slackS = SLACK_S }) {
