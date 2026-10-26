@@ -2632,7 +2632,7 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
                 data["holdMs"] == nil || integer(data["holdMs"], 0...600) != nil else { return nil }
             state = "aim"
         } else {
-            guard let value = data["state"] as? String, ["waiting", "error", "done", "handback", "thinking", "paused", "idle"].contains(value) else { return nil }
+            guard let value = data["state"] as? String, ["waiting", "error", "done", "handback", "thinking", "paused"].contains(value) else { return nil }
             state = value
         }
         let event = RingEvent(seq: seq, state: state, pid: Int32(pid), windowId: UInt32(window), at: point(data["at"]), rect: rect,
@@ -3254,7 +3254,6 @@ final class RingPlanner {
         case "thinking": thinking()
         case "waiting": waiting()
         case "paused": tl.to([.o: 1, .hol: 1, .sp: 0, .px: 0, .fray: 0], t, 0.12)
-        case "idle": t = tl.to([.o: 1, .hol: 0, .sp: 0, .px: 0, .fray: 0], t, 0.12)
         case "error": error()
         default: done()
         }
@@ -4857,7 +4856,7 @@ struct PerchLine { let moment: String, text: String, index: Int, until: Double, 
 struct PerchLineBook {
     var set: PerchLineSet?, enabled = true, seed: UInt64 = 1
     var recent: [String: [Int]] = [:], picks = 0
-    var turnOpen = false, said: Set<String> = [], lastOk = false, startPending = false
+    var turnOpen = false, said: Set<String> = [], lastOk = false, startTried = false, startPending = false
     var showing: (moment: String, until: Double)?, lastAt = -Double.infinity
     var acts = 0, lastAct = Int.min / 2
     var narrationUntil = -Double.infinity, held: (moment: String, act: Bool, at: Double)?
@@ -4868,16 +4867,18 @@ struct PerchLineBook {
     // The moment a frame is, if any. Turns end at a done without ok (the relay's turn end), a hand back or sleep. Waking
     // says wake only when the frame has no moment of its own, so a new turn still starts with its start line.
     mutating func moment(_ state: String, ok: Bool, woke: Bool) -> String? {
-        if !turnOpen { turnOpen = true; said = []; lastOk = false; startPending = false }
+        if !turnOpen { turnOpen = true; said = []; lastOk = false; startTried = false; startPending = false }
         if handKinds.contains(state) { acts += 1 }
         var moment: String?
         switch state {
-        case "aim": startPending = !said.contains("start") && set?.lines["start"] != nil; moment = startPending ? "start" : nil
+        case "aim": moment = !startTried && set?.lines["start"] != nil ? "start" : nil; startTried = true
         case "type": moment = said.contains("typing") ? nil : "typing"
         case "waiting": moment = "approval"
         case "error": moment = "error"; lastOk = false
         case "handback": moment = "handback"; turnOpen = false
-        case "done" where ok: moment = startPending ? "start" : said.contains("first-click") ? nil : "first-click"; lastOk = true
+        case "done" where ok:
+            moment = startPending ? "start" : said.contains("first-click") ? nil : "first-click"
+            startPending = false; lastOk = true
         case "done": moment = lastOk && !said.contains("done") ? "done" : nil; turnOpen = false
         default: break
         }
@@ -4902,7 +4903,8 @@ struct PerchLineBook {
     // Important moments have a 3 s floor; other lines keep 8 s. Never lines on two consecutive acts,
     // never while C1's clear holds, and never with narration up: then the line waits for it.
     mutating func decide(_ moment: String, now: Double, act: Bool) -> Decision {
-        guard enabled, !cleared, set?.lines[moment] != nil else { return .drop }
+        guard enabled, set?.lines[moment] != nil else { return .drop }
+        if cleared { if moment == "start" { startPending = true }; return .drop }
         let gap = PerchLineBook.priority.contains(moment) ? 3.0 : 8.0
         if now - lastAt < gap - 1e-9 { return .drop }
         if let s = showing, now < s.until, !PerchLineBook.priority.contains(moment) { return .drop }

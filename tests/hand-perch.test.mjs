@@ -507,6 +507,18 @@ test('C1 clear: a failed call releases error and approval lines without idle or 
   assert.deepEqual(out.filter(e => e.effect === 'line').map(e => [e.time, e.moment]), [[1, 'error'], [4, 'approval']]);
 });
 
+test('lines: a start dropped by the cap never arrives mid-turn, including a clear retry dropped at the first done', onMac, () => {
+  for (const cleared of [false, true]) {
+    const out = dump([world([wide]), options(true, false), status('done', { ok: true }),
+      clock(2), options(), status('done'), clock(5),
+      ...cleared ? [{ hand: 'clear', nonce, token: 'c'.repeat(32) }] : [], aim(500, 400),
+      clock(6), status('done', { ok: true }), clock(12), status('done', { ok: true }),
+      clock(21), aim(500, 400), clock(22)]);
+    assert.deepEqual(out.filter(e => e.effect === 'line').map(e => [e.time, e.moment]),
+      [[2, 'done'], [12, 'first-click']], `clear: ${cleared}`);
+  }
+});
+
 test('lines: a short successful turn says done at 3 s after start with a click at 1.5 s', onMac, () => {
   const out = dump([world([wide]), aim(500, 400), clock(1.5), act('click', 500, 400), status('done', { ok: true }),
     clock(3), status('done'), clock(4)]);
@@ -565,7 +577,7 @@ test('sleep: after 10 minutes asleep the character goes and the checks stop; the
   assert.deepEqual(turn.filter(e => e.effect === 'line').map(e => e.moment), ['start', 'start'], 'sleep ends the turn; the new one starts with start, not wake');
 });
 
-test('covered and paused seats stop checks after 10 minutes, then a frame or idle brings them back', onMac, () => {
+test('covered and paused seats stop checks after 10 minutes, then a frame brings them back', onMac, () => {
   const cover = [W(8, [150, 150, 1000, 600]), wide];
   const covered = dump([world([wide]), aim(600, 400), clock(1), world(cover),
     ...[2, 300, 600].flatMap(t => [clock(t), world(cover)]), clock(700)]);
@@ -577,9 +589,9 @@ test('covered and paused seats stop checks after 10 minutes, then a frame or idl
   assert.deepEqual(paused.filter(e => e.effect === 'perch-hide').map(e => [e.time, e.reason]), [[601, 'paused']]);
   assert.deepEqual([paused.at(-1).shown, paused.at(-1).poll, paused.at(-1).timers], [false, null, []]);
   for (const resume of [2, 700]) {
-    const unpaused = dump([world([wide]), aim(500, 400), clock(1), status('paused'), clock(resume), status('idle'), clock(resume + 21)]);
-    const idle = perches(unpaused).find(p => p.time === resume);
-    assert.deepEqual(idle.states.at(-1), 'perch', `idle at ${resume} clears the paused pose`);
+    const unpaused = dump([world([wide]), aim(500, 400), clock(1), status('paused'), clock(resume), aim(500, 400), clock(resume + 21)]);
+    const active = perches(unpaused).find(p => p.time === resume);
+    assert.deepEqual(active.states.at(-1), 'perch-point-right', `an aim at ${resume} replaces the paused pose in the dump`);
     assert.deepEqual(perches(unpaused).filter(p => p.states.includes('sleep')).map(p => p.time), [resume + 20]);
   }
 });

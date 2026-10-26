@@ -32,7 +32,7 @@ test('pause uses an exact nonce-bound prepare and commit, and duplicate commits 
   pauseEvent(child, 'confirm', true); commitPause(child, false, '2'.repeat(32));
   assert.deepEqual(values, [true, false]);
 });
-test('unpause forwards idle to the last target so the host can clear its paused pose', async t => {
+test('unpause uses the pause acknowledgment without forwarding idle to the last target', async t => {
   const child = fakeChild();
   const client = createHandClient({ setting: () => ({ enabled: true, style: 'ring' }), built: () => true,
     watch: () => undefined, permissions: null, usage: null,
@@ -42,7 +42,9 @@ test('unpause forwards idle to the last target so the host can clear its paused 
   client.send(frame()); await settle();
   commitPause(child, true); commitPause(child, false, '2'.repeat(32));
   const statuses = child.lines.filter(line => line.hand === 'status');
-  assert.deepEqual(statuses.map(line => line.state), ['paused', 'idle']);
+  assert.deepEqual(statuses.map(line => line.state), ['paused']);
+  assert.equal(child.lines.at(-1).phase, 'applied');
+  assert.equal(child.lines.at(-1).paused, false);
   assert.deepEqual(statuses.map(({ pid, windowId, at }) => ({ pid, windowId, at })),
     statuses.map(() => ({ pid: 501, windowId: 77, at: [10.12, 20] })));
 });
@@ -244,10 +246,19 @@ test('ring host frames share one nonce and sequence, retain filtered labels, and
   await settle();
   assert.equal(h.spawns[0].cursorStyle, 'seam');
   const lines = h.children[0].lines;
-  assert.deepEqual(lines.map(l => l.hand), ['aim', 'act', 'status', 'status', 'status', 'status', 'status', 'status']);
-  assert.equal(lines.at(-1).state, 'idle', 'idle reaches the host to clear its paused pose');
+  assert.deepEqual(lines.map(l => l.hand), ['aim', 'act', 'status', 'status', 'status', 'status', 'status']);
+  assert.equal(lines.at(-1).state, 'thinking');
   assert.equal(lines[0].holdMs, 0); assert.deepEqual(lines[0].rect, record.rect); assert.equal(lines[1].label, 'button');
-  assert.deepEqual(lines.map(l => l.seq), [1, 2, 3, 4, 5, 6, 7, 8]); assert.ok(lines.every(l => l.nonce === lines[0].nonce));
+  assert.deepEqual(lines.map(l => l.seq), [1, 2, 3, 4, 5, 6, 7]); assert.ok(lines.every(l => l.nonce === lines[0].nonce));
+});
+test('a stray idle after a target with no pause sends nothing to the host', async t => {
+  const h = harness({ style: 'ring' }); t.after(() => h.client.close());
+  h.client.send(frame()); await settle();
+  const child = h.children[0], before = child.lines.length;
+  h.client.cursor({ type: 'status', state: 'idle' });
+  h.client.send({ hand: 'status', state: 'idle', pid: 501, windowId: 77, at: [10, 20] });
+  await settle();
+  assert.equal(child.lines.length, before);
 });
 test('glove sends no new frames or labels, and a targetless status cannot start a host', async t => {
   const h = harness(); t.after(() => h.client.close());

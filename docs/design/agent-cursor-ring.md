@@ -213,7 +213,7 @@ perch-only fault can't refuse the character. The client resends the character fr
 `PerchRuntime` (`BEGIN PERCH` in `consent-host.swift`) reacts to the ring's draws, so act delays and queueing stay the
 ring's. It places the box on the edge nearest the target, on the uncovered span nearest it after every window in front
 has cut the edge, and 72 pt off a target or a drag's other end within 56 pt under the edge. The legs hang over the title
-bar, and stay 8 pt clear of a 52 pt traffic-light cluster. Their spread below the seat line is measured per character from
+bar, and stay 8 pt clear of an 80 pt traffic-light cluster. Their spread below the seat line is measured per character from
 the decoded cells of every state drawn on the edge, standing ones included. Until that measure exists the box's half
 width stands in. The left margin is also at least 80 pt on windows 256 pt or wider, and the right one steps 80, 40 and 0 pt below
 256 and 176 pt. A new aim on the same window moves the seat only past 60 pt. Where the legs can't clear the buttons, under
@@ -231,12 +231,13 @@ nod (a 3 pt bump and the hop's settle cells) and the ring's usual burst at the p
 at the relay's turn-end done, when the turn's last call succeeded, and only then does the ring's burst play at the palm
 (`RingRuntime.dissolveAt`). Otherwise the turn's end hands back. C1's paused frame shows the `paused` pose and stops
 sleep. After 20 s without a frame it sleeps for 3 cycles under three rising z glyphs (one replicated layer), then stills
-with one z. The next frame startles it with a 6 pt bump. After 10 minutes asleep it goes, and the next frame brings it
-back. A person dragging or resizing the window hides it, and it returns 500 ms after the frame stops changing.
+with one z. The next frame startles it with a 6 pt bump. After 10 minutes asleep, covered or paused it goes, and the next
+frame brings it back. Unpause hides the paused pose through the host's pause acknowledgment. It returns on the next call.
+A person dragging or resizing the window hides it, and it returns 500 ms after the frame stops changing.
 
 The host rereads the window list every 0.5 s while perched and awake, every 2 s asleep and every 0.25 s while the window
-moves, on a timer with a fifth of the interval as leeway, and stops after 10 minutes asleep. A minimized window, a Space
-switch or a moved window hides the character after up to 0.5 s (2 s asleep), not A2's 120 ms. One read took
+moves, on a timer with a fifth of the interval as leeway, and stops after 10 minutes asleep, covered or paused. A minimized
+window, a Space switch or a moved window hides the character after up to 0.5 s (2 s asleep), not A2's 120 ms. One read took
 0.28 ms median over 200 calls (2026-10-26, load 11). Each plan is one set of keyframe animations built when the frame
 arrives, one per key path whose values change: the dump's `keyPaths` is what the host installs. An arrival animates
 position, contentsRect and opacity, a leap position, contents and contentsRect, sleep's loop contentsRect and the z
@@ -246,11 +247,11 @@ Lines are a pack's own short sentences (`lines` in `character.json`), shown in a
 over the perched box, or over the trailing sprite. Its moments are `start` (a turn's first aim), `first-click` (its
 first done with `ok`), `typing`, `long-wait` (12 s of thinking or waiting), `approval`, `error`, `done` (a turn that ends
 after a success), `handback` and `wake` (waking, when the frame has no moment of its own). A turn ends at the relay's
-done without `ok`, a hand back or sleep. At most one line shows per 8 s, every moment included (an error burst says one
-line), and never on two consecutive acts. Picks avoid that moment's last `min(6, count - 1)` lines, seeded from the
-session seed, and a moment with one line says it once a turn. C2's narration bubble goes first: a line due while it is
+done without `ok`, a hand back or sleep. Error, approval, hand back and done lines have a 3 s floor from the last line.
+other moments wait 8 s. Lines never show on two consecutive acts. Picks avoid that moment's last `min(6, count - 1)` lines,
+seeded from the session seed, and a moment with one line says it once a turn. C2's narration bubble goes first: a line due while it is
 up waits for it to fade (and is dropped if that takes over 5 s), and a line already up fades in 60 ms. From C1's clear
-before an action that needs the pointer until that action's done or idle, no line shows, approval's waiting included.
+before an action that needs the pointer until that action's done or error, no line shows, approval's waiting included.
 The bubble has its own small nonactivating panel, hidden from accessibility, the only part of the overlay that takes a
 click. A person's fresh mouse click (`personActivation`, mouse only) dismisses it, and other input is refused. Lines never
 reach Claude's context or a tool result, but with `hand capture visible` a bubble can show in a screenshot Claude takes.
