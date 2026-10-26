@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync, realpathSync, mkdirSync, chmodSync, symlinkSync, linkSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { deflateSync } from 'node:zlib';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { swiftModuleCache } from '../bench/swift-cache.mjs';
@@ -285,6 +285,28 @@ test('the load runs off the dump\'s thread: acts during a slow decode draw the r
   const took = performance.now() - before;
   assert.deepEqual(both.lines.filter(l => l.effect === 'character').map(l => [l.id, l.loaded]), [[b.id, true]]);
   assert.ok(took < 1900, `${took} ms`); assert.ok(draws(both)[0].sprite);
+});
+
+test('the live hand host reports each load on its stdout with exactly the client\'s keys', options, async t => {
+  // --hand without --menu or --consent: no status item, and acts never arrive, so no panel is made.
+  const good = character(), bad = character(); bad.seq = 1; writeFileSync(bad.sheet, png({ count: 10 }));
+  const host = spawn(build(t), ['--hand', '--cursor-style=sprite'], { env: testEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
+  let out = '';
+  const lines = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { host.kill('SIGKILL'); reject(Error(`no result lines: ${out}`)); }, 15000);
+    host.stdout.on('data', chunk => { out += chunk; if (out.split('\n').length > 2) { clearTimeout(timer); resolve(out.trim().split('\n').map(JSON.parse)); } });
+  });
+  host.stdin.write(JSON.stringify(good) + '\n');
+  // The second frame goes after the first result, so it can't cancel the first load.
+  await new Promise(resolve => { const wait = () => out.includes('\n') ? resolve() : setTimeout(wait, 20); wait(); });
+  host.stdin.write(JSON.stringify(bad) + '\n');
+  const [first, second] = await lines;
+  host.stdin.end();
+  const code = await new Promise(resolve => host.on('close', resolve));
+  assert.equal(code, 0);
+  for (const line of [first, second]) assert.deepEqual(Object.keys(line).sort(), ['hand', 'id', 'loaded', 'nonce', 'reason', 'warnings']);
+  assert.deepEqual(first, { hand: 'character', nonce, id: good.id, loaded: true, reason: null, warnings: [] });
+  assert.deepEqual(second, { hand: 'character', nonce, id: bad.id, loaded: false, reason: 'pixels', warnings: [] });
 });
 
 test('--check-character runs the same checks and reports the reason', options, t => {
