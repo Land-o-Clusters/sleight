@@ -57,7 +57,24 @@ test('cursor style saves only valid installed sprites and status is read-only', 
   assert.equal(await cli.cursorCommand(['style', 'sprite', 'test-cat'], opts), 1);
   output = ''; assert.equal(await cli.cursorCommand(['check', 'test-cat'], opts), 1);
 });
-test('cursor status and style say when the hand is off or the file is unsafe, and that sprite draws as the ring', async t => {
+test('cursor check runs the host\'s own checks on the character frame when the host is compiled', async t => {
+  const w = world(t); api.installCharacter(api.prepareCharacterImport(w.folder), { root: w.root });
+  let output = '', frames = [];
+  const opts = { root: w.root, path: join(w.base, 'hand.json'), out: s => output += s };
+  const host = result => async frame => { frames.push(frame); return result; };
+  assert.equal(await cli.cursorCommand(['check', 'test-cat'], { ...opts, built: () => false, hostCheck: host() }), 0);
+  assert.match(output, /Host check skipped: the hand host is not compiled yet/); assert.equal(frames.length, 0);
+  output = ''; assert.equal(await cli.cursorCommand(['check', 'test-cat'], { ...opts, built: () => true, hostCheck: host({ id: 'test-cat', loaded: true, reason: null, warnings: [] }) }), 0);
+  assert.match(output, /Host check: draws\.\n$/);
+  assert.equal(frames[0].hand, 'character'); assert.equal(frames[0].id, 'test-cat'); assert.match(frames[0].nonce, /^[0-9a-f]{64}$/);
+  assert.equal(Object.keys(frames[0].table).filter(k => !k.includes('@')).length, 19);
+  output = ''; assert.equal(await cli.cursorCommand(['check', 'test-cat'], { ...opts, built: () => true, hostCheck: host({ id: 'test-cat', loaded: false, reason: 'pixels', warnings: [] }) }), 1);
+  assert.match(output, /Host check: refused \(pixels\)\. sleight shows the ring instead of this character\./);
+  output = ''; assert.equal(await cli.cursorCommand(['check', 'test-cat'], { ...opts, built: () => true, hostCheck: async () => { throw Error('the hand host is unavailable (APPLE_TOOLS_MISSING)'); } }), 1);
+  assert.match(output, /cursor check failed: the hand host is unavailable/);
+});
+
+test('cursor status and style say when the hand is off or the file is unsafe, and sprite no longer says it draws as the ring', async t => {
   const w = world(t); api.installCharacter(api.prepareCharacterImport(w.folder), { root: w.root });
   const path = join(w.base, 'hand.json'); let output = '';
   const opts = { path, root: w.root, platform: 'darwin', env: {}, built: () => false, out: s => output += s };
@@ -68,9 +85,9 @@ test('cursor status and style say when the hand is off or the file is unsafe, an
   assert.match(output, /^hand {6}off\n/); assert.match(output, /The hand is off, so no style draws/);
   fs.writeFileSync(path, JSON.stringify({ version: 1, enabled: true }), { mode: 0o600 });
   output = ''; assert.equal(await cli.cursorCommand(['style', 'sprite', 'test-cat'], opts), 0);
-  assert.match(output, /Start a new sleight session to use it\.\nNote: sprite draws as the ring until sleight has a sprite renderer\./);
+  assert.match(output, /Start a new sleight session to use it\.\n$/); assert.doesNotMatch(output, /draws as the ring/);
   output = ''; assert.equal(await cli.cursorCommand(['status'], opts), 0);
-  assert.match(output, /^hand {6}on\n/); assert.match(output, /Note: sprite draws as the ring/); assert.doesNotMatch(output, /hand is off/);
+  assert.match(output, /^hand {6}on\n/); assert.doesNotMatch(output, /draws as the ring|hand is off/);
   fs.chmodSync(path, 0o644);
   output = ''; assert.equal(await cli.cursorCommand(['status'], opts), 0);
   assert.match(output, /^hand {6}off \(hand\.json is unsafe to read; run sleight-mcp hand on or off to replace it\)\n/);
@@ -79,7 +96,7 @@ test('cursor status and style say when the hand is off or the file is unsafe, an
 });
 test('installed checks omit source-copy text, symlinks offer removal, and malformed folder names can be removed', async t => {
   const w = world(t); api.installCharacter(api.prepareCharacterImport(w.folder), { root: w.root });
-  let output = ''; const opts = { root: w.root, out: s => output += s };
+  let output = ''; const opts = { root: w.root, out: s => output += s, built: () => false };
   assert.equal(await cli.cursorCommand(['check', 'test-cat'], opts), 0); assert.doesNotMatch(output, /Your source files/);
   fs.symlinkSync(w.folder, join(w.root, 'linked')); output = '';
   assert.equal(await cli.cursorCommand(['list'], opts), 1); assert.match(output, /remove the link by hand/);
@@ -110,6 +127,7 @@ test('idle-only resolves all 19 events and the callout is generated from that ta
 for (const kind of ['png', 'webp']) test(`Codex v2 ${kind} copies bytes unchanged, with 9 own states and private atomic installation`, t => {
   const w = world(t), bytes = pet(w, kind), source = api.prepareCharacterImport(w.folder);
   assert.equal(source.resolved.filter(s => s.own).length, 9); assert.equal(source.manifest.license, 'unknown');
+  assert.equal(source.manifest.scale, 0.5, 'a Codex cell draws as 96x104 pt');
   assert.match(api.characterCallout(source), /License: not stated/);
   const installed = api.installCharacter(source, { root: w.root });
   assert.deepEqual(fs.readFileSync(join(installed, `sheet.${kind}`)), bytes);
@@ -138,8 +156,8 @@ for (const [name, bytes, error] of [
   ['duplicate IHDR', Buffer.concat([png().subarray(0, 33), png().subarray(8)]), /duplicate PNG IHDR/],
 ]) test(`refuses PNG ${name}`, () => assert.throws(() => api.imageDimensions(bytes, '.png'), error));
 for (const selector of [['extra'], {}, 1, null, 'constructor', '__proto__']) test(`refuses non-string or unknown state sheet ${JSON.stringify(selector)}`, t => {
-  const w = world(t); w.data.extra = 'extra.webp'; w.put('extra.webp', webp(1536, 3120));
-  w.data.states.click = { sheet: selector, row: 14, frames: 1, ms: 100, loop: false }; w.save();
+  const w = world(t); w.data.extra = 'extra.webp'; w.put('extra.webp', webp(1536, 2288));
+  w.data.states.click = { sheet: selector, row: 10, frames: 1, ms: 100, loop: false }; w.save();
   assert.throws(() => w.load(), /states\.click\.sheet.*sheet or extra/);
 });
 test('CLI refuses unknown license in a source character.json pack', async t => {
@@ -481,12 +499,16 @@ test('total byte and pixel caps cover both sheets and preview', t => {
   const w = world(t); w.data.extra = 'extra.webp'; w.put('extra.webp', webp()); w.save();
   fs.truncateSync(join(w.folder, 'sheet.png'), 8 * 1024 ** 2); fs.truncateSync(join(w.folder, 'extra.webp'), 8 * 1024 ** 2);
   assert.throws(() => w.load(), /entries: total character size exceeds 16 MiB/);
+  // The hand host's caps (cells at most 192x208, sheets at most 1536x2288) keep two sheets and a preview under the 16 MP
+  // budget, so a larger cell or sheet fails first, with the reason the host would give.
   w.put('sheet.png', png(4096, 2080)); w.put('extra.webp', webp(4096, 2080)); w.data.frame.w = 512; w.data.grid.rows = 10; w.save();
-  assert.throws(() => w.load(), /sheet\/extra\/preview: total character pixel budget exceeded/);
+  assert.throws(() => w.load(), /frame: invalid frame dimensions \(cells are at most 192x208\)/);
+  w.put('sheet.png', png(1536, 2288)); w.put('extra.webp', webp(1536, 2496)); w.data.frame = { w: 192, h: 208 }; w.data.grid.rows = 11; w.save();
+  assert.throws(() => w.load(), /"extra\.webp" frame\/grid: sheet too large to draw \(at most 1536x2288\)/);
 });
 
 test('CLI refuses non-TTY without --yes after printing details, accepts --yes, checks, lists and removes', async t => {
-  const w = world(t); let output = ''; const opts = { root: w.root, path: join(w.base, 'hand.json'), out: text => output += text, input: { isTTY: false } };
+  const w = world(t); let output = ''; const opts = { root: w.root, path: join(w.base, 'hand.json'), out: text => output += text, input: { isTTY: false }, built: () => false };
   assert.equal(await cli.cursorCommand(['import', w.folder], opts), 1); assert.match(output, /1 of sleight's 19 moves/); assert.match(output, /--yes/); assert.equal(fs.existsSync(w.root), false);
   assert.equal(await cli.cursorCommand(['import', w.folder, '--yes'], opts), 0); assert.match(output, /Turn it on with sleight-mcp cursor style sprite/);
   assert.equal(await cli.cursorCommand(['check', 'test-cat'], opts), 0); assert.equal(await cli.cursorCommand(['list'], opts), 0);

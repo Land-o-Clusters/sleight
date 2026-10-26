@@ -406,7 +406,9 @@ the file. Its mode must be `600`, and symlinks are refused. Invalid fields make 
 
 Use `sleight-mcp cursor style ring` for the branded ring, `style seam` for plain Split Seam, or `style glove` for the hand.
 `sleight-mcp cursor style sprite <character-id>` selects a character only after its installed files pass validation.
-Until sleight has a sprite renderer, the sprite style draws as the ring. Importing a character leaves its sprite hidden.
+The sprite style draws the character beside the ring. Without a valid installed character the ring draws alone, and the
+relay's trace says why (`hand-sprite-fallback`, or `hand-character-refused` with the host's reason). Importing a character
+leaves its sprite hidden. Once the host is compiled, `cursor check <id>` also runs the hand host's own image checks.
 Every style draws only while the hand is on (`sleight-mcp hand on`). Style changes take effect in a new sleight session
 and keep the hand's on/off setting. `sleight-mcp cursor status` prints whether the hand is on (and why not, such as an
 unsafe file), the style, selected character, stream, labels and host compilation state.

@@ -391,7 +391,7 @@ export async function appleToolsPresent({ run = promisify(execFile), exists = ex
     return ['swiftc', 'clang'].every(tool => ['usr/bin', 'Toolchains/XcodeDefault.xctoolchain/usr/bin'].some(folder => exists(join(dir, folder, tool))));
   } catch { return false; }
 }
-export const handCursorStyles = Object.freeze(['glove', 'ring', 'seam']);
+export const handCursorStyles = Object.freeze(['glove', 'ring', 'seam', 'sprite']);
 export async function prepareHandHost({ cacheRoot = defaultHelperCache(), sourceRoot = sources, compile = compileNative,
   tools = appleToolsPresent, onProgress, signal } = {}) {
   let inventory;
@@ -409,7 +409,29 @@ export async function prepareHandHost({ cacheRoot = defaultHelperCache(), source
     if (!handCursorStyles.includes(cursorStyle)) throw Error('HAND_CURSOR_STYLE_INVALID');
     return spawn(executable('consent-host', receipt), ['--hand', '--capture=' + capture, '--cursor-style=' + cursorStyle, consent ? '--consent' : '--menu'],
       { env: consentEnvironment(), stdio: ['pipe', 'pipe', 'ignore', ...consent ? ['pipe', 'pipe'] : []] });
-  } });
+  }, checkCharacter: frame => checkCharacterInHost(executable('consent-host', receipt), frame) });
+}
+// The live host's own checks for a character frame (hand/character-frame.mjs), through the same sandboxed decode child:
+// { id, loaded, reason, warnings }. `sleight-mcp cursor check` shows the reason the host would draw the ring alone.
+export function checkCharacterInHost(binary, frame, { run = spawn, timeoutMs = 10000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = run(binary, ['--check-character'], { env: consentEnvironment(), stdio: ['pipe', 'pipe', 'ignore'] });
+    let out = '';
+    const timer = setTimeout(() => { child.kill('SIGKILL'); reject(Error('CHARACTER_CHECK_TIMEOUT')); }, timeoutMs);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', chunk => { out += chunk; if (out.length > 4096) child.kill('SIGKILL'); });
+    child.on('error', error => { clearTimeout(timer); reject(error); });
+    child.on('close', code => {
+      clearTimeout(timer);
+      let result;
+      try { result = JSON.parse(out.split('\n')[0]); } catch {}
+      const keys = result && typeof result === 'object' ? Object.keys(result).sort().join() : '';
+      if (code !== 0 || keys !== 'id,loaded,reason,warnings') return reject(Error('CHARACTER_CHECK_FAILED'));
+      resolve(result);
+    });
+    child.stdin.on('error', () => {});
+    child.stdin.end(JSON.stringify(frame) + '\n');
+  });
 }
 
 // The worker's end of the session's shared host: the same consent channel over the fds the relay passed at fork (4 writes to
