@@ -210,6 +210,8 @@ Both use 192 by 208 pixel cells. Other versions, scaled atlases and version/dime
 [Petdex's package docs](https://github.com/crafter-station/petdex#pet-package-format) describe both layouts.
 See [character sharing](character-sharing.md) for importing a local Petdex folder. sleight never fetches a pasted URL.
 
+The row indexes and use of v2's two extra rows below are sleight's existing Codex mapping. Petdex documents the nine
+state names and leaves the extra rows to the consuming client, without specifying these indexes or look directions.
 Codex rows are: idle 0, running-right 1, running-left 2, waving 3, jumping 4, failed 5, waiting 6, running 7, review 8,
 look A 9 and look B 10. Generated anchors are (96,196), and hotspots are (96,104). The generated `codex` object stores
 `{ "spriteVersionNumber": 1, "importedFrom": "original-id" }` for 9 rows, or version 2 for 11 rows. Keep it when adding extra art.

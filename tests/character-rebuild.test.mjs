@@ -35,3 +35,19 @@ test('raster qualification skips unsupported or missing toolchains with a reason
   assert.match(rebuildSkipReason({ platform: 'darwin', run: run('1.6.0', '27.1') }), /untested macOS/);
   assert.equal(rebuildSkipReason({ platform: 'darwin', run: run('1.6.0', '27.0.1') }), false);
 });
+
+test('custom designs reject reserved ids, traversal, unknown styles and existing outputs before rendering', async t => {
+  const base = registerTemp(t, fs.realpathSync(fs.mkdtempSync(join('/tmp', 'sleight-custom-design-'))));
+  const output = join(base, 'output');
+  for (const [id, style, reason] of [['bit', 'anime', /non-built-in/], ['../escape', 'anime', /non-built-in/],
+    ['my-character', 'constructor', /Unknown custom design style/]]) {
+    const design = join(base, 'design-' + Math.random().toString(16).slice(2) + '.mjs');
+    fs.writeFileSync(design, `export default ${JSON.stringify({ id, style })};`);
+    await assert.rejects(buildCast(output, { design }), reason);
+    assert.equal(fs.existsSync(output), false);
+  }
+  fs.mkdirSync(output);
+  const design = join(base, 'existing.mjs'); fs.writeFileSync(design, "export default {id:'my-character',style:'anime'};");
+  await assert.rejects(buildCast(output, { design }), /must be new/);
+  assert.deepEqual(fs.readdirSync(output), []);
+});

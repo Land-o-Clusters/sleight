@@ -4,18 +4,18 @@ import { EventEmitter } from 'node:events';
 import { createHandClient } from '../plugins/sleight/lib/hand/client.mjs';
 const settle = async () => { for (let i = 0; i < 20; i++) await new Promise(resolve => setImmediate(resolve)); };
 function harness(t, apply = async () => ({ ok: true, style: 'ring' }), more = {}) {
-  const lines = [], calls = [], child = new EventEmitter();
+  const lines = [], calls = [], catalogs = [], child = new EventEmitter();
   child.pid = 4242; child.stdout = new EventEmitter(); child.stdin = Object.assign(new EventEmitter(), { writableLength: 0,
     write: s => { lines.push(JSON.parse(s)); return true; }, end() { child.emit('exit', 0); } });
   child.stdio = [child.stdin, child.stdout];
-  const picker = { catalog: async () => ({ rows: [{ title: 'Ring (Split Seam+)', op: 'select', style: 'ring', selected: true }], thumbnails: [] }),
+  const picker = { catalog: async options => { catalogs.push(options); return { rows: [{ title: 'Ring (Split Seam+)', op: 'select', style: 'ring', selected: true }], thumbnails: [] }; },
     apply: async e => { calls.push(e); return apply(e); } };
   const client = createHandClient({ setting: () => ({ enabled: true, style: 'glove' }), permissions: null, usage: null, watch: () => undefined,
     built: () => true, prepare: async () => ({ status: 'ready', spawn: () => child }), cursorPicker: picker, ...more });
   t.after(() => client.close());
   client.send({ kind: 'click', pid: 1, windowId: 1, at: [1, 1] });
   const event = raw => child.stdout.emit('data', JSON.stringify({ hand: 'picker', nonce: lines[0].nonce, ...raw }) + '\n');
-  return { lines, calls, event, client };
+  return { lines, calls, catalogs, event, client };
 }
 test('nonce-bound picker click applies once, switches the running host and refreshes the menu', async t => {
   const h = harness(t); await settle();
@@ -37,8 +37,10 @@ test('import refusal reaches a nonmodal host notice without a style change', asy
 test('refresh is read-only, and wizard callout follows a successful import', async t => {
   const h = harness(t, async () => ({ ok: true, style: 'ring', text: 'This pet needs 11 more animations:\nClick: uses its wave animation' })); await settle();
   h.event({ op: 'refresh' }); await settle(); assert.equal(h.calls.length, 0);
+  assert.equal(h.catalogs.at(-1).open, true);
   h.event({ op: 'import', key: 'b'.repeat(64) }); await settle();
   assert.match(h.lines.find(f => f.op === 'notice').text, /11 more animations/);
+  assert.equal(h.catalogs.at(-1).open, false);
 });
 test('sprite selection sends the style before its validated character, on the shared sequence', async t => {
   const sprite = { manifest: { id: 'cat', frame: { w: 64, h: 64 }, sheet: 'sheet.png', states: {}, scale: 1 }, folder: '/fixture/cat',

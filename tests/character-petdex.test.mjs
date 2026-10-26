@@ -10,7 +10,7 @@ import { prepareCharacterImport, installCharacter, checkCharacter, resolveCharac
 import { characterFrame } from '../plugins/sleight/lib/hand/character-frame.mjs';
 import { cursorCommand } from '../plugins/sleight/lib/hand/cursor-command.mjs';
 
-// Public Petdex README: nine shared state rows, with two direction rows in v2.
+// Petdex documents nine states and two extra v2 rows. sleight uses its existing Codex row mapping.
 // Draw colored squares ourselves. No pet files, images or remote services are used.
 const counts = [6, 8, 8, 4, 5, 8, 6, 6, 6, 8, 8];
 const atlases = new Map();
@@ -74,21 +74,22 @@ test('nine-row movement chooses left or right at every distance; aim and scroll 
   for (const s of imported.resolved.filter(s => !s.own)) assert.ok(callout.includes(`${s.label}: uses its`), s.label);
   assert.match(callout, /Move: uses its running right animation/);
   assert.match(callout, /Aim: uses its resting animation/);
-  assert.match(callout, /no look directions.*Running left or right.*idle while aiming/);
+  assert.match(callout, /no look directions.*running left or right.*idle while aiming/);
   assert.doesNotMatch(callout, /looking up|looking down/);
 });
 
 for (const [version, rows] of [[1, 11], [2, 9], [0, 9], [3, 11], [null, 9], ['1', 9], ['2', 11]]) {
   test(`refuses Petdex version ${JSON.stringify(version)} with ${rows} rows`, t => {
     const w = fixture(t, version, rows);
-    assert.throws(() => prepareCharacterImport(w.source), /spriteVersionNumber|frame\/grid/);
+    assert.throws(() => prepareCharacterImport(w.source), [1, 2].includes(version)
+      ? new RegExp(`Codex v${version} sheet dimensions must be 1536x${version === 1 ? 1872 : 2288}`) : /spriteVersionNumber/);
     assert.equal(fs.existsSync(w.root), false);
   });
 }
 
 test('an omitted version remains v1 and cannot silently reinterpret an 11-row atlas', t => {
   const w = fixture(t, 2); delete w.pet.spriteVersionNumber; w.save();
-  assert.throws(() => prepareCharacterImport(w.source), /frame\/grid: sheet dimensions do not match frame and grid/);
+  assert.throws(() => prepareCharacterImport(w.source), /Codex v1 sheet dimensions must be 1536x1872/);
 });
 
 test('nine-row pet imports retain the common path, file and image validation', t => {
@@ -115,6 +116,29 @@ test('pasted gallery, asset and custom-protocol URLs refuse without fetching or 
     assert.doesNotMatch(output, /ENOENT/);
   }
   assert.equal(calls, 0); assert.equal(fs.existsSync(w.root), false);
+  t.diagnostic('6 pasted URLs refused; fetchCalls=0; installedFolders=0');
+});
+
+test('known schemes without slashes refuse before filesystem lookup', async t => {
+  const w = fixture(t);
+  for (const source of ['mailto:artist@example.invalid', 'https:petdex.dev/pets/example', 'javascript:void(0)', 'blob:example']) {
+    assert.throws(() => prepareCharacterImport(source), /never fetches/);
+    let output = '';
+    assert.equal(await cursorCommand(['import', source, '--yes'], { root: w.root, out: s => output += s }), 1);
+    assert.match(output, /never fetches/); assert.doesNotMatch(output, /ENOENT/);
+  }
+  assert.equal(fs.existsSync(w.root), false);
+});
+
+test('a relative local folder named a:b imports through the CLI', async t => {
+  const w = fixture(t), before = process.cwd();
+  fs.renameSync(w.source, join(w.base, 'a:b'));
+  try {
+    process.chdir(w.base);
+    let output = '';
+    assert.equal(await cursorCommand(['import', 'a:b', '--yes'], { root: w.root, path: join(w.base, 'hand.json'), out: s => output += s }), 0, output);
+    assert.equal(checkCharacter('synthetic-pet', { root: w.root }).manifest.grid.rows, 9);
+  } finally { process.chdir(before); }
 });
 
 test('generated pet atlases reach the existing sandboxed decoder with no windows', { skip: process.platform !== 'darwin' && 'requires macOS' }, async t => {

@@ -243,24 +243,26 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
   };
   point(m.anchor, 'anchor'); point(m.hotspot, 'hotspot');
   if (m.perch?.anchor !== undefined) point(m.perch.anchor, 'perch.anchor');
+  if (m.codex !== undefined) {
+    if (!object(m.codex) || ![1, 2].includes(m.codex.spriteVersionNumber)) fail('Codex spriteVersionNumber must be 1 or 2', 'codex.spriteVersionNumber');
+    text(m.codex.importedFrom, 'codex.importedFrom', 1, 48);
+    unknownKeys(m.codex, ['spriteVersionNumber', 'importedFrom'], 'Codex', warnings);
+  }
   const sheets = Object.create(null); let pixels = 0;
   for (const name of [m.sheet, m.extra, m.perch?.sheet, ...files.has('preview.png') ? ['preview.png'] : []].filter(Boolean)) {
     const dims = imageDimensions(files.get(name), extname(name), name); pixels += dims.width * dims.height;
     if (name === 'preview.png') { if (dims.width > 256 || dims.height > 256) fail('preview dimensions exceed 256', 'dimensions', name); }
     else {
+      if (name === m.sheet && m.codex) {
+        const height = m.codex.spriteVersionNumber === 1 ? 1872 : 2288;
+        if (dims.width !== 1536 || dims.height !== height || m.frame.w !== 192 || m.frame.h !== 208) fail(`Codex v${m.codex.spriteVersionNumber} sheet dimensions must be 1536x${height}`, 'codex/frame/grid', name);
+      }
       if (dims.width !== m.grid.cols * m.frame.w || dims.height % m.frame.h || name === m.sheet && dims.height !== m.grid.rows * m.frame.h) fail('sheet dimensions do not match frame and grid', 'frame/grid', name);
       if (dims.width > 1536 || dims.height > 2288) fail('sheet too large to draw (at most 1536x2288)', 'frame/grid', name);
       sheets[name === m.sheet ? 'sheet' : name === m.extra ? 'extra' : 'perch'] = { name, rows: dims.height / m.frame.h, ...dims };
     }
   }
   if (pixels > CHARACTER_LIMITS.pixels) fail('total character pixel budget exceeded', 'sheet/extra/preview');
-  if (m.codex !== undefined) {
-    if (!object(m.codex) || ![1, 2].includes(m.codex.spriteVersionNumber)) fail('Codex spriteVersionNumber must be 1 or 2', 'codex.spriteVersionNumber');
-    const height = m.codex.spriteVersionNumber === 1 ? 1872 : 2288;
-    if (sheets.sheet.width !== 1536 || sheets.sheet.height !== height || m.frame.w !== 192 || m.frame.h !== 208) fail(`Codex v${m.codex.spriteVersionNumber} sheet dimensions must be 1536x${height}`, 'codex/frame/grid');
-    text(m.codex.importedFrom, 'codex.importedFrom', 1, 48);
-    unknownKeys(m.codex, ['spriteVersionNumber', 'importedFrom'], 'Codex', warnings);
-  }
   if (!object(m.states) || !object(m.states.idle) || m.states.idle.row === undefined) fail('idle animation is required', 'states.idle');
   for (const [name, s] of Object.entries(m.states)) {
     if (!names.includes(name)) { warnings.push('Unknown state ignored.'); delete m.states[name]; continue; }
@@ -481,8 +483,12 @@ export function builtinCharacterDoctorLines(options) {
   });
 }
 
+export function refuseUrlSource(source) {
+  if (typeof source === 'string' && /^(?:[a-z][a-z0-9+.-]*:\/\/|(?:https?|ftps?|sftp|file|data|mailto|tel|sms|urn|about|javascript|blob|petdex|codex):)/i.test(source.trim())) fail('sleight never fetches character URLs; download the files yourself and import their local folder', 'source');
+}
+
 export function prepareCharacterImport(folder, { uid = process.getuid(), shared = false } = {}) {
-  if (typeof folder === 'string' && /^[a-z][a-z0-9+.-]*:/i.test(folder.trim())) fail('sleight never fetches character URLs; download the files yourself and import their local folder', 'source');
+  refuseUrlSource(folder);
   folder = fileOperation(folder, 'source', () => fs.realpathSync(folder));
   const snap = snapshot(folder, uid);
   if (snap.files.has('character.json')) {
@@ -592,7 +598,7 @@ export function characterCallout(character, { installed = false } = {}) {
   });
   return [own === resolved.length ? `This ${noun} has its own animation for all ${own} of sleight's moves.`
     : `This ${noun} has its own animation for ${own} of sleight's ${resolved.length} moves. To animate all of them it needs ${resolved.length - own} more:`,
-    ...missing, ...m.codex?.spriteVersionNumber === 1 ? ['The original 9-row atlas has no look directions. Without extra art it uses Running left or right while moving and idle while aiming.'] : [],
+    ...missing, ...m.codex?.spriteVersionNumber === 1 ? ['The original 9-row atlas has no look directions. Without extra art it uses running left or right while moving and idle while aiming.'] : [],
     `Character: ${m.name}`, `Size: ${total} bytes`, `License: ${m.license === 'unknown' ? 'not stated' : m.license}`,
     ...warnings.map(w => `Warning: ${w}`), ...installed ? [] : ['Your source files are not changed. sleight copies them.'],
     'To add animations, draw an extra.webp sheet; see docs/design/character-format.md.'].join('\n') + '\n';
