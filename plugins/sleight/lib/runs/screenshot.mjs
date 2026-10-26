@@ -10,7 +10,7 @@ export async function downscaleScreenshot(image) {
   try {
     if (typeof image.data !== 'string' || image.data.length > 24 * 1024 * 1024 || !/^[A-Za-z0-9+/]+={0,2}$/.test(image.data)) return;
     const input = Buffer.from(image.data, 'base64');
-    if (input.toString('base64') !== image.data || input.length > 16 * 1024 * 1024) return;
+    if (input.length > 16 * 1024 * 1024) return;
     // Bound decoding before handing the bytes to the system image converter.
     let dimensions;
     if (image.mimeType === 'image/png' && input.length >= 24 && input.subarray(0, 8).toString('hex') === '89504e470d0a1a0a' && input.toString('ascii', 12, 16) === 'IHDR')

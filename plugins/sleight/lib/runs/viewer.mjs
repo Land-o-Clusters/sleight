@@ -5,10 +5,12 @@ const json = value => JSON.stringify(value).replace(/</g, '\\u003c').replace(/&/
 /** The same pure timeline reducer runs in Node tests and in the exported page. No capture, network or voice synthesis. */
 export function replayFrame(records, index) {
   const end = Math.min(records.length - 1, Math.max(0, index));
-  let shot, event, narration = '', status = '', sequence = 0, gaps = 0;
+  let shot, event, narration = '', status = '', sequence = 0, gaps = 0, stopped = '', losses = '';
   for (let i = 0; i <= end; i++) {
     const row = records[i];
     if (row.v === 'sleight.run/1' && row.type === 'screenshot') shot = row;
+    if (row.v === 'sleight.run/1' && row.type === 'recording' && row.state === 'stopped') stopped = row.reason;
+    if (row.v === 'sleight.run/1' && row.type === 'gap') losses = `${row.events} queued records dropped; ${row.screenshots} screenshots skipped.`;
     if (row.v === 'sleight.cursor/1') {
       if (sequence && row.seq > sequence + 1) gaps += row.seq - sequence - 1;
       sequence = row.seq;
@@ -23,7 +25,9 @@ export function replayFrame(records, index) {
     event.window?.id === shot?.window?.id && shot?.window?.id > 0 && ['aim', 'act', 'done'].includes(event.phase) &&
     shot.image?.width > 0 && shot.image?.height > 0 && Math.abs((shot.image.width / shot.image.height) / (bounds[2] / bounds[3]) - 1) <= 0.03;
   const xy = mapped ? [(point[0] - bounds[0]) / bounds[2] * 100, (point[1] - bounds[1]) / bounds[3] * 100] : undefined;
-  return { shot, event, narration, status, gaps, point: xy?.every(n => n >= 0 && n <= 100) ? xy : undefined };
+  if (!stopped && end === records.length - 1 && records.length && !records.some(row => row.type === 'session' && row.state === 'end'))
+    stopped = 'no session end received (interrupted, disabled, cleared or writer unavailable)';
+  return { shot, event, narration, status, gaps, stopped, losses, point: xy?.every(n => n >= 0 && n <= 100) ? xy : undefined };
 }
 
 // The page uses DOM text nodes for every recorded string. Only the checked JPEG data becomes a resource URL.
@@ -48,7 +52,8 @@ function player() {
     text('narration', frame.narration);
     text('notice', !valid ? 'No screenshot recorded at this point.' : !frame.point ? 'No matching screen geometry. Cursor point is unavailable.' :
       'Cursor points use the recorded window geometry. Scheduled points are predictions.');
-    text('gaps', frame.gaps ? `${frame.gaps} cursor events missing before this point.` : '');
+    text('gaps', [frame.gaps ? `${frame.gaps} cursor events missing before this point.` : '', frame.losses].filter(Boolean).join(' '));
+    text('stopped', frame.stopped ? `Recording stopped: ${frame.stopped}.` : '');
     text('shot-time', frame.shot ? `Screenshot +${((frame.shot.ts - records[0].ts) / 1000).toFixed(2)} s. Images are snapshots between actions.` : '');
   }
   slider.addEventListener('input', draw);
@@ -86,15 +91,16 @@ export function buildRunHTML(records) {
 <button id="previous" type="button">Previous</button><button id="next" type="button">Next</button>
 <output id="position"></output><p id="event"></p><p id="narration" aria-live="polite"></p>
 <div id="stage"><img id="screenshot" alt="Recorded app screenshot" hidden><span id="ring" aria-hidden="true" hidden></span></div>
-<p id="notice"></p><p><small id="shot-time"></small></p><p id="gaps"></p>
+<p id="notice"></p><p><small id="shot-time"></small></p><p id="gaps"></p><p id="stopped"></p>
 <p><small>Orange #ff7a3d and blue #5b8dff are Split Seam+ colors. Dashed: aim. Tight: act. Faded: done.</small></p>`);
 }
 
-export function buildRunsHTML(rows) {
+export function buildRunsHTML(rows, skipped = []) {
   function listing() {
-    const rows = JSON.parse(document.getElementById('run-data').textContent), list = document.getElementById('runs');
+    const { rows, skipped } = JSON.parse(document.getElementById('run-data').textContent), list = document.getElementById('runs');
     for (const row of rows) { const li = document.createElement('li'); li.textContent = `${row.id} (${row.bytes} bytes). Open: sleight-mcp runs open ${row.id}`; list.append(li); }
     if (!rows.length) list.textContent = 'No recordings. Recording is off by default.';
+    document.getElementById('skipped').textContent = skipped.length ? `Skipped ${skipped.length} unsafe entries: ` + skipped.map(row => `${row.name}: ${row.reason}`).join('; ') : '';
   }
-  return documentHTML(rows, '(' + listing.toString() + ')();', '<p>Run the open command for a recording to build its replay.</p><ul id="runs"></ul>');
+  return documentHTML({ rows, skipped }, '(' + listing.toString() + ')();', '<p>Run the open command for a recording to build its replay.</p><ul id="runs"></ul><p id="skipped"></p>');
 }

@@ -4,6 +4,13 @@ import { PassThrough } from 'node:stream';
 import { performance } from 'node:perf_hooks';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { createRelayHand } from '../plugins/sleight/lib/hand/relay-hand.mjs';
+import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
+import { existsSync, mkdtempSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { registerTemp } from '../scripts/temp-leftovers.mjs';
+import { createCursorEvents } from '../plugins/sleight/lib/hand/events.mjs';
+import { createRunRecorder } from '../plugins/sleight/lib/runs/store.mjs';
 
 const TREE = 'Window: "Calculator", App: Calculator.\n0 standard window Calculator\n\t1 button Description: 7, ID: Seven\n\t2 button Description: 8, ID: Eight';
 // A PNG header for a 464×640-pixel screenshot of a 232×320-point window.
@@ -47,6 +54,19 @@ const read = async h => {
   await settle();
 };
 
+function pixelWriter(t) {
+  const directory = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-run-pixels-')))), root = join(directory, 'runs');
+  const captures = [], r = createRunRecorder({ root, encode: async () => ({ mimeType: 'image/jpeg', data: '/9j/2Q==', width: 1, height: 1 }) });
+  const cursor = { status() {}, close() {}, screenshot(content) {
+    captures.push(content);
+    r.write({ v: 'sleight.cursor/1', session: 'a'.repeat(32), ts: Date.now(), seq: 1, type: 'session', state: 'start' });
+    r.screenshot(content);
+  } };
+  return { cursor, captures, async assertEmpty() {
+    await r.close(); assert.equal(captures.length, 0); assert.equal(r.stats().bytes, 0); assert.equal(existsSync(root), false);
+  } };
+}
+
 test('run recording receives existing native and local screenshot pixels without another engine request', async () => {
   const captures = [], cursor = { status() {}, close() {}, screenshot: (content, detail) => { if (content?.some(i => i.type === 'image')) captures.push({ content, detail }); } };
   const localImage = { type: 'image', mimeType: 'image/png', data: png(100, 50) };
@@ -67,6 +87,42 @@ test('a broken optional screenshot recorder cannot lose the native reply', async
   await read(h);
   assert.equal(h.toClient.at(-1).id, 1); assert.equal(h.toClient.at(-1).result.content.some(i => i.type === 'image'), true);
   h.relay.close();
+});
+
+for (const [kind, app, appId] of [
+  ['blocked-app', 'Alias', 'com.example.blocked'], ['blocked-site', 'Safari', 'com.apple.Safari'],
+  ['own-host', 'consent-host', undefined], ['auth-sheet', 'coreautha', 'com.apple.LocalAuthentication.UIAgent'],
+  ['password-sheet', 'SecurityAgent', 'com.apple.SecurityAgent'],
+]) test(`recording writes no pixels from a withheld ${kind} reply`, async t => {
+  const directory = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-run-privacy-'))), writer = pixelWriter(t);
+  const h = harness({ inputLease: new InputLease({ directory, holder: kind }),
+    permissions: { app: ({ bundleId }) => bundleId === 'com.example.blocked' ? 'Blocked app.' : undefined,
+      sitesLimited: () => kind === 'blocked-site', page: () => 'Blocked site.' }, webBrowser: () => true,
+    cursor: writer.cursor });
+  js(h, 1, 'let app = await cua.getApp({ windowId: 9 })'); await settle();
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: {
+    content: [{ type: 'text', text: `Window: "Private", App: ${app}.\n0 standard window Private\n\t1 HTML content URL: https://blocked.invalid/` },
+      { type: 'image', mimeType: 'image/png', data: png(100, 50) }],
+    _meta: { 'codex/toolSurface': { app: { appId } } } } });
+  await settle();
+  assert.equal(h.toClient.at(-1).result.isError, true);
+  assert.equal(h.toClient.at(-1).result.content.some(i => i.type === 'image'), false);
+  await writer.assertEmpty(); h.relay.close();
+});
+
+test('recording writes no pixels from an automatic helper probe', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const writer = pixelWriter(t), h = harness({ cursor: writer.cursor });
+  for (const id of [1, 2]) {
+    js(h, id, 'let app = await cua.getApp("Calculator")'); await settle();
+    h.fromServer({ jsonrpc: '2.0', id, result: { isError: true, content: [{ type: 'text', text: 'timeoutReached' }] } }); await settle();
+  }
+  t.mock.timers.tick(20000); await settle();
+  const probe = h.toServer.at(-1); assert.match(String(probe.id), /^sleight-helper-/);
+  h.fromServer({ jsonrpc: '2.0', id: probe.id, result: { content: [{ type: 'text', text: TREE },
+    { type: 'image', mimeType: 'image/png', data: png(464, 640) }] } }); await settle();
+  assert.equal(h.toClient.some(m => m.id === probe.id), false);
+  await writer.assertEmpty(); h.relay.close();
 });
 
 function recorder() {
@@ -122,30 +178,32 @@ test('end to end, an admitted click(N) becomes one frame at the element, after t
   assert.deepEqual(sent.map(f => [f.kind, f.pid, f.windowId, f.at]), [['click', 900, 31, [630, 320]], ['click', 900, 31, [658, 180]]]);
 });
 
-// Admission cost: time from the client's line to the engine receiving it, hand off against on (a fake client and an
-// instant locate, so the deferred planning runs on the same event loop between calls). Also the synchronous cost of admit.
-test('the hand adds under 1 ms to admission', async t => {
-  const N = 300;
-  async function measure(hand) {
-    const h = harness(hand ? { hand } : {});
-    await read(h);
-    const admission = [], roundTrip = [];
-    for (let i = 0; i < N; i++) {
-      const id = 100 + i, code = i % 2 ? 'await app.click(1); await app.typeText("7")' : 'await app.click([116, 160])';
-      const received = h.nextServer();
-      const start = performance.now();
-      js(h, id, code);
-      const msg = await received;
-      admission.push(msg.receivedAt - start);
-      h.fromServer({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: TREE }] } });
-      await settle();
-      roundTrip.push(performance.now() - start);
-    }
-    h.relay.close();
-    const median = list => [...list].sort((a, b) => a - b)[Math.floor(list.length / 2)];
-    const p95 = list => [...list].sort((a, b) => a - b)[Math.floor(list.length * 0.95)];
-    return { median: median(admission), p95: p95(admission), roundTrip: median(roundTrip) };
+// Admission cost: time from the client's line to the engine receiving it, with deferred work between calls.
+async function measureAdmission(options = {}, N = 300) {
+  const h = harness(options);
+  await read(h);
+  const admission = [], roundTrip = [];
+  for (let i = 0; i < N; i++) {
+    const id = 100 + i, code = i % 2 ? 'await app.click(1); await app.typeText("7")' : 'await app.click([116, 160])';
+    const received = h.nextServer();
+    const start = performance.now();
+    js(h, id, code);
+    const msg = await received;
+    admission.push(msg.receivedAt - start);
+    h.fromServer({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: TREE }] } });
+    await settle();
+    roundTrip.push(performance.now() - start);
+    // Drain outside the measured call; the fake engine otherwise outpaces disk by thousands of calls per second.
+    await options.cursor?.flushRecording?.();
   }
+  await h.relay.close();
+  const median = list => [...list].sort((a, b) => a - b)[Math.floor(list.length / 2)];
+  const p95 = list => [...list].sort((a, b) => a - b)[Math.floor(list.length * 0.95)];
+  return { median: median(admission), p95: p95(admission), roundTrip: median(roundTrip) };
+}
+
+test('the hand adds under 1 ms to admission', async t => {
+  const N = 300, measure = hand => measureAdmission(hand ? { hand } : {});
   const sent = [];
   const makeHand = () => createRelayHand({ client: { enabled: true, send: f => sent.push(f), hide() {}, close() {} }, env: { SLEIGHT_HAND: '1' }, setting: () => ({ enabled: true }), locate: async () => GEOMETRY });
   await measure(); await measure(makeHand()); // warm both paths
@@ -168,4 +226,26 @@ test('the hand adds under 1 ms to admission', async t => {
     `round trip median off ${off.roundTrip.toFixed(3)}, on ${on.roundTrip.toFixed(3)}; hand.admit ${admitUs.toFixed(2)} µs`);
   assert.ok(on.median - off.median < 1, `admission ${on.median} ms with the hand against ${off.median} ms without`);
   assert.ok(admitUs < 50, `admit took ${admitUs} µs`);
+});
+
+test('recording on versus off admission cost with the existing relay harness', async t => {
+  const directory = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-run-cost-'))));
+  let lookups = 0;
+  const make = enabled => {
+    const setting = () => ({ record_runs: enabled }), writers = [];
+    const cursor = createCursorEvents({ env: {}, setting, recorder: options => {
+      const r = createRunRecorder({ ...options, root: join(directory, 'runs') }); writers.push(r); return r;
+    } });
+    const hand = createRelayHand({ env: {}, setting, events: cursor, locate: async () => { lookups++; return GEOMETRY; } });
+    return { options: { hand, cursor }, writers };
+  };
+  await measureAdmission(make(false).options); await measureAdmission(make(true).options);
+  const off = make(false), offTime = await measureAdmission(off.options);
+  const on = make(true), onTime = await measureAdmission(on.options);
+  assert.equal(lookups, 0); assert.equal(off.writers.length, 0); assert.equal(on.writers.length, 1);
+  assert.ok(on.writers[0].stats().bytes > 0);
+  t.diagnostic(`recording admission 300/side: median off ${offTime.median.toFixed(3)} ms, on ${onTime.median.toFixed(3)} ms; ` +
+    `p95 off ${offTime.p95.toFixed(3)} ms, on ${onTime.p95.toFixed(3)} ms; round trip median off ${offTime.roundTrip.toFixed(3)} ms, on ${onTime.roundTrip.toFixed(3)} ms; ` +
+    `0 geometry lookups; ${on.writers[0].stats().bytes} bytes written, ${on.writers[0].stats().dropped} records dropped`);
+  assert.ok(onTime.median - offTime.median < 1);
 });

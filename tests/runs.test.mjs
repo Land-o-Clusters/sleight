@@ -1,18 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { Script, runInNewContext } from 'node:vm';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 import { createRunRecorder, clearRuns, listRuns, readRun, pruneRuns, runIdValid, RUN_BYTES, RETENTION_MS, SHOT_BYTES } from '../plugins/sleight/lib/runs/store.mjs';
 import { downscaleScreenshot } from '../plugins/sleight/lib/runs/screenshot.mjs';
 import { buildRunHTML, buildRunsHTML, replayFrame } from '../plugins/sleight/lib/runs/viewer.mjs';
 import { runsCommand } from '../plugins/sleight/lib/runs/command.mjs';
+import { startRunRetention } from '../plugins/sleight/lib/runs/retention.mjs';
 import { createCursorEvents } from '../plugins/sleight/lib/hand/events.mjs';
 import { handSetting, readHandConfig } from '../plugins/sleight/lib/hand/settings.mjs';
 import { writeHandSetting } from '../plugins/sleight/lib/hand/command.mjs';
@@ -60,7 +62,8 @@ test('writer bounds the pending queue at 256 and exposes drop count', async t =>
   const { root } = world(t), r = record(root);
   for (let seq = 1; seq <= 300; seq++) r.write(event({ seq }));
   assert.equal(r.stats().pending, 256); assert.equal(r.stats().dropped, 44);
-  await r.close(); assert.equal((await readRun(id, { root })).length, 256);
+  await r.close(); const rows = await readRun(id, { root }); assert.equal(rows.length, 257);
+  assert.match(replayFrame(rows, rows.length - 1).losses, /44 queued records dropped/);
 });
 test('retention deletes expired runs oldest first and keeps the boundary day and unrelated files', async t => {
   const { root } = world(t); mkdirSync(root, { mode: 0o700 });
@@ -70,13 +73,81 @@ test('retention deletes expired runs oldest first and keeps the boundary day and
   writeFileSync(join(root, 'owner.txt'), 'keep');
   const midnight = Date.parse('2026-10-26');
   assert.equal(await pruneRuns({ root, now: midnight }), 2);
-  assert.deepEqual((await listRuns({ root })).map(r => r.id), [id, ids[2]]);
+  assert.deepEqual((await listRuns({ root, now: midnight })).map(r => r.id), [id, ids[2]]);
   assert.equal(readFileSync(join(root, 'owner.txt'), 'utf8'), 'keep');
 });
 test('recording startup prunes expired files before writing', async t => {
   const { root } = world(t); mkdirSync(root, { mode: 0o700 });
   writeFileSync(join(root, '2026-01-01-' + session + '.jsonl'), '\n', { mode: 0o600 });
   const r = record(root); r.write(event()); await r.close(); assert.deepEqual((await listRuns({ root })).map(r => r.id), [id]);
+});
+
+test('relay retention sweeps at startup and when recording is turned off while idle', async t => {
+  const { dir, root } = world(t); mkdirSync(root, { mode: 0o700 });
+  const config = join(dir, 'hand.json'), expired = join(root, '2026-01-01-' + session + '.jsonl');
+  writeFileSync(config, '{"version":1,"enabled":false,"record_runs":true}', { mode: 0o600 });
+  writeFileSync(expired, '\n', { mode: 0o600 });
+  const retention = startRunRetention({ root, config, now: () => now, onError: error => assert.fail(error) });
+  t.after(() => retention.close()); await retention.ready; assert.deepEqual(await readdir(root), []);
+  writeFileSync(expired, '\n', { mode: 0o600 });
+  writeFileSync(config, '{"version":1,"enabled":false,"record_runs":false}');
+  for (let n = 0; n < 100 && (await readdir(root)).length; n++) await new Promise(resolve => setTimeout(resolve, 5));
+  await retention.flush(); assert.deepEqual(await readdir(root), []); await retention.close();
+});
+
+test('mixed unsafe files are reported while recording, listing and clearing safe runs continue', async t => {
+  const { dir, root } = world(t); mkdirSync(root, { mode: 0o700 });
+  const bad = n => `2026-10-26-${String(n).padStart(32, '0')}.jsonl`;
+  const outside = join(dir, 'outside'); writeFileSync(outside, 'private', { mode: 0o600 });
+  writeFileSync(join(root, bad(1)), '\n', { mode: 0o644 });
+  linkSync(outside, join(root, bad(2))); symlinkSync(outside, join(root, bad(3)));
+  writeFileSync(join(root, bad(4)), '', { mode: 0o600 }); truncateSync(join(root, bad(4)), RUN_BYTES + 1);
+  const skipped = [], r = record(root); r.write(event()); await r.close();
+  assert.equal(r.stats().stopped, false);
+  assert.deepEqual((await listRuns({ root, now, onSkip: row => skipped.push(row) })).map(r => r.id), [id]);
+  assert.deepEqual(skipped.map(r => r.name).sort(), [1, 2, 3, 4].map(bad));
+  const lines = [], options = { root, now, temp: dir, open() {}, out: line => lines.push(line) };
+  assert.equal(await runsCommand(['list'], options), 0);
+  assert.ok(lines.join('').includes('Skipped 4')); lines.length = 0;
+  assert.equal(await runsCommand(['clear'], options), 0);
+  assert.match(lines.join(''), /Removed 1 recordings/); assert.match(lines.join(''), /Skipped 4/);
+  assert.deepEqual((await readdir(root)).sort(), [1, 2, 3, 4].map(bad));
+  assert.equal(readFileSync(outside, 'utf8'), 'private');
+});
+
+test('list and open sweep expired files, and list enforces a 200 MiB oldest-first bank cap', async t => {
+  const { root } = world(t); mkdirSync(root, { mode: 0o700 });
+  const old = '2026-01-01-' + session;
+  writeFileSync(join(root, old + '.jsonl'), '\n', { mode: 0o600 });
+  await assert.rejects(readRun(old, { root, now })); assert.deepEqual(await readdir(root), []);
+  for (let n = 0; n < 41; n++) {
+    const path = join(root, '2026-10-26-' + n.toString(16).padStart(32, '0') + '.jsonl');
+    writeFileSync(path, '', { mode: 0o600 }); truncateSync(path, RUN_BYTES);
+  }
+  const rows = await listRuns({ root, now });
+  assert.equal(rows.length, 40); assert.equal(rows.reduce((n, r) => n + r.bytes, 0), 200 * 1024 * 1024);
+  assert.equal(rows.some(r => r.id.endsWith('0'.repeat(32))), false);
+});
+
+test('file size stop is recorded so the viewer explains why recording ended', async t => {
+  const { root } = world(t), r = record(root);
+  for (let seq = 1; seq <= 100; seq++) r.write(event({ seq, say: 'x'.repeat(64000) }));
+  await r.close(); const rows = await readRun(id, { root, now });
+  assert.equal(rows.at(-1).type, 'recording'); assert.equal(rows.at(-1).state, 'stopped');
+  assert.match(replayFrame(rows, rows.length - 1).stopped, /size/);
+});
+
+test('appending a recording prunes the oldest file before the bank exceeds 200 MiB', async t => {
+  const { root } = world(t); mkdirSync(root, { mode: 0o700 });
+  const oldest = '2026-10-25-' + '0'.repeat(32);
+  for (let n = 0; n < 40; n++) {
+    const path = join(root, (n ? '2026-10-26-' + n.toString(16).padStart(32, '0') : oldest) + '.jsonl');
+    writeFileSync(path, '', { mode: 0o600 }); truncateSync(path, RUN_BYTES);
+  }
+  const r = record(root); r.write(event()); await r.close();
+  const rows = await listRuns({ root, now });
+  assert.equal(rows.length, 40); assert.ok(rows.reduce((sum, row) => sum + row.bytes, 0) <= 200 * 1024 * 1024);
+  assert.equal(rows.some(row => row.id === oldest), false); assert.equal(r.stats().stopped, false);
 });
 test('screenshots are embedded once with known native geometry and bounded conversion queue', async t => {
   const { root } = world(t), r = record(root);
@@ -86,6 +157,7 @@ test('screenshots are embedded once with known native geometry and bounded conve
   assert.equal(rows.filter(r => r.type === 'screenshot').length, 2);
   assert.deepEqual(rows[1].window, { id: 7, rect: [100, 200, 200, 100] });
   assert.deepEqual(rows[1].image, shot); assert.equal(rows[1].v, 'sleight.run/1');
+  assert.match(replayFrame(rows, rows.length - 1).losses, /2 screenshots skipped/);
 });
 test('screenshots without safe geometry retain pixels without claiming a mapping', async t => {
   const { root } = world(t), r = record(root); r.write(action()); r.screenshot(content, { source: 'turbo', windowId: 7 });
@@ -93,7 +165,8 @@ test('screenshots without safe geometry retain pixels without claiming a mapping
 });
 test('oversized screenshot and failed conversions leave event recording intact', async t => {
   const { root } = world(t), r = record(root, { encode: async () => ({ ...shot, data: Buffer.alloc(SHOT_BYTES + 1).toString('base64') }) });
-  r.write(event()); r.screenshot(content); await r.close(); assert.equal((await readRun(id, { root })).length, 1);
+  r.write(event()); r.screenshot(content); await r.close(); const rows = await readRun(id, { root });
+  assert.equal(rows.length, 2); assert.equal(rows.at(-1).screenshots, 1);
 });
 test('off during a pending conversion prevents pixels from being saved', async t => {
   const { root } = world(t); let enabled = true, release, began;
@@ -111,7 +184,7 @@ test('bank and files refuse symlinks, wrong modes and hardlinks', async t => {
   const { dir, root } = world(t); mkdirSync(root, { mode: 0o700 });
   const target = join(dir, 'outside'); writeFileSync(target, 'private', { mode: 0o600 });
   symlinkSync(target, join(root, id + '.jsonl'));
-  await assert.rejects(readRun(id, { root })); await assert.rejects(clearRuns({ root }));
+  await assert.rejects(readRun(id, { root })); assert.equal(await clearRuns({ root }), 0);
   assert.equal(readFileSync(target, 'utf8'), 'private');
   await rm(join(root, id + '.jsonl')); chmodSync(root, 0o755); await assert.rejects(listRuns({ root }), /RUNS_UNSAFE/);
   chmodSync(root, 0o700); writeFileSync(join(root, id + '.jsonl'), '\n', { mode: 0o644 }); await assert.rejects(readRun(id, { root }), /RUNS_UNSAFE/);
@@ -160,26 +233,28 @@ test('off recording never constructs a writer, and opting in later includes sess
   enabled = true; time += 250; cursor.status('done'); cursor.close();
   assert.equal(factories, 1); assert.equal(rows[0].state, 'start'); assert.equal(rows[1].state, 'done');
 });
-test('native and turbo plan record-only events without loading or drawing a host', async t => {
+test('native and turbo record-only events use no host, geometry, page metrics or box reads', async t => {
   const { root } = world(t), r = record(root), setting = () => ({ record_runs: true });
   const cursor = createCursorEvents({ env: {}, setting, recorder: () => r, now: () => now });
   const geometry = { ok: true, window: { pid: 42, windowId: 7, bounds: { X: 0, Y: 0, Width: 500, Height: 400 } },
     windows: [{ id: 7, pid: 42, bounds: { X: 0, Y: 0, Width: 500, Height: 400 } }], displays: [{ X: 0, Y: 0, Width: 1000, Height: 800 }],
     elements: { 1: { X: 10, Y: 10, Width: 20, Height: 20 } } };
   const noHost = () => { assert.fail('host loaded'); };
-  const hand = createRelayHand({ env: {}, events: cursor, setting, loadClient: noHost, now: () => 0, locate: async () => geometry });
+  let lookups = 0;
+  const extraRead = async () => { lookups++; return geometry; };
+  const hand = createRelayHand({ env: {}, events: cursor, setting, loadClient: noHost, now: () => 0, locate: extraRead });
   hand.admit(1, { code: 'await app.click(1)', lines: { 1: 'button Description: Save' }, target: { app: 'Editor' } });
   for (let i = 0; i < 12; i++) await new Promise(resolve => setImmediate(resolve));
   hand.result(1, false);
-  const browser = createBrowserHand({ env: {}, events: cursor, setting, loadClient: noHost, locate: async () => geometry,
-    readMetrics: async () => ({ screenX: 0, screenY: 0, outerWidth: 500, outerHeight: 400, innerWidth: 500, innerHeight: 400, dpr: 1, visible: true }) });
-  const token = browser.step({ op: 'click', page: {}, locator: { boundingBox: async () => ({ x: 5, y: 5, width: 10, height: 10 }) } });
+  const browser = createBrowserHand({ env: {}, events: cursor, setting, loadClient: noHost, locate: extraRead, readMetrics: extraRead });
+  const token = browser.step({ op: 'click', page: {}, locator: { boundingBox: extraRead } });
   browser.finish(token);
   for (let i = 0; i < 12; i++) await new Promise(resolve => setImmediate(resolve));
   hand.close(); browser.close(); cursor.close(); await r.close();
   const rows = await readRun(r.stats().id, { root });
   assert.ok(rows.some(row => row.type === 'action' && row.source === 'native' && row.phase === 'done'));
   assert.ok(rows.some(row => row.type === 'action' && row.source === 'turbo' && row.phase === 'done'));
+  assert.equal(lookups, 0); assert.equal(rows.some(row => row.point), false);
 });
 test('replay maps global points into screenshot percentages and carries label/narration without voice', () => {
   const rows = [event(), { v: 'sleight.run/1', type: 'screenshot', ts: now, window: { id: 7, rect: [100, 200, 200, 100] }, image: shot }, action({ seq: 4, say: 'Done', label: 'button' })];
@@ -208,7 +283,7 @@ test('inline player scrubs through images and phases with text-only narration in
   const rows = [event(), { v: 'sleight.run/1', type: 'screenshot', ts: now, window: { id: 7, rect: [100, 200, 200, 100] }, image: shot },
     action({ phase: 'aim', label: 'button', say: '<img src=x onerror=steal()>' }), action({ phase: 'act' }), action({ phase: 'done' })];
   const html = buildRunHTML(rows), elements = new Map();
-  for (const id of ['run-data', 'timeline', 'screenshot', 'ring', 'position', 'event', 'narration', 'notice', 'gaps', 'shot-time', 'previous', 'next'])
+  for (const id of ['run-data', 'timeline', 'screenshot', 'ring', 'position', 'event', 'narration', 'notice', 'gaps', 'stopped', 'shot-time', 'previous', 'next'])
     elements.set(id, { textContent: '', value: '0', style: {}, dataset: {}, listeners: {}, addEventListener(name, fn) { this.listeners[name] = fn; }, removeAttribute(name) { delete this[name]; } });
   elements.get('run-data').textContent = JSON.stringify(rows);
   const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1];
@@ -249,8 +324,13 @@ test('person gate admits exact list/open forms and requires a terminal for clear
 });
 test('shell guard allows literal run reads and refuses clear, extra args and opaque shell forms', async () => {
   const denied = command => preapprovedWriteDenied({ tool: 'Bash', command }, { stat: async path => ({ realPath: path }) });
-  for (const cmd of ['sleight-mcp runs list', `sleight-mcp runs open ${id}`, `node plugins/sleight/lib/launch.mjs runs open ${id}`]) assert.equal(await denied(cmd), false, cmd);
-  for (const cmd of ['sleight-mcp runs clear', 'sleight-mcp runs list extra', 'sleight-mcp runs open ../x', 'sleight-mcp runs "$OP"', 'B=sleight-mcp; $B runs clear', 'echo clear | xargs sleight-mcp runs', 'sh -c "sleight-mcp runs clear"']) assert.equal(await denied(cmd), true, cmd);
+  for (const cmd of ['sleight-mcp runs list', `sleight-mcp runs open ${id}`, `node plugins/sleight/lib/launch.mjs runs open ${id}`,
+    'git commit -m "launch.mjs runs fast"', 'git commit -m "sleight-mcp runs fast"']) assert.equal(await denied(cmd), false, cmd);
+  for (const cmd of ['sleight-mcp runs clear', 'sleight-mcp runs list extra', 'sleight-mcp runs open ../x', 'sleight-mcp runs "$OP"',
+    'B=sleight-mcp; $B runs clear', 'echo clear | xargs sleight-mcp runs', 'sh -c "sleight-mcp runs clear"',
+    "sleight-mcp runs'' clear", 'sleight-mcp ru""ns clear', 'nohup sleight-mcp runs clear',
+    'sleight-mcp runs list && sleight-mcp runs clear', 'sleight-mcp runs list; sleight-mcp runs clear',
+    'echo clear | sleight-mcp runs', 'sleight-mcp runs list > /tmp/replay-index']) assert.equal(await denied(cmd), true, cmd);
 });
 test('actual launcher routes malformed runs commands to usage and refuses headless clear', () => {
   const launcher = new URL('../plugins/sleight/lib/launch.mjs', import.meta.url);
@@ -277,4 +357,39 @@ test('converter refuses malformed and oversized image headers without capture', 
   for (const image of [{ mimeType: 'image/png', data: 'AAAA' }, { mimeType: 'image/svg+xml', data: 'AAAA' }, { mimeType: 'image/jpeg', data: 'not base64' }]) assert.equal(await downscaleScreenshot(image), undefined);
   const tooBig = png(1, 1); tooBig.writeUInt32BE(20000, 16); tooBig.writeUInt32BE(20000, 20);
   assert.equal(await downscaleScreenshot({ mimeType: 'image/png', data: tooBig.toString('base64') }), undefined);
+});
+
+test('headless Chromium renders the local replay under CSP without errors or network requests', {
+  skip: process.env.SLEIGHT_RUN_VIEWER_BROWSER !== '1', timeout: 15000,
+}, async t => {
+  const { chromium } = await import('../plugins/sleight/vendor/playwright-core/index.mjs');
+  const { dir } = world(t), path = join(dir, 'replay.html');
+  const image = await downscaleScreenshot({ mimeType: 'image/png', data: png(1600, 800).toString('base64') });
+  assert.equal(image.mimeType, 'image/jpeg');
+  writeFileSync(path, buildRunHTML([event(), { v: 'sleight.run/1', type: 'screenshot', ts: now, window: action().window, image },
+    action({ say: '<img src=x onerror=steal()>', label: 'button' }),
+    { v: 'sleight.run/1', type: 'recording', state: 'stopped', reason: 'file size limit reached', ts: now }]), { mode: 0o600 });
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage(), errors = [], requests = [];
+    page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+    page.on('pageerror', error => errors.push(error.message));
+    await page.route(/^https?:/, route => { requests.push(route.request().url()); return route.abort(); });
+    await page.goto(pathToFileURL(path).href);
+    await page.evaluate(() => { const slider = document.getElementById('timeline'); slider.value = slider.max; slider.dispatchEvent(new Event('input')); });
+    await page.locator('#screenshot').evaluate(image => image.decode());
+    const view = await page.evaluate(() => ({
+      csp: document.querySelector('meta[http-equiv="Content-Security-Policy"]').content,
+      image: document.getElementById('screenshot').naturalWidth,
+      ring: getComputedStyle(document.getElementById('ring')).display,
+      point: document.getElementById('ring').style.left,
+      narration: document.getElementById('narration').textContent,
+      stopped: document.getElementById('stopped').textContent,
+    }));
+    assert.ok(view.csp.includes("script-src 'sha256-")); assert.equal(view.image, 960);
+    assert.notEqual(view.ring, 'none'); assert.equal(view.point, '25%');
+    assert.equal(view.narration, '<img src=x onerror=steal()>'); assert.match(view.stopped, /Recording stopped:.*size/);
+    assert.deepEqual(errors, []); assert.deepEqual(requests, []);
+    t.diagnostic(`Chromium ${browser.version()}: 0 console errors, 0 page errors, 0 network requests`);
+  } finally { await browser.close(); }
 });

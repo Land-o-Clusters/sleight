@@ -87,6 +87,19 @@ for (const flag of ['0']) test(`open screenshot stays off for flag=${flag}`, asy
   assert.equal(h.sent.filter(msg => msg.method === 'tools/call').length, 1);
 });
 
+test('open_file records its combined delivered image once and never the private screenshot reply', async t => {
+  const recorded = [], cursor = { status() {}, close() {}, screenshot: content => recorded.push(...content.filter(c => c.type === 'image')) };
+  const h = await open(t, { flag: '1', cursor });
+  assert.deepEqual(recorded, h.result.content.filter(c => c.type === 'image')); assert.equal(recorded.length, 1);
+});
+
+test('open_file records no pixels when its engine read is withheld as an own-host window', async t => {
+  const recorded = [], cursor = { status() {}, close() {}, screenshot: content => recorded.push(content) };
+  const h = await open(t, { flag: '1', cursor, window: 'Window: "Allow payment", App: consent-host.\n0 standard window Allow payment' });
+  assert.equal(h.result.isError, true); assert.deepEqual(recorded, []);
+  assert.equal(h.result.content.some(c => c.type === 'image'), false);
+});
+
 for (const flag of [null, '1', 'true']) for (const changeReview of [false, true]) test(`flag=${flag} returns one screenshot after the tree in one engine call; changeReview=${changeReview}`, async t => {
   const h = await open(t, { flag, changeReview });
   assert.deepEqual(h.events, ['acquire', 'screenshot']);

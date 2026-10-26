@@ -158,6 +158,8 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
   }
 
   async function plan(call) {
+    // Recording consumes points already known to the cursor. It never buys another engine/helper read.
+    if (!setting().enabled && !setting().stream) { forget(call); return; }
     // The read and screenshot as the relay knows them now, before any later result changes them.
     const lines = typeof call.input.lines === 'function' ? call.input.lines() : call.input.lines;
     const screenshotSize = typeof call.input.screenshotSize === 'function' ? call.input.screenshotSize() : call.input.screenshotSize;

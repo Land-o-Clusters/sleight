@@ -148,6 +148,9 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
           token.record = record({ action: { kind: EVENT_KINDS[input.op], role: input.role, inputType: input.inputType, secure: EVENT_KINDS[input.op] === 'type' && !input.inputType } });
         } catch {}
 
+        if (!setting().enabled && !setting().stream) {
+          publish(token, 'aim'); publish(token, 'act'); token.shown = true; return token;
+        }
         defer(() => show(input, token).catch(() => { publish(token, 'skipped', 'no-geometry'); }));
         return token;
       } catch { /* The hand never reaches the act path. */ }

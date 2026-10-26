@@ -29,6 +29,7 @@ import { createSurfaceCache, firstClientCallRefresh } from './surface-cache.mjs'
 import { createStartupCache, startupIdentity } from './startup-cache.mjs';
 import { createRelay, firstCallBatchSetting } from './relay.mjs';
 import { createRelayHand } from './hand/relay-hand.mjs';
+import { startRunRetention } from './runs/retention.mjs';
 import { sessionCursorEvents } from './hand/events.mjs';
 import { isV3Frontend, createV3Frontend, transientStartup, traceStartupFailure } from './direct-browser/worker.mjs';
 import { prepareTextWrite, settleTextWrite } from './text-save.mjs';
@@ -1059,6 +1060,12 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   let handTrace;
   const earlyHandTrace = [];
   const cursor = sessionCursorEvents();
+  const runRetention = startRunRetention({
+    onSkip: row => process.stderr.write(`sleight runs: skipped ${row.name}: ${row.reason}\n`),
+    onError: error => process.stderr.write(`sleight runs: retention failed: ${error.code ?? error.message}\n`),
+  });
+  await runRetention.ready;
+  process.once('exit', () => runRetention.close());
   process.once('exit', () => cursor.close());
   // The relay always starts: a hand that can't be created leaves the session without one.
   let hand;

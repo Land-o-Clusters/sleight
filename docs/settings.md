@@ -458,25 +458,37 @@ Recording is off by default. To opt in, add `"record_runs": true` to your privat
 session. Recording works with the hand and public stream off. `SLEIGHT_HAND=0` disables recording too. Keep the file's
 other fields and its mode `600`. Claude cannot change this setting.
 
-Recordings contain the privacy-filtered cursor events and small JPEG copies of screenshots sleight already took.
-Recording never takes another screenshot. Screenshots can contain private content, including document text and account
+Recordings contain the privacy-filtered cursor events and small JPEG copies of screenshots delivered to Claude, after
+every refusal, replacement and image filter. Blocked apps, blocked sites, sleight's confirmation windows, authentication
+sheets and private helper probes supply no recorded pixels. Recording never takes another screenshot. With the ring and
+public stream off, it doesn't request geometry. It records a point only when already known.
+Screenshots can contain private content, including document text and account
 details. Label settings still apply to events. Recorded narration appears as text when an event includes `say`.
+
+Conversion writes a full-size copy to a private temporary folder (mode `700`, source file `600`) for the system image
+converter. A `finally` block removes that folder on success or failure. A process crash or forced exit can leave the copy.
 
 Each session writes `~/Library/Application Support/sleight/runs/<date>-<session>.jsonl`, mode `600`, up to 5 MiB including
 images. Each JPEG is at most 960 pixels on its longest side and 192 KiB. At most two images can wait for conversion;
 excess images are skipped. The event queue holds at most 256 records. A full file stops recording that session.
-Starting a recording removes files older than 30 days, oldest first.
+Retention runs at relay start, when `hand.json` changes (including switching recording off), when a recording starts,
+during appends, and on `runs list` and `runs open`. It removes recordings older than 30 days and caps safe recording files
+at 200 MiB, oldest first. Unsafe entries are skipped and reported. Their bytes fall outside this managed cap.
 
 `sleight-mcp runs list` opens a local recording index. `sleight-mcp runs open <id>` opens a replay with a timeline scrubber,
 screenshots, labels and cursor points. Both commands write a private HTML file in a temporary folder and open it in your
 default browser. The HTML contains only the selected recording's data, or the index's IDs and byte counts. It has no network
-access or external scripts. Treat exported HTML as private too.
+access or external scripts. Treat exported HTML as private too. Any process running as you, including Claude's file tools,
+can read the recordings and the printed replay HTML path.
 
 Cursor points draw over a native window screenshot only when the recording has matching screen geometry. Other images
 remain visible with a geometry notice. Scheduled points are predictions. The viewer replaces each screenshot when the next
-one arrives. It does not infer what changed between captures.
+one arrives. It does not infer what changed between captures. The viewer reports a file size stop and missing session end.
+When the writer can finish, it also reports dropped queue records and skipped screenshots. A hard exit can lose queued
+records and their final loss notice.
 
-`sleight-mcp runs clear` deletes all recordings. Run it yourself in a terminal. It doesn't ask for Touch ID confirmation.
+`sleight-mcp runs list` names entries it skipped because of their mode, links or size. `sleight-mcp runs clear` deletes safe
+recordings and reports the rest. Run clear yourself in a terminal. It doesn't ask for Touch ID confirmation.
 Existing sessions stop writing if their recording file was removed. Temporary HTML copies remain until you remove them
 or the system clears its temporary folder. Claude may run list and open, but cannot run clear.
 
