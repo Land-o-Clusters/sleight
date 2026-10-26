@@ -391,7 +391,11 @@ A shell command that names `sleight-mcp` or `launch.mjs` next to `hand`, `turbo`
 a direct read-only form with literal arguments: `hand status`, `turbo status`, `permissions`, `permissions list`,
 `cursor list`, `cursor check <id>` or `cursor status`. A variable, substitution, glob, brace, redirection, heredoc,
 subshell, `xargs`, `parallel` or `eval` anywhere in that command refuses it. A variable or substitution as the command word
-refuses a command with one of those four words too, even without the launcher's name.
+refuses a command with one of those four words too, even without the launcher's name. An interpreter or shell next to one
+of those words passes only when it runs a read-only form. A pipe into a shell always refuses. Read-only tools (`grep`, `rg`,
+`cat`, `head`, `tail`, `wc`, `ls`, `file`, `stat`, `diff`, and `git log`, `show`, `diff`, `grep`, `blame` or `status`)
+can read the launcher's files and mention those words, as long as the command has no output redirection, `-exec` or
+substitution.
 
 ## Agent cursor
 

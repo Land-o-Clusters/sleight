@@ -202,14 +202,32 @@ test('a launcher command word beside a subcommand word passes only as a plain di
         `parallel sleight-mcp ::: "${write}"`, `echo "${write}" | parallel sleight-mcp`, `printf '%s' ${word} | xargs -I{} sleight-mcp {} ${tail}`,
         // The launcher is named but isn't the command word.
         `find . -exec sleight-mcp ${write} \\;`, `caffeinate sleight-mcp ${write}`, `bash /x/run.sh sleight-mcp ${read}`,
-        `sleight"-"mcp ${write}`, `sleight-m\\cp ${write}`]) {
+        `sleight"-"mcp ${write}`, `sleight-m\\cp ${write}`,
+        // Prefix options the guard doesn't know, and env's split string, hide the command word.
+        `env -S "sleight-mcp ${write}"`, `env -S"sleight-mcp ${write}"`, `env --split-string="sleight-mcp ${write}"`, `env -S "sleight-mcp ${read}"`,
+        `env -iS "sleight-mcp ${write}"`, `timeout --weird 5 sleight-mcp ${write}`, `timeout sleight-mcp ${write}`, `nice --foo sleight-mcp ${read}`,
+        `sudo -s sleight-mcp ${write}`, `command -x sleight-mcp ${write}`, `env -S "\$B ${write}"`, `nohup -- -S sleight-mcp ${write}`,
+        // A subcommand word without the launcher's name: no expansion or joined quoting, and no interpreter that isn't
+        // running the launcher's read form literally.
+        `python3 -c "import os; os.system('sleight'+'-mcp ${write}')"`, `node -e "require('child_process').execSync('sleight-'+'mcp ${write}')"`,
+        `perl -e 'system("sleight-"."mcp ${write}")'`, `ruby -e 'system("sl" + "eight-mcp ${write}")'`, `swift run.swift ${write}`,
+        `osascript -e 'do shell script "sleight-" & "mcp ${write}"'`, `bash -c 'sleight'"-mcp ${write}"`, `zsh -c "cd /x && sleight-mcp ${read}"`,
+        `sh -c "sleight-mcp ${read}" extra`, `bash script.sh ${write}`, `echo ${word}"" ${tail}`, `echo ${write.replace(/[a-z]$/, '?')}`,
+        `echo {${word},x} ${tail}`, `node /x/lib/launch.mjs ${write}`,
+        // A read tool doesn't save a command that can also run something.
+        `grep x f | xargs sleight-mcp ${word}`, `grep -l ${word} plugins/sleight/lib/launch.mjs | xargs cat`, `cat plugins/sleight/lib/launch.mjs | bash`,
+        `rg --pre sleight-mcp ${word} .`, `git grep -O sleight-mcp ${word}`, `PATH=/tmp/x grep ${word} plugins/sleight/lib/launch.mjs`,
+        `grep ${word} plugins/sleight/lib/launch.mjs > /tmp/x`, `find . -name launch.mjs -exec grep ${word} {} \\;`, `grep ${word} $(echo launch.mjs)`,
+        `grep ${word} plugins/sleight/lib/launch.mjs; sleight-mcp ${write}`, `(grep ${word} plugins/sleight/lib/launch.mjs)`]) {
         assert.equal(await guard({ tool: 'Bash', command: spelling }, { stat }), true, spelling);
       }
     }
     for (const form of reads[command]) {
       for (const spelling of [`sleight-mcp ${form}`, `env sleight-mcp ${form}`, `sh -c "sleight-mcp ${form}"`, `node /x/lib/launch.mjs ${form}`,
-        `node --no-warnings /x/lib/launch.mjs ${form}`, `/x/plugins/sleight/bin/sleight-mcp ${form}`, `zsh -lc "cd /x && sleight-mcp ${form}"`,
-        `sleight-mcp ${form} | head`, `sleight-mcp ${form}; echo done`, `FOO=1 sleight-mcp ${form}`, `sleight-mcp "${form.split(' ')[0]}" ${form.split(' ').slice(1).join(' ')}`]) {
+        `node --no-warnings /x/lib/launch.mjs ${form}`, `/x/plugins/sleight/bin/sleight-mcp ${form}`, `zsh -lc "sleight-mcp ${form}"`,
+        `sleight-mcp ${form} | head`, `sleight-mcp ${form}; echo done`, `FOO=1 sleight-mcp ${form}`, `sleight-mcp "${form.split(' ')[0]}" ${form.split(' ').slice(1).join(' ')}`,
+        `timeout 5 sleight-mcp ${form}`, `timeout -s KILL 5s sleight-mcp ${form}`, `nice -n 5 sleight-mcp ${form}`, `env -u X sleight-mcp ${form}`,
+        `stdbuf -oL sleight-mcp ${form}`, `nohup sleight-mcp ${form}`, `bash -c 'node /x/lib/launch.mjs ${form}'`]) {
         assert.equal(await guard({ tool: 'Bash', command: spelling }, { stat }), false, spelling);
       }
     }
@@ -219,8 +237,22 @@ test('a launcher command word beside a subcommand word passes only as a plain di
     'sleight-mcp allow list', 'sleight-mcp turbo-state', 'echo hand on', 'ls tests/*cursor*', 'node --test tests/cursor-events.test.mjs 2>&1 | tail -5']) {
     assert.equal(await guard({ tool: 'Bash', command: spelling }, { stat }), false, spelling);
   }
-  // The launcher named beside a subcommand word as an argument of another tool is refused too (the Grep tool reads it instead).
-  assert.equal(await guard({ tool: 'Bash', command: 'grep -n hand plugins/sleight/lib/launch.mjs' }, { stat }), true);
+  // Read-only tools may name the launcher beside any subcommand word when nothing in the command can run it.
+  for (const spelling of ['grep -n hand plugins/sleight/lib/launch.mjs', "rg 'turbo|cursor' plugins/sleight/lib/launch.mjs",
+    'cat plugins/sleight/lib/launch.mjs | grep -n permissions', 'head -50 plugins/sleight/lib/launch.mjs', 'tail -n 5 plugins/sleight/lib/launch.mjs',
+    'wc -l plugins/sleight/lib/launch.mjs', 'ls -la plugins/sleight/bin/sleight-mcp && echo cursor', 'file plugins/sleight/bin/sleight-mcp hand',
+    'stat plugins/sleight/lib/launch.mjs | grep turbo', 'diff a/launch.mjs b/launch.mjs | grep hand', 'grep -n "cursor(" plugins/sleight/lib/launch.mjs',
+    "grep -rn 'hand.*status' plugins/sleight/lib/launch.mjs", 'grep -c "\\$hand" plugins/sleight/lib/launch.mjs', 'grep -n "sleight-mcp hand on" docs/settings.md',
+    'git log --oneline -- plugins/sleight/lib/launch.mjs | grep hand', 'git show HEAD:plugins/sleight/lib/launch.mjs | grep -n cursor',
+    "git grep -n 'cursor style' -- plugins/sleight/lib/launch.mjs", 'git --no-pager diff -- plugins/sleight/lib/launch.mjs', 'git blame plugins/sleight/lib/launch.mjs | grep turbo',
+    'git status --short plugins/sleight/lib/launch.mjs', 'timeout 5 grep hand plugins/sleight/lib/launch.mjs', 'env grep -n permissions plugins/sleight/lib/launch.mjs',
+    'echo hand on', 'echo "hand on"']) {
+    assert.equal(await guard({ tool: 'Bash', command: spelling }, { stat }), false, spelling);
+  }
+  for (const spelling of ['git log --format=%s | sh', 'git log --format=%s | bash -s', 'cat notes | python3', 'cat notes | node -',
+    'cat f > "$HOME/Library/Application Support/sleight/hand.json"', "cat f > ~/Library/Application\\ Support/sleight/hand.json"]) {
+    assert.equal(await guard({ tool: 'Bash', command: spelling }, { stat }), true, spelling);
+  }
 });
 test('the action log and outcome switches are the user\'s: Claude\'s file and shell tools can\'t set them where sleight reads its environment', async () => {
   const { loggingSwitchWriteDenied: denied } = await import('../plugins/sleight/hooks/preapproved-write-guard.mjs');
