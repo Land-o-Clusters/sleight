@@ -72,8 +72,8 @@ test('Turbo explains consent, dated results, the existing chart and user control
   assert.ok(turbo, 'the Turbo section exists');
   assert.match(turbo, /Chrome and Helium directly/);
   assert.match(turbo, /one-time debugging switch/);
-  assert.match(turbo, /Chrome.*10 of 13.*258\.9 s.*447\.8 s.*2026-10-18 to 2026-10-19/);
-  assert.match(turbo, /Helium.*11 of 13.*241\.8 s.*338\.3 s.*2026-10-18/);
+  assert.match(turbo, /Chrome.*12 of 13.*296\.8 s.*447\.8 s.*2026-10-18 to 2026-10-19/);
+  assert.match(turbo, /Helium.*10 of 13.*264\.1 s.*343\.6 s.*2026-10-18 to 2026-10-19/);
   assert.match(turbo, /docs\/results\/browser-turbo\.md/);
   assert.match(turbo, /docs\/results\/img\/family-browser-turbo-chrome-light\.svg/);
   assert.match(turbo, /`\.\/bin\/sleight-mcp turbo on`/);
