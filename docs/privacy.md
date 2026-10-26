@@ -27,6 +27,25 @@ cannot drift from the code.
 | Grok Bot shell session | `~/Library/Caches/sleight/shell/session.sock`, a 0600 Unix socket in a user-owned 0700 folder. Calls and results pass through memory. Each reply prints the session UUID. Private `starting/owner` and `session-start.sqlite` files serialize the session through shutdown. Detached startup appends stderr to a 0600 `session.log` in that folder. The peer-check helper is compiled in a private system temporary folder. This route never writes pre-approvals. | Socket, startup owner, helper and images removed on normal exit, SIGTERM or ten idle minutes. Coordinator and stderr log remain until removed by the owner | `plugins/sleight/lib/socket-bridge.mjs` |
 | Shell image results | `images-*` folders under `~/Library/Caches/sleight/shell/` (0700), with one 0600 file per returned image. The shell prints each path instead of inline image data. | Capped at fifty per session. Pruned at exit and at the next startup after a crash | `plugins/sleight/lib/socket-bridge.mjs` |
 
+## Optional narration
+
+Narration defaults to off. When enabled, the mod caches assistant prose from its message events without fetching
+a transcript or retaining images. The cutter removes code, quoted values, URLs, paths, email addresses, tokens with
+API-key prefixes, long base64 or hex runs, and Luhn-valid card numbers. It also omits text-entry narration and checks
+for whole user-value words of at least four characters. These filters can remove ordinary identifiers and cannot
+recognize every secret. Claude can paraphrase screen text or repeat tool results in its prose, including personal
+names and short secrets. Turn narration off for sensitive work.
+
+The built-in host checks secure input before drawing or speaking. Local speech uses installed system voices
+without downloads, Personal Voice authorization or opening an input device. Core Audio metadata reads happen
+off the main thread, at most once per 500 ms, and unreadable state skips speech. Recordings can silence narration
+because running input is a conservative call proxy. The checks and speech synthesis are in
+`plugins/sleight/lib/direct-browser/native/consent-host.swift`.
+
+Opt-in cursor streams can include the filtered sentence as `say` after a native secure-input check. A missing host
+omits it, and replay or deferred delivery removes it. External renderers must hide parked text when secure input
+changes. See [the protocol's narration limits](design/cursor-protocol.md#narration).
+
 ## What leaves the Mac
 
 The Grok Bot shell route uses a local Unix socket, with no TCP listener. The bot receives sleight's results through

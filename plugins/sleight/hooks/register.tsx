@@ -1,5 +1,6 @@
+import { createNarrationCache } from './narration.mjs'
 import { atom, read, update } from 'claude-code'
-import type { Register } from 'claude-code'
+import type { Register, EngineInterface } from 'claude-code'
 
 import type { Frame, LogEntry, ViewStatus } from '../types'
 import { FRAME_MARKER, snapshotCode } from './snapshot'
@@ -70,7 +71,7 @@ let turboEnvelope: TurboEnvelope | undefined
 let turboSequence = 0
 let turboPending = Promise.resolve()
 
-async function beginTurboTurn($: any, text: string, origin: 'composer' | 'bridge'): Promise<string | undefined> {
+async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin'>, text: string, origin: 'composer' | 'bridge'): Promise<string | undefined> {
   if (turboSequence >= Number.MAX_SAFE_INTEGER) return
   const turn = `turbo-${++turboSequence}`
   let context: string | undefined
@@ -82,12 +83,13 @@ async function beginTurboTurn($: any, text: string, origin: 'composer' | 'bridge
         const state = await $.process.run([`${$.plugin.root}/bin/sleight-mcp`, 'turbo-state'])
         if (state.exitCode === 0 && state.isStdoutTruncated !== true && typeof state.stdout === 'string' && state.stdout.length <= 4096) {
           const data = JSON.parse(state.stdout)
+          narration.configure(data?.narration)
           enabled = data?.enabled === true
           const p = data?.presence
           if (origin !== 'bridge' && typeof p?.locked === 'boolean' && Number.isFinite(p.idleSeconds) && p.idleSeconds >= 0)
             present = !p.locked && p.idleSeconds < 120
-        }
-      } catch { /* User text still reaches the relay when turbo is unavailable. */ }
+        } else { narration.configure('off') }
+      } catch { narration.configure('off') /* User text still reaches the relay when turbo is unavailable. */ }
       if (!enabled && present && !/^[ \t]*allow\b/i.test(text)) return
       for (let attempt = 0; attempt < 2; attempt++) {
         if (!turboEnvelope) {
@@ -335,7 +337,17 @@ function ownCallVerdict(e: { tool: string; input: unknown }, origin: { plugin: s
   return undefined
 }
 
+const narration = createNarrationCache()
+// The existing genuine-prompt turbo-state reply includes narration mode. No extra process,
+// file read, transcript request or awaited work is added to a tool call.
+function narrated<T extends { tool_use_id?: string; agentId?: string }>(event: T) {
+  return { ...event, sleight_say: narration.take(event) ?? '' }
+}
+
 export const register: Register = on => {
+  on('session.append', { door: 'response' }, ($, e, next) => { narration.observe(e); return next(e) })
+  on('session.compact', ($, e, next) => { narration.reset(); return next(e) })
+
   on('classic.PreToolUse', async ($, e, next) => {
     if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'].includes(e.tool)) return next(e)
     if (usedThisTurn && shellLaunchDenied(e) && await $.env.get('SLEIGHT_SHELL_GUARD') !== '0') return { deny: shellGuardReason }
@@ -355,6 +367,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     turboEnvelope = undefined
     remoteTurnBound = false
+    narration.configure('off')
     await $.command.register({
       name: 'sleight',
       description: 'Open the sleight pane; show turn stats, replay, record, or stop computer use',
@@ -400,9 +413,12 @@ export const register: Register = on => {
 
   // A private argument, removed by the relay before forwarding. Subagents are outside
   // these main-loop counters, even when an old child calls during a later turn.
-  const counted = <T extends { agentId?: string }>(e: T, owner: StatsTurn | undefined) => {
-    if (e.agentId !== undefined || !owner) return { ...e, sleight_stats: { internal: true } }
-    return { ...e, sleight_stats: { turn: owner.id } }
+  const counted = <T extends { agentId?: string; sleight_say?: string }>(e: T, owner: StatsTurn | undefined) => {
+    const sleight_say = e.sleight_say
+    const event = { ...e }; delete event.sleight_say
+    const say = sleight_say ? { say: sleight_say } : {}
+    if (e.agentId !== undefined || !owner) return { ...event, sleight_stats: { internal: true, ...say } }
+    return { ...event, sleight_stats: { turn: owner.id, ...say } }
   }
 
   const forward = async <T extends { agentId?: string }, R>(e: T, owner: StatsTurn | undefined, next: (event: T) => Promise<R>) => {
@@ -433,7 +449,7 @@ export const register: Register = on => {
       at: now(),
     }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await forward(e, owner, next)
+    const ran = await forward(narrated(e), owner, next)
     const app = appFrom(code, ran.text)
     if (app) lastApp = app
     actions++
@@ -451,7 +467,7 @@ export const register: Register = on => {
     if (await read($, stopped)) return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
     if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     usedThisTurn = true
-    return forward(e, owner, next)
+    return forward(narrated(e), owner, next)
   })
 
   // Compact browser verbs are session work too. The fixed completion hook must
@@ -463,9 +479,9 @@ export const register: Register = on => {
     if (await read($, stopped)) return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
     if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     usedThisTurn = true
-    const entry: LogEntry = { id: e.tool_use_id, title: name, status: 'running', at: now() }
+    const entry: LogEntry = { id: (e as { tool_use_id: string }).tool_use_id, title: name, status: 'running', at: now() }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await forward(e, owner, next)
+    const ran = await forward(narrated(e), owner, next)
     actions++
     const status: LogEntry['status'] = ran.deny !== undefined ? 'refused' : ran.isError ? 'error' : 'done'
     await update($, log, list => list.map(one => one.id === entry.id ? { ...one, status } : one))

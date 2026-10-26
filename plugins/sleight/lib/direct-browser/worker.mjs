@@ -1,3 +1,4 @@
+import { narrationLine } from '../../hooks/narration.mjs';
 import { sessionCursorEvents, withCursorCall, workerCursorStatus, workerCursorAction, cursorStep, cursorStreamEnabled } from '../hand/events.mjs';
 import { fork } from 'node:child_process';
 import { appendFileSync, closeSync, constants, mkdirSync, openSync, readFileSync, realpathSync, writeSync } from 'node:fs';
@@ -304,7 +305,8 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
     },
     async call(input) {
       let request;
-      try { request = validateToolCall(input, hello.browser); } catch { return { text: 'Invalid turbo arguments. Use the documented five tool schemas.', isError: true }; }
+      try { const { say, ...tool } = input; request = validateToolCall(tool, hello.browser);
+        const line = narrationLine(say, request.arguments); if (line) request.say = line; } catch { return { text: 'Invalid turbo arguments. Use the documented five tool schemas.', isError: true }; }
       if (!active || lost || !current()) return failure();
       const epoch = generation;
       const turn = traceTurn, call = ++traceCall;
@@ -489,8 +491,9 @@ export function serveV3Worker({ channel, browser, begin, current = () => true, c
         const record = results.get(frame.params.resultId); results.delete(frame.params.resultId);
         return !!record && record.runtime === runtime && record.hash === frame.params.hash && record.hash === hash(record.result) && runtime.delivered(record.result) === true;
       }
-      const request = validateToolCall(frame.params, browser), owner = runtime;
-      const result = await owner.call(request, { handoffDrain: detail => send({ version: 3, id: frame.id, handoffDrain: detail }),
+      const { say, ...tool } = frame.params;
+      const request = validateToolCall(tool, browser), owner = runtime;
+      const result = await owner.call(request, { say: narrationLine(say, request.arguments), handoffDrain: detail => send({ version: 3, id: frame.id, handoffDrain: detail }),
         handoffDeadline: detail => send({ version: 3, id: frame.id, handoff: detail }), pdfBuilding: () => {
         if (epoch === generation && !ended && runtime === owner && ['browser_read', 'browser_open', 'browser_act', 'browser_fill'].includes(request.name))
           send({ version: 3, id: frame.id, pdfBuild: true });
@@ -809,7 +812,7 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
                   if (navigation) workerCursorAction({ ...navigation, phase: result.isError ? 'failed' : 'done' });
                   return result;
                 } catch (error) { if (navigation) workerCursorAction({ ...navigation, phase: 'failed' }); throw error; }
-              });
+              }, cursorStreamEnabled(), options?.say);
             } catch (error) { return error?.message === 'ELECTRON_HOST_FOREIGN' ? foreignHost(error.appName) : appNotice(error) ?? failure(); }
           },
           ...(selections.length ? { waitMs: Math.min(APP_PREPARE_CAP_MS, selections.length * APP_PREPARE_WAIT_MS) } : {}),

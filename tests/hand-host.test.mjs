@@ -26,6 +26,12 @@ test('hand source: it never posts input, moves the pointer, activates, takes key
   // The picker answers the relay on stdout, nonce-bound, through one writer (plus its dump mode); it posts no input either.
   assert.match(picker, /func writeCursorPickerEvent[\s\S]*?nonceBook\.nonce\("hand"\)/);
   assert.doesNotMatch(picker, /CGEventPost|\.post\(|postToPid|CGWarp|NSCursor|activate\(|makeMain|AXUIElement|NSLog/);
+  // Narration writes stdout through one helper (its secure-input answer and dump modes), and never opens capture or a network.
+  const narration = section('NARRATION');
+  assert.ok(narration, 'narration section absent');
+  assert.equal(narration.match(/standardOutput/g)?.length, 1);
+  assert.match(narration, /func narrationJSON[^\n]*\n[^\n]*\n\s*FileHandle\.standardOutput\.write/);
+  assert.doesNotMatch(narration, /CGEventPost|\.post\(|postToPid|CGWarp|NSCursor|activate\(|makeKey|makeMain|becomeKey\(|orderFront\(|AXUIElement|print\(|NSLog|AVCapture|AVAudioSession|URLSession/);
   // Reading a delivered event's source fields (the person-input check, and its dump self-test) is allowed; posting one is not.
   for (const text of [host, frame, tail, art, motion, ring, runtime]) {
     assert.doesNotMatch(text, /CGEventPost|\.post\(|postToPid|CGWarp|NSCursor|activate\(|makeKey|makeMain|becomeKey\(|orderFront\(|AXUIElement|standardOutput|print\(|NSLog/);

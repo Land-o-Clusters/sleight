@@ -90,6 +90,7 @@ import { checkedStop, stopText } from './checked-stop.mjs';
 import { TurnOutcomes, unconfirmedInput } from './turn-outcomes.mjs';
 import { resultCompleteness, filteredRead } from './read-completeness.mjs';
 import { stripHandBindings } from './hand/bindings.mjs';
+import { narrationLine } from '../hooks/narration.mjs';
 import { cursorRecord } from './hand/events.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
 import { stripDP1Trace } from './dp1-trace.mjs';
@@ -915,6 +916,7 @@ export function createRelay({
   cursor,
 }) {
   const localCursor = new Map();
+  const callNarration = new Map();
   const cursorStatus = (state, detail) => { try { cursor?.status(state, detail); } catch {} };
   const runScreenshotDetails = new WeakMap();
   // Tags carry geometry through split replies without saving pixels before final delivery.
@@ -2236,6 +2238,7 @@ export function createRelay({
     leaseTimer.unref?.();
   }
   function finishedCall(id) {
+    callNarration.delete(id);
     openedWindowCalls.delete(id);
     openedFlowPlans.delete(id);
     openedWindowReads.delete(id);
@@ -3429,6 +3432,17 @@ export function createRelay({
       serverIn.write(line + '\n');
       return;
     }
+    // Remove private narration before startup caching, tracing, journals and all execution paths.
+    if (!startupReady && msg.method === 'tools/call' && msg.params?.arguments) {
+      const raw = msg.params.arguments.sleight_stats?.say;
+      if (msg.params.arguments.sleight_stats && typeof msg.params.arguments.sleight_stats === 'object') delete msg.params.arguments.sleight_stats.say;
+      callNarration.delete(msg.id);
+      const say = modHost() && cursor?.narration && cursor.narration !== 'off' ? narrationLine(raw, msg.params.arguments) : undefined;
+      if (say && msg.id !== undefined) {
+        if (callNarration.size >= 200) callNarration.delete(callNarration.keys().next().value);
+        callNarration.set(msg.id, say);
+      }
+    }
     if (msg.method === 'initialize') codexClient = codexTurnClient(msg.params?.clientInfo);
     if (msg.method === 'tools/call') {
       if (docOrigin.owns(msg.id)) {
@@ -4230,9 +4244,9 @@ export function createRelay({
       running.add(msg.id);
       callDetails.set(msg.id, msg.params.name);
       recordAction('sent', msg.id);
-      directBrowser.call({ name: msg.params.name, arguments: msg.params.arguments }).then(result => {
-        cursorStatus(result.isError ? 'error' : 'done');
-        if (!result.isError) cursorStatus('thinking');
+      directBrowser.call({ name: msg.params.name, arguments: msg.params.arguments, ...callNarration.has(msg.id) ? { say: callNarration.get(msg.id) } : {} }).then(result => {
+        cursorStatus(result.isError ? 'error' : 'done', { say: callNarration.get(msg.id) });
+        if (!result.isError) cursorStatus('thinking', { say: callNarration.get(msg.id) });
         finishedCall(msg.id);
         const rendered = result.text;
         const content = [{ type: 'text', text: rendered }, ...(result.images ?? [])];
@@ -4591,7 +4605,7 @@ export function createRelay({
         const kind = ({ drag: 'drag', hover: 'move', open_file: 'navigate', select_window: 'select' })[name] ??
           (name === 'menu_bar' && op !== 'apps' ? 'select' : name === 'notifications' && op === 'press' ? 'click' : undefined);
         if (kind && cursor?.enabled) {
-          const record = { ...cursorRecord({ action: { kind } }), call: cursor.call(), index: 0, source: 'local' };
+          const record = { ...cursorRecord({ action: { kind } }), call: cursor.call(), index: 0, source: 'local', say: callNarration.get(msg.id) };
           localCursor.set(msg.id, record); cursor.action({ ...record, phase: 'act' });
         }
       } catch {}
@@ -4836,7 +4850,7 @@ export function createRelay({
       // Admission has decided. The hand plans on a later tick, outside the guard path, from what Claude last saw.
       if (hand && name === 'js' && (!browser || cursor?.enabled) && msg.id !== undefined && typeof originalCode === 'string' && ACTION.test(originalCode)) {
         const target = documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow, seen = numberWindow(originalCode, target);
-        hand.admit(msg.id, { code: originalCode, target, ...(browser ? { unplanned: true } : {}), lines: () => compactor.seenLines(seen),
+        hand.admit(msg.id, { code: originalCode, target, say: callNarration.get(msg.id), ...(browser ? { unplanned: true } : {}), lines: () => compactor.seenLines(seen),
           screenshotSize: () => screenshots.get(target?.app?.toLowerCase())?.byTitle[target?.title] });
       }
     }
@@ -5771,8 +5785,8 @@ export function createRelay({
         if (!msg.error && !msg.result?.isError) openedWindows.set(handle, target);
         else if (openedWindows.get(handle) !== target) openedWindows.delete(handle);
       }
-      cursorStatus(msg.error || msg.result?.isError ? 'error' : 'done');
-      if (!msg.error && !msg.result?.isError) cursorStatus('thinking');
+      cursorStatus(msg.error || msg.result?.isError ? 'error' : 'done', { say: callNarration.get(msg.id) });
+      if (!msg.error && !msg.result?.isError) cursorStatus('thinking', { say: callNarration.get(msg.id) });
       hand?.result(msg.id, !!(msg.error || msg.result?.isError)); reportPreapprovals(msg); finishedCall(msg.id);
     }
     if (remoteApprovals && isAppApproval(msg) && !shellAppCards.has(msg)) shellAppCards.set(msg, plainAppCard(msg));

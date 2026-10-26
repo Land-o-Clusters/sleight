@@ -1457,7 +1457,9 @@ if (isMainModule(import.meta.url)) {
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   } else if (process.argv[2] === 'turbo-state') {
     const { readInstalledConfig } = await import('./direct-browser/installed-config.mjs');
-    process.stdout.write(JSON.stringify({ ...turboState(readInstalledConfig), presence: await runScript('remote-approvals.js', { operation: 'presence' }) }) + '\n');
+    const { cachedHandSetting } = await import('./hand/settings.mjs');
+    process.stdout.write(JSON.stringify({ ...turboState(readInstalledConfig), narration: cachedHandSetting().narration,
+      presence: await runScript('remote-approvals.js', { operation: 'presence' }) }) + '\n');
   } else if (process.argv[2] === 'permissions') {
     try { process.exitCode = (await import('./permissions-command.mjs')).permissionsCommand(process.argv.slice(3), { out: text => process.stdout.write(text) }); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }

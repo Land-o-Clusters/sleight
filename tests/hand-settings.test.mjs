@@ -42,8 +42,8 @@ function world(t) {
 
 test('precedence: platform, explicit env 0 or 1, unsafe file, saved choice, then off by default', t => {
   const w = world(t);
-  assert.deepEqual(w.setting(), { enabled: false, reason: 'default', capture: 'hidden', captureReason: 'default' });
-  assert.deepEqual(w.setting({ SLEIGHT_HAND: '1' }, 'linux'), { enabled: false, reason: 'platform', capture: 'hidden', captureReason: 'default' });
+  assert.deepEqual(w.setting(), { enabled: false, reason: 'default', capture: 'hidden', captureReason: 'default', narration: 'off' });
+  assert.deepEqual(w.setting({ SLEIGHT_HAND: '1' }, 'linux'), { enabled: false, reason: 'platform', capture: 'hidden', captureReason: 'default', narration: 'off' });
   for (const value of ['', 'false', 'off', 'true', '2']) {
     assert.deepEqual([w.setting({ SLEIGHT_HAND: value }).enabled, w.setting({ SLEIGHT_HAND: value }).reason], [false, 'default'], value);
   }

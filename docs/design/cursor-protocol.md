@@ -52,6 +52,7 @@ End is best effort when the relay closes.
 | `role` | Optional known AX or ARIA role |
 | `reason` | Required for `skipped`; absent for other phases |
 | `label` | Optional element label, controlled by the user's setting |
+| `say` | Optional assistant narration, at most 90 characters; see Narration |
 
 Window exposure is `exposed`, `covered`, `offscreen`, `other-space` or `minimized`. Window rectangles use the same units as
 the point. Fields within `window` and `display` are omitted when unavailable. Window titles never appear.
@@ -88,6 +89,7 @@ Browser point steps retain the hand's existing exclusion and can report `skipped
 | --- | --- |
 | `state` | `thinking`, `waiting`, `error`, `done`, `handback` or `idle` |
 | `app` | Optional app name |
+| `say` | Optional assistant narration, at most 90 characters; see Narration |
 | `call` | Optional opaque call identifier |
 
 ```json
@@ -98,6 +100,46 @@ Browser point steps retain the hand's existing exclusion and can report `skipped
 turn end. `handback` marks sign-in handoff or takeover. `thinking` marks time between calls, emitted at call results without
 polling. The first status of a session is `idle` when no other status has been published. Turn end also emits `idle`.
 Statuses describe the current call or turn. `done` followed by `thinking` after a call does not end the session.
+
+## Narration
+
+`narration` in `hand.json` is `off` (default), `bubbles` or `voice`. Action and status records can include `say`.
+The Claude Code mod caches assistant text from its own message events, bound to the tool ID and agent loop.
+It doesn't fetch a transcript or retain media. The existing `turbo-state` reply supplies the narration mode at each user prompt,
+without another subprocess or a settings read from the mod. Unavailable settings or missing message events omit narration. Native receivers need a recognized acquisition since
+narration was enabled or the session was compacted. The cache holds at most 16 loops and 128 calls per loop.
+
+The cutter examines at most 1,024 UTF-8 bytes before regex work, discarding a partial final token. It keeps the first
+sentence, at most 90 characters, after removing code, quoted strings, URLs, paths and email addresses.
+Input calls omit narration. Echo checks suppress a sentence only when it repeats a whole word of at least four characters from text,
+values, paste content or search queries, excluding enums and control labels.
+
+The cutter also strips tokens with key prefixes beginning with `sk-`, `sk-ant-`, `ghp_`, `gho_`, `xox` or `AKIA`, long base64
+or hex runs, long mixed letter/digit tokens, and Luhn-valid card numbers of 13 to 19 digits with spaces or hyphens.
+These shape checks can remove ordinary identifiers and cannot identify every secret. Assistant prose can paraphrase
+screen text or repeat personal names and short, unrecognized secrets. Narration is opt-in. Turn it off for sensitive work.
+
+Public `say` requires a nonce-bound native secure-input check. The check contains a random token without prose.
+A missing host, a 100 ms timeout, a malformed reply or queue overflow removes `say` while delivering the bare event.
+The tool proceeds without waiting for the check. Connection replay and deferred delivery omit `say`.
+Stream-only sessions without the built-in host omit `say` too. Third-party renderers must hide parked narration
+when secure input changes because the native check cannot control another renderer's window.
+
+`voice` is optional. Its `id` selects an installed system voice and its optional `rate` defaults to 0.5 (range 0.1 to 0.6).
+`sleight-mcp cursor status` prints the narration mode and requested voice. The compiled host's `--narration-voices`
+mode lists installed IDs without a window. With no explicit ID, the host prefers the system language, then quality.
+The host skips speech when the selected ID is missing. It doesn't download voices or request Personal Voice authorization.
+
+Voice fails closed for secure input, muted or zero-volume output, unreadable output metadata, or a process using audio input.
+Main-element mute and volume fall back to per-channel properties. Process-property reads run on a utility queue,
+at most once per 500 ms while needed. Voice waits for the first background check before playback. One trace line explains
+unreadable audio metadata. The host reads metadata without opening an input device and treats running input as
+a conservative call proxy, so recordings silence voice too and a call that has stopped input can be missed.
+Live device behavior remains unverified.
+
+Only one utterance plays, with one replaceable queued line. Immediate duplicates are ignored; the same sentence may
+speak again after 10 seconds. Cancellation clears the queue. A missing finish callback times out after 15 seconds,
+stopping speech, removing its bubble and ending its watcher.
 
 ## Discovery and delivery
 
@@ -132,7 +174,8 @@ PID exclusion list. Every other window can count as cover for a drag or hover, i
 
 ## Privacy
 
-Typed and pasted text, setValue values, URLs, page text, file paths and window titles never enter an event. `app` and `bundle`
+Action geometry excludes typed and pasted text, setValue values, page text, URLs, file paths and window titles.
+Opt-in assistant narration has the limits described above. `app` and `bundle`
 identify the application only. Labels default to `off`, which omits the `label` key entirely.
 
 `role` labels use generic nouns from a fixed table, such as `button`, `text field` and `menu item`. `title` labels use a control's

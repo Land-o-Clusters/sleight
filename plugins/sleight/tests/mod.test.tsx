@@ -7,6 +7,46 @@ const PANE = { plugin: 'sleight', component: 'Pane', requestId: 'sleight' } as c
 const SURFACES = ['terminal', 'desktop'] as const
 
 describe('sleight mod', () => {
+  for (const mode of ['off', 'bubbles']) for (const door of ['tool-result', 'response'] as const)
+    test(`unused sleight ${mode}, ${door}: 300 appends through the host dispatcher`, async ($, on) => {
+      on('process.run', async () => ({ value: { exitCode: 0, stdout: JSON.stringify({ enabled: false, narration: mode,
+        presence: { idleSeconds: 0, locked: false } }), stderr: '' } }) as never)
+      on('prompt.submit', async (_$, e) => ({ text: e.text }))
+      on('session.messages', async () => { throw Error('transcript read forbidden') })
+      on('tool.call', async () => { throw Error('unused sleight must not forward tools') })
+      await $.prompt.submit({ text: 'Use another tool', origin: { kind: 'composer' } } as never)
+      // The reported test duration / 300 bounds per-row dispatcher cost, including setup.
+      for (let i = 0; i < 300; i++) await $.session.append({ uuid: `unused-${i}`, door,
+        origin: door === 'response' ? { kind: 'model', model: 'fixture' } : { kind: 'tool', tool: 'Read' },
+        message: door === 'response' ? { type: 'assistant', role: 'assistant', content: [{ type: 'text', text: 'Reading the page.' }] }
+          : { type: 'user', role: 'user', content: [{ type: 'tool_result', tool_use_id: `other-tool-${i}`, content: 'Fixture result.' }] } })
+    })
+  for (const mode of ['off','bubbles']) test(`assistant event narration ${mode} uses private stats without transcript reads`, async ($, on) => {
+    const forwarded: Record<string, unknown>[] = []
+    let reads = 0
+    on('session.messages', async () => { reads++; throw Error('transcript read forbidden') })
+    on('process.run', async () => ({ value: { exitCode: 0, stdout: JSON.stringify({ enabled: false, narration: mode, presence: { idleSeconds: 0, locked: false } }), stderr: '' } }) as never)
+    on('turn.start', async (_$, e) => ({ turnId: e.turnId }) as never)
+    on('ui.status', async () => ({ value: undefined }))
+    on('tool.call', { tool: JS_TOOL }, async (_$, e) => { forwarded.push(e); return { result: { content: [] } } as never })
+    on('prompt.submit', async (_$, e) => ({ text: e.text }))
+    await $.prompt.submit({ text: 'Inspect the menu', origin: { kind: 'composer' } } as never)
+    await $.turn.start({ turnId: 'narration-turn' } as never)
+    await $.session.append({ uuid: 'acquisition', door: 'response', origin: { kind: 'model', model: 'fixture' },
+      message: { type: 'assistant', role: 'assistant', content: [{ type: 'tool_use', id: 'acquire', name: JS_TOOL, input: { code: 'let app = await cua.getApp("Editor")' } }] } })
+    await $.session.append({ uuid: 'narration-message', door: 'response', origin: { kind: 'model', model: 'fixture' }, message: { type: 'assistant', role: 'assistant', content: [
+      { type: 'text', text: 'I’ll inspect the menu. Another sentence.' },
+      ...['narration-call', 'parallel-call'].map(id => ({ type: 'tool_use' as const, id, name: JS_TOOL, input: { code: 'await app.click(3)' } })),
+    ] } })
+    await $.session.append({ uuid: 'later-message', door: 'response', origin: { kind: 'model', model: 'fixture' },
+      message: { type: 'assistant', role: 'assistant', content: [{ type: 'tool_use', id: 'later-call', name: JS_TOOL, input: { code: 'await app.click(3)' } }] } })
+    for (const id of ['narration-call', 'parallel-call', 'later-call'])
+      await $.tool.call({ tool: JS_TOOL, code: 'await app.click(3)', tool_use_id: id, sleight_say: 'MODEL FORGERY' } as never)
+    expect(forwarded.map(e => (e.sleight_stats as { say?: string }).say)).toEqual(
+      mode === 'off' ? [undefined, undefined, undefined] : ['I’ll inspect the menu.', 'I’ll inspect the menu.', undefined])
+    for (const event of forwarded) expect(event.sleight_say).toBeUndefined()
+    expect(reads).toBe(0)
+  })
   const turboEnvelope = { version: 1, session: 'private-host-session', nonce: 'a'.repeat(64) }
   const genuinePrompt = (text: string, kind = 'composer') => ({ text, origin: { kind } }) as never
 

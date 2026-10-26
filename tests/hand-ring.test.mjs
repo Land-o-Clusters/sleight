@@ -447,7 +447,10 @@ test('ring source: Core Animation only, no timer, display link or per-frame Swif
   const ring = section('RING PLAN') + section('RING RUNTIME');
   assert.doesNotMatch(ring, /\bTimer\b|CADisplayLink|DispatchQueue|asyncAfter|repeatCount/);
   const host = section('HAND HOST');
-  assert.doesNotMatch(host, /CADisplayLink|repeatCount/);
+  const withoutVoiceBars = host.replace(/    func voiceBars[\s\S]*?(?=    func installRing)/, '');
+  assert.doesNotMatch(withoutVoiceBars, /CADisplayLink|repeatCount/);
+  assert.match(host.match(/    func voiceBars[\s\S]*?(?=    func installRing)/)?.[0] ?? '', /animation.duration = 0.6/);
+  assert.match(host.match(/    func voiceBars[\s\S]*?(?=    func installRing)/)?.[0] ?? '', /animation.repeatCount = .infinity/);
   // The host's ring code keeps one one-shot wake-up.
   const ringHost = host.slice(host.indexOf('var ringEnvironment'), host.indexOf('func installRing'));
   assert.equal((ringHost.match(/asyncAfter/g) ?? []).length, 1);

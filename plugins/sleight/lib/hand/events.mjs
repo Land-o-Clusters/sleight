@@ -1,6 +1,8 @@
 // Public cursor records are projections, never copies of tool arguments or engine replies.
 // The relay owns the session, sequence and socket clients. Workers send only projected records over IPC.
 import { createRunRecorder } from '../runs/store.mjs';
+import { createNarrationSink } from './narration-sink.mjs';
+import { narrationLine } from '../../hooks/narration.mjs';
 import { randomBytes } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { lstat, realpath, readdir } from 'node:fs/promises';
@@ -25,6 +27,7 @@ const text = x => typeof x === 'string' && x.length <= 160 && !/[\x00-\x1f\x7f]/
 const tuple = (x, n) => Array.isArray(x) && x.length === n && x.every(v => Number.isFinite(v) && Math.abs(v) <= 100000) ? [...x] : undefined;
 const rect = x => tuple(x, 4) ?? (x && tuple([x.X ?? x.x, x.Y ?? x.y, x.Width ?? x.width, x.Height ?? x.height], 4));
 const positive = x => Number.isSafeInteger(x) && x > 0 ? x : undefined;
+const withoutSay = event => { const { say: _say, ...record } = event; return record; };
 const put = (o, k, v) => { if (v !== undefined) o[k] = v; };
 const thin = x => x.length <= 64 ? x : Array.from({ length: 64 }, (_, i) => x[Math.round(i * (x.length - 1) / 63)]);
 export const cursorReason = reason => reasons.has(reason) ? reason : /element-not-found|no-box/.test(reason ?? '') ? 'not-found'
@@ -121,7 +124,7 @@ export function createRendererSink({ dir = process.env.SLEIGHT_CURSOR_STREAM_DIR
           try {
             const current = await inspect(path);
             if (closed || peers.get(path) !== peer || current.ino !== peer.ino || current.dev !== peer.dev || current.uid !== uid || !current.isSocket() || current.isSymbolicLink() || (current.mode & 0o7777) !== 0o600 || await realpath(path) !== path || !await directoryOK()) return remove(peer);
-            const replay = [...new Set([sessionStart, currentStatus, ...peer.queue].filter(Boolean).map(item => typeof item === 'string' ? item : JSON.stringify(item) + '\n'))];
+            const replay = [...new Set([sessionStart, currentStatus, ...peer.queue].filter(Boolean).map(item => JSON.stringify(withoutSay(typeof item === 'string' ? JSON.parse(item) : item)) + '\n'))];
             replay.sort((a, b) => (JSON.parse(a).seq ?? 0) - (JSON.parse(b).seq ?? 0));
             if (replay.length > 256) { dropped += replay.length - 256; replay.splice(2, replay.length - 256); }
             peer.queue = replay;
@@ -141,12 +144,12 @@ export function createRendererSink({ dir = process.env.SLEIGHT_CURSOR_STREAM_DIR
       if (closed) return;
       refresh(false);
       if (event?.type === 'session' && event.state === 'start') sessionStart = event;
-      if (event?.type === 'status') currentStatus = event;
+      if (event?.type === 'status') currentStatus = withoutSay(event);
       if (!peers.size) return;
       let line; try { line = JSON.stringify(event) + '\n'; } catch { return; }
       for (const p of peers.values()) {
         if (p.queue.length + p.inFlight >= 256) { dropped++; continue; }
-        p.queue.push(line); pump(p);
+        p.queue.push(event.say && (!p.ready || p.blocked) ? JSON.stringify(withoutSay(event)) + '\n' : line); pump(p);
       }
     },
     stats: () => ({ connected: [...peers.values()].filter(p => p.ready).length, queued: [...peers.values()].reduce((n, p) => n + p.queue.length + p.inFlight, 0), dropped }),
@@ -168,6 +171,8 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
   host = 'claude-code', repeat = setInterval, cancelRepeat = clearInterval } = {}) {
   setting = createHandSettingReader({ setting, now });
   const session = opaque(); let seq = 0, closed = false, started = false, output = sink, discoveryTimer, hostClient, recording, recordingClosed, sessionStart;
+  const narrationOutput = createNarrationSink({ write: event => { if (!closed && options().stream === true) (output ??= createRendererSink({ dir: env.SLEIGHT_CURSOR_STREAM_DIR })).write(event); },
+    check: done => hostClient?.checkNarration ? hostClient.checkNarration(done) : done(false) });
   const options = () => { try { return env.SLEIGHT_HAND === '0' ? {} : setting(); } catch { return {}; } };
   // The built-in host draws while the settings pick a drawn style and its client isn't dead (null: none could be created).
   const drawing = () => cursorDrawing(options()) && hostClient !== null && hostClient?.enabled !== false;
@@ -184,7 +189,7 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
     } catch {}
     try { onEvent(event); } catch {}
     if (!held) toHost(event);
-    try { if (options().stream === true) (output ??= createRendererSink({ dir: env.SLEIGHT_CURSOR_STREAM_DIR })).write(event); } catch {}
+    try { if (options().stream === true) narrationOutput.write(event); } catch {}
     return event;
   };
   const start = (initialStatus = true) => {
@@ -206,6 +211,7 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
   const api = {
     call: opaque,
     connectHost(client) { hostClient = client; },
+    get narration() { return options().narration ?? 'off'; },
     get labels() { return options().labels ?? 'off'; },
     get enabled() { return allowed(); },
     host(value) { if (!started && ['claude-code', 'codex', 'other'].includes(value)) host = value; },
@@ -213,7 +219,7 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
     action(input, { held = false } = {}) {
       if (!allowed()) return;
       const record = actionRecord(input, api.labels);
-      if (record) { start(); return emit({ type: 'action', ...record }, held); }
+      if (record) { if (options().narration && options().narration !== 'off') put(record, 'say', narrationLine(input.say)); start(); return emit({ type: 'action', ...record }, held); }
     },
     forward(event) { if (!closed && event) toHost(event); },
     screenshot(content, detail) {
@@ -228,12 +234,12 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
     status(state, detail = {}) {
       if (!allowed() || !states.has(state)) return;
       detail ??= {};
-      start(false); const record = { type: 'status', state }; if (callId(detail.call)) record.call = detail.call; put(record, 'app', text(detail.app)); emit(record);
+      start(false); const record = { type: 'status', state }; if (callId(detail.call)) record.call = detail.call; put(record, 'app', text(detail.app)); if (options().narration && options().narration !== 'off') put(record, 'say', narrationLine(detail.say)); emit(record);
     },
     close() {
       if (closed) return recordingClosed;
       if (started && allowed()) emit({ type: 'session', state: 'end', host, version: release });
-      closed = true; cancelRepeat(discoveryTimer); discoveryTimer = undefined; output?.close();
+      narrationOutput.close(); closed = true; cancelRepeat(discoveryTimer); discoveryTimer = undefined; output?.close();
       recordingClosed = recording?.close()?.catch?.(() => {});
       return recordingClosed;
     },
@@ -247,11 +253,11 @@ export const sessionCursorEvents = () => sharedEvents ??= createCursorEvents();
 // One asynchronous call context in a worker, shared by browser and Electron action runners.
 const context = new AsyncLocalStorage();
 export const cursorStreamEnabled = () => process.env.SLEIGHT_HAND !== '0' && (cachedHandSetting().stream === true || cachedHandSetting().record_runs === true || cursorDrawing(cachedHandSetting()));
-export const withCursorCall = (source, fn, enabled = cursorStreamEnabled()) =>
-  enabled ? context.run({ call: opaque(), index: 0, source }, fn) : fn();
+export const withCursorCall = (source, fn, enabled = cursorStreamEnabled(), say) =>
+  enabled ? context.run({ call: opaque(), index: 0, source, say: narrationLine(say) }, fn) : fn();
 export function cursorStep() {
   const call = context.getStore();
-  return call ? { call: call.call, index: call.index++, source: call.source } : { call: opaque(), index: 0, source: 'turbo' };
+  return call ? { call: call.call, index: call.index++, source: call.source, ...call.say ? { say: call.say } : {} } : { call: opaque(), index: 0, source: 'turbo' };
 }
 export function workerCursorStatus(state, detail = {}) {
   try {
@@ -259,6 +265,7 @@ export function workerCursorStatus(state, detail = {}) {
       const record = { state }, call = context.getStore()?.call;
       if (callId(call)) record.call = call;
       put(record, 'app', text(detail.app));
+      if (cachedHandSetting().narration !== 'off') put(record, 'say', narrationLine(context.getStore()?.say));
       process.send({ version: 3, cursorStatus: record });
     }
   } catch {}
@@ -268,6 +275,7 @@ export function workerCursorAction(record) {
     const setting = cachedHandSetting();
     if (process.connected && (setting.stream || setting.record_runs || cursorDrawing(setting)) && process.env.SLEIGHT_HAND !== '0') {
       const event = actionRecord(record, setting.labels ?? 'off');
+      if (event && setting.narration && setting.narration !== 'off') put(event, 'say', narrationLine(record.say));
       if (event) process.send({ version: 3, cursor: event });
     }
   } catch {}
