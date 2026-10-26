@@ -276,6 +276,22 @@ No tool acts on sleight's own glove or its approval and payment cards, which bel
 tool refuses that status item and leaves it out of `apps`, and `js`, `drag`, `hover`, `open_file`, `select_window` and
 the engine's approval prompt refuse its process and its windows. Only your click answers them.
 
+## Commands you run yourself
+
+The launcher runs a command that changes sleight's settings only when you start it in your own terminal. Its stdin and
+stdout must be a terminal, and no process above it may be Claude Code or the Claude app (the Code tab's terminal panel
+included). Otherwise it prints one line and exits with code 3. The menu bar toggles write through sleight's own window
+and keep working.
+
+- Run `hand on`, `off` and `capture` in your own terminal. `hand status` runs anywhere.
+- Run `turbo on`, `off` and `turbo app on|off` in your own terminal. `turbo status` runs anywhere.
+- Run `cursor style`, `import` and `remove` in your own terminal. `cursor list`, `check` and `status` run anywhere.
+- Run `permissions block`, `unblock`, `revoke`, `sites`, `repair` and `memory clear` in your own terminal. Listing runs anywhere.
+- Run `allow remove` in your own terminal. `allow list` runs anywhere.
+- Run `routine add`, `remove` and `unlock` in your own terminal. `routine list` and `run-now` run anywhere.
+- Run `watch <url> --find`, `watch record`, `remove` and `unlock` in your own terminal. `watch list`, `notes` and
+  `run-now` run anywhere.
+
 ## Turns without a hook
 
 The Claude Code mod ends the engine's turn when Claude finishes. Other clients can omit the mod

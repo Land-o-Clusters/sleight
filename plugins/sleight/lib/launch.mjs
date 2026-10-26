@@ -1392,8 +1392,18 @@ export function allowCommand(args, { list = listPreapproved, remove = removePrea
   return 2;
 }
 
+// The command families whose settings-changing forms run only when a person starts them in a terminal (person-gate.mjs,
+// GATED_COMMANDS). The list lives here too so the server's own start never loads the gate.
+const SETTINGS_COMMANDS = ['hand', 'turbo', 'cursor', 'permissions', 'allow', 'routine', 'watch'];
+
 if (isMainModule(import.meta.url)) {
-  if (['session', 'js', 'js_reset', 'open_file', 'select_window', 'drag'].includes(process.argv[2])) {
+  let refusal;
+  if (SETTINGS_COMMANDS.includes(process.argv[2])) {
+    try { refusal = (await import('./person-gate.mjs')).settingsRefusal(process.argv.slice(2)); }
+    catch { refusal = `sleight: ${process.argv[2]} changes sleight's settings, so run it yourself in a terminal (or use the menu bar).`; }
+  }
+  if (refusal) { process.stderr.write(refusal + '\n'); process.exitCode = 3; }
+  else if (['session', 'js', 'js_reset', 'open_file', 'select_window', 'drag'].includes(process.argv[2])) {
     try { process.exitCode = await (await import('./socket-bridge.mjs')).socketCommand(process.argv.slice(2)); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   } else if (process.argv[2] === '--socket-relay') run({ shellRoute: true }).catch(err => fail(err.message));
