@@ -140,10 +140,14 @@ the adapter's `size`. The extra sheet loads only when an entry uses it.
 The host itself never passes character art to ImageIO. It starts a child of its own binary, `consent-host --decode-sheet
 W H png|webp`, with the checked file as stdin, a pipe as stdout, `/dev/null` as stderr and no other descriptor
 (`POSIX_SPAWN_CLOEXEC_DEFAULT` keeps the consent channel out). The child decodes built-in 1x1 PNG and WebP images,
-enters a deny-default sandbox, and only then reads the file. It decodes one image (an APNG's two refuse) at the
-validated size into sRGB premultiplied RGBA and writes the bytes. On macOS 27 `sandbox_init` kills the
-process when given `kSBXProfilePureComputation` by name. The child passes the same rule as SBPL, `(version 1)(deny default)`. Without the warm-up, ImageIO crashed inside that sandbox. The parent reads exactly W*H*4 bytes within 2 s. A
-timeout, a crash, a short read or a refusal exit means no character. The parent wraps the bytes in a `CGImage` without a
+sets hard limits of 2 s of CPU and 8 descriptors, enters a deny-default sandbox, and only then reads the file. It
+decodes one image (an APNG's two refuse) at the validated size into sRGB premultiplied RGBA and writes the bytes. On
+macOS 27 `sandbox_init` kills the process when given `kSBXProfilePureComputation` by name. The child passes the same
+rule as SBPL, `(version 1)(deny default)`. Without the warm-up, ImageIO crashed inside that sandbox. macOS 27 refuses
+`RLIMIT_AS`, `RLIMIT_DATA` and `RLIMIT_RSS` at any value (EINVAL), so the child has no memory limit beyond the parent's
+deadline. The parent reads exactly W*H*4 bytes within 2 s, then gives the child 0.5 s to exit before SIGKILL. A
+timeout, a crash, a short read or a refusal exit means no character. A refused limit or sandbox has its own reason,
+`sandbox`, apart from a crash (`child`). The parent wraps the bytes in a `CGImage` without a
 copy and checks at least 50 visible pixels and under 95 percent fully opaque pixels in every used cell. Chroma fringe
 in a used cell and ink in an unused cell of a referenced row are warnings. The host knows resolved columns, not each
 row's declared frame count, so it can't refuse unused ink safely. Row 0, column 6 is Codex's neutral pose and never
@@ -155,12 +159,17 @@ A load writes one stderr line on refusal or warning, and in hand mode one nonce-
 decode child, and prints `{"id","loaded","reason","warnings"}`. `prepareHandHost()` returns `checkCharacter(frame)` for
 it, so `sleight-mcp cursor check <id>` can show the user why the ring shows alone.
 
+The decode runs on a background queue (`SpriteLoader`). Until it finishes the ring draws alone, and acts never wait for
+it. The sprite joins at the next frame after. A later character frame or a change away from sprite style cancels a
+load in flight: the read loop polls in 50 ms slices, kills the child and drops the result. In the dump, a character
+line cost the dump's thread under 50 ms while the child took a slowed 1 s.
+
 Each full-size sheet costs the host its 13.4 MiB of decoded bytes, freed on a replacement, a style other than sprite, or
-exit. The live host's peak RSS budget is 64 MiB in sprite style (`budgetFor('sprite')` in `bench/hand/cost-pass.mjs`).
-The ring and the glove keep 50 MiB. In the dump mode on 2026-10-26 (three runs each, spread under 0.1 MiB) the host's own
+exit. The cost pass's peak RSS budget is 64 MiB for a run with `--cursor-style sprite` (`budgetFor` in
+`bench/hand/cost-pass.mjs`, which scores both of its reports). The ring and the glove keep 50 MiB. In the dump mode on 2026-10-26 (three runs each, spread under 0.1 MiB) the host's own
 peak after loading was 8.3 MiB with no character, 23.2 MiB with a full-size sheet and 36.6 MiB with a full-size extra
 sheet as well. The decode child peaked at 41.7 MiB and ran 0.02 s for a full-size PNG. Loading a full-size sheet took
-about 0.25 s on the host's main thread, mostly the unoptimized ink check. The live figures are VC7's.
+about 0.25 s, mostly the unoptimized ink check, now on the loader's queue. The live figures are VC7's.
 
 The test bank override, `SLEIGHT_CURSOR_CHARACTERS_ROOT`, and the decode child's fault switch,
 `SLEIGHT_CURSOR_DECODE_FAULT`, work only with `SLEIGHT_CURSOR_TEST=1`, and the bank only below `/private/tmp/`. The
