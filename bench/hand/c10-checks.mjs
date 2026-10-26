@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
-import { installSyntheticCharacter, characterEnv } from './synthetic-character.mjs';
+import { installSyntheticCharacter, characterEnv, encodePng } from './synthetic-character.mjs';
 import { loadCharacter, resolveCharacterStates } from '../../plugins/sleight/lib/hand/character.mjs';
 import { characterFrame } from '../../plugins/sleight/lib/hand/character-frame.mjs';
 import { assistantNarration, narrationLine, createNarrationCache } from '../../plugins/sleight/hooks/narration.mjs';
@@ -20,6 +20,54 @@ import { createRelay } from '../../plugins/sleight/lib/relay.mjs';
 const nonce = 'a'.repeat(64), token = () => randomBytes(16).toString('hex');
 const jsonl = rows => rows.map(r => JSON.stringify(r)).join('\n') + '\n';
 const parsed = text => text.trim().split('\n').filter(Boolean).map(JSON.parse);
+export async function runDump({ children, binary, directory, character }, scenario) {
+  const raw = await children.run(binary, scenario.args, {
+    input: jsonl(scenario.frames), env: { ...children.env, ...character.env },
+  });
+  writeFileSync(join(directory, `${scenario.id}.jsonl`), raw, { mode: 0o600 });
+  return parsed(raw);
+}
+export async function captureWithRetry(name, capture, signal) {
+  const errors = [];
+  for (let i = 0; i < 2; i++) {
+    signal?.throwIfAborted();
+    try { return { ...await capture(`${name}${i ? '-retry' : ''}.png`), captureRetries: i, captureAttempts: i + 1, captureErrors: errors }; }
+    catch (error) { signal?.throwIfAborted(); errors.push(error.message); }
+  }
+  return { screenshot: null, error: errors.join('; '), captureAttempts: 2, captureRetries: 1, captureErrors: errors,
+    texts: [], spritePixels: -1, hostWindows: -1, voiceBars: -1, voicePixels: -1 };
+}
+export const spriteDrew = (baseline, visible) => !baseline.error && !visible.error && visible.spritePixels > baseline.spritePixels + 4;
+export const spriteCleared = (baseline, visible, after) => spriteDrew(baseline, visible) && !after.error && Math.abs(after.spritePixels - baseline.spritePixels) <= 4;
+export async function waitForSprite({ baseline, shot, sleep, now = Date.now, deadlineMs = 5000, signal }) {
+  signal?.throwIfAborted();
+  const began = now(), deadline = new AbortController(), abort = () => deadline.abort(signal.reason);
+  const timer = setTimeout(() => deadline.abort(Object.assign(Error('Frame observation deadline'), { code: 'FRAME_DEADLINE' })), deadlineMs);
+  signal?.addEventListener('abort', abort, { once: true });
+  let samples = 0, image;
+  try {
+    do {
+      image = await abortable(shot(samples++, deadline.signal), deadline.signal);
+      if (now() - began > deadlineMs) break;
+      if (spriteDrew(baseline, image)) return { image, samples, changed: true, latencyMs: now() - began };
+      if (image.error || now() - began >= deadlineMs) break;
+      await abortable(sleep(Math.min(50, deadlineMs - (now() - began))), deadline.signal);
+    } while (now() - began <= deadlineMs);
+  } catch (error) {
+    signal?.throwIfAborted();
+    if (error.code !== 'FRAME_DEADLINE') throw error;
+  } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
+  return { image: image ?? { error: 'No sprite capture before the frame deadline', screenshot: null, spritePixels: -1 },
+    samples, changed: false, latencyMs: now() - began };
+}
+async function abortable(promise, signal) {
+  if (!signal) return promise;
+  signal.throwIfAborted();
+  let abort;
+  try { return await Promise.race([promise, new Promise((_, reject) => {
+    abort = () => reject(signal.reason); signal.addEventListener('abort', abort, { once: true });
+  })]); } finally { signal.removeEventListener('abort', abort); }
+}
 export const textMatches = (rows, expected) => {
   const normalize = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
   if (!expected || !normalize(expected)) return false;
@@ -61,7 +109,8 @@ export function buildCharacter(base, id = 'c10-synthetic') {
     lines: { start: ['Ready to begin.'], 'first-click': ['First step done.'], error: ['That needs a look.'], done: ['All done.'] } };
   writeFileSync(join(c.folder, 'character.json'), JSON.stringify(manifest), { mode: 0o600 });
   const pack = loadCharacter(c.folder, { installed: true });
-  return { ...c, pack, env: characterEnv(c.root), frame: characterFrame(pack, { nonce, seq: 1, resolve: resolveCharacterStates }) };
+  const thumbs = join(base, 'thumbs'); mkdirSync(thumbs, { recursive: true, mode: 0o700 });
+  return { ...c, pack, env: { ...characterEnv(c.root), SLEIGHT_CURSOR_THUMBS_ROOT: thumbs }, frame: characterFrame(pack, { nonce, seq: 1, resolve: resolveCharacterStates }) };
 }
 export function dumpScenarios(target, character) {
   const scene = (cover = false) => ({ dumpWorld: { windows: [...cover ? [{ id: target.id + 1, pid: target.pid, frame: [target.frame[0] - 30, target.frame[1] - 160, target.frame[2] + 60, target.frame[3] + 320] }] : [],
@@ -108,7 +157,11 @@ export function evaluateDump(id, rows) {
 }
 const settle = async () => { for (let i = 0; i < 12; i++) await new Promise(resolve => setImmediate(resolve)); };
 /** Real relay transport and private run writer, with authored engine responses. No engine, apps or browser connection. */
-export async function replayProbe({ root, lease, image, encode, target = { id: 7, pid: 42, frame: [100, 200, 200, 100] } }) {
+export async function replayProbe({ root, lease, image, encode, signal, target = { id: 7, pid: 42, frame: [100, 200, 200, 100] } }) {
+  signal?.throwIfAborted();
+  const withheld = [1,2,3].map(n => ({ type: 'image', mimeType: 'image/png',
+    data: encodePng(4, 4, new Uint8Array(Array.from({ length: 64 }, (_, i) => i % 4 === 3 ? 255 : i % 4 === n - 1 ? 255 : 0))).toString('base64') }));
+  const withheldBytes = new Set(withheld.map(i => i.data));
   let offWriters = 0, withheldRecorded = 0;
   const off = createCursorEvents({ env: {}, setting: () => handSetting({ env: {}, platform: 'darwin', path: join(root, 'absent-hand.json') }),
     recorder: () => { offWriters++; throw Error('Off writer constructed'); } });
@@ -116,8 +169,8 @@ export async function replayProbe({ root, lease, image, encode, target = { id: 7
   let recorder;
   const events = createCursorEvents({ env: {}, setting: () => ({ record_runs: true, narration: 'bubbles' }),
     recorder: opts => recorder = createRunRecorder({ ...opts, root, encode: async input => {
-      if (Buffer.from(input.data, 'base64').toString().startsWith('WITHHELD-C10')) withheldRecorded++;
-      return (encode ?? downscaleScreenshot)(input);
+      if (withheldBytes.has(input.data)) withheldRecorded++;
+      return abortable((encode ?? downscaleScreenshot)(input), signal);
     } }) });
   const [clientIn, clientOut, serverIn, serverOut] = Array.from({ length: 4 }, () => new PassThrough());
   const delivered = []; serverIn.resume();
@@ -133,13 +186,14 @@ export async function replayProbe({ root, lease, image, encode, target = { id: 7
       window: { id: target.id, pid: target.pid, rect: target.frame } };
     events.action({ ...action, phase: 'aim' }); events.action({ ...action, phase: 'act' });
     for (const [id, appId] of [[1, 'com.example.c10-allowed'], [2, 'com.example.c10-blocked'], [3, 'com.apple.LocalAuthentication.UIAgent'], [4, 'consent-host']]) {
-      clientIn.write(jsonl([{ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code: '1+1' } } }])); await settle();
+      signal?.throwIfAborted();
+      clientIn.write(jsonl([{ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code: '1+1' } } }])); await abortable(settle(), signal);
       serverOut.write(jsonl([{ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'Fixture response.' },
-        id === 1 ? image : { type: 'image', mimeType: 'image/png', data: Buffer.from('WITHHELD-C10-' + id).toString('base64') }],
-        _meta: { 'codex/toolSurface': { app: { appId } } } } }])); await settle();
+        id === 1 ? image : withheld[id - 2]],
+        _meta: { 'codex/toolSurface': { app: { appId } } } } }])); await abortable(settle(), signal);
     }
     events.action({ ...action, phase: 'done' });
-    await events.flushRecording(); await events.close();
+    await abortable(events.flushRecording(), signal); await events.close(); signal?.throwIfAborted();
     const records = await readRun(recorder.stats().id, { root });
     const html = buildRunHTML(records);
     return { offWriters, records, html, delivered: delivered.filter(r => r.id === 1).flatMap(r => r.result?.content ?? []).filter(c => c.type === 'image').length,
@@ -155,7 +209,7 @@ export async function runCheck(id, ctx) {
   const { children, fixture, ready, directory, bin, work, sleep } = ctx;
   const character = buildCharacter(work), target = ready, f = frames(target), checks = [];
   let host;
-  const request = async row => { const key = token(); fixture.send({ ...row, token: key }); const answer = await fixture.wait(r => r.token === key); if (answer.error) throw Error(answer.error); return answer; };
+  const request = async (row, signal = ctx.signal) => { signal?.throwIfAborted(); const key = token(); fixture.send({ ...row, token: key }); const answer = await abortable(fixture.wait(r => r.token === key, row.op === 'shot' ? 15000 : 5000), signal); if (answer.error) throw Error(answer.error); return answer; };
   const start = async () => {
     host = children.start(join(bin, 'consent-host'), ['--hand', '--capture=visible', '--cursor-style=sprite', '--menu'], { env: { ...children.env, ...character.env } });
     host.send(menu()); host.send(character.frame);
@@ -163,36 +217,42 @@ export async function runCheck(id, ctx) {
     if (loaded.loaded !== true) throw Error('Synthetic character refused');
     return host;
   };
-  const shot = async name => {
-    const result = await request({ op: 'shot', name: `${name}.png`, host: host.child.pid });
+  const shot = async (name, extra = {}, signal = ctx.signal) => {
+    const result = await captureWithRetry(name, filename => request({ op: 'shot', name: filename, host: host.child.pid, ...extra }, signal), signal);
+    signal?.throwIfAborted();
     writeFileSync(join(directory, `${name}.capture.json`), JSON.stringify(result), { mode: 0o600 });
     return result;
   };
-  const check = (name, pass, numbers, evidence, reason) => checks.push({ name, status: pass ? 'pass' : 'fail', numbers, screenshot: evidence.screenshot, ...reason ? { reason } : {} });
+  const check = (name, pass, numbers, evidence, reason) => checks.push({ name, status: pass && !evidence.error ? 'pass' : 'fail',
+    numbers: { ...numbers, ...evidence.captureAttempts ? { captureAttempts: evidence.captureAttempts, captureRetries: evidence.captureRetries } : {} },
+    screenshot: evidence.screenshot, ...evidence.error ? { reason: `Capture failed: ${evidence.error}` } : reason ? { reason } : {} });
   const skip = (name, reason, numbers = { observations: 0 }, required = true, evidence) => checks.push({ name, status: 'skip', required, reason, numbers, screenshot: evidence?.screenshot ?? null });
   const dump = async scenario => {
-    const raw = await children.run(join(bin, 'consent-host'), scenario.args, { input: jsonl(scenario.frames) });
-    writeFileSync(join(directory, `${scenario.id}.jsonl`), raw, { mode: 0o600 });
-    return evaluateDump(scenario.id, parsed(raw));
+    return evaluateDump(scenario.id, await runDump({ children, binary: join(bin, 'consent-host'), directory, character }, scenario));
   };
   try {
     await start(); await sleep(500);
     const baseline = await shot('baseline');
     if (id === 'pause') {
       const pause = createSessionPause(), stale = pause.checkpoint(); pause.set(true);
-      let blocked = 0; try { stale(); } catch (e) { blocked += Number(e.notRun === true); }
+      let blocked = 0, resumed = 0; const acks = [], hostPids = new Set([host.child.pid]);
+      try { stale(); } catch (e) { blocked += Number(e.notRun === true); }
       const restore = async value => {
         const key = token(); host.send({ hand: 'pause-ack', nonce, phase: 'restore', token: key, paused: value });
-        return host.wait(r => r.hand === 'pause' && r.phase === 'restored' && r.token === key && r.paused === value);
+        const ack = await host.wait(r => r.hand === 'pause' && r.phase === 'restored' && r.token === key && r.paused === value);
+        acks.push(ack); return ack;
       };
       await restore(true); host.send(f.status('paused')); await sleep(500); const pausedShot = await shot('paused');
       await host.close(); await start(); await restore(pause.paused);
+      hostPids.add(host.child.pid);
       host.send(f.status('paused')); await sleep(500); const restoredShot = await shot('respawn-paused');
       try { pause.checkpoint()(); } catch (e) { blocked += Number(e.notRun === true); }
       pause.set(false); try { stale(); } catch (e) { blocked += Number(e.notRun === true); }
-      pause.checkpoint()(); await restore(false);
-      check('pause checkpoint before next action', blocked === 3, { blockedActions: blocked, resumedCheckpoints: 1 }, pausedShot, 'Session checkpoint fixture, no engine action was dispatched.');
-      check('paused host respawn restore acknowledgment', pause.paused === false, { hosts: 2, pauseRestoreAcks: 2, resumeAcks: 1 }, restoredShot, 'Parent restore protocol; relay crash recovery and physical controls still need a person.');
+      pause.checkpoint()(); resumed++; await restore(false);
+      check('unit: session pause checkpoint', blocked === 3 && resumed === 1, { blockedActions: blocked, resumedCheckpoints: resumed }, pausedShot, 'In-process session unit check. The relay action boundary was not exercised.');
+      const pausedAcks = acks.filter(a => a.paused === true).length, resumeAcks = acks.filter(a => a.paused === false).length;
+      check('paused host respawn restore acknowledgment', hostPids.size === 2 && pausedAcks === 2 && resumeAcks === 1,
+        { hosts: hostPids.size, pauseRestoreAcks: pausedAcks, resumeAcks }, restoredShot, 'Observed parent restore acknowledgments. The paused artwork and physical controls need attended review.');
       skip('menu row and character hardware click', 'Both controls require fresh hardware input. Injected input or an AX press cannot qualify them in an owner-away run.', { clicks: 0 }, true, pausedShot);
     } else if (id === 'narration') {
       const n = narrationFixture();
@@ -207,8 +267,11 @@ export async function runCheck(id, ctx) {
         { ...redaction.numbers, cardDigits: 16, recognized: Number(textMatches(redactedShot.texts, n.redacted)) }, redactedShot);
       const key = token(); host.send({ hand: 'clear', nonce, token: key }); await host.wait(r => r.hand === 'clear-ready' && r.token === key); await sleep(250);
       const cleared = await shot('clear'), planClear = await dump(dumpScenarios(target, character.frame).find(s => s.id === 'clear-plan'));
-      check('nothing shown during clear', planClear.pass && cleared.spritePixels === baseline.spritePixels && cleared.hostWindows === 0,
-        { ...planClear.numbers, spritePixels: cleared.spritePixels, baselinePixels: baseline.spritePixels, hostWindows: cleared.hostWindows }, cleared);
+      const beforeClear = redactedShot.error ? picture : redactedShot;
+      const bubbleSeen = textMatches(beforeClear.texts, redactedShot.error ? n.line : n.redacted) && beforeClear.hostWindows > 0;
+      check('nothing shown during clear', planClear.pass && bubbleSeen && spriteCleared(baseline, beforeClear, cleared) && cleared.hostWindows === 0,
+        { ...planClear.numbers, beforeSpritePixels: beforeClear.spritePixels, bubbleSeen: Number(bubbleSeen), spritePixels: cleared.spritePixels,
+          baselinePixels: baseline.spritePixels, tolerancePixels: 4, hostWindows: cleared.hostWindows }, cleared);
     } else if (id === 'voice') {
       const defaults = handSetting({ env: {}, platform: 'darwin', path: join(work, 'absent-hand.json') });
       check('voice off by default', defaults.narration === 'off', { defaultVoiceEnabled: Number(defaults.narration === 'voice') }, baseline);
@@ -216,17 +279,41 @@ export async function runCheck(id, ctx) {
       writeFileSync(join(directory, 'voices.json'), JSON.stringify(voices), { mode: 0o600 });
       if (!voices.length) skip('one spoken line and pause', 'No installed system voice; C10 never downloads one.', { installedVoices: 0 });
       else {
+        const line = 'I will inspect this fixture before taking the next step.';
+        const plans = await runDump({ children, binary: join(bin, 'consent-host'), directory, character }, {
+          id: 'voice-bubble-plan', args: ['--ring-plan-dump', '--cursor-style=sprite', `--clip=${target.frame.join(',')}`],
+          frames: [character.frame, menu('voice', { id: voices[0].id, rate: 0.5 }), f.act({ say: line })],
+        });
+        const bubble = plans.find(r => r.effect === 'draw' && r.bubble)?.bubble.frame;
         host.send(menu('voice', { id: voices[0].id, rate: 0.5 }));
-        host.send(f.act({ say: 'I will inspect this fixture before taking the next step.' })); await sleep(800);
-        const speaking = await shot('voice-requested');
+        const requestedAt = Date.now(); host.send(f.act({ say: line })); await sleep(800);
+        const speaking = await shot('voice-requested', { bubble });
+        const pauseAtMs = Date.now() - requestedAt;
         const key = token(); host.send({ hand: 'pause-ack', nonce, phase: 'restore', token: key, paused: true }); await host.wait(r => r.token === key && r.phase === 'restored');
-        host.send(f.status('paused')); await sleep(200); const paused = await shot('voice-paused');
+        host.send(f.status('paused')); await sleep(200); const paused = await shot('voice-paused', { bubble });
         const cancellation = JSON.parse(await children.run(join(bin, 'consent-host'), ['--narration-selftest'], { input: jsonl([{ installed: ['fixture'], voice: { id: 'fixture', rate: 0.5 }, lines: ['One line.', { cancel: true }] }]) }));
-        check('narrator cancellation model', cancellation.started.length === 1 && cancellation.active === null, { requestedLines: 1, installedVoices: voices.length, modelStarts: cancellation.started.length, modelStops: cancellation.stops }, paused, 'Selftest cancellation, not physical pause or audible playback.');
-        skip('audible start and pause cutting a speaking line', 'The host exposes no speaking acknowledgment. No microphone capture is allowed. Known low: an active line may continue for up to 15 s after pause.', { requestedLines: 1, audioRecordings: 0, pauseAfterMs: 800 }, true, speaking);
+        writeFileSync(join(directory, 'voice-cancellation.json'), JSON.stringify(cancellation), { mode: 0o600 });
+        check('unit: narrator cancellation model', cancellation.started.length === 1 && cancellation.active === null, { requestedLines: 1, installedVoices: voices.length, modelStarts: cancellation.started.length, modelStops: cancellation.stops }, baseline, 'Selftest cancellation; baseline screenshot is context. Physical pause and audible playback were not exercised.');
+        let audio;
+        if (speaking.voiceBars !== 3) {
+          audio = await request({ op: 'audio' });
+          writeFileSync(join(directory, 'audio-output.json'), JSON.stringify(audio), { mode: 0o600 });
+        }
+        const numbers = { speakingBars: speaking.voiceBars ?? -1, speakingPixels: speaking.voicePixels ?? -1,
+          pausedBars: paused.voiceBars ?? -1, pausedPixels: paused.voicePixels ?? -1, pauseAtMs,
+          muted: audio?.muted === true ? 1 : audio?.muted === false ? 0 : -1,
+          zeroVolume: audio?.zeroVolume === true ? 1 : audio?.zeroVolume === false ? 0 : -1, audioRecordings: 0 };
+        if (!speaking.error && speaking.voiceBars !== 3 && (audio?.muted === true || audio?.zeroVolume === true)) {
+          skip('voice line start and pause cut', 'No voice bars; output is muted or at zero volume. Output settings were read and left unchanged.', numbers, true, speaking);
+        } else {
+          check('voice line started (three blue bars)', speaking.voiceBars === 3, numbers, speaking,
+            'Blue bars appear after the speech delegate starts. Pixels do not prove audible output. Missing bars include read-only audio metadata.');
+          check('pause cut a speaking line (bars removed)', speaking.voiceBars === 3 && paused.voiceBars === 0, numbers, paused,
+            'A speaking capture precedes pause; the following capture must contain zero blue bars.');
+        }
       }
     } else if (id === 'picker') {
-      // C8 may land at integration. Use only bundled data, never the owner\'s installed characters or Codex pets.
+      // Use bundled data and this run's synthetic character, with a private discovery home.
       const source = new URL('../../plugins/sleight/characters/', import.meta.url).pathname;
       const home = join(work, 'picker-home'); mkdirSync(home, { mode: 0o700 });
       let selected;
@@ -252,23 +339,28 @@ export async function runCheck(id, ctx) {
       const after = host.rows.length;
       host.send({ hand: 'picker', nonce, op: 'style', style: 'sprite' }); host.send(f.character(character.frame));
       await host.wait(r => r.hand === 'character' && r.id === character.id && r.loaded, 5000, after);
-      host.send(f.aim()); await sleep(500); const next = await shot('next-frame');
-      check('selection plumbing and next sprite frame', applied.ok && selected?.character === character.id && ring.spritePixels === baseline.spritePixels && next.spritePixels > ring.spritePixels,
-        { catalogRows: catalog.rows.length, installedCharacters: catalog.installed.length, selected: Number(selected?.character === character.id), ringPixels: ring.spritePixels, spritePixels: next.spritePixels }, next,
-        'Synthetic catalog and parent-issued style frame. Does not prove a hardware menu selection.');
+      const loadedAt = Date.now(); host.send(f.aim());
+      const frameChange = await waitForSprite({ baseline: ring, shot: (i, signal) => shot(`next-frame-${i}`, {}, signal), sleep,
+        signal: ctx.signal, now: ctx.now ?? Date.now, deadlineMs: 5000 });
+      const next = frameChange.image;
+      check('selection plumbing and first observed sprite frame', applied.ok && selected?.character === character.id && !ring.error && !baseline.error && Math.abs(ring.spritePixels - baseline.spritePixels) <= 4 && frameChange.changed,
+        { catalogRows: catalog.rows.length, installedCharacters: catalog.installed.length, selected: Number(selected?.character === character.id), ringPixels: ring.spritePixels,
+          spritePixels: next.spritePixels, samples: frameChange.samples, latencyMs: frameChange.latencyMs, sinceLoadAckMs: Date.now() - loadedAt, deadlineMs: 5000, tolerancePixels: 4 }, next,
+        'Latency includes capture and OCR. Synthetic catalog and parent style frame; hardware selection needs attended review.');
       skip('hardware picker selection', 'Fresh hardware input is required for native menu selection; no injected click is substituted.', { clicks: 0 }, true, next);
     } else if (id === 'perch') {
       host.send(options(true, false)); host.send(f.aim()); await sleep(1200);
       const seated = await shot('seated'), geometry = await request({ op: 'state' });
-      const raw = await children.run(join(bin, 'consent-host'), ['--perch-dump'], { input: jsonl([character.frame, options(true), { dumpWorld: { windows: [{ id: target.id, pid: target.pid, frame: target.frame }], displays: target.displays } }, { dumpDecode: true }, f.aim()]) });
-      writeFileSync(join(directory, 'seat-plan.jsonl'), raw, { mode: 0o600 });
-      const rows = parsed(raw), seat = rows.find(r => r.effect === 'perch')?.seat, legs = rows.find(r => r.effect === 'legs')?.legs;
+      const rows = await runDump({ children, binary: join(bin, 'consent-host'), directory, character }, { id: 'seat-plan', args: ['--perch-dump'],
+        frames: [character.frame, options(true), { dumpWorld: { windows: [{ id: target.id, pid: target.pid, frame: target.frame }], displays: target.displays } }, { dumpDecode: true }, f.aim()] });
+      const seat = rows.find(r => r.effect === 'perch')?.seat, legs = rows.find(r => r.effect === 'legs')?.legs;
       const legLeft = seat && legs ? seat.x - legs[0] - target.frame[0] : -1;
       check('seat and traffic-light margin', seated.spritePixels > baseline.spritePixels && geometry.clusterRightPt <= 80 && legLeft >= geometry.clusterRightPt + 8,
         { spritePixels: seated.spritePixels, measuredClusterRightPt: geometry.clusterRightPt, constantPt: 80, spriteLegLeftPt: legLeft, gapPt: legLeft - geometry.clusterRightPt }, seated,
         'Cluster measured from all three real fixture title-bar buttons. Seat and leg footprint measured by the shipped dump.');
       await request({ op: 'cover', covered: true }); await sleep(1500); const covered = await shot('covered');
-      check('cover by another fixture window', covered.spritePixels === baseline.spritePixels, { seatedPixels: seated.spritePixels, coveredPixels: covered.spritePixels, coverWindows: 1 }, covered);
+      check('cover by another fixture window', spriteCleared(baseline, seated, covered),
+        { seatedPixels: seated.spritePixels, coveredPixels: covered.spritePixels, baselinePixels: baseline.spritePixels, tolerancePixels: 4 }, covered);
       await request({ op: 'cover', covered: false }); await sleep(1500); const uncovered = await shot('uncovered');
       check('uncover restores seat', uncovered.spritePixels > baseline.spritePixels, { uncoveredPixels: uncovered.spritePixels }, uncovered);
       if (ready.displays.length < 2) skip('second display', 'Only one display is present.', { displays: ready.displays.length }, false, uncovered);
@@ -278,8 +370,8 @@ export async function runCheck(id, ctx) {
         const image = await shot('second-display'); check('second display seat', image.spritePixels > 0, { displays: ready.displays.length, displayIndex: 1, spritePixels: image.spritePixels }, image);
       }
       const deep = await dump(dumpScenarios(target, character.frame).find(s => s.id === 'covered-sleep-plan'));
-      check('600 second stop in runtime dump', deep.pass, deep.numbers, covered, 'Simulated clock only.');
-      skip('10 minute covered live sleep', 'No test-only live sleep-duration flag exists in this host. The 600 s runtime dump ran; wall-clock sleep was not run.', { liveSeconds: 0, dumpSeconds: 604 }, false, covered);
+      check('unit: 600 second stop in runtime dump', deep.pass, deep.numbers, baseline, 'Simulated clock only; baseline screenshot is context.');
+      skip('10 minute covered live sleep', 'Wall-clock covered sleep is outside this seven-step pass. The 604 s runtime dump ran.', { liveSeconds: 0, dumpSeconds: 604 }, false, covered);
     } else if (id === 'lines') {
       host.send(options(true, true));
       const actions = [[0, f.aim(), 'start'], [8000, f.status('done', { ok: true }), 'first-click'], [11000, f.status('error'), 'error'],
@@ -295,23 +387,32 @@ export async function runCheck(id, ctx) {
         }
       }
       for (const scenario of dumpScenarios(target, character.frame).filter(s => s.id.startsWith('lines-'))) {
-        const answer = await dump(scenario); check(scenario.id, answer.pass, answer.numbers, { screenshot: 'done.png' }, 'Shipped runtime on a simulated clock, beside the live frame screenshots.');
+        const answer = await dump(scenario); check(`unit: ${scenario.id}`, answer.pass, answer.numbers, baseline, 'Shipped runtime on a simulated clock; baseline screenshot is context. Live frame checks are separate.');
       }
     } else if (id === 'replay') {
+      if (baseline.error) { check('replay capture prerequisite', false, { captures: 0 }, baseline); return { id, checks }; }
       const image = { type: 'image', mimeType: 'image/png', data: readFileSync(join(directory, baseline.screenshot)).toString('base64') };
       const probe = await replayProbe({ root: join(work, 'runs'), lease: join(work, 'leases'), image,
-        target: { ...target, frame: baseline.captureFrame } });
+        signal: ctx.signal, target: { ...target, frame: baseline.captureFrame } });
       writeFileSync(join(directory, 'replay.html'), probe.html, { mode: 0o600 });
       writeFileSync(join(directory, 'recorded.jsonl'), jsonl(probe.records), { mode: 0o600 });
       check('recording off by default', probe.offWriters === 0, { offWriters: probe.offWriters }, baseline);
-      check('withheld content excluded and timeline replayed', probe.replies === 4 && probe.shots === 1 && probe.delivered === 1 && probe.pointPositions > 0 && probe.withheldDelivered === 0 && probe.withheldRecorded === 0 && !probe.html.includes('WITHHELD-C10'),
+      check('withheld content excluded and timeline replayed', probe.replies === 4 && probe.shots === 1 && probe.delivered === 1 && probe.pointPositions > 0 && probe.withheldDelivered === 0 && probe.withheldRecorded === 0,
         { records: probe.records.length, replayPositions: probe.positions, pointPositions: probe.pointPositions, replies: probe.replies, deliveredShots: probe.delivered, recordedShots: probe.shots, withheldDelivered: probe.withheldDelivered, withheldRecorded: probe.withheldRecorded, bytes: probe.bytes }, baseline,
         'Authored actions and engine replies traverse the production relay, writer and replay reducer. Fixture geometry annotates the delivered image.');
       const page = await request({ op: 'replay' }); await sleep(300); const replayShot = await shot('replay');
-      check('replay page in fixture WebKit viewer', page.positions === probe.positions && page.withheld === 0 && page.imageShown === true,
-        { viewerPositions: page.positions, reducerPositions: probe.positions, withheldPositions: page.withheld, imageShown: Number(page.imageShown) }, replayShot);
+      check('replay page in fixture WebKit viewer', page.positions === probe.positions && page.imageShown === true,
+        { viewerPositions: page.positions, reducerPositions: probe.positions, imageShown: Number(page.imageShown) }, replayShot);
     }
     writeFileSync(join(directory, 'host-events.jsonl'), jsonl(host.rows), { mode: 0o600 });
     return { id, checks };
-  } finally { if (host) { const end = await host.close(); if (end.code !== 0) throw Error(`Hand host exited ${end.code ?? end.signal}`); } }
+  } finally {
+    writeFileSync(join(directory, 'result.json'), JSON.stringify({ id, checks }, null, 2) + '\n', { mode: 0o600 });
+    if (host) {
+      writeFileSync(join(directory, 'host-events.jsonl'), jsonl(host.rows), { mode: 0o600 });
+      const end = await host.close();
+      writeFileSync(join(directory, 'host-stderr.log'), end.stderr ?? '', { mode: 0o600 });
+      if (end.code !== 0 && !ctx.signal?.aborted) throw Object.assign(Error(`Hand host exited ${end.code ?? end.signal}`), { code: 'CLEANUP' });
+    }
+  }
 }

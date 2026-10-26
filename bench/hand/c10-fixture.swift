@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import CoreAudio
 import Foundation
 import ImageIO
 import IOKit
@@ -20,8 +21,54 @@ func idle() -> Double? {
     guard service != 0 else { return nil }; defer { IOObjectRelease(service) }
     return (IORegistryEntryCreateCFProperty(service, "HIDIdleTime" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? NSNumber).map { $0.doubleValue / 1e9 }
 }
+// Count separate blue column runs inside the bubble's 12 pt voice-glyph strip only.
+// Vertical animation changes heights, while the three x positions stay fixed.
+func voicePixels(_ rgba: [UInt8], _ width: Int, _ height: Int) -> [String: Int] {
+    var pixels = 0, bars = 0, inBar = false
+    for x in 0..<width {
+        var column = 0
+        for y in 0..<height {
+            let i = (y * width + x) * 4
+            if abs(Int(rgba[i]) - 91) <= 12 && abs(Int(rgba[i + 1]) - 141) <= 12 && rgba[i + 2] >= 243 && rgba[i + 3] >= 230 { column += 1 }
+        }
+        pixels += column
+        if column > 0 && !inBar { bars += 1 }
+        inBar = column > 0
+    }
+    return ["voiceBars": bars, "voicePixels": pixels]
+}
+func outputAudio() -> [String: Any] {
+    func read<T>(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector, _ scope: AudioObjectPropertyScope,
+                 _ element: AudioObjectPropertyElement, _ initial: T) -> T? {
+        var value = initial, size = UInt32(MemoryLayout<T>.size)
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: element)
+        guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr,
+              size == MemoryLayout<T>.size else { return nil }
+        return value
+    }
+    let main = kAudioObjectPropertyElementMain, scope = kAudioDevicePropertyScopeOutput
+    guard let device: UInt32 = read(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultOutputDevice,
+                                   kAudioObjectPropertyScopeGlobal, main, UInt32(0)), device != 0 else {
+        return ["muted": NSNull(), "zeroVolume": NSNull(), "reason": "unknown-output"]
+    }
+    let mainMute: UInt32? = read(device, kAudioDevicePropertyMute, scope, main, UInt32(0))
+    let mainVolume: Float32? = read(device, kAudioDevicePropertyVolumeScalar, scope, main, Float32(0))
+    let channels: [UInt32] = mainMute != nil && mainVolume != nil ? [main] : [1,2]
+    let mutes = channels.map { mainMute ?? read(device, kAudioDevicePropertyMute, scope, $0, UInt32(0)) }
+    let volumes: [Float32?] = channels.map { mainVolume ?? read(device, kAudioDevicePropertyVolumeScalar, scope, $0, Float32(0)) }
+    return ["muted": mutes.allSatisfy { $0 != nil } ? mutes.allSatisfy { $0 != 0 } as Any : NSNull(),
+            "zeroVolume": volumes.allSatisfy { $0?.isFinite == true } ? volumes.allSatisfy { $0 == 0 } as Any : NSNull(),
+            "channels": channels.count, "volumes": volumes.map { $0 as Any? ?? NSNull() }, "mutes": mutes.map { $0 as Any? ?? NSNull() }]
+}
 let args = CommandLine.arguments
 if args == [args[0], "--selftest"] { emit(["windowsCreated": 0, "margin": 80, "coveredStopSeconds": 600]); exit(0) }
+if args == [args[0], "--voice-pixels-selftest"] {
+    let data = FileHandle.standardInput.readDataToEndOfFile()
+    guard data.count <= 128 * 1024, let row = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let width = row["width"] as? Int, let height = row["height"] as? Int, (1...128).contains(width), (1...128).contains(height),
+          let base64 = row["rgba"] as? String, let bytes = Data(base64Encoded: base64), bytes.count == width * height * 4 else { exit(65) }
+    emit(voicePixels(Array(bytes), width, height).merging(["windowsCreated": 0]) { _, b in b }); exit(0)
+}
 if args == [args[0], "--preflight"] { emit(["screenRecording": CGPreflightScreenCaptureAccess(), "idle": idle() as Any? ?? NSNull()]); exit(0) }
 guard args.count == 4, args[1] == "--serve", args[2].hasPrefix("/"), args[3].hasSuffix("/bin/consent-host") else { exit(64) }
 let output = URL(fileURLWithPath: args[2]).resolvingSymlinksInPath().path
@@ -95,6 +142,7 @@ final class Fixture: NSObject, NSApplicationDelegate, WKNavigationDelegate {
               let op = row["op"] as? String else { finish(65) }
         switch op {
         case "state": snapshot(token)
+        case "audio": emit(["event": "reply", "token": token].merging(outputAudio()) { _, b in b })
         case "cover":
             guard let value = row["covered"] as? Bool else { finish(65) }
             if value { cover.orderFrontRegardless() } else { cover.orderOut(nil) }
@@ -107,7 +155,11 @@ final class Fixture: NSObject, NSApplicationDelegate, WKNavigationDelegate {
                   let host = row["host"] as? Int32, host > 0, getpgid(host) == getpgid(getpid()) else { finish(65) }
             var path = [CChar](repeating: 0, count: 4096)
             guard proc_pidpath(host, &path, UInt32(path.count)) > 0, String(cString: path) == args[3] else { finish(65) }
-            Task { await capture(name, host, token) }
+            var bubble: CGRect?
+            if let values = row["bubble"] as? [Double], values.count == 4, values.allSatisfy({ $0.isFinite }), values[2] > 0, values[3] > 0 {
+                bubble = CGRect(x: values[0], y: values[1], width: values[2], height: values[3])
+            }
+            Task { await capture(name, host, token, bubble) }
         case "replay":
             let path = output + "/replay.html"
             var st = stat()
@@ -129,20 +181,18 @@ final class Fixture: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         (() => {
           const slider = document.getElementById('timeline');
           const records = JSON.parse(document.getElementById('run-data').textContent);
-          let withheld = 0;
           for (let i = 0; i < records.length; i++) {
             slider.value = i; slider.dispatchEvent(new Event('input'));
-            if (document.body.textContent.includes('WITHHELD-C10')) withheld++;
           }
           const image = document.getElementById('screenshot');
-          return {positions: records.length, withheld, imageShown: !image.hidden && image.src.startsWith('data:image/jpeg;base64,')};
+          return {positions: records.length, imageShown: !image.hidden && image.src.startsWith('data:image/jpeg;base64,')};
         })()
         """) { value, error in
             guard error == nil, let result = value as? [String: Any] else { emit(["event": "reply", "token": token, "error": "replay-script-failed"]); return }
             emit(["event": "reply", "token": token].merging(result) { _, b in b })
         }
     }
-    func capture(_ name: String, _ host: Int32, _ token: String) async {
+    func capture(_ name: String, _ host: Int32, _ token: String, _ bubble: CGRect?) async {
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
             guard let targetWindow = content.windows.first(where: { $0.windowID == UInt32(target.windowNumber) }),
@@ -178,9 +228,23 @@ final class Fixture: NSObject, NSApplicationDelegate, WKNavigationDelegate {
             let recognition = VNRecognizeTextRequest(); recognition.recognitionLevel = .accurate
             try VNImageRequestHandler(cgImage: image).perform([recognition])
             let texts = (recognition.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+            var voice = ["voiceBars": -1, "voicePixels": -1]
+            if let bubble = bubble {
+                let strip = CGRect(x: (bubble.minX + 8 - region.minX) * scale, y: (bubble.minY - region.minY) * scale,
+                                   width: 12 * scale, height: bubble.height * scale).integral
+                if strip.minX >= 0 && strip.minY >= 0 && strip.maxX <= CGFloat(image.width) && strip.maxY <= CGFloat(image.height),
+                   let cropped = image.cropping(to: strip) {
+                    var glyph = [UInt8](repeating: 0, count: cropped.width * cropped.height * 4)
+                    if let inkContext = CGContext(data: &glyph, width: cropped.width, height: cropped.height, bitsPerComponent: 8,
+                        bytesPerRow: cropped.width * 4, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
+                        inkContext.draw(cropped, in: CGRect(x: 0, y: 0, width: cropped.width, height: cropped.height))
+                        voice = voicePixels(glyph, cropped.width, cropped.height)
+                    }
+                }
+            }
             emit(["event": "reply", "token": token, "screenshot": name, "width": image.width, "height": image.height, "texts": texts,
                   "captureFrame": rect(region),
-                  "spritePixels": ink, "includedWindows": owned.count, "hostWindows": owned.filter { $0.owningApplication?.processID == host }.count])
+                  "spritePixels": ink, "includedWindows": owned.count, "hostWindows": owned.filter { $0.owningApplication?.processID == host }.count].merging(voice) { _, b in b })
         } catch { emit(["event": "reply", "token": token, "error": "capture-failed"]) }
     }
 }
