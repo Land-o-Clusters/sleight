@@ -6,7 +6,7 @@ import type { Frame, LogEntry, ViewStatus } from '../types'
 import { FRAME_MARKER, snapshotCode } from './snapshot'
 import { fileArgument, outcomeOf, resultEntries } from './replay'
 import type { ReplayScript } from './replay'
-import { preapprovedWriteTarget, preapprovedWriteReason, loggingSwitchWriteDenied } from './preapproved-write-guard.mjs'
+import { preapprovedWriteTarget, preapprovedWriteReason, loggingSwitchWriteDenied, PROTECTED } from './preapproved-write-guard.mjs'
 import { shellLaunchDenied, shellGuardReason } from './shell-guard.mjs'
 import { costSnapshot, statsFromReply, turnSummary, turnStatsText } from './turn-stats.mjs'
 import type { TurnSummary } from './turn-stats.mjs'
@@ -21,78 +21,56 @@ const BROWSER_TOOLS = ['browser_open', 'browser_read', 'browser_act', 'browser_f
 const PANE = 'sleight'
 const LOG_LIMIT = 200
 
+// Atom declarations are stable references. The host stores their values per session.
 const log = atom({ plugin: 'sleight', key: 'log' } as const, [] as LogEntry[])
 const frame = atom({ plugin: 'sleight', key: 'frame' } as const, null as Frame | null)
 const view = atom({ plugin: 'sleight', key: 'view' } as const, { kind: 'idle' } as ViewStatus)
 const stopped = atom({ plugin: 'sleight', key: 'stopped' } as const, false)
 const replayFile = atom({ plugin: 'sleight', key: 'replayFile' } as const, '')
 const replaying = atom({ plugin: 'sleight', key: 'replaying' } as const, false)
-let replayActive = false
-let replayCancelled = false
-let replaySequence = 0
 const receipt = atom({ plugin: 'sleight', key: 'receipt' } as const, null as { path?: string; review?: string; unavailable?: boolean } | null)
 const stats = atom({ plugin: 'sleight', key: 'stats' } as const, null as TurnSummary | null)
+
 type StatsTurn = { id: string; used: boolean; forwarded: number; baseline?: Awaited<ReturnType<typeof hostCost>>; stoppedStats: ReturnType<typeof statsFromReply>; stopping?: Promise<string | undefined> }
-let statsTurn: StatsTurn | undefined
-let latestStatsOwner: StatsTurn | undefined
+
 async function hostCost($: any) {
   try { return costSnapshot(await $.session.usage()) } catch { return null }
 }
 
-async function storeStats($: any, summary: TurnSummary, owner?: StatsTurn) {
-  await update($, stats, () => { latestStatsOwner = owner; return summary })
+async function storeStats($: any, state: ModState, summary: TurnSummary, owner?: StatsTurn) {
+  await update($, stats, () => { state.latestStatsOwner = owner; return summary })
 }
 
-// Not drawn from, so plain module variables (a reload resets them, harmlessly).
-let usedThisTurn = false
-// A genuine turbo prompt needs an end fence even if no sleight tool runs.
-// Binding that prompt alone must not activate the shell guard.
-let turboTurnBound = false
-let remoteTurnBound = false
-let turnRunning = false
-let actions = 0
-let lastApp: string | undefined
-// The exact snapshot code in flight, for the tool.check below.
-let snapshotInFlight: string | undefined
-// Apps the pane snapshotted since Claude last used sleight. The engine diffs
-// UI state against the latest read of an app, whoever made it, so Claude's
-// next diff would be against the pane's read; the next prompt says so.
-const snapshottedApps = new Set<string>()
-// The pane's last drawn size, for sizing the next snapshot.
-let paneColumns = 48
-let paneRows = 20
-// The surface that last drew the pane; a snapshot carries only what it draws.
-let paneSurface = 'terminal'
-
+// tool.call carries the host's loop identity; classic.PreToolUse does not.
+// A child's shell fence lasts until that child's completion, even if the main
+// turn completes first. An absent id is the main loop, never a borrowed child.
+const loopKey = (e: { agentId?: string }) => e.agentId ?? ''
 // Host-issued turn capability stays in this mod's private runtime. It never
 // enters atoms, pane history, prompt context or model-facing tool results.
 type TurboEnvelope = { version: 1; session: string; nonce: string }
-let turboEnvelope: TurboEnvelope | undefined
-let turboSequence = 0
-let turboPending = Promise.resolve()
 
-async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin'>, text: string, origin: 'composer' | 'bridge'): Promise<string | undefined> {
-  if (turboSequence >= Number.MAX_SAFE_INTEGER) return
-  const turn = `turbo-${++turboSequence}`
+async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin'>, state: ModState, text: string, origin: 'composer' | 'bridge'): Promise<string | undefined> {
+  if (state.turboSequence >= Number.MAX_SAFE_INTEGER) return
+  const turn = `turbo-${++state.turboSequence}`
   let context: string | undefined
-  const running = turboPending.then(async () => {
+  const running = state.turboPending.then(async () => {
     try {
       let enabled = false
       let present = origin !== 'bridge'
       try {
-        const state = await $.process.run([`${$.plugin.root}/bin/sleight-mcp`, 'turbo-state'])
-        if (state.exitCode === 0 && state.isStdoutTruncated !== true && typeof state.stdout === 'string' && state.stdout.length <= 4096) {
-          const data = JSON.parse(state.stdout)
-          narration.configure(data?.narration)
+        const setting = await $.process.run([`${$.plugin.root}/bin/sleight-mcp`, 'turbo-state'])
+        if (setting.exitCode === 0 && setting.isStdoutTruncated !== true && typeof setting.stdout === 'string' && setting.stdout.length <= 4096) {
+          const data = JSON.parse(setting.stdout)
+          state.narration.configure(data?.narration)
           enabled = data?.enabled === true
           const p = data?.presence
           if (origin !== 'bridge' && typeof p?.locked === 'boolean' && Number.isFinite(p.idleSeconds) && p.idleSeconds >= 0)
             present = !p.locked && p.idleSeconds < 120
-        } else { narration.configure('off') }
-      } catch { narration.configure('off') /* User text still reaches the relay when turbo is unavailable. */ }
+        } else { state.narration.configure('off') }
+      } catch { state.narration.configure('off') /* User text still reaches the relay when turbo is unavailable. */ }
       if (!enabled && present && !/^[ \t]*allow\b/i.test(text)) return
       for (let attempt = 0; attempt < 2; attempt++) {
-        if (!turboEnvelope) {
+        if (!state.turboEnvelope) {
           const response = await call($, 'turn_ended', { sleight_turbo: { event: 'bootstrap' } })
           if (response.isError || response.content?.length !== 1 || response.content[0]?.type !== 'text' ||
               typeof response.content[0].text !== 'string' || response.content[0].text.length > 4096) return
@@ -101,27 +79,62 @@ async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin'>, te
           if (!data || Object.keys(data).length !== 1 || !envelope || Object.keys(envelope).length !== 3 || envelope.version !== 1 ||
               typeof envelope.session !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(envelope.session) ||
               typeof envelope.nonce !== 'string' || !/^[a-f0-9]{64}$/.test(envelope.nonce)) return
-          turboEnvelope = { version: 1, session: envelope.session, nonce: envelope.nonce }
+          state.turboEnvelope = { version: 1, session: envelope.session, nonce: envelope.nonce }
         }
         let response
-        try { response = await call($, 'turn_ended', { sleight_turbo: { ...turboEnvelope, event: 'begin', turn, text, origin, turbo: enabled } }) }
-        catch { turboEnvelope = undefined; continue }
-        if (response.isError) { turboEnvelope = undefined; continue }
-        if (origin === 'bridge') remoteTurnBound = true
+        try { response = await call($, 'turn_ended', { sleight_turbo: { ...state.turboEnvelope, event: 'begin', turn, text, origin, turbo: enabled } }) }
+        catch { state.turboEnvelope = undefined; continue }
+        if (response.isError) { state.turboEnvelope = undefined; continue }
+        if (origin === 'bridge') state.remoteTurnBound = true
         try {
           const remote = JSON.parse(response.content?.[0]?.text ?? '')?.sleightRemote
-          if (remote?.turboBound === true) turboTurnBound = true
+          if (remote?.turboBound === true) state.turboTurnBound = true
           if (typeof remote?.context === 'string' && remote.context.length <= 4096 &&
               /^sleight: Ask the user to reply: allow [^\r\n]+$/.test(remote.context)) context = remote.context
         } catch { /* A missing context line changes no authority. */ }
         break
       }
-    } catch { turboEnvelope = undefined }
+    } catch { state.turboEnvelope = undefined }
   })
-  turboPending = running
+  state.turboPending = running
   await running
   return context
 }
+
+// Capabilities and mutable state belong to one registration, even if the host
+// reuses this imported module for another session. Helpers stay at file scope
+// so Claude Code can follow every mods API call through its static validator.
+function createModState() {
+  return {
+    replayActive: false,
+    replayCancelled: false,
+    replaySequence: 0,
+    statsTurn: undefined as StatsTurn | undefined,
+    latestStatsOwner: undefined as StatsTurn | undefined,
+    usedThisTurn: false,
+    shellUsers: new Set<string>(),
+    // Binding a genuine prompt needs an end fence, even without a tool call.
+    turboTurnBound: false,
+    remoteTurnBound: false,
+    turnRunning: false,
+    runningAgents: new Set<string>(),
+    actions: 0,
+    lastApp: undefined as string | undefined,
+    // Only this exact in-flight snapshot can receive the mod's own allowance.
+    snapshotInFlight: undefined as string | undefined,
+    // Pane reads move the engine's diff baseline. Only the main prompt consumes this notice.
+    snapshottedApps: new Set<string>(),
+    paneColumns: 48,
+    paneRows: 20,
+    paneSurface: 'terminal',
+    turboEnvelope: undefined as TurboEnvelope | undefined,
+    turboSequence: 0,
+    turboPending: Promise.resolve(),
+    narration: createNarrationCache(),
+  }
+}
+type ModState = ReturnType<typeof createModState>
+const turnBusy = (state: ModState) => state.turnRunning || state.runningAgents.size > 0
 
 const now = () => new Date().toTimeString().slice(0, 8)
 
@@ -129,8 +142,8 @@ function appFrom(code: string, text: string | undefined): string | undefined {
   return code.match(/getApp\(\s*["'`]([^"'`]+)["'`]/)?.[1] ?? text?.match(/App: ([^.\n]+)\./)?.[1]
 }
 
-function setStatus($: { ui: { status: (text: string | undefined) => void } }) {
-  $.ui.status(lastApp ? `sleight · ${lastApp} · ${actions} action${actions === 1 ? '' : 's'}` : undefined)
+function setStatus($: { ui: { status: (text: string | undefined) => void } }, state: ModState) {
+  $.ui.status(state.lastApp ? `sleight · ${state.lastApp} · ${state.actions} action${state.actions === 1 ? '' : 's'}` : undefined)
 }
 
 // Runs one call on the engine as this mod.
@@ -140,8 +153,8 @@ async function call($: any, tool: string, args: Record<string, unknown>) {
   return $.mcp.call(conn.server, tool, args)
 }
 
-async function recordCurrent($: any, file?: string) {
-  if (turnRunning || replayActive) return { text: 'Wait for the current run to finish before recording.' }
+async function recordCurrent($: any, state: ModState, file?: string) {
+  if (turnBusy(state) || state.replayActive) return { text: 'Wait for the current run to finish before recording.' }
   try {
     const path = file !== undefined ? fileArgument(file) : `sleight-${await $.session.id()}.json`
     if (await $.fs.exists(path)) throw new Error(`${path} already exists. Choose another file.`)
@@ -166,26 +179,26 @@ async function recordCurrent($: any, file?: string) {
   }
 }
 
-async function replayCurrent($: any, file: string) {
-  if (turnRunning || replayActive) return { text: 'Wait for the current run to finish before replaying.' }
-  replayActive = true
-  replayCancelled = false
-  const id = `replay-${++replaySequence}`
+async function replayCurrent($: any, state: ModState, file: string) {
+  if (turnBusy(state) || state.replayActive) return { text: 'Wait for the current run to finish before replaying.' }
+  state.replayActive = true
+  state.replayCancelled = false
+  const id = `replay-${++state.replaySequence}`
   let engineStarted = false
   let handoff: string | undefined
   try {
-    if (await read($, stopped) || replayCancelled) return { text: 'sleight is stopped. Send a new message before replaying.' }
+    if (await read($, stopped) || state.replayCancelled) return { text: 'sleight is stopped. Send a new message before replaying.' }
     const path = fileArgument(file)
     const script: ReplayScript = JSON.parse(await $.fs.read(path))
-    if (replayCancelled) return { text: 'Replay stopped before starting.' }
+    if (state.replayCancelled) return { text: 'Replay stopped before starting.' }
     if (script?.sleightReplay !== 1 || !Array.isArray(script.steps)) throw new Error('Not a sleight replay script.')
     await update($, replayFile, () => path)
     await update($, replaying, () => true)
-    snapshottedApps.clear()
+    state.snapshottedApps.clear()
     await update($, log, list => [...list, { id, title: `Replaying ${path}`, status: 'running', at: now() } as LogEntry].slice(-LOG_LIMIT))
     const conn = await $.mcp.connect(SERVER)
     if (!conn.isConnected) throw new Error(conn.message)
-    if (await read($, stopped) || replayCancelled) {
+    if (await read($, stopped) || state.replayCancelled) {
       await update($, log, list => list.map(entry => entry.id === id ? { ...entry, title: 'Replay stopped before starting.', status: 'refused' } : entry))
       return { text: 'Replay stopped before starting.' }
     }
@@ -196,11 +209,11 @@ async function replayCurrent($: any, file: string) {
     const windowText = typeof outcome.window === 'string' ? outcome.window : undefined
     for (const step of script.steps) {
       const app = appFrom(step.args?.code ?? '', windowText)
-      if (app) snapshottedApps.add(app)
+      if (app) state.snapshottedApps.add(app)
     }
     const entries = resultEntries(script, outcome, id, now())
     await update($, log, list => [...list.filter(entry => entry.id !== id), ...entries].slice(-LOG_LIMIT))
-    if (await read($, stopped) || replayCancelled) {
+    if (await read($, stopped) || state.replayCancelled) {
       const step = outcome.step ?? outcome.steps ?? outcome.waits.at(-1)?.step
       const text = `Replay stopped by the user at step ${step ?? 'unknown'}. This step may have sent input. Check the window before repeating it.`
       await update($, log, list => [...list, { id: `${id}-stop`, title: text, status: 'refused', at: now() } as LogEntry].slice(-LOG_LIMIT))
@@ -214,25 +227,25 @@ async function replayCurrent($: any, file: string) {
       return { text: `Replay stopped at step ${outcome.step}: ${outcome.error}. Sending the stop details to Claude.` }
     }
     const app = [...script.steps].reverse().map(step => appFrom(step.args.code ?? '', windowText)).find(Boolean)
-    if (app) lastApp = app
-    actions += outcome.steps ?? 0
-    setStatus($)
-    await endEngineTurn($, 'Stop')
+    if (app) state.lastApp = app
+    state.actions += outcome.steps ?? 0
+    setStatus($, state)
+    await endEngineTurn($, state, 'Stop')
     return { text: `Replay finished: ${outcome.steps} steps.` }
   } catch (err) {
     const message = (err as Error).message
     await update($, log, list => [...list.filter(entry => entry.id !== id), { id, title: `Replay failed: ${message}`, status: 'error', at: now() } as LogEntry].slice(-LOG_LIMIT))
-    if (engineStarted) await endEngineTurn($, 'Interrupt')
+    if (engineStarted) await endEngineTurn($, state, 'Interrupt')
     return { text: `Replay failed: ${message}` }
   } finally {
-    if (replayCancelled) await update($, stopped, () => true)
+    if (state.replayCancelled) await update($, stopped, () => true)
     await update($, replaying, () => false)
-    replayActive = false
+    state.replayActive = false
     if (handoff) {
       const prompt = handoff
       $.clock.after(0, async () => {
-        if (await read($, stopped) || replayCancelled) return
-        if (replayActive || id !== `replay-${replaySequence}`) {
+        if (await read($, stopped) || state.replayCancelled) return
+        if (state.replayActive || id !== `replay-${state.replaySequence}`) {
           $.ui.toast('sleight: a newer replay started before the stop reached Claude. Send the stop details from the log when it finishes.')
           return
         }
@@ -244,11 +257,11 @@ async function replayCurrent($: any, file: string) {
 
 // Tells the engine the turn is over so it releases what it holds, as Codex
 // does at the end of each turn. The relay fills in the session and turn ids.
-async function endEngineTurn($: any, event: 'Stop' | 'Interrupt', checked = false, completed?: TurnSummary, owner?: StatsTurn) {
+async function endEngineTurn($: any, state: ModState, event: 'Stop' | 'Interrupt', checked = false, completed?: TurnSummary, owner?: StatsTurn) {
   try {
     const ended = await call($, 'turn_ended', { hook_event_name: event, ...(checked ? { sleight_stop: true } : {}), ...(owner?.used && (completed || checked) ? { sleight_stats: owner.id } : {}) })
     if (checked && owner) owner.stoppedStats = statsFromReply(ended)
-    if (completed) await storeStats($, { ...completed, stats: statsFromReply(ended) }, owner)
+    if (completed) await storeStats($, state, { ...completed, stats: statsFromReply(ended) }, owner)
     let latest = (ended as { _meta?: { 'sleight/receipt'?: { path?: string; review?: string; unavailable?: boolean } } })._meta?.['sleight/receipt']
     // The installed host's $.mcp.call keeps content but drops _meta. The relay supplies JSON
     // in one fixed marker so paths with spaces and multi-line reviews don't need a prose parser.
@@ -277,34 +290,34 @@ async function endEngineTurn($: any, event: 'Stop' | 'Interrupt', checked = fals
         .find((text: string) => text.startsWith('sleight stop:')) ?? 'sleight stop unconfirmed: the engine returned no checked receipt.'
     }
   } catch (err) {
-    if (completed) await storeStats($, completed, owner)
+    if (completed) await storeStats($, state, completed, owner)
     $.ui.log(`sleight: could not end the turn: ${(err as Error).message}`, { to: 'debug' })
     if (checked) return `sleight stop unconfirmed: ${(err as Error).message}`
   }
 }
 
-function stopEngineTurn($: any) {
-  const owner = statsTurn
+function stopEngineTurn($: any, state: ModState) {
+  const owner = state.statsTurn
   if (owner) owner.stoppedStats = null
-  const pending = endEngineTurn($, 'Interrupt', true, undefined, owner)
+  const pending = endEngineTurn($, state, 'Interrupt', true, undefined, owner)
   if (owner) owner.stopping = pending
   return pending
 }
 
-async function snapshot($: any, app: string) {
+async function snapshot($: any, state: ModState, app: string) {
   await update($, view, () => ({ kind: 'snapshotting', app }) as ViewStatus)
   try {
     // Leave rows for the status, controls, file input, "Actions" and three log lines.
-    const code = snapshotCode(app, Math.max(8, paneColumns - 2), Math.max(4, paneRows - 9), paneSurface === 'terminal')
-    snapshotInFlight = code
-    const result = await call($, 'js', { code, title: 'sleight pane snapshot', sleight_stats: { internal: true } }).finally(() => { snapshotInFlight = undefined })
+    const code = snapshotCode(app, Math.max(8, state.paneColumns - 2), Math.max(4, state.paneRows - 9), state.paneSurface === 'terminal')
+    state.snapshotInFlight = code
+    const result = await call($, 'js', { code, title: 'sleight pane snapshot', sleight_stats: { internal: true } }).finally(() => { state.snapshotInFlight = undefined })
     const text = result.content.map((block: { text?: string }) => block.text ?? '').join('\n')
     const line = text.split('\n').find((l: string) => l.startsWith(FRAME_MARKER))
     if (result.isError || !line) {
       throw new Error(result.isError ? text.slice(0, 200) : 'no frame in the result')
     }
     const shot = JSON.parse(line.slice(FRAME_MARKER.length))
-    snapshottedApps.add(app)
+    state.snapshottedApps.add(app)
     await update($, frame, () => ({ ...shot, at: now() }) as Frame)
     await update($, view, () => ({ kind: 'idle' }) as ViewStatus)
   } catch (err) {
@@ -327,47 +340,70 @@ async function isPaneOpen($: any): Promise<boolean> {
 // asked for it (2026-10-08). This mod allows exactly two calls: its snapshot, by the code it just
 // built, and turn_ended. next.origin is set by the host, so only this plugin's own calls pass;
 // Claude's calls (origin engine) go to the normal check.
-function ownCallVerdict(e: { tool: string; input: unknown }, origin: { plugin: string } | undefined) {
+function ownCallVerdict(state: ModState, e: { tool: string; input: unknown }, origin: { plugin: string } | undefined) {
   if (origin?.plugin !== 'sleight') return undefined
   if (e.tool === TURN_END_TOOL) return { decision: 'allow', reason: 'sleight ends the engine turn' } as const
   const code = (e.input as { code?: unknown } | undefined)?.code
-  if (e.tool === JS_TOOL && snapshotInFlight !== undefined && code === snapshotInFlight) {
+  if (e.tool === JS_TOOL && state.snapshotInFlight !== undefined && code === state.snapshotInFlight) {
     return { decision: 'allow', reason: 'sleight pane snapshot' } as const
   }
   return undefined
 }
 
-const narration = createNarrationCache()
 // The existing genuine-prompt turbo-state reply includes narration mode. No extra process,
 // file read, transcript request or awaited work is added to a tool call.
-function narrated<T extends { tool_use_id?: string; agentId?: string }>(event: T) {
-  return { ...event, sleight_say: narration.take(event) ?? '' }
+function narrated<T extends { tool_use_id?: string; agentId?: string }>(state: ModState, event: T) {
+  return { ...event, sleight_say: state.narration.take(event) ?? '' }
+}
+
+// The mod declarations specify a flat ToolCallEnvelope for classic.PreToolUse;
+// the hooks guide describes stdin JSON. Accept both without guessing identity
+// from a transcript, cwd, parent session or prompt id. Conflicts refuse.
+function guardEnvelope(e: any) {
+  if (typeof e.tool === 'string') {
+    if (e.tool_name !== undefined && e.tool_name !== e.tool) throw Error('conflicting hook tools')
+    return e
+  }
+  if (typeof e.tool_name !== 'string' || !e.tool_input || typeof e.tool_input !== 'object' || Array.isArray(e.tool_input))
+    throw Error('missing hook tool input')
+  return { ...e.tool_input, tool: e.tool_name }
 }
 
 export const register: Register = on => {
-  on('session.append', { door: 'response' }, ($, e, next) => { narration.observe(e); return next(e) })
-  on('session.compact', ($, e, next) => { narration.reset(); return next(e) })
+  const state = createModState()
+  on('session.append', { door: 'response' }, ($, e, next) => { state.narration.observe(e); return next(e) })
+  on('session.compact', ($, e, next) => { state.narration.reset(); return next(e) })
 
   on('classic.PreToolUse', async ($, e, next) => {
-    if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'].includes(e.tool)) return next(e)
-    if (usedThisTurn && shellLaunchDenied(e) && await $.env.get('SLEIGHT_SHELL_GUARD') !== '0') return { deny: shellGuardReason }
-    if (loggingSwitchWriteDenied(e)) return { deny: "Only the user turns on sleight's action log and outcome lines. Ask them to make this change." }
-    const denied = await preapprovedWriteTarget(e, {
+    const event = guardEnvelope(e)
+    if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'].includes(event.tool)) return next(e)
+    if (loggingSwitchWriteDenied(event)) return { deny: "Only the user turns on sleight's action log and outcome lines. Ask them to make this change." }
+    const home = await $.env.get('HOME'), configDir = await $.env.get('CLAUDE_CONFIG_DIR')
+    if (typeof home !== 'string' || !home.startsWith('/') || configDir !== undefined && (typeof configDir !== 'string' || !configDir.startsWith('/')))
+      return { deny: preapprovedWriteReason(PROTECTED.settings) }
+    const denied = await preapprovedWriteTarget(event, {
       stat: (path: string) => $.fs.stat(path, { resolve: true }),
-      home: await $.env.get('HOME'),
-      configDir: await $.env.get('CLAUDE_CONFIG_DIR'),
+      home, configDir,
     })
     return denied ? { deny: preapprovedWriteReason(denied) } : next(e)
-  })
-  on('tool.check', async ($, e, next) => ownCallVerdict(e, next.origin) ?? next(e))
+  }).catch(() => ({ deny: preapprovedWriteReason(PROTECTED.settings) }))
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    // Malformed identity cannot select another loop's inactive fence. The host's
+    // valid main-loop envelope omits agentId, session_id and prompt_id altogether.
+    const invalid = e.agentId !== undefined && (typeof e.agentId !== 'string' || !e.agentId)
+    if ((invalid || state.shellUsers.has(loopKey(e))) && shellLaunchDenied(e) && await $.env.get('SLEIGHT_SHELL_GUARD') !== '0')
+      return { deny: shellGuardReason }
+    return next(e)
+  }).catch(() => ({ deny: shellGuardReason }))
+  on('tool.check', async ($, e, next) => ownCallVerdict(state, e, next.origin) ?? next(e))
     // Failing open to the normal check only ever tightens. A call from inside this mod's own
     // frame lands here as a re-entry, decided from e and next alone. The host's published
     // HookFailure kind union is 'throw' | 'timeout' only, so the kind reads through a widening.
-    .catch(($, e, next) => ((next.error?.kind as string | undefined) === 're-entry' ? ownCallVerdict(e, next.origin) : undefined) ?? next(e))
+    .catch(($, e, next) => ((next.error?.kind as string | undefined) === 're-entry' ? ownCallVerdict(state, e, next.origin) : undefined) ?? next(e))
   on('session.start', async ($, e, next) => {
-    turboEnvelope = undefined
-    remoteTurnBound = false
-    narration.configure('off')
+    state.turboEnvelope = undefined
+    state.remoteTurnBound = false
+    state.narration.configure('off')
     await $.command.register({
       name: 'sleight',
       description: 'Open the sleight pane; show turn stats, replay, record, or stop computer use',
@@ -381,17 +417,20 @@ export const register: Register = on => {
   // moved the engine's diff baseline. The host skips this hook for our own
   // automatic handoff, so that handoff cannot lift Stop.
   on('prompt.submit', async ($, e, next) => {
+    // An inbox delivery or subagent prompt is not the user's resume boundary.
+    // It also must not consume the main pane's diff-baseline notice.
+    if ((e as { agentId?: string }).agentId !== undefined) return next(e)
     if (await read($, stopped)) {
       // A failed collection keeps the relay alive. Lift its closing flag only at this user boundary.
       await call($, 'turn_ended', { sleight_resume: true }).catch(() => undefined)
     }
     await update($, stopped, () => false)
     const approvalNote = (e.origin?.kind === 'composer' || e.origin?.kind === 'bridge') &&
-        (e as { agentId?: string }).agentId === undefined ? await beginTurboTurn($, e.text, e.origin.kind) : undefined
+        (e as { agentId?: string }).agentId === undefined ? await beginTurboTurn($, state, e.text, e.origin.kind) : undefined
     if (approvalNote) e = { ...e, context: [...(e.context ?? []), approvalNote] }
-    if (snapshottedApps.size === 0) return next(e)
-    const apps = [...snapshottedApps].join(', ')
-    snapshottedApps.clear()
+    if (state.snapshottedApps.size === 0) return next(e)
+    const apps = [...state.snapshottedApps].join(', ')
+    state.snapshottedApps.clear()
     const note =
       `sleight: its pane or a replay read the UI state of ${apps} after your last sleight call. ` +
       'The engine diffs against the latest read, so pass { disableDiffing: true } to your next ' +
@@ -400,11 +439,12 @@ export const register: Register = on => {
   })
 
   on('turn.start', async ($, e, next) => {
-    turnRunning = true
     // Older host captures omit agentId from turn.start's type, as with prompt.submit above.
-    if ((e as { agentId?: string }).agentId !== undefined) return next(e)
+    const agentId = (e as { agentId?: string }).agentId
+    if (agentId !== undefined) { state.runningAgents.add(agentId); return next(e) }
+    state.turnRunning = true
     const owner: StatsTurn = { id: e.turnId, used: false, forwarded: 0, stoppedStats: null }
-    statsTurn = owner
+    state.statsTurn = owner
     // Never hold up a turn for the ledger, including turns that never use sleight.
     // Capture the owner so an older read cannot overwrite a newer turn's baseline.
     void hostCost($).then(cost => { owner.baseline = cost })
@@ -423,6 +463,9 @@ export const register: Register = on => {
 
   const forward = async <T extends { agentId?: string }, R>(e: T, owner: StatsTurn | undefined, next: (event: T) => Promise<R>) => {
     const main = e.agentId === undefined ? owner : undefined
+    // Subagents need not raise turn.start. Their first call holds the pane's
+    // replay/refresh fence until their own turn.complete, including late work.
+    if (e.agentId !== undefined) state.runningAgents.add(e.agentId)
     // A call may be interrupted before next returns. Stop must collect it already.
     if (main) { main.forwarded++; main.used = true }
     const ran = await next(counted(e, owner))
@@ -433,14 +476,18 @@ export const register: Register = on => {
   }
 
   on('tool.call', { tool: JS_TOOL }, async ($, e, next) => {
-    const owner = statsTurn
+    const owner = state.statsTurn
     if (next.origin?.plugin === 'sleight') return next(e)
-    if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
+    if (state.replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     if (await read($, stopped)) {
       return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
     }
-    usedThisTurn = true
-    snapshottedApps.clear()
+    state.usedThisTurn = true
+    state.shellUsers.add(loopKey(e))
+    // The pane and its diff baseline belong to the main conversation. Child
+    // calls still run through Stop and the guards, with their own narration.
+    if (e.agentId !== undefined) return forward(narrated(state, e), owner, next)
+    state.snapshottedApps.clear()
     const code = String(e.code ?? '')
     const entry: LogEntry = {
       id: e.tool_use_id,
@@ -449,43 +496,46 @@ export const register: Register = on => {
       at: now(),
     }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await forward(narrated(e), owner, next)
+    const ran = await forward(narrated(state, e), owner, next)
     const app = appFrom(code, ran.text)
-    if (app) lastApp = app
-    actions++
+    if (app) state.lastApp = app
+    state.actions++
     const status: LogEntry['status'] = ran.deny !== undefined ? 'refused' : ran.isError ? 'error' : 'done'
     await update($, log, list => list.map(one => (one.id === entry.id ? { ...one, status, app: app ?? one.app } : one)))
-    setStatus($)
+    setStatus($, state)
     return ran
   })
 
   // The host's tool-name union comes from its last saved capture, which here
   // predates the replay tool, so the filter's name reads through a widening.
   on('tool.call', { tool: REPLAY_TOOL as never }, async ($, e, next) => {
-    const owner = statsTurn
+    const owner = state.statsTurn
     if (next.origin?.plugin === 'sleight') return next(e)
     if (await read($, stopped)) return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
-    if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
-    usedThisTurn = true
-    return forward(narrated(e), owner, next)
+    if (state.replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
+    state.usedThisTurn = true
+    state.shellUsers.add(loopKey(e))
+    return forward(narrated(state, e), owner, next)
   })
 
   // Compact browser verbs are session work too. The fixed completion hook must
   // fence turbo even when the turn never called native JS. Log only the verb,
   // keeping field values and page content out of the pane's action history.
   for (const name of BROWSER_TOOLS) on('tool.call', { tool: `mcp__plugin_sleight_computer__${name}` as never }, async ($, e, next) => {
-    const owner = statsTurn
+    const owner = state.statsTurn
     if (next.origin?.plugin === 'sleight') return next(e)
     if (await read($, stopped)) return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
-    if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
-    usedThisTurn = true
+    if (state.replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
+    state.usedThisTurn = true
+    state.shellUsers.add(loopKey(e))
+    if ((e as { agentId?: string }).agentId !== undefined) return forward(narrated(state, e), owner, next)
     const entry: LogEntry = { id: (e as { tool_use_id: string }).tool_use_id, title: name, status: 'running', at: now() }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await forward(narrated(e), owner, next)
-    actions++
+    const ran = await forward(narrated(state, e), owner, next)
+    state.actions++
     const status: LogEntry['status'] = ran.deny !== undefined ? 'refused' : ran.isError ? 'error' : 'done'
     await update($, log, list => list.map(one => one.id === entry.id ? { ...one, status } : one))
-    setStatus($)
+    setStatus($, state)
     return ran
   })
 
@@ -498,32 +548,34 @@ export const register: Register = on => {
     try {
       return await next(e)
     } finally {
+      state.shellUsers.delete(loopKey(e))
+      if (e.agentId !== undefined) state.runningAgents.delete(e.agentId)
       if (e.agentId === undefined) {
-        turnRunning = false
+        state.turnRunning = false
         // Stats ownership cannot gate engine cleanup, including mid-turn mod loads.
-        const needsEnd = usedThisTurn || turboTurnBound || remoteTurnBound
-        usedThisTurn = false
-        turboTurnBound = false
-        remoteTurnBound = false
-        const owner = statsTurn?.id === e.turnId ? statsTurn : undefined
-        if (owner) statsTurn = undefined
+        const needsEnd = state.usedThisTurn || state.turboTurnBound || state.remoteTurnBound
+        state.usedThisTurn = false
+        state.turboTurnBound = false
+        state.remoteTurnBound = false
+        const owner = state.statsTurn?.id === e.turnId ? state.statsTurn : undefined
+        if (owner) state.statsTurn = undefined
         if (needsEnd || owner?.used) {
           const baseline = owner?.baseline
           const completed = owner?.used ? turnSummary(e, null) : undefined
           if (!needsEnd) {
             await owner?.stopping
-            if (completed) await storeStats($, { ...completed, stats: owner?.stoppedStats ?? null }, owner)
+            if (completed) await storeStats($, state, { ...completed, stats: owner?.stoppedStats ?? null }, owner)
           } else {
             // Refresh the pane while the engine turn is still open, then end it.
-            if (lastApp && !e.isAborted && (await isPaneOpen($))) await snapshot($, lastApp)
-            await endEngineTurn($, e.isAborted ? 'Interrupt' : 'Stop', false, completed, owner)
+            if (state.lastApp && !turnBusy(state) && !e.isAborted && (await isPaneOpen($))) await snapshot($, state, state.lastApp)
+            await endEngineTurn($, state, e.isAborted ? 'Interrupt' : 'Stop', false, completed, owner)
           }
           // Usage is optional and can hang. Cleanup and the summary never wait for it.
           if (completed && owner) {
             void hostCost($).then(async cost => {
               if (!cost) return
               const final = turnSummary(e, cost, baseline)
-              await update($, stats, latest => latest && latestStatsOwner === owner
+              await update($, stats, latest => latest && state.latestStatsOwner === owner
                 ? { ...latest, costUsd: final.costUsd, costDeltaUsd: final.costDeltaUsd } : latest)
             }).catch(() => undefined)
           }
@@ -535,21 +587,22 @@ export const register: Register = on => {
   on('command.run', { command: 'sleight' }, async ($, e) => {
     const args = e.args.trim()
     if (args === 'stats') return { text: turnStatsText(await read($, stats)) }
-    if (args === 'record' || args.startsWith('record ')) return recordCurrent($, args.slice(6).trim() || undefined)
+    if (args === 'record' || args.startsWith('record ')) return recordCurrent($, state, args.slice(6).trim() || undefined)
     if (e.args.trim() === 'stop') {
-      if (replayActive) replayCancelled = true
+      if (state.replayActive) state.replayCancelled = true
       await update($, stopped, () => true)
-      usedThisTurn = false
-      turboTurnBound = false
-      remoteTurnBound = false
-      const receipt = await stopEngineTurn($)
+      state.usedThisTurn = false
+      state.shellUsers.clear()
+      state.turboTurnBound = false
+      state.remoteTurnBound = false
+      const receipt = await stopEngineTurn($, state)
       $.ui.status('sleight · stopped')
       // The interrupted call usually ends Claude's turn at once (desktop app, 2026-10-11), so Esc
       // is only for a turn that goes on without sleight.
       return { text: `${receipt} If Claude keeps working, press Esc to end its turn.` }
     }
     await $.ui.open({ id: PANE, title: 'sleight' })
-    if (args === 'replay' || args.startsWith('replay ')) return replayCurrent($, args.slice(6))
+    if (args === 'replay' || args.startsWith('replay ')) return replayCurrent($, state, args.slice(6))
     // `/sleight do this` opens the pane and sends "do this" to Claude, as if
     // typed on its own line. The engine refuses a submit from inside this hook
     // (the prompt would wait on the command submitting it), so it goes out
@@ -570,12 +623,12 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e)
     const { Box, Text, Button } = els
-    paneSurface = e.surface
-    paneColumns = Math.max(8, Math.min(120, e.props.bodyColumns ?? 48))
+    state.paneSurface = e.surface
+    state.paneColumns = Math.max(8, Math.min(120, e.props.bodyColumns ?? 48))
     // The rows the surface gave the pane: about a third of the terminal inline,
     // its full height docked. A picture sized to more pushes the buttons and
     // log out of view.
-    paneRows = Math.max(10, Math.min(40, e.props.scroll?.bodyRows ?? Math.floor((e.viewport?.rows ?? 30) / 2)))
+    state.paneRows = Math.max(10, Math.min(40, e.props.scroll?.bodyRows ?? Math.floor((e.viewport?.rows ?? 30) / 2)))
 
     const [entries, shot, status, isStopped, file, isReplaying, latest, latestStats] = await Promise.all([read($, log), read($, frame), read($, view), read($, stopped), read($, replayFile), read($, replaying), read($, receipt), read($, stats)])
 
@@ -617,12 +670,12 @@ export const register: Register = on => {
         <Box flexDirection="row">
           <Button
             key="refresh"
-            label={turnRunning ? 'Refresh (after this turn)' : 'Refresh'}
+            label={turnBusy(state) ? 'Refresh (after this turn)' : 'Refresh'}
             hotkey="r"
             onPress={() => {
-              if (turnRunning || replayActive || !lastApp) return
-              const app = lastApp
-              void snapshot($, app).then(() => endEngineTurn($, 'Stop'))
+              if (turnBusy(state) || state.replayActive || !state.lastApp) return
+              const app = state.lastApp
+              void snapshot($, state, app).then(() => endEngineTurn($, state, 'Stop'))
             }}
           />
           <Button
@@ -630,10 +683,11 @@ export const register: Register = on => {
             label="Stop"
             hotkey="s"
             onPress={() => {
-              if (replayActive) replayCancelled = true
+              if (state.replayActive) state.replayCancelled = true
               void update($, stopped, () => true)
-              usedThisTurn = false
-              void stopEngineTurn($).then(receipt => $.ui.toast(receipt ?? 'sleight stop unconfirmed'))
+              state.usedThisTurn = false
+              state.shellUsers.clear()
+              void stopEngineTurn($, state).then(receipt => $.ui.toast(receipt ?? 'sleight stop unconfirmed'))
               $.ui.status('sleight · stopped')
             }}
           />
@@ -644,11 +698,11 @@ export const register: Register = on => {
         })()}
         <Box flexDirection="row">
           <Button key="replay" label="Replay file" onPress={async () => {
-            const result = await replayCurrent($, await read($, replayFile))
+            const result = await replayCurrent($, state, await read($, replayFile))
             $.ui.toast(result.text)
           }} />
           <Button key="record" label="Record session" onPress={async () => {
-            const result = await recordCurrent($, await read($, replayFile))
+            const result = await recordCurrent($, state, await read($, replayFile))
             $.ui.toast(result.text)
           }} />
         </Box>

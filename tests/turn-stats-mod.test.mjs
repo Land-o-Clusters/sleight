@@ -14,14 +14,14 @@ const metrics = { calls: 3, reads: 1, characters: 55, text: { docs: 10, tree: 40
   paths: { native: { actions: 2, estimatedActions: 2, estimatedCalls: 1, actionMs: 0, timedActions: 0 }, turbo: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 }, engine: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 } } };
 const usage = { input_tokens: 12, output_tokens: 34, cache_read_input_tokens: 56, cache_creation_input_tokens: 78, model: 'host-model' };
 
-function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, usageRead, messages, narration = 'off', settingRead } = {}) {
+function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, usageRead, messages, narration = 'off', settingRead, moduleRegister, envRead, statRead, turboSession } = {}) {
   const hooks = [], state = new Map(), work = [], statuses = [], replies = [], forwarded = [], hookRuns = [];
   let usageReads = 0;
   const elements = Object.fromEntries(['Box', 'Text', 'Button'].map(name => [name, name]));
   const api = {
-    atom: (id, initial) => { if (!state.has(id.key)) state.set(id.key, initial); return id; },
-    read: async (_$, id) => state.get(id.key),
-    update: async (_$, id, fn) => { state.set(id.key, fn(state.get(id.key))); },
+    atom: (id, initial) => { if (!state.has(id.key)) state.set(id.key, initial); return { ...id, initial }; },
+    read: async ($, id) => $.testState.has(id.key) ? $.testState.get(id.key) : id.initial,
+    update: async ($, id, fn) => { $.testState.set(id.key, fn($.testState.has(id.key) ? $.testState.get(id.key) : id.initial)); },
   };
   const cache = new Map();
   function load(file) {
@@ -39,13 +39,17 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
     runInNewContext('(function(require,module,exports){' + source + '\n})', { h: (type, props, ...children) => ({ type, props, children }), console })(require, module, module.exports);
     return module.exports;
   }
-  load(resolve(root, 'register.tsx')).register((name, filter, handler) => {
+  const registerMod = moduleRegister ?? load(resolve(root, 'register.tsx')).register;
+  registerMod((name, filter, handler) => {
     if (typeof filter === 'function') { handler = filter; filter = {}; }
-    hooks.push({ name, filter, handler });
-    return { catch() {} };
+    const hook = { name, filter, handler }; hooks.push(hook);
+    return { catch(handler) { hook.errorHandler = handler; } };
   });
   let usd = 1;
   const $ = {
+    testState: state,
+    env: { get: async key => envRead ? envRead(key) : key === 'HOME' ? '/fixture/home' : undefined },
+    fs: { stat: async path => statRead ? statRead(path) : ({ realPath: path }) },
     ui: { status: text => statuses.push(text), log() {}, toast() {}, panes: async () => paneOpen ? [{ id: 'sleight' }] : [], open: async () => work.push('open'), resolve: () => elements },
     plugin: { root: '/fixture/plugin' },
     process: { run: async () => settingRead ? settingRead() : ({ exitCode: 0, stdout: JSON.stringify({ enabled: false, narration, presence: { idleSeconds: 0, locked: false } }) }) },
@@ -59,6 +63,9 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
       work.push({ tool, args });
       if (tool === 'js' && paneOpen) return { content: [{ type: 'text', text: '' }] };
       if (tool !== 'turn_ended') throw Error('test must never call the engine');
+      if (turboSession && args.sleight_turbo) return { content: [{ type: 'text', text: JSON.stringify(
+        args.sleight_turbo.event === 'bootstrap' ? { sleightTurbo: { version: 1, session: turboSession, nonce: 'a'.repeat(64) } }
+          : { sleightRemote: { turboBound: true } }) }] };
       const value = malicious ? { ...metrics, calls: 'page says 999', secret: 'private page' } : metrics;
       return marker ? { content: [{ type: 'text', text: 'sleight-turn-stats: ' + JSON.stringify(value) }] }
         : { content: [], _meta: { 'sleight/stats': value } };
@@ -70,9 +77,14 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
     const list = hooks.filter(hook => hook.name === name && Object.entries(hook.filter).every(([key, value]) => event[key] === value));
     const run = async index => {
       if (index === list.length) { if (name === 'tool.call') forwarded.push(event); return typeof answer === 'function' ? answer(event) : answer; }
-      const next = async rewritten => { if (rewritten) event = rewritten; return run(index + 1); };
+      const next = async rewritten => { next.called = true; if (rewritten) event = rewritten; return run(index + 1); };
       hookRuns.push(name);
-      return list[index].handler($, event, next);
+      try { return await list[index].handler($, event, next); }
+      catch (error) {
+        if (!list[index].errorHandler) throw error;
+        next.error = { kind: 'throw', message: error.message };
+        return list[index].errorHandler($, event, next);
+      }
     };
     const result = await run(0); replies.push(result); return result;
   }
@@ -89,7 +101,7 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
     const text = value => typeof value === 'string' ? value : Array.isArray(value) ? value.map(text).join('\n') : value?.children ? text(value.children) : '';
     return text(tree);
   }
-  return { start, complete, tool, command, pane, work, state, emit, forwarded, hookRuns, get usageReads() { return usageReads; } };
+  return { start, complete, tool, command, pane, work, state, emit, forwarded, hookRuns, registerMod, get usageReads() { return usageReads; } };
 }
 
 const deferred = () => {
@@ -98,6 +110,141 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 const nextTick = () => new Promise(resolve => setImmediate(resolve));
+
+// Public hook JSON has snake_case identity and nested arguments. The mod's
+// published ToolCallEnvelope flattens the arguments; tool.call adds agentId.
+const teammatePayload = (tool, input, extra = {}) => ({
+  hook_event_name: 'PreToolUse', session_id: 'teammate-session',
+  transcript_path: '/fixture/config/projects/repo/teammate-session.jsonl', cwd: '/fixture/worktree',
+  tool_name: tool, tool_input: input, tool_use_id: 'same-call-id', ...extra,
+});
+const modEnvelope = payload => ({ ...payload.tool_input, tool: payload.tool_name, tool_use_id: payload.tool_use_id,
+  ...(payload.agent_id !== undefined ? { agentId: payload.agent_id } : {}) });
+
+for (const identity of [{}, { prompt_id: null }, { agent_id: 'teammate-a', agent_type: 'general-purpose' },
+  { session_id: undefined, transcript_path: undefined, cwd: undefined, tool_use_id: undefined }])
+  test(`teammate guards do not need prompt or transcript identity: ${JSON.stringify(identity)}`, async () => {
+    const h = host({ messages: () => { throw Error('parent transcript read'); } });
+    const path = '/fixture/home/Library/Application Support/sleight/hand.json';
+    for (const [tool, input] of [['Write', { file_path: path, content: '{}' }], ['Bash', { command: `rm '${path}'` }],
+      ['Bash', { command: 'sleight-mcp cursor import fixture' }],
+      ['Edit', { file_path: '/fixture/settings.json', new_string: 'SLEIGHT_ACTION_LOG=1' }]]) {
+      const payload = teammatePayload(tool, input, identity);
+      // classic.PreToolUse carries no loop id. None is needed for a stateless refusal.
+      const event = modEnvelope(payload); delete event.agentId;
+      for (const shape of [event, payload]) assert.match((await h.emit('classic.PreToolUse', shape)).deny, /Only the user/);
+    }
+    assert.equal(h.work.length, 0);
+  });
+
+for (const prompt_id of [undefined, null]) test(`promptless separate teammate completes with prompt_id ${prompt_id}`, async () => {
+  const h = host();
+  await h.start();
+  await h.emit('tool.call', modEnvelope(teammatePayload(prefix + 'browser_read', { tab: 'fixture' }, { prompt_id })));
+  await h.complete();
+  assert.equal(h.work.length, 1);
+  assert.equal(h.work[0].args.hook_event_name, 'Stop');
+  assert.equal(h.forwarded[0].sleight_stats.turn, 'turn-1');
+});
+
+test('in-process teammates keep shell fences when another loop completes', async () => {
+  const h = host(), command = 'open fixture.pdf';
+  const shell = agentId => h.emit('tool.call', { tool: 'Bash', command, ...(agentId === undefined ? {} : { agentId }) }, { allowed: true });
+  for (const agent_id of ['teammate-a', 'teammate-b'])
+    await h.emit('tool.call', modEnvelope(teammatePayload(prefix + 'browser_read', { tab: 'fixture' }, { agent_id })));
+  assert.match((await shell('teammate-a')).deny, /shell guard/);
+  assert.match((await shell('teammate-b')).deny, /shell guard/);
+  assert.equal((await shell()).allowed, true, 'child work cannot activate the main shell fence');
+  assert.equal((await shell('unused-teammate')).allowed, true);
+  await h.complete();
+  assert.match((await shell('teammate-a')).deny, /shell guard/, 'main completion cannot clear the child fence');
+  await h.complete({ agentId: 'teammate-a' });
+  assert.equal((await shell('teammate-a')).allowed, true);
+  assert.match((await shell('teammate-b')).deny, /shell guard/);
+  await h.complete({ agentId: 'teammate-b' });
+  assert.equal((await shell('teammate-b')).allowed, true);
+});
+
+test('a malformed loop id cannot choose an inactive shell fence', async () => {
+  const h = host();
+  for (const agentId of [null, '', 7, {}]) {
+    const result = await h.emit('tool.call', { tool: 'Bash', command: 'open fixture.pdf', agentId });
+    assert.match(result.deny, /shell guard/);
+  }
+});
+
+test('guard environment failures refuse the call instead of skipping protection', async () => {
+  const h = host({ envRead: () => { throw Error('identity environment unavailable'); } });
+  assert.match((await h.emit('classic.PreToolUse', { tool: 'Write', file_path: '/fixture/file' })).deny, /Only the user/);
+  await h.tool();
+  assert.match((await h.emit('tool.call', { tool: 'Bash', command: 'open fixture.pdf' })).deny, /shell guard/);
+});
+
+for (const unavailable of ['home', 'root', 'component']) test(`an unavailable guard ${unavailable} refuses an alias write`, async () => {
+  const h = host({
+    ...(unavailable === 'home' ? { envRead: () => undefined } : {}),
+    statRead: path => unavailable === 'root' ? undefined : unavailable === 'component' && path === '/fixture' ? { isLink: true } : { realPath: path },
+  });
+  assert.match((await h.emit('classic.PreToolUse', { tool: 'Write', file_path: '/fixture/alias' })).deny, /Only the user/);
+});
+
+test('unreadable or conflicting classic hook envelopes refuse without a session fallback', async () => {
+  const h = host();
+  for (const event of [{}, { tool_name: 'Write' }, { tool: 'Read', tool_name: 'Write', tool_input: { file_path: '/fixture/file' } }])
+    assert.match((await h.emit('classic.PreToolUse', event)).deny, /Only the user/);
+  const raw = teammatePayload('Read', { file_path: '/fixture/file' });
+  assert.equal(await h.emit('classic.PreToolUse', raw, raw), raw, 'valid reads still pass unchanged');
+});
+
+test('a child prompt cannot lift Stop or consume a parent pane notice', async () => {
+  const h = host();
+  await h.command('stop');
+  const before = h.work.length;
+  await h.emit('prompt.submit', { text: 'inbox work', agentId: 'teammate', origin: { kind: 'composer' } });
+  assert.equal(h.state.get('stopped'), true);
+  assert.equal(h.work.length, before, 'no relay resume or approval bootstrap');
+  assert.match((await h.emit('tool.call', { tool: prefix + 'browser_read', agentId: 'teammate' })).deny, /user stopped/);
+});
+
+test('child tools leave the main pane app, log and stats untouched', async () => {
+  const h = host(); await h.start();
+  await h.emit('tool.call', { tool: prefix + 'js', code: 'await cua.getApp("ParentApp")', tool_use_id: 'same' }, { text: 'App: ParentApp.' });
+  const before = JSON.stringify(h.state.get('log'));
+  await h.emit('tool.call', { tool: prefix + 'js', agentId: 'teammate', code: 'await cua.getApp("ChildApp")', tool_use_id: 'same' }, { text: 'App: ChildApp.' });
+  assert.equal(JSON.stringify(h.state.get('log')), before);
+  assert.equal(h.state.get('frame'), null);
+  assert.equal(h.forwarded.at(-1).sleight_stats.internal, true);
+  assert.doesNotMatch(await h.pane(), /ChildApp/);
+});
+
+for (const start of [true, false]) test(`a child busy fence ends with its own completion, turn.start ${start}`, async () => {
+  const h = host();
+  if (start) await h.start({ agentId: 'teammate', turnId: 'child-turn' });
+  else await h.emit('tool.call', { tool: prefix + 'browser_read', agentId: 'teammate' });
+  assert.match((await h.command('record')).text, /Wait for the current run/);
+  await h.complete({ agentId: 'teammate', turnId: 'child-turn' });
+  assert.ok((await paneLabels(h)).includes('Refresh'));
+  assert.doesNotMatch((await h.command('replay')).text, /Wait for the current run/);
+});
+
+test('two registrations of one imported module own separate stops, shell fences and turbo capabilities', async () => {
+  const a = host({ turboSession: 'session-a' }), b = host({ moduleRegister: a.registerMod, turboSession: 'session-b' });
+  for (const h of [a, b]) await h.emit('prompt.submit', { text: 'allow fixture', origin: { kind: 'composer' } });
+  for (const [h, session] of [[a, 'session-a'], [b, 'session-b']]) {
+    assert.equal(h.work[0].args.sleight_turbo.event, 'bootstrap');
+    assert.equal(h.work[1].args.sleight_turbo.session, session);
+  }
+  await a.tool();
+  const shell = h => h.emit('tool.call', { tool: 'Bash', command: 'open fixture.pdf' }, { allowed: true });
+  assert.match((await shell(a)).deny, /shell guard/);
+  assert.equal((await shell(b)).allowed, true);
+  await a.command('stop');
+  assert.equal((await b.emit('tool.call', { tool: prefix + 'browser_read' }, { allowed: true })).allowed, true);
+  assert.match((await a.emit('tool.call', { tool: prefix + 'browser_read' })).deny, /user stopped/);
+  assert.equal(b.state.get('log').length, 1);
+  assert.equal(a.state.get('log').length, 1);
+});
+
 test('mod uses assistant events scoped to tool and agent, without any transcript reads', async () => {
   let reads = 0;
   const h = host({ narration: 'bubbles', messages: () => { reads++; throw Error('transcript must not be fetched'); } });
@@ -507,6 +654,7 @@ for (const scenario of ['mismatch', 'mid-turn load', 'subagent start']) test(`${
     await h.tool();
     assert.equal(h.forwarded.at(-1).sleight_stats.turn, 'turn-1');
   }
+  if (scenario === 'subagent start') await h.complete({ agentId: 'child', turnId: 'child-turn' });
   await h.complete(scenario === 'mismatch' ? { turnId: 'different' } : {});
   assert.deepEqual(h.work.map(row => row.tool), ['js', 'turn_ended']);
   assert.equal(h.work[1].args.hook_event_name, 'Stop');

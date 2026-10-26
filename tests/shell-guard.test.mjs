@@ -329,6 +329,7 @@ function installedGuard({ disabled = false, refuseWrite = false } = {}) {
     if (name === 'claude-code') return { atom: (_key, value) => ({ value }),
       read: async (_$, atom) => atom.value, update: async (_$, atom, fn) => { atom.value = fn(atom.value); } };
     if (name === './shell-guard.mjs') return guard;
+    if (name === './narration.mjs') return { createNarrationCache: () => ({ take() {}, configure() {}, observe() {}, reset() {} }) };
     if (name === './preapproved-write-guard.mjs') return {
       loggingSwitchWriteDenied: () => false, preapprovedWriteTarget: async () => { checked++; return refuseWrite ? "sleight's settings files" : undefined; },
       preapprovedWriteReason: label => `Only the user changes ${label}. Ask them to make this change.`,
@@ -341,6 +342,7 @@ function installedGuard({ disabled = false, refuseWrite = false } = {}) {
     return { catch() {} };
   });
   const pre = hooks.get('classic.PreToolUse'); assert.equal(typeof pre, 'function');
+  const shell = hooks.get('tool.call:Bash'); assert.equal(typeof shell, 'function');
   let passed = 0;
   const $ = { env: { get: async key => key === 'SLEIGHT_SHELL_GUARD' ? (disabled ? '0' : undefined) : '/synthetic-home' },
     fs: { stat: async () => { throw Error('unexpected stat'); } },
@@ -354,13 +356,13 @@ function installedGuard({ disabled = false, refuseWrite = false } = {}) {
       return { content: [] };
     } }, ui: { status() {}, log() {}, toast() {}, panes: async () => [] } };
   const next = event => { passed++; return event; };
-  return { $, hooks, pre: event => pre($, event, next), checked: () => checked, passed: () => passed, ended: () => ended,
-    use: (tool = 'js', next = event => event) => hooks.get(`tool.call:mcp__plugin_sleight_computer__${tool}`)($, { tool_use_id: 'call' }, next),
+  return { $, hooks, pre: event => event.tool === 'Bash' ? shell($, event, e => pre($, e, next)) : pre($, event, next), checked: () => checked, passed: () => passed, ended: () => ended,
+    use: (tool = 'js', next = event => event, extra = {}) => hooks.get(`tool.call:mcp__plugin_sleight_computer__${tool}`)($, { tool_use_id: 'call', ...extra }, next),
     complete: (event, next = event => event) => hooks.get('turn.complete')($, event ?? {}, next),
     stop: () => hooks.get('command.run:sleight')($, { args: 'stop' }) };
 }
 
-test('installed PreToolUse returns the refusal before filesystem access and preserves the write guard', async () => {
+test('installed tool.call shell fence refuses before PreToolUse filesystem access and preserves the write guard', async () => {
   const h = installedGuard({ refuseWrite: true });
   await h.use();
   const pre = h.pre;

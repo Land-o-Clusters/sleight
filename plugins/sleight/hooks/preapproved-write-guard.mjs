@@ -112,10 +112,13 @@ async function protectedPath(path, options, ancestor = false) {
   if (literal) return literal;
   if (home) path = path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => home);
   let resolved = (await stat(path.startsWith('/') ? '/' : '.').catch(() => undefined))?.realPath;
-  if (!resolved) return undefined;
+  // An unavailable root cannot establish that an alias is outside the protected
+  // trees. Refuse instead of allowing a tool the host may still execute.
+  if (!resolved) return PROTECTED.settings;
   for (const part of path.split('/').filter(Boolean)) {
     const next = `${resolved.replace(/\/$/, '')}/${part}`;
     const info = await stat(next).catch(() => undefined);
+    if (info && typeof info.realPath !== 'string') return PROTECTED.settings;
     resolved = info?.realPath ?? normalize(next);
   }
   // configDir too: a link to a custom CLAUDE_CONFIG_DIR resolves to it, and its folders above an install still count.
