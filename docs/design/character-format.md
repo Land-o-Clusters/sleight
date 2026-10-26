@@ -208,7 +208,7 @@ and their fallbacks:
 | perch-hop | jumping columns 0, 1, 3 and 4 |
 | perch-point-left, perch-point-right | look at heading 225 or 135, then aim, then idle's first cell |
 | sleep | idle's first cell (the host draws the z glyphs) |
-| high-five | wave, then success. Its `hotspot` is where the ring's done burst plays |
+| high-five | wave, then success. It plays once a turn, and its `hotspot` is where the turn's burst plays |
 | perch-wait | waiting-approval |
 | startle | error's first 2 frames |
 | jumping | the leap's arc. A Codex pet uses row 4 |

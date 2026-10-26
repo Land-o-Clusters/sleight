@@ -219,7 +219,10 @@ arrival, a 240 ms hop per 120 pt, a run past 360 pt (at most 600 ms), a parabola
 above the higher edge, `320 + 0.5 * distance` ms up to 520), and a fade and pop over 400 pt or onto another display.
 Reduced motion makes every move a 150 ms crossfade and shows each state's first cell. Reactions follow A2's table: aim
 points toward the target's side, a click bumps 3 pt, typing, scrolling and dragging peek, waiting holds the card up to
-120 s, an error winces, and a done with `ok` high-fives while the ring's burst moves to the palm (`RingRuntime.dissolveAt`).
+120 s, and an error winces. Each call's done with `ok` gets a nod (a 3 pt bump and the hop's settle cells) and the ring's
+usual burst at the point. The high-five plays once a turn, at the relay's turn-end done, when the turn's last call
+succeeded, and only then does the ring's burst play at the palm (`RingRuntime.dissolveAt`). Otherwise the turn's end
+hands back.
 After 20 s without a frame it sleeps for 3 cycles under three rising z glyphs (one replicated layer), then stills with
 one z. The next frame startles it with a 6 pt bump. A person dragging or resizing the window hides it, and it returns
 500 ms after the frame stops changing.
