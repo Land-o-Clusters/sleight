@@ -252,6 +252,10 @@ test('a child killed mid-write or hung gives the ring alone', options, t => {
     assert.deepEqual([fault, loaded(r).loaded, loaded(r).reason], [fault, false, reason]); assert.equal(draws(r)[0].sprite, null);
     assert.ok(ms >= minMs && ms < maxMs, `${fault}: ${ms} ms`);
   }
+  // A sandbox (or limit) refusal is its own reason, apart from a crash.
+  assert.equal(loaded(good(t, [character(), act()], [], { SLEIGHT_CURSOR_DECODE_FAULT: 'nosandbox' })).reason, 'sandbox');
+  const limits = spawnSync(build(t), ['--decode-sheet', '512', '192', 'png'], { input: '', encoding: 'utf8', env: testEnv({ SLEIGHT_CURSOR_DECODE_FAULT: 'limits' }) });
+  assert.equal(limits.stdout, 'cpu=2/2 nofile=8/8\n');
   // No decode child outlives its parent.
   const stray = spawnSync('/bin/ps', ['-axo', 'command'], { encoding: 'utf8' }).stdout.split('\n').filter(l => l.startsWith(build(t) + ' --decode-sheet'));
   assert.deepEqual(stray, []);

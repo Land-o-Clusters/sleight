@@ -2814,7 +2814,7 @@ func spriteFrame(_ data: [String: Any]) -> SpriteFrame? {
     }
     return SpriteFrame(seq: seq, id: id, sheet: sheet, extra: path(data["extra"]), cell: CGSize(width: cell[0], height: cell[1]), table: table)
 }
-enum SpriteLoadError: String, Error { case path, permissions, size, type, decode, alpha, pixels, changed, timeout, child }
+enum SpriteLoadError: String, Error { case path, permissions, size, type, decode, alpha, pixels, changed, timeout, child, sandbox, cancelled }
 func spriteWarning(_ message: String) { FileHandle.standardError.write(Data(("sleight sprite: " + message + "\n").utf8)) }
 // A sheet's format and size from its first bytes, without decoding: PNG's IHDR, or WebP's VP8X, VP8L or VP8 header. An
 // animated WebP is refused here; the child refuses an APNG (two images).
@@ -2896,7 +2896,7 @@ func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String) thr
     guard !timedOut else { free(buffer); throw SpriteLoadError.timeout }
     guard got == total, !extra, exited, code == 0 else {
         free(buffer)
-        if exited, let reason = [65: SpriteLoadError.type, 66: .size, 67: .alpha, 68: .decode][Int(code)] { throw reason }
+        if exited, let reason = [65: SpriteLoadError.type, 66: .size, 67: .alpha, 68: .decode, 69: .sandbox][Int(code)] { throw reason }
         throw SpriteLoadError.child
     }
     return buffer
@@ -3182,7 +3182,7 @@ func writeCharacterResult(_ id: String, _ result: SpriteCharacter.Result) {
 // the untrusted bytes, decodes one image at the parent's validated size into sRGB premultiplied RGBA and writes those bytes.
 // The named profile kSBXProfilePureComputation is killed by SIGKILL at sandbox_init on macOS 27 (measured 2026-10-26), so
 // the child passes the same rule as SBPL. Without the warm-up ImageIO crashes inside the sandbox (SIGSEGV, measured).
-// Exit codes: 64 usage, 65 type or count, 66 size, 67 no alpha, 68 decode, 69 sandbox.
+// Exit codes: 64 usage, 65 type or count, 66 size, 67 no alpha, 68 decode, 69 limits or sandbox refused.
 @_silgen_name("sandbox_init") func spriteSandboxInit(_ profile: UnsafePointer<CChar>, _ flags: UInt64, _ error: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) -> Int32
 let spriteWarmImages: [[UInt8]] = [
     [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
@@ -3205,8 +3205,20 @@ func spriteDecodeChild(_ args: [String]) -> Never {
     for bytes in spriteWarmImages {
         if let source = CGImageSourceCreateWithData(Data(bytes) as CFData, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) { _ = draw(image, 1, 1) }
     }
+    // Limits before the sandbox: 2 s of CPU (SIGXCPU ends it) and 8 descriptors, both hard so the child can't raise them.
+    // No memory limit: macOS 27 refuses RLIMIT_AS, RLIMIT_DATA and RLIMIT_RSS at any value with EINVAL (measured
+    // 2026-10-26), so memory stays bounded by the parent's 2 s deadline.
+    for (resource, value) in [(RLIMIT_CPU, rlim_t(2)), (RLIMIT_NOFILE, rlim_t(8))] {
+        var limit = rlimit(rlim_cur: value, rlim_max: value)
+        guard setrlimit(resource, &limit) == 0 else { exit(69) }
+    }
     var error: UnsafeMutablePointer<CChar>? = nil
-    guard spriteSandboxInit("(version 1)(deny default)", 0, &error) == 0 else { exit(69) }
+    guard fault != "nosandbox", spriteSandboxInit("(version 1)(deny default)", 0, &error) == 0 else { exit(69) }
+    if fault == "limits" {
+        var cpu = rlimit(), files = rlimit(); getrlimit(RLIMIT_CPU, &cpu); getrlimit(RLIMIT_NOFILE, &files)
+        let text = "cpu=\(cpu.rlim_cur)/\(cpu.rlim_max) nofile=\(files.rlim_cur)/\(files.rlim_max)\n"
+        _ = text.withCString { write(1, $0, strlen($0)) }; exit(0)
+    }
     var data = Data(), chunk = [UInt8](repeating: 0, count: 1 << 16)
     while true {
         let n = read(0, &chunk, chunk.count)

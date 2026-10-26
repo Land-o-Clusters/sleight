@@ -276,15 +276,16 @@ test('the sprite style\'s character result reaches the trace, nonce-bound, with 
   h.client.send(frame()); await settle();
   const { nonce } = h.children[0].menus[0], stdout = h.children[0].stdout;
   const event = more => ({ hand: 'character', nonce, id: 'fixture', loaded: false, reason: 'size', warnings: [], ...more });
-  for (const e of [event(), event({ loaded: true, reason: null, warnings: ['chroma fringe'] })]) stdout.emit('data', Buffer.from(JSON.stringify(e) + '\n'));
+  for (const e of [event(), event({ reason: 'sandbox' }), event({ loaded: true, reason: null, warnings: ['chroma fringe'] })]) stdout.emit('data', Buffer.from(JSON.stringify(e) + '\n'));
   await settle();
   assert.deepEqual(h.traces.filter(([d]) => d.startsWith('hand-character')),
-    [['hand-character-refused', { id: 'fixture', reason: 'size' }], ['hand-character', { id: 'fixture', warnings: ['chroma fringe'] }]]);
+    [['hand-character-refused', { id: 'fixture', reason: 'size' }], ['hand-character-refused', { id: 'fixture', reason: 'sandbox' }],
+      ['hand-character', { id: 'fixture', warnings: ['chroma fringe'] }]]);
   // A foreign nonce, an unknown reason, a reason on success or an extra key is refused like any other bad event.
   for (const bad of [event({ nonce: 'f'.repeat(64) }), event({ reason: 'oops' }), event({ loaded: true }), event({ extra: 1 })]) {
     stdout.emit('data', Buffer.from(JSON.stringify(bad) + '\n')); await settle();
   }
-  assert.equal(h.traces.filter(([d]) => d.startsWith('hand-character')).length, 2);
+  assert.equal(h.traces.filter(([d]) => d.startsWith('hand-character')).length, 3);
   assert.equal(h.traces.filter(([d]) => d === 'hand-toggle-refused').length, 4);
 });
 

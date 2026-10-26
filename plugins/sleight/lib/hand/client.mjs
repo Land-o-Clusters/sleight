@@ -193,7 +193,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   }
   // The sprite style's load result, so a character shown as the ring alone has its reason in the trace.
   function characterEvent(event) {
-    const reasons = ['path', 'permissions', 'size', 'type', 'decode', 'alpha', 'pixels', 'changed', 'timeout', 'child'];
+    const reasons = ['path', 'permissions', 'size', 'type', 'decode', 'alpha', 'pixels', 'changed', 'timeout', 'child', 'sandbox'];
     if (event.nonce !== nonce || Object.keys(event).sort().join() !== 'hand,id,loaded,nonce,reason,warnings' || typeof event.loaded !== 'boolean' ||
       typeof event.id !== 'string' || !/^[a-z0-9-]{1,48}$/.test(event.id) || !(event.loaded ? event.reason === null : reasons.includes(event.reason)) ||
       !Array.isArray(event.warnings) || !event.warnings.every(w => ['chroma fringe', 'ink in an unused cell'].includes(w))) return false;
