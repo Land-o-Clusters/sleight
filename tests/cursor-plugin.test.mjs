@@ -62,9 +62,10 @@ test('Cursor never reads the Claude mod\'s hooks or picks up a component nobody 
   for (const dir of ['rules', 'agents', 'commands']) assert.equal(existsSync(join(plugin, dir)), false, `${dir}/ would load into Cursor`);
 });
 
-test('Cursor reads the same skill folder as Claude Code and Codex, and the skill fits Cursor\'s rules', () => {
+test('Cursor reads Claude Code skills, while Codex selects only drive-mac-apps', () => {
   const skills = relative(cursor.skills);
-  assert.equal(skills.replace(/\/$/, ''), relative(codex.skills).replace(/\/$/, ''));
+  assert.equal(relative(codex.skills).replace(/\/$/, ''), join(skills, 'drive-mac-apps'));
+  assert.equal(codex.skills, './skills/drive-mac-apps/');
   for (const name of readdirSync(skills)) {
     const text = readFileSync(join(skills, name, 'SKILL.md'), 'utf8');
     const front = /^---\n([\s\S]*?)\n---/.exec(text)[1];

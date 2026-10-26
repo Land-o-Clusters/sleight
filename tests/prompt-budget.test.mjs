@@ -34,6 +34,7 @@ test('make-character description stays below 60 tokens even at one token per UTF
   const source = readFileSync(new URL('../plugins/sleight/skills/make-character/SKILL.md', import.meta.url), 'utf8');
   const description = source.match(/^description: (.+)$/m)?.[1];
   assert.ok(description);
+  assert.equal(hash(source), baseline.makeCharacterBody);
   const bytes = Buffer.byteLength(description);
   assert.ok(bytes < 60, `${bytes} bytes is the conservative token upper bound`);
   assert.equal(hash(description), baseline.makeCharacterDescription);

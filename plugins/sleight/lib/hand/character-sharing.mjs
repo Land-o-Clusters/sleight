@@ -1,6 +1,6 @@
 // Sharing checks the immutable snapshot in a private bank, then publishes that same snapshot.
 import * as fs from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
+import { join, dirname, basename, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { loadCharacter, parseCharacterJSON, resolveCharacterStates, checkCharacter, installCharacter } from './character.mjs';
 import { characterFrame } from './character-frame.mjs';
@@ -43,8 +43,7 @@ export async function exportCharacterArchive(id, file, options = {}) {
   const character = checkCharacter(id, options);
   return withSharedCharacter(character.files, options, checked => {
     // A new file only. Opening a preexisting file, including a dangling symlink, never truncates it.
-    const target = resolve(file), parent = dirname(target);
-    if (fs.realpathSync(parent) !== parent) throw Error('Character archive: symlink output parent refused');
+    const requested = resolve(file), parent = fs.realpathSync(dirname(requested)), target = join(parent, basename(requested));
     const bytes = encodeCharacterArchive(checked.files);
     const fd = fs.openSync(target, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
     const created = fs.fstatSync(fd);
@@ -54,6 +53,6 @@ export async function exportCharacterArchive(id, file, options = {}) {
       try { const current = fs.lstatSync(target); if (current.dev === created.dev && current.ino === created.ino) fs.unlinkSync(target); } catch {}
       throw error;
     }
-    fs.closeSync(fd); return { bytes: bytes.length, id };
+    fs.closeSync(fd); return { bytes: bytes.length, id, path: target };
   });
 }

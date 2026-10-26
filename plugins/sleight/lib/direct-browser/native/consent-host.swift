@@ -1486,7 +1486,7 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     // Opening the submenu words the last-use times against the current time. Only Permissions submenus have this delegate.
     func menuNeedsUpdate(_ menu: NSMenu) {
-        if menu === item.menu { if hand?.enabled == true { writeCursorPickerEvent(["op": "refresh"]) }; return }
+        if menu === item.menu { return }
         if (menu as? CursorPickerMenu)?.permissionsRoot == true { fillPermissions(menu) }
     }
     // Revoke and block only remove access, so they don't ask.
@@ -1500,7 +1500,10 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let hand = hand else { return }
         writeHandToggle(!hand.enabled)
     }
-    func menuWillOpen(_ menu: NSMenu) { (menu as? CursorPickerMenu)?.lastHighlighted = nil }
+    func menuWillOpen(_ menu: NSMenu) {
+        (menu as? CursorPickerMenu)?.lastHighlighted = nil
+        if menu === item.menu, hand?.enabled == true { writeCursorPickerEvent(["op": "refresh"]) }
+    }
     func menu(_ menu: NSMenu, willHighlight entry: NSMenuItem?) { if let entry = entry { (menu as? CursorPickerMenu)?.lastHighlighted = entry } }
     @objc func cursorPauseClick(_ sender: NSMenuItem) {
         guard let menu = sender.menu as? CursorPickerMenu, let window = menu.trackingWindow else { return }
@@ -2148,6 +2151,7 @@ enum CursorPickerRow {
         case "import":
             return nested && Set(row.keys) == ["title", "op", "key"] &&
                 (row["key"] as? String)?.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil
+        case "installed": return nested && Set(row.keys) == ["title", "op"]
         case "folder": return !nested && Set(row.keys) == ["title", "op"]
         case "lines":
             guard let on = row["selected"] as? NSNumber, CFGetTypeID(on) == CFBooleanGetTypeID() else { return false }
@@ -2419,6 +2423,7 @@ final class CursorPickerHost: NSObject, NSMenuDelegate {
                 entry.submenu = inner
             } else {
                 entry.target = self; entry.action = #selector(click(_:)); entry.representedObject = row
+                if row["op"] as? String == "installed" { entry.isEnabled = false; entry.action = nil }
                 entry.state = row["selected"] as? Bool == true ? .on : .off
                 if let id = row["character"] as? String { entry.image = images[id]; characterItems[id] = entry }
             }

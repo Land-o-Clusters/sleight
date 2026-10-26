@@ -113,5 +113,6 @@ test('a symlinked Codex root is skipped with one metadata-only trace per picker 
   fs.symlinkSync(join(w.home, 'actual-codex'), join(w.home, '.codex'));
   const traces = [], controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, trace: (...args) => traces.push(args) });
   for (let i = 0; i < 3; i++) assert.deepEqual((await controller.catalog()).pets, []);
-  assert.deepEqual(traces, [['hand-picker-discovery-skipped', { reason: 'symlink-codex-root' }]]);
+  assert.deepEqual(traces.filter(([name]) => name === 'hand-picker-discovery-skipped'), [['hand-picker-discovery-skipped', { reason: 'symlink-codex-root' }]]);
+  assert.equal(traces.filter(([name]) => name === 'hand-picker-codex-list').length, 3);
 });

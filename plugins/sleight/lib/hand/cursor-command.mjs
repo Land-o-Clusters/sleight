@@ -84,7 +84,7 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
       return await publish(prepareCharacterImport(rest[0], { uid }));
     } else if (op === 'export') {
       const result = await exportCharacterArchive(rest[0], rest[1], { ...options, hostCheck: sharedHostCheck });
-      out(`Exported ${result.id}: ${result.bytes} bytes.\n`);
+      out(`Exported ${result.id}: ${result.bytes} bytes to ${result.path}.\n`);
     } else if (op === 'check') {
       const character = checkCharacter(rest[0], options);
       out(characterCallout(character, { installed: true }));
@@ -102,9 +102,10 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
         : `${c.manifest.id}: ${c.manifest.name} (${c.resolved.filter(s => s.own).length} of ${c.resolved.length} states)`).join('\n') + '\n' : 'No characters installed.\n');
       if (characters.some(c => c.error)) return 1;
       for (const group of await pluginCatalog({ home, env, uid })) {
+        if (group.reason) { out(`Skipped plugin ${group.pluginId}: ${group.reason}.\n`); continue; }
         if (!group.packs.length) continue;
-        out(`Plugin: ${group.name} (${group.host})\n${group.warning ? group.warning + '\n' : ''}`);
-        for (const pack of group.packs) out(`  ${pack.id}: ${pack.name} (choose from Cursor to import)\n`);
+        out(`Plugin: ${group.pluginId} (${group.host})\n${group.warning ? group.warning + '\n' : ''}`);
+        for (const pack of group.packs) out(`  ${pack.id}: ${pack.name} (${characters.some(c => c.manifest?.id === pack.id) ? 'already installed' : 'choose from Cursor to import'})\n`);
       }
     }
     return 0;

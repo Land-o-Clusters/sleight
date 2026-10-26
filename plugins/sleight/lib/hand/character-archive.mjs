@@ -32,7 +32,7 @@ const putOctal = (header, start, size, value) => header.write(value.toString(8).
 export function encodeCharacterArchive(files) {
   entriesCheck(files);
   const chunks = [];
-  for (const [name, bytes] of [...files].sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [name, bytes] of [...files].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {
     const header = Buffer.alloc(512); header.write(name, 0, 100, 'ascii');
     putOctal(header, 100, 8, 0o600); putOctal(header, 108, 8, 0); putOctal(header, 116, 8, 0);
     putOctal(header, 124, 12, bytes.length); putOctal(header, 136, 12, 0);

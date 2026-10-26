@@ -298,8 +298,8 @@ export function createHandClient({ env = process.env, setting = () => handSettin
     optionsSent = text; pickerFrame({ op: 'options', perch, lines });
   };
   const pickerNotice = text => pickerFrame({ op: 'notice', text: String(text).replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ch => ch === '\n' ? '\n' : '').slice(0, 3000) });
-  async function pickerCatalog(picker) {
-    const catalog = await picker.catalog({ style, character, lines: lines ? 'on' : 'off' });
+  async function pickerCatalog(picker, open = false) {
+    const catalog = await picker.catalog({ style, character, lines: lines ? 'on' : 'off', open });
     if (host !== 'running') return;
     const frame = { op: 'catalog', rows: catalog.rows };
     if (Buffer.byteLength(JSON.stringify(frame)) > 64000 || catalog.rows.length > 512 || catalog.rows.some(r => r.children?.length > 512)) {
@@ -370,7 +370,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
         else if (result.ok) await pickerStyle(result, picker);
         if (result.text) pickerNotice(result.text);
       }
-      await pickerCatalog(picker);
+      await pickerCatalog(picker, event.op === 'refresh');
     }).catch(error => { if (host === 'running') pickerNotice(`The Cursor menu could not update: ${error.message}`); })
       .finally(() => { pickerBusy = false; const next = pickerQueue.shift(); if (next) pickerEvent(next.event, next.internal); });
     return true;

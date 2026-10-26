@@ -8,14 +8,14 @@ import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { encodePng } from '../bench/hand/synthetic-character.mjs';
 import * as archive from '../plugins/sleight/lib/hand/character-archive.mjs';
 import * as sharing from '../plugins/sleight/lib/hand/character-sharing.mjs';
-import { discoverCharacterPlugins } from '../plugins/sleight/lib/hand/character-plugins.mjs';
+import { discoverCharacterPlugins, characterPackDigest } from '../plugins/sleight/lib/hand/character-plugins.mjs';
 import { loadCharacter, installCharacter } from '../plugins/sleight/lib/hand/character.mjs';
 import { cursorCommand } from '../plugins/sleight/lib/hand/cursor-command.mjs';
 import { createCursorPicker } from '../plugins/sleight/lib/hand/cursor-picker.mjs';
-import { settingsCommand } from '../plugins/sleight/lib/person-gate.mjs';
+import { settingsCommand, settingsRefusal } from '../plugins/sleight/lib/person-gate.mjs';
 
 function world(t) {
-  const home = registerTemp(t, fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'sleight-sharing-'))));
+  const home = registerTemp(t, fs.realpathSync(fs.mkdtempSync(join('/tmp', 'sleight-sharing-'))));
   const root = join(home, 'characters');
   const putPack = (folder, id = 'mouse') => {
     fs.mkdirSync(folder, { recursive: true, mode: 0o700 });
@@ -28,7 +28,7 @@ function world(t) {
     return loadCharacter(folder);
   };
   const plugin = (name = 'critters', id = 'mouse', host = 'claude') => {
-    const folder = join(home, host, name), meta = join(folder, host === 'claude' ? '.claude-plugin' : '.codex-plugin');
+    const folder = host === 'claude' ? join(home, '.claude/plugins/cache/demo', name, '1.0.0') : join(home, host, name), meta = join(folder, host === 'claude' ? '.claude-plugin' : '.codex-plugin');
     fs.mkdirSync(meta, { recursive: true, mode: 0o700 });
     fs.writeFileSync(join(meta, 'plugin.json'), JSON.stringify({ name, version: '1.0.0' }), { mode: 0o600 });
     putPack(join(folder, 'sleight-characters', id), id); return folder;
@@ -150,6 +150,7 @@ test('picker groups plugin packs by name, keeps warnings, rechecks record and de
   assert.equal((await controller.apply({ op: 'import', key: group.children[0].key })).ok, true);
   assert.deepEqual(writes, [{ style: 'sprite', character: 'mouse' }]);
   const next = createCursorPicker({ ...w.options, pluginCatalog: () => discoverCharacterPlugins(w.options), hostCheck: loaded, writeSetting: s => writes.push(s) });
+  fs.rmSync(join(w.root, 'mouse'), { recursive: true });
   const offered = (await next.catalog()).plugins[0].packs[0]; w.record({});
   assert.equal((await next.apply({ op: 'import', key: offered.key })).ok, false);
 });
@@ -200,6 +201,8 @@ test('Claude scoped install precedence and config roots are explicit, unsupporte
   const cfg = join(w.home, 'isolated-config'); fs.mkdirSync(cfg);
   fs.renameSync(join(w.home, '.claude/plugins'), join(cfg, 'plugins'));
   assert.equal(discoverCharacterPlugins(w.options).length, 0);
+  const pathRecord = join(cfg, 'plugins/installed_plugins.json');
+  fs.writeFileSync(pathRecord, fs.readFileSync(pathRecord, 'utf8').replaceAll(join(w.home, '.claude/plugins'), join(cfg, 'plugins')));
   const custom = { ...w.options, env: { CLAUDE_CONFIG_DIR: cfg } };
   assert.equal(discoverCharacterPlugins(custom)[0].name, 'project-art');
   const path = join(cfg, 'plugins/installed_plugins.json'); fs.writeFileSync(path, JSON.stringify({ version: 1, plugins: {} }));
@@ -251,8 +254,119 @@ test('Claude marketplace inline components warn using the host known-marketplace
   fs.writeFileSync(join(w.home, '.claude/plugins/known_marketplaces.json'), JSON.stringify({ demo: { installLocation: market } }));
   const path = join(dir, 'marketplace.json');
   fs.writeFileSync(path, JSON.stringify({ name: 'demo', plugins: [{ name: 'critters', hooks: { hooks: {} }, mcpServers: { tool: {} } }] }));
-  assert.match(discoverCharacterPlugins(w.options)[0].warning, /hooks, MCP servers/);
+  assert.match(discoverCharacterPlugins(w.options)[0].warning, /hooks.*MCP servers/);
   fs.writeFileSync(path, JSON.stringify({ name: 'demo', plugins: [{ name: 'critters', source: './plugins/critters' }] }));
   assert.equal(discoverCharacterPlugins(w.options)[0].warning, undefined);
   fs.unlinkSync(path); assert.match(discoverCharacterPlugins(w.options)[0].warning, /metadata is unavailable/);
+});
+
+// C9R: every undeclared host component warns, including future component names.
+for (const component of ['bin', 'monitors', 'output-styles', 'themes', 'settings.json', 'SKILL.md', 'payload.mcpb', 'hooks',
+  'commands', 'agents', 'skills', 'future-component', 'toString', '__proto__']) {
+  test(`data-only allowlist warns for root ${component}`, t => {
+    const w = world(t), folder = w.plugin();
+    if (component.includes('.')) fs.writeFileSync(join(folder, component), '{}'); else fs.mkdirSync(join(folder, component));
+    w.record({ 'critters@demo': [{ scope: 'user', installPath: folder }] });
+    assert.ok(discoverCharacterPlugins(w.options)[0].warning.includes(component));
+  });
+}
+for (const key of ['hooks', 'outputStyles', 'experimental', 'monitors', 'themes', 'settings', 'channels', 'userConfig', 'types',
+  'commands', 'agents', 'skills', 'futureKey', 'extensions']) {
+  test(`data-only allowlist warns for manifest ${key}`, t => {
+    const w = world(t), folder = w.plugin();
+    fs.writeFileSync(join(folder, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'critters', [key]: {} }));
+    w.record({ 'critters@demo': [{ scope: 'user', installPath: folder }] });
+    assert.ok(discoverCharacterPlugins(w.options)[0].warning.includes(key));
+  });
+}
+test('metadata-only manifests, plain docs and catalogs pass the allowlist; hidden metadata payloads warn', t => {
+  const w = world(t), folder = w.plugin('critters', 'mouse', 'codex');
+  const cache = join(w.home, '.codex/plugins/cache/demo/critters/1.0.0');
+  fs.mkdirSync(join(cache, '..'), { recursive: true }); fs.renameSync(folder, cache);
+  for (const name of ['README.md', 'LICENSE', 'CHANGELOG.txt', '.gitignore']) fs.writeFileSync(join(cache, name), 'metadata');
+  fs.mkdirSync(join(cache, '.agents/plugins'), { recursive: true }); fs.writeFileSync(join(cache, '.agents/plugins/marketplace.json'), '{}');
+  const options = { ...w.options, codexList: () => ({ installed: [{ installed: true, name: 'critters', pluginId: 'critters@demo', marketplaceName: 'demo', version: '1.0.0' }] }) };
+  assert.equal(discoverCharacterPlugins(options)[0].warning, undefined);
+  fs.writeFileSync(join(cache, '.agents/plugins/unknown.js'), '');
+  assert.match(discoverCharacterPlugins(options)[0].warning, /unknown.js/);
+});
+
+test('trusted symlinked plugins and config roots resolve under home; escapes and wrong owners have reasons', async t => {
+  const w = world(t), folder = w.plugin(); w.record({ 'critters@demo': [{ scope: 'user', installPath: folder }] });
+  const original = join(w.home, '.claude/plugins'), target = join(w.home, 'dotfiles/plugins');
+  fs.mkdirSync(join(w.home, 'dotfiles')); fs.renameSync(original, target); fs.symlinkSync(target, original);
+  assert.equal(discoverCharacterPlugins(w.options)[0].packs.length, 1);
+  const claude = join(w.home, '.claude'), config = join(w.home, 'claude-config');
+  fs.renameSync(claude, config); fs.symlinkSync(config, claude);
+  assert.equal(discoverCharacterPlugins(w.options)[0].packs.length, 1);
+  const bad = discoverCharacterPlugins({ ...w.options, uid: process.getuid() + 1 });
+  assert.match(bad[0].reason, /unsafe plugin directory/);
+  fs.unlinkSync(original); fs.symlinkSync(fs.realpathSync(tmpdir()), original);
+  const refused = discoverCharacterPlugins(w.options); assert.match(refused[0].reason, /outside/);
+  let output = '';
+  assert.equal(await cursorCommand(['list'], { ...w.options, out: s => output += s, pluginCatalog: () => refused }), 0);
+  assert.match(output, /Skipped plugin Claude plugins:.*outside/);
+});
+
+test('forged install paths refuse and recorded local marketplace paths remain eligible', t => {
+  const w = world(t), folder = w.plugin(); w.record({ 'critters@demo': [{ scope: 'user', installPath: folder }] });
+  const outside = join(w.home, 'forged'); fs.renameSync(folder, outside);
+  w.record({ 'critters@demo': [{ scope: 'user', installPath: outside }] });
+  assert.match(discoverCharacterPlugins(w.options)[0].reason, /outside/);
+  const market = join(w.home, 'market'); fs.mkdirSync(join(market, '.claude-plugin'), { recursive: true });
+  const local = join(market, 'critters'); fs.renameSync(outside, local);
+  fs.writeFileSync(join(market, '.claude-plugin/marketplace.json'), JSON.stringify({ plugins: [{ name: 'critters', source: './critters' }] }));
+  fs.writeFileSync(join(w.home, '.claude/plugins/known_marketplaces.json'), JSON.stringify({ demo: { installLocation: market } }));
+  w.record({ 'critters@demo': [{ scope: 'user', installPath: local }] });
+  assert.equal(discoverCharacterPlugins(w.options)[0].packs.length, 1);
+  assert.equal(discoverCharacterPlugins(w.options)[0].warning, undefined);
+});
+
+test('export accepts a resolved /tmp parent but never follows or replaces a leaf symlink', async t => {
+  const w = world(t), pack = w.putPack(join(w.home, 'mouse')); installCharacter(pack, { root: w.root });
+  const alias = '/tmp/' + w.home.split('/').at(-1), file = join(alias, 'export.sleightchar');
+  const result = await sharing.exportCharacterArchive('mouse', file, { ...w.options, hostCheck: loaded });
+  assert.equal(result.path, join(w.home, 'export.sleightchar')); assert.equal(fs.statSync(result.path).size, result.bytes);
+  for (const name of ['missing', 'export.sleightchar']) {
+    const leaf = join(alias, 'leaf'); fs.symlinkSync(join(w.home, name), leaf);
+    await assert.rejects(sharing.exportCharacterArchive('mouse', leaf, { ...w.options, hostCheck: loaded }), /exist/);
+    fs.unlinkSync(leaf);
+  }
+  assert.equal(fs.existsSync(join(w.home, 'missing')), false);
+});
+
+test('Codex list is measured once per open, reused during refresh and revalidation, refreshed next open', async t => {
+  const w = world(t), folder = w.plugin(); w.record({ 'critters@demo': [{ scope: 'user', installPath: folder }] });
+  let lists = 0; const traces = [];
+  const controller = createCursorPicker({ ...w.options, hostCheck: loaded, writeSetting() {}, trace: (...args) => traces.push(args),
+    codexSnapshot: async () => { lists++; return { installed: [] }; }, pluginCatalog: options => discoverCharacterPlugins(options) });
+  const first = await controller.catalog(), row = first.rows.find(r => r.title.includes('critters@demo'));
+  assert.ok(row); await controller.catalog({ open: false }); assert.equal(lists, 1);
+  assert.equal((await controller.apply({ op: 'import', key: row.children[0].key })).ok, true); assert.equal(lists, 1);
+  const refreshed = await controller.catalog({ open: false });
+  const installed = refreshed.rows.find(r => r.title.includes('critters@demo')).children[0];
+  assert.match(installed.title, /already installed/); assert.equal(installed.op, 'installed');
+  assert.equal(lists, 1); await controller.catalog(); assert.equal(lists, 2);
+  assert.equal(traces.filter(([name]) => name === 'hand-picker-codex-list').length, 2);
+  assert.ok(traces.every(([, value]) => value.ms >= 0));
+});
+
+test('archive ordering and framed pack digests are deterministic across map insertion order', t => {
+  const w = world(t), files = w.putPack(join(w.home, 'mouse')).files, reversed = new Map([...files].reverse());
+  assert.deepEqual(archive.encodeCharacterArchive(files), archive.encodeCharacterArchive(reversed));
+  assert.equal(characterPackDigest(files), characterPackDigest(reversed));
+  assert.notEqual(characterPackDigest(new Map([['a', Buffer.from('bc')]])), characterPackDigest(new Map([['ab', Buffer.from('c')]])));
+});
+
+test('sharing writers retain the full person gate under a fake agent environment', () => {
+  for (const args of [['cursor', 'import', '/fixture/input.sleightchar'], ['cursor', 'export', 'mouse', '/fixture/out.sleightchar']]) {
+    assert.match(settingsRefusal(args, { stdin: { isTTY: true }, stdout: { isTTY: true }, env: { CLAUDECODE: '1' }, ancestors: () => { throw Error('must not walk'); } }), /started under an agent/);
+  }
+});
+test('dangling symlinked plugins and config roots list a reason', t => {
+  const w = world(t); fs.mkdirSync(join(w.home, '.claude'));
+  const root = join(w.home, '.claude/plugins'); fs.symlinkSync(join(w.home, 'missing'), root);
+  assert.match(discoverCharacterPlugins(w.options)[0].reason, /unresolved symlink/);
+  fs.unlinkSync(root); fs.rmdirSync(join(w.home, '.claude')); fs.symlinkSync(join(w.home, 'missing'), join(w.home, '.claude'));
+  assert.match(discoverCharacterPlugins(w.options)[0].reason, /unresolved symlink/);
 });

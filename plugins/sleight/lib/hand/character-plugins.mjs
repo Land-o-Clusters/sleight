@@ -1,7 +1,7 @@
 // Only the hosts' installed records nominate roots. Never search marketplace or cache directories for plugins.
 import * as fs from 'node:fs';
 import { userInfo } from 'node:os';
-import { isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { Worker, isMainThread, parentPort } from 'node:worker_threads';
@@ -11,6 +11,8 @@ const LIMITS = Object.freeze({ recordBytes: 1024 * 1024, plugins: 256, packs: 12
 const component = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}$/.test(value) && !value.includes('..');
 const idValid = value => typeof value === 'string' && /^[a-z0-9-]{1,48}$/.test(value);
 const plain = value => typeof value === 'string' && value.length > 0 && value.length <= 96 && !/[\p{C}\p{Zl}\p{Zp}]/u.test(value);
+const under = (path, root) => path.startsWith(root + '/');
+const skipped = (host, pluginId, reason) => ({ host, pluginId, name: pluginId, reason, packs: [] });
 function directory(path, uid) {
   if (!isAbsolute(path) || resolve(path) !== path || fs.realpathSync(path) !== path) throw Error('unsafe plugin path');
   const st = fs.lstatSync(path);
@@ -33,9 +35,25 @@ function json(path, uid, cap = 16383) {
 }
 function claudeInstalls({ home, env, uid, cwd }) {
   const config = isAbsolute(env.CLAUDE_CONFIG_DIR ?? '') ? env.CLAUDE_CONFIG_DIR : join(home, '.claude');
-  const root = isAbsolute(env.CLAUDE_CODE_PLUGIN_CACHE_DIR ?? '') ? env.CLAUDE_CODE_PLUGIN_CACHE_DIR : join(config, 'plugins');
+  const nominated = isAbsolute(env.CLAUDE_CODE_PLUGIN_CACHE_DIR ?? '') ? env.CLAUDE_CODE_PLUGIN_CACHE_DIR : join(config, 'plugins');
+  let root;
+  try {
+    root = fs.realpathSync(nominated);
+    if (!under(root, fs.realpathSync(home))) throw Error('plugins folder resolves outside the user home');
+    directory(root, uid);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      let linked = false;
+      for (let path = nominated; path !== dirname(path); path = dirname(path)) {
+        try { if (fs.lstatSync(path).isSymbolicLink()) { linked = true; break; } } catch {}
+      }
+      if (!linked) return [];
+      return [skipped('claude', 'Claude plugins', 'plugins folder has an unresolved symlink')];
+    }
+    return [skipped('claude', 'Claude plugins', error.message)];
+  }
   let record;
-  try { directory(root, uid); record = json(join(root, 'installed_plugins.json'), uid, LIMITS.recordBytes); } catch { return []; }
+  try { record = json(join(root, 'installed_plugins.json'), uid, LIMITS.recordBytes); } catch { return []; }
   let marketplaces;
   try { marketplaces = json(join(root, 'known_marketplaces.json'), uid, LIMITS.recordBytes); } catch {}
   const metadata = new Map();
@@ -55,18 +73,27 @@ function claudeInstalls({ home, env, uid, cwd }) {
       if (!metadata.has(origin)) {
         try {
           const folder = marketplaces?.[origin]?.installLocation; directory(folder, uid);
+          if (!under(folder, fs.realpathSync(home))) throw Error('marketplace outside user home');
           const market = json(join(folder, '.claude-plugin/marketplace.json'), uid, LIMITS.recordBytes);
           metadata.set(origin, Array.isArray(market?.plugins) && market.plugins.length <= LIMITS.plugins ? market.plugins : []);
         } catch { metadata.set(origin, []); }
       }
       const entries = metadata.get(origin).filter(p => p?.name === name);
-      result.push({ host: 'claude', pluginId, folder: paths[0], componentMetadata: entries.length === 1 ? entries[0] : null });
+      // Translate only the trusted root alias. Descendant symlinks still fail directory()/json().
+      const path = paths[0], folder = under(path, nominated) ? root + path.slice(nominated.length) : path;
+      const market = marketplaces?.[origin]?.installLocation;
+      let local = false;
+      try { directory(market, uid); local = under(market, fs.realpathSync(home)) && under(folder, market); } catch {}
+      if (!isAbsolute(folder) || resolve(folder) !== folder || !(under(folder, root) || local)) {
+        result.push(skipped('claude', pluginId, 'installPath is outside the plugins root and recorded marketplace')); continue;
+      }
+      result.push({ host: 'claude', pluginId, folder, componentMetadata: entries.length === 1 ? entries[0] : null });
     }
   }
   return result;
 }
 // The CLI resolves layered config and the active install version. No availability scan or cache walk is used.
-function listCodex({ home, env }) {
+export function listCodex({ home, env }) {
   return JSON.parse(execFileSync('codex', ['plugin', 'list', '--json'], { encoding: 'utf8', timeout: 3000,
     maxBuffer: LIMITS.recordBytes, killSignal: 'SIGKILL', windowsHide: true,
     env: { ...process.env, ...env, CODEX_HOME: isAbsolute(env.CODEX_HOME ?? '') ? env.CODEX_HOME : join(home, '.codex') }, stdio: ['ignore', 'pipe', 'ignore'] }));
@@ -84,6 +111,16 @@ function codexInstalls(options) {
     return [{ host: 'codex', pluginId: p.pluginId, folder }];
   });
 }
+// One CLI result per menu open. Revalidation still reads current manifests, records and pack bytes.
+export async function codexPluginSnapshot(options) {
+  return new Promise(resolve => {
+    const worker = new Worker(new URL(import.meta.url)); let settled = false;
+    const done = value => { if (settled) return; settled = true; clearTimeout(timer); resolve(value); worker.terminate(); };
+    const timer = setTimeout(() => done({ installed: [] }), 5000);
+    worker.once('message', value => done(value.record)); worker.once('error', () => done({ installed: [] })); worker.once('exit', () => done({ installed: [] }));
+    worker.postMessage({ snapshot: true, options });
+  });
+}
 function pluginManifest(folder, host, uid) {
   const primary = host === 'claude' ? '.claude-plugin/plugin.json' : 'plugin.json';
   try { return json(join(folder, primary), uid); }
@@ -93,29 +130,46 @@ function pluginManifest(folder, host, uid) {
   }
 }
 function extras(folder, manifest, uid, componentMetadata) {
-  const kinds = new Set(), sources = [manifest, manifest?.extensions?.['com.openai'], componentMetadata];
-  for (const path of ['.claude-plugin/plugin.json', '.codex-plugin/plugin.json']) {
+  const allowed = new Set(['$schema', 'name', 'displayName', 'version', 'description', 'author', 'homepage', 'repository', 'license', 'keywords',
+    'metadata', 'icon', 'documentationUrl', 'supportUrl', 'privacyPolicyUrl', 'termsOfServiceUrl', 'defaultEnabled', 'interface']);
+  const kinds = new Set(), sources = [manifest];
+  const quote = key => JSON.stringify(key).replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ch => [...ch].map(c => '\\u{' + c.codePointAt(0).toString(16) + '}').join(''));
+  const label = key => key === 'mcpServers' ? 'MCP servers (mcpServers)' : /^[\w$-]+$/.test(key) ? key : quote(key);
+  const inspect = (source, marketplace = false) => {
+    for (const key of Object.keys(source ?? {})) if (!allowed.has(key) && !(marketplace && key === 'source')) kinds.add(label(key));
+  };
+  inspect(componentMetadata, true);
+  for (const path of ['plugin.json', '.claude-plugin/plugin.json', '.codex-plugin/plugin.json']) {
     try { sources.push(json(join(folder, path), uid)); } catch (error) { if (error.code !== 'ENOENT') kinds.add('unreadable metadata'); }
   }
-  for (const source of sources) for (const [key, label] of [['hooks', 'hooks'], ['mcpServers', 'MCP servers'], ['commands', 'commands'],
-    ['agents', 'agents'], ['skills', 'skills'], ['lspServers', 'LSP servers'], ['dependencies', 'dependencies'], ['workflows', 'workflows']]) {
-    if (source && Object.hasOwn(source, key)) kinds.add(label);
-  }
-  for (const [name, label] of [['hooks', 'hooks'], ['.mcp.json', 'MCP servers'], ['mcp.json', 'MCP servers'], ['commands', 'commands'],
-    ['agents', 'agents'], ['skills', 'skills'], ['.lsp.json', 'LSP servers'], ['workflows', 'workflows'], ['package.json', 'package scripts']]) {
-    try { fs.lstatSync(join(folder, name)); kinds.add(label); } catch (error) { if (error.code !== 'ENOENT') kinds.add('unreadable files'); }
-  }
+  sources.forEach(source => inspect(source));
+  const metadataFiles = { '.claude-plugin': ['plugin.json'], '.codex-plugin': ['plugin.json'], '.agents': ['plugins'], '.agents/plugins': ['marketplace.json'] };
+  const scan = (relative = '') => {
+    for (const entry of fs.readdirSync(join(folder, relative), { withFileTypes: true })) {
+      const name = relative ? relative + '/' + entry.name : entry.name;
+      if (!relative && entry.name === 'sleight-characters' && entry.isDirectory()) continue;
+      if (Object.hasOwn(metadataFiles, name) && entry.isDirectory()) { scan(name); continue; }
+      if (entry.isFile() && (relative ? metadataFiles[relative]?.includes(entry.name) : /^(README|LICENSE|CHANGELOG)([.][A-Za-z0-9-]+)?$|^(\.gitignore|plugin\.json)$/.test(entry.name))) continue;
+      kinds.add(name === '.mcp.json' || name === 'mcp.json' ? `MCP servers (${name})` : quote(name));
+    }
+  };
+  scan();
   if (kinds.size) return `Warning: this plugin includes ${[...kinds].join(', ')}. sleight cannot control what the host loads from it.`;
   if (componentMetadata === null) return 'Warning: marketplace component metadata is unavailable. sleight cannot control what the host loads from this plugin.';
 }
 export function characterPackDigest(files) {
   const digest = createHash('sha256');
-  for (const [name, bytes] of [...files].sort(([a], [b]) => a.localeCompare(b))) digest.update(name).update(bytes);
+  for (const [name, bytes] of [...files].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {
+    const lengths = Buffer.alloc(8); lengths.writeUInt32BE(Buffer.byteLength(name), 0); lengths.writeUInt32BE(bytes.length, 4);
+    digest.update(lengths).update(name).update(bytes);
+  }
   return digest.digest('hex');
 }
-export function discoverCharacterPlugins({ home = userInfo().homedir, env = process.env, uid = process.getuid(), cwd = process.cwd(), codexList } = {}) {
+export function discoverCharacterPlugins({ home = userInfo().homedir, env = process.env, uid = process.getuid(), cwd = process.cwd(), codexList, codexRecord } = {}) {
+  if (codexRecord) codexList = () => codexRecord;
   const options = { home, env, uid, cwd, codexList }, groups = [], seen = new Set(); let count = 0;
   for (const install of [...claudeInstalls(options), ...codexInstalls(options)]) {
+    if (install.reason) { groups.push(install); continue; }
     try {
       directory(install.folder, uid);
       const manifest = pluginManifest(install.folder, install.host, uid);
@@ -141,6 +195,11 @@ export function discoverCharacterPlugins({ home = userInfo().homedir, env = proc
 }
 
 if (!isMainThread) parentPort.once('message', options => {
+  if (options.snapshot) {
+    try { parentPort.postMessage({ record: listCodex(options.options) }); }
+    catch { parentPort.postMessage({ record: { installed: [] } }); }
+    return;
+  }
   try { parentPort.postMessage({ groups: discoverCharacterPlugins(options) }); }
   catch { parentPort.postMessage({ groups: [] }); }
 });
