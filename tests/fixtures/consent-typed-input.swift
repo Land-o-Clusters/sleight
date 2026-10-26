@@ -5,8 +5,31 @@ var fixtureVoiceOver = false
 var fixtureSwitchControl = false
 var fixtureKeyAllowed = true
 var trustedEvents = Set<ObjectIdentifier>()
+let fixtureWindowServerPID: Int64 = 424242
+var fixtureSourcePID: Int64 = 0
+var fixtureSourceState = CGEventSourceStateID.hidSystemState
+var fixtureSourceData: Int64 = 0
 var preflightKeyEquivalents = false
-func fixturePersonInput(_ event: NSEvent) -> Bool { trustedEvents.contains(ObjectIdentifier(event)) }
+// Project only CG provenance. AppKit still dispatches the original NSEvent with its real text, window,
+// timestamp and repeat flag. Both the shared helper and word field run the production personInput check.
+func fixtureCGEvent(_ event: NSEvent) -> CGEvent? {
+    guard let cg = event.cgEvent?.copy() else { return nil }
+    if trustedEvents.contains(ObjectIdentifier(event)) {
+        cg.setIntegerValueField(.eventSourceUnixProcessID, value: fixtureSourcePID)
+        cg.setIntegerValueField(.eventSourceStateID, value: Int64(fixtureSourceState.rawValue))
+        cg.setIntegerValueField(.eventSourceUserData, value: fixtureSourceData)
+    }
+    return cg
+}
+func fixturePidPath(_ pid: Int32, _ buffer: UnsafeMutableRawPointer, _ size: UInt32) -> Int32 {
+    let path = pid == Int32(fixtureWindowServerPID)
+        ? "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+        : "/fixture/posted-input"
+    let bytes = Array(path.utf8CString)
+    guard bytes.count <= Int(size) else { return 0 }
+    bytes.withUnsafeBytes { buffer.copyMemory(from: $0.baseAddress!, byteCount: $0.count) }
+    return Int32(bytes.count - 1)
+}
 func fixtureMakeKey(_ window: NSWindow) {
     check(window.canBecomeKey, "only an explicitly focused handoff may become key")
     if fixtureKeyAllowed && window.canBecomeKey { fixtureKeyWindow = window }
@@ -58,8 +81,7 @@ func key(_ text: String, in window: NSWindow, code: UInt16? = nil, trusted: Bool
         timestamp: ProcessInfo.processInfo.systemUptime - age, windowNumber: window.windowNumber,
         context: nil, characters: text, charactersIgnoringModifiers: text, isARepeat: repeated,
         keyCode: code ?? codes[text.lowercased().first ?? "a"] ?? 0)!
-    // NSEvent.keyEvent creates process-origin input. Admit chosen fixture events through the extraction seam,
-    // without editing, rebridging or subclassing any NSEvent or changing its window/text properties.
+    // Mark chosen local events for hardware-shaped CG provenance without rebridging the NSEvent.
     if trusted { trustedEvents.insert(ObjectIdentifier(event)) }
     check(event.window === window, "NSEvent resolves actual card window")
     return event
@@ -175,6 +197,74 @@ for (protectedDefault, code) in [(false, UInt16(36)), (false, 76), (true, 36), (
     enter(unfocused, code: code)
     check(otherReceipt.choices == [protectedDefault ? "Always allow" : "Don't allow"], "field does not intercept another responder's Return")
     _ = held
+}
+
+// C3R2: WindowServer-origin Return must work at both the field and the final action, including
+// passive handoff cards. Empty Return still belongs to NSAlert's protected default button.
+for pid in [Int64(0), fixtureWindowServerPID] {
+    fixtureSourcePID = pid
+    for code: UInt16 in [36, 76] {
+        let (alert, view, actions, receipt) = modal(true)
+        enter(view, code: code)
+        check(receipt.choices == ["Always allow"], "protected default accepts physical Return from pid \(pid), key \(code)")
+        type(word(view, "Always allow"), view); enter(view, code: code)
+        check(receipt.choices == ["Always allow", "Always allow"], "typed confirmation accepts physical Return from pid \(pid), key \(code)")
+        check(!view.field.isEnabled, "typed success invalidates after WindowServer/default dispatch")
+        _ = alert; _ = actions
+        var answers: [String] = []
+        let card = AskCardPanel(AskCard(question: "Fixture?", detail: "", host: "sleight", icon: "", kind: "handoff", choices: ["cancel", "continue"]), deadline: Date().timeIntervalSince1970 * 1000 + 60000) { answers.append($0) }
+        prepare(card.panel, card.typing!.field)
+        type(word(card.typing!, "Continue"), card.typing!); enter(card.typing!, code: code)
+        check(answers == ["continue"] && card.finished, "mouseOnly card accepts focused physical word from pid \(pid), key \(code)")
+        card.close()
+    }
+}
+fixtureSourcePID = 0
+
+// A native button owns its key equivalents and dispatch phase. Consent accepts the same four HID
+// types as 1.5.1; only mouse down/up may directly answer a mouseOnly card. Every event is spent once.
+for pid in [Int64(0), fixtureWindowServerPID] {
+    fixtureSourcePID = pid
+    for mouseOnly in [false, true] {
+        let receipt = TypedReceipt()
+        let window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 200, height: 80), styleMask: .borderless, backing: .buffered, defer: false)
+        let button = NSButton(title: "Confirm", target: receipt, action: #selector(TypedReceipt.accept(_:)))
+        window.contentView!.addSubview(button); _ = window.windowRef
+        let action = ConsentInputAction(button, mouseOnly: mouseOnly)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp, .keyDown, .keyUp] {
+            let event: NSEvent
+            if type == .leftMouseDown || type == .leftMouseUp {
+                event = NSEvent.mouseEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+            } else {
+                event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: "a", charactersIgnoringModifiers: "a", isARepeat: true, keyCode: 0)!
+            }
+            trustedEvents.insert(ObjectIdentifier(event)); fixtureCurrentEvent = event
+            let before = receipt.choices.count, allowed = !mouseOnly || type == .leftMouseDown || type == .leftMouseUp
+            check(action.press(button) == allowed, "native consent dispatch preserves pid \(pid), type \(type), mouseOnly \(mouseOnly)")
+            check(receipt.choices.count == before + (allowed ? 1 : 0), "button emits only the expected receipt")
+            check(!action.press(button), "same consent event cannot dispatch twice")
+            trustedEvents.remove(ObjectIdentifier(event)); fixtureCurrentEvent = nil
+        }
+        check(!window.isVisible, "native button regression window never ordered")
+    }
+}
+fixtureSourcePID = 0
+
+// Exercise both provenance layers with real CGEvent fields, so widening the consent event set never
+// admits a posted process, invalid pid, non-HID source or user-data marker.
+for source in [(Int64(7), CGEventSourceStateID.hidSystemState, Int64(0)),
+    (-1, .hidSystemState, 0), (Int64(Int32.max) + 1, .hidSystemState, 0),
+    (0, .combinedSessionState, 0), (0, .privateState, 0), (0, .hidSystemState, 9)] {
+    let (alert, view, actions, receipt) = modal(true)
+    type(word(view, "Always allow"), view)
+    fixtureSourcePID = source.0; fixtureSourceState = source.1; fixtureSourceData = source.2
+    enter(view)
+    check(receipt.choices.isEmpty && view.field.isEnabled && view.field.stringValue.isEmpty, "bad provenance cannot confirm or fall through to protected default")
+    let event = key("\r", in: alert.window, code: 36)
+    fixtureCurrentEvent = event
+    check(!actions[0].press(alert.buttons[0]) && receipt.choices.isEmpty, "final consent action independently refuses bad provenance")
+    trustedEvents.remove(ObjectIdentifier(event)); fixtureCurrentEvent = nil
+    fixtureSourcePID = 0; fixtureSourceState = .hidSystemState; fixtureSourceData = 0
 }
 
 let deadline = Date().timeIntervalSince1970 * 1000 + 60000

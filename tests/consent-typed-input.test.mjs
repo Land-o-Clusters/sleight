@@ -24,14 +24,15 @@ test('real modal and handoff events route typed choices only after field focus w
   const blocks = ['PERSON INPUT', 'APP FRAME', 'ASK CARD'].map(name => {
     const block = source.split(`// BEGIN ${name}\n`)[1]?.split(`// END ${name}`)[0];
     assert.ok(block, name);
-    // Headless seams supply hardware provenance and key-window/current-event state only.
+    // Headless seams supply CGEvent provenance and key-window/current-event state only.
     // Real NSEvents, window association, key equivalents and responder dispatch stay intact.
     return block.replaceAll('window.isKeyWindow', '(window === fixtureKeyWindow)')
       .replaceAll('NSWorkspace.shared.isVoiceOverEnabled', 'fixtureVoiceOver')
       .replaceAll('NSWorkspace.shared.isSwitchControlEnabled', 'fixtureSwitchControl')
       .replaceAll('wordFocusAllowed = isKeyWindow', 'wordFocusAllowed = fixtureKeyWindow === self')
       .replaceAll('makeKey()', 'fixtureMakeKey(self)')
-      .replaceAll('personInput(event.cgEvent)', 'fixturePersonInput(event)');
+      .replaceAll('event.cgEvent', 'fixtureCGEvent(event)')
+      .replaceAll('proc_pidpath(Int32(pid), &path, UInt32(path.count))', 'fixturePidPath(Int32(pid), &path, UInt32(path.count))');
   });
   const dir = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-typed-input-'))));
   const swift = join(dir, 'main.swift'), binary = join(dir, 'fixture');

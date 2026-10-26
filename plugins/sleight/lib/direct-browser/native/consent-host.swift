@@ -44,19 +44,25 @@ func personInput(_ event: CGEvent?) -> Bool {
 private var personSpentByWindow: [Int: Double] = [:]
 func personActivation(_ event: NSEvent?, windowMatches: Bool, keyboard: Bool = true,
     highlighted: Bool = true, accessibility: Bool = false, now: Double = ProcessInfo.processInfo.systemUptime,
-    windowNumber: Int? = nil) -> Bool {
+    windowNumber: Int? = nil, consent: Bool = false) -> Bool {
     guard !accessibility, let event = event, windowMatches,
         event.timestamp.isFinite, event.timestamp >= 0, event.timestamp <= now, now - event.timestamp < 5,
-        let cg = event.cgEvent, cg.getIntegerValueField(.eventSourceUnixProcessID) == 0, personInput(cg) else { return false }
-    guard event.type == .leftMouseUp || keyboard && highlighted && event.type == .keyDown && !event.isARepeat && [36, 49, 76].contains(event.keyCode) else { return false }
+        let cg = event.cgEvent, (consent || cg.getIntegerValueField(.eventSourceUnixProcessID) == 0), personInput(cg) else { return false }
+    // Consent retains 1.5.1's WindowServer provenance and native button dispatch. The word field checks
+    // its own Return, repeat and focus rules before dispatch; passive cards still require a mouse event.
+    if consent {
+        guard keyboard || [.leftMouseDown, .leftMouseUp].contains(event.type) else { return false }
+    } else {
+        guard event.type == .leftMouseUp || keyboard && highlighted && event.type == .keyDown && !event.isARepeat && [36, 49, 76].contains(event.keyCode) else { return false }
+    }
     let window = windowNumber ?? event.windowNumber
     guard event.timestamp > (personSpentByWindow[window] ?? -Double.infinity) else { return false }
     personSpentByWindow[window] = event.timestamp
     return true
 }
-func personActivation(_ event: NSEvent?, in window: NSWindow?, keyboard: Bool = true, highlighted: Bool = true) -> Bool {
+func personActivation(_ event: NSEvent?, in window: NSWindow?, keyboard: Bool = true, highlighted: Bool = true, consent: Bool = false) -> Bool {
     guard let window = window else { return false }
-    return personActivation(event, windowMatches: event?.window === window, keyboard: keyboard, highlighted: highlighted, windowNumber: window.windowNumber)
+    return personActivation(event, windowMatches: event?.window === window, keyboard: keyboard, highlighted: highlighted, windowNumber: window.windowNumber, consent: consent)
 }
 func personChoice(_ kind: String, _ choice: String) -> Bool {
     if ["cancel", "decline", "session"].contains(choice) { return false }
@@ -123,7 +129,7 @@ final class ConsentInputAction: NSObject {
         let event = currentEvent()
         guard let event = event,
             !typed || event.type == .keyDown,
-            personActivation(event, in: sender.window, keyboard: !mouseOnly || typed)
+            personActivation(event, in: sender.window, keyboard: !mouseOnly || typed, consent: true)
             else { refuseConsentInput(sender); return false }
         return sender.sendAction(originalAction, to: originalTarget)
     }
