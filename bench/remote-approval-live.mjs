@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Import-safe RA1 owner-away check. The interactive PTY is shared with the benchmark; this file never imports run.mjs.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir, homedir, loadavg, userInfo } from 'node:os';
 import { join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -97,7 +97,7 @@ export async function runRemoteApproval(options = {}, io) {
 export function realDependencies() {
   const execute = promisify(execFile), controller = new AbortController();
   const login = remoteLoginPlan();
-  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => controller.abort());
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(signal, () => controller.abort());
   const hold = async () => { while (existsSync('/tmp/sleight-hold')) { controller.signal.throwIfAborted(); await sleep(1000); } controller.signal.throwIfAborted(); };
   const metadata = async operation => {
     const { stdout } = await execute('/usr/bin/osascript', ['-l', 'JavaScript', join(root, 'plugins/sleight/lib/remote-approvals.js'), JSON.stringify({ operation })],
@@ -130,8 +130,10 @@ export function realDependencies() {
 }
 
 export async function realSession(bank, { hold, signal, upfront = false, login = remoteLoginPlan(), launch = launchPty }) {
-  const id = randomUUID(), dir = join(bank.bank, id), config = login.env.CLAUDE_CONFIG_DIR;
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const id = randomUUID(), config = login.env.CLAUDE_CONFIG_DIR;
+  mkdirSync(join(bank.bank, id), { recursive: true, mode: 0o700 });
+  // Claude keys project trust by the folder's real path (/var/folders is /private/var/folders), as the claude-cu arm does.
+  const dir = realpathSync(join(bank.bank, id));
   mkdirSync(config, { recursive: true, mode: 0o700 });
   const mcp = join(dir, 'mcp.json'), settings = join(dir, 'settings.json'), turnFile = join(dir, 'turn-' + id + '.json');
   const nonce = randomUUID(), audit = join(dir, 'approvals.jsonl');
@@ -148,7 +150,11 @@ export async function realSession(bank, { hold, signal, upfront = false, login =
     args: [...remotePlan().args, '--session-id', id, '--mcp-config', mcp, '--settings', settings] };
   const configFile = join(config, '.claude.json');
   const before = existsSync(configFile) ? JSON.parse(readFileSync(configFile, 'utf8')) : {};
+  let restored = false;
   const restoreTrust = () => {
+    if (restored) return;
+    restored = true;
+    process.off('exit', restoreTrust);
     // Read again after child collection so account refreshes and other Claude metadata survive.
     const current = JSON.parse(readFileSync(configFile, 'utf8'));
     if (Object.hasOwn(before.projects ?? {}, dir)) current.projects[dir] = before.projects[dir];
@@ -158,6 +164,8 @@ export async function realSession(bank, { hold, signal, upfront = false, login =
     else delete current.hasCompletedOnboarding;
     writeFileSync(configFile, JSON.stringify(current, null, 2) + '\n', { mode: 0o600 });
   };
+  // An exit the finally blocks never reach (a signal that ends the process) still removes this run's trust.
+  process.once('exit', restoreTrust);
   writeFileSync(configFile, JSON.stringify({ ...before, hasCompletedOnboarding: true,
     projects: { ...before.projects, [dir]: { hasTrustDialogAccepted: true, enabledMcpServers: ['plugin:sleight:computer'] } } }), { mode: 0o600 });
   // No print mode: the real terminal composer must raise prompt.submit with a trusted origin.
