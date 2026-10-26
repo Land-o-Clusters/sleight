@@ -1,7 +1,7 @@
 // User CLI only. Character names and descriptions never enter an MCP prompt or tool result.
 import { createInterface } from 'node:readline';
 import { randomBytes } from 'node:crypto';
-import { charactersDirectory, prepareCharacterImport, installCharacter, listCharacters, checkCharacter, removeCharacter, characterCallout, resolveCharacterStates } from './character.mjs';
+import { charactersDirectory, refuseUrlSource, prepareCharacterImport, installCharacter, listCharacters, checkCharacter, removeCharacter, characterCallout, resolveCharacterStates } from './character.mjs';
 import { characterFrame } from './character-frame.mjs';
 import { CURSOR_STYLES, LINES_MODES, handConfigPath, handSetting } from './settings.mjs';
 import { writeHandSetting } from './command.mjs';
@@ -9,7 +9,7 @@ import { handHostBuilt, prepareHandHost } from '../direct-browser/host.mjs';
 import { statSync } from 'node:fs';
 import { readCharacterArchive } from './character-archive.mjs';
 import { assertCharacterImportId, withSharedCharacter, exportCharacterArchive } from './character-sharing.mjs';
-import { installedCharacterPlugins } from './character-plugins.mjs';
+import { installedCharacterPlugins, characterPluginSkips } from './character-plugins.mjs';
 
 // The live host's own checks for an installed character, through its sandboxed decode child (consent-host --check-character).
 const hostCheckCharacter = async frame => {
@@ -77,6 +77,7 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
         installCharacter(character, options);
         out(`Imported ${character.manifest.id}. The sprite stays hidden.\nTurn it on with sleight-mcp cursor style sprite ${character.manifest.id}\n`); return 0;
       };
+      refuseUrlSource(rest[0]);
       let source;
       try { source = statSync(rest[0]); }
       catch (error) { throw Error(`Character: ${JSON.stringify(rest[0])} source: ${error.code ?? error.message}`); }
@@ -102,8 +103,9 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
         : `${c.manifest.id}: ${c.manifest.name}${c.builtin ? ' [built-in]' : ''} (${c.resolved.filter(s => s.own).length} of ${c.resolved.length} states)`).join('\n') + '\n' : 'No characters installed.\n');
       if (characters.some(c => c.error)) return 1;
       for (const group of await pluginCatalog({ home, env, uid })) {
-        if (group.reason) { out(`Skipped plugin ${group.pluginId}: ${group.reason}.\n`); continue; }
-        for (const pack of group.skipped ?? []) out(`Skipped plugin pack ${pack.id} (${group.pluginId}): ${pack.reason}.\n`);
+        for (const pack of characterPluginSkips(group)) out(pack.more ? `${group.pluginId}: ${pack.id}.\n`
+          : group.reason ? `Skipped plugin ${group.pluginId}: ${pack.reason}.\n`
+            : `Skipped plugin pack ${pack.id} (${group.pluginId}): ${pack.reason}.\n`);
         if (!group.packs.length) continue;
         out(`Plugin: ${group.pluginId} (${group.host})\n${group.warning ? group.warning + '\n' : ''}`);
         for (const pack of group.packs) out(`  ${pack.id}: ${pack.name} (${characters.some(c => c.manifest?.id === pack.id) ? 'already installed' : 'choose from Cursor to import'})\n`);

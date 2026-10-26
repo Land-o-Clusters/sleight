@@ -5,8 +5,8 @@
 The app tasks run on the native path with the same arms and rules as the native claim. In VS Code the agent edits a fixture file in a separate instance with a temporary profile. In Slack it posts one fixed message to a test channel of a throwaway account. In the tester's personal Spotify account it finds a track, plays it and pauses it. The scorer's wording is "fastest". sleight has the lowest expected time on 3 of 3 tasks.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="img/family-app-claim-dark.svg">
-  <img src="img/family-app-claim-light.svg" width="900" alt="App claim, 2026-10-18, 02:39 to 03:16 UTC. Expected seconds per task for sleight, LCU, Codex, Cua, Peekaboo and Claude computer use. sleight has the lowest expected time on 3 of 3 tasks. The scorer's wording is &quot;fastest&quot;.">
+  <source media="(prefers-color-scheme: dark)" srcset="charts/family-app-claim-dark.svg">
+  <img src="charts/family-app-claim-light.svg" width="900" alt="App claim, 2026-10-18, 02:39 to 03:16 UTC. Expected seconds per task for sleight, LCU, Codex, Cua, Peekaboo and Claude computer use. sleight has the lowest expected time on 3 of 3 tasks. The scorer's wording is &quot;fastest&quot;.">
 </picture>
 
 <sub>App claim, 2026-10-18, 02:39 to 03:16 UTC. Expected seconds per task for sleight, LCU, Codex, Cua, Peekaboo and Claude computer use. sleight has the lowest expected time on 3 of 3 tasks. The scorer's wording is "fastest".</sub>

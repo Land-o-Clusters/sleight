@@ -10,7 +10,9 @@ type GuardOptions = {
   home?: string;
   configDir?: string;
 };
-export const PROTECTED: Readonly<Record<'settings' | 'cache' | 'install' | 'aboveSleight' | 'aboveInstall' | 'launcher', string>>;
+export const PROTECTED: Readonly<Record<'settings' | 'cache' | 'install' | 'aboveSleight' | 'aboveInstall' | 'launcher' | 'unresolved', string>>;
+export const guardUnavailableReason: string;
+export const guardPathReason: string;
 export function preapprovedWriteTarget(input: GuardInput, options: GuardOptions): Promise<string | undefined>;
 export function preapprovedWriteDenied(input: GuardInput, options: GuardOptions): Promise<boolean>;
 export function preapprovedWriteReason(label: string): string;

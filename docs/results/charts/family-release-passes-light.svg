@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 533" width="900" height="533" role="img" aria-labelledby="title desc">
+<title id="title">Release passes: pass rates per study and arm</title>
+<desc id="desc">Release passes: 105 of 111 recorded attempts passed across 7 study and arm rows. Task sets differ between studies.</desc>
+<style>
+.bg{fill:#FBF8F1}
+text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:13px;fill:#141A26}
+.t{font-size:15px;font-weight:600}
+.b{font-weight:600}
+.m{fill:#545E6E}
+.g{stroke:#E4DED2;stroke-width:1;fill:none}
+.me{fill:#E8622C}
+.ot{fill:#4E79D9}
+.sl{fill:#7A879A}
+.hme{stroke:#E8622C}
+.hot{stroke:#4E79D9}
+.hsl{stroke:#7A879A}
+</style>
+<defs><pattern id="h-me" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hme" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern><pattern id="h-ot" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hot" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern><pattern id="h-sl" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hsl" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern></defs>
+<rect class="bg" width="900" height="533" rx="12"/>
+<text x="24" y="34" class="t">Release passes</text>
+<text x="24" y="54" class="m">Pass rate per study and arm. Bars share a 0 to 100% scale. Labels give passed attempts / all attempts.</text>
+<g transform="translate(840 8) scale(0.8)"><g transform="translate(0.6 0.6)"><g transform="translate(10 10) rotate(-35)"><g fill="#141A26" stroke="#141A26" fill-opacity="0.08" stroke-opacity="0.08" stroke-width="3" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g><g fill="#141A26" stroke="#141A26" fill-opacity="0.12" stroke-opacity="0.12" stroke-width="1.8" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g><g fill="#141A26" stroke="#141A26" fill-opacity="0.2" stroke-opacity="0.2" stroke-width="0.8" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g></g></g><g transform="translate(10 10) rotate(-35)"><rect x="-1.95" y="-1.95" width="3.9" height="3.9" rx="0.62" fill="#4E79D9" fill-opacity="0.2" transform="translate(4.2 23) rotate(8)"/><rect x="-1.6" y="-1.6" width="3.2" height="3.2" rx="0.51" fill="#4E79D9" fill-opacity="0.92" transform="translate(4.2 23) rotate(8)"/><rect x="-1.83" y="-1.83" width="3.66" height="3.66" rx="0.59" fill="#7299EA" fill-opacity="0.2" transform="translate(8.8 23.5) rotate(-6)"/><rect x="-1.5" y="-1.5" width="3" height="3" rx="0.48" fill="#7299EA" fill-opacity="0.92" transform="translate(8.8 23.5) rotate(-6)"/><rect x="-1.71" y="-1.71" width="3.42" height="3.42" rx="0.55" fill="#7299EA" fill-opacity="0.2" transform="translate(6.5 26.5) rotate(4)"/><rect x="-1.4" y="-1.4" width="2.8" height="2.8" rx="0.45" fill="#7299EA" fill-opacity="0.92" transform="translate(6.5 26.5) rotate(4)"/><rect x="-1.59" y="-1.59" width="3.17" height="3.17" rx="0.51" fill="#A9C4F5" fill-opacity="0.2" transform="translate(11.5 26.2) rotate(-11)"/><rect x="-1.3" y="-1.3" width="2.6" height="2.6" rx="0.42" fill="#A9C4F5" fill-opacity="0.92" transform="translate(11.5 26.2) rotate(-11)"/><rect x="-1.34" y="-1.34" width="2.68" height="2.68" rx="0.43" fill="#A9C4F5" fill-opacity="0.2" transform="translate(2.6 27.5) rotate(-4)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#A9C4F5" fill-opacity="0.92" transform="translate(2.6 27.5) rotate(-4)"/><rect x="-1.34" y="-1.34" width="2.68" height="2.68" rx="0.43" fill="#7299EA" fill-opacity="0.2" transform="translate(9.2 29.6) rotate(7)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#7299EA" fill-opacity="0.92" transform="translate(9.2 29.6) rotate(7)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#A9C4F5" fill-opacity="0.2" transform="translate(13.9 29.2) rotate(3)"/><rect x="-0.9" y="-0.9" width="1.8" height="1.8" rx="0.29" fill="#A9C4F5" fill-opacity="0.92" transform="translate(13.9 29.2) rotate(3)"/><rect x="-0.98" y="-0.98" width="1.95" height="1.95" rx="0.31" fill="#A9C4F5" fill-opacity="0.2" transform="translate(5.6 30.6) rotate(-8)"/><rect x="-0.8" y="-0.8" width="1.6" height="1.6" rx="0.26" fill="#A9C4F5" fill-opacity="0.92" transform="translate(5.6 30.6) rotate(-8)"/></g><g transform="translate(10 10) rotate(-35)"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z" fill="#B9BFC9"/><path d="M-2.02 12.19 Q-2.2 10.8 -0.8 10.8 L10 10.8 Q11.4 10.8 11.24 12.19 L10.86 15.61 Q10.7 17 9.89 18.14 L9.81 18.26 Q9 19.4 7.6 19.4 L5 19.4 Q3.6 19.4 2.34 18.79 L-0.14 17.61 Q-1.4 17 -1.58 15.61 Z" fill="#EFE9DC"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z" fill="#B9BFC9"/><path d="M-4 14 A2 2.8 0 1 0 0 14 A2 2.8 0 1 0 -4 14 Z" fill="#EFE9DC"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z" fill="#B9BFC9"/><path d="M0.83 13.51 L-5.21 6.91 A0.78 0.78 0 0 0 -6.38 7.93 L-0.57 14.74 Z" fill="#EFE9DC"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z" fill="#B9BFC9"/><path d="M1.35 11.58 L0.36 0.91 A0.74 0.74 0 0 0 -1.12 1.03 L-0.45 11.72 Z" fill="#EFE9DC"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z" fill="#B9BFC9"/><path d="M5.05 11.59 L4.24 -0.88 A0.74 0.74 0 0 0 2.75 -0.8 L3.25 11.68 Z" fill="#EFE9DC"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z" fill="#B9BFC9"/><path d="M8.75 11.6 L8.59 0.04 A0.74 0.74 0 0 0 7.1 0.04 L6.95 11.6 Z" fill="#EFE9DC"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z" fill="#B9BFC9"/><path d="M12.43 11.63 L12.82 3.52 A0.71 0.71 0 0 0 11.39 3.42 L10.7 11.51 Z" fill="#EFE9DC"/></g></g>
+<text x="24" y="125" class="b">0.11.0 (2026-10-05)</text>
+<text x="24" y="144" class="m">sleight</text>
+<line class="g" x1="234" y1="146" x2="726" y2="146"/>
+<path class="me" d="M234 133h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="144" data-study="2026-10-05-release-0.11.0.json" data-arm="sleight" data-kind="pass-rate">100.0% (12/12)</text>
+<text x="24" y="180" class="b">0.12.0 (2026-10-05)</text>
+<text x="24" y="199" class="m">sleight</text>
+<line class="g" x1="234" y1="201" x2="726" y2="201"/>
+<path class="me" d="M234 188h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="199" data-study="2026-10-05-release-0.12.0.json" data-arm="sleight" data-kind="pass-rate">100.0% (12/12)</text>
+<text x="24" y="235" class="b">0.7.0 (2026-10-05)</text>
+<text x="24" y="254" class="m">sleight</text>
+<line class="g" x1="234" y1="256" x2="726" y2="256"/>
+<path class="me" d="M234 243h433.3a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-433.3z"/>
+<text x="736" y="254" data-study="2026-10-05-release-0.7.0.json" data-arm="sleight" data-kind="pass-rate">88.9% (16/18)</text>
+<text x="24" y="290" class="b">0.8.0 (2026-10-05)</text>
+<text x="24" y="309" class="m">sleight</text>
+<line class="g" x1="234" y1="311" x2="726" y2="311"/>
+<path class="me" d="M234 298h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="309" data-study="2026-10-05-release-0.8.0.json" data-arm="sleight" data-kind="pass-rate">100.0% (6/6)</text>
+<text x="24" y="345" class="b">0.16.0 (2026-10-09)</text>
+<text x="24" y="364" class="m">sleight</text>
+<line class="g" x1="234" y1="366" x2="726" y2="366"/>
+<path class="me" d="M234 353h464.6a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-464.6z"/>
+<text x="736" y="364" data-study="2026-10-09-release-0.16.0.json" data-arm="sleight" data-kind="pass-rate">95.2% (20/21)</text>
+<text x="24" y="400" class="b">1.0.0 (2026-10-09)</text>
+<text x="24" y="419" class="m">sleight</text>
+<line class="g" x1="234" y1="421" x2="726" y2="421"/>
+<path class="me" d="M234 408h441.1a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-441.1z"/>
+<text x="736" y="419" data-study="2026-10-09-release-1.0.0.json" data-arm="sleight" data-kind="pass-rate">90.5% (19/21)</text>
+<text x="24" y="455" class="b">1.1.0 (2026-10-09)</text>
+<text x="24" y="474" class="m">sleight</text>
+<line class="g" x1="234" y1="476" x2="726" y2="476"/>
+<path class="me" d="M234 463h464.6a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-464.6z"/>
+<text x="736" y="474" data-study="2026-10-09-release-1.1.0.json" data-arm="sleight" data-kind="pass-rate">95.2% (20/21)</text>
+<text x="24" y="509" class="m">Task sets differ between studies. See the tables for timing, models, engine versions and failed runs.</text>
+</svg>

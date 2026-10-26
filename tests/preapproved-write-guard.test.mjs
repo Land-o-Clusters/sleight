@@ -469,7 +469,7 @@ test('the folders above installed plugin copies deny removal and moves; other ma
   const home = `${MAC_USERS}fixture`, configDir = '/tmp/lane-claude-abc123';
   const installs = new Set([`${home}/.claude/plugins/cache/sleight/sleight`, `${home}/.codex/plugins/cache/land-o-clusters/sleight`,
     `${configDir}/plugins/cache`, `${configDir}/plugins/cache/market/sleight`]);
-  const fsStat = async path => installs.has(path) ? { realPath: path } : undefined;
+  const fsStat = async path => path === '/' || installs.has(path) ? { realPath: path } : undefined;
   const options = { stat: fsStat, home, configDir };
   for (const command of ['rm -rf ~/.claude/plugins/cache', 'rm -rf ~/.claude/plugins', 'rm -rf ~/.claude', 'rm -rf ~/.codex/plugins/cache',
     'rm -rf ~/.cursor/plugins', 'rm -rf ~/.claude/plugins/cache/sleight', 'rm -rf ~/.codex/plugins/cache/land-o-clusters',

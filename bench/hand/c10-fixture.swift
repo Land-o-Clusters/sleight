@@ -61,6 +61,16 @@ func outputAudio() -> [String: Any] {
             "channels": channels.count, "volumes": volumes.map { $0 as Any? ?? NSNull() }, "mutes": mutes.map { $0 as Any? ?? NSNull() }]
 }
 let args = CommandLine.arguments
+func displayRefusal(_ asleep: Bool, _ locked: Bool?) -> String? {
+    if locked == nil { return "screen-lock-state-unknown" }
+    if locked == true { return "screen-locked" }
+    return asleep ? "display-asleep" : nil
+}
+if args == [args[0], "--display-selftest"] {
+    guard let row = try? JSONSerialization.jsonObject(with: FileHandle.standardInput.readDataToEndOfFile()) as? [String: Any],
+          let asleep = row["asleep"] as? Bool else { exit(65) }
+    emit(["windowsCreated": 0, "reason": displayRefusal(asleep, row["locked"] as? Bool) as Any? ?? NSNull()]); exit(0)
+}
 if args == [args[0], "--selftest"] { emit(["windowsCreated": 0, "margin": 80, "coveredStopSeconds": 600]); exit(0) }
 if args == [args[0], "--voice-pixels-selftest"] {
     let data = FileHandle.standardInput.readDataToEndOfFile()
@@ -69,7 +79,14 @@ if args == [args[0], "--voice-pixels-selftest"] {
           let base64 = row["rgba"] as? String, let bytes = Data(base64Encoded: base64), bytes.count == width * height * 4 else { exit(65) }
     emit(voicePixels(Array(bytes), width, height).merging(["windowsCreated": 0]) { _, b in b }); exit(0)
 }
-if args == [args[0], "--preflight"] { emit(["screenRecording": CGPreflightScreenCaptureAccess(), "idle": idle() as Any? ?? NSNull()]); exit(0) }
+if args == [args[0], "--preflight"] {
+    let session = CGSessionCopyCurrentDictionary() as? [String: Any]
+    let locked = session.map { $0["CGSSessionScreenIsLocked"] as? Bool ?? false }
+    if let refusal = displayRefusal(CGDisplayIsAsleep(CGMainDisplayID()) != 0, locked) {
+        emit(["ok": false, "error": refusal]); FileHandle.standardError.write(Data((refusal + "\n").utf8)); exit(2)
+    }
+    emit(["ok": true, "screenRecording": CGPreflightScreenCaptureAccess(), "idle": idle() as Any? ?? NSNull()]); exit(0)
+}
 guard args.count == 4, args[1] == "--serve", args[2].hasPrefix("/"), args[3].hasSuffix("/bin/consent-host") else { exit(64) }
 let output = URL(fileURLWithPath: args[2]).resolvingSymlinksInPath().path
 var info = stat()
@@ -159,7 +176,7 @@ final class Fixture: NSObject, NSApplicationDelegate, WKNavigationDelegate {
             if let values = row["bubble"] as? [Double], values.count == 4, values.allSatisfy({ $0.isFinite }), values[2] > 0, values[3] > 0 {
                 bubble = CGRect(x: values[0], y: values[1], width: values[2], height: values[3])
             }
-            Task { await capture(name, host, token, bubble) }
+            Task { await capture(name, host, token, bubble, row["ocr"] as? Bool ?? true) }
         case "replay":
             let path = output + "/replay.html"
             var st = stat()
@@ -192,13 +209,18 @@ final class Fixture: NSObject, NSApplicationDelegate, WKNavigationDelegate {
             emit(["event": "reply", "token": token].merging(result) { _, b in b })
         }
     }
-    func capture(_ name: String, _ host: Int32, _ token: String, _ bubble: CGRect?) async {
+    func capture(_ name: String, _ host: Int32, _ token: String, _ bubble: CGRect?, _ ocr: Bool) async {
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
             guard let targetWindow = content.windows.first(where: { $0.windowID == UInt32(target.windowNumber) }),
                   let screen = content.displays.first(where: { $0.frame.contains(targetWindow.frame) }) else { throw NSError(domain: "fixture", code: 1) }
             // Only the owned fixture windows and the pinned host binary are included, even when another app overlaps them.
-            let region = targetWindow.frame.insetBy(dx: -80, dy: -160).intersection(screen.frame)
+            var region = targetWindow.frame.insetBy(dx: -80, dy: -160).intersection(screen.frame)
+            // Voice polling captures only the glyph strip, without full-fixture PNG encoding or OCR.
+            if !ocr, let bubble = bubble {
+                region = CGRect(x: bubble.minX + 8, y: bubble.minY, width: 12, height: bubble.height).intersection(region)
+                guard !region.isNull, !region.isEmpty else { throw NSError(domain: "fixture", code: 5) }
+            }
             let owned = content.windows.filter { window in
                 window.windowID == UInt32(target.windowNumber) || (cover.isVisible && window.windowID == UInt32(cover.windowNumber)) || window.owningApplication?.processID == host
             }.filter { $0.frame.intersects(region) }
@@ -225,9 +247,12 @@ final class Fixture: NSObject, NSApplicationDelegate, WKNavigationDelegate {
                 let r = Int(bytes[i]), g = Int(bytes[i + 1]), b = Int(bytes[i + 2])
                 if r > 120 && b > 100 && g < 100 && r > g * 3 / 2 && b > g * 3 / 2 { ink += 1 }
             }
-            let recognition = VNRecognizeTextRequest(); recognition.recognitionLevel = .accurate
-            try VNImageRequestHandler(cgImage: image).perform([recognition])
-            let texts = (recognition.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+            var texts: [String] = []
+            if ocr {
+                let recognition = VNRecognizeTextRequest(); recognition.recognitionLevel = .accurate
+                try VNImageRequestHandler(cgImage: image).perform([recognition])
+                texts = (recognition.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+            }
             var voice = ["voiceBars": -1, "voicePixels": -1]
             if let bubble = bubble {
                 let strip = CGRect(x: (bubble.minX + 8 - region.minX) * scale, y: (bubble.minY - region.minY) * scale,

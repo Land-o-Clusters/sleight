@@ -138,6 +138,14 @@ for (const kind of ['png', 'webp']) test(`Codex v2 ${kind} copies bytes unchange
   assert.deepEqual(fs.readdirSync(w.root), ['test-cat']); assert.equal(api.loadCharacter(installed).resolved.length, 19);
   assert.throws(() => api.installCharacter(source, { root: w.root }), /exists/i);
 });
+test('nine-row WebP imports through the same header validator without changing bytes', t => {
+  const w = world(t); pet(w, 'webp');
+  w.put('spritesheet.webp', webp(1536, 1872));
+  w.put('pet.json', { id: 'test-cat', displayName: 'Test Cat', spriteVersionNumber: 1, spritesheetPath: 'spritesheet.webp' });
+  const prepared = api.prepareCharacterImport(w.folder), target = api.installCharacter(prepared, { root: w.root });
+  assert.equal(api.checkCharacter('test-cat', { root: w.root }).manifest.grid.rows, 9);
+  assert.deepEqual(fs.readFileSync(join(target, 'sheet.webp')), webp(1536, 1872));
+});
 for (const kind of ['VP8X', 'VP8L', 'VP8 ']) test(`reads ${kind} dimensions without decoding`, () => assert.deepEqual(api.imageDimensions(webp(1536, 2288, kind), '.webp'), { width: 1536, height: 2288 }));
 for (const [name, chunks, error] of [
   ['later canvas hiding large image', [webp(16384, 16384, 'VP8L').subarray(12), webp().subarray(12, 30)], /VP8X must be first/],
@@ -386,7 +394,7 @@ const manifestErrors = {
   "sheet URL": "sheet: invalid sheet filename",
   "sheet missing": "sheet.webp\" sheet: sheet file missing",
   "sheet basename": "sheet: sheet filename must be sheet.png or sheet.webp",
-  "extra filename": "extra: extra sheet filename must be extra.webp",
+  "extra filename": "extra: extra sheet filename must be extra.png or extra.webp",
   "small cell": "frame: invalid frame dimensions",
   "large cell": "frame: invalid frame dimensions",
   "fractional cell": "frame: invalid frame dimensions",
@@ -476,9 +484,9 @@ test('local unknown license allowed; custom license requires text; warnings do n
   const result = w.load(); assert.ok(result.warnings.length >= 4);
   w.data.license = 'My-own-license'; w.put('LICENSE.txt', 'Personal use only.'); w.save(); assert.equal(w.load().manifest.license, 'My-own-license');
 });
-test('imports refuse old Codex, unsafe manifests and unexpected files', t => {
+test('imports refuse unsupported Codex, unsafe manifests and unexpected files', t => {
   const w = world(t); pet(w); const p = JSON.parse(fs.readFileSync(join(w.folder, 'pet.json')));
-  for (const [bad, error] of [[{ ...p, spriteVersionNumber: 1 }, /pet\.json.*spriteVersionNumber: Codex pet must/], [{ ...p, spritesheetPath: '../sheet.png' }, /pet\.json.*spritesheetPath: invalid sheet filename/], [{ ...p, displayName: '\u001bcat' }, /pet\.json.*displayName: invalid displayName text/]]) {
+  for (const [bad, error] of [[{ ...p, spriteVersionNumber: 3 }, /pet\.json.*spriteVersionNumber: Codex pet spriteVersionNumber must/], [{ ...p, spritesheetPath: '../sheet.png' }, /pet\.json.*spritesheetPath: invalid sheet filename/], [{ ...p, displayName: '\u001bcat' }, /pet\.json.*displayName: invalid displayName text/]]) {
     w.put('pet.json', bad); assert.throws(() => api.prepareCharacterImport(w.folder), error);
   }
   w.put('pet.json', p); w.put('other.txt', 'x'); assert.throws(() => api.prepareCharacterImport(w.folder), /"other\.txt" entry: extra character file refused/);

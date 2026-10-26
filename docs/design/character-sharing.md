@@ -2,7 +2,7 @@
 
 A character pack is data that follows [character format v1](character-format.md). Share it in an installed
 plugin or as one `.sleightchar` file. sleight's own protocol and format remain independent of any vendor's pets.
-Codex v2 imports keep their atlas bytes; sleight supplies compatibility, never Codex pets or vendor art.
+Codex and Petdex pets in either supported layout keep their atlas bytes; sleight supplies compatibility, never Codex pets or vendor art.
 The ring marks the point. Imported sprites are hidden until the person selects sprite mode.
 
 ## Character plugins
@@ -41,7 +41,8 @@ These are [Claude Code's manifest rules](https://code.claude.com/docs/en/plugins
 
 The character plugin's only payload is `sleight-characters/<id>/`. Its contents are art and metadata. sleight reads pack data without executing plugin code. A data-only plugin contains its manifests, character
 folder and known metadata files. Unknown files or manifest keys make the picker group say
-`warning: check plugin`. The import callout and `cursor list` name each unexpected item:
+`warning: check plugin`. The import callout and `cursor list` name at most 8 unexpected items, each capped at 40 characters,
+then give the remaining count:
 "Warning: this plugin includes hooks, MCP servers. sleight cannot control what the host loads from it."
 The host may have loaded them before sleight opens its picker. This warning is a file and manifest check,
 not an audit or a promise about the plugin's behavior.
@@ -87,7 +88,7 @@ Disabled but still installed Claude plugins remain available as art sources. sle
 Discovery follows only those recorded paths, never a general folder scan. Synced or session-only plugins
 without install records are outside this adapter. Missing, unsupported or unsafe records do not expose packs.
 The plugin root is resolved once and must stay under the user home, owned by that user. Refused roots
-are listed with a reason. Children must stay under that resolved root or the recorded local marketplace.
+appear as skipped rows in the Cursor menu and in `cursor list`, with a reason. Children must stay under that resolved root or the recorded local marketplace.
 Child symlinks, hardlinks, shared writable files and mismatched pack IDs are refused. Limits are 1 MiB per host
 record, 256 plugin records, 32 entries in each plugin's character folder and 128 valid packs per catalog.
 
@@ -97,7 +98,7 @@ Before installation and selection, sleight validates a captured copy through the
 Changed manifests or pack bytes invalidate an outstanding offer. Reopen the menu to refresh Codex
 installation status after installing or removing a plugin. Installed local copies remain until
 the person removes them. Plugin updates never silently replace a local character with the same ID.
-A plugin pack with a built-in ID is skipped with a reason. Packs with an installed local ID are labeled `already installed`.
+Refused packs, including built-in ID collisions, get a skipped menu row. Choose it to read the reason. The row cannot import. Packs with an installed local ID are labeled `already installed`.
 
 ### Codex compatibility
 
@@ -119,6 +120,52 @@ as `hand-picker-codex-list`. A new menu open gets a new list. Claude records and
 
 This is a local marketplace integration. Public directory acceptance of a data-only plugin has not been
 verified. Character plugins keep their data-only layout even if a host expects code or skills for directory acceptance.
+
+## Petdex pets
+
+Import a pet folder already downloaded to this Mac. It needs `pet.json` and the PNG or WebP named by its local
+`spritesheetPath`, with `id`, `displayName` and an optional description in the manifest.
+
+```sh
+sleight-mcp cursor import "$HOME/.petdex/pets/my-pet"
+```
+
+This example is not tested against a real Petdex download. Petdex's CLI also writes `~/.codex/pets/<slug>/`,
+which the picker's "Add your Codex pets" row lists. Each folder must satisfy the manifest requirements above.
+Read the license, size and missing-animation table before confirming. The default answer is No. Import copies the atlas
+unchanged, generates `character.json` and leaves the source alone. CLI import does not select a character or display a sprite.
+To show it later, choose `sleight-mcp cursor style sprite my-pet`. A picker import selects the character and sprite mode.
+
+[Petdex's README](https://github.com/crafter-station/petdex#for-builders) describes 8 by 9 and v2 8 by 11 atlases with
+192 by 208 pixel cells. It lists nine state names: idle, running-right, running-left, waving, jumping, failed, waiting,
+running and review. It leaves the two extra v2 rows to the consuming client. Petdex's integration notes default an omitted
+version to 1. sleight accepts the original sizes: 1536 by 1872 for version 1 or omitted, and 1536 by 2288 for version 2.
+Other versions, scaled atlases and mismatched dimensions are refused.
+
+Row indexes and the use of v2's extra rows for 16 look directions follow sleight's existing Codex mapping, not a Petdex
+contract. The [format spec](character-format.md) gives those mappings. The 9-row layout draws 7 of sleight's 19 event
+animations directly, leaving 12 using fallbacks. Movement plays the left or right running row. Aiming uses idle art while
+scrolling uses running art without a direction pose. The 11-row layout supplies 9 direct animations and 10 fallbacks.
+The import wizard lists every missing move and what it shows now. Add your own `extra.webp` and event mappings for more
+animations without editing the original sheet.
+
+## Pasted links
+
+URL import is refused, including a Petdex gallery page, `petdex://` link and direct image URL. sleight never fetches
+characters or follows redirects. Download direct files yourself, place the image and its matching `pet.json` in a
+local folder, then import that folder. A gallery page or manifest endpoint is not a character file. A bare image
+also needs the matching local manifest, and ZIP downloads must be extracted to a folder before import.
+
+## Validation and rights
+
+Petdex imports pass the same file ownership, mode, link, JSON, image-header, byte and pixel limits as other local packs.
+Installation revalidates a private snapshot. Rendering and `cursor check` use the existing native host's sandboxed
+decode child and pixel checks. Importing never starts a renderer.
+
+Petdex's code license does not license its pets: [asset rights belong to their submitters](https://github.com/crafter-station/petdex#license).
+The displayed author and license are unverified. A local pet with no license shows "not stated". Obtain permission
+before redistributing it and state the license in a shared sleight pack. sleight imports local files and does not upload
+them or submit them to Petdex. This importer does not bundle downloaded pets or vendor art.
 
 ## One-file packs
 
@@ -155,11 +202,38 @@ the import prompt. A process crash can leave it behind. sleight keeps the source
 
 ## Making a character
 
-Claude Code includes `/sleight:make-character`. The skill uses the generator in the matching sleight
-source checkout at `tools/characters/`. There is one generator copy. Copy a cast design into your
-project and run the checkout's builder with `--design` and a separate `--out` folder. It needs macOS `sips`, Node and `cwebp`.
+Claude Code includes `/sleight:make-character`. Its generator is beside the skill in
+`plugins/sleight/skills/make-character/tool/`. The repository's `tools/characters/` entry points import
+that shared source. You don't need a source checkout after installation. Copy a cast design into your
+project and run the installed builder with `--design` and a separate new `--out` folder with no symlink ancestors.
+Use `/private/tmp` instead of `/tmp` on macOS. It needs macOS `sips` and Node 22+.
+Tested with `cwebp` 1.6.0. Other versions fall back to PNG. A missing encoder or failed encode also uses PNG.
+Both follow format v1. Built-in rebuilds still require `cwebp` 1.6.0 and refuse failed encodes.
 
-OpenAI's [Build skills](https://learn.chatgpt.com/docs/build-skills) documents
-`agents/openai.yaml` with `policy.allow_implicit_invocation: false` for explicit Codex invocation. It
-does not document Claude Code's `disable-model-invocation` field. Support for that field in Codex is
-unverified, so sleight's Codex manifest selects only `drive-mac-apps` and excludes `make-character`.
+Each custom build writes six contact sheets under `output/review/<id>/`, outside the importable pack.
+They show the main, extra and perch atlases at 96 by 104 pixels per cell on light and dark backgrounds.
+Review all six at 100% before import. For style or motion code changes, copy only the installed
+`skills/make-character/tool/` and `lib/hand/character.mjs` into your project, preserving those relative paths.
+Edit that copy.
+
+The Codex manifest lists only `"skills": "./skills/drive-mac-apps/"`, leaving make-character outside
+its skill path. Codex CLI 0.164.0 exposed only drive-mac-apps in its model-visible
+skill list with this path in a 2026-10-26 measurement. This single-skill-folder route is observed, not documented upstream.
+Other Codex versions are unverified. Codex 0.164.0 ignores `disable-model-invocation`: pointing the
+manifest at `./skills/` exposed both skills in that measurement. Claude Code uses
+`disable-model-invocation: true` to keep `/sleight:make-character` available through explicit invocation.
+
+## Petdex references
+
+Public documentation checked at Petdex commit `31c0aee7f4fb387774b87d40e8047dc0f9cea94b`:
+
+- [README](https://github.com/crafter-station/petdex/blob/31c0aee7f4fb387774b87d40e8047dc0f9cea94b/README.md)
+- [CLI README](https://github.com/crafter-station/petdex/blob/31c0aee7f4fb387774b87d40e8047dc0f9cea94b/packages/petdex-cli/README.md)
+- [MIT license](https://github.com/crafter-station/petdex/blob/31c0aee7f4fb387774b87d40e8047dc0f9cea94b/LICENSE)
+- [Public skill](https://github.com/crafter-station/petdex/blob/31c0aee7f4fb387774b87d40e8047dc0f9cea94b/.claude/skills/petdex/SKILL.md)
+- [Integration notes](https://github.com/crafter-station/petdex/blob/31c0aee7f4fb387774b87d40e8047dc0f9cea94b/docs/chatgpt-pet-integration.md)
+- [MIT manifest source](https://github.com/crafter-station/petdex/blob/31c0aee7f4fb387774b87d40e8047dc0f9cea94b/packages/petdex-cli/src/manifest.ts)
+- Version and install excerpts of the [MIT CLI source](https://github.com/crafter-station/petdex/blob/31c0aee7f4fb387774b87d40e8047dc0f9cea94b/packages/petdex-cli/bin/petdex.ts)
+
+sleight supplies compatibility without reusing code or artwork. Fixtures draw synthetic squares locally.
+Research did not download any pets. Cua's public docs and the conversion decision are linked in the format spec.

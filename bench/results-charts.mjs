@@ -26,6 +26,9 @@ export const CHARTS = [
   { id: 'family-browser-turbo-helium', family: 'browser-turbo', browser: 'helium', kind: 'family' },
   { id: 'family-browser-race-safari', family: 'browser-race', browser: 'safari', kind: 'family' },
   { id: 'family-browser-race-firefox', family: 'browser-race', browser: 'firefox', kind: 'family' },
+  { id: 'family-ab-tests', family: 'ab-tests', browser: null, kind: 'summary' },
+  { id: 'family-validation', family: 'validation', browser: null, kind: 'summary' },
+  { id: 'family-release-passes', family: 'release-passes', browser: null, kind: 'summary' },
 ];
 
 // Section 2c of the 1.4.0 plan: ember for sleight, dab blue for the one other arm of a two-arm chart, one slate for every
@@ -144,6 +147,11 @@ const wordingLine = study => `The scorer's wording is "${study.verdict.wording}"
 
 export function chartCaption(id, all) {
   const chart = chartById(id);
+  if (chart.kind === 'summary') {
+    const rows = summaryRows(all, chart.family);
+    const passed = rows.reduce((sum, row) => sum + row.passed, 0), runs = rows.reduce((sum, row) => sum + row.runs, 0);
+    return `${summaryTitle(chart.family)}: ${passed} of ${runs} recorded attempts passed across ${rows.length} study and arm rows. Task sets differ between studies.`;
+  }
   if (chart.kind === 'overview') {
     const bits = PANELS.map(panel => {
       const study = studyFor(all, panel.family, panel.browser);
@@ -174,11 +182,12 @@ export function chartCaption(id, all) {
 const escXml = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const escMd = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/([\\`*_[\]|])/g, '\\$1');
 
-export function chartBlock(id, all, { base = '' } = {}) {
-  chartById(id);
+export function chartBlock(id, all, { base = '', directory } = {}) {
+  const chart = chartById(id);
+  directory ??= chart.kind === 'summary' ? 'charts' : 'img';
   const caption = chartCaption(id, all);
-  return `<picture>\n  <source media="(prefers-color-scheme: dark)" srcset="${base}img/${id}-dark.svg">\n` +
-    `  <img src="${base}img/${id}-light.svg" width="${W}" alt="${escXml(caption)}">\n</picture>\n\n<sub>${escMd(caption)}</sub>\n`;
+  return `<picture>\n  <source media="(prefers-color-scheme: dark)" srcset="${base}${directory}/${id}-dark.svg">\n` +
+    `  <img src="${base}${directory}/${id}-light.svg" width="${W}" alt="${escXml(caption)}">\n</picture>\n\n<sub>${escMd(caption)}</sub>\n`;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -300,6 +309,7 @@ function svg(id, all, body, height, palette) {
 
 function chartTitle(id, all) {
   const chart = chartById(id);
+  if (chart.kind === 'summary') return `${summaryTitle(chart.family)}: pass rates per study and arm`;
   if (chart.kind === 'overview') return 'sleight against the next-best arm, total expected seconds per benchmark';
   if (chart.kind === 'headline') return `${familyTitle(chart)}: total expected seconds over ${studyFor(all, chart.family)?.tasks.length ?? 0} tasks`;
   return `${familyTitle(chart)}: expected seconds per task`;
@@ -478,13 +488,53 @@ function familyChart(id, all) {
   return { body: [...out, ...foot.out], height: foot.y };
 }
 
-const KINDS = { headline: headlineChart, overview: overviewChart, family: familyChart };
+const summaryTitle = family => ({ 'ab-tests': 'Experiments', validation: 'Validation', 'release-passes': 'Release passes' })[family];
+
+export function summaryRows(all, family) {
+  const data = all[family];
+  if (family === 'release-passes') return (data?.files ?? []).filter(file => file.kind === 'release').flatMap(file =>
+    file.arms.map(arm => ({ study: file.name, label: `${file.version} (${file.date})`, arm: arm.arm, passed: arm.passed, runs: arm.runs })));
+  return (data?.studies ?? []).flatMap(study => study.arms.map(arm => {
+    const runs = study.runs.filter(row => row.arm === arm);
+    return { study: study.id, label: study.title ?? study.id, arm, passed: runs.filter(row => row.passed).length, runs: runs.length };
+  }));
+}
+
+function summaryChart(id, all) {
+  const chart = chartById(id), rows = summaryRows(all, chart.family);
+  const { out, y: top } = header(summaryTitle(chart.family), 'Pass rate per study and arm. Bars share a 0 to 100% scale. Labels give passed attempts / all attempts.', []);
+  const x0 = PAD + 210, barMax = W - PAD - x0 - 150;
+  let y = top, previous;
+  for (const row of rows) {
+    if (row.study !== previous) {
+      y += 12;
+      for (const line of wrap(row.label, W - 2 * PAD)) { out.push(text(PAD, y + 13, line, { cls: 'b' })); y += 18; }
+      previous = row.study;
+    }
+    const pct = row.runs ? row.passed / row.runs : 0;
+    const data = ` data-study="${escXml(row.study)}" data-arm="${escXml(row.arm)}" data-kind="pass-rate"`;
+    out.push(text(PAD, y + 14, armName(row.arm), { cls: 'm' }));
+    out.push(`<line class="g" x1="${x0}" y1="${n(y + 16)}" x2="${x0 + barMax}" y2="${n(y + 16)}"/>`);
+    if (pct) out.push(bar(x0, y + 3, pct * barMax, 14, row.arm === 'sleight' || row.arm === 'build-B' ? 'me' : 'ot'));
+    out.push(text(x0 + barMax + 10, y + 14, `${f1(pct * 100)}% (${row.passed}/${row.runs})`, { data }));
+    y += 25;
+  }
+  if (!rows.length) { out.push(text(PAD, y + 14, 'No recorded attempts.', { cls: 'm' })); y += 28; }
+  const foot = footer(['Task sets differ between studies. See the tables for timing, models, engine versions and failed runs.'], y + 16);
+  return { body: [...out, ...foot.out], height: foot.y };
+}
+
+const KINDS = { headline: headlineChart, overview: overviewChart, family: familyChart, summary: summaryChart };
 
 export function renderCharts(all) {
   const files = {};
   for (const chart of CHARTS) {
     const { body, height } = KINDS[chart.kind](chart.id, all);
-    for (const [mode, palette] of Object.entries(PALETTES)) files[`img/${chart.id}-${mode}.svg`] = svg(chart.id, all, body, height, palette);
+    for (const [mode, palette] of Object.entries(PALETTES)) {
+      const bodyText = svg(chart.id, all, body, height, palette);
+      if (chart.kind !== 'summary') files[`img/${chart.id}-${mode}.svg`] = bodyText;
+      if (chart.family && chart.kind !== 'headline') files[`charts/${chart.id}-${mode}.svg`] = bodyText;
+    }
   }
   return files;
 }
@@ -492,7 +542,7 @@ export function renderCharts(all) {
 // ---------------------------------------------------------------------------------------------------------------------------
 // Main: render from the committed data files and write (or check) docs/results/img/.
 
-const DATA_FAMILIES = ['native-claim', 'app-claim', 'browser-turbo', 'browser-race'];
+const DATA_FAMILIES = ['native-claim', 'app-claim', 'browser-turbo', 'browser-race', 'ab-tests', 'validation', 'release-passes'];
 export const loadData = out => Object.fromEntries(DATA_FAMILIES.map(id => [id, JSON.parse(readFileSync(join(out, 'data', `${id}.json`), 'utf8'))]));
 
 export function main(argv = process.argv.slice(2)) {
@@ -505,8 +555,7 @@ export function main(argv = process.argv.slice(2)) {
     process.exitCode = changed.length ? 1 : 0;
     return;
   }
-  mkdirSync(join(out, 'img'), { recursive: true });
-  for (const [name, body] of Object.entries(files)) writeFileSync(join(out, name), body);
+  for (const [name, body] of Object.entries(files)) { mkdirSync(dirname(join(out, name)), { recursive: true }); writeFileSync(join(out, name), body); }
   console.log(`wrote ${Object.keys(files).length} charts to ${join(out, 'img')}`);
 }
 

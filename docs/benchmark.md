@@ -3,7 +3,7 @@
 ## Results hub
 
 Rebuild the results pages from the committed data with `node bench/results-hub.mjs --render-only`.
-Use `node bench/results-hub.mjs --render-only --check` to check for stale pages.
+Use `node bench/results-hub.mjs --check` to check for stale pages: it collects the raw results first, so it also catches data older than the raw results.
 
 Collect and render once after a finished pass with `node bench/results-hub.mjs`, or run `node bench/hub-refresh.mjs`, which does the
 same and logs one line. The runners call it themselves after a successful, saved pass: `bench/run.mjs`, `bench/fowl/rounds.sh` (the browser

@@ -5,7 +5,7 @@ The default cursor is sleight's ring. Importing a character leaves its sprite hi
 that ring, which always marks the exact point. The sprite's anchor controls its offset. Rendering and style selection
 are separate from importing.
 
-The format belongs to sleight's open cursor protocol. Codex v2 pets import without changing their atlas bytes.
+The format belongs to sleight's open cursor protocol. Codex and Petdex pets in either supported layout import without changing their atlas bytes.
 Character data remains on this Mac. Names and descriptions appear in the user CLI and picker, never in model prompts or tool results.
 
 ## Files
@@ -14,7 +14,7 @@ Character data remains on this Mac. Names and descriptions appear in the user CL
 my-character/
   character.json
   sheet.png          # or sheet.webp
-  extra.webp         # optional extra rows
+  extra.webp         # optional extra rows (or extra.png)
   perch.webp         # optional perch-mode rows (or perch.png)
   preview.png        # optional, at most 256 by 256 pixels
   LICENSE.txt        # terms for a license the validator does not recognize
@@ -62,11 +62,12 @@ Import refuses those IDs regardless of display name. To make a variant, give it 
 Remove refuses built-ins. An old user folder with a reserved ID cannot shadow the bundled pack, but remains removable
 with `sleight-mcp cursor remove <id>`. The picker shows a separate "renamed needed" row that opens the user bank for repair.
 
-The build tool is `tools/characters/build.mjs`, outside the plugin. Its cast data, poses and styles draw all six characters
-in code under MIT. On macOS with `cwebp` 1.6.0 on PATH, build into a new directory:
+The generator is included in the plugin at `skills/make-character/tool/`. The repository entry point is
+`tools/characters/build.mjs`. Its cast data, poses and styles draw all six characters in code under MIT.
+On macOS with `cwebp` 1.6.0 on PATH, build into a new directory with no symlink ancestors:
 
 ```sh
-nice -n 20 node tools/characters/build.mjs --out /tmp/sleight-cast-build
+nice -n 20 node tools/characters/build.mjs --out /private/tmp/sleight-cast-build
 ```
 
 macOS `sips` rasterizes the SVGs without a browser or window. After PNG metadata is stripped, `cwebp` encodes every atlas
@@ -125,7 +126,7 @@ This example defines idle and click art. The remaining 17 states use fallbacks.
   before re-importing it as a pack. The validator recognizes CC0, CC-BY family licenses, MIT, Apache-2.0, BSD-2-Clause,
   BSD-3-Clause, ISC, Unlicense, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later and OFL-1.1.
   Other identifiers or custom terms need `LICENSE.txt`. `proprietary-personal` is also accepted. Attribution is unverified.
-- `sheet` is `sheet.png` or `sheet.webp`. Set `extra` to `extra.webp` when extra rows are present. File extensions must agree
+- `sheet` is `sheet.png` or `sheet.webp`. Set `extra` to `extra.png` or `extra.webp` when extra rows are present. File extensions must agree
   with image magic bytes. Paths and URLs are refused.
 - `frame` defaults to 192 by 208 pixels. The width must be an integer from 64 to 192 and the height from 64 to 208, so
   every sheet fits the hand host's 1536 by 2288 cap.
@@ -195,22 +196,36 @@ Scroll art is never mirrored vertically. Tint, pulse, hold and follow-up metadat
 renderer. With reduced motion enabled, the renderer uses the first resolved frame for every state, no movement easing,
 and a 150 ms fade. Idle's first frame is the still frame.
 
-### Codex v2 compatibility
+### Codex and Petdex compatibility
 
 Pass a folder containing `pet.json` and the image named by `spritesheetPath`. The manifest must have
-`spriteVersionNumber: 2`, `id`, and `displayName`. `description` may be absent. The importer copies the PNG or WebP
-byte for byte to `sheet.png` or `sheet.webp` and generates `character.json`. The image must measure 1536 by 2288 pixels. Its grid has 8 columns and 11 rows of 192 by 208 cells. Codex v1 atlases are refused.
+`id`, `displayName` and a local `spritesheetPath`. `description` may be absent. The importer copies the PNG or WebP
+byte for byte to `sheet.png` or `sheet.webp` and generates `character.json`.
 
+| `spriteVersionNumber` | Grid | Atlas pixels |
+| --- | --- | --- |
+| Absent or `1` | 8 columns, 9 rows | 1536 by 1872 |
+| `2` | 8 columns, 11 rows | 1536 by 2288 |
+
+Both use 192 by 208 pixel cells. Other versions, scaled atlases and version/dimension mismatches are refused.
+[Petdex's package docs](https://github.com/crafter-station/petdex#pet-package-format) describe both layouts.
+See [character sharing](character-sharing.md) for importing a local Petdex folder. sleight never fetches a pasted URL.
+
+The row indexes and use of v2's two extra rows below are sleight's existing Codex mapping. Petdex documents the nine
+state names and leaves the extra rows to the consuming client, without specifying these indexes or look directions.
 Codex rows are: idle 0, running-right 1, running-left 2, waving 3, jumping 4, failed 5, waiting 6, running 7, review 8,
 look A 9 and look B 10. Generated anchors are (96,196), and hotspots are (96,104). The generated `codex` object stores
-`{ "spriteVersionNumber": 2, "importedFrom": "original-id" }`. Keep it when adding extra art.
+`{ "spriteVersionNumber": 1, "importedFrom": "original-id" }` for 9 rows, or version 2 for 11 rows. Keep it when adding extra art.
+Rows 9 and 10 exist only in v2. A 9-row pet uses running-right or running-left for movement at every distance, idle art
+for aim, and running art for scroll without a look pose. Its 7 direct event animations leave 12 moves using fallbacks.
+The callout lists each missing animation and explains that it has no look directions. The source rows are copied unchanged.
 
 Idle durations are 280, 110, 110, 140, 140, 320 ms. Running rows use 120 ms per frame and 220 on the last frame. Waving uses
 140 ms and 280 on the last frame. Failed uses 140 ms and 240 on the last frame. Waiting uses 150 ms and 260 on the last.
 Review uses 150 ms and 280 on the last. Jump slices use 140 ms, with 280 ms on the landing frame. The copied atlas's unused
 cells and optional neutral look cell remain untouched. The optional neutral cell at row 0, column 6 is not mapped or used.
 
-A Codex import supplies art directly for 9 sleight states. The other 10 use fallbacks. This count comes from the resolved table,
+A v2 import supplies art directly for 9 sleight states. The other 10 use fallbacks. This count comes from the resolved table,
 not from a fixed wizard message. The wizard and `check` show one line per missing move, naming the fallback animation and
 any added pulse, look pose, repeated frames, hold or return to rest. For a Codex-only pet the callout starts:
 
@@ -221,9 +236,26 @@ Right-click: uses its waving animation
 Key press: uses its running animation, first 3 frames
 ```
 
+### Cua cursor themes
+
+[Cua's public cursor-theme docs](https://cua.ai/docs/cua-driver/guides/operate#personalize-the-cursor) describe a dotLottie
+archive with `cua/theme.json`, schema `cua.cursor-theme/2`, twelve action animations at 128 by 128 pixels and 30 fps,
+a still frame for each, author and license. Its actions include observe, navigate, app, transfer, record and system.
+
+Import would need a Lottie player to turn JSON into raster frames. sleight does not have that player or rasterizer,
+so direct import is unsupported. A bounded, dependency-free converter would support only a subset of those animations.
+
+sleight's character format stores static PNG or WebP atlases, frame timings and fallbacks for 19 event states. Its
+[cursor protocol](cursor-protocol.md) defines local event records independently of the renderer or character art.
+Cua's theme archive packages animations for its own driver. Cua already provides agent cursors with custom themes.
+
+An author can render their own theme to PNG or WebP with an external tool, arrange the cells and write `character.json`.
+That local pack must pass the same validator and sandboxed decoder as every other pack. sleight does not open a theme
+archive, run its contents, fetch assets or install a player. External conversion and Cua rendering were not tested here.
+
 ### Adding extra rows
 
-Keep the original Codex sheet unchanged. Draw an `extra.webp` with 8 columns, the same cell dimensions and as many complete
+Keep the original Codex sheet unchanged. Draw an `extra.png` or `extra.webp` with 8 columns, the same cell dimensions and as many complete
 rows as needed within the size and pixel limits. Its height determines its row count. Add `"extra": "extra.webp"` at the
 top of the manifest, then put `"sheet": "extra"` on each state using it. Rows start at zero within each sheet.
 
@@ -304,7 +336,7 @@ to the ring. These host checks belong to the renderer and are not established by
 1. Ask your agent to draw rows of 192 by 208 transparent cells, 8 columns across. Draw the first idle frame so it also works
    as a still image. Export PNG or WebP.
 2. Save the main atlas as `sheet.png` or `sheet.webp`. Write `character.json` with your ID, attribution, license, grid and
-   timed idle row. Add event states or an `extra.webp` as needed.
+   timed idle row. Add event states or an extra PNG or WebP sheet as needed.
 3. Run `sleight-mcp cursor import ./my-character`. Read its size, license and missing-animation table before confirming.
    The default answer is No. A non-TTY import requires `--yes`.
 4. Run `sleight-mcp cursor check my-character` to validate the installed copy and print that table again.

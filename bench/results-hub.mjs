@@ -12,7 +12,8 @@
 // bench/fowl/race-score.mjs for the browser race rounds. Nothing in the output depends on the clock. Every arm's numbers name the
 // ChatGPT engine versions they ran on with their UTC dates, read from the results or inferred from the checked-in timeline
 // (bench/engine-versions.json; run `node bench/engine-version.mjs refresh` on the benchmark Mac before collecting).
-//   node bench/results-hub.mjs [--wt ~/Projects/sleight-wt] [--out docs/results] [--render-only] [--check] [--exclude-covered] [--bank <folder>]...
+//   node bench/results-hub.mjs [--wt ~/Projects/sleight-wt] [--out docs/results] [--render-only] [--hub-only] [--check] [--exclude-covered] [--bank <folder>]...
+// --hub-only leaves the root README alone, including during --check. Release preflight always checks it too.
 // The runners run collect and render once after a successful pass through bench/hub-refresh.mjs (--no-hub or SLEIGHT_NO_HUB=1 stops it).
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
@@ -23,7 +24,7 @@ import { claim, excluded, regradeFor, score, warnings } from './claim-score.mjs'
 import { coveredRows, loadRound, markCover, scoreRounds } from './fowl/race-score.mjs';
 import { ANSWER_GRADER_FILE, currentAnswerGraders } from './fowl/real-gate-grade.mjs';
 import { dayRange, engineMix, engineNote, engineText, loadTimeline, passRowEngine, summarizeEngines, usesEngine } from './engine-version.mjs';
-import { buildPage, loadResults, perArm, renderMarkdown as renderReleaseMarkdown } from './results-page.mjs';
+import { buildPage, loadResults, perArm, renderHtml as renderReleaseHtml, renderMarkdown as renderReleaseMarkdown } from './results-page.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BENCH = join(ROOT, 'docs', 'benchmarks');
@@ -523,15 +524,15 @@ export function writeUpCatalog() {
 
 export const RELEASE_RIVALS = ['2026-10-10-h2h-5.json', '2026-10-03-sleight-vs-lcu.json'];
 
-export function collectReleases({ timeline = loadTimeline() } = {}) {
+export function collectReleases({ timeline = loadTimeline(), bench = BENCH } = {}) {
   const standard = [];
-  for (const name of readdirSync(BENCH).sort().filter(file => file.endsWith('.json'))) {
-    const raw = tryJson(join(BENCH, name));
+  for (const name of (isDir(bench) ? readdirSync(bench) : []).sort().filter(file => file.endsWith('.json'))) {
+    const raw = tryJson(join(bench, name));
     if (!raw) continue;
     const passes = Array.isArray(raw.passes) ? raw.passes : undefined;
     const last = passes ? passes.at(-1) : raw;
     if (!Array.isArray(last?.results) || !last.results.length || !last.results.every(row => row.arm && row.task)) continue;
-    const writeUp = existsSync(join(BENCH, name.replace(/\.json$/, '.md'))) ? name.replace(/\.json$/, '.md') : undefined;
+    const writeUp = existsSync(join(bench, name.replace(/\.json$/, '.md'))) ? name.replace(/\.json$/, '.md') : undefined;
     // A file's mtime here is the checkout's, so an older pass is placed from its stamp and its runs' seconds.
     standard.push({ ...loadResults(name, raw, writeUp), engines: summarizeEngines(last.results.map(row => ({ arm: row.arm, engine: passRowEngine(raw.stamp ? raw : last, row, { file: name, timeline }) }))) });
   }
@@ -546,6 +547,22 @@ export function collectReleases({ timeline = loadTimeline() } = {}) {
     task: row.task, arm: row.arm, run: row.run ?? null, round: null, seconds: row.seconds ?? null, passed: row.passed === true, turns: row.turns ?? null,
     problem: row.passed ? null : scrub(row.reason ?? (row.cancelled ? 'cancelled' : 'failed')).slice(0, 200), file: file.name })));
   return { family: 'release-passes', title: 'Release passes and the earlier head-to-heads', releaseInputs: releaseNames, files: standard.map(toRow), runs };
+}
+
+// Compare recorded content, not checkout mtimes. A corrected pass under the same filename must also reach the hub.
+export function releaseFreshness(data, options = {}) {
+  const fresh = collectReleases(options);
+  const releases = fresh.files.filter(file => file.kind === 'release').sort((a, b) =>
+    (a.date + a.name).localeCompare(b.date + b.name, 'en'));
+  if (!releases.length) return { skipped: 'no raw release-pass results in the collector source folder' };
+  const newest = releases.at(-1).name;
+  for (const file of releases) {
+    const saved = data.files.find(row => row.name === file.name);
+    const runs = rows => rows.filter(row => row.file === file.name);
+    if (!data.releaseInputs.includes(file.name) || JSON.stringify(saved) !== JSON.stringify(file) ||
+        JSON.stringify(runs(data.runs)) !== JSON.stringify(runs(fresh.runs))) return { newest, stale: file.name };
+  }
+  return { newest, stale: null };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -795,7 +812,7 @@ export function renderNavHtml(current) {
 const details = (summary, body) => `<details><summary>${escapeHtml(summary)}</summary>\n\n${body.trim()}\n\n</details>\n`;
 
 // A chart picture block from bench/results-charts.mjs, or nothing while that module is missing.
-const chartFor = (all, id) => { const block = charts.chartBlock(id, all, { base: '' }); return block ? block.trim() + '\n' : null; };
+const chartFor = (all, id) => { const block = charts.chartBlock(id, all, { base: '', directory: id.startsWith('family-') ? 'charts' : 'img' }); return block ? block.trim() + '\n' : null; };
 
 // Data collected before 2026-10-19 carries no engine versions, and the footer says so until a collect adds them.
 const hasEngines = studies => studies.some(study => study?.engines && Object.keys(study.engines).length);
@@ -872,14 +889,14 @@ function raceStudySection(all, study, level, chartId) {
   const out = [`${level} ${study.title}${study.latest ? ' (newest)' : ''}\n`];
   out.push(`${study.date}, ${cap(study.browser)} ${study.browserVersion.join(', ')}, ${study.rounds.length} rounds and ${study.runs.length} runs. The scorer's wording is "${study.verdict.wording}".\n`);
   const summary = study.latest && study.family === 'browser-race';
-  if (summary) out.push(`sleight is ${raceResult(study)}.\n`);
+  if (summary) out.push(`${raceResult(study)}.\n`);
   if (unopposedTotal(study)) out.push(`${summary ? 'The competitors each have' : 'sleight is the only arm with a total: every competitor has'} a task with no pass. There is no competing complete-suite time.\n`);
-  const graders = gradersNote(study);
-  if (graders) out.push(graders + '\n');
   const chart = study.latest && chartId ? chartFor(all, chartId) : null;
   if (chart) out.push(chart);
   out.push('Each cell is expected seconds, then passes/runs.\n');
   out.push(taskMatrix(study) + '\n');
+  const graders = gradersNote(study);
+  if (graders) out.push(graders + '\n');
   out.push(lostTable(study) + '\n');
   out.push(topUpTable(study) + '\n');
   for (const pair of study.sameModel ?? []) out.push(sameModelSection(study, pair, level + '#'));
@@ -1035,14 +1052,17 @@ function swap(text, from, to) {
   return text.replace(from, () => to);
 }
 
-function renderReleasePage(all, id) {
-  const data = all[id], fam = family(id);
-  const inputs = data.releaseInputs.map(name => {
+function releasePage(data) {
+  return buildPage(data.releaseInputs.map(name => {
     const raw = readJson(join(BENCH, name));
     const writeUp = existsSync(join(BENCH, name.replace(/\.json$/, '.md'))) ? name.replace(/\.json$/, '.md') : undefined;
     return loadResults(name, raw, writeUp);
-  });
-  const page = buildPage(inputs);
+  }));
+}
+
+function renderReleasePage(all, id) {
+  const data = all[id], fam = family(id);
+  const page = releasePage(data);
   // explore.html charts these runs, so the page links it where results-page.mjs names its own chart page.
   let md = renderReleaseMarkdown(page, { title: fam.title, chart: 'explore.html', rebuild: 'node bench/results-hub.mjs' });
   md = swap(md, ' The same page with a chart is [explore.html](explore.html).', ` The [interactive page](${PAGES_URL}explore.html) charts every run.`);
@@ -1201,9 +1221,10 @@ const unopposedTotal = study => study.verdict.totals[study.me] != null &&
 function raceResult(study) {
   const v = study.verdict;
   const count = `${v.lowest.length} of ${study.tasks.length} tasks`;
-  const wording = v.wording === 'fastest' ? `fastest on ${count}` : v.wording;
-  const total = v.totals[study.me] == null ? 'no total (a task has no pass)' : `with a total of ${f1(v.totals[study.me])} s`;
-  return `${wording}, ${unopposedTotal(study) ? `the only arm with a total (${f1(v.totals[study.me])} s)` : total}`;
+  const wording = v.wording === 'fastest' ? `is fastest on ${count}` : v.wording.startsWith('completed every task')
+    ? `has completed every task and is fastest on ${count}` : `has the scorer wording "${v.wording}"`;
+  const total = v.totals[study.me] == null ? 'It has no total (a task has no pass)' : `Its total is ${f1(v.totals[study.me])} s`;
+  return `sleight ${wording}. ${unopposedTotal(study) ? `It is the only arm with a total (${f1(v.totals[study.me])} s)` : total}`;
 }
 
 function resultSummary(id, data) {
@@ -1225,7 +1246,7 @@ function headlineFor(id, data) {
     return `"${s.verdict.wording}", sleight's total expected time ${f1(s.verdict.totals.sleight)} s over ${s.tasks.length} tasks (${s.runs.length} runs, ${s.date}). ${upFirst(engine)}`;
   }
   if (id === 'browser-race') {
-    return lowFirst(data.studies.filter(s => s.latest).map(s => `In ${cap(s.browser)} sleight is ${raceResult(s)} (${code(s.label)}, ${s.date.slice(0, 10)})`).join('. ') || 'No complete set') + `. ${upFirst(engine)}`;
+    return lowFirst(data.studies.filter(s => s.latest).map(s => `In ${cap(s.browser)} ${raceResult(s)} (${code(s.label)}, ${s.date.slice(0, 10)})`).join('. ') || 'No complete set') + `. ${upFirst(engine)}`;
   }
   if (id === 'browser-turbo') {
     const race = data.race.studies.filter(s => s.latest).map(s => `In ${cap(s.browser)}, the lowest expected time on ${s.verdict.fastest[s.me].length} of ${s.tasks.length} and ${s.verdict.totals[s.me] == null ? 'no total (a task has no pass)' : `a total of ${f1(s.verdict.totals[s.me])} s`} against FowlBrowser's ${f1(s.verdict.totals.fowlbrowser)} s (${code(s.label)})`);
@@ -1408,10 +1429,11 @@ export function collect({ wt, out, excludeCovered = false, banks: extraBanks = [
     notes.push('race: raw folder missing, kept the race data');
   }
   const catalog = writeUpCatalog();
-  const coveredWriteUps = sortedUniq([...gates.map(s => s.writeUp), ...collectReleases().files.map(f => f.writeUp)]);
+  const releases = collectReleases({ timeline });
+  const coveredWriteUps = sortedUniq([...gates.map(s => s.writeUp), ...releases.files.map(f => f.writeUp)]);
   all['ab-tests'] = { family: 'ab-tests', title: 'A/B tests and tuning experiments', studies: [...collectJsonAbs(), ...gates.filter(s => s.family === 'ab-tests')].sort((a, b) => (a.date + a.id < b.date + b.id ? -1 : 1)),
     catalog, coveredWriteUps };
-  all['release-passes'] = collectReleases({ timeline });
+  all['release-passes'] = releases;
   const banks = collectValidation({ wt, kept: keep('validation'), banks: extraBanks });
   if (banks.banks.length) all.validation = banks;
   else { all.validation = keep('validation'); notes.push('validation: no bank on this Mac, kept the data file'); }
@@ -1431,6 +1453,13 @@ export function render(all) {
   files['ab-tests.md'] = renderAbPage(all, 'ab-tests');
   files['validation.md'] = renderValidationPage(all, 'validation');
   files['release-passes.md'] = renderReleasePage(all, 'release-passes');
+  files['release-passes.html'] = renderReleaseHtml(releasePage(all['release-passes']), { rebuild: 'node bench/results-hub.mjs' })
+    .replace('<body>\n', `<body>\n${renderNavHtml('release-passes.md')}\n`);
+  for (const id of ['ab-tests', 'validation', 'release-passes']) {
+    const name = family(id).page;
+    const heading = `# ${family(id).title}\n`;
+    files[name] = files[name].replace(heading, () => `${heading}\n${chartFor(all, `family-${id}`)}`);
+  }
   files['README.md'] = renderIndex(all);
   for (const [name, text] of Object.entries(charts.renderCharts(all))) files[name] = text;
   const explore = JSON.stringify(exploreData(all)).replace(/</g, '\\u003c');
@@ -1471,7 +1500,7 @@ export function main(argv = process.argv.slice(2)) {
   } else ({ all, notes } = collect({ wt, out, excludeCovered: argv.includes('--exclude-covered'), banks: argValues(argv, '--bank') }));
   const files = render(all);
   const readmeFile = join(ROOT, 'README.md');
-  const readme = renderReadme({ ...all, 'engine-compat': readJson(join(out, 'data/engine-compat.json')) });
+  const readme = argv.includes('--hub-only') ? null : renderReadme({ ...all, 'engine-compat': readJson(join(out, 'data/engine-compat.json')) });
   if (argv.includes('--check')) {
     const changed = Object.entries(files).filter(([name, text]) => !existsSync(join(out, name)) || readFileSync(join(out, name), 'utf8') !== text).map(([name]) => name);
     for (const name of changed) console.log(`would change ${name}`);

@@ -1,0 +1,199 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1716" width="900" height="1716" role="img" aria-labelledby="title desc">
+<title id="title">Experiments: pass rates per study and arm</title>
+<desc id="desc">Experiments: 959 of 990 recorded attempts passed across 38 study and arm rows. Task sets differ between studies.</desc>
+<style>
+.bg{fill:#141A26}
+text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:13px;fill:#EFE9DC}
+.t{font-size:15px;font-weight:600}
+.b{font-weight:600}
+.m{fill:#A7B0BF}
+.g{stroke:#2C3442;stroke-width:1;fill:none}
+.me{fill:#E8622C}
+.ot{fill:#4E79D9}
+.sl{fill:#9AA6B8}
+.hme{stroke:#E8622C}
+.hot{stroke:#4E79D9}
+.hsl{stroke:#9AA6B8}
+</style>
+<defs><pattern id="h-me" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hme" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern><pattern id="h-ot" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hot" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern><pattern id="h-sl" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hsl" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern></defs>
+<rect class="bg" width="900" height="1716" rx="12"/>
+<text x="24" y="34" class="t">Experiments</text>
+<text x="24" y="54" class="m">Pass rate per study and arm. Bars share a 0 to 100% scale. Labels give passed attempts / all attempts.</text>
+<g transform="translate(840 8) scale(0.8)"><g transform="translate(0.6 0.6)"><g transform="translate(10 10) rotate(-35)"><g fill="#141A26" stroke="#141A26" fill-opacity="0.08" stroke-opacity="0.08" stroke-width="3" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g><g fill="#141A26" stroke="#141A26" fill-opacity="0.12" stroke-opacity="0.12" stroke-width="1.8" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g><g fill="#141A26" stroke="#141A26" fill-opacity="0.2" stroke-opacity="0.2" stroke-width="0.8" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g></g></g><g transform="translate(10 10) rotate(-35)"><rect x="-1.95" y="-1.95" width="3.9" height="3.9" rx="0.62" fill="#4E79D9" fill-opacity="0.2" transform="translate(4.2 23) rotate(8)"/><rect x="-1.6" y="-1.6" width="3.2" height="3.2" rx="0.51" fill="#4E79D9" fill-opacity="0.92" transform="translate(4.2 23) rotate(8)"/><rect x="-1.83" y="-1.83" width="3.66" height="3.66" rx="0.59" fill="#7299EA" fill-opacity="0.2" transform="translate(8.8 23.5) rotate(-6)"/><rect x="-1.5" y="-1.5" width="3" height="3" rx="0.48" fill="#7299EA" fill-opacity="0.92" transform="translate(8.8 23.5) rotate(-6)"/><rect x="-1.71" y="-1.71" width="3.42" height="3.42" rx="0.55" fill="#7299EA" fill-opacity="0.2" transform="translate(6.5 26.5) rotate(4)"/><rect x="-1.4" y="-1.4" width="2.8" height="2.8" rx="0.45" fill="#7299EA" fill-opacity="0.92" transform="translate(6.5 26.5) rotate(4)"/><rect x="-1.59" y="-1.59" width="3.17" height="3.17" rx="0.51" fill="#A9C4F5" fill-opacity="0.2" transform="translate(11.5 26.2) rotate(-11)"/><rect x="-1.3" y="-1.3" width="2.6" height="2.6" rx="0.42" fill="#A9C4F5" fill-opacity="0.92" transform="translate(11.5 26.2) rotate(-11)"/><rect x="-1.34" y="-1.34" width="2.68" height="2.68" rx="0.43" fill="#A9C4F5" fill-opacity="0.2" transform="translate(2.6 27.5) rotate(-4)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#A9C4F5" fill-opacity="0.92" transform="translate(2.6 27.5) rotate(-4)"/><rect x="-1.34" y="-1.34" width="2.68" height="2.68" rx="0.43" fill="#7299EA" fill-opacity="0.2" transform="translate(9.2 29.6) rotate(7)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#7299EA" fill-opacity="0.92" transform="translate(9.2 29.6) rotate(7)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#A9C4F5" fill-opacity="0.2" transform="translate(13.9 29.2) rotate(3)"/><rect x="-0.9" y="-0.9" width="1.8" height="1.8" rx="0.29" fill="#A9C4F5" fill-opacity="0.92" transform="translate(13.9 29.2) rotate(3)"/><rect x="-0.98" y="-0.98" width="1.95" height="1.95" rx="0.31" fill="#A9C4F5" fill-opacity="0.2" transform="translate(5.6 30.6) rotate(-8)"/><rect x="-0.8" y="-0.8" width="1.6" height="1.6" rx="0.26" fill="#A9C4F5" fill-opacity="0.92" transform="translate(5.6 30.6) rotate(-8)"/></g><g transform="translate(10 10) rotate(-35)"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z" fill="#B9BFC9"/><path d="M-2.02 12.19 Q-2.2 10.8 -0.8 10.8 L10 10.8 Q11.4 10.8 11.24 12.19 L10.86 15.61 Q10.7 17 9.89 18.14 L9.81 18.26 Q9 19.4 7.6 19.4 L5 19.4 Q3.6 19.4 2.34 18.79 L-0.14 17.61 Q-1.4 17 -1.58 15.61 Z" fill="#EFE9DC"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z" fill="#B9BFC9"/><path d="M-4 14 A2 2.8 0 1 0 0 14 A2 2.8 0 1 0 -4 14 Z" fill="#EFE9DC"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z" fill="#B9BFC9"/><path d="M0.83 13.51 L-5.21 6.91 A0.78 0.78 0 0 0 -6.38 7.93 L-0.57 14.74 Z" fill="#EFE9DC"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z" fill="#B9BFC9"/><path d="M1.35 11.58 L0.36 0.91 A0.74 0.74 0 0 0 -1.12 1.03 L-0.45 11.72 Z" fill="#EFE9DC"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z" fill="#B9BFC9"/><path d="M5.05 11.59 L4.24 -0.88 A0.74 0.74 0 0 0 2.75 -0.8 L3.25 11.68 Z" fill="#EFE9DC"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z" fill="#B9BFC9"/><path d="M8.75 11.6 L8.59 0.04 A0.74 0.74 0 0 0 7.1 0.04 L6.95 11.6 Z" fill="#EFE9DC"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z" fill="#B9BFC9"/><path d="M12.43 11.63 L12.82 3.52 A0.71 0.71 0 0 0 11.39 3.42 L10.7 11.51 Z" fill="#EFE9DC"/></g></g>
+<text x="24" y="125" class="b">SLEIGHT_FIRST_CALL_BATCH=merge against the default wording, textedit-edit and textedit-save</text>
+<text x="24" y="144" class="m">default</text>
+<line class="g" x1="234" y1="146" x2="726" y2="146"/>
+<path class="ot" d="M234 133h441.1a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-441.1z"/>
+<text x="736" y="144" data-study="2026-10-10-merge-ab" data-arm="default" data-kind="pass-rate">90.5% (19/21)</text>
+<text x="24" y="169" class="m">merge</text>
+<line class="g" x1="234" y1="171" x2="726" y2="171"/>
+<path class="ot" d="M234 158h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="169" data-study="2026-10-10-merge-ab" data-arm="merge" data-kind="pass-rate">100.0% (24/24)</text>
+<text x="24" y="205" class="b">first-call wording A/B: the default against SLEIGHT_FIRST_CALL_BATCH=app, calculator-click, textedit-edit and</text>
+<text x="24" y="223" class="b">textedit-save x2 per round, 2 rounds alternating</text>
+<text x="24" y="242" class="m">default</text>
+<line class="g" x1="234" y1="244" x2="726" y2="244"/>
+<path class="ot" d="M234 231h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="242" data-study="2026-10-11-firstcall-ab" data-arm="default" data-kind="pass-rate">100.0% (11/11)</text>
+<text x="24" y="267" class="m">SLEIGHT_FIRST_CALL_BATCH=app</text>
+<line class="g" x1="234" y1="269" x2="726" y2="269"/>
+<path class="ot" d="M234 256h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="267" data-study="2026-10-11-firstcall-ab" data-arm="SLEIGHT_FIRST_CALL_BATCH=app" data-kind="pass-rate">100.0% (12/12)</text>
+<text x="24" y="303" class="b">SLEIGHT_RESULT_TRIM=1 at e212204 against the default, calculator-click, textedit-edit and textedit-save x2 per</text>
+<text x="24" y="321" class="b">round, 2 rounds</text>
+<text x="24" y="340" class="m">SLEIGHT_RESULT_TRIM=1 (list trim and acquisition-tree drop)</text>
+<line class="g" x1="234" y1="342" x2="726" y2="342"/>
+<path class="ot" d="M234 329h447a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-447z"/>
+<text x="736" y="340" data-study="2026-10-11-result-trim-ab" data-arm="SLEIGHT_RESULT_TRIM=1 (list trim and acquisition-tree drop)" data-kind="pass-rate">91.7% (11/12)</text>
+<text x="24" y="365" class="m">default</text>
+<line class="g" x1="234" y1="367" x2="726" y2="367"/>
+<path class="ot" d="M234 354h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="365" data-study="2026-10-11-result-trim-ab" data-arm="default" data-kind="pass-rate">100.0% (12/12)</text>
+<text x="24" y="401" class="b">Save-sheet A/B: default against SLEIGHT_FIRST_CALL_BATCH=sheet (no Cmd+S stop, menu clicks in one call),</text>
+<text x="24" y="419" class="b">calculator-click…</text>
+<text x="24" y="438" class="m">sheet</text>
+<line class="g" x1="234" y1="440" x2="726" y2="440"/>
+<path class="ot" d="M234 427h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="438" data-study="2026-10-11-sheet-ab" data-arm="sheet" data-kind="pass-rate">100.0% (17/17)</text>
+<text x="24" y="463" class="m">default</text>
+<line class="g" x1="234" y1="465" x2="726" y2="465"/>
+<path class="ot" d="M234 452h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="463" data-study="2026-10-11-sheet-ab" data-arm="default" data-kind="pass-rate">100.0% (17/17)</text>
+<text x="24" y="499" class="b">SLEIGHT_FIRST_CALL_BATCH=sheet against the default on calculator-click and textedit-edit (no Save sheet), 3 runs</text>
+<text x="24" y="517" class="b">a task per arm per round, 2 rounds…</text>
+<text x="24" y="536" class="m">sheet</text>
+<line class="g" x1="234" y1="538" x2="726" y2="538"/>
+<path class="ot" d="M234 525h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="536" data-study="2026-10-11-sheet-edit-ab" data-arm="sheet" data-kind="pass-rate">100.0% (12/12)</text>
+<text x="24" y="561" class="m">default</text>
+<line class="g" x1="234" y1="563" x2="726" y2="563"/>
+<path class="ot" d="M234 550h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="561" data-study="2026-10-11-sheet-edit-ab" data-arm="default" data-kind="pass-rate">100.0% (11/11)</text>
+<text x="24" y="597" class="b">skill A/B: current SKILL.md, SLEIGHT_SKILL=slim (SKILL-slim.md) and SLEIGHT_SKILL=none, calculator-click and</text>
+<text x="24" y="615" class="b">textedit-edit x3 per arm per round, 2 rounds…</text>
+<text x="24" y="634" class="m">slim</text>
+<line class="g" x1="234" y1="636" x2="726" y2="636"/>
+<path class="ot" d="M234 623h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="634" data-study="2026-10-11-skill-ab" data-arm="slim" data-kind="pass-rate">100.0% (12/12)</text>
+<text x="24" y="659" class="m">none</text>
+<line class="g" x1="234" y1="661" x2="726" y2="661"/>
+<path class="ot" d="M234 648h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="659" data-study="2026-10-11-skill-ab" data-arm="none" data-kind="pass-rate">100.0% (11/11)</text>
+<text x="24" y="684" class="m">current</text>
+<line class="g" x1="234" y1="686" x2="726" y2="686"/>
+<path class="ot" d="M234 673h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="684" data-study="2026-10-11-skill-ab" data-arm="current" data-kind="pass-rate">100.0% (11/11)</text>
+<text x="24" y="720" class="b">skill A/B rerun: current SKILL.md, SLEIGHT_SKILL=slim (SKILL-slim.md with placeholder ID and label examples) and</text>
+<text x="24" y="738" class="b">SLEIGHT_SKILL=none…</text>
+<text x="24" y="757" class="m">slim</text>
+<line class="g" x1="234" y1="759" x2="726" y2="759"/>
+<path class="ot" d="M234 746h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="757" data-study="2026-10-11-skill-ab-2" data-arm="slim" data-kind="pass-rate">100.0% (12/12)</text>
+<text x="24" y="782" class="m">none</text>
+<line class="g" x1="234" y1="784" x2="726" y2="784"/>
+<path class="ot" d="M234 771h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="782" data-study="2026-10-11-skill-ab-2" data-arm="none" data-kind="pass-rate">100.0% (12/12)</text>
+<text x="24" y="807" class="m">current</text>
+<line class="g" x1="234" y1="809" x2="726" y2="809"/>
+<path class="ot" d="M234 796h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="807" data-study="2026-10-11-skill-ab-2" data-arm="current" data-kind="pass-rate">100.0% (12/12)</text>
+<text x="24" y="843" class="b">skill A/B on textedit-save:</text>
+<text x="24" y="862" class="m">slim</text>
+<line class="g" x1="234" y1="864" x2="726" y2="864"/>
+<path class="ot" d="M234 851h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="862" data-study="2026-10-11-skill-ab-save" data-arm="slim" data-kind="pass-rate">100.0% (6/6)</text>
+<text x="24" y="887" class="m">none</text>
+<line class="g" x1="234" y1="889" x2="726" y2="889"/>
+<path class="ot" d="M234 876h406a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-406z"/>
+<text x="736" y="887" data-study="2026-10-11-skill-ab-save" data-arm="none" data-kind="pass-rate">83.3% (5/6)</text>
+<text x="24" y="912" class="m">current</text>
+<line class="g" x1="234" y1="914" x2="726" y2="914"/>
+<path class="ot" d="M234 901h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="912" data-study="2026-10-11-skill-ab-save" data-arm="current" data-kind="pass-rate">100.0% (6/6)</text>
+<text x="24" y="948" class="b">three arms, one change each:</text>
+<text x="24" y="967" class="m">headdrop</text>
+<line class="g" x1="234" y1="969" x2="726" y2="969"/>
+<path class="ot" d="M234 956h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="967" data-study="2026-10-11-three-arm-ab" data-arm="headdrop" data-kind="pass-rate">100.0% (12/12)</text>
+<text x="24" y="992" class="m">sheet</text>
+<line class="g" x1="234" y1="994" x2="726" y2="994"/>
+<path class="ot" d="M234 981h426.5a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-426.5z"/>
+<text x="736" y="992" data-study="2026-10-11-three-arm-ab" data-arm="sheet" data-kind="pass-rate">87.5% (7/8)</text>
+<text x="24" y="1017" class="m">default</text>
+<line class="g" x1="234" y1="1019" x2="726" y2="1019"/>
+<path class="ot" d="M234 1006h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1017" data-study="2026-10-11-three-arm-ab" data-arm="default" data-kind="pass-rate">100.0% (11/11)</text>
+<text x="24" y="1053" class="b">Engine docs on demand, and where first calls queue (2026-10-12)</text>
+<text x="24" y="1072" class="m">default</text>
+<line class="g" x1="234" y1="1074" x2="726" y2="1074"/>
+<path class="ot" d="M234 1061h365a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-365z"/>
+<text x="736" y="1072" data-study="2026-10-12-d5-min-ab" data-arm="default" data-kind="pass-rate">75.0% (39/52)</text>
+<text x="24" y="1097" class="m">min</text>
+<line class="g" x1="234" y1="1099" x2="726" y2="1099"/>
+<path class="ot" d="M234 1086h393.4a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-393.4z"/>
+<text x="736" y="1097" data-study="2026-10-12-d5-min-ab" data-arm="min" data-kind="pass-rate">80.8% (42/52)</text>
+<text x="24" y="1133" class="b">Lean skill A/B on FowlBrowser's tasks (2026-10-12)</text>
+<text x="24" y="1152" class="m">default</text>
+<line class="g" x1="234" y1="1154" x2="726" y2="1154"/>
+<path class="ot" d="M234 1141h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1152" data-study="2026-10-12-lean-skill-ab" data-arm="default" data-kind="pass-rate">100.0% (26/26)</text>
+<text x="24" y="1177" class="m">lean</text>
+<line class="g" x1="234" y1="1179" x2="726" y2="1179"/>
+<path class="ot" d="M234 1166h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1177" data-study="2026-10-12-lean-skill-ab" data-arm="lean" data-kind="pass-rate">100.0% (26/26)</text>
+<text x="24" y="1213" class="b">Turbo A/B, gate candidate against v3-gate, 2026-10-16</text>
+<text x="24" y="1232" class="m">baseline</text>
+<line class="g" x1="234" y1="1234" x2="726" y2="1234"/>
+<path class="ot" d="M234 1221h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1232" data-study="2026-10-16-turbo-ab" data-arm="baseline" data-kind="pass-rate">100.0% (130/130)</text>
+<text x="24" y="1257" class="m">candidate</text>
+<line class="g" x1="234" y1="1259" x2="726" y2="1259"/>
+<path class="ot" d="M234 1246h484.2a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-484.2z"/>
+<text x="736" y="1257" data-study="2026-10-16-turbo-ab" data-arm="candidate" data-kind="pass-rate">99.2% (129/130)</text>
+<text x="24" y="1293" class="b">Find alternation A/B, 05:25 to 05:43 UTC</text>
+<text x="24" y="1312" class="m">baseline</text>
+<line class="g" x1="234" y1="1314" x2="726" y2="1314"/>
+<path class="ot" d="M234 1301h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1312" data-study="2026-10-16-turbo-ab-find" data-arm="baseline" data-kind="pass-rate">100.0% (78/78)</text>
+<text x="24" y="1337" class="m">candidate</text>
+<line class="g" x1="234" y1="1339" x2="726" y2="1339"/>
+<path class="ot" d="M234 1326h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1337" data-study="2026-10-16-turbo-ab-find" data-arm="candidate" data-kind="pass-rate">100.0% (78/78)</text>
+<text x="24" y="1373" class="b">Flag A/B, compact-confirmations, 2026-10-19</text>
+<text x="24" y="1392" class="m">off</text>
+<line class="g" x1="234" y1="1394" x2="726" y2="1394"/>
+<path class="ot" d="M234 1381h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1392" data-study="2026-10-19-flag-ab-compact-confirmations" data-arm="off" data-kind="pass-rate">100.0% (20/20)</text>
+<text x="24" y="1417" class="m">on</text>
+<line class="g" x1="234" y1="1419" x2="726" y2="1419"/>
+<path class="ot" d="M234 1406h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1417" data-study="2026-10-19-flag-ab-compact-confirmations" data-arm="on" data-kind="pass-rate">100.0% (20/20)</text>
+<text x="24" y="1453" class="b">Flag A/B, compact-toolbars, 2026-10-19</text>
+<text x="24" y="1472" class="m">off</text>
+<line class="g" x1="234" y1="1474" x2="726" y2="1474"/>
+<path class="ot" d="M234 1461h463.4a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-463.4z"/>
+<text x="736" y="1472" data-study="2026-10-19-flag-ab-compact-toolbars" data-arm="off" data-kind="pass-rate">95.0% (19/20)</text>
+<text x="24" y="1497" class="m">on</text>
+<line class="g" x1="234" y1="1499" x2="726" y2="1499"/>
+<path class="ot" d="M234 1486h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1497" data-study="2026-10-19-flag-ab-compact-toolbars" data-arm="on" data-kind="pass-rate">100.0% (20/20)</text>
+<text x="24" y="1533" class="b">Flag A/B, open-shot, 2026-10-19</text>
+<text x="24" y="1552" class="m">off</text>
+<line class="g" x1="234" y1="1554" x2="726" y2="1554"/>
+<path class="ot" d="M234 1541h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1552" data-study="2026-10-19-flag-ab-open-shot" data-arm="off" data-kind="pass-rate">100.0% (25/25)</text>
+<text x="24" y="1577" class="m">on</text>
+<line class="g" x1="234" y1="1579" x2="726" y2="1579"/>
+<path class="ot" d="M234 1566h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1577" data-study="2026-10-19-flag-ab-open-shot" data-arm="on" data-kind="pass-rate">100.0% (25/25)</text>
+<text x="24" y="1613" class="b">Flag A/B, skill-screenshot, 2026-10-19</text>
+<text x="24" y="1632" class="m">off</text>
+<line class="g" x1="234" y1="1634" x2="726" y2="1634"/>
+<path class="ot" d="M234 1621h438.8a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-438.8z"/>
+<text x="736" y="1632" data-study="2026-10-19-flag-ab-skill-screenshot" data-arm="off" data-kind="pass-rate">90.0% (9/10)</text>
+<text x="24" y="1657" class="m">on</text>
+<line class="g" x1="234" y1="1659" x2="726" y2="1659"/>
+<path class="ot" d="M234 1646h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1657" data-study="2026-10-19-flag-ab-skill-screenshot" data-arm="on" data-kind="pass-rate">100.0% (10/10)</text>
+<text x="24" y="1692" class="m">Task sets differ between studies. See the tables for timing, models, engine versions and failed runs.</text>
+</svg>

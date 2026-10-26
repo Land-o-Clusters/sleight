@@ -225,7 +225,7 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
   const spdx = /^(?:CC0-1\.0|CC-BY(?:-SA|-NC|-NC-SA|-ND|-NC-ND)?-(?:1\.0|2\.0|2\.5|3\.0|4\.0)|MIT|Apache-2\.0|BSD-[23]-Clause|ISC|Unlicense|GPL-[23]\.0-(?:only|or-later)|OFL-1\.1)$/;
   if (!spdx.test(m.license) && !['unknown', 'proprietary-personal'].includes(m.license) && !files.has('LICENSE.txt')) fail('custom license requires LICENSE.txt', 'license');
   filename(m.sheet, 'sheet', sourceFile); if (!/^sheet\.(png|webp)$/.test(m.sheet)) fail('sheet filename must be sheet.png or sheet.webp', 'sheet');
-  if (m.extra !== undefined && m.extra !== 'extra.webp') fail('extra sheet filename must be extra.webp', 'extra');
+  if (m.extra !== undefined && !/^extra\.(png|webp)$/.test(m.extra)) fail('extra sheet filename must be extra.png or extra.webp', 'extra');
   const allowed = ['character.json', m.sheet, m.extra, m.perch?.sheet, 'preview.png', 'LICENSE.txt'];
   if (!files.has(m.sheet)) fail('sheet file missing', 'sheet', m.sheet);
   if (m.extra && !files.has(m.extra)) fail('sheet file missing', 'extra', m.extra);
@@ -243,22 +243,26 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
   };
   point(m.anchor, 'anchor'); point(m.hotspot, 'hotspot');
   if (m.perch?.anchor !== undefined) point(m.perch.anchor, 'perch.anchor');
+  if (m.codex !== undefined) {
+    if (!object(m.codex) || ![1, 2].includes(m.codex.spriteVersionNumber)) fail('Codex spriteVersionNumber must be 1 or 2', 'codex.spriteVersionNumber');
+    text(m.codex.importedFrom, 'codex.importedFrom', 1, 48);
+    unknownKeys(m.codex, ['spriteVersionNumber', 'importedFrom'], 'Codex', warnings);
+  }
   const sheets = Object.create(null); let pixels = 0;
   for (const name of [m.sheet, m.extra, m.perch?.sheet, ...files.has('preview.png') ? ['preview.png'] : []].filter(Boolean)) {
     const dims = imageDimensions(files.get(name), extname(name), name); pixels += dims.width * dims.height;
     if (name === 'preview.png') { if (dims.width > 256 || dims.height > 256) fail('preview dimensions exceed 256', 'dimensions', name); }
     else {
+      if (name === m.sheet && m.codex) {
+        const height = m.codex.spriteVersionNumber === 1 ? 1872 : 2288;
+        if (dims.width !== 1536 || dims.height !== height || m.frame.w !== 192 || m.frame.h !== 208) fail(`Codex v${m.codex.spriteVersionNumber} sheet dimensions must be 1536x${height}`, 'codex/frame/grid', name);
+      }
       if (dims.width !== m.grid.cols * m.frame.w || dims.height % m.frame.h || name === m.sheet && dims.height !== m.grid.rows * m.frame.h) fail('sheet dimensions do not match frame and grid', 'frame/grid', name);
       if (dims.width > 1536 || dims.height > 2288) fail('sheet too large to draw (at most 1536x2288)', 'frame/grid', name);
       sheets[name === m.sheet ? 'sheet' : name === m.extra ? 'extra' : 'perch'] = { name, rows: dims.height / m.frame.h, ...dims };
     }
   }
   if (pixels > CHARACTER_LIMITS.pixels) fail('total character pixel budget exceeded', 'sheet/extra/preview');
-  if (m.codex !== undefined) {
-    if (!object(m.codex) || m.codex.spriteVersionNumber !== 2 || sheets.sheet.width !== 1536 || sheets.sheet.height !== 2288 || m.frame.w !== 192 || m.frame.h !== 208) fail('Codex v2 sheet dimensions must be 1536x2288', 'codex/frame/grid');
-    text(m.codex.importedFrom, 'codex.importedFrom', 1, 48);
-    unknownKeys(m.codex, ['spriteVersionNumber', 'importedFrom'], 'Codex', warnings);
-  }
   if (!object(m.states) || !object(m.states.idle) || m.states.idle.row === undefined) fail('idle animation is required', 'states.idle');
   for (const [name, s] of Object.entries(m.states)) {
     if (!names.includes(name)) { warnings.push('Unknown state ignored.'); delete m.states[name]; continue; }
@@ -437,7 +441,8 @@ export function loadCharacter(folder, { uid = process.getuid(), shared = false, 
 }
 
 function codexManifest(pet, sheet) {
-  if (!object(pet) || pet.spriteVersionNumber !== 2) fail('Codex pet must have spriteVersionNumber 2', 'spriteVersionNumber', 'pet.json');
+  if (!object(pet) || pet.spriteVersionNumber !== undefined && ![1, 2].includes(pet.spriteVersionNumber)) fail('Codex pet spriteVersionNumber must be omitted, 1 or 2', 'spriteVersionNumber', 'pet.json');
+  const version = pet.spriteVersionNumber === undefined ? 1 : pet.spriteVersionNumber;
   text(pet.id, 'id', 1, 48, 'pet.json');
   if (!/^[A-Za-z0-9_ -]+$/.test(pet.id)) fail('invalid Codex pet id', 'id', 'pet.json');
   const slug = pet.id.toLowerCase().replace(/[^a-z0-9-]/g, '-'); idCheck(slug, 'pet.json');
@@ -445,15 +450,16 @@ function codexManifest(pet, sheet) {
   const timed = (row, frames, ms, loop = true, start = 0) => ({ row, frames, ms, loop, ...start ? { start } : {} });
   return { format: 'sleight-character', version: 1, id: slug, name: slug === pet.id ? pet.displayName : pet.id, description: pet.description ?? '', author: pet.author ?? 'Local import', license: pet.license ?? 'unknown', sheet,
     // Scale 0.5: a 192x208 Codex cell draws as 96x104 pt beside the ring (sleight-arch, 2026-10-26).
-    frame: { w: 192, h: 208 }, grid: { cols: 8, rows: 11 }, scale: 0.5, anchor: { x: 96, y: 196 }, hotspot: { x: 96, y: 104 },
-    states: { idle: timed(0, 6, [280, 110, 110, 140, 140, 320]), move: { dir16: { rowA: 9, rowB: 10 } },
-      aim: timed(9, 1, 160, false, 4), click: timed(4, 3, 140, false, 1), type: timed(7, 6, [120, 120, 120, 120, 120, 220]),
+    frame: { w: 192, h: 208 }, grid: { cols: 8, rows: version === 1 ? 9 : 11 }, scale: 0.5, anchor: { x: 96, y: 196 }, hotspot: { x: 96, y: 104 },
+    states: { idle: timed(0, 6, [280, 110, 110, 140, 140, 320]),
+      ...version === 2 ? { move: { dir16: { rowA: 9, rowB: 10 } }, aim: timed(9, 1, 160, false, 4), look: { dir16: { rowA: 9, rowB: 10 } } } : {},
+      click: timed(4, 3, 140, false, 1), type: timed(7, 6, [120, 120, 120, 120, 120, 220]),
       'waiting-approval': timed(6, 6, [150, 150, 150, 150, 150, 260]), error: timed(5, 8, [140, 140, 140, 140, 140, 140, 140, 240], false),
       thinking: timed(8, 6, [150, 150, 150, 150, 150, 280]), success: timed(3, 4, [140, 140, 140, 280], false),
       'running-right': timed(1, 8, [120, 120, 120, 120, 120, 120, 120, 220]), 'running-left': timed(2, 8, [120, 120, 120, 120, 120, 120, 120, 220]),
-      look: { dir16: { rowA: 9, rowB: 10 } }, wave: timed(3, 4, [140, 140, 140, 280], false),
+      wave: timed(3, 4, [140, 140, 140, 280], false),
       'right-click': { fallback: 'wave' }, working: { fallback: 'type' } },
-    codex: { spriteVersionNumber: 2, importedFrom: pet.id } };
+    codex: { spriteVersionNumber: version, importedFrom: pet.id } };
 }
 
 export const BUILTIN_CHARACTER_IDS = Object.freeze(['tsugi', 'shizu', 'bit', 'kit', 'yori', 'tab']);
@@ -477,7 +483,12 @@ export function builtinCharacterDoctorLines(options) {
   });
 }
 
+export function refuseUrlSource(source) {
+  if (typeof source === 'string' && /^(?:[a-z][a-z0-9+.-]*:\/\/|(?:https?|ftps?|sftp|file|data|mailto|tel|sms|urn|about|javascript|blob|petdex|codex):)/i.test(source.trim())) fail('sleight never fetches character URLs; download the files yourself and import their local folder', 'source');
+}
+
 export function prepareCharacterImport(folder, { uid = process.getuid(), shared = false } = {}) {
+  refuseUrlSource(folder);
   folder = fileOperation(folder, 'source', () => fs.realpathSync(folder));
   const snap = snapshot(folder, uid);
   if (snap.files.has('character.json')) {
@@ -587,7 +598,8 @@ export function characterCallout(character, { installed = false } = {}) {
   });
   return [own === resolved.length ? `This ${noun} has its own animation for all ${own} of sleight's moves.`
     : `This ${noun} has its own animation for ${own} of sleight's ${resolved.length} moves. To animate all of them it needs ${resolved.length - own} more:`,
-    ...missing, `Character: ${m.name}`, `Size: ${total} bytes`, `License: ${m.license === 'unknown' ? 'not stated' : m.license}`,
+    ...missing, ...m.codex?.spriteVersionNumber === 1 ? ['The original 9-row atlas has no look directions. Without extra art it uses running left or right while moving and idle while aiming.'] : [],
+    `Character: ${m.name}`, `Size: ${total} bytes`, `License: ${m.license === 'unknown' ? 'not stated' : m.license}`,
     ...warnings.map(w => `Warning: ${w}`), ...installed ? [] : ['Your source files are not changed. sleight copies them.'],
     'To add animations, draw an extra.webp sheet; see docs/design/character-format.md.'].join('\n') + '\n';
 }

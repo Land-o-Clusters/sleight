@@ -45,11 +45,29 @@ owner's publication decision retain their separate requirements.
 Before the release preflight, run `nice -n 20 node tools/characters/check.mjs` from the release worktree.
 It checks all six built-in packs against the plugin's SHA-256 manifest and requires lossless VP8L sheets.
 A character bank of 8,000,000 bytes or more (hash manifest included) fails the check. Record its per-pack bytes, total character bytes and
-complete plugin bytes with the release evidence. `tools/characters/` is a build tool and is outside the plugin.
+complete plugin bytes with the release evidence. The generator is included in the plugin at
+`skills/make-character/tool/`. `tools/characters/` contains repository entry points and repository-only checks.
 On macOS with the tested toolchain, also run `tests/character-rebuild.test.mjs`. It compares a fresh build's structure and alpha
 with the committed packs, not their bytes, and skips with a reason on another toolchain.
 
 ## Checks
+
+After the release pass and A/B save their results, refresh the benchmark hub before tagging:
+
+```sh
+CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX) nice -n 20 node bench/results-hub.mjs
+CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX) nice -n 20 node bench/results-hub.mjs --check
+```
+
+Collection reads the raw folders available on the release Mac and keeps saved data for missing external folders.
+Review and commit `docs/results/` and the root README's generated blocks. Run the check again on that clean commit.
+It returns 1 if any data file, page or chart differs from a fresh collection and render. It never runs a benchmark.
+The Markdown pages link static SVGs in `docs/results/charts/`; `explore.html` charts all seven families, and
+`release-passes.html` includes the release-history chart. Rendering is deterministic and uses plain SVG.
+
+Use `--render-only` to rebuild from saved data without collection, such as on CI. Use `--hub-only` to write or check
+only `docs/results/` when a lane cannot edit the root README. Neither flag is used by the release preflight.
+Missing raw folders leave those families unmeasured for the current release. Regeneration does not create new runs.
 
 The preflight calls repaired A1's `inspectReleaseVersion({ root, expectedVersion, tag })`
 directly. That inspector discovers production plugin and marketplace manifests, including
@@ -65,10 +83,10 @@ There is no development override. The newest release notes receive private ident
 home path, email, common phone format and supplied-term checks. Findings contain only
 `CHANGELOG.md` and line numbers. Review the notes for private details beyond those patterns.
 
-The benchmark hub check runs before the history scan. It renders every page, chart, `explore.html` and the README's
-generated blocks from `docs/results/data` in memory, with `node bench/results-hub.mjs --render-only --check`, and compares
+The benchmark hub check runs before the history scan. It collects available raw results, renders every page, chart,
+`explore.html` and the README's generated blocks in memory with `node bench/results-hub.mjs --check`, and compares
 the result with the files in the tree. A stale file fails with `hub` and `stale-output`, and the fix is
-`node bench/results-hub.mjs --render-only` followed by a commit. A generator crash or a failed run fails with `hub` and `hub-error`. The generator must be tracked, like the other helpers.
+`node bench/results-hub.mjs` followed by a commit. A generator crash or a failed run fails with `hub` and `hub-error`. The generator must be tracked, like the other helpers.
 
 The history base defaults to the local `origin/main`. Use `--history-base REF` to select
 another local base. A missing base or one outside HEAD's ancestry fails. The existing

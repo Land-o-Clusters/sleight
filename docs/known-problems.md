@@ -15,6 +15,27 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 - Turbo may ask about an honest checkout: on 2026-10-15, 50/98 honest payment fixtures allowed without asking (83/98 in round 12) ([browsers](#browsers)).
 - Safari may stop between opening a tab and typing: 36 of 36 Codex chains and 19 of 19 Claude Code chains stopped. The fix is untested live ([approvals and guards](#approvals-and-guards)).
 
+## Character sharing and creation
+
+- Character discovery relies on observed host records. Claude Code 2.1.309's `version: 2`, `projectPath`
+  and `CLAUDE_CONFIG_DIR/plugins`, and Codex 0.164.0's `plugin list --json` shape were measured on 2026-10-26.
+  The host contracts don't document these formats, and unsupported records don't expose packs.
+- A symlinked Claude config or plugins root must resolve under the user's home and remain owned by
+  that user. Child symlinks are refused. Skipped roots and packs appear with reasons in the Cursor
+  menu and `cursor list`. A plugin without a readable manifest does not expose its characters.
+- Codex installation status is cached for one menu open, with a 3 s CLI deadline. Reopen Cursor after
+  installing or removing a plugin. Claude records and pack bytes are rechecked before import.
+- The make-character generator needs macOS `sips` and Node 22+. The installed plugin includes it.
+  Tested with `cwebp` 1.6.0. Other versions fall back to PNG. A missing encoder or failed encode also uses PNG.
+  Built-in rebuilds still require `cwebp` 1.6.0 and refuse failed encodes. The output directory must be new and
+  have no symlink ancestors. Review the six light and dark contact sheets before import.
+  An offline build does not establish how a character reads in motion over real windows.
+- Codex CLI 0.164.0 ignores `disable-model-invocation`, measured on this Mac on 2026-10-26.
+  sleight's Codex manifest lists only `"skills": "./skills/drive-mac-apps/"`, keeping make-character out
+  of Codex's model-visible skill list in that measurement. This single-skill-folder route is observed,
+  not documented upstream. Other Codex versions are unverified. Claude Code keeps make-character
+  available through explicit invocation with `disable-model-invocation: true`.
+
 ## Release qualification
 
 - Release qualification applies to the final integrated commit. The 1.5.0 manifests, doctor output and unreleased
@@ -280,7 +301,10 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 - Typed confirmation needs a physical keyboard, so cards can't be answered from Switch Control's on-screen keyboard. The mask length is readable over AX. VoiceOver reading and key-window behavior are unverified live.
 - Waiting handoff covers owned turbo browser tabs and native apps with a lease. Document-scoped native mode and Electron turbo still stop.
 - The card lasts 4 minutes, and a shorter host tool timeout ends the wait earlier. Closed shadow-root login forms and custom auth controls are not checked. A populated text field beside a login form refuses resume.
-- The shell guard reads literal commands only, after a sleight tool has run in the turn. Codex, Cursor and Grok hosts do not get it.
+- The shell guard reads literal commands only. Once any loop uses sleight, it fences launchers for every caller in that mod registration. Each loop's completion removes only its own fence. Codex, Cursor and Grok hosts do not get it.
+- Split-pane teammates have separate mod instances. Whether their launch loads the lead's plugin and mod needs a live check. Promptless teammate cleanup has only offline coverage.
+- A child prompt cannot lift Stop. Send a new message to the lead to resume sleight. An abandoned child's refresh, record and replay fence expires at the lead's next completion, session start, compaction or Stop. Its shell fence (launcher commands refused) stays until Stop or a new session, and compaction never lifts the shell fence.
+- Missing or relative HOME and CLAUDE_CONFIG_DIR values refuse writes that need those roots, with a path-resolution message. Literal paths still get protected-file and alias checks. A plain `ls` passes. Malformed hook envelopes get a generic refusal message.
 - Variables, aliases, ANSI-C quoting, ssh, scripts on disk and encoded payloads (`base64 | sh`) get past the shell guard. It can also refuse harmless text, such as a launcher word in interpreter process arguments or any `osascript` or `launchctl submit/load/bootstrap/kickstart`. How the installed host presents a denial is unchecked.
 - Uploads refuse group-writable files (including files made under umask 002), writable parents, mutating ACL entries and unreadable metadata. Copy the file to a visible file in Documents. Folder uploads are unsupported. The iCloud and `/Volumes` exceptions ran on synthetic metadata only.
 - Cookie handling is model guidance plus a guard on identified containers. A container counts when it's a known CMP root, or a fixed, sticky or dialog element under 1,500 characters with a consent phrase.

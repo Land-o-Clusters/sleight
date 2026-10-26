@@ -12,7 +12,17 @@ const component = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9.
 const idValid = value => typeof value === 'string' && /^[a-z0-9-]{1,48}$/.test(value);
 const plain = value => typeof value === 'string' && value.length > 0 && value.length <= 96 && !/[\p{C}\p{Zl}\p{Zp}]/u.test(value);
 const under = (path, root) => path.startsWith(root + '/');
-const skipped = (host, pluginId, reason) => ({ host, pluginId, name: pluginId, reason, packs: [] });
+export const skippedCharacterReason = reason => String(reason)
+  // Character validation names the file before the rule. Keep the rule, never the supplied filename.
+  .replace(/^Character: "(?:\\.|[^"\\])*" /, '')
+  .replace(/"(?:\\.|[^"\\])*"|'[^']*'/g, '[file]')
+  .replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ' ').slice(0, 120) || 'Character unavailable';
+export function characterPluginSkips(group) {
+  const entries = [...group.reason ? [{ id: group.pluginId, reason: group.reason }] : [], ...group.skipped ?? []];
+  return [...entries.slice(0, 3).map(({ id, reason }) => ({ id, reason: skippedCharacterReason(reason) })),
+    ...entries.length > 3 ? [{ id: `and ${entries.length - 3} more skipped`, reason: 'Open the plugin folder to review the remaining characters.', more: true }] : []];
+}
+const skipped = (host, pluginId, reason) => ({ host, pluginId, name: pluginId, reason: skippedCharacterReason(reason), packs: [] });
 function directory(path, uid) {
   if (!isAbsolute(path) || resolve(path) !== path || fs.realpathSync(path) !== path) throw Error('unsafe plugin path');
   const st = fs.lstatSync(path);
@@ -132,15 +142,22 @@ function pluginManifest(folder, host, uid) {
 function extras(folder, manifest, uid, componentMetadata) {
   const allowed = new Set(['$schema', 'name', 'displayName', 'version', 'description', 'author', 'homepage', 'repository', 'license', 'keywords',
     'metadata', 'icon', 'documentationUrl', 'supportUrl', 'privacyPolicyUrl', 'termsOfServiceUrl', 'defaultEnabled', 'interface']);
-  const kinds = new Set(), sources = [manifest];
+  const kinds = [], metadataKinds = new Set(), sources = [manifest]; let count = 0;
   const quote = key => JSON.stringify(key).replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ch => [...ch].map(c => '\\u{' + c.codePointAt(0).toString(16) + '}').join(''));
   const label = key => key === 'mcpServers' ? 'MCP servers (mcpServers)' : /^[\w$-]+$/.test(key) ? key : quote(key);
+  const add = value => {
+    count++;
+    if (kinds.length < 8) {
+      const chars = [...value]; kinds.push(chars.length > 40 ? chars.slice(0, 39).join('') + '…' : value);
+    }
+  };
+  const metadata = key => { if (!metadataKinds.has(key)) { metadataKinds.add(key); add(label(key)); } };
   const inspect = (source, marketplace = false) => {
-    for (const key of Object.keys(source ?? {})) if (!allowed.has(key) && !(marketplace && key === 'source')) kinds.add(label(key));
+    for (const key of Object.keys(source ?? {})) if (!allowed.has(key) && !(marketplace && ['source', 'category', 'tags', 'strict'].includes(key))) metadata(key);
   };
   inspect(componentMetadata, true);
   for (const path of ['plugin.json', '.claude-plugin/plugin.json', '.codex-plugin/plugin.json']) {
-    try { sources.push(json(join(folder, path), uid)); } catch (error) { if (error.code !== 'ENOENT') kinds.add('unreadable metadata'); }
+    try { sources.push(json(join(folder, path), uid)); } catch (error) { if (error.code !== 'ENOENT') metadata('unreadable metadata'); }
   }
   sources.forEach(source => inspect(source));
   const metadataFiles = { '.claude-plugin': ['plugin.json'], '.codex-plugin': ['plugin.json'], '.agents': ['plugins'], '.agents/plugins': ['marketplace.json'] };
@@ -149,12 +166,14 @@ function extras(folder, manifest, uid, componentMetadata) {
       const name = relative ? relative + '/' + entry.name : entry.name;
       if (!relative && entry.name === 'sleight-characters' && entry.isDirectory()) continue;
       if (Object.hasOwn(metadataFiles, name) && entry.isDirectory()) { scan(name); continue; }
-      if (entry.isFile() && (relative ? metadataFiles[relative]?.includes(entry.name) : /^(README|LICENSE|CHANGELOG)([.][A-Za-z0-9-]+)?$|^(\.gitignore|plugin\.json)$/.test(entry.name))) continue;
-      kinds.add(name === '.mcp.json' || name === 'mcp.json' ? `MCP servers (${name})` : quote(name));
+      if (entry.isFile() && (relative ? metadataFiles[relative]?.includes(entry.name) : /^(README|LICENSE|CHANGELOG)(\.(md|txt))?$|^(\.gitignore|plugin\.json)$/.test(entry.name))) continue;
+      // Count the rest without formatting or retaining attacker-supplied names beyond the first eight.
+      if (kinds.length === 8) { count++; continue; }
+      add(name === '.mcp.json' || name === 'mcp.json' ? `MCP servers (${name})` : quote(name));
     }
   };
   scan();
-  if (kinds.size) return `Warning: this plugin includes ${[...kinds].join(', ')}. sleight cannot control what the host loads from it.`;
+  if (count) return `Warning: this plugin includes ${kinds.join(', ')}${count > kinds.length ? `, and ${count - kinds.length} more` : ''}. sleight cannot control what the host loads from it.`;
   if (componentMetadata === null) return 'Warning: marketplace component metadata is unavailable. sleight cannot control what the host loads from this plugin.';
 }
 export function characterPackDigest(files) {
@@ -171,6 +190,8 @@ export function discoverCharacterPlugins({ home = userInfo().homedir, env = proc
   for (const install of [...claudeInstalls(options), ...codexInstalls(options)]) {
     if (install.reason) { groups.push(install); continue; }
     try {
+      // Presence is enough here; validate the root and all ancestors before reading character data.
+      try { fs.lstatSync(join(install.folder, 'sleight-characters')); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
       directory(install.folder, uid);
       const manifest = pluginManifest(install.folder, install.host, uid);
       if (!plain(manifest?.name)) continue;
@@ -189,10 +210,13 @@ export function discoverCharacterPlugins({ home = userInfo().homedir, env = proc
           if (seen.has(key)) continue;
           // Bind offers to the actual snapshot as well as its installed identity.
           group.packs.push({ id, name: pack.manifest.name, key, folder, digest: characterPackDigest(pack.files) }); seen.add(key); count++;
-        } catch {} // Bad packs never become selectable offers.
+        } catch (error) { (group.skipped ??= []).push({ id, reason: skippedCharacterReason(error.message) }); } // Bad packs never become selectable offers.
       }
       groups.push(group);
-    } catch {} // A stale record, missing payload, or unsafe path grants no discovery root.
+    } catch (error) {
+      // Ordinary installed plugins without character data are outside this catalog.
+      if (error.code !== 'ENOENT') groups.push(skipped(install.host, install.pluginId, error.message));
+    }
   }
   return groups;
 }

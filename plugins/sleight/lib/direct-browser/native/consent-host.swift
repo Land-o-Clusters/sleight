@@ -2258,7 +2258,7 @@ enum CursorPickerRow {
     static func valid(_ row: [String: Any], nested: Bool = false) -> Bool {
         guard let title = row["title"] as? String, (1...60).contains(title.count),
             title.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) && $0.properties.generalCategory != .format }),
-            Set(row.keys).isSubset(of: ["title", "op", "style", "character", "selected", "key", "children"]) else { return false }
+            Set(row.keys).isSubset(of: ["title", "op", "style", "character", "selected", "key", "children", "reason"]) else { return false }
         if let children = row["children"] as? [[String: Any]] {
             return !nested && Set(row.keys) == ["title", "children"] && children.count <= 512 && children.allSatisfy { valid($0, nested: true) }
         }
@@ -2275,6 +2275,10 @@ enum CursorPickerRow {
             return nested && Set(row.keys) == ["title", "op", "key"] &&
                 (row["key"] as? String)?.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil
         case "installed": return nested && Set(row.keys) == ["title", "op"]
+        case "skipped":
+            guard nested, Set(row.keys) == ["title", "op", "reason"], let reason = row["reason"] as? String,
+                (1...1000).contains(reason.count) else { return false }
+            return reason.unicodeScalars.allSatisfy { !CharacterSet.controlCharacters.contains($0) && $0.properties.generalCategory != .format }
         case "folder": return !nested && Set(row.keys) == ["title", "op"]
         case "lines":
             guard let on = row["selected"] as? NSNumber, CFGetTypeID(on) == CFBooleanGetTypeID() else { return false }
@@ -2560,7 +2564,10 @@ final class CursorPickerHost: NSObject, NSMenuDelegate {
     }
     @objc func click(_ sender: NSMenuItem) {
         guard personMenuActivation(sender) else { refuseSelection(); return }
-        guard let row = sender.representedObject as? [String: Any], CursorPickerRow.valid(row, nested: row["op"] as? String == "import") else { return }
+        guard let row = sender.representedObject as? [String: Any], CursorPickerRow.valid(row, nested: ["import", "skipped"].contains(row["op"] as? String ?? "")) else { return }
+        if row["op"] as? String == "skipped" {
+            showNotice("\(row["title"] as! String)\n\(row["reason"] as! String)"); return
+        }
         if row["op"] as? String == "folder" {
             // A click opens the existing folder in Finder. No shell or script receives the path.
             do {

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { CHARTS, PALETTES, chartBlock, chartCaption, engineLine, loadData, renderCharts, studyFor } from '../bench/results-charts.mjs';
+import { CHARTS, PALETTES, chartBlock, chartCaption, engineLine, loadData, renderCharts, studyFor, summaryRows } from '../bench/results-charts.mjs';
 import { cellText } from '../bench/results-hub.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -35,20 +35,24 @@ function wellFormed(svg, name) {
   assert.match(svg, /<title id="title">[^<]+<\/title>\n<desc id="desc">[^<]+<\/desc>/);
 }
 
-test('the 16 chart files render from the committed data, twice the same, and match docs/results/img', () => {
+test('all chart files render from the committed data, twice the same, and match img and charts', () => {
   const first = renderCharts(committed()), second = renderCharts(committed());
   assert.deepEqual(first, second);
-  const names = CHARTS.flatMap(c => [`img/${c.id}-light.svg`, `img/${c.id}-dark.svg`]).sort();
-  assert.equal(names.length, 16);
+  const names = CHARTS.flatMap(c => ['light', 'dark'].flatMap(mode => [
+    ...(c.kind !== 'summary' ? [`img/${c.id}-${mode}.svg`] : []),
+    ...(c.family && c.kind !== 'headline' ? [`charts/${c.id}-${mode}.svg`] : []),
+  ])).sort();
+  assert.equal(names.length, 34);
   assert.deepEqual(Object.keys(first).sort(), names);
-  assert.deepEqual(readdirSync(join(OUT, 'img')).filter(n => n.endsWith('.svg')).map(n => `img/${n}`).sort(), names);
+  assert.deepEqual(['img', 'charts'].flatMap(dir => readdirSync(join(OUT, dir)).filter(n => n.endsWith('.svg')).map(n => `${dir}/${n}`)).sort(), names);
   for (const [name, text] of Object.entries(first)) assert.equal(readFileSync(join(OUT, name), 'utf8'), text, `${name} is stale: run node bench/results-charts.mjs`);
 });
 
 test('light and dark differ only in the palette tokens of the style block', () => {
   const files = renderCharts(committed());
   for (const chart of CHARTS) {
-    const light = files[`img/${chart.id}-light.svg`], dark = files[`img/${chart.id}-dark.svg`];
+    const dir = chart.kind === 'summary' ? 'charts' : 'img';
+    const light = files[`${dir}/${chart.id}-light.svg`], dark = files[`${dir}/${chart.id}-dark.svg`];
     const styleOf = svg => /<style>[\s\S]*?<\/style>/.exec(svg)[0];
     assert.equal(light.replace(styleOf(light), ''), dark.replace(styleOf(dark), ''), `${chart.id}: the structure differs`);
     const tokens = (svg, palette) => Object.entries(palette).reduce((style, [token, hex]) => style.replaceAll(hex, `{${token}}`), styleOf(svg));
@@ -99,7 +103,7 @@ test('each SVG is well formed, names its caption, and loads nothing', () => {
   const all = committed(), files = renderCharts(all);
   for (const [name, svg] of Object.entries(files)) {
     wellFormed(svg, name);
-    const id = name.replace(/^img\/|-(light|dark)\.svg$/g, '');
+    const id = name.replace(/^(img|charts)\/|-(light|dark)\.svg$/g, '');
     assert.ok(svg.includes(`<desc id="desc">${chartCaption(id, all).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</desc>`), `${name}: desc is the caption`);
     // The xmlns declaration is the one URL an SVG image needs; nothing else may name a host.
     assert.ok(!svg.replace('xmlns="http://www.w3.org/2000/svg"', '').includes('http'), `${name}: names a host`);
@@ -125,14 +129,37 @@ test('chartBlock gives the picture pair for a page\'s path and repeats the capti
     const caption = chartCaption(chart.id, all);
     assert.ok(/^[A-Z].*\.$/.test(caption) && !/\n/.test(caption) && !/;/.test(caption), `${chart.id}: one line of sentences`);
     const readme = chartBlock(chart.id, all, { base: 'docs/results/' });
-    assert.ok(readme.includes(`<source media="(prefers-color-scheme: dark)" srcset="docs/results/img/${chart.id}-dark.svg">`));
-    assert.ok(readme.includes(`<img src="docs/results/img/${chart.id}-light.svg" width="900" alt="`));
+    const dir = chart.kind === 'summary' ? 'charts' : 'img';
+    assert.ok(readme.includes(`<source media="(prefers-color-scheme: dark)" srcset="docs/results/${dir}/${chart.id}-dark.svg">`));
+    assert.ok(readme.includes(`<img src="docs/results/${dir}/${chart.id}-light.svg" width="900" alt="`));
     assert.ok(readme.includes('\n\n<sub>') && readme.endsWith('</sub>\n'));
-    assert.ok(chartBlock(chart.id, all).includes(`src="img/${chart.id}-light.svg"`));
+    assert.ok(chartBlock(chart.id, all).includes(`src="${dir}/${chart.id}-light.svg"`));
     const alt = /alt="([^"]*)"/.exec(readme)[1];
     assert.equal(unescape(alt), caption);
   }
   assert.throws(() => chartBlock('no-such-chart', all), /no chart/);
+});
+
+test('experiment, validation and release charts label every study and arm with the recorded pass count', () => {
+  const all = committed(), files = renderCharts(all);
+  for (const chart of CHARTS.filter(chart => chart.kind === 'summary')) {
+    const rows = summaryRows(all, chart.family);
+    const printed = labels(files[`charts/${chart.id}-light.svg`]);
+    assert.equal(printed.length, rows.length);
+    for (const row of rows) {
+      const label = printed.find(p => p.attrs['data-study'] === row.study && p.attrs['data-arm'] === row.arm);
+      assert.equal(label?.text, `${f1(row.runs ? row.passed / row.runs * 100 : 0)}% (${row.passed}/${row.runs})`);
+      if (chart.family !== 'release-passes') {
+        const runs = all[chart.family].studies.find(study => study.id === row.study).runs.filter(run => run.arm === row.arm);
+        assert.equal(row.passed, runs.filter(run => run.passed).length);
+        assert.equal(row.runs, runs.length);
+      } else {
+        const runs = all[chart.family].runs.filter(run => run.file === row.study && run.arm === row.arm);
+        assert.equal(row.passed, runs.filter(run => run.passed).length);
+        assert.equal(row.runs, runs.length);
+      }
+    }
+  }
 });
 
 test('footers name the engine versions and UTC dates once the data carries them', () => {
