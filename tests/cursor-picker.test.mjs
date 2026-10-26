@@ -46,7 +46,7 @@ test('discovery finds both Codex roots, deduplicates and refuses linked pet fold
 test('menu import uses VC3 validation, writes the selection, returns VC3 callout and leaves source unchanged', async t => {
   const w = world(t), source = w.put('My_Cat');
   const before = fs.readFileSync(join(source, 'pet.json'));
-  const writes = [], controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, writeSetting: s => writes.push(s) });
+  const writes = [], controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, builtins: false, writeSetting: s => writes.push(s) });
   const catalog = await controller.catalog(); assert.equal(catalog.pets.length, 1);
   const result = await controller.apply({ op: 'import', key: catalog.pets[0].key });
   assert.equal(result.ok, true, result.text); assert.deepEqual(writes, [{ style: 'sprite', character: 'my-cat' }]);
@@ -57,7 +57,7 @@ test('menu import uses VC3 validation, writes the selection, returns VC3 callout
 });
 test('offered identities bind selection and imports; failed import preserves validation reason', async t => {
   const w = world(t), folder = w.put('cat'), writes = [];
-  const controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, writeSetting: s => writes.push(s) });
+  const controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, builtins: false, writeSetting: s => writes.push(s) });
   assert.equal((await controller.apply({ op: 'select', style: 'sprite', character: 'cat' })).ok, false);
   assert.equal((await controller.apply({ op: 'import', key: folder })).ok, false);
   const catalog = await controller.catalog();
@@ -67,7 +67,7 @@ test('offered identities bind selection and imports; failed import preserves val
 });
 test('installed idle thumbnail descriptors contain only idle and have content keys that change with art', async t => {
   const w = world(t), folder = w.put('cat'); installCharacter(prepareCharacterImport(folder), { root: w.root });
-  const controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, writeSetting: () => {} });
+  const controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, builtins: false, writeSetting: () => {} });
   const first = (await controller.catalog()).thumbnails[0];
   assert.deepEqual(Object.keys(first.frame.table), ['idle']); assert.match(first.key, /^[0-9a-f]{64}$/);
   assert.equal(first.frame.table.idle.frames.length, 1);
@@ -76,7 +76,7 @@ test('installed idle thumbnail descriptors contain only idle and have content ke
 });
 test('a settings refusal after import says the pet was installed and retains the fallback callout', async t => {
   const w = world(t); w.put('cat');
-  const controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, writeSetting() { throw Error('HAND_CONFIG_UNSAFE'); } });
+  const controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, builtins: false, writeSetting() { throw Error('HAND_CONFIG_UNSAFE'); } });
   const catalog = await controller.catalog(), result = await controller.apply({ op: 'import', key: catalog.pets[0].key });
   assert.equal(result.ok, false); assert.match(result.text, /Imported, but could not select it: HAND_CONFIG_UNSAFE/);
   assert.match(result.text, /To animate all of them it needs/); assert.ok(fs.existsSync(join(w.root, 'cat/character.json')));
@@ -84,7 +84,7 @@ test('a settings refusal after import says the pet was installed and retains the
 test('installed titles lose format characters before reaching the native menu contract', async t => {
   const w = world(t), source = w.put('cat', { displayName: 'C\u00adat\ufeff' });
   installCharacter(prepareCharacterImport(source), { root: w.root });
-  const controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, writeSetting() {} });
+  const controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, builtins: false, writeSetting() {} });
   const rows = (await controller.catalog()).rows;
   assert.equal(rows.find(r => r.character === 'cat').title, 'Cat');
 });
@@ -92,26 +92,26 @@ test('catalog hashes off the main loop and reuses unchanged metadata, invalidati
   const w = world(t);
   for (const id of ['cat', 'dog']) installCharacter(prepareCharacterImport(w.put(id)), { root: w.root });
   let loopRan = false; setImmediate(() => { loopRan = true; });
-  const first = await installedCursorCatalog({ root: w.root, uid: process.getuid() });
+  const first = await installedCursorCatalog({ root: w.root, builtins: false, uid: process.getuid() });
   assert.equal(loopRan, true); assert.equal(first.hashes, 2); assert.equal(first.hits, 0);
-  const second = await installedCursorCatalog({ root: w.root, uid: process.getuid() });
+  const second = await installedCursorCatalog({ root: w.root, builtins: false, uid: process.getuid() });
   assert.equal(second.hashes, 0); assert.equal(second.hits, 2);
   const path = join(w.root, 'cat/sheet.png'), bytes = fs.readFileSync(path); bytes[32] = 1; fs.writeFileSync(path, bytes);
-  const third = await installedCursorCatalog({ root: w.root, uid: process.getuid() });
+  const third = await installedCursorCatalog({ root: w.root, builtins: false, uid: process.getuid() });
   assert.equal(third.hashes, 1); assert.equal(third.hits, 1);
   assert.notEqual(third.thumbnails[0].key, first.thumbnails[0].key);
   assert.equal(third.thumbnails[1].key, first.thumbnails[1].key);
   fs.chmodSync(join(w.root, 'dog/sheet.png'), 0o644);
-  const fourth = await installedCursorCatalog({ root: w.root, uid: process.getuid() });
+  const fourth = await installedCursorCatalog({ root: w.root, builtins: false, uid: process.getuid() });
   assert.equal(fourth.thumbnails.some(t => t.id === 'dog'), false, 'mode changes invalidate validation too');
   fs.rmSync(join(w.root, 'cat'), { recursive: true });
-  assert.deepEqual((await installedCursorCatalog({ root: w.root, uid: process.getuid() })).characters.map(c => c.id), ['dog']);
+  assert.deepEqual((await installedCursorCatalog({ root: w.root, builtins: false, uid: process.getuid() })).characters.map(c => c.id), ['dog']);
 });
 test('a symlinked Codex root is skipped with one metadata-only trace per picker lifetime', async t => {
   const w = world(t); w.put('cat');
   fs.renameSync(join(w.home, '.codex'), join(w.home, 'actual-codex'));
   fs.symlinkSync(join(w.home, 'actual-codex'), join(w.home, '.codex'));
-  const traces = [], controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, trace: (...args) => traces.push(args) });
+  const traces = [], controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, builtins: false, trace: (...args) => traces.push(args) });
   for (let i = 0; i < 3; i++) assert.deepEqual((await controller.catalog()).pets, []);
   assert.deepEqual(traces.filter(([name]) => name === 'hand-picker-discovery-skipped'), [['hand-picker-discovery-skipped', { reason: 'symlink-codex-root' }]]);
   assert.equal(traces.filter(([name]) => name === 'hand-picker-codex-list').length, 3);

@@ -90,8 +90,8 @@ export function sessionHandClient(options = {}) {
 }
 // The sprite style's installed character, as VC3 validates it, and VC3's resolver for characterFrame. Loaded on launch only.
 const installedSprite = async id => {
-  const { loadCharacter, charactersDirectory, resolveCharacterStates } = await import('./character.mjs');
-  return { character: loadCharacter(join(charactersDirectory(), id), { installed: true }), resolve: resolveCharacterStates };
+  const { checkCharacter, resolveCharacterStates } = await import('./character.mjs');
+  return { character: checkCharacter(id), resolve: resolveCharacterStates };
 };
 
 // The files behind the menu's Permissions rows. A change to any of them sends the host a fresh menu frame.

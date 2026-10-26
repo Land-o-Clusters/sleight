@@ -66,6 +66,7 @@ function executable(name, receipt) {
 export const environment = () => ({ PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' });
 // A cached binary's compile path is temporary. Resolve the card asset from the installed trusted JS package instead.
 export const consentEnvironment = () => ({ ...environment(),
+  SLEIGHT_BUILTIN_CHARACTERS: fileURLToPath(new URL('../../characters/', import.meta.url)).replace(/\/$/, ''),
   SLEIGHT_CONSENT_ICON: fileURLToPath(new URL('../../assets/icon.png', import.meta.url)) });
 
 // A cold module cache rebuilds AppKit's modules: over 120 s at load 31 to 38 (2026-10-14), so first use allows 300 s.

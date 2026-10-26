@@ -27,7 +27,7 @@ const example = new URL('../examples/character-marketplace/plugins/example-bit/s
 test('plugin group rows with warnings pass the actual native menu parser in dump mode', mac, t => {
   for (const name of ['Critters'.repeat(10), 'x' + '🐭'.repeat(40)]) {
     const rows = cursorMenuModel({ plugins: [{ name, pluginId: 'critters@demo', warning: 'Includes hooks',
-      packs: [{ id: 'mouse', name: 'Mouse', key: 'b'.repeat(64) }, { id: 'done', name: 'Installed Mouse', key: 'c'.repeat(64) }] }], installed: [{ id: 'done', name: 'Installed Mouse' }] });
+      packs: [{ id: 'mouse', name: 'Mouse', key: 'b'.repeat(64) }, { id: 'done', name: 'Installed Mouse', key: 'c'.repeat(64) }] }], installed: [{ id: 'done', name: 'x'.repeat(48) + '🐭', builtin: true }] });
     const result = spawnSync(build(t), ['--cursor-menu-dump'], { input: JSON.stringify({ hand: 'picker', nonce: 'a'.repeat(64), op: 'catalog', rows }) + '\n',
       encoding: 'utf8', timeout: 30000 });
     assert.equal(result.status, 0, result.stderr); assert.deepEqual(JSON.parse(result.stdout).rows, rows);
@@ -72,4 +72,14 @@ test('make-character uses the shared generator and shine renderer for a custom v
   assert.equal(pack.manifest.id, 'my-character'); assert.equal(pack.resolved.filter(s => s.own).length, 19);
   assert.equal(fs.existsSync(new URL('../plugins/sleight/skills/make-character/template/', import.meta.url)), false);
   t.diagnostic(`customPackBytes=${pack.total}`);
+});
+
+test('temporary bank checks ignore every built-in lookup even when a frame uses a built-in id', mac, async t => {
+  const original = loadCharacter(example.pathname.slice(0, -1), { shared: true });
+  for (const id of ['bit', 'kit', 'shizu', 'tab', 'tsugi', 'yori']) {
+    const files = new Map(original.files), manifest = { ...original.manifest, id };
+    files.set('character.json', Buffer.from(JSON.stringify(manifest)));
+    const checked = await withSharedCharacter(files, { hostCheck: (frame, root) => checkCharacterInHost(build(t), frame, { root }) });
+    assert.equal(checked.manifest.id, id);
+  }
 });

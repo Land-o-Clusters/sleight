@@ -81,8 +81,8 @@ The `version: 2` record, its `projectPath` field and the `CLAUDE_CONFIG_DIR/plug
 on this Mac, not documented host contracts. The default is `~/.claude/plugins`. The documented
 `CLAUDE_CODE_PLUGIN_CACHE_DIR` override takes precedence. A user install is eligible everywhere.
 Project and local installs are eligible within their recorded project. sleight chooses local scope over
-project, then user scope, as its own precedence rule. Conflicting paths at the winning scope are refused. Disabled but still installed Claude
-plugins remain available as art sources. sleight does not claim they are loaded or enable them.
+project, then user scope, as its own precedence rule. Conflicting paths at the winning scope are refused.
+Disabled but still installed Claude plugins remain available as art sources. sleight does not claim they are loaded or enable them.
 
 Discovery follows only those recorded paths, never a general folder scan. Synced or session-only plugins
 without install records are outside this adapter. Missing, unsupported or unsafe records do not expose packs.
@@ -91,10 +91,13 @@ are listed with a reason. Children must stay under that resolved root or the rec
 Child symlinks, hardlinks, shared writable files and mismatched pack IDs are refused. Limits are 1 MiB per host
 record, 256 plugin records, 32 entries in each plugin's character folder and 128 valid packs per catalog.
 
-Each valid pack appears under the host-assigned `name@marketplace` identity. Choosing it rechecks its installed record and content
-digest. Before installation and selection, sleight validates a captured copy through the host's sandboxed decoder.
-Changing or uninstalling the plugin invalidates an outstanding offer. Installed local copies remain until
+Each valid pack appears under the host-assigned `name@marketplace` identity. Choosing it rechecks the
+Claude install record or the open menu's Codex record, the current manifests and the content digest.
+Before installation and selection, sleight validates a captured copy through the host's sandboxed decoder.
+Changed manifests or pack bytes invalidate an outstanding offer. Reopen the menu to refresh Codex
+installation status after installing or removing a plugin. Installed local copies remain until
 the person removes them. Plugin updates never silently replace a local character with the same ID.
+A plugin pack with a built-in ID is skipped with a reason. Packs with an installed local ID are labeled `already installed`.
 
 ### Codex compatibility
 
@@ -106,7 +109,8 @@ for local installs. See [OpenAI's package documentation](https://developers.open
 The template supplies a Codex compatibility manifest and a separate `.agents` marketplace catalog.
 `codex plugin list --json` and its `installed[]` shape, including disabled installs, are observed on this
 Mac and are not documented host contracts. The CLI versions checked on 2026-10-26 are Claude Code
-2.1.309 and Codex 0.164.0. sleight asks that CLI for installed records and reads only the recorded version's cache path, or the documented `local` path for a local source. It never treats the
+2.1.309 and Codex 0.164.0. sleight asks that CLI for installed records and reads only the recorded
+version's cache path, or the documented `local` path for a local source. It never treats the
 source checkout or an available but uninstalled listing as an installed plugin. `CODEX_HOME` is honored.
 The CLI has a 3 s deadline and a 1 MiB output cap, and discovery skips Codex packs if the CLI is unavailable. Discovery runs
 on a worker with a 10 s deadline and never runs on a computer-use action path. The Codex list is cached
@@ -129,7 +133,7 @@ The launcher retains its person gate. Import shows the v1 size, license and gene
 asks for confirmation. `--yes` is the existing explicit CLI option. Import leaves the sprite hidden.
 Export needs a stated license. It validates and decodes the snapshot before creating a new 0600 file.
 It never overwrites an existing file. Import copies data into the private character bank through the existing atomic
-installer. Existing IDs are refused. Packs with license `unknown` are accepted locally but cannot be shared.
+installer. Existing IDs and all six built-in IDs are refused. Packs with license `unknown` are accepted locally but cannot be shared.
 
 `.sleightchar` v1 is an uncompressed POSIX ustar archive. Use flat, allowlisted filenames directly at its
 root, with no enclosing folder. The reader uses only Node built-ins. It accepts at most 8 files with names up
@@ -145,7 +149,7 @@ within the whole-file cap.
 
 The decoder checks a private temporary snapshot through `consent-host --check-character <bank>`, a mode
 that draws nothing. This mode accepts only an owned 0700 canonical `/private/tmp/sleight-character-check-XXXXXX`
-bank. Live rendering keeps its installed-path rule. The normal v1 file, dimension and pixel checks and
+bank and ignores the built-in lookup. Live rendering keeps its installed-path rule. The normal v1 file, dimension and pixel checks and
 sandboxed image child apply. The temporary bank is removed after acceptance, refusal or cancellation of
 the import prompt. A process crash can leave it behind. sleight keeps the source art unchanged and does not upload it.
 

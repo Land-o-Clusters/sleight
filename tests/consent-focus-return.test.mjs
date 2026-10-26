@@ -20,11 +20,11 @@ test('cards and alerts record who was in front, follow the person to the activat
   assert.match(source, /addObserver\(forName: NSApplication\.willBecomeActiveNotification, object: nil, queue: nil\) \{ \[weak self\] _ in\s*self\?\.focus\.hostActivating\(\)/);
   // All three menu-bar alerts (turbo off, session opt-in or resume, action confirm) go through personModal, which restores.
   assert.equal((source.match(/personModal\(alert, choices:/g) ?? []).length, 3);
-  assert.match(source, /focus\.presenting\(\[:\]\)\n\s*let result = withExtendedLifetime\(actions\) \{ modal\.run\(abort: \{ NSApp\.abortModal\(\) \}\) \{ alert\.runModal\(\) \} \}\n\s*focus\.dismissed\(\)/);
+  assert.match(source, /focus\.presenting\(\[:\]\)\n\s*consentArming\(alert.window\)\.presented\(\)\n\s*let result = withExtendedLifetime\(actions\) \{ modal\.run\(abort: \{ NSApp\.abortModal\(\) \}\) \{ alert\.runModal\(\) \} \}\n\s*focus\.dismissed\(\)/);
   // A recorded app is checked by pid, bundle and launch date.
   assert.match(source, /AppIdentity\(pid: pid, bundle: app\.bundleIdentifier, launched: app\.launchDate\?\.timeIntervalSince1970\)/);
   // Handoff never becomes key or runs focus restoration. Other cards keep the existing behavior.
-  assert.match(source, /func show\(\) \{\s*if passive \{ panel.orderFrontRegardless\(\) \} else \{ panel.makeKeyAndOrderFront\(nil\) \}\s*NSSound\(named: "Glass"\)\?\.play\(\)\s*\}/);
+  assert.match(source, /func show\(\) \{\s*if passive \{ panel.orderFrontRegardless\(\) \} else \{ panel.makeKeyAndOrderFront\(nil\) \}\s*consentArming\(panel\)\.presented\(\)\s*NSSound\(named: "Glass"\)\?\.play\(\)\s*\}/);
   const block = source.match(/\/\/ BEGIN FOCUS RETURN\n([\s\S]*?)\/\/ END FOCUS RETURN/)?.[1];
   assert.ok(block, 'focus return absent');
   assert.doesNotMatch(block, /CGEvent|AXUIElement|NSApp\.|NSRunningApplication\(|NSWorkspace\./, 'the decision itself touches no system state');

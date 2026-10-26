@@ -11,7 +11,7 @@ import { loadCharacter } from './character.mjs';
 import { writeHandSetting } from './command.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
-const sort = entries => [...entries].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+const sort = entries => [...entries].sort((a, b) => a.builtin && b.builtin ? 0 : Number(!!b.builtin) - Number(!!a.builtin) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 const slug = id => id.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 const title = name => typeof name === 'string' && name.length > 0 && name.length <= 60;
 const menuTitle = (name, fallback) => [...name.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, '')].slice(0, 60).join('') || fallback;
@@ -20,7 +20,7 @@ export function cursorMenuModel({ installed = [], found = [], plugins = [], styl
   const ids = new Set(installed.map(c => c.id));
   return [
     ...[['ring', 'Ring (Split Seam+)'], ['seam', 'Plain ring'], ['glove', 'Glove']].map(([value, name]) => ({ title: name, op: 'select', style: value, selected: style === value })),
-    ...sort(installed).map(c => ({ title: menuTitle(c.name, c.id), op: 'select', style: 'sprite', character: c.id, selected: style === 'sprite' && character === c.id })),
+    ...sort(installed).map(c => c.renameNeeded ? { title: `${c.id} (renamed needed)`, op: 'folder' } : ({ title: c.builtin ? `${[...menuTitle(c.name, c.id)].slice(0, 49).join('')} (built-in)` : menuTitle(c.name, c.id), op: 'select', style: 'sprite', character: c.id, selected: style === 'sprite' && character === c.id })),
     // A2: the character's lines, a toggle shown with a sprite selected.
     ...style === 'sprite' ? [{ title: 'Character lines', op: 'lines', selected: lines !== 'off' }] : [],
     { title: 'Add your Codex pets', children: sort(found.filter(p => !ids.has(p.id))).map(p => ({ title: menuTitle(p.name, p.id), op: 'import', key: p.key })) },
@@ -67,7 +67,7 @@ export function findCodexPets({ home = userInfo().homedir, env = process.env, ui
 }
 
 export function createCursorPicker({ home = userInfo().homedir, env = process.env, root = charactersDirectory(), uid = process.getuid(),
-  writeSetting = writeHandSetting, trace = () => {}, cwd = process.cwd(), pluginCatalog = installedCharacterPlugins, hostCheck,
+  builtins = true, builtinRoot, writeSetting = writeHandSetting, trace = () => {}, cwd = process.cwd(), pluginCatalog = installedCharacterPlugins, hostCheck,
   codexSnapshot = pluginCatalog === installedCharacterPlugins ? codexPluginSnapshot : async () => ({ installed: [] }) } = {}) {
   let offered = new Map(), pluginOffers = new Map(), installed = new Set(), busy = false;
   const pluginOptions = { home, env: { CLAUDE_CONFIG_DIR: env.CLAUDE_CONFIG_DIR, CLAUDE_CODE_PLUGIN_CACHE_DIR: env.CLAUDE_CODE_PLUGIN_CACHE_DIR, CODEX_HOME: env.CODEX_HOME }, uid, cwd };
@@ -81,11 +81,11 @@ export function createCursorPicker({ home = userInfo().homedir, env = process.en
         try { trace('hand-picker-codex-list', { ms: performance.now() - start }); } catch {}
       }
       // Every installed folder gets a row, including refused packs, so a click can explain the refusal.
-      const { characters, thumbnails } = await installedCursorCatalog({ root, uid });
+      const { characters, thumbnails } = await installedCursorCatalog({ root, uid, builtins, builtinRoot });
       const found = findCodexPets({ home, env, uid, trace: discoveryTrace }).filter(p => !characters.some(c => c.id === p.id));
       const plugins = await pluginCatalog({ ...pluginOptions, codexRecord });
       pluginOffers = new Map(plugins.flatMap(group => group.packs.filter(pack => !characters.some(c => c.id === pack.id)).map(pack => [pack.key, { ...pack, warning: group.warning }])));
-      offered = new Map(found.map(p => [p.key, p])); installed = new Set(characters.map(c => c.id));
+      offered = new Map(found.map(p => [p.key, p])); installed = new Set(characters.filter(c => !c.renameNeeded).map(c => c.id));
       return { installed: characters, pets: found.map(({ folder, ...p }) => p), plugins: plugins.map(({ folder, packs, ...p }) => ({ ...p, packs: packs.map(({ folder, ...pack }) => pack) })), thumbnails,
         rows: cursorMenuModel({ installed: characters, found, plugins, style, character, lines }) };
     },
@@ -121,7 +121,7 @@ export function createCursorPicker({ home = userInfo().homedir, env = process.en
         if (event.op === 'select' && (Object.keys(event).sort().join() === 'op,style' && ['ring', 'seam', 'glove'].includes(event.style) ||
             Object.keys(event).sort().join() === 'character,op,style' && event.style === 'sprite' && installed.has(event.character))) {
           if (event.style === 'sprite') {
-            checkCharacter(event.character, { root, uid });
+            checkCharacter(event.character, { root, uid, builtinRoot });
           }
           const setting = { style: event.style, ...event.character ? { character: event.character } : {} };
           await writeSetting(setting); return { ok: true, ...setting };

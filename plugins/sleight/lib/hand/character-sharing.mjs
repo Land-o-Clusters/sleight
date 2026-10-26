@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import { join, dirname, basename, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { loadCharacter, parseCharacterJSON, resolveCharacterStates, checkCharacter, installCharacter } from './character.mjs';
+import { BUILTIN_CHARACTER_IDS, loadCharacter, parseCharacterJSON, resolveCharacterStates, checkCharacter, installCharacter } from './character.mjs';
 import { characterFrame } from './character-frame.mjs';
 import { encodeCharacterArchive, readCharacterArchive } from './character-archive.mjs';
 import { prepareHandHost } from '../direct-browser/host.mjs';
@@ -31,13 +31,18 @@ export async function withSharedCharacter(files, { uid = process.getuid(), hostC
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
 
+export function assertCharacterImportId(files) {
+  const id = parseCharacterJSON(files.get('character.json'))?.id;
+  if (BUILTIN_CHARACTER_IDS.includes(id)) throw Error(`Character: built-in character id ${id} is reserved`);
+  return files;
+}
 export function importCharacterArchive(file, options = {}) {
-  return withSharedCharacter(readCharacterArchive(file, options), options, character => {
+  return withSharedCharacter(assertCharacterImportId(readCharacterArchive(file, options)), options, character => {
     installCharacter(character, options); return character;
   });
 }
 export function importPluginCharacter(pack, options = {}) {
-  return withSharedCharacter(pack.files, options, character => { installCharacter(character, options); return character; });
+  return withSharedCharacter(assertCharacterImportId(pack.files), options, character => { installCharacter(character, options); return character; });
 }
 export async function exportCharacterArchive(id, file, options = {}) {
   const character = checkCharacter(id, options);

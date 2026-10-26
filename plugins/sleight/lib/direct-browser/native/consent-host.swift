@@ -17,13 +17,58 @@ import CoreAudio
 
 // BEGIN PERSON INPUT
 private var consentFeedbackKey: UInt8 = 0
-let consentInputMessage = "This button needs your own click or key press."
-func refuseConsentInput(_ button: NSButton? = nil) {
-    if let button = button, let label = objc_getAssociatedObject(button, &consentFeedbackKey) as? NSTextField {
-        label.stringValue = consentInputMessage
+private var consentArmingKey: UInt8 = 0
+// Match the Windows card interval. Compare the input's timestamp, including queued input.
+let consentArmingDelay: TimeInterval = 0.5
+final class ConsentArming {
+    private(set) var presentedAt = Double.infinity
+    private var mouseDownAt: Double?
+    private var observers: [(NotificationCenter, NSObjectProtocol)] = []
+    init(_ window: NSWindow) {
+        func observe(_ center: NotificationCenter, _ name: Notification.Name, object: AnyObject? = nil, activation: Bool = false) {
+            let token = center.addObserver(forName: name, object: object, queue: nil) { [weak self, weak window] _ in
+                guard let self = self, let window = window, window.isVisible else { return }
+                if activation { self.activated(window) } else { self.presented() }
+            }
+            observers.append((center, token))
+        }
+        observe(.default, NSWindow.didBecomeKeyNotification, object: window, activation: true)
+        observe(.default, NSApplication.willBecomeActiveNotification, activation: true)
+        observe(.default, NSApplication.didBecomeActiveNotification, activation: true)
+        observe(.default, NSWindow.didChangeOcclusionStateNotification, object: window)
+        observe(NSWorkspace.shared.notificationCenter, NSWorkspace.activeSpaceDidChangeNotification)
+        observe(NSWorkspace.shared.notificationCenter, NSWorkspace.sessionDidBecomeActiveNotification)
+        observe(DistributedNotificationCenter.default(), Notification.Name("com.apple.screenIsUnlocked"))
     }
-    os_log("PERSON_INPUT_REQUIRED", log: OSLog(subsystem: "com.sleight.consent", category: "input"), type: .error)
-    FileHandle.standardError.write(Data("sleight consent refused: PERSON_INPUT_REQUIRED\n".utf8))
+    deinit { for (center, observer) in observers { center.removeObserver(observer) } }
+    func presented(at timestamp: Double = ProcessInfo.processInfo.systemUptime) { presentedAt = timestamp; mouseDownAt = nil }
+    func mouseBegan(_ event: NSEvent) { mouseDownAt = event.timestamp }
+    private func activated(_ window: NSWindow) {
+        if let event = NSApp.currentEvent, event.window === window,
+            [.leftMouseDown, .leftMouseUp].contains(event.type) {
+            if event.type == .leftMouseDown { mouseBegan(event) }
+            // The card was already armed before this deliberate activating click began.
+            if let down = mouseDownAt, down >= presentedAt + consentArmingDelay { return }
+        }
+        presented()
+    }
+    func accepts(_ event: NSEvent) -> Bool { event.timestamp >= presentedAt + consentArmingDelay }
+}
+func consentArming(_ window: NSWindow) -> ConsentArming {
+    if let arming = objc_getAssociatedObject(window, &consentArmingKey) as? ConsentArming { return arming }
+    let arming = ConsentArming(window)
+    objc_setAssociatedObject(window, &consentArmingKey, arming, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+    return arming
+}
+let consentInputMessage = "This button needs your own click or key press."
+let consentTimingMessage = "Too soon: try again."
+func refuseConsentInput(_ button: NSButton? = nil, tooSoon: Bool = false) {
+    if let button = button, let label = objc_getAssociatedObject(button, &consentFeedbackKey) as? NSTextField {
+        label.stringValue = tooSoon ? consentTimingMessage : consentInputMessage
+    }
+    let reason = tooSoon ? "CONSENT_TOO_SOON" : "PERSON_INPUT_REQUIRED"
+    os_log("%{public}@", log: OSLog(subsystem: "com.sleight.consent", category: "input"), type: .error, reason)
+    FileHandle.standardError.write(Data("sleight consent refused: \(reason)\n".utf8))
 }
 // Source state alone is insufficient: a poster can select the HID state table too.
 func personInput(_ event: CGEvent?) -> Bool {
@@ -44,26 +89,32 @@ func personInput(_ event: CGEvent?) -> Bool {
 private var personSpentByWindow: [Int: Double] = [:]
 func personActivation(_ event: NSEvent?, windowMatches: Bool, keyboard: Bool = true,
     highlighted: Bool = true, accessibility: Bool = false, now: Double = ProcessInfo.processInfo.systemUptime,
-    windowNumber: Int? = nil) -> Bool {
+    windowNumber: Int? = nil, consent: Bool = false) -> Bool {
     guard !accessibility, let event = event, windowMatches,
         event.timestamp.isFinite, event.timestamp >= 0, event.timestamp <= now, now - event.timestamp < 5,
-        let cg = event.cgEvent, cg.getIntegerValueField(.eventSourceUnixProcessID) == 0, personInput(cg) else { return false }
-    guard event.type == .leftMouseUp || keyboard && highlighted && event.type == .keyDown && !event.isARepeat && [36, 49, 76].contains(event.keyCode) else { return false }
+        let cg = event.cgEvent, (consent || cg.getIntegerValueField(.eventSourceUnixProcessID) == 0), personInput(cg) else { return false }
+    // Consent retains WindowServer provenance. A repeated key-down can never confirm.
+    if consent {
+        guard !(event.type == .keyDown && event.isARepeat),
+            keyboard || [.leftMouseDown, .leftMouseUp].contains(event.type) else { return false }
+    } else {
+        guard event.type == .leftMouseUp || keyboard && highlighted && event.type == .keyDown && !event.isARepeat && [36, 49, 76].contains(event.keyCode) else { return false }
+    }
     let window = windowNumber ?? event.windowNumber
     guard event.timestamp > (personSpentByWindow[window] ?? -Double.infinity) else { return false }
     personSpentByWindow[window] = event.timestamp
     return true
 }
-func personActivation(_ event: NSEvent?, in window: NSWindow?, keyboard: Bool = true, highlighted: Bool = true) -> Bool {
+func personActivation(_ event: NSEvent?, in window: NSWindow?, keyboard: Bool = true, highlighted: Bool = true, consent: Bool = false) -> Bool {
     guard let window = window else { return false }
-    return personActivation(event, windowMatches: event?.window === window, keyboard: keyboard, highlighted: highlighted, windowNumber: window.windowNumber)
+    return personActivation(event, windowMatches: event?.window === window, keyboard: keyboard, highlighted: highlighted, windowNumber: window.windowNumber, consent: consent)
 }
 func personChoice(_ kind: String, _ choice: String) -> Bool {
     if ["cancel", "decline", "session"].contains(choice) { return false }
     // A debugger's Once is also a consent to debugging. Plain session app approvals remain host-answerable.
     return choice == "always" || ["action", "debugger", "relaunch", "opt-in", "resume", "turbo-off", "handoff"].contains(kind)
 }
-// NSAlert owns its NSButtons and their private subclasses. Add only an AX override to a zero-storage runtime
+// NSAlert owns its NSButtons and their private subclasses. Add guarded input overrides to a zero-storage runtime
 // subclass of the actual button class, preserving its layout, key equivalents and original modal action.
 func refuseAccessibilityPress(_ button: NSButton) -> Bool {
     guard let base = object_getClass(button) else { return false }
@@ -89,9 +140,27 @@ func refuseAccessibilityPress(_ button: NSButton) -> Bool {
         else { previous(sender, legacySelector, action) }
     }
     let legacyImplementation = imp_implementationWithBlock(rejectLegacy)
-    guard class_addMethod(guarded, selector, implementation, types),
-        class_addMethod(guarded, legacySelector, legacyImplementation, legacyTypes) else {
+    let mouseSelector = #selector(NSButton.mouseDown(with:))
+    let firstSelector = #selector(NSButton.acceptsFirstMouse(for:))
+    guard let mouseMethod = class_getInstanceMethod(base, mouseSelector), let mouseTypes = method_getTypeEncoding(mouseMethod),
+        let firstMethod = class_getInstanceMethod(base, firstSelector), let firstTypes = method_getTypeEncoding(firstMethod) else {
         imp_removeBlock(implementation); imp_removeBlock(legacyImplementation); objc_disposeClassPair(guarded); return false
+    }
+    typealias MouseDown = @convention(c) (AnyObject, Selector, NSEvent) -> Void
+    let previousMouse = unsafeBitCast(method_getImplementation(mouseMethod), to: MouseDown.self)
+    let mouse: @convention(block) (NSButton, NSEvent) -> Void = { sender, event in
+        if let action = sender.target as? ConsentInputAction {
+            action.trackMouseDown(event) { previousMouse(sender, mouseSelector, event) }
+        } else { previousMouse(sender, mouseSelector, event) }
+    }
+    let first: @convention(block) (NSButton, NSEvent?) -> Bool = { _, _ in true }
+    let mouseImplementation = imp_implementationWithBlock(mouse), firstImplementation = imp_implementationWithBlock(first)
+    guard class_addMethod(guarded, selector, implementation, types),
+        class_addMethod(guarded, legacySelector, legacyImplementation, legacyTypes),
+        class_addMethod(guarded, mouseSelector, mouseImplementation, mouseTypes),
+        class_addMethod(guarded, firstSelector, firstImplementation, firstTypes) else {
+        for imp in [implementation, legacyImplementation, mouseImplementation, firstImplementation] { imp_removeBlock(imp) }
+        objc_disposeClassPair(guarded); return false
     }
     objc_registerClassPair(guarded)
     object_setClass(button, guarded)
@@ -103,13 +172,22 @@ final class ConsentInputAction: NSObject {
     let originalTarget: AnyObject?, originalAction: Selector?
     let currentEvent: () -> NSEvent?
     let mouseOnly: Bool
+    private var mouseDown: NSEvent?
     init(_ button: NSButton, mouseOnly: Bool = false, currentEvent: @escaping () -> NSEvent? = { NSApp.currentEvent }) {
         self.button = button
         originalTarget = button.target; originalAction = button.action; self.currentEvent = currentEvent; self.mouseOnly = mouseOnly
         super.init()
+        if let window = button.window { _ = consentArming(window) }
         // Failure leaves the protected button disabled. It must never fall back to the unguarded action.
         guard refuseAccessibilityPress(button) else { button.isEnabled = false; refuseConsentInput(button); return }
         button.target = self; button.action = #selector(press(_:))
+        button.sendAction(on: .leftMouseUp)
+    }
+    func trackMouseDown(_ event: NSEvent, perform: () -> Void) {
+        mouseDown = event
+        if let window = button?.window { consentArming(window).mouseBegan(event) }
+        defer { mouseDown = nil }
+        perform()
     }
     @objc @discardableResult func press(_ sender: NSButton) -> Bool {
         return dispatch(sender)
@@ -121,9 +199,19 @@ final class ConsentInputAction: NSObject {
     }
     private func dispatch(_ sender: NSButton, typed: Bool = false) -> Bool {
         let event = currentEvent()
-        guard let event = event,
-            !typed || event.type == .keyDown,
-            personActivation(event, in: sender.window, keyboard: !mouseOnly || typed)
+        guard let event = event, let window = sender.window,
+            typed ? event.type == .keyDown : event.type == .leftMouseUp
+            else { refuseConsentInput(sender); return false }
+        let arming = consentArming(window)
+        if !typed {
+            guard let down = mouseDown, down.type == .leftMouseDown, down.window === window,
+                down.timestamp.isFinite, down.timestamp >= 0, down.timestamp <= event.timestamp,
+                ProcessInfo.processInfo.systemUptime - down.timestamp < 5,
+                personInput(down.cgEvent) else { refuseConsentInput(sender); return false }
+            guard arming.accepts(down) else { refuseConsentInput(sender, tooSoon: true); return false }
+        }
+        guard arming.accepts(event) else { refuseConsentInput(sender, tooSoon: true); return false }
+        guard personActivation(event, in: window, keyboard: typed, consent: true)
             else { refuseConsentInput(sender); return false }
         return sender.sendAction(originalAction, to: originalTarget)
     }
@@ -165,6 +253,7 @@ final class ConsentWordField: NSTextField {
     private var maskedText: String { String(repeating: "•", count: typed.count) }
     private var dispatching = false
     private var lastTimestamp: TimeInterval = -.infinity
+    private var lastPresentation = Double.infinity
     private var focusObserver: NSObjectProtocol?
     let accessibilityState: () -> (voiceOver: Bool, switchControl: Bool)
     init(_ entries: [String: ConsentInputAction], instructions: String,
@@ -272,7 +361,7 @@ final class ConsentWordField: NSTextField {
         }
     }
     private func clear() { typed = ""; stringValue = "" }
-    private func refuse() { clear(); refuseConsentInput(entries.values.first?.button) }
+    private func refuse(tooSoon: Bool = false) { clear(); refuseConsentInput(entries.values.first?.button, tooSoon: tooSoon) }
     func invalidate() { clear(); entries.removeAll(); isEnabled = false }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         // Let an empty field retain the card's existing default. A pending word owns both Return keys,
@@ -286,11 +375,16 @@ final class ConsentWordField: NSTextField {
     }
     override func keyDown(with event: NSEvent) {
         guard !dispatching else { return }
+        if let window = window {
+            let presentation = consentArming(window).presentedAt
+            if presentation != lastPresentation { clear(); lastPresentation = presentation }
+        }
         if typed.isEmpty && (event.keyCode == 36 || event.keyCode == 76) { return }
         let letter = Self.letter(event)
         // Navigation, digits, punctuation and dead keys do not change or refuse a pending word.
         let multipleCharacters = (event.charactersIgnoringModifiers?.count ?? 0) > 1
         guard [36, 76, 48, 51].contains(event.keyCode) || letter != nil || multipleCharacters else { return }
+        if let window = window, !consentArming(window).accepts(event) { refuse(tooSoon: true); return }
         let now = ProcessInfo.processInfo.systemUptime
         guard isEnabled, !entries.isEmpty, let window = window, window.isKeyWindow,
             window.firstResponder === self, event.window === window, event.type == .keyDown,
@@ -382,6 +476,14 @@ func consentInputActions(_ alert: NSAlert, choices: [String], kind: String) -> [
         stack.frame = NSRect(x: 0, y: 0, width: 360, height: typing.frame.height + alert.accessoryView!.frame.height + 8)
         alert.accessoryView = stack
         alert.layout()
+    }
+    // NSAlert assigns Return to its first button. Clear protected equivalents after the final layout,
+    // preserving button order and therefore the modal response indexes every caller already uses.
+    for (button, choice) in zip(alert.buttons, choices) {
+        if personChoice(kind, choice) {
+            button.keyEquivalent = ""
+            if alert.window.defaultButtonCell === button.cell { alert.window.defaultButtonCell = nil }
+        } else if choice == "cancel" && button.keyEquivalent.isEmpty { button.keyEquivalent = "\u{1b}" }
     }
     return actions
 }
@@ -1103,9 +1205,13 @@ final class AskCardPanel: NSObject {
     @objc func toggleDetails(_ sender: NSButton) { expanded.toggle(); layout() }
     func show() {
         if passive { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) }
+        consentArming(panel).presented()
         NSSound(named: "Glass")?.play()
     }
-    func review() { if passive { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) } }
+    func review() {
+        if passive { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) }
+        consentArming(panel).presented()
+    }
     @objc func press(_ sender: NSButton) {
         guard choices.indices.contains(sender.tag) else { return }
         finish(choices[sender.tag])
@@ -1283,6 +1389,7 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let actions = consentInputActions(alert, choices: choices, kind: kind)
         defer { for action in actions { action.typing?.invalidate() } }
         focus.presenting([:])
+        consentArming(alert.window).presented()
         let result = withExtendedLifetime(actions) { modal.run(abort: { NSApp.abortModal() }) { alert.runModal() } }
         focus.dismissed()
         // A shell card received during the modal waits until its run loop has ended.
@@ -4202,6 +4309,40 @@ func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String, can
     }
     return buffer
 }
+// BEGIN BUILTIN CHARACTER HASHES
+let spriteBuiltinHashes: [String: [String: String]] = [
+    "tsugi": [
+        "extra.webp": "e538b83ae608fc13f59dc3dcd6c22f1c1376df59d1f8db39cad856ef61293999",
+        "perch.webp": "3e8a9a8d66791c23abf0ad812d351bb2c5db68bbb2a7e7a7008ae83ebac8b52e",
+        "sheet.webp": "e0b6d9ca9be79686569b3ba2601528a79c5cf6e8ed91d5421f8af2c71e9b9d24"
+    ],
+    "shizu": [
+        "extra.webp": "b490ed6078ddf36135f5866c2b87a318194b1393cf2822a1d3a7a94865e015f4",
+        "perch.webp": "89fe50a8869ef66269463f0fb0e331f0ea59c7a5398e334006b7a1f0aa1526c5",
+        "sheet.webp": "eb3a547b7b6a58ef3cf3728be7a4f798163765c31dd3775afa76a59eea36f9b2"
+    ],
+    "bit": [
+        "extra.webp": "e0d78aa8ed60f975e156a923cec7ae940aed5edb05ca416dcf4fdfad4bb26f64",
+        "perch.webp": "cf5ac17a50422168677a4f12d8f74eb6e32f434605dfb6feb1ee739344581af6",
+        "sheet.webp": "9081335333b74a305654c66e0d6bace4ff4afd9f94b809fac9ca78092bf882ac"
+    ],
+    "kit": [
+        "extra.webp": "578d2027aa2a0ad21bc270427794e25a428b5892bd9d1d75d192b3241b384df8",
+        "perch.webp": "c7ab4f9a4babb1b08372a4bc328fee78c812f01c549f933edbcccf7b532fe12b",
+        "sheet.webp": "57ea231ac93b446316964263f4606b81acc8f224015c3ac51a40cebcadb762b4"
+    ],
+    "yori": [
+        "extra.webp": "f1f582c2792a3bc32230fd225c0e74cad0884bfa75dd07553d47d98a9420ddf2",
+        "perch.webp": "883b5378e113b14b29f7ae7be877459cb8bebf041513f4f713017b89c3e05966",
+        "sheet.webp": "4cce595ceb59e0c11d9c9e96bea9f331d4a190409d50525180ceb962ffe98f4d"
+    ],
+    "tab": [
+        "extra.webp": "11713ae8936af7b539550de17f428e005bba743a620fa170ad0d41cc61f3dd82",
+        "perch.webp": "9fa4762b1fc93afcc5335329d6bc0f11bc0f1ef21620427dca76c4d1e4d532d3",
+        "sheet.webp": "2d503eaa2794eef137d860ad7d2775f2d08c590948043e9ca678cc0a76d403eb"
+    ]
+]
+// END BUILTIN CHARACTER HASHES
 struct SpriteCharacter {
     let frame: SpriteFrame, images: [String: CGImage]
     struct Result { let character: SpriteCharacter?, reason: String?, warnings: [String] }
@@ -4246,7 +4387,12 @@ struct SpriteCharacter {
         return result
     }
     static func decode(_ path: String, key: String, frame: SpriteFrame, cancelled: @escaping () -> Bool = { false }) throws -> (CGImage, Set<String>) {
-        let root = root(), expectedParent = root + "/" + frame.id
+        // The launcher supplies this fixed package path in its sanitized environment. Frames cannot add roots.
+        let sharingCheck = CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--check-character"
+        let builtin = !sharingCheck && spriteBuiltinHashes[frame.id] != nil
+        let packageRoot = ProcessInfo.processInfo.environment["SLEIGHT_BUILTIN_CHARACTERS"] ?? ""
+        let root = builtin ? packageRoot : root(), expectedParent = root + "/" + frame.id
+        guard root.hasPrefix("/") else { throw SpriteLoadError.path }
         func canonical(_ path: String) -> Bool {
             var bytes = [CChar](repeating: 0, count: Int(PATH_MAX))
             return realpath(path, &bytes) != nil && String(cString: bytes) == path
@@ -4258,9 +4404,10 @@ struct SpriteCharacter {
             var st = stat()
             guard lstat(directory, &st) == 0, st.st_mode & S_IFMT == S_IFDIR, st.st_uid == getuid(), st.st_mode & 0o7022 == 0 else { throw SpriteLoadError.permissions }
         }
+        // Match character.mjs: 0600 plus the 0644 data mode measured in both plugin caches.
         var before = stat()
         guard lstat(path, &before) == 0, before.st_mode & S_IFMT == S_IFREG, before.st_uid == getuid(),
-            before.st_mode & 0o7777 == 0o600, before.st_nlink == 1 else { throw SpriteLoadError.permissions }
+            ((before.st_mode & 0o7777) == 0o600 || builtin && (before.st_mode & 0o7777) == 0o644), before.st_nlink == 1 else { throw SpriteLoadError.permissions }
         guard before.st_size > 0, before.st_size <= 8 * 1024 * 1024 else { throw SpriteLoadError.size }
         // O_NOFOLLOW_ANY (which can't be combined with O_NOFOLLOW: EINVAL) refuses a symlink in any component, so a directory swapped after the realpath check can't redirect
         // the open; F_GETPATH confirms the descriptor is the checked path.
@@ -4270,6 +4417,12 @@ struct SpriteCharacter {
         guard fcntl(fd, F_GETPATH, &name) == 0, String(cString: name) == path else { throw SpriteLoadError.path }
         guard fstat(fd, &opened) == 0, opened.st_dev == before.st_dev, opened.st_ino == before.st_ino,
             opened.st_mode == before.st_mode, opened.st_uid == before.st_uid, opened.st_size == before.st_size else { throw SpriteLoadError.changed }
+        if builtin {
+            var bytes = [UInt8](repeating: 0, count: Int(opened.st_size))
+            guard let pin = spriteBuiltinHashes[frame.id]?[(path as NSString).lastPathComponent],
+                pread(fd, &bytes, bytes.count, 0) == bytes.count,
+                SHA256.hash(data: Data(bytes)).map({ String(format: "%02x", $0) }).joined() == pin else { throw SpriteLoadError.changed }
+        }
         var head = [UInt8](repeating: 0, count: 64)
         let headCount = pread(fd, &head, 64, 0)
         guard headCount > 0, let header = spriteSheetHeader(Array(head.prefix(headCount))) else { throw SpriteLoadError.type }

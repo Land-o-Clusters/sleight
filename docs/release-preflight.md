@@ -40,6 +40,15 @@ Run release mode again after the intended tag exists. `releaseReady: true` means
 preflight checks passed. The architect's full check, release pass, A/B, public CI and the
 owner's publication decision retain their separate requirements.
 
+## Plugin size
+
+Before the release preflight, run `nice -n 20 node tools/characters/check.mjs` from the release worktree.
+It checks all six built-in packs against the plugin's SHA-256 manifest and requires lossless VP8L sheets.
+A character bank of 8,000,000 bytes or more (hash manifest included) fails the check. Record its per-pack bytes, total character bytes and
+complete plugin bytes with the release evidence. `tools/characters/` is a build tool and is outside the plugin.
+On macOS with the tested toolchain, also run `tests/character-rebuild.test.mjs`. It compares a fresh build's structure and alpha
+with the committed packs, not their bytes, and skips with a reason on another toolchain.
+
 ## Checks
 
 The preflight calls repaired A1's `inspectReleaseVersion({ root, expectedVersion, tag })`

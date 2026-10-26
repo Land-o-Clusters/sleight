@@ -9,7 +9,7 @@ import { encodePng } from '../bench/hand/synthetic-character.mjs';
 import * as archive from '../plugins/sleight/lib/hand/character-archive.mjs';
 import * as sharing from '../plugins/sleight/lib/hand/character-sharing.mjs';
 import { discoverCharacterPlugins, characterPackDigest } from '../plugins/sleight/lib/hand/character-plugins.mjs';
-import { loadCharacter, installCharacter } from '../plugins/sleight/lib/hand/character.mjs';
+import { BUILTIN_CHARACTER_IDS, checkCharacter, loadCharacter, installCharacter } from '../plugins/sleight/lib/hand/character.mjs';
 import { cursorCommand } from '../plugins/sleight/lib/hand/cursor-command.mjs';
 import { createCursorPicker } from '../plugins/sleight/lib/hand/cursor-picker.mjs';
 import { settingsCommand, settingsRefusal } from '../plugins/sleight/lib/person-gate.mjs';
@@ -37,7 +37,7 @@ function world(t) {
     const path = join(home, '.claude/plugins'); fs.mkdirSync(path, { recursive: true, mode: 0o700 });
     fs.writeFileSync(join(path, 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: entries }), { mode: 0o600 });
   };
-  const options = { home, root, uid: process.getuid(), env: {}, cwd: home, codexList: () => ({ installed: [] }) };
+  const options = { home, root, builtins: false, uid: process.getuid(), env: {}, cwd: home, codexList: () => ({ installed: [] }) };
   return { home, root, putPack, plugin, record, options };
 }
 const loaded = async () => ({ loaded: true, warnings: [], reason: null });
@@ -370,3 +370,24 @@ test('dangling symlinked plugins and config roots list a reason', t => {
   fs.unlinkSync(root); fs.rmdirSync(join(w.home, '.claude')); fs.symlinkSync(join(w.home, 'missing'), join(w.home, '.claude'));
   assert.match(discoverCharacterPlugins(w.options)[0].reason, /unresolved symlink/);
 });
+
+for (const id of BUILTIN_CHARACTER_IDS) {
+  test(`built-in ${id} cannot be shadowed by a direct install, archive, CLI import or plugin offer`, async t => {
+    const w = world(t), pack = w.putPack(join(w.home, id), id), file = join(w.home, id + '.sleightchar');
+    fs.writeFileSync(file, archive.encodeCharacterArchive(pack.files));
+    let decodes = 0; const options = { ...w.options, hostCheck: async () => { decodes++; return loaded(); } };
+    assert.throws(() => installCharacter(pack, options), /built.in.*id/);
+    await assert.rejects(async () => sharing.importCharacterArchive(file, options), /built.in.*reserved/);
+    await assert.rejects(async () => sharing.importPluginCharacter(pack, options), /built.in.*reserved/);
+    let output = '';
+    assert.equal(await cursorCommand(['import', file, '--yes'], { ...w.options, sharedHostCheck: options.hostCheck, out: s => output += s }), 1);
+    assert.match(output, /built.in.*reserved/); assert.equal(decodes, 0);
+    const plugin = w.plugin('collision', id); w.record({ 'collision@demo': [{ scope: 'user', installPath: plugin }] });
+    const groups = discoverCharacterPlugins(w.options);
+    assert.deepEqual(groups[0].packs, []); assert.deepEqual(groups[0].skipped, [{ id, reason: 'built-in character id is reserved' }]);
+    output = '';
+    assert.equal(await cursorCommand(['list'], { ...w.options, out: s => output += s, pluginCatalog: () => groups }), 0);
+    assert.match(output, new RegExp(`Skipped plugin pack ${id}.*built-in`));
+    assert.equal(checkCharacter(id, { root: w.root }).builtin, true); assert.equal(fs.existsSync(w.root), false);
+  });
+}

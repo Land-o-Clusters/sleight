@@ -8,7 +8,7 @@ import { writeHandSetting } from './command.mjs';
 import { handHostBuilt, prepareHandHost } from '../direct-browser/host.mjs';
 import { statSync } from 'node:fs';
 import { readCharacterArchive } from './character-archive.mjs';
-import { withSharedCharacter, exportCharacterArchive } from './character-sharing.mjs';
+import { assertCharacterImportId, withSharedCharacter, exportCharacterArchive } from './character-sharing.mjs';
 import { installedCharacterPlugins } from './character-plugins.mjs';
 
 // The live host's own checks for an installed character, through its sandboxed decode child (consent-host --check-character).
@@ -32,10 +32,10 @@ function ask(input, out, prompt) {
 /** Exit 0: done or declined, 1: validation/IO/non-TTY refusal, 2: usage. */
 export async function cursorCommand(args, { out = text => process.stdout.write(text), input = process.stdin, env = process.env,
   root = env.SLEIGHT_CURSOR_TEST === '1' ? env.SLEIGHT_CHARACTERS_DIR ?? charactersDirectory() : charactersDirectory(),
-  uid = process.getuid(), path = handConfigPath(), platform = process.platform, built = handHostBuilt, hostCheck = hostCheckCharacter,
+  uid = process.getuid(), builtins = true, path = handConfigPath(), platform = process.platform, built = handHostBuilt, hostCheck = hostCheckCharacter,
   sharedHostCheck, home, pluginCatalog = installedCharacterPlugins,
   confirm = prompt => ask(input, out, prompt) } = {}) {
-  const [op, ...all] = args, options = { root, uid };
+  const [op, ...all] = args, options = { root, uid, builtins };
   // --perch goes with style sprite only: the character sits on the target window instead of trailing the ring.
   const perch = op === 'style' && all[0] === 'sprite' && all.at(-1) === '--perch', rest = perch ? all.slice(0, -1) : all;
   if (!(op === 'lines' && rest.length === 1 && LINES_MODES.includes(rest[0]) || op === 'import' && (rest.length === 1 || rest.length === 2 && rest[1] === '--yes') && !rest[0].startsWith('--') ||
@@ -80,7 +80,7 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
       let source;
       try { source = statSync(rest[0]); }
       catch (error) { throw Error(`Character: ${JSON.stringify(rest[0])} source: ${error.code ?? error.message}`); }
-      if (source.isFile()) return await withSharedCharacter(readCharacterArchive(rest[0], { uid }), { uid, hostCheck: sharedHostCheck }, publish);
+      if (source.isFile()) return await withSharedCharacter(assertCharacterImportId(readCharacterArchive(rest[0], { uid })), { uid, hostCheck: sharedHostCheck }, publish);
       return await publish(prepareCharacterImport(rest[0], { uid }));
     } else if (op === 'export') {
       const result = await exportCharacterArchive(rest[0], rest[1], { ...options, hostCheck: sharedHostCheck });
@@ -99,10 +99,11 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
       const characters = listCharacters(options);
       out(characters.length ? characters.map(c => c.skipped ? `Skipped ${JSON.stringify(c.id)}: ${c.reason}.`
         : c.error ? `${JSON.stringify(c.id).slice(1, -1)}: needs repair: ${c.error}`
-        : `${c.manifest.id}: ${c.manifest.name} (${c.resolved.filter(s => s.own).length} of ${c.resolved.length} states)`).join('\n') + '\n' : 'No characters installed.\n');
+        : `${c.manifest.id}: ${c.manifest.name}${c.builtin ? ' [built-in]' : ''} (${c.resolved.filter(s => s.own).length} of ${c.resolved.length} states)`).join('\n') + '\n' : 'No characters installed.\n');
       if (characters.some(c => c.error)) return 1;
       for (const group of await pluginCatalog({ home, env, uid })) {
         if (group.reason) { out(`Skipped plugin ${group.pluginId}: ${group.reason}.\n`); continue; }
+        for (const pack of group.skipped ?? []) out(`Skipped plugin pack ${pack.id} (${group.pluginId}): ${pack.reason}.\n`);
         if (!group.packs.length) continue;
         out(`Plugin: ${group.pluginId} (${group.host})\n${group.warning ? group.warning + '\n' : ''}`);
         for (const pack of group.packs) out(`  ${pack.id}: ${pack.name} (${characters.some(c => c.manifest?.id === pack.id) ? 'already installed' : 'choose from Cursor to import'})\n`);

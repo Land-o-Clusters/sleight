@@ -1,0 +1,460 @@
+{
+  "format": "sleight-character",
+  "version": 1,
+  "id": "yori",
+  "name": "Yori",
+  "description": "Cool, confident adult engineer in a dark suit with a low side ponytail. Drawn in code for sleight.",
+  "author": "sleight",
+  "license": "MIT",
+  "sheet": "sheet.webp",
+  "extra": "extra.webp",
+  "frame": {
+    "w": 192,
+    "h": 208
+  },
+  "grid": {
+    "cols": 8,
+    "rows": 11
+  },
+  "scale": 0.5,
+  "anchor": {
+    "x": 96,
+    "y": 196
+  },
+  "hotspot": {
+    "x": 96,
+    "y": 104
+  },
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 6,
+      "ms": [
+        280,
+        110,
+        110,
+        140,
+        140,
+        320
+      ],
+      "loop": true
+    },
+    "running-right": {
+      "row": 1,
+      "frames": 8,
+      "ms": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ],
+      "loop": true
+    },
+    "running-left": {
+      "row": 2,
+      "frames": 8,
+      "ms": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ],
+      "loop": true
+    },
+    "wave": {
+      "row": 3,
+      "frames": 4,
+      "ms": [
+        140,
+        140,
+        140,
+        280
+      ],
+      "loop": false
+    },
+    "aim": {
+      "row": 3,
+      "start": 4,
+      "frames": 4,
+      "ms": [
+        70,
+        70,
+        90,
+        320
+      ],
+      "loop": false
+    },
+    "working": {
+      "row": 7,
+      "frames": 6,
+      "ms": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ],
+      "loop": true
+    },
+    "click": {
+      "sheet": "extra",
+      "row": 0,
+      "frames": 4,
+      "ms": [
+        60,
+        70,
+        90,
+        160
+      ],
+      "loop": false
+    },
+    "right-click": {
+      "sheet": "extra",
+      "row": 0,
+      "start": 4,
+      "frames": 4,
+      "ms": [
+        70,
+        80,
+        90,
+        160
+      ],
+      "loop": false
+    },
+    "double-click": {
+      "sheet": "extra",
+      "row": 1,
+      "frames": 5,
+      "ms": [
+        50,
+        60,
+        50,
+        70,
+        160
+      ],
+      "loop": false
+    },
+    "key": {
+      "sheet": "extra",
+      "row": 1,
+      "start": 5,
+      "frames": 3,
+      "ms": [
+        50,
+        60,
+        110
+      ],
+      "loop": false
+    },
+    "type": {
+      "sheet": "extra",
+      "row": 2,
+      "frames": 8,
+      "ms": 80,
+      "loop": true
+    },
+    "scroll-up": {
+      "sheet": "extra",
+      "row": 3,
+      "frames": 4,
+      "ms": 120,
+      "loop": true
+    },
+    "scroll-down": {
+      "sheet": "extra",
+      "row": 3,
+      "start": 4,
+      "frames": 4,
+      "ms": 120,
+      "loop": true
+    },
+    "drag-grab": {
+      "sheet": "extra",
+      "row": 4,
+      "frames": 3,
+      "ms": [
+        60,
+        60,
+        120
+      ],
+      "loop": false
+    },
+    "drag-drop": {
+      "sheet": "extra",
+      "row": 4,
+      "start": 3,
+      "frames": 5,
+      "ms": [
+        60,
+        60,
+        80,
+        100,
+        220
+      ],
+      "loop": false
+    },
+    "drag-carry": {
+      "sheet": "extra",
+      "row": 5,
+      "frames": 6,
+      "ms": 110,
+      "loop": true
+    },
+    "waiting-approval": {
+      "sheet": "extra",
+      "row": 6,
+      "frames": 6,
+      "ms": [
+        300,
+        150,
+        150,
+        300,
+        150,
+        150
+      ],
+      "loop": true
+    },
+    "error": {
+      "sheet": "extra",
+      "row": 7,
+      "frames": 8,
+      "ms": [
+        60,
+        80,
+        80,
+        80,
+        80,
+        120,
+        160,
+        300
+      ],
+      "loop": false
+    },
+    "success": {
+      "sheet": "extra",
+      "row": 8,
+      "frames": 8,
+      "ms": [
+        70,
+        70,
+        80,
+        90,
+        100,
+        120,
+        160,
+        340
+      ],
+      "loop": false
+    },
+    "handoff": {
+      "sheet": "extra",
+      "row": 9,
+      "frames": 8,
+      "ms": [
+        120,
+        120,
+        140,
+        140,
+        160,
+        160,
+        200,
+        400
+      ],
+      "loop": false
+    },
+    "thinking": {
+      "sheet": "extra",
+      "row": 10,
+      "frames": 8,
+      "ms": 200,
+      "loop": true
+    },
+    "move": {
+      "dir16": {
+        "rowA": 9,
+        "rowB": 10
+      }
+    },
+    "look": {
+      "dir16": {
+        "rowA": 9,
+        "rowB": 10
+      }
+    },
+    "perch": {
+      "sheet": "perch",
+      "row": 0,
+      "frames": 6,
+      "ms": [
+        320,
+        120,
+        120,
+        260,
+        260,
+        400
+      ],
+      "loop": true
+    },
+    "perch-peek": {
+      "sheet": "perch",
+      "row": 0,
+      "start": 6,
+      "frames": 2,
+      "ms": [
+        1400,
+        400
+      ],
+      "loop": true
+    },
+    "perch-hop": {
+      "sheet": "perch",
+      "row": 1,
+      "frames": 4,
+      "ms": [
+        70,
+        120,
+        70,
+        160
+      ],
+      "loop": false
+    },
+    "perch-point-left": {
+      "sheet": "perch",
+      "row": 1,
+      "start": 4,
+      "frames": 1,
+      "ms": 320,
+      "loop": false
+    },
+    "perch-point-right": {
+      "sheet": "perch",
+      "row": 1,
+      "start": 5,
+      "frames": 1,
+      "ms": 320,
+      "loop": false
+    },
+    "sleep": {
+      "sheet": "perch",
+      "row": 1,
+      "start": 6,
+      "frames": 2,
+      "ms": [
+        1500,
+        1500
+      ],
+      "loop": true
+    },
+    "high-five": {
+      "sheet": "perch",
+      "row": 2,
+      "frames": 3,
+      "ms": [
+        90,
+        120,
+        420
+      ],
+      "loop": false,
+      "hotspot": {
+        "x": 143,
+        "y": 63
+      }
+    },
+    "perch-wait": {
+      "sheet": "perch",
+      "row": 2,
+      "start": 3,
+      "frames": 2,
+      "ms": [
+        900,
+        500
+      ],
+      "loop": true
+    },
+    "startle": {
+      "sheet": "perch",
+      "row": 2,
+      "start": 5,
+      "frames": 2,
+      "ms": [
+        70,
+        110
+      ],
+      "loop": false
+    }
+  },
+  "perch": {
+    "anchor": {
+      "x": 96,
+      "y": 142
+    },
+    "sheet": "perch.webp"
+  },
+  "lines": {
+    "lang": "en",
+    "start": [
+      "Right. Let's begin.",
+      "I see it. Starting.",
+      "Okay. One step at a time.",
+      "On it.",
+      "Let's keep this tidy."
+    ],
+    "first-click": [
+      "Clean click.",
+      "Good. That landed.",
+      "First one in.",
+      "Exactly where it should be."
+    ],
+    "typing": [
+      "Typing it out.",
+      "Keeping the wording tight.",
+      "Short and clear.",
+      "Nearly there with the text."
+    ],
+    "long-wait": [
+      "Take your time.",
+      "No hurry. I'll be right here.",
+      "Waiting is part of the job.",
+      "Still ready when you are."
+    ],
+    "approval": [
+      "Your decision. I'll wait.",
+      "This needs your OK, not mine.",
+      "Your call to make.",
+      "I'll hold here until you say."
+    ],
+    "error": [
+      "That didn't take. Rechecking.",
+      "Not quite. Let's look again.",
+      "Small miss. Back to it.",
+      "Hm. Worth a second look."
+    ],
+    "done": [
+      "Done. Clean finish.",
+      "That's handled.",
+      "Finished. Nice work.",
+      "All done. Good session."
+    ],
+    "handback": [
+      "It's yours from here.",
+      "Handing back. Good working with you.",
+      "Your turn.",
+      "Over to you."
+    ],
+    "wake": [
+      "I'm here.",
+      "Back. Where were we?",
+      "Awake. Ready.",
+      "Right, I'm up."
+    ]
+  }
+}

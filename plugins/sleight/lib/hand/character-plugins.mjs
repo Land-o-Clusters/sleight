@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { Worker, isMainThread, parentPort } from 'node:worker_threads';
-import { loadCharacter, parseCharacterJSON } from './character.mjs';
+import { BUILTIN_CHARACTER_IDS, loadCharacter, parseCharacterJSON } from './character.mjs';
 
 const LIMITS = Object.freeze({ recordBytes: 1024 * 1024, plugins: 256, packs: 128, perPlugin: 32 });
 const component = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}$/.test(value) && !value.includes('..');
@@ -180,6 +180,9 @@ export function discoverCharacterPlugins({ home = userInfo().homedir, env = proc
       const group = { ...identity, name: manifest.name, warning: extras(install.folder, manifest, uid, componentMetadata), packs: [] };
       for (const id of ids) {
         if (!idValid(id) || count >= LIMITS.packs) continue;
+        if (BUILTIN_CHARACTER_IDS.includes(id)) {
+          (group.skipped ??= []).push({ id, reason: 'built-in character id is reserved' }); continue;
+        }
         try {
           const folder = join(packRoot, id), pack = loadCharacter(folder, { uid, shared: true });
           const key = createHash('sha256').update(JSON.stringify([install.host, install.pluginId, folder])).digest('hex');
